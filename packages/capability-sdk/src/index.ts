@@ -53,6 +53,7 @@ export type ClientInstanceEnv = Record<string, string | undefined>;
 export type PlatformStoreMode = "postgres" | "memory";
 
 export interface ClientInstanceCapabilityContext {
+  logger?: import("@vivd-catalyst/core").Logger;
   clientInstanceId: ClientInstanceId;
   capabilitiesConfig: Record<string, unknown>;
   dataSources: DataSourceRegistry;

@@ -1,3 +1,4 @@
+import type { Logger } from "@vivd-catalyst/core";
 import {
   createPlatformId,
   isAppError,
@@ -18,10 +19,6 @@ export interface ExecutionWorkspaceCleanupJobOptions {
   checkIntervalMs?: number;
   runOnStartup?: boolean;
   now?: () => Date;
-}
-
-interface WorkspaceCleanupLogger {
-  error(input: unknown, message?: string): void;
 }
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100;
@@ -72,14 +69,14 @@ export class ExecutionWorkspaceCleanupJob {
   private readonly workflow: ExecutionWorkspaceCleanupWorkflow;
   private readonly checkIntervalMs: number;
   private readonly runOnStartup: boolean;
-  private readonly logger: WorkspaceCleanupLogger;
+  private readonly logger: Logger;
   private timer: ReturnType<typeof setInterval> | undefined;
   private running: Promise<void> | undefined;
 
   constructor(input: {
     workflow: ExecutionWorkspaceCleanupWorkflow;
     options?: ExecutionWorkspaceCleanupJobOptions;
-    logger: WorkspaceCleanupLogger;
+    logger: Logger;
   }) {
     this.workflow = input.workflow;
     this.checkIntervalMs = input.options?.checkIntervalMs ?? DEFAULT_CLEANUP_CHECK_INTERVAL_MS;
@@ -128,7 +125,7 @@ export class ExecutionWorkspaceCleanupJob {
 export function createExecutionWorkspaceCleanupJob(
   options: ChatServerOptions,
   input: {
-    logger: WorkspaceCleanupLogger;
+    logger: Logger;
   }
 ): ExecutionWorkspaceCleanupJob | undefined {
   if (!options.executionWorkspaceCleanup) {

@@ -4,6 +4,7 @@ import {
   createTestInstance
 } from "./support/test-instance";
 import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
+import { createFailingTestLogger } from "./support/fixtures";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 import { describe, expect, it } from "vitest";
@@ -68,11 +69,7 @@ describe("conversation retention expiration", () => {
         checkIntervalMs: 10,
         runOnStartup: true
       },
-      logger: {
-        error(error) {
-          throw error instanceof Error ? error : new Error("Retention job failed");
-        }
-      }
+      logger: createFailingTestLogger("Retention job failed")
     });
 
     const startupConversation = await createExpiredConversation(store, clientInstanceId, "startup");
@@ -263,11 +260,7 @@ describe("conversation retention expiration", () => {
     const clientInstanceId = asClientInstanceId("retention-off-test");
     const store = createTestInstance().stores;
     const jobInput = {
-      logger: {
-        error(error: unknown) {
-          throw error instanceof Error ? error : new Error("Retention job failed");
-        }
-      },
+      logger: createFailingTestLogger("Retention job failed"),
       jobOptions: { checkIntervalMs: 10, runOnStartup: true }
     };
     const conversation = await createExpiredConversation(store, clientInstanceId, "kept");
@@ -766,11 +759,7 @@ describe("orphaned managed file cleanup", () => {
     const job = new ConversationRetentionJob({
       workflow: fixture.laterWorkflow(),
       options: { checkIntervalMs: 0, runOnStartup: true },
-      logger: {
-        error(error) {
-          throw error instanceof Error ? error : new Error("Retention job failed");
-        }
-      }
+      logger: createFailingTestLogger("Retention job failed")
     });
 
     job.start();

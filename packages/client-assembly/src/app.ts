@@ -1,3 +1,4 @@
+import { createLogger } from "./logger";
 import type { FastifyInstance } from "fastify";
 import {
   LocalAgentRuntime,
@@ -94,6 +95,7 @@ export async function createClientInstanceApp(
 ): Promise<ClientInstanceApp> {
   const execution = await createClientInstanceExecutionAssembly(input);
   const {
+    logger,
     env,
     config,
     clientInstanceId,
@@ -125,6 +127,7 @@ export async function createClientInstanceApp(
       allowedOrigins: input.allowedOrigins
     });
   const server = await createChatServer({
+    logger,
     config,
     clientInstanceId,
     authAdapter,
@@ -188,11 +191,12 @@ export async function createClientInstanceApp(
 export async function createClientInstanceExecutionAssembly(
   input: Omit<CreateClientInstanceAppInput, "agentRuntimeMode" | "allowedOrigins">
 ) {
+  const logger = createLogger();
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
   const resolvedStoreMode = resolveStoreMode(input.storeMode, env);
-  const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const store = await createPlatformStore({ env, storeMode: input.storeMode, logger });
   const dataSources = createDataSourceRegistry({
     configs: config.dataSources,
     secretResolver: createEnvSecretResolver(env)
@@ -204,6 +208,7 @@ export async function createClientInstanceExecutionAssembly(
     ? createLocalWorkspaceFileByteStore({ rootDirectory: executionWorkspaceObjectRoot })
     : undefined;
   const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
+    logger,
     capabilitiesConfig: config.capabilities,
     clientInstanceId,
     dataSources,
@@ -303,7 +308,7 @@ export async function createClientInstanceExecutionAssembly(
         objectStore: workspaceFileByteStore,
         fileStore: workspaceFileByteStore,
         auditRecorder,
-        telemetry: createConsoleWorkspaceCommandTelemetry(console),
+        telemetry: createConsoleWorkspaceCommandTelemetry(logger),
         limits: config.executionWorkspaces.command,
         sourceFileReader: attachments
           ? {
@@ -360,6 +365,7 @@ export async function createClientInstanceExecutionAssembly(
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
   }
   const localAgentRuntimeOptions = {
+    logger,
     assetSource,
     modelProviders: config.modelProviders,
     modelBindings: config.modelBindings,
@@ -374,7 +380,7 @@ export async function createClientInstanceExecutionAssembly(
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
     modelContext: config.modelContext,
-    runFailureReporter: createRuntimeFailureReporter(),
+    runFailureReporter: createRuntimeFailureReporter(logger),
     artifactReader: managedObjects
       ? { readArtifact: managedObjects.readArtifact.bind(managedObjects) }
       : undefined,
@@ -406,6 +412,7 @@ export async function createClientInstanceExecutionAssembly(
   }
 
   return {
+    logger,
     env,
     config,
     clientInstanceId,

@@ -75,6 +75,7 @@ export interface ModelCallGovernance extends ModelUsageRecorder {
 }
 
 export interface LocalAgentRuntimeOptions {
+  logger?: import("@vivd-catalyst/core").Logger;
   assetSource: ConfigAssetSource;
   modelProviders: ModelProviderConfig[];
   modelBindings?: readonly ModelBindingConfig[];
@@ -772,6 +773,7 @@ export class LocalAgentRuntime implements AgentRuntime {
       ...(this.options.modelContext ?? DEFAULT_MODEL_CONTEXT),
       clientInstanceId: context.clientInstanceId,
       artifactReader: this.options.artifactReader,
+      logger: this.options.logger,
       fileReader: this.options.fileReader
     };
   }

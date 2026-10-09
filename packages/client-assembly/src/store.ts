@@ -1,12 +1,14 @@
+import { createLogger } from "./logger";
 import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
-import { AppError, type PlatformStore } from "@vivd-catalyst/core";
+import { AppError, type PlatformStore, type Logger } from "@vivd-catalyst/core";
 import type { ClientInstanceEnv } from "./env";
 
 export type PlatformStoreMode = "postgres" | "memory";
 
 export async function createPlatformStore(input: {
   env: ClientInstanceEnv;
+  logger?: Logger;
   storeMode?: PlatformStoreMode;
 }): Promise<PlatformStore> {
   const mode = input.storeMode ?? resolveStoreMode(input.env);
@@ -17,6 +19,7 @@ export async function createPlatformStore(input: {
   if (input.env.DATABASE_URL) {
     return PostgresPlatformStore.connect({
       databaseUrl: input.env.DATABASE_URL,
+      logger: input.logger ?? createLogger(),
       runMigrations: input.env.RUN_MIGRATIONS !== "false"
     });
   }

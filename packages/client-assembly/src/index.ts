@@ -52,3 +52,5 @@ export {
   detectWorkspaceSourceFileFormat,
   WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES
 } from "./workspace-source-attachments";
+
+export { createLogger } from "./logger";

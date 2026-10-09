@@ -173,16 +173,16 @@ const loadedModule = (node) => {
 };
 
 /** @param {string} filename */
-const isCliEntry = (filename) =>
-  packageAt(filename)?.bins.some((bin) =>
-    isPackageFile(
-      filename,
-      bin
-        .replace(/^\.\//, "")
-        .replace(/^dist\//, "src/")
-        .replace(/\.js$/, ".ts")
+const isServerSource = (filename) => {
+  const directory = packageAt(filename)?.directory;
+  return (
+    directory !== undefined &&
+    /^packages\/[^/]+\/src\//.test(relative(root, filename).replaceAll("\\", "/")) &&
+    !["config-cli", "chat-ui", "ui", "chat-widget", "chat-standalone"].some(
+      (name) => directory === `packages/${name}`
     )
-  ) ?? false;
+  );
+};
 
 /** @param {string} filename */
 const mayFetch = (filename) =>
@@ -233,13 +233,21 @@ const plugin = {
     // ESLint's no-restricted-globals and no-restricted-properties would cover these three,
     // but under one rule name. The baseline counts by rule and each boundary has its own owner.
     "console-boundary": rule(
-      "Console belongs in a CLI entry file",
-      (filename) => packageAt(filename) !== undefined && !isCliEntry(filename),
+      "Server packages log through core Logger; only config-cli may use console",
+      isServerSource,
       (context, report) => ({
         "Program:exit": () =>
           [...globalUses(context, ["console"]), ...hostMemberUses(context, ["console"])].forEach(
             report
           )
+      })
+    ),
+    "logger-boundary": rule(
+      "Logger interfaces belong in core",
+      (filename) => isServerSource(filename) && packageAt(filename)?.directory !== "packages/core",
+      (_context, report) => ({
+        "TSInterfaceDeclaration[id.name=/Logger$/]": report,
+        "TSTypeAliasDeclaration[id.name=/Logger$/]": report
       })
     ),
     "env-boundary": rule(

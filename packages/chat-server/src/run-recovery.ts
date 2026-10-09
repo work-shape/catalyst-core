@@ -6,7 +6,7 @@ import type {
   RunObservation
 } from "@vivd-catalyst/core";
 import { isAppError } from "@vivd-catalyst/core";
-import type { FastifyBaseLogger } from "fastify";
+import type { Logger } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
 
 export interface RunRecoveryOptions {
@@ -55,7 +55,7 @@ export class RunRecoveryWatchdog {
 
   constructor(
     private readonly options: ChatServerOptions,
-    private readonly logger?: FastifyBaseLogger,
+    private readonly logger?: Logger,
     recoveryOptions: RunRecoveryOptions = {}
   ) {
     this.staleActiveRunMs = recoveryOptions.staleActiveRunMs ?? DEFAULT_STALE_ACTIVE_RUN_MS;

@@ -1,3 +1,4 @@
+import type { Logger } from "@vivd-catalyst/core";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
@@ -10,7 +11,11 @@ type PostgresDatabase = PostgresJsDatabase<typeof schema>;
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), "../migrations");
 const migrationLockKey = "vivd-catalyst:postgres-store:migrations";
 
-export async function runPostgresMigrations(sql: Sql, db: PostgresDatabase): Promise<void> {
+export async function runPostgresMigrations(
+  sql: Sql,
+  db: PostgresDatabase,
+  logger?: Logger
+): Promise<void> {
   const reserved = await sql.reserve();
   let migrationError: unknown;
 
@@ -31,7 +36,7 @@ export async function runPostgresMigrations(sql: Sql, db: PostgresDatabase): Pro
       if (!migrationError) {
         throw error;
       }
-      console.warn("Failed to release Postgres migration advisory lock", error);
+      logger?.warn({ error }, "Failed to release Postgres migration advisory lock");
     } finally {
       reserved.release();
     }

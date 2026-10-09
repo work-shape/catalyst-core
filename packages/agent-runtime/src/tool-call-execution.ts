@@ -167,6 +167,7 @@ export async function executeToolCall(input: {
 
 function logProjectionNotice(
   input: {
+    modelContext: ModelContextProjectionOptions;
     runId: AgentRunId;
     startInput: StartAgentRunInput;
     toolCall: ModelToolCall;
@@ -176,15 +177,16 @@ function logProjectionNotice(
   if (!modelOutput.notice) {
     return;
   }
-  console.warn(
-    JSON.stringify({
+  input.modelContext.logger?.warn(
+    {
       type: "model_context_projection.bounded_tool_output",
       runId: input.runId,
       conversationId: input.startInput.conversationId,
       toolCallId: input.toolCall.toolCallId,
       toolName: input.toolCall.toolName,
       ...modelOutput.notice
-    })
+    },
+    "Model context tool output bounded"
   );
 }
 

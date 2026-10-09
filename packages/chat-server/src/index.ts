@@ -1,3 +1,4 @@
+import type { Logger } from "@vivd-catalyst/core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
 import { normalizeAllowedOrigins } from "@vivd-catalyst/core";
 import cors from "@fastify/cors";
@@ -57,7 +58,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   const allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins);
   options = { ...options, allowedOrigins };
   const app = Fastify({
-    logger: true,
+    loggerInstance: adaptLogger(options.logger),
     // Assumes the API is reachable only through a reverse proxy on a private network (the
     // Compose network). X-Forwarded-For is honoured only when the direct peer is a loopback or
     // private address, so a public peer cannot choose its own request.ip.
@@ -78,13 +79,13 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
 
   installErrorHandler(app);
   const retentionJob = createConversationRetentionJob(options, {
-    logger: app.log,
+    logger: options.logger,
     jobOptions: options.retentionExpiration
   });
   const executionWorkspaceCleanupJob = createExecutionWorkspaceCleanupJob(options, {
-    logger: app.log
+    logger: options.logger
   });
-  const runRecoveryWatchdog = new RunRecoveryWatchdog(options, app.log, options.runRecovery);
+  const runRecoveryWatchdog = new RunRecoveryWatchdog(options, options.logger, options.runRecovery);
   app.addHook("onReady", async () => {
     retentionJob.start();
     executionWorkspaceCleanupJob?.start();
@@ -133,3 +134,17 @@ export type {
 } from "./approval-request-workflow";
 
 export * from "./skill-change-approval-handler";
+
+function adaptLogger(logger: Logger): FastifyInstance["log"] {
+  return {
+    level: "debug",
+    debug: (input: unknown, message?: string) => logger.debug(input, message),
+    info: (input: unknown, message?: string) => logger.info(input, message),
+    warn: (input: unknown, message?: string) => logger.warn(input, message),
+    error: (input: unknown, message?: string) => logger.error(input, message),
+    fatal: (input: unknown, message?: string) => logger.error(input, message),
+    trace: (input: unknown, message?: string) => logger.debug(input, message),
+    silent: () => {},
+    child: (bindings: Record<string, unknown>) => adaptLogger(logger.child(bindings))
+  };
+}

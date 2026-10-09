@@ -1,3 +1,4 @@
+import { createLogger } from "./logger";
 import { AppError, type PlatformStore } from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
@@ -40,9 +41,10 @@ export interface ClientInstanceArtifactPreviewWorker {
 export async function createClientInstanceArtifactPreviewWorker(
   input: CreateClientInstanceArtifactPreviewWorkerInput = {}
 ): Promise<ClientInstanceArtifactPreviewWorker> {
+  const logger = createLogger();
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadArtifactPreviewWorkerConfig(input.configPath, env));
-  const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const store = await createPlatformStore({ env, storeMode: input.storeMode, logger });
   const clientInstanceId = getClientInstanceId(config);
   const storeMode = resolveStoreMode(input.storeMode, env);
   const sourceReader = input.sourceReaderFactory
@@ -123,7 +125,7 @@ export async function runClientInstanceArtifactPreviewWorker(
         reason: `Received ${signal}`
       })
       .catch((error: unknown) => {
-        console.error(error);
+        createLogger().error({ error }, "Worker shutdown failed");
         process.exitCode = 1;
       });
   };

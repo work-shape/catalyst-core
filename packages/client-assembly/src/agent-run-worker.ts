@@ -1,3 +1,4 @@
+import { createLogger } from "./logger";
 import {
   AgentRunWorker,
   createWorkerLocalAgentRunExecutor,
@@ -80,7 +81,7 @@ export async function runClientInstanceAgentRunWorker(
           : { interruptActive: true, reason: `Received ${signal} again` }
       )
       .catch((error: unknown) => {
-        console.error(error);
+        createLogger().error({ error }, "Worker shutdown failed");
         process.exitCode = 1;
       });
   };

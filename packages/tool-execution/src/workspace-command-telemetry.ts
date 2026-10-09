@@ -1,3 +1,4 @@
+import type { Logger } from "@vivd-catalyst/core";
 import {
   auditActorFromUser,
   type ActiveWorkspaceCommandCounts,
@@ -46,15 +47,7 @@ export interface WorkspaceCommandTelemetry {
   record(event: WorkspaceCommandTelemetryEvent): void | Promise<void>;
 }
 
-export interface WorkspaceCommandTelemetryLogger {
-  info(input: unknown, message?: string): void;
-  warn(input: unknown, message?: string): void;
-  error(input: unknown, message?: string): void;
-}
-
-export function createConsoleWorkspaceCommandTelemetry(
-  logger: WorkspaceCommandTelemetryLogger = console
-): WorkspaceCommandTelemetry {
+export function createConsoleWorkspaceCommandTelemetry(logger: Logger): WorkspaceCommandTelemetry {
   return {
     record(event) {
       const payload = {

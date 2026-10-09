@@ -218,13 +218,17 @@ import { schema } from "./schema";
 
 export interface PostgresPlatformStoreOptions {
   databaseUrl: string;
+  logger?: import("@vivd-catalyst/core").Logger;
   runMigrations?: boolean;
 }
 
 const DUPLICATE_RELATION_NOTICE_CODE = "42P07";
 const DUPLICATE_SCHEMA_NOTICE_CODE = "42P06";
 
-function handlePostgresNotice(notice: Notice): void {
+function handlePostgresNotice(
+  notice: Notice,
+  logger: PostgresPlatformStoreOptions["logger"]
+): void {
   if (
     (notice.code === DUPLICATE_RELATION_NOTICE_CODE ||
       notice.code === DUPLICATE_SCHEMA_NOTICE_CODE) &&
@@ -233,7 +237,7 @@ function handlePostgresNotice(notice: Notice): void {
     return;
   }
 
-  console.warn(notice);
+  logger?.warn({ notice }, "Postgres notice");
 }
 
 export class PostgresPlatformStore
@@ -272,13 +276,16 @@ export class PostgresPlatformStore
     });
   }
 
+  private logger?: PostgresPlatformStoreOptions["logger"];
+
   static async connect(options: PostgresPlatformStoreOptions): Promise<PostgresPlatformStore> {
     const sql = postgres(options.databaseUrl, {
       max: 10,
       idle_timeout: 30,
-      onnotice: handlePostgresNotice
+      onnotice: (notice) => handlePostgresNotice(notice, options.logger)
     });
     const store = new PostgresPlatformStore(sql);
+    store.logger = options.logger;
     if (options.runMigrations ?? true) {
       await store.migrate();
     }
@@ -290,7 +297,7 @@ export class PostgresPlatformStore
   }
 
   async migrate(): Promise<void> {
-    await runPostgresMigrations(this.postgresClient, this.db);
+    await runPostgresMigrations(this.postgresClient, this.db, this.logger);
   }
 
   async appendApprovalDecision(request: ApprovalRequest): Promise<void> {

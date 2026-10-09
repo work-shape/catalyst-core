@@ -11,3 +11,5 @@ export * from "./config-asset-concurrency";
 export * from "./origins";
 export * from "./operations";
 export * from "./events";
+
+export type { Logger } from "./logger";

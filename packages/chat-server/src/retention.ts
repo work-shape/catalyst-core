@@ -1,3 +1,4 @@
+import type { Logger } from "@vivd-catalyst/core";
 import {
   type Conversation,
   type ConversationId,
@@ -32,10 +33,6 @@ export interface ConversationRetentionJobOptions {
   checkIntervalMs?: number;
   runOnStartup?: boolean;
   now?: () => Date;
-}
-
-interface RetentionLogger {
-  error(input: unknown, message?: string): void;
 }
 
 const DEFAULT_RETENTION_BATCH_SIZE = 100;
@@ -240,14 +237,14 @@ export class ConversationRetentionJob {
   private readonly workflow: ConversationRetentionWorkflow;
   private readonly checkIntervalMs: number;
   private readonly runOnStartup: boolean;
-  private readonly logger: RetentionLogger;
+  private readonly logger: Logger;
   private timer: ReturnType<typeof setInterval> | undefined;
   private running: Promise<void> | undefined;
 
   constructor(input: {
     workflow: ConversationRetentionWorkflow;
     options?: ConversationRetentionJobOptions;
-    logger: RetentionLogger;
+    logger: Logger;
   }) {
     this.workflow = input.workflow;
     this.checkIntervalMs = input.options?.checkIntervalMs ?? DEFAULT_RETENTION_CHECK_INTERVAL_MS;
@@ -300,7 +297,7 @@ export class ConversationRetentionJob {
 export function createConversationRetentionJob(
   options: ChatServerOptions,
   input: {
-    logger: RetentionLogger;
+    logger: Logger;
     jobOptions?: ConversationRetentionJobOptions;
   }
 ): ConversationRetentionJob {

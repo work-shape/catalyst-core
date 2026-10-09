@@ -2,6 +2,7 @@ import { createClientInstanceExecutionAssembly } from "../../packages/client-ass
 import { afterAll, afterEach, beforeEach } from "vitest";
 import {
   createClientInstanceApp,
+  createLogger,
   type CreateClientInstanceAppInput
 } from "@vivd-catalyst/client-assembly";
 import { createChatServer, type ChatServerOptions } from "@vivd-catalyst/chat-server";
@@ -31,8 +32,11 @@ export interface TestInstance<S extends PlatformStore = PlatformStore> {
 type TestIdentity = string | { headers: TestCallInput["headers"] };
 export type TestMemoryStore = InMemoryPlatformStore;
 export type TestPostgresStore = PostgresPlatformStore;
-export type TestServerOptions = Omit<ChatServerOptions, "apiAccessStore" | "configAssets"> &
-  Partial<Pick<ChatServerOptions, "apiAccessStore">> & {
+export type TestServerOptions = Omit<
+  ChatServerOptions,
+  "apiAccessStore" | "configAssets" | "logger"
+> &
+  Partial<Pick<ChatServerOptions, "apiAccessStore" | "logger">> & {
     configAssets?: Omit<ChatServerOptions["configAssets"], "source"> &
       Partial<Pick<ChatServerOptions["configAssets"], "source">>;
   };
@@ -236,6 +240,7 @@ export function completeServerOptions(
 ): ChatServerOptions {
   return {
     ...options,
+    logger: options.logger ?? createLogger(),
     apiAccessStore: options.apiAccessStore ?? stores,
     configAssets: options.configAssets
       ? {

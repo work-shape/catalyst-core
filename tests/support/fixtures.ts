@@ -6,7 +6,8 @@ import {
   unknownToJsonValue,
   type AuthenticatedUser,
   type ConversationStore,
-  type JsonObject
+  type JsonObject,
+  type Logger
 } from "@vivd-catalyst/core";
 import {
   parseClientInstanceConfig,
@@ -19,6 +20,20 @@ type LocalizedTestString =
       en?: string;
       de?: string;
     };
+
+/** A job under test must not log an error; the logged error fails the test. */
+export function createFailingTestLogger(message: string): Logger {
+  const logger: Logger = {
+    debug() {},
+    info() {},
+    warn() {},
+    error(input) {
+      throw input instanceof Error ? input : new Error(message);
+    },
+    child: () => logger
+  };
+  return logger;
+}
 
 export function createTestUser(
   id: string,

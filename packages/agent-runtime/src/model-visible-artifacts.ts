@@ -17,6 +17,7 @@ export interface ModelContextArtifactReader {
 }
 
 export interface ModelVisibleArtifactProjectionOptions {
+  logger?: import("@vivd-catalyst/core").Logger;
   clientInstanceId?: ClientInstanceId;
   artifactReader?: ModelContextArtifactReader;
 }
@@ -71,12 +72,13 @@ async function readModelVisibleImages(
         data: object.bytes
       });
     } catch (error) {
-      console.warn(
-        JSON.stringify({
+      options.logger?.warn(
+        {
           type: "model_context_projection.artifact_unavailable",
           artifactId: artifact.artifactId,
           error: error instanceof Error ? error.message : "Unknown artifact read error"
-        })
+        },
+        "Model context image unavailable"
       );
     }
   }

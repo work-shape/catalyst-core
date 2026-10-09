@@ -1,4 +1,5 @@
 import { addTestRoute, createTestInstance } from "./support/test-instance";
+import { createLogger } from "@vivd-catalyst/client-assembly";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppError, asClientInstanceId } from "@vivd-catalyst/core";
@@ -207,7 +208,7 @@ describe("provider error boundary", () => {
       "fetch",
       vi.fn(async () => new Response(JSON.stringify(providerBody), { status: 400 }))
     );
-    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const logged = vi.spyOn(createLogger(), "error").mockImplementation(() => undefined);
     const app = await createTestInstance({
       config: createTestConfig({
         modelProviders: [
@@ -270,7 +271,9 @@ describe("provider error boundary", () => {
       }
       expect(audit.body).not.toContain(marker);
       expect(
-        logged.mock.calls.some(([payload]) => String(payload).includes("agent_runtime.run_failed"))
+        logged.mock.calls.some(([payload]) =>
+          JSON.stringify(payload).includes("agent_runtime.run_failed")
+        )
       ).toBe(true);
       expect(JSON.stringify(logged.mock.calls)).not.toContain(marker);
       for (const operation of ["testProviderError", "testInternalError"] as const) {

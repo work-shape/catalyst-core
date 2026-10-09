@@ -50,6 +50,7 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
     "@fixture/beta": ["@fixture/gamma"],
     "@fixture/gamma": ["@fixture/beta"],
     "@fixture/delta": [],
+    "@fixture/config-cli": [],
     "@fixture/ghost": []
   }),
   "packages/alpha/package.json": JSON.stringify({
@@ -82,7 +83,8 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
   }),
 
   // Allowed: the CLI entry, the environment module, an adapter and a root test file.
-  [`${source}/cli.ts`]: `console.log("started");\n`,
+  "packages/config-cli/package.json": JSON.stringify({ name: "@fixture/config-cli" }),
+  "packages/config-cli/src/cli.ts": `console.log("started");\n`,
   [`${source}/env.ts`]: `export const mode = process.env.MODE;\n`,
   [`${source}/adapters/http.ts`]: `export const load = () => fetch("https://example.test");\n`,
   "tests/setup.test.ts": `console.log(process.env.MODE);\n`,
@@ -138,10 +140,11 @@ export const quiet = 1;
   [`${source}/warned.ts`]: `debugger;\n`,
 
   // Console, environment and fetch boundaries, with each bypass
-  [`${source}/console-member.ts`]: `console.log("example");\n`,
+  [`${source}/console-member.ts`]: `console.warn("example");\n`,
   [`${source}/console-destructured.ts`]: `const { log } = console;
 log("example");
 `,
+  [`${source}/logger-interface.ts`]: `export interface OtherLogger { warn(input: unknown): void; }\n`,
   [`${source}/console-alias.ts`]: `export const logger = console;\n`,
   [`${source}/console-host.ts`]: `globalThis.console.log("example");\n`,
   [`${source}/env-member.ts`]: `export const mode = process.env.MODE;\n`,
@@ -369,6 +372,7 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `@typescript-eslint/ban-ts-comment ${source}/ts-comment.ts`,
         `eslint/inline-config ${source}/inline-config.ts`,
         `no-debugger ${source}/warned.ts`,
+        `catalyst/logger-boundary ${source}/logger-interface.ts`,
         `catalyst/console-boundary ${source}/console-member.ts`,
         `catalyst/console-boundary ${source}/console-destructured.ts`,
         `catalyst/console-boundary ${source}/console-alias.ts`,

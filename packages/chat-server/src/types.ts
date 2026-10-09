@@ -36,6 +36,7 @@ import type { ExecutionWorkspaceCleanupJobOptions } from "./workspace-cleanup";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
 
 export interface ChatServerOptions {
+  logger: import("@vivd-catalyst/core").Logger;
   approvalRequests?: Pick<ApprovalRequestWorkflowOptions, "store" | "handlers" | "onDecided">;
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;

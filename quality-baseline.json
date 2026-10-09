@@ -220,48 +220,6 @@
     },
     {
       "target": "lint",
-      "rule": "catalyst/console-boundary",
-      "scope": "clients/demo",
-      "count": 1,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/console-boundary",
-      "scope": "packages/agent-runtime",
-      "count": 3,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/console-boundary",
-      "scope": "packages/client-assembly",
-      "count": 6,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/console-boundary",
-      "scope": "packages/deployment-kit",
-      "count": 12,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/console-boundary",
-      "scope": "packages/postgres-store",
-      "count": 2,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/console-boundary",
-      "scope": "packages/tool-execution",
-      "count": 1,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
       "rule": "catalyst/database-skip",
       "scope": "tests",
       "count": 10,

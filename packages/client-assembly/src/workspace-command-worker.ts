@@ -1,3 +1,4 @@
+import { createLogger } from "./logger";
 import { tmpdir } from "node:os";
 import { AppError, StoreBackedAuditRecorder } from "@vivd-catalyst/core";
 import {
@@ -34,6 +35,7 @@ export interface ClientInstanceWorkspaceCommandWorker {
 export async function createClientInstanceWorkspaceCommandWorker(
   input: CreateClientInstanceWorkspaceCommandWorkerInput = {}
 ): Promise<ClientInstanceWorkspaceCommandWorker> {
+  const logger = createLogger();
   const env = input.env ?? process.env;
   const config = applyWorkspaceRunnerImageEnvOverride(
     input.config ?? (await loadWorkspaceWorkerConfig(input.configPath, env)),
@@ -43,7 +45,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
     throw new AppError("VALIDATION_FAILED", "Execution workspaces are disabled in release config");
   }
 
-  const store = await createPlatformStore({ env, storeMode: input.storeMode });
+  const store = await createPlatformStore({ env, storeMode: input.storeMode, logger });
   const clientInstanceId = getClientInstanceId(config);
   const byteStore = createLocalWorkspaceFileByteStore({
     rootDirectory: requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
@@ -52,7 +54,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
     clientInstanceId,
     store
   });
-  const telemetry = createConsoleWorkspaceCommandTelemetry(console);
+  const telemetry = createConsoleWorkspaceCommandTelemetry(logger);
   const processExecutor =
     config.executionWorkspaces.runner.mode === "docker"
       ? createDockerProcessExecutorFromConfig(config.executionWorkspaces.runner)
@@ -130,7 +132,7 @@ export async function runClientInstanceWorkspaceCommandWorker(
         reason: `Received ${signal}`
       })
       .catch((error: unknown) => {
-        console.error(error);
+        createLogger().error({ error }, "Worker shutdown failed");
         process.exitCode = 1;
       });
   };

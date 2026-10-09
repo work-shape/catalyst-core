@@ -50,6 +50,7 @@ export type { StoredReasoningSummary } from "@vivd-catalyst/core";
 const CHARS_PER_TOKEN = 4;
 
 export interface ModelContextProjectionOptions {
+  logger?: import("@vivd-catalyst/core").Logger;
   toolOutput: {
     maxTokens: number;
     maxBytes?: number;
@@ -555,12 +556,13 @@ async function projectUserAttachmentImages(
         data: object.bytes
       });
     } catch (error) {
-      console.warn(
-        JSON.stringify({
+      options.logger?.warn(
+        {
           type: "model_context_projection.file_unavailable",
           fileId: attachment.fileId,
           error: error instanceof Error ? error.message : "Unknown file read error"
-        })
+        },
+        "Model context image unavailable"
       );
     }
   }
