@@ -415,6 +415,25 @@ the code `RATE_LIMITED`, the seconds to wait in `details.retryAfterSeconds` and 
 `Retry-After` header. Behind a second proxy the client address needs
 [`trusted_proxies`](/operate/deployment/).
 
+## Operation policy
+
+Every call of a registered operation is checked against a policy value before it runs. The
+`policy` section sets the value for operations that nothing else names one for: no declaration
+of the release and no setting of an admin. An instance without the section gets the defaults.
+
+```yaml
+policy:
+  defaults:
+    reading: allow
+    changing: confirm
+```
+
+- `reading`: `allow` runs a reading operation, `deny` refuses it with 403 and the code
+  `POLICY_DENIED`.
+- `changing`: `allow` runs a changing operation. `confirm` asks the caller to confirm, and a
+  person's or a service's own call through the API or the CLI is that confirmation. `approval`
+  holds the call for another person. `deny` refuses it.
+
 ## Infrastructure
 
 The `infrastructure` section states what an instance runs on: one provider per port. It is

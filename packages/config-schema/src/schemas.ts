@@ -795,6 +795,24 @@ export const rateLimitsConfigSchema = z
   .strict()
   .prefault({});
 
+/**
+ * The policy value of an operation that nothing else names one for: no declaration of the
+ * release and no setting of an admin. A reading operation runs or is refused; a changing one
+ * may also ask its caller to confirm or another person to approve.
+ */
+const policyConfigSchema = z
+  .object({
+    defaults: z
+      .object({
+        reading: z.enum(["allow", "deny"]).default("allow"),
+        changing: z.enum(["allow", "confirm", "approval", "deny"]).default("confirm")
+      })
+      .strict()
+      .prefault({})
+  })
+  .strict()
+  .prefault({});
+
 export const clientInstanceConfigSchema = z.object({
   version: z.literal(1).default(1),
   clientInstance: z.object({
@@ -870,7 +888,8 @@ export const clientInstanceConfigSchema = z.object({
   tools: z.array(toolInstanceConfigSchema).default([]),
   views: viewsConfigSchema,
   dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
-  ui: uiConfigSchema
+  ui: uiConfigSchema,
+  policy: policyConfigSchema
 });
 
 const MOVED_ASSET_CONFIG_KEYS = [
