@@ -1,7 +1,12 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { compareBaseline } from "@vivd-catalyst/quality-config/baseline";
+import { baselineRises, compareBaseline } from "@vivd-catalyst/quality-config/baseline";
 
 const entry = {
   target: "lint",
@@ -69,6 +74,76 @@ describe("quality baseline", () => {
     const [error] = compareBaseline(many, baseline, "lint");
     expect(error).toContain("src/19.ts (1) and 2 more");
     expect(error).not.toContain("src/20.ts");
+  });
+
+  it("reports baseline counts that were raised and entries that were added", () => {
+    const other = { ...entry, scope: "packages/other" };
+    expect(baselineRises(baseline, baseline)).toEqual([]);
+    expect(baselineRises(baseline, { version: 1, entries: [{ ...entry, count: 1 }] })).toEqual([]);
+    expect(baselineRises({ version: 1, entries: [entry, other] }, baseline)).toEqual([]);
+    expect(
+      baselineRises(baseline, { version: 1, entries: [{ ...entry, count: 3 }, other] })
+    ).toEqual([
+      "lint|test/rule|packages/example: count raised from 2 to 3",
+      "lint|test/rule|packages/other: entry added with count 2"
+    ]);
+  });
+
+  describe("guard for pull requests", () => {
+    const guard = fileURLToPath(
+      new URL("../packages/quality-config/baseline-guard.mjs", import.meta.url)
+    );
+
+    /** Commits one baseline on main and a second one on a branch, then runs the guard. */
+    function guardBranch(onMain: object | undefined, onBranch: object) {
+      const directory = mkdtempSync(join(tmpdir(), "catalyst-baseline-guard-"));
+      const git = (...args: string[]) => {
+        const identity = ["-c", "user.name=Test", "-c", "user.email=test@example.test"];
+        const result = spawnSync("git", [...identity, ...args], { cwd: directory });
+        expect(result.status).toBe(0);
+      };
+      const commit = (content: object | undefined, message: string) => {
+        if (content)
+          writeFileSync(join(directory, "quality-baseline.json"), JSON.stringify(content));
+        git("add", "--all");
+        git("commit", "--quiet", "--allow-empty", "--message", message);
+      };
+      try {
+        git("init", "--quiet", "--initial-branch", "main");
+        commit(onMain, "main");
+        git("checkout", "--quiet", "-b", "change");
+        commit(onBranch, "change");
+        // Main moves on after the branch left it; the guard compares with the merge base.
+        git("checkout", "--quiet", "main");
+        commit({ version: 1, entries: [] }, "later main");
+        git("checkout", "--quiet", "change");
+        return spawnSync(process.execPath, [guard, "main"], { cwd: directory, encoding: "utf8" });
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    }
+
+    it("passes when counts fall or stay and when the base has no baseline yet", () => {
+      expect(guardBranch(baseline, { version: 1, entries: [{ ...entry, count: 1 }] }).status).toBe(
+        0
+      );
+      expect(guardBranch(baseline, baseline).status).toBe(0);
+      expect(guardBranch(undefined, baseline).status).toBe(0);
+    });
+
+    it("fails when a count rises or an entry is added, and says that counts may only fall", () => {
+      const raised = guardBranch(baseline, { version: 1, entries: [{ ...entry, count: 3 }] });
+      expect(raised.status).toBe(1);
+      expect(raised.stderr).toContain("Counts may only fall");
+      expect(raised.stderr).toContain("lint|test/rule|packages/example: count raised from 2 to 3");
+
+      const added = guardBranch(baseline, {
+        version: 1,
+        entries: [entry, { ...entry, scope: "packages/other" }]
+      });
+      expect(added.status).toBe(1);
+      expect(added.stderr).toContain("lint|test/rule|packages/other: entry added with count 2");
+    });
   });
 
   it("holds test type errors to the count that CB-2b owns", () => {

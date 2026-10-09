@@ -67,3 +67,23 @@ function filesOf(findings) {
   const more = names.length > 10 ? ` and ${names.length - 10} more` : "";
   return `. Findings are in ${listed.join(", ")}${more}`;
 }
+
+/**
+ * The entries of a baseline that are new or whose count is higher than in an earlier baseline.
+ * Entries are only added when a rule is introduced, with its measurement, so on a pull
+ * request both are a baseline raised to admit a new violation.
+ * @param {Baseline} earlier
+ * @param {Baseline} current
+ * @returns {string[]} One line per raised or added entry.
+ */
+export function baselineRises(earlier, current) {
+  const before = new Map(earlier.entries.map((entry) => [keyOf(entry), entry.count]));
+  return current.entries
+    .filter((entry) => entry.count > (before.get(keyOf(entry)) ?? 0))
+    .map((entry) =>
+      before.has(keyOf(entry))
+        ? `${keyOf(entry)}: count raised from ${before.get(keyOf(entry))} to ${entry.count}`
+        : `${keyOf(entry)}: entry added with count ${entry.count}`
+    )
+    .sort();
+}

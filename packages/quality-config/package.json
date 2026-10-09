@@ -8,7 +8,8 @@
     "./baseline": "./baseline.mjs"
   },
   "bin": {
-    "catalyst-quality": "./check.mjs"
+    "catalyst-quality": "./check.mjs",
+    "catalyst-quality-baseline-guard": "./baseline-guard.mjs"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
