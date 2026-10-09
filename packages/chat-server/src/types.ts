@@ -15,6 +15,7 @@ import type {
 } from "@vivd-catalyst/core";
 import type {
   AuditRecorder,
+  Authorizer,
   CentralPolicySetting,
   PlatformEventEmitter,
   RateLimiter
@@ -116,6 +117,8 @@ export interface ChatServerOptions {
   };
   /** Counts calls per operation and caller. Without one the server counts in its own process. */
   rateLimiter?: RateLimiter;
+  /** Decides what a caller may do. Without one the rights of the roles decide. */
+  authorizer?: Authorizer;
   /** What the calls of registered operations run with beyond the server's own defaults. */
   operations?: {
     /** The events of a call. Without one, audited events become audit rows and nothing blocks. */
@@ -131,4 +134,4 @@ export interface ChatServerOptions {
 
 /** The options as the server's own modules see them, with every default filled in. */
 export type ResolvedChatServerOptions = ChatServerOptions &
-  Required<Pick<ChatServerOptions, "rateLimiter">>;
+  Required<Pick<ChatServerOptions, "rateLimiter" | "authorizer">>;

@@ -20,6 +20,7 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type OperationOrigin,
   type OperationResource,
   type StorePage,
   type RuntimeCallContext
@@ -45,6 +46,7 @@ type RouteServerOptions = Pick<
   | "rateLimiter"
   | "stores"
   | "auditRecorder"
+  | "authorizer"
   | "operations"
 >;
 
@@ -112,17 +114,26 @@ type OperationInput<Op extends Operation> = InputPart<Op["body"]> &
   InputPart<Op["query"]> &
   Record<OperationPathParamName<Op["path"]>, string>;
 
+/**
+ * Who checks the caller's right. Where the descriptor requires one, the registry checks it.
+ * Where it requires none, the registration must say that the implementation checks.
+ */
+type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknown, ...unknown[]]
+  ? { checksRightsItself?: never }
+  : { checksRightsItself: true };
+
 /** What a registration adds to the descriptor: what the call touches and what it does. */
-interface OperationBinding<Op extends Operation> extends Omit<
+type OperationBinding<Op extends Operation> = Omit<
   AssembledOperationBinding,
-  "resource" | "execute"
-> {
-  resource?(input: OperationInput<Op>): OperationResource | undefined;
-  execute(
-    input: OperationInput<Op>,
-    context: OperationBindingContext
-  ): RouteResult<Op> | Promise<RouteResult<Op>>;
-}
+  "resource" | "execute" | "checksRightsItself"
+> &
+  RightsCheck<Op> & {
+    resource?(input: OperationInput<Op>): OperationResource | undefined;
+    execute(
+      input: OperationInput<Op>,
+      context: OperationBindingContext
+    ): RouteResult<Op> | Promise<RouteResult<Op>>;
+  };
 
 export interface Route {
   <const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
@@ -271,6 +282,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           operation,
           {
             identity: caller.identity,
+            origin: originOf(caller.identity, request),
             correlationId,
             input: { ...inputFields(request.body), ...inputFields(request.query), ...params },
             idempotencyKey: readIdempotencyKey(request)
@@ -281,6 +293,17 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
     });
   }
   return Object.assign(route, { registered, operation: registerOperation });
+}
+
+/**
+ * Where a call over HTTP comes from, read from how it was authenticated and from nothing else
+ * the caller sends. A browser session is the person. A key or token in the request is
+ * automation, which the CLI is, whether it belongs to a service principal or to a person.
+ */
+function originOf(identity: AuthenticatedIdentity, request: FastifyRequest): OperationOrigin {
+  if (isAuthenticatedServicePrincipal(identity)) return { kind: "cli" };
+  if (identity.authenticationMethod === "session-cookie") return { kind: "user" };
+  return hasExplicitCredentials(request.headers) ? { kind: "cli" } : { kind: "user" };
 }
 
 const inputFieldsSchema = z.record(z.string(), z.unknown()).catch({});

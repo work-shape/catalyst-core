@@ -218,6 +218,26 @@ export const registeredTestOperations = {
   })
 };
 
+/**
+ * An operation that requires no right although its type says it requires one. The types
+ * refuse to register an unchecked operation, so a test of the same refusal at startup has to
+ * hide the empty list from them.
+ */
+export function createUncheckedTestOperation() {
+  const requires: ["audit.view"] = ["audit.view"];
+  requires.pop();
+  return defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "testRunUnchecked",
+    method: "GET",
+    path: "/api/v1/test/operations/unchecked",
+    scope: "governance:read",
+    requires,
+    effect: "reading",
+    response: json(z.object({ value: z.string() }))
+  });
+}
+
 export const testOperations = {
   legacyDevelopmentUsers: fixtureOperation("GET", "/auth/development/users"),
   ...apiOperations,

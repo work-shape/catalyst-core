@@ -3,15 +3,14 @@ import {
   AppError,
   asCollaborationWorkspaceId,
   isAuthenticatedServicePrincipal,
-  legacyAuthorizer,
   type AuthenticatedIdentity,
   type OperationRun
 } from "@vivd-catalyst/core";
 import type { Route } from "../http/route";
 import { toOperationRunResource } from "../operations/operation-run-resource";
-import type { ChatServerOptions } from "../types";
+import type { ResolvedChatServerOptions } from "../types";
 
-export function registerOperationRunRoutes(route: Route, options: ChatServerOptions): void {
+export function registerOperationRunRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const { clientInstanceId } = options;
   const runs = options.stores.operationRuns;
 
@@ -23,7 +22,7 @@ export function registerOperationRunRoutes(route: Route, options: ChatServerOpti
       throw new AppError("NOT_FOUND", "Operation run not found");
     }
     if (!isCallerOf(run, identity)) {
-      const access = await legacyAuthorizer.forActor(identity);
+      const access = await options.authorizer.forActor(identity);
       access.require("audit.view", { kind: "operation_run", workspaceId: run.workspaceId });
     }
     return toOperationRunResource(run);

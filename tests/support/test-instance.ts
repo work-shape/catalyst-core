@@ -393,7 +393,8 @@ function bindInstance<S extends PlatformStores>(
         state.closed = true;
         instances.delete(instance);
         try {
-          await starting;
+          // A start that failed was already answered to the call that began it.
+          await starting?.catch(() => undefined);
           if (state.serverOptions) await state.jobs?.stop();
         } finally {
           await state.cleanup();

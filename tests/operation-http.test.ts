@@ -1,161 +1,32 @@
-import { describe, expect, it } from "vitest";
-import { apiErrorResponseSchema, operationRunSchema } from "@vivd-catalyst/api-contract";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { operationRunSchema, type Operation } from "@vivd-catalyst/api-contract";
 import {
   AppError,
   IDEMPOTENCY_KEY_MAX_LENGTH,
-  StoreBackedAuditRecorder,
   asClientInstanceId,
   createPlatformId,
-  legacyPermissionFor,
-  type CentralPolicySetting,
-  type Logger,
-  type OperationRun,
-  type PlatformEventEmitter,
-  type PlatformEventName
+  type Authorizer
 } from "@vivd-catalyst/core";
-import { createTestConfig } from "./support/fixtures";
-import { registeredTestOperations as operations } from "./support/operations";
-import { asCaller, createCallerAuthAdapter, type TestCaller } from "./support/route-callers";
-import { createTestInstanceWith, type TestRoute } from "./support/test-instance";
+import {
+  change,
+  clientInstanceId,
+  createServer,
+  errorOf,
+  person,
+  right,
+  secret,
+  type ServerInput
+} from "./support/operation-server";
+import {
+  createUncheckedTestOperation,
+  registeredTestOperations as operations
+} from "./support/operations";
+import type { TestCaller } from "./support/route-callers";
+import type { TestRoute } from "./support/test-instance";
 
 // The HTTP face of the operation registry. These tests register fixture operations through it
 // and prove, for every class of outcome, what the caller is answered and what the Operation
 // Run records, and that each refusal leaves the operation unexecuted.
-
-const secret = "payload-that-must-not-leave";
-const config = createTestConfig();
-const clientInstanceId = asClientInstanceId(config.clientInstance.id);
-
-interface ServerInput {
-  settings?: CentralPolicySetting[];
-  readingDefault?: "allow" | "deny";
-  approvals?: boolean;
-  /** The outcome the guardrails of this event answer with. */
-  guardrail?: { event: PlatformEventName; outcome: "block" | "require_approval" };
-  now?: () => Date;
-}
-
-async function createServer(input: ServerInput = {}) {
-  const executed: string[] = [];
-  const logged: unknown[] = [];
-  const approvalRequests: string[] = [];
-  let release: () => void = () => undefined;
-  let entered: () => void = () => undefined;
-  const gate = {
-    released: new Promise<void>((resolve) => (release = resolve)),
-    entered: new Promise<void>((resolve) => (entered = resolve))
-  };
-  const logger: Logger = {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: (fields) => void logged.push(fields),
-    child: () => logger
-  };
-  const { guardrail } = input;
-  const events: PlatformEventEmitter | undefined = guardrail && {
-    emit: (name) => Promise.resolve(name === guardrail.event ? guardrail.outcome : "allow")
-  };
-  const server = await createTestInstanceWith(
-    (stores) => ({
-      authAdapter: createCallerAuthAdapter(),
-      logger,
-      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
-      config: {
-        ...config,
-        policy: {
-          defaults: { ...config.policy.defaults, reading: input.readingDefault ?? "allow" }
-        }
-      },
-      operations: {
-        centralPolicySettings: () => input.settings ?? [],
-        ...(events ? { events } : {}),
-        ...(input.now ? { now: input.now } : {}),
-        ...(input.approvals
-          ? {
-              approvals: {
-                request: ({ run }) => {
-                  approvalRequests.push(run.id);
-                  return Promise.resolve({ approvalRequestId: `apr_${approvalRequests.length}` });
-                }
-              }
-            }
-          : {})
-      }
-    }),
-    (route) => registerFixtures(route)
-  );
-
-  function registerFixtures(route: TestRoute): void {
-    route.operation(operations.testRunRead, {
-      resource: (item) => ({ kind: "test_item", id: item.itemId }),
-      execute: (item) => {
-        executed.push("testRunRead");
-        return Promise.resolve({ itemId: item.itemId, view: item.view });
-      }
-    });
-    route.operation(operations.testRunList, {
-      execute: (_input, { paging }) => {
-        executed.push(`testRunList:${paging?.limit}`);
-        return Array.from({ length: 5 }, (_, index) => ({
-          id: `item-${index}`,
-          createdAt: "2026-10-09T12:00:00.000Z"
-        }));
-      }
-    });
-    route.operation(operations.testRunChange, {
-      execute: async (item, context) => {
-        executed.push(`testRunChange:${item.name}`);
-        switch (item.mode) {
-          case "not-found":
-            throw new AppError("NOT_FOUND", "The item does not exist", { name: item.name });
-          case "throw":
-            throw new Error(secret);
-          case "large":
-            return { name: item.name, filler: "x".repeat(300 * 1024) };
-          case "gated":
-            entered();
-            await gate.released;
-            return { name: item.name };
-          case "own-right":
-            context.access.require("audit.view");
-            return { name: item.name };
-          case "ok":
-            return { name: item.name };
-        }
-      }
-    });
-  }
-
-  const runs = (): Promise<OperationRun[]> =>
-    server.stores.operationRuns.list({ clientInstanceId });
-  const auditTypes = async (run: string) =>
-    (await server.stores.audit.listAuditEvents({ clientInstanceId }))
-      .filter((event) => event.metadata?.operationRunId === run)
-      .map((event) => `${event.type}:${event.status}`)
-      .sort();
-  return {
-    server,
-    executed,
-    logged,
-    approvalRequests,
-    gate,
-    release: () => release(),
-    runs,
-    auditTypes
-  };
-}
-
-const right = (...actions: Parameters<typeof legacyPermissionFor>[0][]) =>
-  actions.map(legacyPermissionFor);
-const person = (caller: TestCaller = {}) =>
-  asCaller({ permissions: right("users.manage", "audit.view"), ...caller });
-const change = (name: string, mode?: string, key?: string) => ({
-  payload: { name, ...(mode ? { mode } : {}) },
-  headers: key === undefined ? {} : { "idempotency-key": key }
-});
-const errorOf = (response: { json(): unknown }) =>
-  apiErrorResponseSchema.parse(response.json()).error;
 
 describe("operation over HTTP: a call that runs", () => {
   it("answers 200 with the plain output, names its run and records it as done", async () => {
@@ -247,6 +118,121 @@ describe("operation over HTTP: a call that runs", () => {
     );
     const origins = Object.fromEntries((await runs()).map((run) => [run.actor.kind, run.origin]));
     expect(origins).toEqual({ user: { kind: "user" }, service_principal: { kind: "cli" } });
+  });
+
+  it("takes a person's token for the CLI and a person's browser session for the person", async () => {
+    const { server, runs } = await createServer({ explicitCredentials: true });
+    const withHeaders = (name: string, caller: TestCaller, headers: Record<string, string>) => {
+      const as = person(caller);
+      return server.call("testRunChange", { payload: { name }, headers }, as);
+    };
+    const byToken = await withHeaders("by-token", {}, { authorization: "Bearer person-token" });
+    const bySession = await withHeaders(
+      "by-session",
+      { cookie: true },
+      { "sec-fetch-site": "same-origin" }
+    );
+    expect([byToken.statusCode, bySession.statusCode]).toEqual([200, 200]);
+    const origin = async (response: typeof byToken) =>
+      (await runs()).find((run) => run.id === response.headers["operation-run-id"]);
+    expect(await origin(byToken)).toMatchObject({
+      actor: { kind: "user" },
+      origin: { kind: "cli" }
+    });
+    expect(await origin(bySession)).toMatchObject({
+      actor: { kind: "user" },
+      origin: { kind: "user" }
+    });
+  });
+
+  it("answers the outcome with its run when the call happened and recording it failed", async () => {
+    const { server, runs, executed, logged } = await createServer({
+      failingEvent: "operation.completed"
+    });
+    const first = await server.call("testRunChange", change("kept", "ok", "key-1"), person());
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({ name: "kept" });
+    const [run] = await runs();
+    expect(run).toMatchObject({ status: "done" });
+    expect(first.headers["operation-run-id"]).toBe(run?.id);
+    expect(logged).toMatchObject([{ operation: "testRunChange", operationRunId: run?.id }]);
+    expect(JSON.stringify(logged)).not.toContain(secret);
+    expect(JSON.stringify(logged)).not.toContain("kept");
+
+    // The caller that sends the call again is answered from the run and changes nothing twice.
+    const again = await server.call("testRunChange", change("kept", "ok", "key-1"), person());
+    expect(again.statusCode).toBe(200);
+    expect(again.headers["idempotent-replayed"]).toBe("true");
+    expect(executed).toEqual(["testRunChange:kept"]);
+  });
+});
+
+describe("operation over HTTP: who checks the right", () => {
+  it("makes a registration without a required right say that it checks rights itself", () => {
+    const check = (route: TestRoute) => {
+      expectTypeOf(route.operation<typeof operations.testRunList>)
+        .parameter(1)
+        .toHaveProperty("checksRightsItself")
+        .toEqualTypeOf<true>();
+      expectTypeOf(route.operation<typeof operations.testRunRead>)
+        .parameter(1)
+        .toHaveProperty("checksRightsItself")
+        .toEqualTypeOf<undefined>();
+    };
+    expect(check).toBeTypeOf("function");
+  });
+
+  it("does not start with an operation that requires no right and does not say so", async () => {
+    const unchecked = createUncheckedTestOperation();
+    const start = createServer({
+      register: (route) =>
+        route.operation(unchecked, { execute: () => Promise.resolve({ value: "open" }) })
+    }).then(({ server }) => server.call("testRunRead", { params: { itemId: "1" } }, person()));
+    await expect(start).rejects.toThrow(/does not say that it checks rights itself/u);
+  });
+
+  it("does not start with an operation that names a right and says it checks rights itself", async () => {
+    // The types refuse this too, so the right the descriptor names is hidden from them.
+    const named: Omit<typeof operations.testRunRead, "requires"> & {
+      requires: NonNullable<Operation["requires"]>;
+    } = operations.testRunRead;
+    const start = createServer({
+      register: (route) =>
+        route.operation(named, {
+          checksRightsItself: true,
+          execute: () => Promise.resolve({ itemId: "1" })
+        })
+    }).then(({ server }) => server.call("testRunRead", { params: { itemId: "1" } }, person()));
+    await expect(start).rejects.toThrow(/may not say that it checks rights itself/u);
+  });
+
+  it("asks the server's authorizer, for the call and for reading a run", async () => {
+    const asked: string[] = [];
+    const authorizer: Authorizer = {
+      forActor: () =>
+        Promise.resolve({
+          authorize: (action) => {
+            asked.push(action);
+            return { allowed: false, reason: "denied" };
+          },
+          require: (action) => {
+            asked.push(action);
+            throw new AppError("FORBIDDEN", "Refused by the test", { action, reason: "denied" });
+          }
+        })
+    };
+    const { server, executed } = await createServer({ authorizer });
+    const refused = await server.call("testRunChange", change("no"), person({ id: "usr_one" }));
+    expect(refused.statusCode).toBe(403);
+    expect(errorOf(refused)).toMatchObject({ code: "FORBIDDEN", details: { reason: "denied" } });
+    expect(executed).toEqual([]);
+    const read = await server.call(
+      "operations.get_run",
+      { params: { runId: String(refused.headers["operation-run-id"]) } },
+      person({ id: "usr_two" })
+    );
+    expect(read.statusCode).toBe(403);
+    expect(asked).toEqual(["users.manage", "audit.view"]);
   });
 });
 
@@ -572,6 +558,47 @@ describe("operation over HTTP: the same call sent again", () => {
     expect(finished.statusCode).toBe(200);
     expect(second.headers["operation-run-id"]).toBe(finished.headers["operation-run-id"]);
     expect(executed).toEqual(["testRunChange:slow"]);
+  });
+
+  it("never runs an interrupted changing call again under its key", async () => {
+    const { server, gate, release, runs, executed } = await createServer();
+    const first = server.call("testRunChange", change("cut", "gated", "key-1"), person());
+    await gate.entered;
+    const [running] = await runs();
+    if (!running) throw new Error("The first call must have started a run");
+    await server.stores.operationRuns.markInterrupted({ clientInstanceId, id: running.id });
+
+    for (const attempt of [1, 2]) {
+      const again = await server.call("testRunChange", change("cut", "gated", "key-1"), person());
+      expect(again.statusCode, `attempt ${attempt}`).toBe(409);
+      expect(errorOf(again)).toMatchObject({
+        code: "OPERATION_IN_PROGRESS",
+        details: { operationRunId: running.id, interrupted: true }
+      });
+      expect(again.headers["operation-run-id"]).toBe(running.id);
+    }
+    expect(executed).toEqual(["testRunChange:cut"]);
+    expect(await runs()).toMatchObject([{ status: "failed", attempt: 1 }]);
+    release();
+    await first;
+  });
+
+  it("keeps the key of a person and of a service principal with the same id apart", async () => {
+    const { server, runs, executed } = await createServer();
+    for (const kind of ["user", "service"] as const) {
+      const response = await server.call(
+        "testRunChange",
+        change("mine", "ok", "shared"),
+        person({ kind, id: "same_id" })
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["idempotent-replayed"]).toBeUndefined();
+    }
+    expect(executed).toHaveLength(2);
+    expect((await runs()).map((run) => run.actor.kind).sort()).toEqual([
+      "service_principal",
+      "user"
+    ]);
   });
 
   it("executes once when two calls with one key arrive together", async () => {

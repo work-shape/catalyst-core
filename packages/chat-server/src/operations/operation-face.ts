@@ -8,8 +8,6 @@ import {
   createOperationRegistry,
   isAppError,
   isAppErrorCode,
-  isAuthenticatedServicePrincipal,
-  legacyAuthorizer,
   operationDenialError,
   type AuthenticatedIdentity,
   type OperationChangeClass,
@@ -38,7 +36,13 @@ const DEFAULT_OPERATION_TIMEOUT_MS = 5 * 60 * 1000;
 
 type OperationFaceOptions = Pick<
   ResolvedChatServerOptions,
-  "clientInstanceId" | "stores" | "auditRecorder" | "config" | "logger" | "operations"
+  | "clientInstanceId"
+  | "stores"
+  | "auditRecorder"
+  | "authorizer"
+  | "config"
+  | "logger"
+  | "operations"
 >;
 
 /** What an implementation knows about the call, with the page of a list operation. */
@@ -54,6 +58,11 @@ export interface AssembledOperationBinding {
   events?: OperationDefinition["events"];
   module?: string;
   timeoutMs?: number;
+  /**
+   * Says that the implementation checks the caller's right itself, through `context.access`.
+   * An operation whose descriptor requires no right must say so, and no other may.
+   */
+  checksRightsItself?: true;
   /** What the call touches: what the right is checked on and the subject of its events. */
   resource?(input: unknown): OperationResource | undefined;
   execute(input: unknown, context: OperationBindingContext): unknown;
@@ -67,6 +76,7 @@ export interface OperationFace {
     operation: Operation,
     call: {
       identity: AuthenticatedIdentity;
+      origin: OperationOrigin;
       correlationId: string;
       input: Record<string, unknown>;
       idempotencyKey: string | undefined;
@@ -90,7 +100,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
     clientInstanceId: options.clientInstanceId,
     registry,
     runs: options.stores.operationRuns,
-    authorizer: legacyAuthorizer,
+    authorizer: options.authorizer,
     events: options.operations?.events ?? createAuditingEventEmitter(options.auditRecorder),
     audit: options.auditRecorder,
     policy: {
@@ -118,6 +128,18 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
       const [action, ...furtherActions] = operation.requires ?? [];
       if (furtherActions.length > 0) {
         throw new Error(`Operation '${operation.id}' may require one right`);
+      }
+      // Nothing is unchecked by omission: either the registry checks the right the descriptor
+      // names, or the registration says that the implementation checks it.
+      if (action === undefined && binding.checksRightsItself !== true) {
+        throw new Error(
+          `Operation '${operation.id}' requires no right and does not say that it checks rights itself`
+        );
+      }
+      if (action !== undefined && binding.checksRightsItself !== undefined) {
+        throw new Error(
+          `Operation '${operation.id}' requires '${action}' and may not say that it checks rights itself`
+        );
       }
       const page =
         response.kind === "page"
@@ -166,7 +188,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
           effect: operation.effect,
           input: call.input,
           actor: call.identity,
-          origin: originOf(call.identity),
+          origin: call.origin,
           idempotencyKey: call.idempotencyKey,
           correlationId: call.correlationId
         },
@@ -207,15 +229,6 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
       }
     }
   };
-}
-
-/**
- * Where a call over HTTP comes from, read from the credential that authenticated it and from
- * nothing the caller sends: a service principal's key is automation, which the CLI is; a
- * person's session is that person.
- */
-function originOf(identity: AuthenticatedIdentity): OperationOrigin {
-  return isAuthenticatedServicePrincipal(identity) ? { kind: "cli" } : { kind: "user" };
 }
 
 /**

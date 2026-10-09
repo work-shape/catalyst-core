@@ -18,6 +18,12 @@ contain breaking changes; a patch version does not.
   from the run with `Idempotent-Replayed: true`, and `409` tells a key used for another call
   (`IDEMPOTENCY_KEY_REUSED`), a first call still running (`OPERATION_IN_PROGRESS`), an
   expired one (`OPERATION_EXPIRED`) or an answer too large to keep (`OUTPUT_NOT_RETAINED`).
+  A changing call that was interrupted is never run again under its key: the key answers
+  `409 OPERATION_IN_PROGRESS` with `details.interrupted: true`, because nobody knows how far
+  the call got. The origin of a run over HTTP follows how the call was authenticated: a
+  browser session is `user`, a key or token in the request is `cli`, also for a person's
+  token. An operation that requires no right must be registered with
+  `checksRightsItself: true`, or the server does not start.
   No operation of the release is registered this way yet. A run stores a hash of the input,
   never the input, and for a failure a code and a safe message.
 - **Operations:** `GET /api/v1/operations/runs/{runId}` reads one Operation Run and

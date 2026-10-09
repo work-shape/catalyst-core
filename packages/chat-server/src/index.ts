@@ -1,6 +1,6 @@
 import type { HttpRuntime, Logger } from "@vivd-catalyst/core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
-import { normalizeAllowedOrigins } from "@vivd-catalyst/core";
+import { legacyAuthorizer, normalizeAllowedOrigins } from "@vivd-catalyst/core";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -74,7 +74,8 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   const options: ResolvedChatServerOptions = {
     ...input,
     allowedOrigins,
-    rateLimiter: input.rateLimiter ?? createInProcessRateLimiter()
+    rateLimiter: input.rateLimiter ?? createInProcessRateLimiter(),
+    authorizer: input.authorizer ?? legacyAuthorizer
   };
   const app = Fastify({
     loggerInstance: adaptLogger(options.logger),
