@@ -1513,6 +1513,45 @@ test("first message from the root route moves to the persisted conversation rout
   await expect(createdConversation).toHaveCount(1);
 });
 
+test("the generated title reaches the rail when the title job ends after the run", async ({
+  page
+}) => {
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  const rail = page.getByRole("complementary", { name: "Conversations" });
+  const tag = `zt${Date.now().toString(36)}`;
+  const message = `${tag} bravo charlie delta echo foxtrot`;
+
+  // The title job may end after a run shorter than a second does. The list answers as it does
+  // then: the temporary title until one answer has shown the conversation without its run.
+  let shownWithoutRun = false;
+  await page.route(
+    (url) => url.origin === new URL(apiBaseUrl).origin && url.pathname === "/api/v1/conversations",
+    async (route) => {
+      if (route.request().method() !== "GET" || shownWithoutRun) {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const body: { items: Array<{ title: string; activeRun?: unknown }> } = await response.json();
+      const listed = body.items.find((item) => item.title.toLowerCase().startsWith(tag));
+      if (listed) {
+        listed.title = message;
+        shownWithoutRun = listed.activeRun === undefined;
+      }
+      await route.fulfill({ response, json: body });
+    }
+  );
+
+  await page.getByPlaceholder("Message").fill(message);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  await expect(
+    rail.getByText(`Z${tag.slice(1)} Bravo Charlie Delta Echo`, { exact: true })
+  ).toBeVisible();
+  expect(shownWithoutRun).toBe(true);
+});
+
 test("root submit stays draft-only while create-run is pending", async ({ page }) => {
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);

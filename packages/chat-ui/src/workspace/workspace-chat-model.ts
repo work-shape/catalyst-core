@@ -24,6 +24,7 @@ import {
 import { resolveContextUsage } from "../assistant/context-usage";
 import type { SendBlock } from "../assistant/send-block";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
+import { useConversationListRefresh } from "./use-conversation-list-refresh";
 import {
   useCancelRunMutation,
   useDeleteConversationMutation,
@@ -423,19 +424,11 @@ export function useWorkspaceChatModel({
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
   });
   const serverConversations = conversationsQuery.data ?? [];
-  const hasListedActiveRun = serverConversations.some((conversation) => conversation.activeRun);
-
-  useEffect(() => {
-    if (!isAuthenticated || !hasListedActiveRun) {
-      return undefined;
-    }
-    const intervalId = window.setInterval(() => {
-      workspaceCache.invalidateConversations();
-    }, 1_000);
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [hasListedActiveRun, isAuthenticated, workspaceCache.invalidateConversations]);
+  const conversationListRefresh = useConversationListRefresh({
+    enabled: isAuthenticated,
+    conversations: serverConversations,
+    refresh: workspaceCache.invalidateConversations
+  });
 
   useEffect(() => {
     const completedBackgroundConversationIds =
@@ -799,13 +792,7 @@ export function useWorkspaceChatModel({
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
-    runRequestAccepted();
-  }
-
-  // The server titles a new conversation with a job. The list is refetched every second while
-  // a run is active, and that is where the title arrives.
-  function runRequestAccepted() {
-    workspaceCache.invalidateConversations();
+    conversationListRefresh.runAccepted(response);
   }
 
   function streamError(conversationId: string, message: string, viewed: boolean) {
@@ -839,7 +826,7 @@ export function useWorkspaceChatModel({
       response.conversation.id
     );
     setNotice(undefined);
-    runRequestAccepted();
+    conversationListRefresh.runAccepted(response);
   }
 
   /** The run did not start: open the composer with the message ready to send. */
