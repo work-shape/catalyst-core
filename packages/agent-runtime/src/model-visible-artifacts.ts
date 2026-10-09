@@ -1,6 +1,7 @@
 import type {
   ClientInstanceId,
   ManagedArtifactId,
+  ManagedArtifactRef,
   SupportedImageMimeType,
   ToolExecutionResult
 } from "@vivd-catalyst/core";
@@ -23,11 +24,12 @@ export interface ModelVisibleArtifactProjectionOptions {
 }
 
 const VISUAL_CONTEXT_LOADED_HEADER = "[Visual context loaded]";
-// Stands where images were: a tool result of an earlier run, or one a request had no room for.
+// Stands where images a tool loaded were: in a result of an earlier run, or in a request that had
+// no room for them.
 const VISUAL_CONTEXT_NOT_LOADED_HEADER =
   "[Visual context not loaded: older images are not kept in model context. To see one again, repeat the tool call that produced it with the values below.]";
-const ATTACHED_IMAGES_NOT_LOADED_NOTE =
-  "[Attached images not loaded: older images are not kept in model context. Ask for the image again if it is needed.]";
+
+type ModelImagePart = Extract<ModelContentPart, { type: "image" }>;
 
 export interface ModelVisibleArtifactProjection {
   parts: ModelContentPart[];
@@ -58,19 +60,56 @@ export function summarizeModelVisibleArtifactsNotLoaded(
   return createVisualArtifactSummary(result, VISUAL_CONTEXT_NOT_LOADED_HEADER);
 }
 
-/** The same content without its images, saying in their place that they are not loaded. */
-export function withoutModelVisibleImages(content: ModelContent): ModelContent {
-  if (typeof content === "string" || !content.some((part) => part.type === "image")) {
+/**
+ * The same content without the given images. A line in their place says what was left out: for
+ * an image a tool loaded, the values to load it again with; for an image the user attached, that
+ * it was too large, since no tool call brings it back.
+ */
+export function omitModelVisibleImages(
+  content: ModelContent,
+  omitted: ReadonlySet<ModelImagePart>
+): ModelContent {
+  if (typeof content === "string" || omitted.size === 0) {
     return content;
   }
-  const text = content
+  const images = content.filter(
+    (part): part is ModelImagePart => part.type === "image" && omitted.has(part)
+  );
+  if (images.length === 0) {
+    return content;
+  }
+  let text = content
     .filter((part): part is Extract<ModelContentPart, { type: "text" }> => part.type === "text")
     .map((part) => part.text)
     .join("");
-  if (text.includes(VISUAL_CONTEXT_LOADED_HEADER)) {
-    return text.replace(VISUAL_CONTEXT_LOADED_HEADER, VISUAL_CONTEXT_NOT_LOADED_HEADER);
+  const reloadable = images.flatMap((image) =>
+    image.source?.kind === "tool_result" ? [image.source.label] : []
+  );
+  const notes: string[] = [];
+  if (reloadable.length > 0) {
+    // The summary of loaded images is the end of the text; take the omitted ones out of it.
+    for (const label of reloadable) {
+      text = text.replace(`\n- ${label}`, "");
+    }
+    if (text.endsWith(VISUAL_CONTEXT_LOADED_HEADER)) {
+      text = text.slice(0, -VISUAL_CONTEXT_LOADED_HEADER.length).trimEnd();
+    }
+    notes.push(
+      [VISUAL_CONTEXT_NOT_LOADED_HEADER, ...reloadable.map((label) => `- ${label}`)].join("\n")
+    );
   }
-  return text ? `${text}\n\n${ATTACHED_IMAGES_NOT_LOADED_NOTE}` : ATTACHED_IMAGES_NOT_LOADED_NOTE;
+  const other = images.filter((image) => image.source?.kind !== "tool_result");
+  if (other.length > 0) {
+    const names = other.flatMap((image) => (image.source ? [image.source.label] : []));
+    notes.push(
+      `[${other.length === 1 ? "1 image was" : `${other.length} images were`} too large to include in the model input and ${other.length === 1 ? "was" : "were"} left out${names.length > 0 ? `: ${names.join(", ")}` : ""}.]`
+    );
+  }
+  const remaining = content.filter((part) => part.type === "image" && !omitted.has(part));
+  const projectedText = [text, ...notes].filter((value) => value.length > 0).join("\n\n");
+  return remaining.length > 0
+    ? [{ type: "text", text: projectedText }, ...remaining]
+    : projectedText;
 }
 
 async function readModelVisibleImages(
@@ -104,7 +143,8 @@ async function readModelVisibleImages(
       images.push({
         type: "image",
         mimeType: object.mimeType,
-        data: object.bytes
+        data: object.bytes,
+        source: { kind: "tool_result", label: describeImageArtifact(artifact) }
       });
     } catch (error) {
       options.logger?.warn(
@@ -138,22 +178,33 @@ function createVisualArtifactSummary(
   }
   const lines = result.artifacts
     .filter((artifact) => artifact.modelVisibility?.type === "image")
-    .map((artifact) => {
-      const metadata = artifact.metadata ?? {};
-      const details = [
-        typeof metadata.fileId === "string" ? `fileId: ${metadata.fileId}` : undefined,
-        `artifactId: ${artifact.artifactId}`,
-        `mimeType: ${artifact.modelVisibility?.mimeType ?? artifact.mimeType ?? "image/png"}`,
-        typeof metadata.pageNumber === "number" ? `page: ${metadata.pageNumber}` : undefined,
-        typeof metadata.slideNumber === "number" ? `slide: ${metadata.slideNumber}` : undefined,
-        typeof metadata.sheet === "string" ? `sheet: ${metadata.sheet}` : undefined,
-        typeof metadata.range === "string" ? `range: ${metadata.range}` : undefined,
-        typeof metadata.width === "number" && typeof metadata.height === "number"
-          ? `size: ${metadata.width}x${metadata.height}`
-          : undefined,
-        typeof metadata.dpi === "number" ? `dpi: ${metadata.dpi}` : undefined
-      ].filter((value): value is string => value !== undefined);
-      return `- ${details.join(", ")}`;
-    });
+    .map((artifact) => `- ${describeImageArtifact(artifact)}`);
   return lines.length > 0 ? [header, ...lines].join("\n") : undefined;
+}
+
+/**
+ * One image of a tool result in the values its tool takes: the file and page of a document page,
+ * the source artifact with its page, slide, sheet or range for a preview, or the workspace path.
+ */
+function describeImageArtifact(artifact: ManagedArtifactRef): string {
+  const metadata = artifact.metadata ?? {};
+  // A preview is asked for by the artifact it was rendered from, never by its own id.
+  const artifactId =
+    typeof metadata.sourceArtifactId === "string" ? metadata.sourceArtifactId : artifact.artifactId;
+  return [
+    typeof metadata.fileId === "string" ? `fileId: ${metadata.fileId}` : undefined,
+    `artifactId: ${artifactId}`,
+    typeof metadata.workspacePath === "string" ? `path: ${metadata.workspacePath}` : undefined,
+    `mimeType: ${artifact.modelVisibility?.mimeType ?? artifact.mimeType ?? "image/png"}`,
+    typeof metadata.pageNumber === "number" ? `page: ${metadata.pageNumber}` : undefined,
+    typeof metadata.slideNumber === "number" ? `slide: ${metadata.slideNumber}` : undefined,
+    typeof metadata.sheet === "string" ? `sheet: ${metadata.sheet}` : undefined,
+    typeof metadata.range === "string" ? `range: ${metadata.range}` : undefined,
+    typeof metadata.width === "number" && typeof metadata.height === "number"
+      ? `size: ${metadata.width}x${metadata.height}`
+      : undefined,
+    typeof metadata.dpi === "number" ? `dpi: ${metadata.dpi}` : undefined
+  ]
+    .filter((value): value is string => value !== undefined)
+    .join(", ");
 }

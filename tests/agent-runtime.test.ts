@@ -6,7 +6,9 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
+  asConversationAttachmentId,
   asManagedArtifactId,
+  asManagedFileId,
   asMessageId,
   type ChatMessage,
   type JsonObject,
@@ -2974,6 +2976,32 @@ describe("local agent runtime", () => {
     expect(text.match(/\[Visual context loaded\]/gu)).toHaveLength(2);
   });
 
+  it("drops the images a tool loaded before those the user attached, image by image", async () => {
+    const sevenMiB = 7 * 1024 * 1024;
+    const f = await pageImageFixture("page-images-user-attached", {
+      imageBytes: sevenMiB,
+      attachedImages: 5
+    });
+
+    await f.runToEnd("Compare my photos with page one", [1]);
+
+    // Four attached images of 7 MiB fit the budget of 32 MiB; the fifth and the page do not.
+    const request = f.requests[1]?.messages ?? [];
+    const user = request.find((message) => message.role === "user");
+    expect(modelContentImages(user?.content ?? "").map((image) => image.source?.label)).toEqual([
+      "photo-1.png",
+      "photo-2.png",
+      "photo-3.png",
+      "photo-4.png"
+    ]);
+    expect(modelContentText(user?.content ?? "")).toContain(
+      "[1 image was too large to include in the model input and was left out: photo-5.png.]"
+    );
+    expect(f.imageSizes(1)).toHaveLength(4);
+    expect(f.text(1)).toContain("[Visual context not loaded:");
+    expect(f.text(1)).not.toContain("[Visual context loaded]");
+  });
+
   it("answers from a stored checkpoint whose later tool results held page images", async () => {
     const f = await pageImageFixture("page-images-checkpoint", { compactOnToolCalls: true });
 
@@ -3339,7 +3367,7 @@ async function rateLimitFixture(name: string) {
  */
 async function pageImageFixture(
   name: string,
-  options: { imageBytes?: number; compactOnToolCalls?: boolean } = {}
+  options: { imageBytes?: number; compactOnToolCalls?: boolean; attachedImages?: number } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`${name}-client`);
   const context: RuntimeCallContext = {
@@ -3455,6 +3483,11 @@ async function pageImageFixture(
         return { bytes: new Uint8Array(options.imageBytes ?? 8), mimeType: "image/png" };
       }
     },
+    fileReader: {
+      async readFile() {
+        return { bytes: new Uint8Array(options.imageBytes ?? 8), mimeType: "image/png" };
+      }
+    },
     usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
   });
   const requestMessages = (index: number) => requests[index]?.messages ?? [];
@@ -3492,7 +3525,26 @@ async function pageImageFixture(
           agentName: "page_agent",
           conversationId,
           inputMessageId: userMessage.id,
-          message: { text }
+          message: {
+            text,
+            ...(options.attachedImages
+              ? {
+                  attachmentManifest: {
+                    version: 1 as const,
+                    attachments: Array.from({ length: options.attachedImages }, (_, index) => ({
+                      kind: "image",
+                      fileId: asManagedFileId(`file_photo_${index + 1}`),
+                      attachmentId: asConversationAttachmentId(`att_photo_${index + 1}`),
+                      filename: `photo-${index + 1}.png`,
+                      mimeType: "image/png",
+                      byteSize: options.imageBytes ?? 8,
+                      status: "ready",
+                      modelVisibility: { type: "image" as const, mimeType: "image/png" as const }
+                    }))
+                  }
+                }
+              : {})
+          }
         },
         context
       );

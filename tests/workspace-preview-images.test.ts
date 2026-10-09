@@ -130,7 +130,7 @@ describe("workspace.preview_images", () => {
     const imageParts = Array.isArray(modelOutput.content)
       ? modelOutput.content.filter((part) => part.type === "image")
       : [];
-    expect(imageParts).toEqual([
+    expect(imageParts).toMatchObject([
       {
         type: "image",
         mimeType: "image/png",
@@ -273,7 +273,7 @@ describe("workspace.preview_images", () => {
     const imageParts = Array.isArray(modelOutput.content)
       ? modelOutput.content.filter((part) => part.type === "image")
       : [];
-    expect(imageParts).toEqual([
+    expect(imageParts).toMatchObject([
       {
         type: "image",
         mimeType: "image/png",
@@ -569,7 +569,7 @@ describe("workspace.preview_images", () => {
     const imageParts = Array.isArray(modelOutput.content)
       ? modelOutput.content.filter((part) => part.type === "image")
       : [];
-    expect(imageParts).toEqual([
+    expect(imageParts).toMatchObject([
       {
         type: "image",
         mimeType: "image/png",

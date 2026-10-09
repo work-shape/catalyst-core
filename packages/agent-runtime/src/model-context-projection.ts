@@ -569,7 +569,8 @@ async function projectUserAttachmentImages(
       images.push({
         type: "image",
         mimeType,
-        data: object.bytes
+        data: object.bytes,
+        source: { kind: "user_attachment", label: attachment.filename }
       });
     } catch (error) {
       options.logger?.warn(

@@ -58,6 +58,11 @@ export type ModelContentPart =
       type: "image";
       mimeType: SupportedImageMimeType;
       data: Uint8Array;
+      /**
+       * Where the image came from and what names it, for a request that has to leave it out. A
+       * tool can load its own image again; an image the user attached cannot be loaded again.
+       */
+      source?: { kind: "tool_result" | "user_attachment"; label: string };
     };
 
 export type ModelContent = string | ModelContentPart[];

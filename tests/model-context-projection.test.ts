@@ -22,6 +22,7 @@ import {
   selectRecentCompleteHistory
 } from "../packages/agent-runtime/src/model-context-projection";
 import { modelContentImages, modelContentText } from "@vivd-catalyst/model-provider";
+import { workspacePreviewImagesInputSchema } from "@vivd-catalyst/tool-execution";
 
 describe("model context projection", () => {
   it("round-trips assistant web sources and citations through message metadata", () => {
@@ -500,6 +501,69 @@ describe("model context projection", () => {
     );
     expect(modelContentText(projected[1]?.content ?? "")).toContain("[Visual context not loaded:");
     expect(JSON.stringify(metadata)).not.toContain("iVBOR");
+  });
+
+  it("names an image of an earlier run by the values its tool takes", async () => {
+    const preview = (id: string, metadata: JsonObject) => ({
+      artifactId: asManagedArtifactId(id),
+      kind: "artifact.preview_image",
+      mimeType: "image/png",
+      modelVisibility: { type: "image" as const, mimeType: "image/png" as const },
+      metadata
+    });
+    const result: ToolExecutionResult = {
+      status: "success",
+      output: { status: "ready" },
+      artifacts: [
+        preview("art_preview_pdf_page", { sourceArtifactId: "art_pdf", pageNumber: 3 }),
+        preview("art_preview_slide", { sourceArtifactId: "art_deck", slideNumber: 2 }),
+        preview("art_preview_range", {
+          sourceArtifactId: "art_sheet",
+          sheet: "Costs",
+          range: "A1:C4"
+        }),
+        preview("art_page_image", { fileId: "file_contract", pageNumber: 7, dpi: 160 })
+      ]
+    };
+
+    const marker = (await createModelVisibleToolOutput(result, modelContextOptions(), "not_loaded"))
+      .text;
+    const named = marker
+      .split("\n")
+      .filter((line) => line.startsWith("- "))
+      .map((line) =>
+        Object.fromEntries(
+          line
+            .slice(2)
+            .split(", ")
+            .map((pair) => pair.split(": "))
+        )
+      );
+
+    expect(marker).toContain("[Visual context not loaded:");
+    expect(marker).not.toContain("art_preview_");
+    // What the marker names is what workspace.preview_images takes: the source and a selector.
+    expect(
+      workspacePreviewImagesInputSchema.parse({
+        artifactId: named[0]?.artifactId,
+        pages: [Number(named[0]?.page)]
+      })
+    ).toMatchObject({ artifactId: "art_pdf", pages: [3] });
+    expect(
+      workspacePreviewImagesInputSchema.parse({
+        artifactId: named[1]?.artifactId,
+        slides: [Number(named[1]?.slide)]
+      })
+    ).toMatchObject({ artifactId: "art_deck", slides: [2] });
+    expect(
+      workspacePreviewImagesInputSchema.parse({
+        artifactId: named[2]?.artifactId,
+        sheets: [named[2]?.sheet],
+        ranges: [named[2]?.range]
+      })
+    ).toMatchObject({ artifactId: "art_sheet", sheets: ["Costs"], ranges: ["A1:C4"] });
+    // A document page is asked for again by its file and page, as view_document_page takes them.
+    expect(named[3]).toMatchObject({ fileId: "file_contract", page: "7" });
   });
 });
 
