@@ -46,6 +46,7 @@ const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
 const generatedConfigPath = resolve(repoRoot, ".tmp/e2e/e2e-app.yaml");
+const e2eKeyEnvFile = resolve(repoRoot, ".tmp/e2e/config-cli.env");
 const e2eConfigPath = resolve(repoRoot, process.env.E2E_CONFIG_PATH ?? generatedConfigPath);
 const e2eSessionTokenSecret = "e2e-session-token-secret-with-at-least-24-characters";
 const e2eServerCredential = "e2e-server-to-server-credential";
@@ -246,9 +247,13 @@ function startApiServer() {
 }
 
 async function pushConfigAssets() {
+  await createConfigApiKey();
+  // A key in the caller's environment would win over the env file.
+  const { CATALYST_API_KEY: _callerKey, ...env } = process.env;
   await run(
     process.execPath,
     [
+      `--env-file=${e2eKeyEnvFile}`,
       "packages/config-cli/dist/index.js",
       "config",
       "push",
@@ -261,51 +266,38 @@ async function pushConfigAssets() {
     {
       cwd: repoRoot,
       label: "config asset push",
-      env: {
-        ...process.env,
-        CATALYST_API_KEY: await createConfigApiKey()
-      }
+      env
     }
   );
 }
 
-/** The CLI signs in with an API key only, so the superadmin creates one as an operator would. */
+/** The CLI signs in with an API key only; `catalyst config local-key` creates one. */
 async function createConfigApiKey() {
-  const signIn = await fetch(`${e2eApiUrl}/api/auth/sign-in/email`, {
-    method: "POST",
-    headers: { origin: e2eUiUrl, "content-type": "application/json" },
-    body: JSON.stringify({
-      email: "e2e-superadmin@example.test",
-      password: "e2e-superadmin-password"
-    })
-  });
-  if (!signIn.ok) {
-    throw new Error(`superadmin sign-in returned ${signIn.status}`);
-  }
-  const cookie = signIn.headers
-    .getSetCookie()
-    .map((value) => value.split(";")[0])
-    .join("; ");
-  const post = async (path, body) => {
-    const response = await fetch(`${e2eApiUrl}/api/v1/instance${path}`, {
-      method: "POST",
-      headers: { origin: e2eUiUrl, "content-type": "application/json", cookie },
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) {
-      throw new Error(`POST ${path} returned ${response.status}: ${await response.text()}`);
+  await run(
+    process.execPath,
+    [
+      "packages/config-cli/dist/index.js",
+      "config",
+      "local-key",
+      "--dir",
+      "tests/fixtures/e2e-assets",
+      "--instance",
+      e2eApiUrl,
+      "--config",
+      e2eConfigPath,
+      "--write-env",
+      e2eKeyEnvFile
+    ],
+    {
+      cwd: repoRoot,
+      label: "config api key",
+      env: {
+        ...process.env,
+        CHAT_UI_ORIGIN: e2eUiUrl,
+        E2E_SUPERADMIN_EMAIL: "e2e-superadmin@example.test"
+      }
     }
-    return response.json();
-  };
-  const { principal } = await post("/service-principals", {
-    displayLabel: "E2E config push",
-    permissions: ["config_assets.read", "config_assets.release"]
-  });
-  const credential = await post(`/service-principals/${principal.id}/credentials`, {
-    name: "e2e runner",
-    scopes: ["config_assets:read", "config_assets:release"]
-  });
-  return credential.secret;
+  );
 }
 
 function startUiServer() {

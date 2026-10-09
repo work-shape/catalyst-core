@@ -17,12 +17,13 @@ Agents and skills are loaded live from the database. The YAML and Markdown files
 
 ```bash
 pnpm seed:auth
-# Sign in as the demo superadmin, then create a Catalyst CLI service principal
-# and API key under Administration > API Access. Put the one-time value in .env.
+pnpm config:local-key
 pnpm config:push
 ```
 
-The script builds the config CLI and loads the gitignored `.env` file. Create the service principal with `config_assets.read` and `config_assets.release`, restrict the key to `config_assets:read` and `config_assets:release`, and set its one-time value as `CATALYST_API_KEY`. The key is exchanged for a short-lived access token; it is not written to `catalyst.yaml` or `.catalyst-state.json`.
+`pnpm config:local-key` signs in as the seeded demo superadmin, creates the service principal `Local config CLI` with `config_assets.read` and `config_assets.release` and a key limited to `config_assets:read` and `config_assets:release`, and writes the key into the gitignored `.env` as `CATALYST_API_KEY` without printing it. Run it again after every database reset. It works only against `localhost`, `127.0.0.1` or `::1` and only with a development config; on any other instance, create the principal and key by hand under Administration > API Access.
+
+`pnpm config:push` builds the config CLI and loads `.env`. The key is exchanged for a short-lived access token; it is not written to `catalyst.yaml` or `.catalyst-state.json`.
 
 The workflow assistant can propose changes to its shared instructions with
 `propose_skill_change`, including new instructions. Ask it to remember a general

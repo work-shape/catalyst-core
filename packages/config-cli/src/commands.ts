@@ -9,6 +9,7 @@ import {
 } from "@vivd-catalyst/config-schema";
 import { ConfigApiError, createConfigApi } from "./api";
 import { createUnifiedDiff } from "./diff";
+import { API_KEY_ENV_NAME, createLocalApiKey, writeApiKeyToEnvFile } from "./local-key";
 import {
   canonicalizeSkillConfig,
   serializeAgentYaml,
@@ -33,7 +34,8 @@ import {
   type WorkingCopyBundle
 } from "./working-copy";
 
-export type ConfigCommandName = "pull" | "push" | "diff" | "validate" | "list" | "show";
+export type ConfigCommandName =
+  "pull" | "push" | "diff" | "validate" | "list" | "show" | "local-key";
 
 export interface ConfigCommandOptions {
   cwd: string;
@@ -44,6 +46,12 @@ export interface ConfigCommandOptions {
   only?: string[];
   assetKind?: "agent" | "skill";
   assetName?: string;
+  /** `local-key`: the client instance config. Default: `config/app.yaml` in the working copy. */
+  appConfig?: string;
+  /** `local-key`: the env file that receives the key. Default: `.env` in the working copy. */
+  envFile?: string;
+  /** `local-key`: the variable written. Default: the one the CLI reads. */
+  envName?: string;
   fetchImpl?: typeof fetch;
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
@@ -68,11 +76,34 @@ export async function runConfigCommand(
         return await listConfig(options);
       case "show":
         return await showConfig(options);
+      case "local-key":
+        return await localKey(options);
     }
   } catch (error) {
     writeError(options, formatCommandError(error));
     return 1;
   }
+}
+
+async function localKey(options: ConfigCommandOptions): Promise<number> {
+  const workingDir = resolveWorkingDir(options);
+  const instance = resolveInstance(await readManifest(workingDir), options.instance);
+  const apiKey = await createLocalApiKey({
+    baseUrl: instance.url,
+    configPath: options.appConfig
+      ? resolve(options.cwd, options.appConfig)
+      : resolve(workingDir, "config/app.yaml"),
+    env: commandEnv(options),
+    ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
+  });
+  const envName = options.envName ?? API_KEY_ENV_NAME;
+  const file = await writeApiKeyToEnvFile(
+    options.envFile ? resolve(options.cwd, options.envFile) : resolve(workingDir, ".env"),
+    envName,
+    apiKey
+  );
+  writeOutput(options, `Created a key for ${instance.url} and wrote ${envName} to ${file}.`);
+  return 0;
 }
 
 export async function pullConfig(options: ConfigCommandOptions): Promise<number> {
@@ -725,11 +756,16 @@ function formatPushPlan(plan: PushPlan, prune: boolean): string {
   return lines.join("\n");
 }
 
+function commandEnv(options: ConfigCommandOptions) {
+  return options.env ?? process.env;
+}
+
 async function connectApi(url: string, options: ConfigCommandOptions) {
-  const env = options.env ?? process.env;
-  const apiKey = env.CATALYST_API_KEY;
+  const apiKey = commandEnv(options).CATALYST_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing CLI credentials. Set CATALYST_API_KEY.");
+    throw new Error(
+      "Missing CLI credentials. Set CATALYST_API_KEY to a key created under Administration, API Access. For a local development instance, 'catalyst config local-key' creates one."
+    );
   }
   return createConfigApi({
     baseUrl: url,

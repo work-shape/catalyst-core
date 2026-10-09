@@ -62,6 +62,38 @@ export async function signInWithEmail(input: {
   };
 }
 
+/**
+ * For a tool outside a browser, which keeps no cookies: signs in and returns a fetch that
+ * carries the session cookie and the origin the instance trusts on every request.
+ */
+export async function signInForSessionFetch(input: {
+  apiBaseUrl: string;
+  origin: string;
+  email: string;
+  password: string;
+  fetchImpl?: typeof fetch;
+}): Promise<typeof fetch> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const response = await fetchImpl(authUrl(input.apiBaseUrl, "/sign-in/email"), {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: input.origin },
+    body: JSON.stringify({ email: input.email, password: input.password })
+  });
+  if (!response.ok) {
+    throw new Error(`Sign-in as '${input.email}' was refused with status ${response.status}`);
+  }
+  const cookie = response.headers
+    .getSetCookie()
+    .map((value) => value.split(";", 1)[0])
+    .join("; ");
+  return (resource, init) => {
+    const request = new Request(resource, init);
+    request.headers.set("cookie", cookie);
+    request.headers.set("origin", input.origin);
+    return fetchImpl(request);
+  };
+}
+
 export async function signOut(apiBaseUrl: string): Promise<void> {
   await fetch(authUrl(apiBaseUrl, "/sign-out"), {
     method: "POST",

@@ -66,11 +66,19 @@ Create the credential once as a superadmin under **Administration → API Access
 2. Create a key restricted to `config_assets:read` and `config_assets:release`.
 3. Copy the secret when it is shown once and expose it as `CATALYST_API_KEY` in the operator environment or CI secret store.
 
+For a local development instance, one command does these steps:
+
+```sh
+catalyst config local-key
+```
+
+It signs in as the seeded superadmin of the development config (`config/app.yaml` in the working copy, or `--config <file>`), creates the service principal `Local config CLI` and a key with the two config scopes, and writes the key as `CATALYST_API_KEY` into `.env` in the working copy (`--write-env <file>`, `--env-name <variable>`). The key is not printed. A later call reuses the principal and replaces the key in the file, so run it again after a database reset. The command refuses any instance host other than `localhost`, `127.0.0.1` or `::1` and any config whose environment is not `development`.
+
 The CLI sends the API key only to `POST /api/v1/auth/access-token`, then uses the returned short-lived access token for config operations. It refuses to send an API key over plain HTTP except to `localhost`, `127.0.0.0/8`, or `::1`; remote instances must use HTTPS. A key belongs to a service principal but is independently named, audited, expirable, and revocable. Create separate keys for developer machines and CI jobs so they can be rotated without disrupting one another.
 
 Do not pass the key on the command line or put it in `catalyst.yaml` or `.catalyst-state.json`. Keychain-backed profiles are a future enhancement; the current CLI intentionally reads only environment variables.
 
-The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
+The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it the instance has no API access and the exchange answers 404. The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request and names Administration, API Access as the place a key comes from; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
 
 ## Interactive editing and field ownership
 
