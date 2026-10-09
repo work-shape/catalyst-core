@@ -16,6 +16,7 @@ import {
   createProviderToolMetadata,
   createOpenAiResponsesContinuation,
   didOpenAiResponsesCompact,
+  isOpenAiResponsesContinuationAboveStringLimit,
   readOpenAiResponsesCompactionItem,
   readOpenAiResponsesWebMetadata,
   readOpenAiResponsesWebSearchCallCount,
@@ -165,7 +166,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response, "request");
+      throw await this.createProviderError(response, "request", request);
     }
 
     const payload = (await response.json()) as OpenAiResponsesResponse;
@@ -202,7 +203,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     });
 
     if (!response.ok) {
-      throw await this.createProviderError(response, "stream request");
+      throw await this.createProviderError(response, "stream request", request);
     }
     if (!response.body) {
       throw new AppError("INTERNAL", "Model provider stream returned no response body", {
@@ -297,6 +298,13 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     providerTools: OpenAiCompatibleProviderTool[],
     providerNativeTools: ReturnType<typeof createProviderToolMetadata>["providerNativeTools"]
   ): OpenAiResponsesRequestBody {
+    if (isOpenAiResponsesContinuationAboveStringLimit(this.id, request.continuation)) {
+      // The provider would answer 400 to this request, every time. Refuse it before it is sent.
+      throw new AppError("INTERNAL", "Model provider continuation is above the string limit", {
+        providerId: this.id,
+        continuationRejected: true
+      });
+    }
     const model = request.model || this.options.model;
     const reasoningEffort = this.resolveReasoningEffort(request);
     return {
@@ -339,19 +347,61 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   private async createProviderError(
     response: Response,
-    operation: "request" | "stream request"
+    operation: "request" | "stream request",
+    request?: ModelCompletionRequest
   ): Promise<AppError> {
-    const errorBody = await readProviderErrorBody(response);
+    // Code and parameter are read from the complete body: they follow the message, so the
+    // text shortened for diagnostics may no longer hold them.
+    const completeBody = await response.text().catch(() => "");
+    const errorBody = truncateProviderErrorBody(completeBody);
+    const refusal = response.status === 400 ? readProviderRefusal(completeBody) : {};
+    if (refusal.code === "context_length_exceeded") {
+      return new AppError(
+        "VALIDATION_FAILED",
+        "This conversation is too long for the model. Start a new conversation.",
+        { providerId: this.id, status: response.status, providerError: errorBody }
+      );
+    }
     return new AppError(
       "INTERNAL",
       `Model provider ${operation} failed with ${response.status}${errorBody ? `: ${errorBody}` : ""}`,
       {
         providerId: this.id,
         status: response.status,
-        providerError: errorBody
+        providerError: errorBody,
+        // An `encrypted_content` string above the provider's string limit: the continuation
+        // that carried it can never be sent again.
+        ...(request?.continuation &&
+        refusal.code === "string_above_max_length" &&
+        refusal.param !== undefined &&
+        /(?:^|\.)encrypted_content$/u.test(refusal.param)
+          ? { continuationRejected: true }
+          : {})
       }
     );
   }
+}
+
+/** The code and parameter of a provider's JSON error body; read from those, not from its message. */
+function readProviderRefusal(completeBody: string): { code?: string; param?: string } {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(completeBody);
+  } catch {
+    return {};
+  }
+  const error = isRecord(payload) && isRecord(payload.error) ? payload.error : payload;
+  if (!isRecord(error)) {
+    return {};
+  }
+  return {
+    ...(typeof error.code === "string" ? { code: error.code } : {}),
+    ...(typeof error.param === "string" ? { param: error.param } : {})
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function assertNoProviderNativeToolsForChatCompletions(
@@ -405,16 +455,12 @@ function isOpenAiResponsesFunctionCall(
 
 const providerErrorBodyLimit = 2000;
 
-async function readProviderErrorBody(response: Response): Promise<string | undefined> {
-  try {
-    const body = (await response.text()).trim();
-    if (!body) {
-      return undefined;
-    }
-    return body.length > providerErrorBodyLimit
-      ? `${body.slice(0, providerErrorBodyLimit)}...`
-      : body;
-  } catch {
+function truncateProviderErrorBody(completeBody: string): string | undefined {
+  const body = completeBody.trim();
+  if (!body) {
     return undefined;
   }
+  return body.length > providerErrorBodyLimit
+    ? `${body.slice(0, providerErrorBodyLimit)}...`
+    : body;
 }

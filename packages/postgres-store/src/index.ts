@@ -171,7 +171,10 @@ import {
   touchConversation,
   updateConversationTitle as updatePostgresConversationTitle
 } from "./postgres-conversation-operations";
-import { getModelProviderContinuation as getPostgresModelProviderContinuation } from "./postgres-model-provider-continuation-operations";
+import {
+  deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
+  getModelProviderContinuation as getPostgresModelProviderContinuation
+} from "./postgres-model-provider-continuation-operations";
 import type { PostgresDatabase } from "./postgres-database";
 import { createPostgresPlatformFileStore } from "./postgres-file-store";
 import {
@@ -634,6 +637,12 @@ export class PostgresPlatformStore
     input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
   ): Promise<ModelProviderContinuationCheckpoint | undefined> {
     return getPostgresModelProviderContinuation(this.db, input);
+  }
+
+  async deleteModelProviderContinuation(
+    input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
+  ): Promise<void> {
+    return deletePostgresModelProviderContinuation(this.db, input);
   }
 
   async getStructuredDataResource(

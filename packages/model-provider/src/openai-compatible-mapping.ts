@@ -34,6 +34,11 @@ import type {
   OpenAiResponsesUsage
 } from "./openai-compatible-types";
 
+// The longest string the Responses API accepts in a request: 20 MiB, the number its 400
+// `string_above_max_length` names. A compaction or reasoning item above it is not kept as a
+// continuation, so the conversation goes on from its own history; the user sees nothing.
+export const OPENAI_RESPONSES_STRING_MAX_CHARS = 20_971_520;
+
 export interface OpenAiCompatibleProviderTool {
   tool: ModelFunctionTool;
   providerName: string;
@@ -389,10 +394,33 @@ export function didOpenAiResponsesCompact(payload: OpenAiResponsesResponse): boo
   return Boolean(readLatestCompactionItem(payload.output ?? []));
 }
 
+/** Whether a continuation holds an encrypted item the provider would refuse as too long. */
+export function isOpenAiResponsesContinuationAboveStringLimit(
+  providerId: string,
+  continuation: ModelProviderContinuation | undefined
+): boolean {
+  const compactionItem = readOpenAiResponsesCompactionItem(providerId, continuation);
+  return (
+    (compactionItem !== undefined && isAboveStringLimit(compactionItem)) ||
+    readOpenAiResponsesContinuationItems(providerId, continuation).some((entry) =>
+      isAboveStringLimit(entry.item)
+    )
+  );
+}
+
+function isAboveStringLimit(item: { encrypted_content: string }): boolean {
+  return item.encrypted_content.length > OPENAI_RESPONSES_STRING_MAX_CHARS;
+}
+
+/**
+ * The newest compaction item of a response. One above the provider's string limit could never be
+ * sent back, so the response counts as not compacted and the earlier checkpoint stays in use.
+ */
 function readLatestCompactionItem(
   output: OpenAiResponsesOutputItem[]
 ): OpenAiResponsesCompactionItem | undefined {
-  return [...output].reverse().find(isOpenAiResponsesCompactionItem);
+  const latest = [...output].reverse().find(isOpenAiResponsesCompactionItem);
+  return latest && !isAboveStringLimit(latest) ? latest : undefined;
 }
 
 function readEncryptedReasoningItems(
@@ -400,7 +428,8 @@ function readEncryptedReasoningItems(
 ): OpenAiResponsesContinuationState["encryptedReasoningItems"] {
   const entries: OpenAiResponsesContinuationState["encryptedReasoningItems"] = [];
   output.forEach((item, index) => {
-    if (!isOpenAiResponsesReasoningItem(item)) {
+    // A reasoning item above the provider's string limit could never be sent back.
+    if (!isOpenAiResponsesReasoningItem(item) || isAboveStringLimit(item)) {
       return;
     }
     const nextToolCall = output

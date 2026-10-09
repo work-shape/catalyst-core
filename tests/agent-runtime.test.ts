@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   AppError,
@@ -25,6 +25,8 @@ import {
   type ModelCallGovernance
 } from "@vivd-catalyst/agent-runtime";
 import {
+  OPENAI_RESPONSES_STRING_MAX_CHARS,
+  OpenAiCompatibleChatProvider,
   modelContentText,
   type ModelCompletionStreamEvent,
   type ModelMessage,
@@ -2398,6 +2400,130 @@ describe("local agent runtime", () => {
     ]);
   });
 
+  it("sends a conversation from its history when its stored compaction item is above the provider's limit", async () => {
+    const f = await storedContinuationFixture(
+      "continuation-above-limit",
+      "x".repeat(OPENAI_RESPONSES_STRING_MAX_CHARS + 1)
+    );
+    try {
+      f.answers.push(responsesAnswer("Answered from history."));
+
+      expect(await f.runToEnd("Third question")).toEqual([
+        "message_delta",
+        "message_completed",
+        "run_completed"
+      ]);
+      expect(f.requestBodies).toHaveLength(1);
+      expect(f.requestBodies[0]).not.toContain('"encrypted_content"');
+      expect(f.requestBodies[0]).toContain("First question");
+      expect(f.requestBodies[0]).toContain("Third question");
+      expect(await f.storedContinuation()).toBeUndefined();
+    } finally {
+      f.restore();
+    }
+  });
+
+  it("drops a continuation the provider refuses as too long and retries once from history", async () => {
+    const f = await storedContinuationFixture("continuation-refused", "opaque-checkpoint");
+    try {
+      f.answers.push(
+        // Any input item's ciphertext counts: here a reasoning item beside the checkpoint.
+        providerRefusal("string_above_max_length", "input[4].encrypted_content"),
+        responsesAnswer("Answered after the rebuild.")
+      );
+
+      expect(await f.runToEnd("Third question")).toEqual([
+        "message_delta",
+        "message_completed",
+        "run_completed"
+      ]);
+      expect(f.requestBodies).toHaveLength(2);
+      expect(f.requestBodies[0]).toContain('"encrypted_content"');
+      expect(f.requestBodies[0]).not.toContain("First question");
+      expect(f.requestBodies[1]).not.toContain('"encrypted_content"');
+      expect(f.requestBodies[1]).toContain("First question");
+      expect(f.requestBodies[1]).toContain("Third question");
+      expect(await f.storedContinuation()).toBeUndefined();
+
+      // The conversation stays alive: the next message goes out from history at once.
+      f.answers.push(responsesAnswer("Still answering."));
+      expect((await f.runToEnd("Fourth question")).at(-1)).toBe("run_completed");
+      expect(f.requestBodies).toHaveLength(3);
+    } finally {
+      f.restore();
+    }
+  });
+
+  it("keeps the continuation and does not retry on any other refusal", async () => {
+    const f = await storedContinuationFixture("continuation-kept", "opaque-checkpoint");
+    try {
+      for (const [code, param] of [
+        ["invalid_value", "input[1].encrypted_content"],
+        ["string_above_max_length", "input[2].content"]
+      ] as const) {
+        f.requestBodies.length = 0;
+        f.answers.push(providerRefusal(code, param));
+
+        expect(await f.runToEnd("Third question")).toEqual(["run_failed"]);
+        expect(f.requestBodies).toHaveLength(1);
+        expect(await f.storedContinuation()).toBeDefined();
+      }
+    } finally {
+      f.restore();
+    }
+  });
+
+  it("fails with a message about the conversation's length when the rebuilt history is too long", async () => {
+    const f = await storedContinuationFixture("continuation-history-too-long", "opaque-checkpoint");
+    try {
+      f.answers.push(
+        providerRefusal("string_above_max_length", "input[1].encrypted_content"),
+        providerRefusal("context_length_exceeded", "input")
+      );
+
+      const events = await f.runEventsToEnd("Third question");
+
+      expect(f.requestBodies).toHaveLength(2);
+      expect(events.at(-1)).toMatchObject({
+        type: "run_failed",
+        error: {
+          code: "VALIDATION_FAILED",
+          message: "This conversation is too long for the model. Start a new conversation.",
+          category: "app_error"
+        }
+      });
+    } finally {
+      f.restore();
+    }
+  });
+
+  it("reads a refusal's code and parameter from an error body longer than the diagnostic limit", async () => {
+    // As in a real Responses error, code and param follow the message.
+    const longMessage = "x".repeat(5_000);
+    const f = await storedContinuationFixture("continuation-long-refusal", "opaque-checkpoint");
+    try {
+      f.answers.push(
+        providerRefusal("string_above_max_length", "input[1].encrypted_content", longMessage),
+        providerRefusal("context_length_exceeded", "input", longMessage)
+      );
+
+      const events = await f.runEventsToEnd("Third question");
+
+      expect(f.requestBodies).toHaveLength(2);
+      expect(f.requestBodies[1]).not.toContain('"encrypted_content"');
+      expect(await f.storedContinuation()).toBeUndefined();
+      expect(events.at(-1)).toMatchObject({
+        type: "run_failed",
+        error: {
+          code: "VALIDATION_FAILED",
+          message: "This conversation is too long for the model. Start a new conversation."
+        }
+      });
+    } finally {
+      f.restore();
+    }
+  });
+
   it("does not expose raw internal error text in run failure events", async () => {
     const clientInstanceId = asClientInstanceId("internal-error-client");
     const context: RuntimeCallContext = {
@@ -2587,6 +2713,155 @@ async function createConversationWithMessages(
     });
   }
   return conversation.id;
+}
+
+function responsesAnswer(text: string): Response {
+  return Response.json({
+    output: [{ type: "message", content: [{ type: "output_text", text }] }]
+  });
+}
+
+function providerRefusal(code: string, param: string, message = "Refused."): Response {
+  return Response.json(
+    { error: { message, type: "invalid_request_error", code, param } },
+    { status: 400 }
+  );
+}
+
+/**
+ * A compacting Responses provider behind the runtime, and a conversation of two exchanges whose
+ * first answer is the stored compaction checkpoint. Answers are served in the order pushed.
+ */
+async function storedContinuationFixture(name: string, encryptedContent: string) {
+  const clientInstanceId = asClientInstanceId(`${name}-client`);
+  const context: RuntimeCallContext = {
+    clientInstanceId,
+    correlationId: `corr-${name}`,
+    user: {
+      id: "user-1",
+      externalUserId: "user-1",
+      displayLabel: "User",
+      roles: ["user"],
+      permissionRefs: [],
+      clientInstanceId,
+      authSource: "test"
+    }
+  };
+  const store = new InMemoryPlatformStore();
+  const compaction = { compaction: { compactThresholdTokens: 270_000 } };
+  const providerConfig: ModelProviderConfig = {
+    id: "test-provider",
+    type: "openai-compatible",
+    api: "responses",
+    model: "test-model",
+    contextManagement: compaction
+  };
+  const provider = new OpenAiCompatibleChatProvider({
+    id: providerConfig.id,
+    api: "responses",
+    model: providerConfig.model,
+    baseUrl: "https://provider.test/v1",
+    apiKey: "test",
+    contextManagement: compaction
+  });
+  const conversationId = await createConversationWithMessages(store, {
+    clientInstanceId,
+    messages: [{ role: "user", text: "First question" }]
+  });
+  await store.appendAssistantMessage({
+    clientInstanceId,
+    conversationId,
+    text: "First answer",
+    providerContinuation: {
+      providerId: providerConfig.id,
+      state: {
+        kind: "openai_responses",
+        compactionItem: { id: "cmp_1", type: "compaction", encrypted_content: encryptedContent },
+        encryptedReasoningItems: []
+      }
+    }
+  });
+  await store.appendMessage({
+    clientInstanceId,
+    conversationId,
+    role: "user",
+    text: "Second question"
+  });
+  await store.appendAssistantMessage({
+    clientInstanceId,
+    conversationId,
+    text: "Second answer"
+  });
+  const answers: Response[] = [];
+  const requestBodies: string[] = [];
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+    requestBodies.push(String(init?.body));
+    const answer = answers.shift();
+    if (!answer) {
+      throw new Error("The provider was asked more often than the test expects");
+    }
+    return answer;
+  });
+  const runtime = new LocalAgentRuntime({
+    assetSource: createStaticConfigAssetSource({
+      agents: [
+        {
+          skillNames: [],
+          name: "stored_continuation_agent",
+          displayName: "Stored Continuation Agent",
+          instructions: "Help the user.",
+          modelProviderId: providerConfig.id,
+          toolNames: [],
+          initialPrompts: []
+        }
+      ]
+    }),
+    modelProviders: [providerConfig],
+    defaultModelProvider: providerConfig,
+    conversationHistory: store,
+    modelProviderContinuationStore: store,
+    modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
+    toolRegistry: new ToolRegistry({ tools: [] }),
+    toolExecution: createUnusedToolExecution(),
+    usageGovernance: new ModelUsageGovernance({ store, budget: {}, safeguards: {} })
+  });
+  async function runEventsToEnd(text: string) {
+    const userMessage = await store.appendMessage({
+      clientInstanceId,
+      conversationId,
+      role: "user",
+      text
+    });
+    const run = await runtime.start(
+      {
+        agentName: "stored_continuation_agent",
+        conversationId,
+        inputMessageId: userMessage.id,
+        message: { text }
+      },
+      context
+    );
+    const events = [];
+    for await (const event of runtime.observe(run.runId, context)) {
+      events.push(event);
+    }
+    return events;
+  }
+  return {
+    answers,
+    requestBodies,
+    runEventsToEnd,
+    async runToEnd(text: string): Promise<string[]> {
+      return (await runEventsToEnd(text)).map((event) => event.type);
+    },
+    storedContinuation: () =>
+      store.getModelProviderContinuation({
+        clientInstanceId,
+        conversationId,
+        providerId: providerConfig.id
+      }),
+    restore: () => fetchMock.mockRestore()
+  };
 }
 
 function createUnusedToolExecution(): ToolExecution {

@@ -1078,6 +1078,17 @@ export class InMemoryPlatformStore
     return checkpoint?.clientInstanceId === input.clientInstanceId ? checkpoint : undefined;
   }
 
+  async deleteModelProviderContinuation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    providerId: string;
+  }): Promise<void> {
+    const key = modelProviderContinuationKey(input.conversationId, input.providerId);
+    if (this.modelProviderContinuations.get(key)?.clientInstanceId === input.clientInstanceId) {
+      this.modelProviderContinuations.delete(key);
+    }
+  }
+
   async claimRunStartCommand(
     input: ClaimRunStartCommandInput
   ): Promise<ClaimRunStartCommandResult> {

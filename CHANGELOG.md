@@ -3,6 +3,19 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+## 0.6.4 — unreleased
+
+### Fixed
+
+- **Models:** a long conversation no longer fails on every message after the provider compacted
+  its context into an item above the provider's limit of 20,971,520 characters per string. Such
+  an item, and an encrypted reasoning item of that size, is not kept. A stored one, or one the
+  provider refuses with 400 `string_above_max_length` on `encrypted_content`, is dropped and the
+  request is sent once more from the conversation's history, so affected conversations answer
+  again without a migration. A provider's 400 `context_length_exceeded` fails the run with "This
+  conversation is too long for the model. Start a new conversation." instead of an internal
+  error.
+
 ## 0.6.3 — 2026-10-08
 
 ### Fixed

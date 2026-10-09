@@ -99,6 +99,15 @@ describePostgres("Postgres conversation store", () => {
         state: { checkpoint: "latest" },
         sourceMessageId: latestCheckpointMessage.id
       });
+      const continuationKey = {
+        clientInstanceId,
+        conversationId: conversation.id,
+        providerId: "test-provider"
+      };
+      await store.deleteModelProviderContinuation({ ...continuationKey, providerId: "other" });
+      await expect(store.getModelProviderContinuation(continuationKey)).resolves.toBeDefined();
+      await store.deleteModelProviderContinuation(continuationKey);
+      await expect(store.getModelProviderContinuation(continuationKey)).resolves.toBeUndefined();
       await sql`
         update messages
         set created_at = ${"2026-08-06T10:00:00.000Z"}
