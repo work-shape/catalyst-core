@@ -2,7 +2,12 @@ import { createElement } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { ServicePrincipalDetail } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
-import { ApiAccessPanel } from "../packages/chat-ui/src/control-plane/api-access-panel";
+import {
+  ApiAccessPanel,
+  copySecretField,
+  SecretFields,
+  type SecretCopyState
+} from "../packages/chat-ui/src/control-plane/api-access-panel";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 
 const detail: ServicePrincipalDetail = {
@@ -157,5 +162,54 @@ describe("API access panel", () => {
     expect(markup).toContain("https://catalyst.example.com");
     expect(markup).toContain("cat_live_once");
     expect(markup).toContain('data-secret="one-time"');
+  });
+
+  const secret = {
+    secret: "cat_live_secret",
+    serverUrl: "https://catalyst.example.test",
+    credentialName: "CI production"
+  };
+
+  function renderSecretFields(copyState: SecretCopyState): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { locale: "en" },
+        createElement(SecretFields, {
+          secret,
+          copyState,
+          onCopy: () => undefined,
+          onClose: () => undefined
+        })
+      )
+    );
+  }
+
+  it("reports a rejected clipboard write instead of marking the field as copied", async () => {
+    const rejected = await new Promise<SecretCopyState>((resolve) => {
+      copySecretField("key", secret.secret, resolve, () =>
+        Promise.reject(new Error("Clipboard access was denied"))
+      );
+    });
+    expect(rejected).toEqual({ error: "Clipboard access was denied" });
+
+    const markup = renderSecretFields(rejected);
+    expect(markup).toContain('<p role="alert">Clipboard access was denied</p>');
+    expect(markup).not.toContain("lucide-check");
+  });
+
+  it("marks only the copied field after a successful clipboard write", async () => {
+    const written: string[] = [];
+    const copied = await new Promise<SecretCopyState>((resolve) => {
+      copySecretField("key", secret.secret, resolve, async (value) => {
+        written.push(value);
+      });
+    });
+    expect(written).toEqual(["cat_live_secret"]);
+    expect(copied).toEqual({ copied: "key" });
+
+    const markup = renderSecretFields(copied);
+    expect(markup.match(/lucide-check/g)).toHaveLength(1);
+    expect(markup).not.toContain('role="alert"');
   });
 });

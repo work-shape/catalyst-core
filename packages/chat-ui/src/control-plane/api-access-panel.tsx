@@ -651,45 +651,84 @@ function CredentialForm({
   );
 }
 
-function SecretDialog({
-  secret,
-  onClose
-}: {
-  secret?: { secret: string; serverUrl: string; credentialName: string };
-  onClose(): void;
-}) {
+type SecretField = "server" | "key";
+
+interface RevealedSecret {
+  secret: string;
+  serverUrl: string;
+  credentialName: string;
+}
+
+export interface SecretCopyState {
+  copied?: SecretField;
+  error?: string;
+}
+
+/** Copies one credential field and reports the copied field, or why copying failed. */
+export function copySecretField(
+  field: SecretField,
+  value: string,
+  onResult: (state: SecretCopyState) => void,
+  write: (value: string) => Promise<void> = copyText
+): void {
+  write(value).then(
+    () => onResult({ copied: field }),
+    (error: unknown) => onResult({ error: errorMessage(error) })
+  );
+}
+
+function SecretDialog({ secret, onClose }: { secret?: RevealedSecret; onClose(): void }) {
   const { t } = useTranslation();
-  const [copied, setCopied] = useState<"server" | "key">();
+  const [copyState, setCopyState] = useState<SecretCopyState>({});
   return (
     <Dialog open={Boolean(secret)} title={t("apiAccessCredentialReady")} onClose={onClose}>
       {secret ? (
-        <div className="grid gap-4">
-          <p className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            {t("apiAccessSecretOnce")}
-          </p>
-          <CopyField
-            label={t("apiAccessServerUrl")}
-            value={secret.serverUrl}
-            copied={copied === "server"}
-            onCopy={() => {
-              void copyText(secret.serverUrl).then(() => setCopied("server"));
-            }}
-          />
-          <CopyField
-            label={t("apiAccessApiKey")}
-            value={secret.secret}
-            copied={copied === "key"}
-            secret
-            onCopy={() => {
-              void copyText(secret.secret).then(() => setCopied("key"));
-            }}
-          />
-          <div className="flex justify-end">
-            <Button onClick={onClose}>{t("apiAccessDone")}</Button>
-          </div>
-        </div>
+        <SecretFields
+          secret={secret}
+          copyState={copyState}
+          onCopy={(field, value) => copySecretField(field, value, setCopyState)}
+          onClose={onClose}
+        />
       ) : null}
     </Dialog>
+  );
+}
+
+export function SecretFields({
+  secret,
+  copyState,
+  onCopy,
+  onClose
+}: {
+  secret: RevealedSecret;
+  copyState: SecretCopyState;
+  onCopy(field: SecretField, value: string): void;
+  onClose(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="grid gap-4">
+      <p className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        {t("apiAccessSecretOnce")}
+      </p>
+      <CopyField
+        label={t("apiAccessServerUrl")}
+        value={secret.serverUrl}
+        copied={copyState.copied === "server"}
+        onCopy={() => onCopy("server", secret.serverUrl)}
+      />
+      <CopyField
+        label={t("apiAccessApiKey")}
+        value={secret.secret}
+        copied={copyState.copied === "key"}
+        secret
+        onCopy={() => onCopy("key", secret.secret)}
+      />
+      {copyState.error ? <p role="alert">{copyState.error}</p> : null}
+      <div className="flex justify-end">
+        <Button onClick={onClose}>{t("apiAccessDone")}</Button>
+      </div>
+    </div>
   );
 }
 
