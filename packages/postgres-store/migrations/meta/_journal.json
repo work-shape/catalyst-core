@@ -239,6 +239,13 @@
       "when": 1791587967002,
       "tag": "0033_operation_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791592182464,
+      "tag": "0034_access_grants_namespaces",
+      "breakpoints": true
     }
   ]
 }

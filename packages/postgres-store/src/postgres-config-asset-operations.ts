@@ -23,7 +23,8 @@ import {
   configAssetRevisions,
   configAssets,
   configAssetState,
-  configAssetWorkspaceAvailability
+  configAssetWorkspaceAvailability,
+  permissionGrants
 } from "./schema";
 
 export async function getConfigAssetState(
@@ -230,6 +231,17 @@ export async function applyConfigAssetMutations(
         await tx
           .delete(configAssetAvailability)
           .where(eq(configAssetAvailability.assetId, asset.id));
+        // The row is reused when the name is created again, so a grant on this asset must not
+        // come back with the next one.
+        await tx
+          .delete(permissionGrants)
+          .where(
+            and(
+              eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+              eq(permissionGrants.scopeKind, "asset"),
+              eq(permissionGrants.scopeId, asset.id)
+            )
+          );
         continue;
       }
 

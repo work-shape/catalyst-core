@@ -15,6 +15,7 @@ import type {
   WorkspaceCommandStore
 } from "./execution-workspace";
 import type { PlatformFileStore } from "./files";
+import type { AccessAdministrationStore } from "./permissions";
 import type { JobsStore } from "./jobs";
 import type { OperationRunStore } from "./operation-runs";
 import type { ModelUsageEventStore } from "./usage";
@@ -57,6 +58,7 @@ export interface PlatformStores {
   users: UserStore;
   workspaces: CollaborationWorkspaceStore;
   apiAccess: ApiAccessStore;
+  access: AccessAdministrationStore;
   configAssets: ConfigAssetStore;
   approvals: ApprovalsStore;
   executionWorkspaces: ExecutionWorkspacesStore;

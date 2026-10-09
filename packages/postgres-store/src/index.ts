@@ -13,6 +13,7 @@ import { createPostgresUsageStore } from "./stores/usage";
 import { createPostgresUsersStore } from "./stores/users";
 import { createPostgresWorkspacesStore } from "./stores/workspaces";
 import { createPostgresApiAccessStore } from "./stores/apiAccess";
+import { createPostgresAccessStore } from "./stores/access";
 import { createPostgresConfigAssetsStore } from "./stores/configAssets";
 import { createPostgresApprovalsStore } from "./stores/approvals";
 import { createPostgresExecutionWorkspacesStore } from "./stores/executionWorkspaces";
@@ -63,6 +64,7 @@ function bindStores(
     users: createPostgresUsersStore(db),
     workspaces: createPostgresWorkspacesStore(db),
     apiAccess: createPostgresApiAccessStore(db),
+    access: createPostgresAccessStore(db),
     configAssets: createPostgresConfigAssetsStore(db),
     approvals: createPostgresApprovalsStore(db),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
