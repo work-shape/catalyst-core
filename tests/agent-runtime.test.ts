@@ -19,6 +19,7 @@ import {
   type ToolExecution,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
+import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import {
   LocalAgentRuntime,
@@ -1852,6 +1853,122 @@ describe("local agent runtime", () => {
 
     expect(attempts).toBe(3);
     expect(interruptedEvents.map((event) => event.type)).toEqual(["message_delta", "run_failed"]);
+  });
+
+  it("survives two consecutive rate limit answers and gives up after the third", async () => {
+    const clientInstanceId = asClientInstanceId("provider-rate-limit-retry-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-provider-rate-limit-retry",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = (await createTestInstance()).stores;
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    let rateLimitedAnswers = 2;
+    let attemptTimes: number[] = [];
+    const modelProvider: ModelProvider = {
+      id: "test-provider",
+      async complete() {
+        throw new Error("Expected the streaming provider path to be used");
+      },
+      async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+        attemptTimes.push(Date.now());
+        if (attemptTimes.length <= rateLimitedAnswers) {
+          throw new AppError("INTERNAL", "Model provider request failed", { status: 429 });
+        }
+        yield {
+          type: "completed",
+          completion: {
+            text: "Answered on the third attempt.",
+            toolCalls: [],
+            usage: noReportedUsage()
+          }
+        };
+      }
+    };
+    const runtime = new LocalAgentRuntime({
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            skillNames: [],
+            name: "rate_limit_retry_agent",
+            displayName: "Rate Limit Retry Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store.conversations,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
+    });
+    const waitsBetween = (times: number[]) =>
+      times.slice(1).map((time, index) => time - (times[index] ?? 0));
+    const runToEnd = async (text: string) => {
+      const conversationId = await createConversationWithMessages(store, {
+        clientInstanceId,
+        messages: []
+      });
+      const run = await runtime.start(
+        { agentName: "rate_limit_retry_agent", conversationId, message: { text } },
+        context
+      );
+      const types: string[] = [];
+      for await (const event of runtime.observe(run.runId, context)) {
+        types.push(event.type);
+      }
+      return types;
+    };
+    const stepMs = 50;
+    // The largest jitter: each wait is its base plus 20 percent.
+    const random = vi.spyOn(Math, "random").mockReturnValue(1);
+    useFakeClockBesidePostgres();
+    try {
+      const survived = await advanceFakeClockUntilSettled(runToEnd("hello"), stepMs);
+
+      expect(survived).toEqual(["message_delta", "message_completed", "run_completed"]);
+      expect(attemptTimes).toHaveLength(3);
+      const waits = waitsBetween(attemptTimes);
+      expect(waits[0]).toBeGreaterThanOrEqual(1_200);
+      expect(waits[0]).toBeLessThan(1_200 + 4 * stepMs);
+      expect(waits[1]).toBeGreaterThanOrEqual(4_800);
+      expect(waits[1]).toBeLessThan(4_800 + 4 * stepMs);
+
+      // The smallest jitter: each wait is its base minus 20 percent.
+      random.mockReturnValue(0);
+      attemptTimes = [];
+      rateLimitedAnswers = 3;
+      const failed = await advanceFakeClockUntilSettled(runToEnd("hello again"), stepMs);
+
+      expect(failed).toEqual(["run_failed"]);
+      expect(attemptTimes).toHaveLength(3);
+      const failedWaits = waitsBetween(attemptTimes);
+      expect(failedWaits[0]).toBeGreaterThanOrEqual(800);
+      expect(failedWaits[0]).toBeLessThan(800 + 4 * stepMs);
+      expect(failedWaits[1]).toBeGreaterThanOrEqual(3_200);
+      expect(failedWaits[1]).toBeLessThan(3_200 + 4 * stepMs);
+    } finally {
+      vi.useRealTimers();
+      random.mockRestore();
+    }
   });
 
   it("does not repeat a completed model call when usage persistence fails", async () => {

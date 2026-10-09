@@ -46,7 +46,6 @@ import {
   type ModelProvider,
   type ModelToolCall
 } from "@vivd-catalyst/model-provider";
-import { setTimeout as delay } from "node:timers/promises";
 import { RunState, toRunFailureError, type RunFailureError } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";
@@ -117,8 +116,12 @@ export interface LocalAgentRunFailureReport {
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
 const DEFAULT_MAX_STEPS = 64;
 const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
-const MODEL_PROVIDER_MAX_ATTEMPTS = 2;
-const MODEL_PROVIDER_RETRY_DELAY_MS = 250;
+// Protects a run from a provider's rate limit or dropped connection: the wait before the second
+// and the third attempt. After the third attempt the run fails with the provider's error.
+const MODEL_PROVIDER_RETRY_WAITS_MS = [1_000, 4_000];
+const MODEL_PROVIDER_MAX_ATTEMPTS = MODEL_PROVIDER_RETRY_WAITS_MS.length + 1;
+// Each wait varies by this share in both directions, so runs that failed together do not retry together.
+const MODEL_PROVIDER_RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
   toolOutput: {
     maxTokens: 60000
@@ -929,7 +932,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           });
         }
         try {
-          await delay(MODEL_PROVIDER_RETRY_DELAY_MS, undefined, { signal: context.signal });
+          await waitUnlessAborted(modelProviderRetryWaitMs(attempt), context.signal);
         } catch {
           throw error;
         }
@@ -942,6 +945,26 @@ export class LocalAgentRuntime implements AgentRuntime {
 interface ModelProviderAttempt {
   retrySafe: boolean;
   preparingToolCallIds: ReturnType<typeof asToolCallId>[];
+}
+
+/** Rejects when the signal aborts first. Uses the global timer so a test clock can drive it. */
+function waitUnlessAborted(waitMs: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("Model provider retry wait was cancelled"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, waitMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function modelProviderRetryWaitMs(failedAttempt: number): number {
+  const waitMs = MODEL_PROVIDER_RETRY_WAITS_MS[failedAttempt - 1] ?? 0;
+  return Math.round(waitMs * (1 + (Math.random() * 2 - 1) * MODEL_PROVIDER_RETRY_JITTER_RATIO));
 }
 
 function isTransientModelProviderError(error: unknown): boolean {
