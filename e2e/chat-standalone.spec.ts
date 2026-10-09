@@ -922,7 +922,9 @@ test("a configuration the interface cannot read shows an error that a retry reco
   // server's own.
   let requests = 0;
   await page.route(
-    (url) => url.origin === new URL(apiBaseUrl).origin && url.pathname === "/api/v1/config",
+    (url) =>
+      url.origin === new URL(apiBaseUrl).origin &&
+      url.pathname === apiOperations["config.get"].path,
     async (route) => {
       requests += 1;
       if (requests === 1) {
@@ -950,10 +952,12 @@ test("a configuration the interface cannot read shows an error that a retry reco
 
   await failure.getByRole("button", { name: "Try again", exact: true }).click();
 
-  await expect(page.getByText("E2E Customer")).toBeVisible();
   await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
   await expect(failure).toHaveCount(0);
   expect(requests).toBe(3);
+  // The answer of another release was seen once, so the loaded workspace keeps the notice.
+  await expect(page.getByRole("status")).toContainText("The application was updated");
 });
 
 test("new turns anchor below the top chrome and retain response runway", async ({ page }) => {
