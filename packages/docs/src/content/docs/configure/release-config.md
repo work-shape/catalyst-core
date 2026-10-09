@@ -60,10 +60,11 @@ ui:
     surfaceColor: "#ffffff"
 
 retention:
-  conversations:
-    deleteAfterDays: 90
-  audit:
-    deleteAfterDays: 730
+  conversationDays: 90
+  expireConversations: true
+  extendOnActivity: true
+  auditDays: 730
+  allowUserDelete: true
 
 usage:
   budget:
@@ -85,6 +86,22 @@ usage:
           cachedInputPricePerMillionTokens: 0.5
           outputPricePerMillionTokens: 30
 ```
+
+### Retention
+
+| Key                             | Default | Meaning                                                                                                                                        |
+| ------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retention.conversationDays`    | `30`    | How long a Conversation is kept, in days.                                                                                                      |
+| `retention.expireConversations` | `true`  | `false` keeps every Conversation a user started, whatever its date. Abandoned drafts are still removed.                                        |
+| `retention.extendOnActivity`    | `true`  | `true` counts `conversationDays` from the last message a user sent. `false` counts from the creation of the Conversation: a fixed maximum age. |
+| `retention.auditDays`           | `365`   | How long audit events are kept.                                                                                                                |
+| `retention.allowUserDelete`     | `true`  | Lets users delete their own Conversations.                                                                                                     |
+
+With `extendOnActivity: true`, every message a user sends moves the deletion date to `conversationDays` after that message, and never to an earlier date. Opening, reading, renaming or moving a Conversation, the generated title and background jobs do not move it. A Conversation someone keeps writing in is therefore never deleted for age. Set `extendOnActivity: false` when the instance has promised a maximum age: the date set at creation then stands, whatever is written later.
+
+Changing `conversationDays` or `extendOnActivity` does not rewrite the dates of existing Conversations. A Conversation takes the new period with its next message, when `extendOnActivity` is on.
+
+In its last seven days a Conversation carries a clock in the list, and the open Conversation shows one line above the message field with the deletion date. With `extendOnActivity: true` the line adds that a new message keeps the Conversation.
 
 The conversation Resources panel is enabled by default and appears only after a user enters a persisted Conversation. Set `ui.resources.enabled: false` only when a deployment must opt out of that surface.
 

@@ -135,6 +135,17 @@ contain breaking changes; a patch version does not.
   `modelProvider` and `usageGovernance`. `ModelUsageEventInput` carries an `attribution` in
   place of `conversationId`, `agentRunId` and `agentName`, and `runModelCall` takes the call's
   instance and attribution.
+- **Retention:** a conversation's deletion date counts from the last message a user sent, no
+  longer from its creation: accepting a message moves the date to `retention.conversationDays`
+  later, in the transaction that stores the message. Opening, reading, renaming, moving, the
+  generated title and background jobs do not move it. `retention.extendOnActivity: false`
+  keeps the date set at creation as a fixed maximum age. Check what an instance promised its
+  users before upgrading: the default is `true`. A conversation within seven days of its date
+  shows one line above the composer with the deletion date; where a message moves the date,
+  the line says that a new message keeps the conversation. The safe config answer carries
+  `retention.extendOnActivity`, optional for clients of an older API.
+- **UI library:** `Banner` has the layout `line`, one quiet sentence without a box whose icon
+  alone carries the tone.
 - **Interface, default theme:** an instance that sets no `ui.theme` or `ui.darkTheme` now shows
   warm paper neutrals with one terracotta accent (light `#fdfbf7` page, `#f6f3ec` sidebar,
   `#b5573a` accent; dark `#1c1a17` page, `#131210` sidebar, `#d98c6c` accent). An instance

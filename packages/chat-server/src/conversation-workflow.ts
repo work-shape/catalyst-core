@@ -515,7 +515,12 @@ export class ConversationWorkflow {
                 }
               }
             : {}),
-          claimReadyDraftAttachments: attachmentManifest.attachments.length > 0
+          claimReadyDraftAttachments: attachmentManifest.attachments.length > 0,
+          // Only a message a user sends counts as activity. Reading, renaming, moving and
+          // background jobs never reach this call.
+          ...(this.options.config.retention.extendOnActivity
+            ? { extendRetentionDays: this.options.config.retention.conversationDays }
+            : {})
         });
         if (prepared.firstUserMessage && this.options.config.conversationTitles.enabled) {
           await stores.jobs.enqueue(

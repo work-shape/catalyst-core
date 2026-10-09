@@ -242,9 +242,18 @@ export async function prepareConversationRunStart(
       }
     }
 
+    // The row is locked, so the expiry claim reads the moved date or has already claimed the
+    // Conversation. `greatest` keeps a later date, and of two messages the later one.
     await tx
       .update(conversations)
-      .set({ updatedAt: createdAt })
+      .set({
+        updatedAt: createdAt,
+        ...(input.extendRetentionDays === undefined
+          ? {}
+          : {
+              retainedUntil: drizzleSql<Date>`greatest(${conversations.retainedUntil}, now() + make_interval(days => ${input.extendRetentionDays}))`
+            })
+      })
       .where(
         and(
           eq(conversations.clientInstanceId, input.clientInstanceId),

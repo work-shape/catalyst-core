@@ -850,6 +850,12 @@ export const clientInstanceConfigSchema = z.object({
        */
       expireConversations: z.boolean().default(true),
       /**
+       * True counts `conversationDays` from the last message a user sent: accepting a message
+       * moves the date. False keeps the date set at creation, a fixed maximum age. Only the
+       * operator knows which of the two the customer was promised.
+       */
+      extendOnActivity: z.boolean().default(true),
+      /**
        * The `audit.prune` job deletes audit events older than this once a day and records
        * one `audit.pruned` event with the count.
        */
@@ -859,6 +865,7 @@ export const clientInstanceConfigSchema = z.object({
     .default({
       conversationDays: 30,
       expireConversations: true,
+      extendOnActivity: true,
       auditDays: 365,
       allowUserDelete: true
     }),

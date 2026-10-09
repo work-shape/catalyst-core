@@ -97,6 +97,8 @@ export const safeConfigSchema = z.object({
   retention: z.object({
     conversationDays: z.number(),
     expireConversations: z.boolean(),
+    /** Absent in the answer of an API from before the setting; the interface reads that as false. */
+    extendOnActivity: z.boolean().optional(),
     auditDays: z.number(),
     allowUserDelete: z.boolean()
   }),

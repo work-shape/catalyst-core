@@ -20,6 +20,8 @@ Define retention for:
 - audit events
 - backups
 
+A Conversation is deleted `retention.conversationDays` after the last message a user sent in it. Set `retention.extendOnActivity: false` to count from its creation instead, as a fixed maximum age. In its last seven days the conversation list marks it with a clock, and the open Conversation says when it will be deleted. See [release config](/configure/release-config/#retention).
+
 Conversation retention and audit retention may be different. Audit events should avoid raw sensitive payloads so they can safely outlive conversation content where policy requires it.
 
 Audit retention is enforced. Once a day the API process deletes the audit events of its instance that are older than `retention.auditDays` (default 365) and records one `audit.pruned` event with the number of rows it removed. There is no switch: an instance that has to keep audit events longer sets a higher `auditDays`, up to 3650, before it upgrades.

@@ -362,6 +362,11 @@ export interface PrepareConversationRunStartInput {
     claimedAt?: ISODateString;
   };
   claimReadyDraftAttachments?: boolean;
+  /**
+   * Moves the Conversation's retention date to this many days after the acceptance, measured on
+   * the database clock, unless the date already lies later. Absent leaves the date alone.
+   */
+  extendRetentionDays?: number;
 }
 
 export interface PreparedConversationRunStart {

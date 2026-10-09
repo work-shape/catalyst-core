@@ -13123,6 +13123,9 @@
               "expireConversations": {
                 "type": "boolean"
               },
+              "extendOnActivity": {
+                "type": "boolean"
+              },
               "auditDays": {
                 "type": "number"
               },
