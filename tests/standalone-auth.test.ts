@@ -21,16 +21,10 @@ import {
   createStandaloneAuthRuntime,
   type StandaloneAuthRuntime
 } from "@vivd-catalyst/auth";
-import { createRoute } from "../packages/chat-server/src/http/route";
 import { routeTestOperations } from "./support/operations";
-import { createTestConfig } from "./support/fixtures";
-import { createLogger } from "@vivd-catalyst/client-assembly";
 import Fastify from "../packages/chat-server/node_modules/fastify/fastify.js";
 import { installErrorHandler } from "../packages/chat-server/src/errors";
 import { registerBetterAuthRoutes } from "../packages/chat-server/src/routes/better-auth-routes";
-
-// What the route helper needs besides the sign-in under test.
-const routeDefaults = { config: createTestConfig(), logger: createLogger() };
 
 describe("standalone auth email routes", () => {
   const baseUrl = "http://localhost:3000";
@@ -48,7 +42,8 @@ describe("standalone auth email routes", () => {
       clientInstanceId: asClientInstanceId("standalone_auth_test"),
       databaseUrl,
       secret: "test-secret-at-least-32-characters-long",
-      baseUrl
+      baseUrl,
+      rateLimit: false
     });
     const signIn = await auth.setOrCreatePasswordSignIn({
       email,
@@ -214,12 +209,12 @@ describe("standalone auth email routes", () => {
       cookie,
       chatSessionToken
     } = await createMixedCredentials();
-    const httpServer = Fastify();
-    const server = await bindTestTransport(httpServer, () => httpServer.close());
-    installErrorHandler(httpServer);
-    createRoute(httpServer, { ...routeDefaults, clientInstanceId, authAdapter: composite })(
-      routeTestOperations.testIdentityWrite,
-      ({ user }) => ({ externalUserId: user.externalUserId })
+    const server = await createTestInstanceWith(
+      () => ({ clientInstanceId, authAdapter: composite }),
+      (route) =>
+        route(routeTestOperations.testIdentityWrite, ({ user }) => ({
+          externalUserId: user.externalUserId
+        }))
     );
     const headers = { cookie, origin: "https://foreign.test" };
     try {
@@ -257,12 +252,12 @@ describe("standalone auth email routes", () => {
           )
         : auth.authAdapter;
       const authenticate = vi.spyOn(auth.authAdapter, "authenticate");
-      const httpServer = Fastify();
-      const server = await bindTestTransport(httpServer, () => httpServer.close());
-      installErrorHandler(httpServer);
-      createRoute(httpServer, { ...routeDefaults, clientInstanceId, authAdapter })(
-        routeTestOperations.testIdentity,
-        ({ user }) => ({ externalUserId: user.externalUserId })
+      const server = await createTestInstanceWith(
+        () => ({ clientInstanceId, authAdapter }),
+        (route) =>
+          route(routeTestOperations.testIdentity, ({ user }) => ({
+            externalUserId: user.externalUserId
+          }))
       );
       try {
         const response = await server.call("testIdentity", {

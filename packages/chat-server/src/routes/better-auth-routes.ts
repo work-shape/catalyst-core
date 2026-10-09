@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
-import { hasExplicitCredentials } from "@vivd-catalyst/auth";
+import { hasExplicitCredentials, STANDALONE_AUTH_CLIENT_ADDRESS_HEADER } from "@vivd-catalyst/auth";
 import { AppError } from "@vivd-catalyst/core";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ChatServerOptions } from "../types";
@@ -27,7 +27,7 @@ export function registerBetterAuthRoutes(
       const response = await standaloneAuth.handleRequest(
         new Request(toAuthRequestUrl(request.url, standaloneAuth.baseUrl), {
           method: request.method,
-          headers: toRequestHeaders(request.headers),
+          headers: toRequestHeaders(request.headers, request.ip),
           body: request.method === "GET" ? undefined : toRequestBody(request.body)
         })
       );
@@ -61,7 +61,14 @@ function toAuthRequestUrl(requestUrl: string, baseUrl: string): string {
   return new URL(requestUrl, origin).toString();
 }
 
-function toRequestHeaders(headers: Record<string, string | string[] | undefined>): Headers {
+/**
+ * The sign-in library limits its own routes per client address. It reads that address from
+ * the one header set here, so a caller cannot choose the address it is counted under.
+ */
+function toRequestHeaders(
+  headers: Record<string, string | string[] | undefined>,
+  clientAddress: string
+): Headers {
   const requestHeaders = new Headers();
   for (const [key, value] of Object.entries(headers)) {
     if (Array.isArray(value)) {
@@ -74,6 +81,7 @@ function toRequestHeaders(headers: Record<string, string | string[] | undefined>
       requestHeaders.set(key, value);
     }
   }
+  requestHeaders.set(STANDALONE_AUTH_CLIENT_ADDRESS_HEADER, clientAddress);
   return requestHeaders;
 }
 

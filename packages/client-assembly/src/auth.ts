@@ -146,6 +146,8 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
     secret,
     baseUrl: resolveBetterAuthUrl(input),
     trustedOrigins: input.allowedOrigins,
+    // A development instance is signed in to by test suites, many times a second.
+    rateLimit: input.config.clientInstance.environment !== "development",
     seedUsers: input.config.auth.standalone.seedUsers.map((seedUser) => ({
       email: resolveSeedEmail(seedUser, input),
       displayLabel: seedUser.displayLabel,

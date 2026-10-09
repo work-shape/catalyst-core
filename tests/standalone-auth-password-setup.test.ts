@@ -42,7 +42,8 @@ describe("standalone auth password setup tokens", () => {
       clientInstanceId: asClientInstanceId("password-setup-test"),
       databaseUrl: databaseUrl,
       secret: "0123456789abcdef0123456789abcdef",
-      baseUrl: "http://127.0.0.1:4100/api/auth"
+      baseUrl: "http://127.0.0.1:4100/api/auth",
+      rateLimit: false
     });
     const signIn = await auth.setOrCreatePasswordSignIn({
       email,

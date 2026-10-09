@@ -300,7 +300,8 @@ describe("the sign-in library's mount", () => {
       clientInstanceId: asClientInstanceId("api_version_paths_test"),
       databaseUrl: await fileTestDatabaseUrl(),
       secret: "test-secret-at-least-32-characters-long",
-      baseUrl: "http://localhost:3000"
+      baseUrl: "http://localhost:3000",
+      rateLimit: false
     });
     instance = await createTestInstanceWith((stores) => ({
       ...optionalParts(stores),

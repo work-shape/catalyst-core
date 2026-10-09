@@ -38,9 +38,20 @@ export interface StandaloneAuthOptions {
   baseUrl: string;
   trustedOrigins?: string[];
   seedUsers?: StandaloneAuthSeedUser[];
+  /**
+   * Whether the sign-in library limits calls to its own routes per client address. The library
+   * decides this from `NODE_ENV` on its own, which an operated instance does not set.
+   */
+  rateLimit: boolean;
 }
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";
+
+/**
+ * The only header the sign-in library reads a client address from. The server that mounts the
+ * library's routes sets it from the address it has established itself.
+ */
+export const STANDALONE_AUTH_CLIENT_ADDRESS_HEADER = "x-catalyst-client-address";
 
 export interface SetStandalonePasswordInput {
   externalUserId: string;
@@ -145,6 +156,10 @@ export async function createStandaloneAuthRuntime(
     secret: options.secret,
     baseURL: options.baseUrl,
     trustedOrigins: options.trustedOrigins ?? [],
+    // The library's own limits: three calls in ten seconds to sign in or change a password,
+    // a hundred in ten seconds to any other of its routes, per client address and path.
+    rateLimit: { enabled: options.rateLimit },
+    advanced: { ipAddress: { ipAddressHeaders: [STANDALONE_AUTH_CLIENT_ADDRESS_HEADER] } },
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
