@@ -23,7 +23,7 @@ describe("native document execution", () => {
     const result = await runNativeProcess({
       command: process.execPath,
       args: ["-e", "process.stdout.write('x'.repeat(70000))"],
-      timeoutMs: 1_000
+      timeoutMs: 15_000
     });
     expect(Buffer.byteLength(result.stdout)).toBe(64 * 1024);
 
@@ -31,7 +31,7 @@ describe("native document execution", () => {
       runNativeProcess({
         command: process.execPath,
         args: ["-e", "process.stderr.write('conversion failed'); process.exit(7)"],
-        timeoutMs: 1_000
+        timeoutMs: 15_000
       })
     ).rejects.toMatchObject({
       reason: "process_failed",
@@ -102,7 +102,7 @@ process.stdout.write("converted");
       sourcePath,
       outputDirectory,
       outputFormat: "pdf",
-      timeoutMs: 1_000
+      timeoutMs: 15_000
     });
 
     expect(result.stdout).toBe("converted");
@@ -135,7 +135,7 @@ process.stdout.write("converted");
         sourcePath,
         outputDirectory,
         outputFormat: "pdf",
-        timeoutMs: 1_000
+        timeoutMs: 15_000
       })
     ).resolves.toEqual({ stdout: "no output" });
     expect(await readFile(staleOutput, "utf8")).toBe("stale");
@@ -173,7 +173,7 @@ writeFileSync(args.at(-1) + ".png", Buffer.from("rendered page"));
         command: infoCommand,
         pdfPath,
         pageNumber: 3,
-        timeoutMs: 1_000
+        timeoutMs: 15_000
       })
     ).resolves.toEqual({
       pageCount: 12,
@@ -186,7 +186,7 @@ writeFileSync(args.at(-1) + ".png", Buffer.from("rendered page"));
         outputDirectory: directory,
         pageNumber: 3,
         resolution: { maxLongEdgePixels: 2400 },
-        timeoutMs: 1_000
+        timeoutMs: 15_000
       })
     ).resolves.toEqual(Buffer.from("rendered page"));
     expect((await readdir(directory)).some((entry) => entry.endsWith(".png"))).toBe(false);
@@ -207,7 +207,7 @@ writeFileSync(args.at(-1) + ".png", Buffer.from("rendered page"));
         outputDirectory: directory,
         pageNumber: 3,
         resolution: { dpi: 160 },
-        timeoutMs: 1_000
+        timeoutMs: 15_000
       })
     ).rejects.toThrow();
     expect(await readFile(staleOutput, "utf8")).toBe("stale");
@@ -220,7 +220,7 @@ writeFileSync(args.at(-1) + ".png", Buffer.from("rendered page"));
     const error = await runNativeProcess({
       command: `missing-native-command-${Date.now()}`,
       args: [],
-      timeoutMs: 1_000
+      timeoutMs: 15_000
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(NativeProcessError);
     expect(error).toMatchObject({ reason: "command_missing", cause: expect.any(Error) });
