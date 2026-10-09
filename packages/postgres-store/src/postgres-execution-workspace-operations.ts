@@ -28,6 +28,7 @@ import {
   type WorkspaceFile,
   createPlatformId
 } from "@vivd-catalyst/core";
+import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
 import { mapExecutionWorkspace, mapWorkspaceCommand, mapWorkspaceFile } from "./rows";
 import {
@@ -128,6 +129,13 @@ export async function upsertWorkspaceFile(
   input: UpsertWorkspaceFileInput
 ): Promise<WorkspaceFile> {
   return db.transaction(async (tx) => {
+    // The Conversation lock comes first, as in deletion and cleanup; the Workspace is read again
+    // under it because cleanup may have marked it deleted while this write waited.
+    const requested = await requireActiveWorkspace(tx, {
+      clientInstanceId: input.clientInstanceId,
+      workspaceId: input.workspaceId
+    });
+    await requireActiveConversationLock(tx, input.clientInstanceId, requested.conversationId);
     const workspace = await requireActiveWorkspace(tx, {
       clientInstanceId: input.clientInstanceId,
       workspaceId: input.workspaceId

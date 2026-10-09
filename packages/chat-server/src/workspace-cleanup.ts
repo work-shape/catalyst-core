@@ -7,18 +7,11 @@ import {
   type ExecutionWorkspaceDeletionSummary,
   type JsonObject
 } from "@vivd-catalyst/core";
-import type { ChatServerOptions } from "./types";
+import type { ChatServerOptions, ExecutionWorkspaceCleanupJobOptions } from "./types";
 
 export interface ExecutionWorkspaceCleanupRunSummary {
   cleanedCount: number;
   failedCount: number;
-}
-
-export interface ExecutionWorkspaceCleanupJobOptions {
-  batchSize?: number;
-  checkIntervalMs?: number;
-  runOnStartup?: boolean;
-  now?: () => Date;
 }
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100;
@@ -180,7 +173,7 @@ export async function cleanupExecutionWorkspaceForConversation(
   return deleted;
 }
 
-export function executionWorkspaceCleanupAuditMetadata(
+function executionWorkspaceCleanupAuditMetadata(
   summary: ExecutionWorkspaceDeletionSummary | undefined
 ): JsonObject {
   return {
@@ -205,7 +198,7 @@ async function recordWorkspaceCleanupFailure(
   });
 }
 
-export function workspaceCleanupFailureAuditMetadata(error: unknown): JsonObject {
+function workspaceCleanupFailureAuditMetadata(error: unknown): JsonObject {
   return {
     errorCode: isAppError(error) ? error.code : "INTERNAL",
     errorCategory: "workspace_cleanup",

@@ -150,11 +150,18 @@ export interface ConversationStore extends ConversationHistoryStore {
   }): Promise<Conversation>;
 }
 
+export type ConversationExpiryReason = "retention_due" | "abandoned_draft";
+
+export type ExpireConversationResult =
+  | { status: "expired"; conversation: Conversation; reason: ConversationExpiryReason }
+  | { status: "not_expired" };
+
 export interface ConversationRetentionStore {
   /**
    * Active Conversations to expire. With `now`, the ones whose retention is due. With
    * `abandonedBefore`, the ones that hold no messages and no draft attachments and were last
-   * touched at or before that time. Each criterion applies only when given.
+   * touched at or before that time. Each criterion applies only when given. A Conversation
+   * with an agent run in progress is left for a later pass.
    */
   listExpiredConversations(input: {
     clientInstanceId: ClientInstanceId;
@@ -162,11 +169,18 @@ export interface ConversationRetentionStore {
     abandonedBefore?: ISODateString;
     limit: number;
   }): Promise<Conversation[]>;
+  /**
+   * Expires the Conversation only if it meets the criteria of `listExpiredConversations` at the
+   * moment its row is locked. An earlier read is never trusted: a message or upload accepted in
+   * between leaves the Conversation `not_expired` and nothing is deleted.
+   */
   expireConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     expiredAt: ISODateString;
-  }): Promise<Conversation>;
+    now?: ISODateString;
+    abandonedBefore?: ISODateString;
+  }): Promise<ExpireConversationResult>;
 }
 
 export interface ConversationHistoryReader {

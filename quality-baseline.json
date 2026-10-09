@@ -187,7 +187,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/postgres-store",
-      "count": 49,
+      "count": 48,
       "owner": "CB-3a"
     },
     {
@@ -326,13 +326,6 @@
     {
       "target": "lint",
       "rule": "catalyst/module-cycle",
-      "scope": "packages/chat-server",
-      "count": 4,
-      "owner": "CB-4d"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/module-cycle",
       "scope": "packages/chat-ui",
       "count": 6,
       "owner": "G-5c"
@@ -460,7 +453,7 @@
       "target": "lint",
       "rule": "knip/exports",
       "scope": "packages/chat-server",
-      "count": 2,
+      "count": 1,
       "owner": "CB-4d"
     },
     {

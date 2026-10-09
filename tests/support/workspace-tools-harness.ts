@@ -212,6 +212,18 @@ export function encode(value: string): Uint8Array {
 
 class TestWorkspaceObjectStore implements WorkspaceFileByteStore, WorkspaceObjectStore {
   private readonly objects = new Map<string, Uint8Array>();
+  readonly deletedKeys: string[] = [];
+  /** Runs after the bytes of a workspace file are stored and before its row is written. */
+  afterPutWorkspaceFile: (objectKey: string) => Promise<void> = async () => undefined;
+
+  keys(): string[] {
+    return [...this.objects.keys()];
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    this.deletedKeys.push(key);
+    this.objects.delete(key);
+  }
 
   putObject(key: string, body: Uint8Array): void {
     this.objects.set(key, body);
@@ -235,6 +247,7 @@ class TestWorkspaceObjectStore implements WorkspaceFileByteStore, WorkspaceObjec
       input.path
     ].join("/");
     this.putObject(objectKey, input.bytes);
+    await this.afterPutWorkspaceFile(objectKey);
     return { objectKey };
   }
 }

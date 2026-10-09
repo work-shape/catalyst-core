@@ -47,6 +47,7 @@ import type { ModelMessage } from "@vivd-catalyst/model-provider";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
 import { CollaborationWorkspaceWorkflow } from "./collaboration-workspace-workflow";
+import { attemptConversationDataCleanup } from "./conversation-cleanup";
 import {
   createConversationTitle,
   isTemporaryConversationTitle,
@@ -60,10 +61,6 @@ import {
   recoveryEventFromObservation
 } from "./run-recovery";
 import type { ChatServerOptions } from "./types";
-import {
-  cleanupExecutionWorkspaceForConversation,
-  executionWorkspaceCleanupAuditMetadata
-} from "./workspace-cleanup";
 
 export interface CreateConversationCommand {
   title?: string;
@@ -1000,33 +997,21 @@ export class ConversationWorkflow {
     }
     await this.requireConversationAccess(conversationId, user);
     const deletedAt = new Date().toISOString();
-    const attachmentDeletion = this.options.attachments
-      ? await this.options.attachments.deleteConversationAttachments({
-          conversationId,
-          deletedAt
-        })
-      : undefined;
-    const workspaceDeletion = await cleanupExecutionWorkspaceForConversation(this.options, {
-      conversationId,
-      deletedAt
-    });
     const deleted = await this.options.conversationStore.deleteConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       deletedAt
     });
+    // The Conversation is gone for the user from here on. A cleanup that fails is retried by
+    // the retention job and does not fail the request.
+    const cleanup = await attemptConversationDataCleanup(this.options, deleted.id, deletedAt);
     await this.options.auditRecorder.record({
       type: "conversation.deleted",
       status: "success",
       actor: auditActorFromUser(user),
       subject: deleted.id,
       correlationId: context.correlationId,
-      metadata: {
-        attachmentCount: attachmentDeletion?.attachmentCount ?? 0,
-        fileCount: attachmentDeletion?.fileObjectKeys.length ?? 0,
-        artifactCount: attachmentDeletion?.artifactObjectKeys.length ?? 0,
-        ...executionWorkspaceCleanupAuditMetadata(workspaceDeletion)
-      }
+      metadata: { ...cleanup }
     });
     return deleted;
   }

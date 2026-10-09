@@ -193,6 +193,22 @@ export interface CollaborationWorkspaceStore {
   }): Promise<CollaborationWorkspace>;
 }
 
+/**
+ * The refusal of a workspace deletion while Conversations of the workspace still have data to
+ * remove. Their rows lead to that data, so they stay until the retention job has removed it.
+ */
+export function pendingConversationCleanupError(
+  workspaceKind: CollaborationWorkspace["kind"],
+  pendingCleanupCount: number
+): AppError {
+  const subject = workspaceKind === "personal" ? "The account" : "This workspace";
+  return new AppError(
+    "CONFLICT",
+    `${subject} cannot be deleted yet because data of its deleted conversations is still being removed. Try again later.`,
+    { pendingCleanupCount }
+  );
+}
+
 export function createCollaborationWorkspaceId(): CollaborationWorkspaceId {
   return createPlatformId<"CollaborationWorkspaceId">("cws");
 }

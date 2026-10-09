@@ -6,29 +6,18 @@ import {
   type RuntimeCallContext,
   type UserId
 } from "@vivd-catalyst/core";
-import type { ChatServerOptions } from "./types";
 import {
-  cleanupExecutionWorkspaceForConversation,
-  executionWorkspaceCleanupAuditMetadata
-} from "./workspace-cleanup";
+  attemptConversationDataCleanup,
+  type ConversationDataCleanupOutcome,
+  type ConversationDataDeletionTotals
+} from "./conversation-cleanup";
+import type { ChatServerOptions } from "./types";
 
-export interface UserDeletionTotals {
+export interface UserDeletionTotals extends ConversationDataDeletionTotals {
   conversationCount: number;
-  attachmentCount: number;
-  fileCount: number;
-  artifactCount: number;
-  workspaceCount: number;
-  workspaceFileCount: number;
-  workspaceCommandCount: number;
-  workspaceObjectCount: number;
   accessRequestCount: number;
   sharedMembershipCount: number;
 }
-
-export type ConversationDataDeletionTotals = Omit<
-  UserDeletionTotals,
-  "conversationCount" | "accessRequestCount" | "sharedMembershipCount"
->;
 
 export async function cleanupProductUserData(input: {
   options: ChatServerOptions;
@@ -107,13 +96,16 @@ export async function cleanupProductUserData(input: {
     const deletedAt = new Date().toISOString();
     const deletion = await deleteConversationAggregate(options, conversation.id, deletedAt);
     totals.conversationCount += 1;
-    totals.attachmentCount += deletion.attachmentCount;
-    totals.fileCount += deletion.fileCount;
-    totals.artifactCount += deletion.artifactCount;
-    totals.workspaceCount += deletion.workspaceCount;
-    totals.workspaceFileCount += deletion.workspaceFileCount;
-    totals.workspaceCommandCount += deletion.workspaceCommandCount;
-    totals.workspaceObjectCount += deletion.workspaceObjectCount;
+    // A cleanup that is still pending is finished and audited by the retention job.
+    if (deletion.cleanup === "complete") {
+      totals.attachmentCount += deletion.attachmentCount;
+      totals.fileCount += deletion.fileCount;
+      totals.artifactCount += deletion.artifactCount;
+      totals.workspaceCount += deletion.workspaceCount;
+      totals.workspaceFileCount += deletion.workspaceFileCount;
+      totals.workspaceCommandCount += deletion.workspaceCommandCount;
+      totals.workspaceObjectCount += deletion.workspaceObjectCount;
+    }
 
     await options.auditRecorder.record({
       type: "conversation.deleted",
@@ -128,6 +120,15 @@ export async function cleanupProductUserData(input: {
     });
   }
 
+  // The store refuses this while a cleanup is pending, so it comes before anything else of the
+  // account is removed: a refusal leaves the user with every membership and access request.
+  if (personalWorkspace) {
+    await options.userStore.deletePersonalWorkspaceForUser({
+      clientInstanceId: options.clientInstanceId,
+      userId: input.userId
+    });
+  }
+
   totals.accessRequestCount = await options.userStore.deleteAccessRequestsForUser({
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
@@ -136,40 +137,22 @@ export async function cleanupProductUserData(input: {
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
   });
-  if (personalWorkspace) {
-    await options.userStore.deletePersonalWorkspaceForUser({
-      clientInstanceId: options.clientInstanceId,
-      userId: input.userId
-    });
-  }
   return totals;
 }
 
+/**
+ * Deletes the Conversation, then cleans up its data. The deletion stands when the cleanup fails:
+ * the outcome says `pending` and the retention job retries it.
+ */
 export async function deleteConversationAggregate(
   options: ChatServerOptions,
   conversationId: ConversationId,
   deletedAt: string
-): Promise<ConversationDataDeletionTotals> {
-  const attachmentDeletion = options.attachments
-    ? await options.attachments.deleteConversationAttachments({ conversationId, deletedAt })
-    : undefined;
-  const executionWorkspaceDeletion = await cleanupExecutionWorkspaceForConversation(options, {
-    conversationId,
-    deletedAt
-  });
+): Promise<ConversationDataCleanupOutcome> {
   await options.conversationStore.deleteConversation({
     clientInstanceId: options.clientInstanceId,
     conversationId,
     deletedAt
   });
-  const workspaceMetadata = executionWorkspaceCleanupAuditMetadata(executionWorkspaceDeletion);
-  return {
-    attachmentCount: attachmentDeletion?.attachmentCount ?? 0,
-    fileCount: attachmentDeletion?.fileObjectKeys.length ?? 0,
-    artifactCount: attachmentDeletion?.artifactObjectKeys.length ?? 0,
-    workspaceCount: Number(workspaceMetadata.workspaceCount ?? 0),
-    workspaceFileCount: Number(workspaceMetadata.workspaceFileCount ?? 0),
-    workspaceCommandCount: Number(workspaceMetadata.workspaceCommandCount ?? 0),
-    workspaceObjectCount: Number(workspaceMetadata.workspaceObjectCount ?? 0)
-  };
+  return attemptConversationDataCleanup(options, conversationId, deletedAt);
 }

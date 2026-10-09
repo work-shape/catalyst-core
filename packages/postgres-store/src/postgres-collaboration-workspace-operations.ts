@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, inArray, isNull, or, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNull, or, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   AppError,
   type ClientInstanceId,
@@ -17,6 +17,7 @@ import {
   validateWorkspaceCreation
 } from "@vivd-catalyst/core";
 import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
+import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
 import {
   mapCollaborationWorkspace,
   mapCollaborationWorkspaceWithRole,
@@ -173,6 +174,13 @@ export async function deleteWorkspace(
   input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]
 ): Promise<CollaborationWorkspace> {
   return db.transaction(async (tx) => {
+    await lockWorkspaceForHardDelete(
+      tx,
+      and(
+        eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+        eq(collaborationWorkspaces.id, input.collaborationWorkspaceId)
+      )
+    );
     const workspace = await requireWorkspace(
       tx,
       input.clientInstanceId,
@@ -195,6 +203,7 @@ export async function deleteWorkspace(
     if (activeConversation) {
       throw new AppError("CONFLICT", "Workspace still contains conversations");
     }
+    await requireNoPendingConversationCleanup(tx, workspace);
     await tx
       .delete(conversations)
       .where(
@@ -595,6 +604,14 @@ export async function deletePersonalWorkspaceForUser(
   input: Parameters<CollaborationWorkspaceStore["deletePersonalWorkspaceForUser"]>[0]
 ): Promise<CollaborationWorkspace> {
   return db.transaction(async (tx) => {
+    await lockWorkspaceForHardDelete(
+      tx,
+      and(
+        eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+        eq(collaborationWorkspaces.kind, "personal"),
+        eq(collaborationWorkspaces.personalUserId, input.userId)
+      )
+    );
     const workspace = await getPersonalWorkspace(tx, input.clientInstanceId, input.userId);
     if (!workspace) {
       throw new AppError("NOT_FOUND", "Personal Workspace is not available");
@@ -613,6 +630,7 @@ export async function deletePersonalWorkspaceForUser(
     if (activeConversation) {
       throw new AppError("CONFLICT", "Personal Workspace still has active conversations");
     }
+    await requireNoPendingConversationCleanup(tx, workspace);
     await tx
       .delete(conversations)
       .where(
@@ -702,6 +720,22 @@ async function getPersonalWorkspace(
     )
     .limit(1);
   return row ? mapCollaborationWorkspace(row) : undefined;
+}
+
+/**
+ * Takes the workspace row lock before a hard delete looks at the Conversations. Creating a
+ * Conversation in the workspace, or moving one in, takes a key-share lock on this row through
+ * the foreign key, so it waits and then fails instead of being removed with the rest.
+ */
+async function lockWorkspaceForHardDelete(
+  tx: PostgresTransaction,
+  workspace: SQL | undefined
+): Promise<void> {
+  await tx
+    .select({ id: collaborationWorkspaces.id })
+    .from(collaborationWorkspaces)
+    .where(workspace)
+    .for("update");
 }
 
 async function requireWorkspace(

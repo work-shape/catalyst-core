@@ -33,6 +33,8 @@ import {
   type RuntimeAssetSnapshot,
   type CompleteRunStartCommandInput,
   type Conversation,
+  type ConversationExpiryReason,
+  type ExpireConversationResult,
   type ConversationListScope,
   type ConversationId,
   type ConversationRetentionStore,
@@ -86,6 +88,7 @@ import {
   authenticatedUserFromRecord,
   asUserId,
   createCollaborationWorkspaceId,
+  pendingConversationCleanupError,
   createUserId,
   createPlatformId,
   createWorkspaceAccessRequestId,
@@ -129,6 +132,7 @@ export class InMemoryPlatformStore
   private readonly collaborationWorkspaces = new Map<string, CollaborationWorkspace>();
   private readonly workspaceMemberships = new Map<string, WorkspaceMembership>();
   private readonly workspaceAccessRequests = new Map<string, WorkspaceAccessRequest>();
+  private readonly conversationLocks = new Map<string, Promise<void>>();
   private readonly messages = new Map<string, ChatMessage[]>();
   private readonly modelProviderContinuations = new Map<
     string,
@@ -496,6 +500,7 @@ export class InMemoryPlatformStore
     ) {
       throw new AppError("CONFLICT", "Workspace still contains conversations");
     }
+    await this.requireNoPendingConversationCleanup(workspace);
     for (const [id, conversation] of this.conversations) {
       if (conversation.collaborationWorkspaceId === workspace.id) {
         this.conversations.delete(id);
@@ -504,6 +509,29 @@ export class InMemoryPlatformStore
     }
     this.deleteWorkspaceRecords(workspace.id);
     return workspace;
+  }
+
+  /**
+   * Refuses while a Conversation of the workspace still has data to remove, by the pending
+   * list of the retry and the execution workspaces that still hold object rows.
+   */
+  private async requireNoPendingConversationCleanup(
+    workspace: CollaborationWorkspace
+  ): Promise<void> {
+    const scope = { clientInstanceId: workspace.clientInstanceId, limit: Number.MAX_SAFE_INTEGER };
+    const pending = new Set([
+      ...(await this.fileStore.listConversationsPendingObjectCleanup(scope)),
+      ...(await this.executionWorkspaceStore.listConversationsWithWorkspaceObjects(
+        workspace.clientInstanceId
+      ))
+    ]);
+    const pendingCleanupCount = [...pending].filter(
+      (conversationId) =>
+        this.conversations.get(conversationId)?.collaborationWorkspaceId === workspace.id
+    ).length;
+    if (pendingCleanupCount > 0) {
+      throw pendingConversationCleanupError(workspace.kind, pendingCleanupCount);
+    }
   }
 
   async ensurePersonalWorkspace(input: {
@@ -780,6 +808,7 @@ export class InMemoryPlatformStore
     ) {
       throw new AppError("CONFLICT", "Personal Workspace still has active conversations");
     }
+    await this.requireNoPendingConversationCleanup(workspace);
     for (const [id, conversation] of this.conversations) {
       if (conversation.collaborationWorkspaceId === workspace.id) {
         this.conversations.delete(id);
@@ -885,6 +914,61 @@ export class InMemoryPlatformStore
     return listed.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
+  /**
+   * The expiry criteria, shared by the list and the claim. A Conversation with an agent run in
+   * progress meets neither.
+   */
+  private async conversationExpiryReason(
+    conversation: Conversation,
+    criteria: { now?: string; abandonedBefore?: string }
+  ): Promise<ConversationExpiryReason | undefined> {
+    const runInProgress = [...this.agentRuns.values()].some(
+      (run) =>
+        run.clientInstanceId === conversation.clientInstanceId &&
+        run.conversationId === conversation.id &&
+        isActiveAgentRunStatus(run.status)
+    );
+    if (runInProgress) {
+      return undefined;
+    }
+    if (criteria.now !== undefined && isAtOrBefore(conversation.retainedUntil, criteria.now)) {
+      return "retention_due";
+    }
+    if (
+      criteria.abandonedBefore !== undefined &&
+      isAtOrBefore(conversation.updatedAt, criteria.abandonedBefore) &&
+      !this.hasMessages(conversation) &&
+      !(await this.hasDraftAttachments(conversation))
+    ) {
+      return "abandoned_draft";
+    }
+    return undefined;
+  }
+
+  /**
+   * Serializes the writers that decide whether a Conversation may expire, as the Conversation
+   * row lock does in Postgres.
+   */
+  private async withConversationLock<T>(
+    conversationId: ConversationId,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const previous = this.conversationLocks.get(conversationId) ?? Promise.resolve();
+    const result = previous.then(fn);
+    const tail = result.then(
+      () => undefined,
+      () => undefined
+    );
+    this.conversationLocks.set(conversationId, tail);
+    try {
+      return await result;
+    } finally {
+      if (this.conversationLocks.get(conversationId) === tail) {
+        this.conversationLocks.delete(conversationId);
+      }
+    }
+  }
+
   private hasMessages(conversation: Conversation): boolean {
     return (this.messages.get(conversation.id)?.length ?? 0) > 0;
   }
@@ -935,7 +1019,6 @@ export class InMemoryPlatformStore
     abandonedBefore?: string;
     limit: number;
   }): Promise<Conversation[]> {
-    const { abandonedBefore, now } = input;
     const due: Conversation[] = [];
     for (const conversation of this.conversations.values()) {
       if (
@@ -944,13 +1027,7 @@ export class InMemoryPlatformStore
       ) {
         continue;
       }
-      if (
-        (now !== undefined && conversation.retainedUntil <= now) ||
-        (abandonedBefore !== undefined &&
-          conversation.updatedAt <= abandonedBefore &&
-          !this.hasMessages(conversation) &&
-          !(await this.hasDraftAttachments(conversation)))
-      ) {
+      if ((await this.conversationExpiryReason(conversation, input)) !== undefined) {
         due.push(conversation);
       }
     }
@@ -1163,6 +1240,14 @@ export class InMemoryPlatformStore
   }
 
   async prepareConversationRunStart(
+    input: PrepareConversationRunStartInput
+  ): Promise<PreparedConversationRunStart> {
+    return this.withConversationLock(input.conversationId, () =>
+      this.prepareLockedConversationRunStart(input)
+    );
+  }
+
+  private async prepareLockedConversationRunStart(
     input: PrepareConversationRunStartInput
   ): Promise<PreparedConversationRunStart> {
     const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
@@ -1708,7 +1793,14 @@ export class InMemoryPlatformStore
   async upsertWorkspaceFile(
     input: Parameters<ExecutionWorkspaceFileStore["upsertWorkspaceFile"]>[0]
   ) {
-    return this.executionWorkspaceStore.upsertWorkspaceFile(input);
+    const workspace = await this.executionWorkspaceStore.getExecutionWorkspace(input);
+    if (!workspace) {
+      return this.executionWorkspaceStore.upsertWorkspaceFile(input);
+    }
+    return this.withConversationLock(workspace.conversationId, async () => {
+      await this.requireActiveConversation(input.clientInstanceId, workspace.conversationId);
+      return this.executionWorkspaceStore.upsertWorkspaceFile(input);
+    });
   }
 
   async deleteWorkspaceFile(
@@ -1818,11 +1910,17 @@ export class InMemoryPlatformStore
   }
 
   async createManagedArtifact(input: Parameters<PlatformFileStore["createManagedArtifact"]>[0]) {
-    return this.fileStore.createManagedArtifact(input);
+    return this.withConversationLock(input.conversationId, async () => {
+      await this.requireActiveConversation(input.clientInstanceId, input.conversationId);
+      return this.fileStore.createManagedArtifact(input);
+    });
   }
 
   async ensureManagedArtifact(input: Parameters<PlatformFileStore["ensureManagedArtifact"]>[0]) {
-    return this.fileStore.ensureManagedArtifact(input);
+    return this.withConversationLock(input.conversationId, async () => {
+      await this.requireActiveConversation(input.clientInstanceId, input.conversationId);
+      return this.fileStore.ensureManagedArtifact(input);
+    });
   }
 
   async getManagedArtifact(input: Parameters<PlatformFileStore["getManagedArtifact"]>[0]) {
@@ -1902,7 +2000,9 @@ export class InMemoryPlatformStore
   async createConversationAttachment(
     input: Parameters<PlatformFileStore["createConversationAttachment"]>[0]
   ) {
-    return this.fileStore.createConversationAttachment(input);
+    return this.withConversationLock(input.conversationId, () =>
+      this.fileStore.createConversationAttachment(input)
+    );
   }
 
   async getConversationAttachment(
@@ -1936,7 +2036,9 @@ export class InMemoryPlatformStore
   async reactivateDraftAttachment(
     input: Parameters<PlatformFileStore["reactivateDraftAttachment"]>[0]
   ) {
-    return this.fileStore.reactivateDraftAttachment(input);
+    return this.withConversationLock(input.conversationId, () =>
+      this.fileStore.reactivateDraftAttachment(input)
+    );
   }
 
   async deleteDraftAttachment(input: Parameters<PlatformFileStore["deleteDraftAttachment"]>[0]) {
@@ -1991,6 +2093,12 @@ export class InMemoryPlatformStore
     return this.fileStore.listConversationManagedObjectsForDeletion(input);
   }
 
+  async listConversationsPendingObjectCleanup(
+    input: Parameters<PlatformFileStore["listConversationsPendingObjectCleanup"]>[0]
+  ) {
+    return this.fileStore.listConversationsPendingObjectCleanup(input);
+  }
+
   async deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -2006,12 +2114,25 @@ export class InMemoryPlatformStore
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     expiredAt: string;
-  }): Promise<Conversation> {
-    return this.markConversationDeleted({
-      clientInstanceId: input.clientInstanceId,
-      conversationId: input.conversationId,
-      deletedAt: input.expiredAt,
-      status: "retention_expired"
+    now?: string;
+    abandonedBefore?: string;
+  }): Promise<ExpireConversationResult> {
+    return this.withConversationLock(input.conversationId, async () => {
+      const conversation = await this.getConversation(input.clientInstanceId, input.conversationId);
+      if (!conversation || conversation.status !== "active") {
+        return { status: "not_expired" };
+      }
+      const reason = await this.conversationExpiryReason(conversation, input);
+      if (reason === undefined) {
+        return { status: "not_expired" };
+      }
+      const expired = await this.markConversationDeleted({
+        clientInstanceId: input.clientInstanceId,
+        conversationId: input.conversationId,
+        deletedAt: input.expiredAt,
+        status: "retention_expired"
+      });
+      return { status: "expired", conversation: expired, reason };
     });
   }
 
@@ -2537,6 +2658,11 @@ function runStartCommandKey(input: {
   return [input.clientInstanceId, input.ownerUserId, input.commandKind, input.idempotencyKey].join(
     "\u0000"
   );
+}
+
+/** Compares instants, so that two spellings of the same moment are equal. */
+function isAtOrBefore(left: string, right: string): boolean {
+  return Date.parse(left) <= Date.parse(right);
 }
 
 function isActiveAgentRunStatus(status: AgentRun["status"]): boolean {

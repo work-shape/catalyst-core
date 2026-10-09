@@ -427,12 +427,17 @@ class ExecutionWorkspaceSourceAttachmentService {
       clientInstanceId: this.clientInstanceId,
       conversationId: input.conversationId
     });
-    const sourceFileObjectKeys = deletion.fileObjectKeys.filter(isSourceObjectKey);
-    const workspaceArtifactObjectKeys = deletion.artifactObjectKeys.filter(
-      isWorkspaceArtifactObjectKey
-    );
+    // Alone, this handler marks every record of the Conversation deleted, so it removes every
+    // object those records name, preview images included. Beside a capability handler it
+    // removes only its own two prefixes and leaves the records to that handler.
+    const fileObjectKeys = this.markDeletedOnDelete
+      ? deletion.fileObjectKeys
+      : deletion.fileObjectKeys.filter(isSourceObjectKey);
+    const artifactObjectKeys = this.markDeletedOnDelete
+      ? deletion.artifactObjectKeys
+      : deletion.artifactObjectKeys.filter(isWorkspaceArtifactObjectKey);
     await Promise.all(
-      [...sourceFileObjectKeys, ...workspaceArtifactObjectKeys].map((objectKey) =>
+      [...fileObjectKeys, ...artifactObjectKeys].map((objectKey) =>
         this.objectStore.deleteObject(objectKey)
       )
     );
@@ -443,11 +448,7 @@ class ExecutionWorkspaceSourceAttachmentService {
         deletedAt: input.deletedAt
       });
     }
-    return {
-      attachmentCount: 0,
-      fileObjectKeys: sourceFileObjectKeys,
-      artifactObjectKeys: workspaceArtifactObjectKeys
-    };
+    return { attachmentCount: 0, fileObjectKeys, artifactObjectKeys };
   }
 
   async readConversationFile(input: { conversationId: ConversationId; fileId: string }): Promise<{

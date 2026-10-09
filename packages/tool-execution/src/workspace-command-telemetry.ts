@@ -18,7 +18,8 @@ export type WorkspaceCommandTelemetryEventType =
   | "timed_out"
   | "cancelled"
   | "stale_recovered"
-  | "temp_state_cleaned";
+  | "temp_state_cleaned"
+  | "stored_file_removal_failed";
 
 export interface WorkspaceCommandTelemetryEvent {
   type: WorkspaceCommandTelemetryEventType;
@@ -38,6 +39,8 @@ export interface WorkspaceCommandTelemetryEvent {
   promotedArtifactCount?: number;
   errorCode?: string;
   errorCategory?: string;
+  /** The key of a stored object that no file record names and that could not be removed. */
+  objectKey?: string;
   activeCounts?: ActiveWorkspaceCommandCounts;
   removedCount?: number;
   failedCount?: number;

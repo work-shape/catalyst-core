@@ -216,7 +216,12 @@ export async function createClientInstanceExecutionAssembly(
     files: store,
     managedObjectAccess: {
       createAccess(accessInput) {
-        return createManagedObjectAccess({ clientInstanceId, files: store, ...accessInput });
+        return createManagedObjectAccess({
+          clientInstanceId,
+          files: store,
+          logger,
+          ...accessInput
+        });
       }
     },
     storeMode: resolvedStoreMode

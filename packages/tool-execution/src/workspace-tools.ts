@@ -21,7 +21,11 @@ import {
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
-import type { WorkspaceFileByteStore, WorkspaceObjectStore } from "./workspace-file-bytes";
+import {
+  upsertStoredWorkspaceFile,
+  type WorkspaceFileByteStore,
+  type WorkspaceObjectStore
+} from "./workspace-file-bytes";
 import {
   emitWorkspaceCommandTelemetry,
   recordWorkspaceCommandLifecycleAudit,
@@ -304,7 +308,7 @@ export class WorkspaceCommandService {
         checksum: file.checksum,
         mimeType: file.mimeType
       });
-      await this.store.upsertWorkspaceFile({
+      await upsertStoredWorkspaceFile(this.store, this.fileStore, this.telemetry, {
         clientInstanceId: context.clientInstanceId,
         workspaceId: workspace.value.id,
         path: file.path,
@@ -442,7 +446,7 @@ export class WorkspaceCommandService {
         checksum: write.checksum,
         mimeType: write.mimeType
       });
-      const file = await this.store.upsertWorkspaceFile({
+      const file = await upsertStoredWorkspaceFile(this.store, this.fileStore, this.telemetry, {
         clientInstanceId: context.clientInstanceId,
         workspaceId: workspace.value.id,
         path: write.path,

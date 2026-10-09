@@ -30,10 +30,28 @@ import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ChatAttachmentService } from "./attachments";
-import type { ConversationRetentionJobOptions } from "./retention";
-import type { RunRecoveryOptions } from "./run-recovery";
-import type { ExecutionWorkspaceCleanupJobOptions } from "./workspace-cleanup";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
+
+export interface ConversationRetentionJobOptions {
+  batchSize?: number;
+  checkIntervalMs?: number;
+  runOnStartup?: boolean;
+  now?: () => Date;
+}
+
+export interface RunRecoveryOptions {
+  staleActiveRunMs?: number;
+  watchdogIntervalMs?: number;
+  batchSize?: number;
+  runOnStartup?: boolean;
+}
+
+export interface ExecutionWorkspaceCleanupJobOptions {
+  batchSize?: number;
+  checkIntervalMs?: number;
+  runOnStartup?: boolean;
+  now?: () => Date;
+}
 
 export interface ChatServerOptions {
   logger: import("@vivd-catalyst/core").Logger;

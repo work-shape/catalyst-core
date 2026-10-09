@@ -24,6 +24,7 @@ import {
   type RunStartCommand,
   type UpdateAgentRunStatusInput
 } from "@vivd-catalyst/core";
+import { lockActiveConversation } from "./postgres-conversation-operations";
 import type { PostgresDatabase } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
@@ -130,15 +131,7 @@ export async function prepareConversationRunStart(
   input: PrepareConversationRunStartInput
 ): Promise<PreparedConversationRunStart> {
   return db.transaction(async (tx) => {
-    const locked = (await tx.execute(drizzleSql<{ id: string }>`
-      select id
-      from conversations
-      where client_instance_id = ${input.clientInstanceId}
-        and id = ${input.conversationId}
-        and status = 'active'
-      for update
-    `)) as unknown as Array<{ id: string }>;
-    if (!locked[0]) {
+    if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
 

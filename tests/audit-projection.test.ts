@@ -212,6 +212,30 @@ describe("reasonForEvent", () => {
   });
 });
 
+describe("conversation cleanup audit events", () => {
+  it.each([
+    ["conversation.cleanup_failed", "Removing conversation data failed"],
+    ["conversation.cleanup_completed", "Finished removing conversation data"]
+  ])("shows %s in the governance tier with its label", (type, label) => {
+    const [activity] = projectAuditActivities([
+      evt({ type, correlationId: type, subject: "conv_1" })
+    ]);
+
+    expect(activity).toMatchObject({ tier: "governance", label });
+  });
+
+  it.each([
+    ["user.delete_failed", "User deletion refused"],
+    ["collaboration_workspace.delete_failed", "Workspace deletion refused"]
+  ])("labels %s", (type, label) => {
+    const [activity] = projectAuditActivities([
+      evt({ type, status: "failed", correlationId: type, actor: human })
+    ]);
+
+    expect(activity).toMatchObject({ tier: "governance", label });
+  });
+});
+
 describe("conversation audit labels", () => {
   it("describes a manual conversation rename", () => {
     const [activity] = projectAuditActivities([

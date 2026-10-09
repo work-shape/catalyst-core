@@ -16,6 +16,7 @@ import {
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
+  asConversationId,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ClaimNextArtifactPreviewJobInput,
@@ -47,6 +48,12 @@ import {
   type WriteArtifactPreviewManifestInput,
   createPlatformId
 } from "@vivd-catalyst/core";
+import {
+  lockActiveConversation,
+  requireActiveConversationLock,
+  touchConversation
+} from "./postgres-conversation-operations";
+import { conversationsPendingCleanup } from "./postgres-pending-cleanup";
 import { mapConversationAttachment, mapManagedArtifact, mapManagedFile } from "./rows";
 import {
   claimNextArtifactPreviewJob as claimNextPostgresArtifactPreviewJob,
@@ -73,10 +80,6 @@ import {
 type PostgresDatabase = PostgresJsDatabase<typeof schema>;
 
 export interface PostgresPlatformFileStoreCallbacks {
-  requireActiveConversation(
-    clientInstanceId: ClientInstanceId,
-    conversationId: ConversationId
-  ): Promise<void>;
   touchConversation(
     clientInstanceId: ClientInstanceId,
     conversationId: ConversationId,
@@ -247,47 +250,54 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   }
 
   async createManagedArtifact(input: CreateManagedArtifactInput): Promise<ManagedArtifactRecord> {
-    const [row] = await this.db
-      .insert(managedArtifacts)
-      .values({
-        id: createPlatformId<"ManagedArtifactId">("art"),
-        clientInstanceId: input.clientInstanceId,
-        conversationId: input.conversationId,
-        sourceFileId: input.sourceFileId ?? null,
-        kind: input.kind,
-        objectKey: input.objectKey,
-        filename: input.filename ?? null,
-        mimeType: input.mimeType,
-        byteSize: input.byteSize,
-        checksum: input.checksum,
-        metadata: input.metadata ?? {},
-        status: "available",
-        createdAt: new Date()
-      })
-      .returning();
-    return mapManagedArtifact(row);
+    return this.db.transaction(async (tx) => {
+      await requireActiveConversationLock(tx, input.clientInstanceId, input.conversationId);
+      const [row] = await tx
+        .insert(managedArtifacts)
+        .values({
+          id: createPlatformId<"ManagedArtifactId">("art"),
+          clientInstanceId: input.clientInstanceId,
+          conversationId: input.conversationId,
+          sourceFileId: input.sourceFileId ?? null,
+          kind: input.kind,
+          objectKey: input.objectKey,
+          filename: input.filename ?? null,
+          mimeType: input.mimeType,
+          byteSize: input.byteSize,
+          checksum: input.checksum,
+          metadata: input.metadata ?? {},
+          status: "available",
+          createdAt: new Date()
+        })
+        .returning();
+      return mapManagedArtifact(row);
+    });
   }
 
   async ensureManagedArtifact(input: EnsureManagedArtifactInput): Promise<ManagedArtifactRecord> {
-    const [created] = await this.db
-      .insert(managedArtifacts)
-      .values({
-        id: input.id,
-        clientInstanceId: input.clientInstanceId,
-        conversationId: input.conversationId,
-        sourceFileId: input.sourceFileId ?? null,
-        kind: input.kind,
-        objectKey: input.objectKey,
-        filename: input.filename ?? null,
-        mimeType: input.mimeType,
-        byteSize: input.byteSize,
-        checksum: input.checksum,
-        metadata: input.metadata ?? {},
-        status: "available",
-        createdAt: new Date()
-      })
-      .onConflictDoNothing({ target: managedArtifacts.id })
-      .returning();
+    const created = await this.db.transaction(async (tx) => {
+      await requireActiveConversationLock(tx, input.clientInstanceId, input.conversationId);
+      const [row] = await tx
+        .insert(managedArtifacts)
+        .values({
+          id: input.id,
+          clientInstanceId: input.clientInstanceId,
+          conversationId: input.conversationId,
+          sourceFileId: input.sourceFileId ?? null,
+          kind: input.kind,
+          objectKey: input.objectKey,
+          filename: input.filename ?? null,
+          mimeType: input.mimeType,
+          byteSize: input.byteSize,
+          checksum: input.checksum,
+          metadata: input.metadata ?? {},
+          status: "available",
+          createdAt: new Date()
+        })
+        .onConflictDoNothing({ target: managedArtifacts.id })
+        .returning();
+      return row;
+    });
     if (created) {
       return mapManagedArtifact(created);
     }
@@ -431,31 +441,37 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   async createConversationAttachment(
     input: CreateConversationAttachmentInput
   ): Promise<ConversationAttachment> {
-    await this.callbacks.requireActiveConversation(input.clientInstanceId, input.conversationId);
-
-    const now = new Date();
-    const [row] = await this.db
-      .insert(conversationAttachments)
-      .values({
-        id: createPlatformId<"ConversationAttachmentId">("att"),
-        clientInstanceId: input.clientInstanceId,
-        conversationId: input.conversationId,
-        fileId: input.fileId,
-        filename: input.filename,
-        mimeType: input.mimeType ?? null,
-        byteSize: input.byteSize,
-        checksum: input.checksum,
-        status: input.status,
-        format: input.format ?? null,
-        artifactRefs: input.artifactRefs ?? {},
-        processingMetadata: input.processingMetadata ?? {},
-        warnings: input.warnings ?? [],
-        error: input.error ?? null,
-        createdAt: now,
-        updatedAt: now
-      })
-      .returning();
-    await this.callbacks.touchConversation(input.clientInstanceId, input.conversationId, now);
+    const row = await this.db.transaction(async (tx) => {
+      // The lock keeps expiry from deciding that the Conversation is an abandoned draft while
+      // this upload is on its way in.
+      if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
+        throw new AppError("NOT_FOUND", "Conversation is not available");
+      }
+      const now = new Date();
+      const [attachment] = await tx
+        .insert(conversationAttachments)
+        .values({
+          id: createPlatformId<"ConversationAttachmentId">("att"),
+          clientInstanceId: input.clientInstanceId,
+          conversationId: input.conversationId,
+          fileId: input.fileId,
+          filename: input.filename,
+          mimeType: input.mimeType ?? null,
+          byteSize: input.byteSize,
+          checksum: input.checksum,
+          status: input.status,
+          format: input.format ?? null,
+          artifactRefs: input.artifactRefs ?? {},
+          processingMetadata: input.processingMetadata ?? {},
+          warnings: input.warnings ?? [],
+          error: input.error ?? null,
+          createdAt: now,
+          updatedAt: now
+        })
+        .returning();
+      await touchConversation(tx, input.clientInstanceId, input.conversationId, now);
+      return attachment;
+    });
     return mapConversationAttachment(row);
   }
 
@@ -610,6 +626,9 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     status: "queued" | "ready" | "unsupported";
   }): Promise<ConversationAttachment> {
     const row = await this.db.transaction(async (tx) => {
+      if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
+        throw new AppError("NOT_FOUND", "Conversation is not available");
+      }
       const [attachment] = await tx
         .update(conversationAttachments)
         .set({
@@ -642,13 +661,14 @@ class PostgresPlatformFileStore implements PlatformFileStore {
             eq(managedFiles.id, attachment.fileId)
           )
         );
+      await touchConversation(
+        tx,
+        input.clientInstanceId,
+        input.conversationId,
+        attachment.updatedAt
+      );
       return attachment;
     });
-    await this.callbacks.touchConversation(
-      input.clientInstanceId,
-      input.conversationId,
-      row.updatedAt
-    );
     return mapConversationAttachment(row);
   }
 
@@ -1010,6 +1030,23 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       fileObjectKeys: uniqueStrings(deletion.files.map((file) => file.objectKey)),
       artifactObjectKeys: uniqueStrings(deletion.artifacts.map((artifact) => artifact.objectKey))
     };
+  }
+
+  async listConversationsPendingObjectCleanup(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<ConversationId[]> {
+    if (input.limit <= 0) {
+      return [];
+    }
+    const rows = await this.db
+      .select({ id: drizzleSql<string>`pending.id` })
+      .from(
+        drizzleSql`(${conversationsPendingCleanup({ clientInstanceId: input.clientInstanceId })}) pending`
+      )
+      .orderBy(drizzleSql`pending.deleted_at asc`, drizzleSql`pending.id asc`)
+      .limit(input.limit);
+    return rows.map((row) => asConversationId(row.id));
   }
 }
 

@@ -32,7 +32,7 @@ export type {
   UploadDraftAttachmentResult
 } from "./attachments";
 export type {
-  ConversationRetentionJobOptions,
+  ConversationCleanupRetrySummary,
   ConversationRetentionRunSummary,
   OrphanedFileCleanupSummary
 } from "./retention";
@@ -42,17 +42,19 @@ export {
   createConversationRetentionJob
 } from "./retention";
 export { RUN_RECOVERY_ERROR, RunRecoveryWatchdog, recoverStaleRun } from "./run-recovery";
-export type { RunRecoveryOptions, RunRecoverySweepSummary } from "./run-recovery";
+export type { RunRecoverySweepSummary } from "./run-recovery";
 export {
   ExecutionWorkspaceCleanupJob,
   ExecutionWorkspaceCleanupWorkflow,
   cleanupExecutionWorkspaceForConversation
 } from "./workspace-cleanup";
+export type { ExecutionWorkspaceCleanupRunSummary } from "./workspace-cleanup";
 export type {
+  ChatServerOptions,
+  ConversationRetentionJobOptions,
   ExecutionWorkspaceCleanupJobOptions,
-  ExecutionWorkspaceCleanupRunSummary
-} from "./workspace-cleanup";
-export type { ChatServerOptions } from "./types";
+  RunRecoveryOptions
+} from "./types";
 
 export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
   const allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins);

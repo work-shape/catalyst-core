@@ -29,6 +29,7 @@ import {
   normalizeWorkspaceFilePath,
   WorkspaceCommandService,
   type WorkspaceCommandTelemetry,
+  type WorkspaceFileByteStore,
   type WorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
 
@@ -986,6 +987,47 @@ describe("local workspace command runner", () => {
     expect(internalFile?.promotedArtifacts).toBeUndefined();
   });
 
+  it("removes the bytes of a changed file whose record is refused because the conversation was deleted", async () => {
+    const stored: string[] = [];
+    const deleted: string[] = [];
+    let deleteConversation: () => Promise<unknown> = async () => undefined;
+    const harness = await createRunnerHarness({
+      wrapByteStore: (inner) => ({
+        getObject: (key) => inner.getObject(key),
+        async putWorkspaceFile(file) {
+          const result = await inner.putWorkspaceFile(file);
+          stored.push(result.objectKey);
+          // The Conversation is deleted between the bytes and the record.
+          await deleteConversation();
+          return result;
+        },
+        async deleteObject(key) {
+          deleted.push(key);
+          await inner.deleteObject?.(key);
+        }
+      })
+    });
+    deleteConversation = () =>
+      harness.store.deleteConversation({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id,
+        deletedAt: new Date().toISOString()
+      });
+    const workspace = await harness.workspace();
+
+    await harness.exec({ command: "printf 'late' > late.txt" });
+
+    expect(stored).toHaveLength(1);
+    expect(deleted).toEqual(stored);
+    await expect(harness.byteStore.getObject(required(stored[0]))).rejects.toThrow();
+    await expect(
+      harness.store.listWorkspaceFiles({
+        clientInstanceId: harness.clientInstanceId,
+        workspaceId: workspace.id
+      })
+    ).resolves.toEqual([]);
+  });
+
   it("validates workspace paths through the shared safe relative path helper", () => {
     expect(normalizeWorkspaceFilePath("reports/../notes.txt", { maxPathLength: 512 })).toEqual({
       status: "success",
@@ -1045,6 +1087,8 @@ async function createRunnerHarness(
     telemetry?: WorkspaceCommandTelemetry;
     useResultSource?: boolean;
     withAuditRecorder?: boolean;
+    /** Wraps the byte store the runner writes through. */
+    wrapByteStore?: (byteStore: WorkspaceFileByteStore) => WorkspaceFileByteStore;
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
@@ -1075,9 +1119,10 @@ async function createRunnerHarness(
   const rootDirectory = await mkdtemp(join(tmpdir(), "catalyst-runner-test-"));
   cleanupDirectories.push(rootDirectory);
   const commandRootDirectory = join(rootDirectory, "commands");
-  const byteStore = createLocalWorkspaceFileByteStore({
+  const localByteStore = createLocalWorkspaceFileByteStore({
     rootDirectory: join(rootDirectory, "objects")
   });
+  const byteStore = input.wrapByteStore?.(localByteStore) ?? localByteStore;
   const auditRecorder = input.withAuditRecorder
     ? new StoreBackedAuditRecorder({ clientInstanceId, store })
     : undefined;

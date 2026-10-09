@@ -33,7 +33,11 @@ import {
 export type InMemoryExecutionWorkspaceStore = ExecutionWorkspaceMetadataStore &
   ExecutionWorkspaceFileStore &
   WorkspaceCommandStore &
-  ExecutionWorkspaceCleanupStore;
+  ExecutionWorkspaceCleanupStore & {
+    listConversationsWithWorkspaceObjects(
+      clientInstanceId: ClientInstanceId
+    ): Promise<ConversationId[]>;
+  };
 
 export interface InMemoryExecutionWorkspaceStoreCallbacks {
   requireActiveConversation(
@@ -453,6 +457,32 @@ class InMemoryExecutionWorkspaceStoreImpl implements InMemoryExecutionWorkspaceS
       this.workspaceCommands.set(command.id, command);
     }
     return recovered;
+  }
+
+  /**
+   * The Conversations that are not active and still have a workspace or workspace file rows.
+   * Command rows do not count: they hold no object key. The guard before a hard delete of
+   * Conversation rows reads this.
+   */
+  async listConversationsWithWorkspaceObjects(
+    clientInstanceId: ClientInstanceId
+  ): Promise<ConversationId[]> {
+    const conversationIds: ConversationId[] = [];
+    for (const workspace of this.executionWorkspaces.values()) {
+      if (workspace.clientInstanceId !== clientInstanceId) {
+        continue;
+      }
+      const hasWorkspaceFiles = [...this.workspaceFiles.values()].some(
+        (file) => file.clientInstanceId === clientInstanceId && file.workspaceId === workspace.id
+      );
+      if (
+        (workspace.status !== "deleted" || hasWorkspaceFiles) &&
+        !(await this.callbacks.isConversationActive(clientInstanceId, workspace.conversationId))
+      ) {
+        conversationIds.push(workspace.conversationId);
+      }
+    }
+    return conversationIds;
   }
 
   async listExecutionWorkspaceCleanupTargets(

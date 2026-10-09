@@ -39,6 +39,7 @@ import {
   type CompleteRunStartCommandInput,
   type HeartbeatAgentRunInput,
   type CreateConversationInput,
+  type ExpireConversationResult,
   type CreateWorkspaceInput,
   type CreateApiCredentialInput,
   type CreateServicePrincipalInput,
@@ -169,7 +170,6 @@ import {
   listExpiredConversations as listPostgresExpiredConversations,
   listMessages as listPostgresMessages,
   listRecentMessages as listPostgresRecentMessages,
-  requireActiveConversation,
   touchConversation,
   updateConversationTitle as updatePostgresConversationTitle
 } from "./postgres-conversation-operations";
@@ -269,8 +269,6 @@ export class PostgresPlatformStore
     this.postgresClient = sql;
     this.db = drizzle(sql, { schema });
     this.fileStore = createPostgresPlatformFileStore(this.db, {
-      requireActiveConversation: (clientInstanceId, conversationId) =>
-        requireActiveConversation(this.db, clientInstanceId, conversationId),
       touchConversation: (clientInstanceId, conversationId, updatedAt) =>
         touchConversation(this.db, clientInstanceId, conversationId, updatedAt)
     });
@@ -1092,6 +1090,12 @@ export class PostgresPlatformStore
     return this.fileStore.listConversationManagedObjectsForDeletion(input);
   }
 
+  async listConversationsPendingObjectCleanup(
+    input: Parameters<PlatformFileStore["listConversationsPendingObjectCleanup"]>[0]
+  ) {
+    return this.fileStore.listConversationsPendingObjectCleanup(input);
+  }
+
   async deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -1100,11 +1104,9 @@ export class PostgresPlatformStore
     return deletePostgresConversation(this.db, input);
   }
 
-  async expireConversation(input: {
-    clientInstanceId: ClientInstanceId;
-    conversationId: ConversationId;
-    expiredAt: string;
-  }): Promise<Conversation> {
+  async expireConversation(
+    input: Parameters<ConversationRetentionStore["expireConversation"]>[0]
+  ): Promise<ExpireConversationResult> {
     return expirePostgresConversation(this.db, input);
   }
 

@@ -683,6 +683,15 @@ export interface ConversationAttachmentStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<ManagedObjectDeletionResult>;
+  /**
+   * Conversations that are no longer active and still hold data to clean up: an artifact that
+   * is not marked deleted, preview state, or an attachment whose file is not marked deleted and
+   * has no live attachment in another Conversation.
+   */
+  listConversationsPendingObjectCleanup(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<ConversationId[]>;
 }
 
 export interface PlatformFileStore

@@ -13,6 +13,7 @@ import {
 import type { ChatServerOptions } from "./types";
 import { authorizeGovernanceAction } from "./governance-actions";
 import { createPasswordSetupLink, PLATFORM_INVITATION_VALID_DAYS } from "./password-setup-workflow";
+import { pendingCleanupCountOf } from "./conversation-cleanup";
 import { cleanupProductUserData, type UserDeletionTotals } from "./user-deletion";
 
 interface CreateUserCommand {
@@ -156,12 +157,28 @@ export class UserAdministrationWorkflow {
 
     const existing = await this.getUserOrThrow(command.userId);
     await this.requireAtLeastOneRemainingSuperadmin(existing);
-    const deletionTotals = await cleanupProductUserData({
-      options: this.options,
-      actor,
-      context,
-      userId: command.userId
-    });
+    let deletionTotals: UserDeletionTotals;
+    try {
+      deletionTotals = await cleanupProductUserData({
+        options: this.options,
+        actor,
+        context,
+        userId: command.userId
+      });
+    } catch (error) {
+      const pendingCleanupCount = pendingCleanupCountOf(error);
+      if (pendingCleanupCount !== undefined) {
+        await this.options.auditRecorder.record({
+          type: "user.delete_failed",
+          status: "failed",
+          actor: auditActorFromUser(actor),
+          subject: existing.id,
+          correlationId: context.correlationId,
+          metadata: { requestedBy: "admin", pendingCleanupCount }
+        });
+      }
+      throw error;
+    }
     await this.deleteStandalonePasswordSignIns(existing);
     const deleted = await this.options.userStore.deleteUser({
       clientInstanceId: this.options.clientInstanceId,

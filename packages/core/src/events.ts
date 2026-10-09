@@ -114,6 +114,11 @@ export const EVENTS = {
     name: "collaboration_workspace.created",
     subject: "collaboration_workspace"
   },
+  "collaboration_workspace.delete_failed": {
+    ...LEGACY_AUDIT,
+    name: "collaboration_workspace.delete_failed",
+    subject: "collaboration_workspace"
+  },
   "collaboration_workspace.deleted": {
     ...LEGACY_AUDIT,
     name: "collaboration_workspace.deleted",
@@ -173,6 +178,16 @@ export const EVENTS = {
     ...LEGACY_AUDIT,
     name: "config_assets.replaced",
     subject: "config_assets"
+  },
+  "conversation.cleanup_completed": {
+    ...LEGACY_AUDIT,
+    name: "conversation.cleanup_completed",
+    subject: "conversation"
+  },
+  "conversation.cleanup_failed": {
+    ...LEGACY_AUDIT,
+    name: "conversation.cleanup_failed",
+    subject: "conversation"
   },
   "conversation.created": {
     ...LEGACY_AUDIT,
@@ -308,6 +323,7 @@ export const EVENTS = {
   "tool.failed": { ...LEGACY_AUDIT, name: "tool.failed", subject: "tool" },
   "tool.started": { ...LEGACY_AUDIT, name: "tool.started", subject: "tool" },
   "user.created": { ...LEGACY_AUDIT, name: "user.created", subject: "user" },
+  "user.delete_failed": { ...LEGACY_AUDIT, name: "user.delete_failed", subject: "user" },
   "user.deleted": { ...LEGACY_AUDIT, name: "user.deleted", subject: "user" },
   "user.identity_deleted": { ...LEGACY_AUDIT, name: "user.identity_deleted", subject: "user" },
   "user.identity_linked": { ...LEGACY_AUDIT, name: "user.identity_linked", subject: "user" },

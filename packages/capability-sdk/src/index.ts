@@ -292,6 +292,7 @@ export interface CreateManagedObjectAccessInput {
   files: PlatformFileStore;
   byteStore: ManagedObjectByteStore;
   keyFactory: ManagedObjectKeyFactory;
+  logger?: import("@vivd-catalyst/core").Logger;
 }
 
 export interface CreateManagedObjectAccessFromContextInput {
@@ -318,12 +319,14 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
   private readonly files: PlatformFileStore;
   private readonly byteStore: ManagedObjectByteStore;
   private readonly keyFactory: ManagedObjectKeyFactory;
+  private readonly logger: CreateManagedObjectAccessInput["logger"];
 
   constructor(input: CreateManagedObjectAccessInput) {
     this.clientInstanceId = input.clientInstanceId;
     this.files = input.files;
     this.byteStore = input.byteStore;
     this.keyFactory = input.keyFactory;
+    this.logger = input.logger;
   }
 
   async createFile(input: CreateManagedObjectFileInput): Promise<ManagedFileRecord> {
@@ -406,18 +409,37 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
       body: input.bytes,
       contentType: input.mimeType
     });
-    return this.files.createManagedArtifact({
-      clientInstanceId: this.clientInstanceId,
-      conversationId: input.conversationId,
-      sourceFileId: input.sourceFileId,
-      kind: input.kind,
-      objectKey,
-      filename: input.filename,
-      mimeType: input.mimeType,
-      byteSize: input.bytes.byteLength,
-      checksum,
-      metadata: input.metadata
-    });
+    try {
+      return await this.files.createManagedArtifact({
+        clientInstanceId: this.clientInstanceId,
+        conversationId: input.conversationId,
+        sourceFileId: input.sourceFileId,
+        kind: input.kind,
+        objectKey,
+        filename: input.filename,
+        mimeType: input.mimeType,
+        byteSize: input.bytes.byteLength,
+        checksum,
+        metadata: input.metadata
+      });
+    } catch (error: unknown) {
+      // The store refuses the record when the Conversation was deleted in the meantime. No
+      // record names the bytes then, so they are removed here, best effort.
+      if (error instanceof AppError && error.code === "NOT_FOUND") {
+        try {
+          await this.byteStore.deleteObject(objectKey);
+        } catch (deleteError: unknown) {
+          this.logger?.error(
+            {
+              objectKey,
+              error: deleteError instanceof Error ? deleteError.message : String(deleteError)
+            },
+            "Could not remove an artifact object after its record was refused"
+          );
+        }
+      }
+      throw error;
+    }
   }
 
   async readFile(input: ReadManagedObjectFileInput): Promise<ManagedObjectFileRead> {

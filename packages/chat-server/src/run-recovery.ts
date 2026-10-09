@@ -7,14 +7,7 @@ import type {
 } from "@vivd-catalyst/core";
 import { isAppError } from "@vivd-catalyst/core";
 import type { Logger } from "@vivd-catalyst/core";
-import type { ChatServerOptions } from "./types";
-
-export interface RunRecoveryOptions {
-  staleActiveRunMs?: number;
-  watchdogIntervalMs?: number;
-  batchSize?: number;
-  runOnStartup?: boolean;
-}
+import type { ChatServerOptions, RunRecoveryOptions } from "./types";
 
 export interface RunRecoverySweepSummary {
   recovered: number;

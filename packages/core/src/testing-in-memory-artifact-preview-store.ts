@@ -393,6 +393,21 @@ export class InMemoryArtifactPreviewStore {
     return manifest;
   }
 
+  hasPreviewStateForConversation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): boolean {
+    return this.conversationsWithPreviewState(input.clientInstanceId).includes(
+      input.conversationId
+    );
+  }
+
+  conversationsWithPreviewState(clientInstanceId: ClientInstanceId): ConversationId[] {
+    return [...this.artifactPreviewJobs.values(), ...this.artifactPreviewManifests.values()]
+      .filter((record) => record.clientInstanceId === clientInstanceId)
+      .map((record) => record.conversationId);
+  }
+
   deletePreviewStateForConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

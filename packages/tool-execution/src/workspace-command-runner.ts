@@ -28,7 +28,7 @@ import {
 } from "@vivd-catalyst/core";
 import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
 import type { WorkspaceCommandResultSource } from "./workspace-tools";
-import type { WorkspaceFileByteStore } from "./workspace-file-bytes";
+import { upsertStoredWorkspaceFile, type WorkspaceFileByteStore } from "./workspace-file-bytes";
 import {
   normalizeWorkspaceDirectory,
   normalizeWorkspaceFilePath,
@@ -608,7 +608,7 @@ export class LocalWorkspaceCommandRunner {
         checksum: scanned.checksum,
         mimeType: scanned.mimeType
       });
-      const file = await this.store.upsertWorkspaceFile({
+      const file = await upsertStoredWorkspaceFile(this.store, this.byteStore, this.telemetry, {
         clientInstanceId: command.clientInstanceId,
         workspaceId: workspace.id,
         path: scanned.path,

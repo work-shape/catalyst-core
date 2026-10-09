@@ -48,6 +48,45 @@ contain breaking changes; a patch version does not.
 - **Chat:** the agent list shows each agent's description only with the new
   `ui.showAgentDescriptions: true`; by default it lists the names alone.
 
+### Fixed
+
+- **Retention:** conversation expiry decides under the conversation's row lock and removes
+  data only afterwards. A conversation is expired only if it is still due, or still an
+  abandoned draft, at that moment, so a message, an upload or a restored draft attachment that
+  arrives while the job runs keeps the conversation and its files. A due conversation with an
+  agent run in progress is left for the next run of the job. Deleting a conversation follows
+  the same order. When removing stored objects fails, the conversation stays expired or
+  deleted, the failure is audited as `conversation.cleanup_failed`, and the retention job
+  retries the cleanup on each run and audits `conversation.cleanup_completed` when it is done.
+  `conversation.retention_expired` and `conversation.deleted` carry `cleanup: "complete"` or
+  `"pending"`. The first retention run after the update also cleans what earlier deleted or
+  expired conversations left behind when their cleanup had failed.
+- **Workspaces, accounts:** deleting a Shared Workspace, an account or a user answers 409 with
+  `details.pendingCleanupCount` while data of its deleted conversations is still being
+  removed, and removes nothing further. The conversations are deleted at that point. The
+  request completes when it is repeated after the retention job has finished the cleanup. A
+  refused account deletion leaves the user with every membership and access request. The
+  refusal is audited as `collaboration_workspace.delete_failed` or `user.delete_failed`. The
+  retention job now retries pending cleanups before it expires conversations. When only
+  execution workspace data of a deleted conversation is left, the workspace cleanup job
+  finishes it, not the retention job. No time is promised for the repeat: it succeeds once
+  the jobs have run and found nothing left. Both deletions take the workspace row lock first,
+  so a conversation that is created in the workspace or moved into it at the same moment
+  fails instead of being removed with it.
+- **Conversations:** an artifact, a workspace file or a message is written only into an active
+  conversation and under the conversation's row lock. A write that arrives after the
+  conversation was deleted or expired is refused with `NOT_FOUND`; the writer removes the
+  bytes it had already stored, best effort, and logs a failed removal with the object key. An
+  agent run or a workspace command that is still working when its conversation is deleted
+  fails at its next such write.
+- **Attachments:** in an instance without a capability attachment handler, deleting a
+  conversation now removes every object its records name, preview images under
+  `artifact-previews/` included. Before, those images stayed in storage while their records
+  were marked deleted. Images left behind by earlier versions are not removed by this
+  release.
+- **Audit:** `conversation.cleanup_failed` and `conversation.cleanup_completed` appear in the
+  governance tier, and the four new event types have labels in the activity view.
+
 ## 0.6.3 — 2026-10-08
 
 ### Fixed

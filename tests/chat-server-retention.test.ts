@@ -1,42 +1,39 @@
-import {
-  completeServerOptions,
-  type TestMemoryStore,
-  createTestInstance
-} from "./support/test-instance";
-import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
+import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
 import { createFailingTestLogger } from "./support/fixtures";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 import { describe, expect, it } from "vitest";
 import {
   ConversationRetentionJob,
   ConversationRetentionWorkflow,
   ExecutionWorkspaceCleanupWorkflow,
-  createConversationRetentionJob,
-  type ChatAttachmentService,
-  type ChatServerOptions
+  createConversationRetentionJob
 } from "@vivd-catalyst/chat-server";
+import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
-  createManagedObjectAccess,
-  type ManagedObjectByteStore
-} from "@vivd-catalyst/capability-sdk";
-import {
-  unknownToJsonValue,
-  isJsonObject,
-  StoreBackedAuditRecorder,
+  asAgentRunId,
   asClientInstanceId,
   asExecutionWorkspaceId,
+  asMessageId,
+  asUserId,
   asWorkspaceCommandId,
+  isJsonObject,
+  unknownToJsonValue,
   type ClientInstanceId,
   type Conversation,
   type ConversationAttachment,
   type ConversationId,
   type ManagedArtifactRecord,
   type ManagedFileRecord,
-  type PlatformFileStore
+  type PlatformFileStore,
+  type PrepareConversationRunStartInput
 } from "@vivd-catalyst/core";
-
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  RecordingByteStore,
+  createAttachedObjects,
+  createManagedObjectAttachmentService,
+  createRetentionOptions,
+  createTestManagedObjectAccess
+} from "./support/retention-harness";
 
 describe("conversation retention expiration", () => {
   it("expires due conversations on startup and periodically with object cleanup and audit", async () => {
@@ -232,14 +229,14 @@ describe("conversation retention expiration", () => {
       new ConversationRetentionWorkflow(options, {
         now: hoursFromNow(23)
       }).expireDueConversations()
-    ).resolves.toEqual({ expiredCount: 0, failedCount: 0 });
+    ).resolves.toEqual({ expiredCount: 0, failedCount: 0, cleanupPendingCount: 0 });
     await expectConversationStatus(store, clientInstanceId, abandoned.id, "active");
 
     await expect(
       new ConversationRetentionWorkflow(options, {
         now: hoursFromNow(25)
       }).expireDueConversations()
-    ).resolves.toEqual({ expiredCount: 2, failedCount: 0 });
+    ).resolves.toEqual({ expiredCount: 2, failedCount: 0, cleanupPendingCount: 0 });
     await expectConversationStatus(store, clientInstanceId, abandoned.id, "retention_expired");
     await expectConversationStatus(store, clientInstanceId, emptied.id, "retention_expired");
     await expectConversationStatus(store, clientInstanceId, started.id, "active");
@@ -348,11 +345,13 @@ describe("conversation retention expiration", () => {
 
     await expect(workflowAt(23).expireDueConversations()).resolves.toEqual({
       expiredCount: 0,
-      failedCount: 0
+      failedCount: 0,
+      cleanupPendingCount: 0
     });
     await expect(workflowAt(25).expireDueConversations()).resolves.toEqual({
       expiredCount: 1,
-      failedCount: 0
+      failedCount: 0,
+      cleanupPendingCount: 0
     });
     await expectConversationStatus(store, clientInstanceId, abandoned.id, "retention_expired");
     await expectConversationStatus(store, clientInstanceId, started.id, "active");
@@ -369,7 +368,7 @@ describe("conversation retention expiration", () => {
     ).toMatchObject({ metadata: expect.objectContaining({ reason: "abandoned_draft" }) });
   });
 
-  it("keeps deletion metadata retryable when object byte deletion fails", async () => {
+  it("leaves the conversation expired when object deletion fails and finishes the cleanup later", async () => {
     const clientInstanceId = asClientInstanceId("retention-retry-test");
     const store = createTestInstance().stores;
     const byteStore = new RecordingByteStore();
@@ -402,21 +401,17 @@ describe("conversation retention expiration", () => {
       conversation
     });
 
+    const pending = () =>
+      store.listConversationsPendingObjectCleanup({ clientInstanceId, limit: 10 });
+
     byteStore.failNextDeleteFor(objects.artifact.objectKey);
     await expect(workflow.expireDueConversations()).resolves.toEqual({
-      expiredCount: 0,
-      failedCount: 1
+      expiredCount: 1,
+      failedCount: 0,
+      cleanupPendingCount: 1
     });
-    await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
-    await expect(
-      store.getConversationAttachment({
-        clientInstanceId,
-        attachmentId: objects.attachment.id
-      })
-    ).resolves.toMatchObject({
-      id: objects.attachment.id,
-      status: "ready"
-    });
+    // The expiry stands. What the failed cleanup left is still recorded, so it can be found.
+    await expectConversationStatus(store, clientInstanceId, conversation.id, "retention_expired");
     await expect(
       store.getManagedArtifact({
         clientInstanceId,
@@ -427,32 +422,51 @@ describe("conversation retention expiration", () => {
       status: "available"
     });
     expect(byteStore.has(objects.artifact.objectKey)).toBe(true);
+    await expect(pending()).resolves.toEqual([conversation.id]);
 
-    await expect(workflow.expireDueConversations()).resolves.toEqual({
-      expiredCount: 1,
-      failedCount: 0
+    const failedEvents = await store.listAuditEvents({ clientInstanceId, limit: 10 });
+    expect(
+      failedEvents.find((event) => event.type === "conversation.retention_expired")
+    ).toMatchObject({
+      status: "success",
+      subject: conversation.id,
+      metadata: {
+        retainedUntil: conversation.retainedUntil,
+        reason: "retention_due",
+        cleanup: "pending"
+      }
     });
-    await expectConversationStatus(store, clientInstanceId, conversation.id, "retention_expired");
-    await expectDeletedManagedObjects(store, byteStore, clientInstanceId, objects);
-
-    const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
-    const failureAudit = events.find(
-      (event) => event.type === "conversation.retention_expiration_failed"
-    );
+    const failureAudit = failedEvents.find((event) => event.type === "conversation.cleanup_failed");
     expect(failureAudit).toMatchObject({
       status: "failed",
       subject: conversation.id,
-      metadata: expect.objectContaining({
-        retainedUntil: conversation.retainedUntil,
-        errorCode: "INTERNAL",
-        errorCategory: "retention_expiration",
-        errorMessage: "Conversation retention expiration failed"
-      })
+      metadata: { errorCode: "INTERNAL", errorCategory: "conversation_cleanup" }
     });
     expect(JSON.stringify(failureAudit)).not.toContain(objects.artifact.objectKey);
-    expect(events.find((event) => event.type === "conversation.retention_expired")).toMatchObject({
+    expect(
+      failedEvents.some((event) => event.type === "conversation.retention_expiration_failed")
+    ).toBe(false);
+
+    await expect(workflow.expireDueConversations()).resolves.toEqual({
+      expiredCount: 0,
+      failedCount: 0,
+      cleanupPendingCount: 0
+    });
+    await expect(workflow.cleanUpPendingConversations()).resolves.toEqual({
+      completedCount: 1,
+      cleanupPendingCount: 0
+    });
+    await expectDeletedManagedObjects(store, byteStore, clientInstanceId, objects);
+    await expect(pending()).resolves.toEqual([]);
+    const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
+    expect(events.find((event) => event.type === "conversation.cleanup_completed")).toMatchObject({
       status: "success",
-      subject: conversation.id
+      subject: conversation.id,
+      metadata: expect.objectContaining({ fileCount: 1, artifactCount: 1 })
+    });
+    await expect(workflow.cleanUpPendingConversations()).resolves.toEqual({
+      completedCount: 0,
+      cleanupPendingCount: 0
     });
   });
 
@@ -480,23 +494,18 @@ describe("conversation retention expiration", () => {
     byteStore.failNextDeleteFor(workspaceObjects.objectKey);
 
     await expect(workflow.expireDueConversations()).resolves.toEqual({
-      expiredCount: 0,
-      failedCount: 1
+      expiredCount: 1,
+      failedCount: 0,
+      cleanupPendingCount: 1
     });
-    await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
+    await expectConversationStatus(store, clientInstanceId, conversation.id, "retention_expired");
 
     const events = await store.listAuditEvents({ clientInstanceId, limit: 10 });
-    const failureAudit = events.find(
-      (event) => event.type === "conversation.retention_expiration_failed"
-    );
+    const failureAudit = events.find((event) => event.type === "conversation.cleanup_failed");
     expect(failureAudit).toMatchObject({
       status: "failed",
       subject: conversation.id,
-      metadata: expect.objectContaining({
-        errorCode: "INTERNAL",
-        errorCategory: "retention_expiration",
-        errorMessage: "Conversation retention expiration failed"
-      })
+      metadata: { errorCode: "INTERNAL", errorCategory: "conversation_cleanup" }
     });
     expect(JSON.stringify(failureAudit)).not.toContain(workspaceObjects.objectKey);
   });
@@ -552,6 +561,195 @@ describe("conversation retention expiration", () => {
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+describe("conversation expiry claim in memory", () => {
+  const clientInstanceId = asClientInstanceId("expiry-claim-test");
+  const now = new Date();
+  // Every Conversation without a message counts as an abandoned draft under these criteria.
+  const criteria = {
+    now: now.toISOString(),
+    abandonedBefore: new Date(now.getTime() + DAY_MS).toISOString()
+  };
+
+  async function createDraftWithAcceptance(store: TestMemoryStore) {
+    const conversation = await store.createConversationForTesting({
+      clientInstanceId,
+      createdByUserId: "user-1",
+      createdByExternalUserId: "external-user-1",
+      title: "draft",
+      retainedUntil: "2999-01-01T00:00:00.000Z"
+    });
+    const ownerUserId = asUserId(conversation.createdByUserId);
+    const claim = await store.claimRunStartCommand({
+      clientInstanceId,
+      ownerUserId,
+      idempotencyKey: "key-1",
+      commandKind: "start_conversation_run"
+    });
+    const messageId = asMessageId("msg_first");
+    const acceptance: PrepareConversationRunStartInput = {
+      clientInstanceId,
+      conversationId: conversation.id,
+      ownerUserId,
+      userMessage: { id: messageId, text: "First message" },
+      run: {
+        id: asAgentRunId("run_first"),
+        clientInstanceId,
+        conversationId: conversation.id,
+        ownerUserId,
+        inputMessageId: messageId,
+        agentName: "expiry-test",
+        correlationId: "corr_first"
+      },
+      runStartCommand: {
+        idempotencyKey: "key-1",
+        commandKind: "start_conversation_run",
+        claimedAt: claim.command.updatedAt
+      }
+    };
+    const expiry = {
+      clientInstanceId,
+      conversationId: conversation.id,
+      expiredAt: criteria.now,
+      ...criteria
+    };
+    return { conversation, acceptance, expiry };
+  }
+
+  it("keeps a draft whose first message takes the conversation lock before expiry", async () => {
+    const store = createTestInstance().stores;
+    const { conversation, acceptance, expiry } = await createDraftWithAcceptance(store);
+    await expect(
+      store.listExpiredConversations({ clientInstanceId, ...criteria, limit: 10 })
+    ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
+
+    const [accepted, expired] = await Promise.allSettled([
+      store.prepareConversationRunStart(acceptance),
+      store.expireConversation(expiry)
+    ]);
+
+    expect(accepted).toMatchObject({ status: "fulfilled" });
+    expect(expired).toEqual({ status: "fulfilled", value: { status: "not_expired" } });
+    await expectConversationStatus(store, clientInstanceId, conversation.id, "active");
+    await expect(
+      store.listMessages({ clientInstanceId, conversationId: conversation.id })
+    ).resolves.toEqual([expect.objectContaining({ text: "First message" })]);
+  });
+
+  it("refuses a first message once expiry holds the conversation lock", async () => {
+    const store = createTestInstance().stores;
+    const { conversation, acceptance, expiry } = await createDraftWithAcceptance(store);
+
+    const [expired, accepted] = await Promise.allSettled([
+      store.expireConversation(expiry),
+      store.prepareConversationRunStart(acceptance)
+    ]);
+
+    expect(expired).toMatchObject({
+      status: "fulfilled",
+      value: { status: "expired", reason: "abandoned_draft" }
+    });
+    expect(accepted).toMatchObject({
+      status: "rejected",
+      reason: { code: "NOT_FOUND", message: "Conversation is not available" }
+    });
+    await expectConversationStatus(store, clientInstanceId, conversation.id, "retention_expired");
+    await expect(
+      store.getAgentRun({ clientInstanceId, runId: acceptance.run.id })
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps a workspace whose deleted conversation still waits for its cleanup", async () => {
+    const store = createTestInstance().stores;
+    const byteStore = new RecordingByteStore();
+    const managedObjects = createTestManagedObjectAccess({
+      clientInstanceId,
+      files: store,
+      byteStore
+    });
+    const options = createRetentionOptions({
+      clientInstanceId,
+      store,
+      attachments: createManagedObjectAttachmentService({ managedObjects })
+    });
+    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const workspace = await store.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Shared",
+      creatorUserId: owner.id
+    });
+    const conversation = await store.createConversation({
+      visibility: "workspace",
+      clientInstanceId,
+      collaborationWorkspaceId: workspace.id,
+      createdByUserId: owner.id,
+      createdByExternalUserId: "external-owner",
+      title: "with a file",
+      retainedUntil: "2999-01-01T00:00:00.000Z"
+    });
+    const objects = await createAttachedObjects({
+      store,
+      managedObjects,
+      clientInstanceId,
+      conversation
+    });
+    await store.deleteConversation({
+      clientInstanceId,
+      conversationId: conversation.id,
+      deletedAt: new Date().toISOString()
+    });
+    const deleteWorkspace = () =>
+      store.deleteWorkspace({ clientInstanceId, collaborationWorkspaceId: workspace.id });
+
+    await expect(deleteWorkspace()).rejects.toMatchObject({
+      code: "CONFLICT",
+      details: { pendingCleanupCount: 1 }
+    });
+    expect(byteStore.has(objects.file.objectKey)).toBe(true);
+
+    await expect(
+      new ConversationRetentionWorkflow(options).cleanUpPendingConversations()
+    ).resolves.toEqual({ completedCount: 1, cleanupPendingCount: 0 });
+    await expect(deleteWorkspace()).resolves.toMatchObject({ id: workspace.id });
+    expect(byteStore.keys()).toEqual([]);
+  });
+
+  it("compares the retention date as an instant, whatever its spelling", async () => {
+    const store = createTestInstance().stores;
+    // The same instant as the `now` below, written with an offset. As text it sorts after it.
+    const conversation = await store.createConversationForTesting({
+      clientInstanceId,
+      createdByUserId: "user-1",
+      createdByExternalUserId: "external-user-1",
+      title: "due this instant",
+      retainedUntil: "2024-01-01T01:00:00.000+01:00"
+    });
+    await store.appendMessage({
+      clientInstanceId,
+      conversationId: conversation.id,
+      role: "user",
+      text: "message"
+    });
+    const due = { now: "2024-01-01T00:00:00.000Z", abandonedBefore: "2000-01-01T00:00:00.000Z" };
+    const scope = { clientInstanceId, conversationId: conversation.id };
+
+    await expect(
+      store.expireConversation({
+        ...scope,
+        expiredAt: due.now,
+        ...due,
+        now: "2023-12-31T23:59:59.999Z"
+      })
+    ).resolves.toEqual({ status: "not_expired" });
+    await expect(
+      store.listExpiredConversations({ clientInstanceId, ...due, limit: 10 })
+    ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
+    await expect(
+      store.expireConversation({ ...scope, expiredAt: due.now, ...due })
+    ).resolves.toMatchObject({ status: "expired", reason: "retention_due" });
+  });
+});
 
 function createOrphanFixture(name: string, keyPrefix = "files") {
   const clientInstanceId = asClientInstanceId(name);
@@ -770,70 +968,6 @@ describe("orphaned managed file cleanup", () => {
   });
 });
 
-function createRetentionOptions(input: {
-  clientInstanceId: ClientInstanceId;
-  store: TestMemoryStore;
-  attachments?: ChatAttachmentService;
-  workspaceObjects?: { deleteObject(key: string): Promise<void> };
-  expireConversations?: boolean;
-}): ChatServerOptions {
-  const auditRecorder = new StoreBackedAuditRecorder({
-    clientInstanceId: input.clientInstanceId,
-    store: input.store
-  });
-  return completeServerOptions(
-    {
-      config: parseClientInstanceConfig({
-        version: 1,
-        clientInstance: {
-          id: input.clientInstanceId,
-          displayName: "Retention Test",
-          environment: "development"
-        },
-        auth: {
-          development: {
-            enabled: true
-          }
-        },
-        retention: {
-          conversationDays: 30,
-          expireConversations: input.expireConversations,
-          auditDays: 365,
-          allowUserDelete: true
-        },
-        modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
-        tools: []
-      }),
-      clientInstanceId: input.clientInstanceId,
-      authAdapter: {
-        id: "unused",
-        credentialMode: "ambient",
-        async authenticate() {
-          throw new Error("Unused auth fixture");
-        }
-      },
-      conversationStore: input.store,
-      auditEventStore: input.store,
-      userStore: input.store,
-      usageGovernance: new ModelUsageGovernance({ store: input.store, budget: {}, safeguards: {} }),
-      auditRecorder,
-      agentRuntime: createMissingRuntime(),
-      attachments: input.attachments,
-      executionWorkspaceCleanup: input.workspaceObjects
-        ? {
-            store: input.store,
-            objects: input.workspaceObjects,
-            jobOptions: {
-              runOnStartup: false
-            }
-          }
-        : undefined,
-      modelProvider: createUnusedModelProvider()
-    },
-    input.store
-  );
-}
-
 async function createExpiredConversation(
   store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
@@ -853,52 +987,6 @@ async function createExpiredConversation(
     text: `message for ${title}`
   });
   return conversation;
-}
-
-async function createAttachedObjects(input: {
-  store: TestMemoryStore;
-  managedObjects: ReturnType<typeof createManagedObjectAccess>;
-  clientInstanceId: ClientInstanceId;
-  conversation: Conversation;
-}): Promise<{
-  attachment: ConversationAttachment;
-  file: ManagedFileRecord;
-  artifact: ManagedArtifactRecord;
-}> {
-  const file = await input.managedObjects.createFile({
-    ownerUserId: input.conversation.createdByUserId,
-    conversationId: input.conversation.id,
-    filename: "retention.txt",
-    mimeType: "text/plain",
-    bytes: new TextEncoder().encode("retained file")
-  });
-  const artifact = await input.managedObjects.createArtifact({
-    conversationId: input.conversation.id,
-    sourceFileId: file.id,
-    kind: "test.preview",
-    filename: "retention-preview.txt",
-    mimeType: "text/plain",
-    bytes: new TextEncoder().encode("retained artifact")
-  });
-  const attachment = await input.store.createConversationAttachment({
-    clientInstanceId: input.clientInstanceId,
-    conversationId: input.conversation.id,
-    fileId: file.id,
-    filename: file.filename,
-    mimeType: file.mimeType,
-    byteSize: file.byteSize,
-    checksum: file.checksum,
-    status: "ready",
-    format: "txt",
-    artifactRefs: {
-      preview: artifact.id
-    }
-  });
-  return {
-    attachment,
-    file,
-    artifact
-  };
 }
 
 async function createWorkspaceObjects(input: {
@@ -1017,59 +1105,6 @@ async function createWorkspaceObjects(input: {
   };
 }
 
-function createManagedObjectAttachmentService(input: {
-  managedObjects: ReturnType<typeof createManagedObjectAccess>;
-  /** Stores the objects under `files/`; set to let the service remove orphaned ones. */
-  byteStore?: RecordingByteStore;
-}): ChatAttachmentService {
-  const { byteStore } = input;
-  return {
-    ...(byteStore
-      ? {
-          async deleteOrphanedFileObjects({ objectKeys }) {
-            const ownKeys = objectKeys.filter((key) => key.startsWith("files/"));
-            for (const key of ownKeys) {
-              await byteStore.deleteObject(key);
-            }
-            return ownKeys;
-          }
-        }
-      : {}),
-    maxFileBytes: 1024 * 1024,
-    acceptedFileTypes: ["text/plain"],
-    async listDraftAttachments() {
-      return [];
-    },
-    async uploadDraftAttachment() {
-      throw new Error("Upload is not used in retention tests");
-    },
-    async retryDraftAttachment() {
-      throw new Error("Retry is not used in retention tests");
-    },
-    async deleteDraftAttachment() {
-      throw new Error("Draft deletion is not used in retention tests");
-    },
-    async deleteConversationAttachments(deleteInput) {
-      return input.managedObjects.deleteConversationObjects(deleteInput);
-    },
-    async readConversationFile() {
-      throw new Error("File reads are not used in retention tests");
-    },
-    blockingDraftAttachmentMessage() {
-      return undefined;
-    },
-    createAttachmentManifest() {
-      return {
-        version: 1,
-        attachments: []
-      };
-    },
-    isInlineDisplayMimeType() {
-      return false;
-    }
-  };
-}
-
 async function expectConversationStatus(
   store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
@@ -1156,44 +1191,4 @@ async function waitFor(assertion: () => Promise<void>): Promise<void> {
     }
   }
   throw lastError instanceof Error ? lastError : new Error("Timed out waiting for assertion");
-}
-
-class RecordingByteStore implements ManagedObjectByteStore {
-  readonly deletedKeys: string[] = [];
-  private readonly objects = new Map<string, Uint8Array>();
-  private readonly failuresByKey = new Map<string, number>();
-
-  async putObject(input: { key: string; body: Uint8Array }): Promise<void> {
-    this.objects.set(input.key, input.body);
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    const object = this.objects.get(key);
-    if (!object) {
-      throw new Error(`Object ${key} is not available`);
-    }
-    return object;
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    const remainingFailures = this.failuresByKey.get(key) ?? 0;
-    if (remainingFailures > 0) {
-      if (remainingFailures === 1) {
-        this.failuresByKey.delete(key);
-      } else {
-        this.failuresByKey.set(key, remainingFailures - 1);
-      }
-      throw new Error(`Object ${key} deletion failed`);
-    }
-    this.deletedKeys.push(key);
-    this.objects.delete(key);
-  }
-
-  has(key: string): boolean {
-    return this.objects.has(key);
-  }
-
-  failNextDeleteFor(key: string): void {
-    this.failuresByKey.set(key, (this.failuresByKey.get(key) ?? 0) + 1);
-  }
 }

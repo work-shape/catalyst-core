@@ -9,7 +9,8 @@ import {
   type UserRecord
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
-import { cleanupProductUserData } from "./user-deletion";
+import { pendingCleanupCountOf } from "./conversation-cleanup";
+import { cleanupProductUserData, type UserDeletionTotals } from "./user-deletion";
 
 interface UpdateCurrentUserCommand {
   displayLabel: string;
@@ -103,12 +104,28 @@ export class UserAccountWorkflow {
     }
 
     const existing = await this.getCurrentUserOrThrow(actor);
-    const deletionTotals = await cleanupProductUserData({
-      options: this.options,
-      actor,
-      context,
-      userId: asUserId(actor.id)
-    });
+    let deletionTotals: UserDeletionTotals;
+    try {
+      deletionTotals = await cleanupProductUserData({
+        options: this.options,
+        actor,
+        context,
+        userId: asUserId(actor.id)
+      });
+    } catch (error) {
+      const pendingCleanupCount = pendingCleanupCountOf(error);
+      if (pendingCleanupCount !== undefined) {
+        await this.options.auditRecorder.record({
+          type: "user.delete_failed",
+          status: "failed",
+          actor: auditActorFromUser(actor),
+          subject: existing.id,
+          correlationId: context.correlationId,
+          metadata: { requestedBy: "self", pendingCleanupCount }
+        });
+      }
+      throw error;
+    }
     await this.deleteStandalonePasswordSignIns(existing);
     const deleted = await this.options.userStore.deleteUser({
       clientInstanceId: this.options.clientInstanceId,

@@ -21,6 +21,7 @@ import {
 } from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import type { ChatServerOptions } from "./types";
+import { pendingCleanupCountOf } from "./conversation-cleanup";
 import { deleteConversationAggregate } from "./user-deletion";
 
 const MAX_WORKSPACE_NAME_LENGTH = 120;
@@ -274,7 +275,9 @@ export class CollaborationWorkspaceWorkflow {
       const deletedAt = new Date().toISOString();
       const deletion = await deleteConversationAggregate(this.options, conversation.id, deletedAt);
       conversationCount += 1;
-      fileCount += deletion.fileCount + deletion.artifactCount + deletion.workspaceFileCount;
+      if (deletion.cleanup === "complete") {
+        fileCount += deletion.fileCount + deletion.artifactCount + deletion.workspaceFileCount;
+      }
       await this.options.auditRecorder.record({
         type: "conversation.deleted",
         status: "success",
@@ -288,10 +291,25 @@ export class CollaborationWorkspaceWorkflow {
       });
     }
 
-    await this.options.userStore.deleteWorkspace({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId
-    });
+    try {
+      await this.options.userStore.deleteWorkspace({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId
+      });
+    } catch (error) {
+      const pendingCleanupCount = pendingCleanupCountOf(error);
+      if (pendingCleanupCount !== undefined) {
+        await this.options.auditRecorder.record({
+          type: "collaboration_workspace.delete_failed",
+          status: "failed",
+          actor: auditActorFromUser(user),
+          subject: collaborationWorkspaceId,
+          correlationId: context.correlationId,
+          metadata: { conversationCount, pendingCleanupCount }
+        });
+      }
+      throw error;
+    }
     const result = {
       collaborationWorkspaceId,
       conversationCount,

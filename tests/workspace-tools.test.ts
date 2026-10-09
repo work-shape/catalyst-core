@@ -940,6 +940,79 @@ describe("workspace tools", () => {
     expect(jsonObject(read.output).contentPreview).toBe("delete-me\nkeep-me\n");
   });
 
+  it.each([
+    {
+      toolName: "workspace.apply_patch",
+      input: {
+        patch: ["--- /dev/null", "+++ b/notes/late.txt", "@@ -0,0 +1,1 @@", "+late"].join("\n")
+      }
+    },
+    {
+      toolName: "workspace.import_files",
+      input: { files: [{ fileId: "file_source_csv", path: "inputs/source.csv" }] }
+    }
+  ])(
+    "$toolName removes the bytes of a file whose record is refused because the conversation was deleted",
+    async ({ toolName, input }) => {
+      const harness = await createWorkspaceHarness({
+        sourceFiles: {
+          file_source_csv: { filename: "source.csv", mimeType: "text/csv", bytes: encode("a,b\n") }
+        }
+      });
+      // The Conversation is deleted between the bytes and the record.
+      harness.objectStore.afterPutWorkspaceFile = async () => {
+        await harness.store.deleteConversation({
+          clientInstanceId: harness.clientInstanceId,
+          conversationId: harness.conversation.id,
+          deletedAt: "2026-06-29T12:00:01.000Z"
+        });
+      };
+
+      const result = await harness.runTool(toolName, input);
+
+      expect(result).toMatchObject({ status: "failed" });
+      expect(harness.objectStore.deletedKeys).toHaveLength(1);
+      expect(harness.objectStore.keys()).toEqual([]);
+    }
+  );
+
+  it("reports the object key to the telemetry when the bytes of a refused file cannot be removed", async () => {
+    const telemetryEvents: Parameters<WorkspaceCommandTelemetry["record"]>[0][] = [];
+    const harness = await createWorkspaceHarness({
+      telemetry: {
+        record(event) {
+          telemetryEvents.push(event);
+        }
+      }
+    });
+    harness.objectStore.afterPutWorkspaceFile = async () => {
+      await harness.store.deleteConversation({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id,
+        deletedAt: "2026-06-29T12:00:01.000Z"
+      });
+    };
+    harness.objectStore.deleteObject = async () => {
+      throw new Error("object store is down");
+    };
+
+    const result = await harness.runTool("workspace.apply_patch", {
+      patch: ["--- /dev/null", "+++ b/notes/late.txt", "@@ -0,0 +1,1 @@", "+late"].join("\n")
+    });
+
+    expect(result).toMatchObject({ status: "failed" });
+    const [objectKey] = harness.objectStore.keys();
+    expect(objectKey).toContain(harness.conversation.id);
+    expect(telemetryEvents).toContainEqual(
+      expect.objectContaining({
+        type: "stored_file_removal_failed",
+        clientInstanceId: harness.clientInstanceId,
+        objectKey,
+        failedCount: 1
+      })
+    );
+  });
+
   it("imports uploaded managed files into workspace storage without leaking object keys", async () => {
     const sourceBytes = new TextEncoder().encode("name,total\nAda,42\n");
     const harness = await createWorkspaceHarness({

@@ -490,6 +490,7 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     attachmentId: ConversationAttachmentId;
     status: "queued" | "ready" | "unsupported";
   }): Promise<ConversationAttachment> {
+    await this.callbacks.requireActiveConversation(input.clientInstanceId, input.conversationId);
     const existing = this.conversationAttachments.get(input.attachmentId);
     if (
       !existing ||
@@ -760,6 +761,48 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     };
   }
 
+  async listConversationsPendingObjectCleanup(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<ConversationId[]> {
+    const candidates = new Set<ConversationId>();
+    for (const record of [
+      ...this.conversationAttachments.values(),
+      ...this.managedArtifacts.values()
+    ]) {
+      if (record.clientInstanceId === input.clientInstanceId) {
+        candidates.add(record.conversationId);
+      }
+    }
+    for (const conversationId of this.artifactPreviewStore.conversationsWithPreviewState(
+      input.clientInstanceId
+    )) {
+      candidates.add(conversationId);
+    }
+    const pending: ConversationId[] = [];
+    for (const conversationId of [...candidates].sort()) {
+      const active = await this.callbacks
+        .requireActiveConversation(input.clientInstanceId, conversationId)
+        .then(
+          () => true,
+          () => false
+        );
+      if (active) {
+        continue;
+      }
+      const scope = { clientInstanceId: input.clientInstanceId, conversationId };
+      const { files, artifacts } = this.collectConversationManagedObjectsForDeletion(scope);
+      if (
+        files.length > 0 ||
+        artifacts.length > 0 ||
+        this.artifactPreviewStore.hasPreviewStateForConversation(scope)
+      ) {
+        pending.push(conversationId);
+      }
+    }
+    return pending.slice(0, Math.max(input.limit, 0));
+  }
+
   private collectConversationManagedObjectsForDeletion(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -803,6 +846,10 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
     return { attachments, files, artifacts };
   }
 
+  /**
+   * Marks the attachments of a deleted Conversation, as the Postgres claim does. Files,
+   * artifacts and preview state stay for the cleanup that follows the claim.
+   */
   deleteAttachmentsForConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -821,19 +868,6 @@ class InMemoryPlatformFileStoreImpl implements InMemoryPlatformFileStore {
         });
       }
     }
-    for (const artifact of this.managedArtifacts.values()) {
-      if (
-        artifact.clientInstanceId === input.clientInstanceId &&
-        artifact.conversationId === input.conversationId
-      ) {
-        this.managedArtifacts.set(artifact.id, {
-          ...artifact,
-          status: "deleted",
-          deletedAt: input.deletedAt
-        });
-      }
-    }
-    this.artifactPreviewStore.deletePreviewStateForConversation(input);
   }
 
   private requireClaimedAttachment(input: {

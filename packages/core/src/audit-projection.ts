@@ -66,6 +66,8 @@ export interface ProjectAuditActivitiesOptions {
 
 const ACTIVITY_LABELS: Record<string, string> = {
   "auth.session_token_issued": "Signed in",
+  "conversation.cleanup_completed": "Finished removing conversation data",
+  "conversation.cleanup_failed": "Removing conversation data failed",
   "conversation.created": "Started a conversation",
   "conversation.deleted": "Deleted a conversation",
   "conversation.renamed": "Renamed a conversation",
@@ -76,6 +78,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "storage.orphaned_files_deleted": "Removed orphaned files",
   "storage.orphaned_file_cleanup_failed": "Orphaned file cleanup failed",
   "collaboration_workspace.created": "Created a workspace",
+  "collaboration_workspace.delete_failed": "Workspace deletion refused",
   "collaboration_workspace.updated": "Updated a workspace",
   "collaboration_workspace.member_added": "Added a workspace member",
   "collaboration_workspace.member_removed": "Removed a workspace member",
@@ -109,6 +112,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "governance.user_password_reset_authorized": "Authorized a password reset",
   "governance.user_invitation_authorized": "Authorized a user invitation",
   "user.created": "Created a user",
+  "user.delete_failed": "User deletion refused",
   "user.updated": "Updated a user",
   "user.profile_updated": "Updated a profile",
   "user.identity_linked": "Linked a user identity",
@@ -150,6 +154,7 @@ function tierForType(type: string): AuditActivityTier {
     type.startsWith("auth.") ||
     type.startsWith("collaboration_workspace.") ||
     type === "conversation.deleted" ||
+    type.startsWith("conversation.cleanup") ||
     type.startsWith("conversation.retention")
   ) {
     return "governance";
