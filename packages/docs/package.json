@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "astro build",
-    "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "build": "node scripts/generate-api-reference.mjs && astro build",
+    "dev": "node scripts/generate-api-reference.mjs && astro dev --host 127.0.0.1 --port 4321",
+    "generate:api-reference": "node scripts/generate-api-reference.mjs",
     "preview": "astro preview --host 127.0.0.1 --port 4321",
-    "typecheck": "astro check"
+    "typecheck": "node scripts/generate-api-reference.mjs && astro check"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.40.0",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "@vivd-catalyst/api-contract": "workspace:*",
     "typescript": "^6.0.3",
     "vite": "^7.3.5"
   }

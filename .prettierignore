@@ -10,3 +10,4 @@ skills-lock.json
 pnpm-lock.yaml
 packages/ui/src/theme/defaults.css
 tests/ui-guard.baseline.json
+packages/docs/src/content/docs/reference/api/**

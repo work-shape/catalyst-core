@@ -43,6 +43,11 @@ export default defineConfig({
           ]
         },
         {
+          // Written by scripts/generate-api-reference.mjs from the release's OpenAPI document.
+          label: "API Reference",
+          items: [{ autogenerate: { directory: "reference/api" } }]
+        },
+        {
           label: "Reference",
           items: ["reference/current-status", "reference/framework-choice", "reference/glossary"]
         }

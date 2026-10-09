@@ -17,3 +17,5 @@ test-results/
 *.log
 .DS_Store
 .catalyst-state.json
+# Written from the OpenAPI document by the docs build.
+packages/docs/src/content/docs/reference/api/

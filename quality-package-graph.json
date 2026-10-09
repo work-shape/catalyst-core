@@ -50,7 +50,7 @@
   "@vivd-catalyst/core": [],
   "@vivd-catalyst/data-source": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
   "@vivd-catalyst/deployment-kit": [],
-  "@vivd-catalyst/docs": [],
+  "@vivd-catalyst/docs": ["@vivd-catalyst/api-contract"],
   "@vivd-catalyst/document-execution": [],
   "@vivd-catalyst/mail": ["@vivd-catalyst/core"],
   "@vivd-catalyst/model-provider": ["@vivd-catalyst/core"],
