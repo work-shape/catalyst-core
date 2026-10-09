@@ -4247,7 +4247,7 @@
           }
         },
         "x-catalyst-effect": "changing",
-        "x-catalyst-rate-class": "auth"
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/instance/usage": {
@@ -7139,7 +7139,7 @@
         }
       },
       "RateLimited": {
-        "description": "`RATE_LIMITED`: The caller sent too many requests of this operation's rate class.",
+        "description": "`RATE_LIMITED`: The caller sent too many requests of this operation's rate class. `details.retryAfterSeconds` and the `Retry-After` header give the seconds to wait. The numbers are the instance's, set under `rateLimits` in its release config.",
         "content": {
           "application/json": {
             "schema": {

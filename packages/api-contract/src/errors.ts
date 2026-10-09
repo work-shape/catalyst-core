@@ -22,7 +22,8 @@ export const API_ERROR_MEANINGS: Record<z.infer<typeof appErrorCodeSchema>, stri
   CONFLICT: "The request conflicts with the current state of the resource.",
   TIMEOUT: "The instance did not finish the work in time.",
   VALIDATION_FAILED: "Path, query or body do not match the operation's schema.",
-  RATE_LIMITED: "The caller sent too many requests of this operation's rate class.",
+  RATE_LIMITED:
+    "The caller sent too many requests of this operation's rate class. `details.retryAfterSeconds` and the `Retry-After` header give the seconds to wait. The numbers are the instance's, set under `rateLimits` in its release config.",
   INTERNAL: "The instance failed. The message never carries details."
 };
 
