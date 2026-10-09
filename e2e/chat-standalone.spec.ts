@@ -266,7 +266,12 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect(headerAgent).toHaveText("");
   await expect(headerAgent.locator("svg").first()).toBeVisible();
   await expect(chat.locator('[data-slot="workspace-apps"]')).toHaveCount(0);
-  await expect(chat.getByText("Draft that survives choosing an agent")).toBeVisible();
+  // The agent echoes the message, so name the user's own bubble.
+  const sentMessage = chat
+    .locator('[data-role="user"]')
+    .getByText("Draft that survives choosing an agent", { exact: true });
+  await expect(sentMessage).toHaveCount(1);
+  await expect(sentMessage).toBeVisible();
   await expect(input).toHaveValue("");
   await expect.poll(async () => (await composerPlacement()).bottomGap).toBeLessThan(40);
 });
