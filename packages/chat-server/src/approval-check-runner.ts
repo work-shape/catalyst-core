@@ -13,7 +13,10 @@ import { resolveModelBinding, type ClientInstanceConfig } from "@vivd-catalyst/c
 import type { ModelCompletion, ModelProvider } from "@vivd-catalyst/model-provider";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
-const CHECK_TIMEOUT_MS = 10_000;
+// Protects an agent run from a check model that never answers. Past it a blocking rule refuses
+// the proposal and names this limit; a warning rule stores the proposal as not evaluated.
+const APPROVAL_CHECK_TIMEOUT_MS = 60_000;
+const APPROVAL_CHECK_TIMEOUT_MESSAGE = `did not answer within ${APPROVAL_CHECK_TIMEOUT_MS / 1000} seconds`;
 const verdictSchema = z
   .object({
     violates: z.boolean(),
@@ -133,12 +136,21 @@ export class ApprovalCheckRunner {
         return {
           id: check.id,
           status: "blocked",
-          message: `Check '${check.id}' could not be evaluated. Try again later.`
+          message:
+            error instanceof ApprovalCheckTimeoutError
+              ? `Check '${check.id}' ${APPROVAL_CHECK_TIMEOUT_MESSAGE}. Try again later.`
+              : `Check '${check.id}' could not be evaluated. Try again later.`
         };
       }
       // No message: the card words an unevaluated check in the reader's language.
       return { id: check.id, status: "warned", message: "" };
     }
+  }
+}
+
+class ApprovalCheckTimeoutError extends AppError {
+  constructor() {
+    super("TIMEOUT", `Approval check ${APPROVAL_CHECK_TIMEOUT_MESSAGE}`);
   }
 }
 
@@ -154,8 +166,8 @@ async function completeWithTimeout(
   const timeoutMs = Math.max(
     0,
     Math.min(
-      CHECK_TIMEOUT_MS,
-      context.deadline ? context.deadline.getTime() - Date.now() : CHECK_TIMEOUT_MS
+      APPROVAL_CHECK_TIMEOUT_MS,
+      context.deadline ? context.deadline.getTime() - Date.now() : APPROVAL_CHECK_TIMEOUT_MS
     )
   );
   const deadline = new Date(Date.now() + timeoutMs);
@@ -163,7 +175,12 @@ async function completeWithTimeout(
   let onAbort: (() => void) | undefined;
   try {
     const aborted = new Promise<never>((_resolve, reject) => {
-      onAbort = () => reject(new AppError("TIMEOUT", "Approval check could not be evaluated"));
+      onAbort = () =>
+        reject(
+          controller.signal.aborted && timeoutMs === APPROVAL_CHECK_TIMEOUT_MS
+            ? new ApprovalCheckTimeoutError()
+            : new AppError("TIMEOUT", "Approval check could not be evaluated")
+        );
       signal.addEventListener("abort", onAbort, { once: true });
       timer = setTimeout(() => controller.abort(), timeoutMs);
       if (signal.aborted) {

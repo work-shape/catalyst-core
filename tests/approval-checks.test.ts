@@ -230,15 +230,30 @@ describe("approval check runner", () => {
   });
 
   it.each(["warn", "block"] as const)(
-    "bounds a provider that ignores cancellation with onFail %s",
+    "gives a slow check 60 seconds, then bounds a provider that ignores cancellation with onFail %s",
     async (onFail) => {
       const f = await fixture([{ ...rule, onFail }]);
       const called = neverCompleting(f.complete);
       useFakeClockBesidePostgres();
+      const startedAt = Date.now();
       const result = f.runner.run(handler, command, context);
       await settleOnFakeClock(called);
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(await settleOnFakeClock(result)).toEqual([unevaluated(onFail)]);
+      // No caller sets a deadline on the context, so the runner's own limit is the effective one.
+      const deadline = f.complete.mock.calls[0]?.[1].deadline?.getTime() ?? 0;
+      expect(deadline - startedAt).toBeGreaterThanOrEqual(60_000);
+      expect(deadline - startedAt).toBeLessThan(60_100);
+      await vi.advanceTimersByTimeAsync(deadline - Date.now() - 1_000);
+      expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(await settleOnFakeClock(result)).toEqual([
+        onFail === "block"
+          ? {
+              id: rule.id,
+              status: "blocked",
+              message: `Check '${rule.id}' did not answer within 60 seconds. Try again later.`
+            }
+          : unevaluated("warn")
+      ]);
       vi.useRealTimers();
       expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(true);
       expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
