@@ -44,7 +44,7 @@ The capabilities lockfile records the platform manifests it was resolved against
 - **TypeScript**: every package project and the test project, with `noUnusedLocals` and `noUnusedParameters`. A file that several projects share reports once. Astro keeps its own `astro check` target.
 - **Prettier**: source and configuration files. A Prettier ignore comment counts as a violation, because it would hide new formatting findings.
 
-ESLint skips `packages/api-client/src/generated` and `packages/postgres-store/migrations` by path. A folder that is merely named `generated`, `vendor` or `migrations` is linted.
+ESLint skips `packages/postgres-store/migrations` by path. A folder that is merely named `generated`, `vendor` or `migrations` is linted.
 
 Every message counts, whatever its severity, so a rule set to `warn` still fails. Tool crashes, parse errors and configuration failures are fatal and cannot be baselined.
 

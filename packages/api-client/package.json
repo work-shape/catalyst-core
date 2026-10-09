@@ -36,7 +36,6 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
-    "generate": "pnpm --filter @vivd-catalyst/api-contract generate:openapi && openapi-ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -44,7 +43,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "0.99.0",
     "@types/node": "^24.13.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
