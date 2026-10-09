@@ -36,6 +36,14 @@ export const apiErrorResponseSchema = z.object({
 });
 
 /**
+ * `details` of the 429 a caller over an operation's rate limit receives. The `Retry-After`
+ * header of that answer carries the same number.
+ */
+export const rateLimitedDetailsSchema = z.object({
+  retryAfterSeconds: z.number().int().min(1)
+});
+
+/**
  * `details.reason` of the 404 a server answers for a method and path that is no operation of
  * its catalog. An operation the instance runs without answers 404 without it. A caller built
  * from the catalog reads it as: this caller belongs to another release than the server.

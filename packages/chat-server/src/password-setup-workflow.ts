@@ -6,16 +6,18 @@ import {
   type RuntimeCallContext,
   type UserRecord
 } from "@vivd-catalyst/core";
-import type { ChatServerOptions } from "./types";
+import type { ResolvedChatServerOptions } from "./types";
 
 export const PASSWORD_RESET_VALID_MINUTES = 60;
 export const PLATFORM_INVITATION_VALID_DAYS = 7;
 
-const RESET_REQUESTS_PER_EMAIL_PER_HOUR = 3;
+const HOUR_MS = 60 * 60 * 1000;
+// Caps on the mail this workflow sends, beside the limit every call to the operation is under.
+// A request over a cap is answered like any other, so the answer says nothing about a mailbox.
+const RESET_MAILS_PER_MAILBOX = { limit: 3, windowMs: HOUR_MS };
 // Per client when the reverse proxy forwards the client address (see trustProxy in index.ts);
 // otherwise every request shares the proxy address and this is an instance-wide cap.
-const RESET_REQUESTS_PER_ADDRESS_PER_HOUR = 20;
-const HOUR_MS = 60 * 60 * 1000;
+const RESET_MAILS_PER_ADDRESS = { limit: 20, windowMs: HOUR_MS };
 
 interface RequestPasswordResetCommand {
   email: string;
@@ -39,16 +41,7 @@ export function createPasswordSetupLink(appUrl: string, token: string): string {
 }
 
 export class PasswordSetupWorkflow {
-  private readonly requestsByEmail = new SlidingWindowLimiter(
-    RESET_REQUESTS_PER_EMAIL_PER_HOUR,
-    HOUR_MS
-  );
-  private readonly requestsByAddress = new SlidingWindowLimiter(
-    RESET_REQUESTS_PER_ADDRESS_PER_HOUR,
-    HOUR_MS
-  );
-
-  constructor(private readonly options: ChatServerOptions) {}
+  constructor(private readonly options: ResolvedChatServerOptions) {}
 
   /**
    * Always answers the same way and never waits for delivery, so neither the response nor its
@@ -65,9 +58,16 @@ export class PasswordSetupWorkflow {
       );
     }
     const email = command.email.trim().toLowerCase();
+    const limiter = this.options.rateLimiter;
     const allowed =
-      this.requestsByAddress.tryAcquire(command.remoteAddress) &&
-      this.requestsByEmail.tryAcquire(email);
+      (
+        await limiter.consume(
+          `password-reset-mail|address:${command.remoteAddress}`,
+          RESET_MAILS_PER_ADDRESS
+        )
+      ).allowed &&
+      (await limiter.consume(`password-reset-mail|mailbox:${email}`, RESET_MAILS_PER_MAILBOX))
+        .allowed;
     if (allowed) {
       void this.deliverPasswordReset(email, command.locale, context).catch(command.onDeliveryError);
     }
@@ -161,32 +161,4 @@ function selfActor(user: UserRecord): AuditActor {
     displayLabel: user.displayLabel,
     roles: user.roles
   };
-}
-
-/** In-memory, per process: enough for single-instance deployments. */
-class SlidingWindowLimiter {
-  private readonly hits = new Map<string, number[]>();
-
-  constructor(
-    private readonly limit: number,
-    private readonly windowMs: number
-  ) {}
-
-  tryAcquire(key: string): boolean {
-    const now = Date.now();
-    for (const [candidate, timestamps] of this.hits) {
-      const recent = timestamps.filter((timestamp) => now - timestamp < this.windowMs);
-      if (recent.length === 0) {
-        this.hits.delete(candidate);
-      } else {
-        this.hits.set(candidate, recent);
-      }
-    }
-    const recent = this.hits.get(key) ?? [];
-    if (recent.length >= this.limit) {
-      return false;
-    }
-    this.hits.set(key, [...recent, now]);
-    return true;
-  }
 }

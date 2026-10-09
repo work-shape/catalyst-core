@@ -1,11 +1,14 @@
-import type { Logger } from "@vivd-catalyst/core";
+import type { HttpRuntime, Logger } from "@vivd-catalyst/core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
 import { normalizeAllowedOrigins } from "@vivd-catalyst/core";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import { installErrorHandler } from "./errors";
+import { rememberFramework } from "./http/framework";
+import { createInProcessRateLimiter } from "./http/rate-limit";
 import { createRoute } from "./http/route";
+import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
@@ -26,7 +29,7 @@ import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
 import { createConversationRetentionJob } from "./retention";
 import { RunRecoveryWatchdog } from "./run-recovery";
-import type { ChatServerOptions } from "./types";
+import type { ChatServerOptions, ResolvedChatServerOptions } from "./types";
 import { createExecutionWorkspaceCleanupJob } from "./workspace-cleanup";
 
 export type {
@@ -59,12 +62,17 @@ export type {
   RunRecoveryOptions
 } from "./types";
 export { loadViewRuntimeFiles } from "./view-runtime";
-export { createRoute } from "./http/route";
-export type { Route } from "./http/route";
+export { createInProcessRateLimiter } from "./http/rate-limit";
+export { createHttpRuntime } from "./http/runtime";
+export type { InProcessHttpServer } from "./http/runtime";
 
-export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
-  const allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins);
-  options = { ...options, allowedOrigins };
+export async function createChatServer(input: ChatServerOptions): Promise<HttpRuntime> {
+  const allowedOrigins = normalizeAllowedOrigins(input.allowedOrigins);
+  const options: ResolvedChatServerOptions = {
+    ...input,
+    allowedOrigins,
+    rateLimiter: input.rateLimiter ?? createInProcessRateLimiter()
+  };
   const app = Fastify({
     loggerInstance: adaptLogger(options.logger),
     // Assumes the API is reachable only through a reverse proxy on a private network (the
@@ -126,7 +134,9 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   registerSuperadminRoutes(route, options);
   registerApiReferenceRoutes(route, options);
 
-  return app;
+  const runtime = createHttpRuntime(app);
+  rememberFramework(runtime, { app, route });
+  return runtime;
 }
 
 export { ApprovalCheckRunner } from "./approval-check-runner";

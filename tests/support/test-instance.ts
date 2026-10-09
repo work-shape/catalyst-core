@@ -5,14 +5,15 @@ import {
   createLogger,
   type CreateClientInstanceAppInput
 } from "@vivd-catalyst/client-assembly";
-import {
-  createChatServer,
-  createRoute,
-  type ChatServerOptions,
-  type Route
-} from "@vivd-catalyst/chat-server";
+import { createChatServer, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+import { frameworkBehind } from "../../packages/chat-server/src/http/framework";
 import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contract";
-import { asClientInstanceId, NoopAuditRecorder, type PlatformStores } from "@vivd-catalyst/core";
+import {
+  asClientInstanceId,
+  NoopAuditRecorder,
+  type HttpRuntime,
+  type PlatformStores
+} from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource } from "./static-config-asset-source";
 import { createPostgresStores, type PostgresStores } from "@vivd-catalyst/postgres-store";
 import { fileTestDatabaseUrl, closeFileTestDatabase, resetFileTestDatabase } from "./test-database";
@@ -22,8 +23,18 @@ import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { testOperations, type TestOperationName, type TestCallInput } from "./operations";
 import { createTestConfig, seedTestAssets } from "./fixtures";
 
-type TestHttpServer = Awaited<ReturnType<typeof createChatServer>>;
+type TestHttpServer = NonNullable<ReturnType<typeof frameworkBehind>>["app"];
 type TestResponse = Awaited<ReturnType<TestHttpServer["inject"]>>;
+
+/** The product's route helper, as a test registers fixture operations through it. */
+export type TestRoute = NonNullable<ReturnType<typeof frameworkBehind>>["route"];
+
+/** The framework behind a server, which test support alone reaches past the public boundary. */
+function testFramework(runtime: Pick<HttpRuntime, "fetch">) {
+  const framework = frameworkBehind(runtime);
+  if (!framework) throw new Error("This runtime is not a chat server");
+  return framework;
+}
 type TestRouteHandler = NonNullable<Parameters<TestHttpServer["route"]>[0]["handler"]>;
 
 export interface TestInstance<S extends PlatformStores = PlatformStores> {
@@ -56,6 +67,8 @@ type TestPostgresOptions = {
 type Metadata = {
   execution?: Awaited<ReturnType<typeof createClientInstanceExecutionAssembly>>;
   server?: TestHttpServer;
+  /** The service's public boundary. */
+  runtime?: HttpRuntime;
   config?: ClientInstanceConfig;
   closed: boolean;
   cleanup(): Promise<void>;
@@ -122,7 +135,7 @@ export function createTestInstance(
 export function createTestInstanceWith(
   replace: (stores: TestStore) => Partial<TestServerOptions>,
   /** Registers fixture operations through the product's route helper, beside the product's. */
-  register?: (route: Route) => void
+  register?: (route: TestRoute) => void
 ): Promise<TestInstance<TestStore>> {
   if (!testActive) preserveSuiteState = true;
   return createDefaultInstance(replace, register);
@@ -130,7 +143,7 @@ export function createTestInstanceWith(
 
 async function createDefaultInstance(
   replace: (stores: TestStore) => Partial<TestServerOptions> = () => ({}),
-  register?: (route: Route) => void
+  register?: (route: TestRoute) => void
 ): Promise<TestInstance<TestStore>> {
   const stores = addTestStoreHelpers(
     await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl() })
@@ -211,8 +224,10 @@ async function createDefaultInstance(
     );
     const server = await createChatServer(options);
     try {
-      register?.(createRoute(server, options));
-      return server;
+      const framework = testFramework(server);
+      register?.(framework.route);
+      state.runtime = server;
+      return framework.app;
     } catch (error) {
       await server.close();
       throw error;
@@ -263,7 +278,8 @@ async function createConfiguredInstance(
     const stores = options.stores;
     const server = await createChatServer(completeServerOptions(options, stores));
     return bindInstance(stores, {
-      server,
+      server: testFramework(server).app,
+      runtime: server,
       config: options.config,
       closed: false,
       async cleanup() {
@@ -281,7 +297,8 @@ async function createConfiguredInstance(
   try {
     if (input.seedAssets !== false) await seedTestAssets(app);
     return bindInstance(app.store, {
-      server: app.server,
+      server: testFramework(app).app,
+      runtime: app,
       config: app.config,
       closed: false,
       cleanup: () => app.close()
@@ -340,10 +357,10 @@ function bindInstance<S extends PlatformStores>(
         state.server = await starting;
       }
       const server = state.server;
-      if (!server) throw new Error("This store fixture has no HTTP transport");
       const descriptor = testOperations[operation];
       const { params, query, method, payload, ...request } = input;
       const identity = typeof as === "string" ? { headers: { "x-dev-user-id": as } } : as;
+      if (!server) throw new Error("This store fixture has no HTTP transport");
       const requestPayload =
         typeof payload === "string" || (payload !== null && typeof payload === "object")
           ? payload
@@ -384,6 +401,15 @@ function getTestServer(instance: TestInstance): TestHttpServer {
   const server = metadata.get(instance)?.server;
   if (!server) throw new Error("No test HTTP transport");
   return server;
+}
+
+/** The public runtime of the instance's server, for tests of that boundary itself. */
+export async function getTestRuntime(instance: TestInstance): Promise<HttpRuntime> {
+  // The default instance starts its server on the first call.
+  await instance.call("health.get");
+  const runtime = metadata.get(instance)?.runtime;
+  if (!runtime) throw new Error("No test HTTP runtime");
+  return runtime;
 }
 
 export async function listenTestInstance(instance: TestInstance): Promise<string> {
@@ -458,13 +484,15 @@ export function addTestRoute(
 /** Adapts a worker or a focused framework fixture without exposing injection to callers. */
 export async function bindTestTransport(
   server: TestHttpServer,
-  close: () => Promise<void>
+  close: () => Promise<void>,
+  runtime?: HttpRuntime
 ): Promise<TestInstance<TestStore>> {
   const stores = addTestStoreHelpers(
     await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl() })
   );
   return bindInstance(stores, {
     server,
+    runtime,
     closed: false,
     async cleanup() {
       try {

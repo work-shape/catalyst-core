@@ -55,3 +55,5 @@ export {
 } from "./workspace-source-attachments";
 
 export { createLogger } from "./logger";
+// For a worker that serves HTTP beside the instance, such as the document worker.
+export { createHttpRuntime } from "@vivd-catalyst/chat-server";

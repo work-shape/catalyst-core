@@ -19,6 +19,15 @@ reverse proxy / TLS
 
 Caddy is the default reverse proxy/TLS choice for the first VPS or VM deployment because it keeps automatic HTTPS and routing simple.
 
+The API limits how often one caller may call an operation, and counts a caller who is not
+signed in by client address. It reads that address from `X-Forwarded-For` only when the request
+comes from a loopback or private address, which is the reverse proxy on the Compose network.
+Caddy as the outermost proxy passes the real client address without configuration. Where
+another proxy or load balancer stands in front of Caddy, name it under `trusted_proxies` in
+the Caddyfile's `servers` options; without that Caddy reports the outer proxy as the client and
+all callers share one count. The counters live in the API process, so an instance runs exactly
+one API process.
+
 ## Deployment Flow
 
 Separate publishing from deployment:

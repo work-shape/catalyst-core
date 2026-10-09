@@ -1,5 +1,4 @@
 import { createLogger } from "./logger";
-import type { FastifyInstance } from "fastify";
 import {
   LocalAgentRuntime,
   StoreBackedAgentRuntime,
@@ -19,7 +18,7 @@ import {
 } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
-import { AppError, type PlatformStores } from "@vivd-catalyst/core";
+import { AppError, type HttpRuntime, type PlatformStores } from "@vivd-catalyst/core";
 import {
   type ClientInstanceConfig,
   getClientInstanceId,
@@ -81,12 +80,10 @@ export interface CreateClientInstanceAppInput {
   agentRuntimeMode?: "local" | "worker";
 }
 
-export interface ClientInstanceApp {
+/** Listens on `HOST` and `PORT` of the instance's environment unless told otherwise. */
+export interface ClientInstanceApp extends HttpRuntime {
   readonly config: ClientInstanceConfig;
-  readonly server: FastifyInstance;
   readonly store: PlatformStores;
-  listen(input?: { host?: string; port?: number }): Promise<void>;
-  close(): Promise<void>;
 }
 
 export async function createClientInstanceApp(
@@ -167,10 +164,11 @@ export async function createClientInstanceApp(
 
   return {
     config,
-    server,
     store,
-    async listen(listenInput = {}) {
-      await server.listen({
+    // The server's own function, unwrapped.
+    fetch: server.fetch,
+    listen(listenInput = {}) {
+      return server.listen({
         host: listenInput.host ?? env.HOST ?? "127.0.0.1",
         port: Number(listenInput.port ?? env.PORT ?? 4100)
       });

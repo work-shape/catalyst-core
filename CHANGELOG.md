@@ -74,6 +74,29 @@ contain breaking changes; a patch version does not.
   takes the operations alone: title and version are those of the release. An operation that
   answers a file states its content type (`blob("text/html")`), and an operation of a
   signed-in caller may state `scope: null` when it asks for no scope.
+- **API (operator-relevant):** every operation is rate limited. A call is counted per
+  operation and per caller: the signed-in person or service where the operation authenticates
+  one, the client address where it does not. Reading operations allow 600 calls a minute,
+  changing operations 120 a minute, credential operations (password change, password reset
+  and setup, API-key exchange, session-token issuing) 20 in five minutes. A caller over the
+  limit receives 429 with the code `RATE_LIMITED`, `details.retryAfterSeconds` and a
+  `Retry-After` header. The counters live in the API process: they start empty after a restart,
+  and an instance must run one API process. The client address is taken from
+  `X-Forwarded-For` only when the direct peer is a loopback or private address, so the reverse
+  proxy in front of the API has to pass the real client address on; a proxy that sits behind
+  another proxy must be told to trust it, or every caller is counted as one address.
+- **Sign-in (operator-relevant):** the sign-in routes under `/api/auth/*` are rate limited on
+  every instance whose `clientInstance.environment` is not `development`: three calls in ten
+  seconds per client address to sign in, a hundred in ten seconds to any other of these
+  routes. Until now this limit depended on `NODE_ENV=production`, which the reference Compose
+  files do not set, so it was off. The address is the one the API established for the
+  request; a caller cannot choose it with a header.
+- **Server runtime (breaking):** `createChatServer`, `ClientInstanceApp` and the document
+  worker expose `{ fetch(request), listen, close }` and no web framework type.
+  `ClientInstanceApp.server` and the worker's `server` are gone: call `app.fetch(new
+  Request(url))` where code called `app.server.inject(...)`. `listen` resolves with the base
+  URL. `createRoute` and `Route` are no longer exported from `@vivd-catalyst/chat-server`.
+  `createStandaloneAuthRuntime` requires `rateLimit`.
 - **Platform store (breaking):** Postgres is the only platform store. The `STORE` environment
   variable is no longer read, so `STORE=memory` no longer starts an instance without a
   database; every process needs `DATABASE_URL`. Remove `STORE` from environment files. The

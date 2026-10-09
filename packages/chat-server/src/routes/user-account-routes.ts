@@ -2,11 +2,11 @@ import { apiOperations } from "@vivd-catalyst/api-contract";
 import { asUserId, getSubjectUserId, resolveEffectivePermissions } from "@vivd-catalyst/core";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "../request-context";
-import type { ChatServerOptions } from "../types";
+import type { ResolvedChatServerOptions } from "../types";
 import { PasswordSetupWorkflow } from "../password-setup-workflow";
 import { UserAccountWorkflow } from "../user-account-workflow";
 
-export function registerUserAccountRoutes(route: Route, options: ChatServerOptions): void {
+export function registerUserAccountRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const userAccount = new UserAccountWorkflow(options);
   const passwordSetup = new PasswordSetupWorkflow(options);
 

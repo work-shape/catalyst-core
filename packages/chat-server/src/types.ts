@@ -13,7 +13,7 @@ import type {
   ExecutionWorkspaceCleanupStore,
   ManagedArtifactId
 } from "@vivd-catalyst/core";
-import type { AuditRecorder } from "@vivd-catalyst/core";
+import type { AuditRecorder, RateLimiter } from "@vivd-catalyst/core";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
@@ -113,4 +113,10 @@ export interface ChatServerOptions {
   serviceAccessToken?: {
     exchange: ApiKeyAccessTokenExchange;
   };
+  /** Counts calls per operation and caller. Without one the server counts in its own process. */
+  rateLimiter?: RateLimiter;
 }
+
+/** The options as the server's own modules see them, with every default filled in. */
+export type ResolvedChatServerOptions = ChatServerOptions &
+  Required<Pick<ChatServerOptions, "rateLimiter">>;

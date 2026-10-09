@@ -2,6 +2,7 @@ import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
 import {
   operationPathParamNames,
+  rateLimitedDetailsSchema,
   type Operation,
   type OperationPathParamName
 } from "@vivd-catalyst/api-contract";
@@ -23,11 +24,18 @@ import {
 } from "@vivd-catalyst/core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import type { ChatServerOptions } from "../types";
+import type { ResolvedChatServerOptions } from "../types";
+import { countOperationCall, type RateLimitedCaller } from "./rate-limit";
 
 type RouteServerOptions = Pick<
-  ChatServerOptions,
-  "clientInstanceId" | "authAdapter" | "allowedOrigins" | "sessionToken" | "config" | "logger"
+  ResolvedChatServerOptions,
+  | "clientInstanceId"
+  | "authAdapter"
+  | "allowedOrigins"
+  | "sessionToken"
+  | "config"
+  | "logger"
+  | "rateLimiter"
 >;
 
 /** What a handler knows about a call whose caller is not a signed-in user. */
@@ -110,8 +118,9 @@ interface AssembledCall {
 
 /**
  * The one place a product route is registered. For every call it authenticates as the
- * operation's `auth` says, checks the credential's `scope`, parses query and body, checks the
- * holder's rights for every action in `requires`, runs the handler and validates what it returns.
+ * operation's `auth` says, counts the call against the operation's rate class, checks the
+ * credential's `scope`, parses query and body, checks the holder's rights for every action in
+ * `requires`, runs the handler and validates what it returns.
  */
 export function createRoute(app: FastifyInstance, options: RouteServerOptions): Route {
   const registered = registeredOperations.get(app) ?? [];
@@ -128,7 +137,16 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       handler: async (request, reply) => {
         const correlationId = createCorrelationId(request);
         void reply.header("x-correlation-id", correlationId);
+        // A call without a principal is counted by its address before anything else runs, a
+        // call with one by that principal as soon as it is known. A refused credential is not
+        // counted: the credentials these operations accept are too long to guess.
+        if (operation.auth === "public" || operation.auth === "serverCredential") {
+          await limitRate(options, operation, { address: request.ip }, reply);
+        }
         const caller = await authenticate(options, operation, request, correlationId);
+        if (caller.identity) {
+          await limitRate(options, operation, { identity: caller.identity }, reply);
+        }
         if (caller.identity && operation.scope) {
           requireAuthScope(caller.identity, operation.scope);
         }
@@ -209,6 +227,23 @@ async function authenticate(
         context: { ...context, user, ...authContextFromUser(user) }
       };
     }
+  }
+}
+
+async function limitRate(
+  options: RouteServerOptions,
+  operation: Operation,
+  caller: RateLimitedCaller,
+  reply: FastifyReply
+): Promise<void> {
+  const retryAfterSeconds = await countOperationCall(options.rateLimiter, operation, caller);
+  if (retryAfterSeconds !== undefined) {
+    void reply.header("retry-after", retryAfterSeconds);
+    throw new AppError(
+      "RATE_LIMITED",
+      "Too many requests. Try again later.",
+      rateLimitedDetailsSchema.parse({ retryAfterSeconds })
+    );
   }
 }
 

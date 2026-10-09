@@ -13,11 +13,10 @@ import {
   StoreBackedAuditRecorder,
   type Logger
 } from "@vivd-catalyst/core";
-import type { Route } from "@vivd-catalyst/chat-server";
 import { createTestConfig } from "./support/fixtures";
 import { routeTestOperations as operations } from "./support/operations";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
-import { createTestInstanceWith } from "./support/test-instance";
+import { createTestInstanceWith, type TestRoute } from "./support/test-instance";
 
 // The route helper is the one place a product route is registered. These tests register
 // fixture operations through it and prove what it does for every operation: who it lets in,
@@ -76,7 +75,7 @@ async function createServer(
   return { server, authAdapter, handled, errors };
 }
 
-function registerFixtures(route: Route, handled: string[]): void {
+function registerFixtures(route: TestRoute, handled: string[]): void {
   const ok = (id: string) => () => {
     handled.push(id);
     return { value: "ok" };
