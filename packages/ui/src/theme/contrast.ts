@@ -6,8 +6,8 @@ export interface RgbColor {
 }
 
 /** The two text colours the library puts on a solid fill. */
-const TEXT_ON_SOLID_LIGHT = "#ffffff";
-const TEXT_ON_SOLID_DARK = "#111111";
+export const TEXT_ON_SOLID_LIGHT = "#ffffff";
+export const TEXT_ON_SOLID_DARK = "#111111";
 
 export function parseHexColor(value: string): RgbColor | undefined {
   const hex = value.trim().replace(/^#/u, "");

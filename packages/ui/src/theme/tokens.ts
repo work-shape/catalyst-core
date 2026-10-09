@@ -1,4 +1,4 @@
-import { textOnSolid } from "./contrast";
+import { TEXT_ON_SOLID_DARK, TEXT_ON_SOLID_LIGHT, textOnSolid } from "./contrast";
 
 export type ThemeMode = "light" | "dark";
 
@@ -22,22 +22,22 @@ export interface ThemeInputsByMode {
 /** The base theme of an instance that sets no colours. A test holds it equal to the config schema defaults. */
 export const DEFAULT_THEME_INPUTS: ThemeInputsByMode = {
   light: {
-    surfaceColor: "#ffffff",
-    backgroundColor: "#f5f5f5",
-    textColor: "#1a1a1a",
-    mutedTextColor: "#5e5e5e",
-    borderColor: "#e5e5e5",
-    accentColor: "#1a1a1a",
-    accentStrongColor: "#0a0a0a"
+    surfaceColor: "#fdfbf7",
+    backgroundColor: "#f6f3ec",
+    textColor: "#201c17",
+    mutedTextColor: "#655e54",
+    borderColor: "#e7e1d5",
+    accentColor: "#c2530f",
+    accentStrongColor: "#9a3e08"
   },
   dark: {
-    surfaceColor: "#1b1b1b",
-    backgroundColor: "#121212",
-    textColor: "#ededed",
-    mutedTextColor: "#b0b0b0",
-    borderColor: "#303030",
-    accentColor: "#ededed",
-    accentStrongColor: "#ffffff"
+    surfaceColor: "#1c1a17",
+    backgroundColor: "#131210",
+    textColor: "#efebe4",
+    mutedTextColor: "#b3ada3",
+    borderColor: "#33302b",
+    accentColor: "#e8823c",
+    accentStrongColor: "#f2a469"
   }
 };
 
@@ -51,6 +51,7 @@ export const THEME_TOKEN_NAMES = [
   "--popover-foreground",
   "--primary",
   "--primary-foreground",
+  "--primary-hover",
   "--primary-soft",
   "--primary-soft-foreground",
   "--primary-border",
@@ -100,6 +101,7 @@ export const THEME_TOKEN_NAMES = [
   "--sidebar-accent-foreground",
   "--sidebar-border",
   "--sidebar-ring",
+  "--shadow-control",
   "--shadow-raised",
   "--shadow-overlay",
   "--shadow-modal"
@@ -114,6 +116,7 @@ interface ModeConstants {
   warning: string;
   info: string;
   charts: readonly [string, string, string, string, string];
+  shadowControl: string;
   shadowRaised: string;
   shadowOverlay: string;
   shadowModal: string;
@@ -126,6 +129,7 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     warning: "#b45309",
     info: "#0369a1",
     charts: ["#0f766e", "#b45309", "#0369a1", "#7c3aed", "#be185d"],
+    shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.4), 0 1px 2px rgb(0 0 0 / 0.05)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.04), 0 2px 12px rgb(0 0 0 / 0.06)",
     shadowOverlay: "0 1px 3px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.10)",
     shadowModal: "0 16px 48px rgb(0 0 0 / 0.18)"
@@ -136,6 +140,7 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     warning: "#fbbf24",
     info: "#38bdf8",
     charts: ["#2dd4bf", "#fbbf24", "#38bdf8", "#a78bfa", "#f472b6"],
+    shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.3)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.4)",
     shadowOverlay: "0 8px 24px rgb(0 0 0 / 0.5)",
     shadowModal: "0 16px 48px rgb(0 0 0 / 0.6)"
@@ -170,6 +175,12 @@ export function createThemeTokens(inputs: ThemeInputs, mode: ThemeMode): ThemeTo
     "--popover-foreground": textColor,
     "--primary": accentColor,
     "--primary-foreground": onAccent,
+    // A hovered solid button moves away from its label's colour, so the label never loses contrast.
+    "--primary-hover": mix(
+      accentColor,
+      90,
+      onAccent === TEXT_ON_SOLID_LIGHT ? TEXT_ON_SOLID_DARK : TEXT_ON_SOLID_LIGHT
+    ),
     "--primary-soft": over(accentColor, 12),
     // An accent may be light, so its soft text is the strong accent and not the tone mix.
     "--primary-soft-foreground": accentStrongColor,
@@ -220,6 +231,7 @@ export function createThemeTokens(inputs: ThemeInputs, mode: ThemeMode): ThemeTo
     "--sidebar-accent-foreground": accentStrongColor,
     "--sidebar-border": borderColor,
     "--sidebar-ring": accentColor,
+    "--shadow-control": constants.shadowControl,
     "--shadow-raised": constants.shadowRaised,
     "--shadow-overlay": constants.shadowOverlay,
     "--shadow-modal": constants.shadowModal

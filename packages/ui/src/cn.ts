@@ -29,7 +29,7 @@ const mergeClasses = extendTailwindMerge({
         "code"
       ],
       spacing: ["control-sm", "control-md", "control-lg"],
-      shadow: ["raised", "overlay", "modal"]
+      shadow: ["control", "raised", "overlay", "modal"]
     }
   }
 });

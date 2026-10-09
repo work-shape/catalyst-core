@@ -652,26 +652,26 @@ export const executionWorkspacesConfigSchema = z
     }
   });
 
-// The base theme: neutral greys with a near-black accent in light mode and a near-white one in
-// dark mode. An instance that sets no colours gets it; a customer theme replaces all seven.
+// The base theme: warm paper neutrals with one restrained orange accent, and a warm near-black
+// in dark mode. An instance that sets no colours gets it; a customer theme replaces all seven.
 const defaultLightUiTheme = {
-  accentColor: "#1a1a1a",
-  accentStrongColor: "#0a0a0a",
-  backgroundColor: "#f5f5f5",
-  surfaceColor: "#ffffff",
-  textColor: "#1a1a1a",
-  mutedTextColor: "#5e5e5e",
-  borderColor: "#e5e5e5"
+  accentColor: "#c2530f",
+  accentStrongColor: "#9a3e08",
+  backgroundColor: "#f6f3ec",
+  surfaceColor: "#fdfbf7",
+  textColor: "#201c17",
+  mutedTextColor: "#655e54",
+  borderColor: "#e7e1d5"
 };
 
 const defaultDarkUiTheme = {
-  accentColor: "#ededed",
-  accentStrongColor: "#ffffff",
-  backgroundColor: "#121212",
-  surfaceColor: "#1b1b1b",
-  textColor: "#ededed",
-  mutedTextColor: "#b0b0b0",
-  borderColor: "#303030"
+  accentColor: "#e8823c",
+  accentStrongColor: "#f2a469",
+  backgroundColor: "#131210",
+  surfaceColor: "#1c1a17",
+  textColor: "#efebe4",
+  mutedTextColor: "#b3ada3",
+  borderColor: "#33302b"
 };
 
 function createUiThemeSchema(defaultTheme: typeof defaultLightUiTheme) {

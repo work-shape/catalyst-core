@@ -21,6 +21,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-foreground: var(--primary-soft-foreground);
   --color-primary-border: var(--primary-border);
@@ -77,8 +78,9 @@
   /* The dimmed page behind a modal dialog. */
   --color-scrim: rgb(0 0 0 / 0.45);
 
-  /* Radius: 4 for checkbox and inline code, 8 for controls, rows and menu items, 12 for
-     cards, lists, menus and popovers, 16 for dialogs and the composer. */
+  /* Radius: 4 for checkbox and inline code, 8 for fields, rows and menu items, 12 for
+     cards, lists, menus and popovers, 16 for dialogs and the composer. Buttons and the
+     segmented control are pills (`rounded-full`). */
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -149,8 +151,15 @@
   }
 }
 
-/* The three shadows of what lifts. Nothing has a shadow at rest. Their values depend on the
-   mode, so they are theme tokens and these utilities only apply them. */
+/* The edge of a button at rest: a faint highlight inside its top edge and a faint drop
+   beneath, so it reads as a surface. */
+@utility shadow-control {
+  box-shadow: var(--shadow-control);
+}
+
+/* The three shadows of what lifts. Apart from a button's edge nothing has a shadow at rest.
+   Their values depend on the mode, so they are theme tokens and these utilities only apply
+   them. */
 @utility shadow-raised {
   box-shadow: var(--shadow-raised);
 }

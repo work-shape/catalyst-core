@@ -44,15 +44,15 @@ describe("UI theme defaults", () => {
     expect(schemaDefaults.accentColor).toBe(schemaInputs.light.accentColor);
   });
 
-  it("has no hue in any default input", () => {
+  it("keeps every default neutral warm and quiet, and the accent the only colour", () => {
     for (const mode of modes) {
       for (const [name, value] of Object.entries(schemaInputs[mode])) {
-        const color = requireHex(value);
-        expect([mode, name, color.r === color.g && color.g === color.b]).toEqual([
-          mode,
-          name,
-          true
-        ]);
+        const { r, g, b } = requireHex(value);
+        const warm = r >= g && g >= b;
+        const accent = name === "accentColor" || name === "accentStrongColor";
+        // A neutral leans to red by a few levels only; an accent is plainly orange.
+        const quiet = accent ? r - b >= 100 : r - b >= 3 && r - b <= 20;
+        expect([mode, name, warm, quiet]).toEqual([mode, name, true, true]);
       }
     }
   });
@@ -160,15 +160,18 @@ describe("UI theme contrast", () => {
   });
 
   it("measures the values the design names", () => {
-    expect(table.light?.["text on page"]).toBeCloseTo(17.4, 1);
-    expect(table.light?.["text on sidebar"]).toBeCloseTo(15.96, 1);
-    expect(table.light?.["muted text on page"]).toBeCloseTo(6.48, 1);
-    expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.61, 1);
-    expect(table.dark?.["text on page"]).toBeCloseTo(14.71, 1);
-    expect(table.dark?.["text on raised"]).toBeCloseTo(12.66, 1);
-    expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.83, 1);
+    expect(table.light?.["text on page"]).toBeCloseTo(16.39, 1);
+    expect(table.light?.["text on sidebar"]).toBeCloseTo(15.28, 1);
+    expect(table.light?.["muted text on page"]).toBeCloseTo(6.19, 1);
+    expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.53, 1);
+    expect(table.light?.["primary button label"]).toBeCloseTo(4.63, 1);
+    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(4.76, 1);
+    expect(table.dark?.["text on page"]).toBeCloseTo(14.61, 1);
+    expect(table.dark?.["text on raised"]).toBeCloseTo(12.61, 1);
+    expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.72, 1);
     expect(table.dark?.["danger button label"]).toBeCloseTo(6.83, 1);
-    expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.61, 1);
+    expect(table.dark?.["primary button label"]).toBeCloseTo(6.91, 1);
+    expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.53, 1);
   });
 });
 
@@ -221,13 +224,21 @@ function measureContrast(tokens: ThemeTokens): Record<string, number> {
       read("--state-hover"),
       surface
     );
-    // A solid button's hover is the fill at 90% over what lies beneath.
     measure(
       `primary button label on hover on ${surfaceName}`,
       read("--primary-foreground"),
-      { ...read("--primary"), a: 0.9 },
+      read("--primary-hover"),
       surface
     );
+    // The chosen item of a segmented control: strong accent text on the accent tint, in a tray
+    // with the secondary fill.
+    measure(
+      `chosen segment on ${surfaceName}`,
+      read("--primary-soft-foreground"),
+      read("--primary-soft"),
+      flatten(read("--secondary"), surface)
+    );
+    // A danger button's hover is the fill at 90% over what lies beneath.
     measure(
       `danger button label on hover on ${surfaceName}`,
       read("--destructive-foreground"),
