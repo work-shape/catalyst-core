@@ -62,9 +62,13 @@ interface WorkspaceRouteContextValue {
 }
 
 interface WorkspaceChromeContextValue {
-  sidebarOpen: boolean;
-  closeSidebar(): void;
-  toggleSidebar(): void;
+  /** The rail shows icons only. It is not kept across reloads. */
+  sidebarCollapsed: boolean;
+  toggleSidebarCollapsed(): void;
+  /** Under 768 px the rail is a drawer; this is whether it is open. */
+  sidebarDrawerOpen: boolean;
+  openSidebarDrawer(): void;
+  closeSidebarDrawer(): void;
   composerFocusRequestId: number;
   requestComposerFocus(): void;
 }
@@ -121,7 +125,8 @@ export function WorkspaceUiStateProvider({
   const [locallyUnreadConversationIds, setLocallyUnreadConversationIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarDrawerOpen, setSidebarDrawerOpen] = useState(false);
   const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
   const [browserLocale] = useState<LocaleCode | undefined>(() => readBrowserLocale());
   const [localePreference, setLocalePreference] = useState<LocaleCode | undefined>(() =>
@@ -283,12 +288,16 @@ export function WorkspaceUiStateProvider({
     setLocallyUnreadConversationIds(new Set());
   }, []);
 
-  const closeSidebar = useCallback(() => {
-    setSidebarOpen(false);
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((collapsed) => !collapsed);
   }, []);
 
-  const toggleSidebar = useCallback(() => {
-    setSidebarOpen((currentOpen) => !currentOpen);
+  const openSidebarDrawer = useCallback(() => {
+    setSidebarDrawerOpen(true);
+  }, []);
+
+  const closeSidebarDrawer = useCallback(() => {
+    setSidebarDrawerOpen(false);
   }, []);
 
   const requestComposerFocus = useCallback(() => {
@@ -344,13 +353,23 @@ export function WorkspaceUiStateProvider({
 
   const chromeValue = useMemo<WorkspaceChromeContextValue>(
     () => ({
-      sidebarOpen,
-      closeSidebar,
-      toggleSidebar,
+      sidebarCollapsed,
+      toggleSidebarCollapsed,
+      sidebarDrawerOpen,
+      openSidebarDrawer,
+      closeSidebarDrawer,
       composerFocusRequestId,
       requestComposerFocus
     }),
-    [closeSidebar, composerFocusRequestId, requestComposerFocus, sidebarOpen, toggleSidebar]
+    [
+      closeSidebarDrawer,
+      composerFocusRequestId,
+      openSidebarDrawer,
+      requestComposerFocus,
+      sidebarCollapsed,
+      sidebarDrawerOpen,
+      toggleSidebarCollapsed
+    ]
   );
 
   const preferencesValue = useMemo<WorkspacePreferencesContextValue>(

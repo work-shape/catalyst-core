@@ -150,6 +150,20 @@ contain breaking changes; a patch version does not.
   `retention.extendOnActivity`, optional for clients of an older API.
 - **UI library:** `Banner` has the layout `line`, one quiet sentence without a box whose icon
   alone carries the tone.
+- **Interface, navigation:** the rail is 280 px wide and collapses to a strip of icons with one
+  visible control; under 768 px it is a drawer the header opens. Its filter field is gone:
+  Search in the rail, or ⌘K (Ctrl+K), opens a command palette that offers New chat and the
+  conversations of the active workspace and searches their titles on the server. New chat also
+  has ⌘⇧O (Ctrl+Shift+O). The theme switch and sign out moved into the account menu in the
+  rail's footer, next to the user's settings. The retention clock and the row menu of a
+  conversation show while the pointer or the keyboard is on the row. The list shows placeholder
+  rows while it loads and a retry when the load failed. A skip link leads past the rail.
+- **Interface, surface:** closing a surface returns the focus to what opened it, a surface that
+  covers the conversation takes it out of the tab order, and Escape closes a menu or the
+  palette before the surface.
+- **UI library:** `Sidebar` is one `nav` landmark where it was an `aside` around a `nav`.
+  `NavItem` gains `trailing` and `shortcut`, `IconButton` gains `shortcut`. New:
+  `CommandPalette`, `SkipLink` and the token `--layout-sidebar-collapsed`.
 - **Interface, default theme:** an instance that sets no `ui.theme` or `ui.darkTheme` now shows
   warm paper neutrals with one terracotta accent (light `#fdfbf7` page, `#f6f3ec` sidebar,
   `#b5573a` accent; dark `#1c1a17` page, `#131210` sidebar, `#d98c6c` accent). An instance

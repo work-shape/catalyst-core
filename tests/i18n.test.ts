@@ -16,7 +16,7 @@ describe("interface translations", () => {
   });
 
   it("finds keys of every area through the one lookup", () => {
-    expect(de.t("closeSidebar")).toBe("Seitenleiste schließen");
+    expect(de.t("nav.collapse")).toBe("Seitenleiste einklappen");
     expect(de.t("attachmentRemove")).toBe("Anhang entfernen");
     expect(de.t("settings.apiAccess")).toBe("API-Zugang");
     expect(en.t("genericWelcome")).toBe("How can I help?");

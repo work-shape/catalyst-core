@@ -3,7 +3,12 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 import type { ConversationListItem, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
-import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
+import {
+  railSections,
+  shownRailSections,
+  WorkspaceRail,
+  type RailSection
+} from "../packages/chat-ui/src/workspace/workspace-rail";
 import {
   retentionHintAfter,
   retentionHintClosed,
@@ -20,6 +25,22 @@ import {
 } from "../packages/chat-ui/src/workspace/workspace-chat-model";
 
 const noop = () => undefined;
+
+function conversation(id: string, title: string): ConversationListItem {
+  return {
+    id,
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw_shared",
+    createdByUserId: "user_1",
+    createdByExternalUserId: "external_1",
+    visibility: "workspace",
+    title,
+    status: "active",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+    retainedUntil: "2027-08-01T10:00:00.000Z"
+  };
+}
 
 describe.each<{ locale: LocaleCode; loadingReason: string; failedReason: string }>([
   {
@@ -181,119 +202,48 @@ describe("abandoned draft conversation", () => {
   });
 });
 
-describe("workspace rail branding", () => {
-  it("uses in-app navigation for the client logo", () => {
-    const config = {
-      ui: {
-        clientName: "Musterfinanz",
-        logoUrl: "/assets/musterfinanz.svg"
-      }
-    } as SafeConfig;
-
-    const markup = renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "de" },
-        createElement(WorkspaceRail, {
-          config,
-          collaborationWorkspaceSelector: null,
-          conversations: [],
-          selectedConversationId: undefined,
-          canViewAdministration: false,
-          view: "chat",
-          creatingConversation: false,
-          deletingConversation: false,
-          userMenu: null,
-          onToggleSidebar: noop,
-          onViewChange: noop,
-          onCreateConversation: noop,
-          onSelectConversation: noop,
-          onRenameConversation: async () => undefined,
-          canMoveConversation: false,
-          onMoveConversation: noop,
-          onDeleteConversation: noop
-        })
-      )
-    );
-
-    expect(markup).toContain('<button type="button"');
-    expect(markup).not.toContain('href="/"');
-    expect(markup).toContain('aria-label="Musterfinanz"');
-    expect(markup).toContain('src="/assets/musterfinanz.svg"');
-  });
-
-  it("uses the customer initial when no logo is configured", () => {
-    const config = {
-      ui: {
-        clientName: "Musterfinanz",
-        title: "Musterfinanz Chat"
-      }
-    } as SafeConfig;
-
-    const markup = renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "de" },
-        createElement(WorkspaceRail, {
-          config,
-          collaborationWorkspaceSelector: null,
-          conversations: [],
-          selectedConversationId: undefined,
-          canViewAdministration: false,
-          view: "chat",
-          creatingConversation: false,
-          deletingConversation: false,
-          userMenu: null,
-          onToggleSidebar: noop,
-          onViewChange: noop,
-          onCreateConversation: noop,
-          onSelectConversation: noop,
-          onRenameConversation: async () => undefined,
-          canMoveConversation: false,
-          onMoveConversation: noop,
-          onDeleteConversation: noop
-        })
-      )
-    );
-
-    expect(markup).toContain(">F</span>");
-    expect(markup).not.toContain("Vivd Catalyst");
-    expect(markup).not.toContain("lucide-shield");
-  });
-});
-
 const railConfig = {
   ui: { clientName: "Musterfinanz", title: "Musterfinanz Chat" }
 } as SafeConfig;
 
+type RailProps = Parameters<typeof WorkspaceRail>[0];
+
 function renderRail(
   collaborationWorkspaceSelector?: ReactNode,
   approvals?: { pendingCount: number },
-  conversations: ConversationListItem[] = []
+  conversations: ConversationListItem[] = [],
+  overrides: Partial<RailProps> = {},
+  locale: LocaleCode = "en"
 ): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { children: null, locale: "en" },
+      { children: null, locale },
       createElement(WorkspaceRail, {
         config: railConfig,
         collaborationWorkspaceSelector,
         conversations,
+        conversationsStatus: "ready",
         selectedConversationId: undefined,
         canViewAdministration: false,
         approvals,
         view: "chat",
-        creatingConversation: false,
         deletingConversation: false,
         canMoveConversation: false,
-        userMenu: null,
-        onToggleSidebar: noop,
+        accountMenu: null,
+        collapsed: false,
+        drawerOpen: false,
+        onDrawerClose: noop,
+        onToggleCollapsed: noop,
+        onOpenSearch: noop,
         onViewChange: noop,
         onCreateConversation: noop,
         onSelectConversation: noop,
+        onReloadConversations: noop,
         onRenameConversation: async () => undefined,
         onMoveConversation: noop,
-        onDeleteConversation: noop
+        onDeleteConversation: noop,
+        ...overrides
       })
     )
   );
@@ -311,53 +261,132 @@ const selector = createElement(CollaborationWorkspaceSelector, {
   onCreateCollaborationWorkspace: noop
 });
 
-describe("workspace rail collapse handle", () => {
-  it("stays hidden until the rail's right border is hovered or the handle is focused", () => {
-    const markup = renderRail();
-    const zone = markup.match(/<div class="([^"]*group\/rail-edge[^"]*)">(<button[^>]*>)/u);
+describe("workspace rail branding", () => {
+  it("shows the client logo where an embedded session has no workspace to select", () => {
+    const markup = renderRail(undefined, undefined, [], {
+      config: {
+        ui: { clientName: "Musterfinanz", logoUrl: "/assets/musterfinanz.svg" }
+      } as SafeConfig
+    });
 
-    // A narrow zone over the full height of the border, from the md breakpoint up.
-    expect(zone?.[1]).toContain("absolute inset-y-0 -right-1.5");
-    expect(zone?.[1]).toContain("hidden w-3 md:block");
-    const handle = zone?.[2] ?? "";
-    expect(handle).toContain('aria-label="Collapse sidebar"');
-    expect(handle).toContain('title="Collapse sidebar"');
-    expect(handle).toContain("pointer-events-none");
-    expect(handle).toContain(" opacity-0 ");
-    expect(handle).toContain("group-hover/rail-edge:opacity-100");
-    expect(handle).toContain("group-hover/rail-edge:pointer-events-auto");
-    expect(handle).toContain("focus-visible:opacity-100");
-    // The list's scrollbar ends left of the zone, which reaches 6px into the rail.
-    expect(markup).toContain("-mr-3 ");
-    expect(markup).not.toContain("-mr-4 ");
+    expect(markup).toContain('src="/assets/musterfinanz.svg"');
+    expect(markup).toContain('alt="Musterfinanz"');
+    expect(markup).not.toContain('href="/"');
+  });
+
+  it("uses the client's name and initial when no logo is configured", () => {
+    const markup = renderRail();
+
+    expect(markup).toContain(">FI</span>");
+    expect(markup).toContain(">Musterfinanz</span>");
+    expect(markup).not.toContain("Vivd Catalyst");
+  });
+});
+
+describe("workspace rail frame", () => {
+  it("is one navigation landmark with search, collapse and New chat at its head", () => {
+    const markup = renderRail();
+
+    expect(markup).toMatch(/^<nav[^>]*aria-label="Main navigation"/u);
+    expect(markup.match(/<nav/gu)).toHaveLength(1);
+    expect(markup).toContain('aria-label="Search"');
+    expect(markup).toMatch(/<button[^>]*aria-label="Collapse sidebar"[^>]*aria-expanded="true"/u);
+    expect(markup).toContain("New chat");
+    expect(markup).toContain("Recent");
+  });
+
+  it("is named in German as well", () => {
+    const markup = renderRail(undefined, undefined, [], {}, "de");
+
+    expect(markup).toContain('aria-label="Hauptnavigation"');
+    expect(markup).toContain('aria-label="Suchen"');
+    expect(markup).toContain('aria-label="Seitenleiste einklappen"');
+    expect(markup).toContain("Neuer Chat");
+    expect(markup).toContain("Zuletzt");
+  });
+
+  it("keeps only the icons when it is collapsed", () => {
+    const markup = renderRail(selector, undefined, [conversation("conv_1", "Angebot Q3")], {
+      collapsed: true
+    });
+
+    expect(markup).toMatch(/<button[^>]*aria-label="Expand sidebar"[^>]*aria-expanded="false"/u);
+    expect(markup).toContain('aria-label="Search"');
+    expect(markup).toContain('<span class="sr-only">New chat</span>');
+    // The selector, the "Recent" label and the list leave with the width.
+    expect(markup).not.toContain('aria-label="Switch workspace"');
+    expect(markup).not.toContain("Recent");
+    expect(markup).not.toContain("Angebot Q3");
+  });
+});
+
+describe("workspace rail section rows", () => {
+  const [chat] = railSections;
+  if (!chat) {
+    throw new Error("The rail has no Chat section.");
+  }
+  const second: RailSection = { ...chat, id: "second", label: "nav.settings", view: "approvals" };
+
+  it("shows no Chat row while Chat is the only section", () => {
+    expect(railSections.map((section) => section.id)).toEqual(["chat"]);
+    expect(shownRailSections(railSections)).toEqual([]);
+
+    const markup = renderRail();
+    expect(markup).not.toContain(">Chat<");
+    expect(markup).not.toContain("lucide-message-square");
+  });
+
+  it("shows the Chat row once a second section is registered", () => {
+    const markup = renderRail(undefined, undefined, [], { sections: [...railSections, second] });
+
+    expect(markup.match(/lucide-message-square/gu)).toHaveLength(2);
+    // The row of the open view is the current one; the other is not.
+    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Chat/u);
+    expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
+    expect(markup).toContain("Settings");
+  });
+});
+
+describe("workspace rail conversation list states", () => {
+  it("shows placeholder rows while the first page loads", () => {
+    const markup = renderRail(undefined, undefined, [], { conversationsStatus: "loading" });
+
+    expect(markup).toContain('data-testid="conversations-loading"');
+    expect(markup).not.toContain("No conversations yet");
+  });
+
+  it("says that the list failed and offers to load it again", () => {
+    const markup = renderRail(undefined, undefined, [], { conversationsStatus: "failed" });
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("Conversations could not be loaded.");
+    expect(markup).toContain("Try again");
+  });
+
+  it("keeps the loaded conversations in view while a reload is under way", () => {
+    const markup = renderRail(undefined, undefined, [conversation("conv_1", "Angebot Q3")], {
+      conversationsStatus: "loading"
+    });
+
+    expect(markup).toContain("Angebot Q3");
+    expect(markup).not.toContain('data-testid="conversations-loading"');
   });
 });
 
 describe("workspace rail collaboration workspace slot", () => {
-  it("keeps the branding head when no selector is supplied", () => {
+  it("keeps the client's branding when no selector is supplied", () => {
     const markup = renderRail();
 
-    expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
     expect(markup).not.toContain('aria-label="Switch workspace"');
-    // The branding row and its own collapse toggle stay exactly as they were.
     expect(markup).toContain("Musterfinanz");
-    expect(markup).toContain(">F</span>");
-    expect(markup).toContain("absolute right-4 top-4");
-    expect(markup).toContain('aria-label="Close sidebar"');
   });
 
-  it("lets the selector replace the branding row for a first-party session", () => {
+  it("lets the selector take the head of the rail for a first-party session", () => {
     const markup = renderRail(selector);
 
-    expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
     expect(markup).toContain('aria-label="Switch workspace"');
-    // Direction A: no standalone branding row — the client identity moved into
-    // the selector popover, which is closed here.
+    // The client identity moved into the selector's popover, which is closed here.
     expect(markup).not.toContain("Musterfinanz");
-    expect(markup).not.toContain(">F</span>");
-    // The collapse toggle rides along in the selector row instead.
-    expect(markup).toContain('aria-label="Close sidebar"');
-    expect(markup).not.toContain("absolute right-4 top-4");
     expect(markup).toContain('aria-label="Collapse sidebar"');
   });
 });
@@ -384,7 +413,7 @@ describe("workspace rail by session kind", () => {
 
     expect(markup).not.toContain('aria-label="Switch workspace"');
     expect(markup).toContain("Musterfinanz");
-    expect(markup).toContain('aria-label="Conversations"');
+    expect(markup).toContain('aria-label="Main navigation"');
   });
 });
 
@@ -561,17 +590,22 @@ describe("workspace rail conversation rows", () => {
             retention: { expireConversations, conversationDays }
           } as SafeConfig,
           conversations,
+          conversationsStatus: "ready",
           selectedConversationId: undefined,
           canViewAdministration: false,
           view: "chat",
-          creatingConversation: false,
           deletingConversation: false,
           canMoveConversation: false,
-          userMenu: null,
-          onToggleSidebar: noop,
+          accountMenu: null,
+          collapsed: false,
+          drawerOpen: false,
+          onDrawerClose: noop,
+          onToggleCollapsed: noop,
+          onOpenSearch: noop,
           onViewChange: noop,
           onCreateConversation: noop,
           onSelectConversation: noop,
+          onReloadConversations: noop,
           onRenameConversation: async () => undefined,
           onMoveConversation: noop,
           onDeleteConversation: noop

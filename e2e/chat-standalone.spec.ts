@@ -34,15 +34,15 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByRole("button", { name: "Select agent" })).toHaveAccessibleName(
     "Select agent: Application Assistant"
   );
-  await expect(page.getByRole("button", { name: "Close sidebar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
   await expect(settingsGear(page)).toHaveCount(0);
 
   await page.getByRole("button", { name: "E2E User account" }).click();
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("menuitem", { name: "Profile" }).click();
   await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
   await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
   await settingsPages(page).getByRole("button", { name: "Language and appearance" }).click();
@@ -56,28 +56,18 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   await createListedConversation(page, conversationTitle);
   await page.goto("/");
 
-  const conversationRail = page.getByRole("complementary", { name: "Conversations" });
-  await page.getByRole("button", { name: "Close sidebar" }).click();
-  await expect(conversationRail).toBeHidden();
-  await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
-  await page.getByRole("button", { name: "Open sidebar" }).click();
-  await expect(conversationRail).toBeVisible();
-  await expect(page.getByRole("searchbox", { name: "Search conversations" })).toBeVisible();
-  // The collapse handle shows, and takes the pointer, only while the pointer is on the rail's
-  // right border.
-  const collapseHandle = page.getByRole("button", { name: "Collapse sidebar" });
-  const collapseHandleBox = await collapseHandle.boundingBox();
-  if (!collapseHandleBox) throw new Error("collapse handle is not laid out");
-  await page.mouse.move(
-    collapseHandleBox.x + collapseHandleBox.width / 2,
-    collapseHandleBox.y + collapseHandleBox.height / 2
-  );
-  await expect(collapseHandle).toHaveCSS("opacity", "1");
-  await collapseHandle.click();
-  await expect(conversationRail).toBeHidden();
-  await expect(page.getByRole("button", { name: "Open sidebar" })).toBeVisible();
-  await page.getByRole("button", { name: "Open sidebar" }).click();
-  await expect(conversationRail).toBeVisible();
+  // One visible control collapses the rail to its icons and expands it again.
+  const conversationRail = page.getByRole("navigation", { name: "Main navigation" });
+  const railWidth = async () => Math.round((await conversationRail.boundingBox())?.width ?? 0);
+  expect(await railWidth()).toBe(280);
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  expect(await railWidth()).toBe(48);
+  await expect(page.getByTestId("conversation-row")).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  expect(await railWidth()).toBe(280);
+  await expect(
+    page.getByTestId("conversation-row").filter({ hasText: conversationTitle })
+  ).toBeVisible();
 
   // The floating chrome carries the agent's icon once a conversation is open; the start page
   // names the agent above its heading instead.
@@ -113,7 +103,6 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
 
   // The icon is the same at every width.
   const wideChipBox = await agentSelector.boundingBox();
-  await page.getByRole("button", { name: "Close sidebar" }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(agentSelector).toBeVisible();
   await expect(agentSelector.locator("svg").first()).toBeVisible();
@@ -127,7 +116,9 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
   const backgroundBefore = await appShell.evaluate((element) =>
     getComputedStyle(element).getPropertyValue("--background")
   );
-  await page.getByRole("button", { name: /Switch to (dark|light) theme/ }).click();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.getByRole("button", { name: "E2E User account" }).click();
+  await page.getByRole("menuitem", { name: /Switch to (dark|light) theme/ }).click();
   await expect
     .poll(() =>
       appShell.evaluate((element) => getComputedStyle(element).getPropertyValue("--background"))
@@ -153,7 +144,10 @@ test("conversation rail keeps dense histories readable and scrollable", async ({
     .poll(() => targetConversation.evaluate((element) => element.getBoundingClientRect().height))
     .toBeGreaterThanOrEqual(32);
 
-  const conversationNavigation = page.getByRole("navigation");
+  // The list scrolls inside the rail; the head and the footer stay in place.
+  const conversationNavigation = page
+    .getByRole("navigation", { name: "Main navigation" })
+    .locator("[data-sidebar-body]");
   await expect(conversationNavigation).toBeVisible();
   const overflow = await conversationNavigation.evaluate((element) => ({
     clientHeight: element.clientHeight,
@@ -336,7 +330,7 @@ test("the first message puts the agent's icon in the header at once, without its
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveText("");
   expect(await headerChip.boundingBox()).toEqual(headerChipBox);
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(startChip).toHaveText("Application Assistant");
   await expect(headerChip).toHaveCount(0);
   expect(await startChip.boundingBox()).toEqual(startChipBox);
@@ -649,7 +643,6 @@ for (const showAgentName of [false, true]) {
       .getByRole("button")
       .first()
       .click();
-    await page.getByRole("button", { name: "Close sidebar" }).click();
     await page.setViewportSize({ width: 320, height: 640 });
 
     // The header's list hangs from the chip's left edge and ends inside the window.
@@ -1084,7 +1077,7 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   });
 
   await page.goto("/");
-  const newConversationButton = page.getByRole("button", { name: "New", exact: true });
+  const newConversationButton = page.getByRole("button", { name: "New chat", exact: true });
   await expect(newConversationButton).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toHaveAccessibleName(
     "Select agent: Application Assistant"
@@ -1124,7 +1117,7 @@ test("new conversation action returns from a persisted conversation to a clean d
   await expect(createdConversation).toHaveCount(1);
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
 
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(input).toHaveValue("");
@@ -1149,7 +1142,7 @@ test("standalone conversation routes are addressable and follow rail navigation"
   await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
 
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await input.fill("Route-scoped new draft");
 
@@ -1514,7 +1507,7 @@ test("first message from the root route moves to the persisted conversation rout
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(page.getByPlaceholder("Message")).toHaveValue("");
   await expect(createdConversation).toHaveCount(1);
@@ -1525,7 +1518,7 @@ test("the generated title reaches the rail when the title job ends after the run
 }) => {
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
-  const rail = page.getByRole("complementary", { name: "Conversations" });
+  const rail = page.getByRole("navigation", { name: "Main navigation" });
   const tag = `zt${Date.now().toString(36)}`;
   const message = `${tag} bravo charlie delta echo foxtrot`;
 
@@ -1680,7 +1673,7 @@ test("composer drafts are scoped to the new screen and selected conversations", 
   await expect(input).toHaveValue("");
   await input.fill("Selected conversation draft");
 
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(input).toHaveValue("New screen draft");
 
   await targetConversation.getByRole("button").first().click();
@@ -2072,9 +2065,14 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   const rowButton = row.getByRole("button").first();
   const clock = row.getByTestId("conversation-expiry-warning");
   const hint = page.getByTestId("conversation-expiry-hint");
-  await expect(clock).toBeVisible();
-  // The row's name stays short for a list read aloud; the sentence is its description.
-  await expect(rowButton).toHaveAccessibleName(`${title} will be deleted soon`);
+  // The clock waits in the row's trailing slot and shows with the pointer or the keyboard.
+  const trailingSlot = clock.locator("..");
+  await expect(trailingSlot).toHaveCSS("opacity", "0");
+  await row.hover();
+  await expect(trailingSlot).toHaveCSS("opacity", "1");
+  await expect(clock).toHaveAccessibleName("will be deleted soon");
+  // The row's name is its title; the sentence is its description.
+  await expect(rowButton).toHaveAccessibleName(title);
   await expect(rowButton).toHaveAccessibleDescription(sentence);
   await expect(hint).toHaveCount(0);
 
@@ -2089,11 +2087,11 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   await page.getByPlaceholder("Message").hover();
   await expect(hint).toHaveCount(0);
 
-  const search = page.getByRole("searchbox", { name: "Search conversations" });
-  await search.fill(title);
-  await expect(page.getByTestId("conversation-row")).toHaveCount(1);
+  // A key press first, so the browser shows the focus as the keyboard's.
   await page.keyboard.press("Tab");
+  await rowButton.focus();
   await expect(rowButton).toBeFocused();
+  await expect(trailingSlot).toHaveCSS("opacity", "1");
   await expect(hint).toBeVisible();
   await expect(hint).toContainText(sentence);
   // The pointer passing over the clock does not take the hint from the keyboard.
@@ -2411,7 +2409,7 @@ test("standalone auth gates superadmin views", async ({ page }) => {
   await expect(settingsGear(page)).toBeVisible();
 
   await page.getByRole("button", { name: "E2E Superadmin account" }).click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
   await signInViaUi(page, normalUser, { alreadyOnLogin: true });
   // A user who owns a shared workspace has the gear too; the Instance pages stay closed.
@@ -2819,7 +2817,7 @@ test("normal users are redirected away from superadmin routes", async ({ page })
 
   await page.goto("/admin/usage");
 
-  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
   await expect(page).toHaveURL(awayFromInstancePagesPattern);
   await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toHaveCount(0);
   await expect(settingsPages(page).getByRole("group", { name: "Instance" })).toHaveCount(0);
@@ -2835,7 +2833,7 @@ test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   );
 
   await page.goto("/");
-  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
   await expectDocumentScrollLocked(page);
 
   await settingsGear(page).click();
@@ -2937,7 +2935,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   });
 
   await page.goto("/");
-  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
   await page
     .getByPlaceholder("Message")
     .fill(
@@ -3028,24 +3026,24 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
   await expect.poll(() => width(slot)).toBe(560);
   await expect(slot).toHaveCSS("transition-duration", "0s");
   await expect(showChat).toHaveCount(0);
-  // The main area is the window without the 320 px rail: 960 px, so the surface may take 580.
+  // The main area is the window without the 280 px rail: 1000 px, so the surface may take 620.
   await expect(separator).toHaveAttribute("aria-valuemin", "380");
-  await expect(separator).toHaveAttribute("aria-valuemax", "580");
-  await expect(separator).toHaveAttribute("aria-valuenow", "400");
+  await expect(separator).toHaveAttribute("aria-valuemax", "620");
+  await expect(separator).toHaveAttribute("aria-valuenow", "440");
   expect((await separator.boundingBox())?.width).toBe(12);
 
   // The keyboard moves the line 16 px, and Home and End take it to the limits.
   await separator.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(separator).toHaveAttribute("aria-valuenow", "416");
+  await expect(separator).toHaveAttribute("aria-valuenow", "456");
   await expect.poll(() => width(slot)).toBe(544);
   await page.keyboard.press("ArrowLeft");
-  await expect(separator).toHaveAttribute("aria-valuenow", "400");
+  await expect(separator).toHaveAttribute("aria-valuenow", "440");
   await page.keyboard.press("Home");
   await expect(separator).toHaveAttribute("aria-valuenow", "380");
-  await expect.poll(() => width(slot)).toBe(580);
+  await expect.poll(() => width(slot)).toBe(620);
   await page.keyboard.press("End");
-  await expect(separator).toHaveAttribute("aria-valuenow", "580");
+  await expect(separator).toHaveAttribute("aria-valuenow", "620");
   await expect.poll(() => width(slot)).toBe(380);
 
   // The pointer drags the line; the width follows it and is kept for this kind alone.
@@ -3074,7 +3072,7 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
   await page.evaluate((key) => window.localStorage.setItem(key, "5000"), widthKey("tool_display"));
   await page.reload();
   await card.click();
-  await expect.poll(() => width(slot)).toBe(580);
+  await expect.poll(() => width(slot)).toBe(620);
   await expect.poll(() => width(chat)).toBe(380);
 
   // Fullscreen covers the window, hides the conversation and offers the way back to it.
@@ -3092,8 +3090,8 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
   // Below 760 px of main area the surface covers it and its header offers "Show chat" alone.
   await page.setViewportSize({ width: 1024, height: 720 });
   await expect(slot).toHaveAttribute("data-surface-mode", "covering");
-  await expect.poll(() => width(slot)).toBe(704);
-  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeInViewport();
+  await expect.poll(() => width(slot)).toBe(744);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeInViewport();
   await expect.poll(composerCovered).toBe(true);
   await expect(showChat).toBeVisible();
   await expect(fullscreen).toHaveCount(0);
@@ -3103,6 +3101,269 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
   await expect(slot).toBeHidden();
   await card.click();
   await expect(slot).toHaveAttribute("data-surface-mode", "covering");
+});
+
+test("the rail shows placeholder rows while its list loads and offers a retry when the load failed", async ({
+  page
+}) => {
+  test.setTimeout(60_000);
+  await signInViaApi(page, normalUser);
+  const title = `Rail states ${Date.now()}`;
+  await createListedConversation(page, title);
+  let listFails = true;
+  await page.route(
+    (url) => url.origin === new URL(apiBaseUrl).origin && url.pathname === "/api/v1/conversations",
+    async (route) => {
+      if (route.request().method() === "GET" && listFails) {
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    }
+  );
+
+  await page.goto("/");
+  const rail = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(rail.getByText("Recent", { exact: true })).toBeVisible();
+  await expect(rail.getByTestId("conversations-loading")).toBeVisible();
+  await expect(rail.getByText("No conversations yet")).toHaveCount(0);
+
+  // The query tries again on its own before it gives up.
+  await expect(rail.getByRole("alert")).toContainText("Conversations could not be loaded.", {
+    timeout: 30_000
+  });
+  await expect(rail.getByTestId("conversations-loading")).toHaveCount(0);
+  listFails = false;
+  await rail.getByRole("button", { name: "Try again" }).click();
+  await expect(rail.getByTestId("conversation-row").filter({ hasText: title })).toBeVisible();
+  await expect(rail.getByRole("alert")).toHaveCount(0);
+});
+
+test("under 768 px the rail is a drawer that the header opens and a choice closes", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 700, height: 800 });
+  await signInViaApi(page, normalUser);
+  const title = `Rail drawer ${Date.now()}`;
+  const { id } = await createListedConversation(page, title);
+  await page.goto("/");
+
+  const drawer = page.getByRole("dialog", { name: "Main navigation" });
+  const openDrawer = page.getByRole("button", { name: "Open sidebar" });
+  await expect(openDrawer).toBeVisible();
+  await expect(drawer).toBeHidden();
+  await openDrawer.click();
+  await expect(drawer).toBeVisible();
+  expect((await drawer.boundingBox())?.width).toBe(280);
+  // A drawer has no collapsed strip, so it offers no control for one.
+  await expect(drawer.getByRole("button", { name: "Collapse sidebar" })).toBeHidden();
+  await expect(drawer.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "E2E User account" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(openDrawer).toBeFocused();
+
+  await openDrawer.click();
+  await drawer
+    .getByTestId("conversation-row")
+    .filter({ hasText: title })
+    .getByRole("button")
+    .first()
+    .click();
+  await expect(drawer).toBeHidden();
+  await expect(page).toHaveURL(conversationUrlPattern(id));
+
+  // From 768 px the rail stands in the layout again.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(openDrawer).toBeHidden();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+});
+
+test("the command palette opens from the rail and the keyboard, searches titles on the server and opens a conversation", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+  const stamp = Date.now();
+  const alphaTitle = `Palette alpha ${stamp}`;
+  const betaTitle = `Palette beta ${stamp}`;
+  const { id: alphaId } = await createListedConversation(page, alphaTitle);
+  await createListedConversation(page, betaTitle);
+  let searches = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/v1/conversations" && url.searchParams.has("query")) {
+      searches += 1;
+    }
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("conversation-row").filter({ hasText: betaTitle })).toBeVisible();
+
+  const palette = page.getByRole("dialog", { name: "Search" });
+  const field = palette.getByRole("combobox", { name: "Search" });
+  const searchButton = page.getByRole("button", { name: "Search", exact: true });
+  const composer = page.getByPlaceholder("Message");
+
+  // From the rail: New chat with its keys, then the loaded conversations, without a request.
+  await searchButton.click();
+  await expect(palette).toBeVisible();
+  await expect(field).toBeFocused();
+  await expect(palette.getByRole("option").first()).toContainText("New chat");
+  await expect(palette.getByRole("option").first()).toContainText(/⌘⇧O|Ctrl\+Shift\+O/u);
+  await expect(palette.getByText("Recent", { exact: true })).toBeVisible();
+  await expect(palette.getByRole("option", { name: alphaTitle })).toBeVisible();
+  await expect(palette.getByRole("option", { name: betaTitle })).toBeVisible();
+  expect(searches).toBe(0);
+  // Escape closes it and the focus is back on what opened it.
+  await page.keyboard.press("Escape");
+  await expect(palette).toBeHidden();
+  await expect(searchButton).toBeFocused();
+
+  // From the keyboard, also out of a text field. What is typed is searched on the server.
+  await composer.click();
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette).toBeVisible();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("");
+  await page.keyboard.type(`ALPHA ${stamp}`);
+  await expect(palette.getByRole("option")).toHaveCount(1);
+  await expect(palette.getByRole("option", { name: alphaTitle })).toBeVisible();
+  await expect(palette.getByText("Conversations", { exact: true })).toBeVisible();
+  await expect(palette.getByText("New chat")).toHaveCount(0);
+  expect(searches).toBeGreaterThan(0);
+
+  await field.fill(`nothing ${stamp}`);
+  await expect(palette.getByRole("status")).toHaveText(`No results for "nothing ${stamp}".`);
+  await expect(palette.getByRole("option")).toHaveCount(0);
+
+  // Enter opens the conversation and puts the focus in the composer.
+  await field.fill(`alpha ${stamp}`);
+  await expect(palette.getByRole("option", { name: alphaTitle })).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(palette).toBeHidden();
+  await expect(page).toHaveURL(conversationUrlPattern(alphaId));
+  await expect(composer).toBeFocused();
+
+  // The same keys close it again, and New chat has keys of its own.
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette).toBeHidden();
+  await page.keyboard.press("ControlOrMeta+Shift+O");
+  await expect(page).not.toHaveURL(conversationUrlPattern(alphaId));
+  await expect(composer).toBeFocused();
+});
+
+test("the account menu names the account and holds the settings, the theme and sign out", async ({
+  page
+}) => {
+  await signInViaUi(page, normalUser);
+  const trigger = page.getByRole("button", { name: "E2E User account" });
+  const menu = page.getByRole("menu");
+  const shell = page.locator("main").first();
+  const isDark = () => shell.evaluate((element) => element.classList.contains("dark"));
+
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await expect(menu).toContainText("E2E User");
+  await expect(menu).toContainText(normalUser.email);
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Settings",
+    /^Switch to (dark|light) theme$/u,
+    "Sign out"
+  ]);
+  // It opens upward from the footer of the rail.
+  const menuBox = await menu.boundingBox();
+  const triggerBox = await trigger.boundingBox();
+  expect((menuBox?.y ?? 0) + (menuBox?.height ?? 0)).toBeLessThanOrEqual(triggerBox?.y ?? 0);
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  const wasDark = await isDark();
+  await trigger.click();
+  await menu
+    .getByRole("menuitem", { name: wasDark ? "Switch to light theme" : "Switch to dark theme" })
+    .click();
+  await expect.poll(isDark).toBe(!wasDark);
+  await expect(menu).toBeHidden();
+
+  // The collapsed rail keeps the avatar alone, and the menu opens beside it.
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(trigger).toHaveText(/^.{0,2}$/u);
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  const sideMenuBox = await menu.boundingBox();
+  const collapsedTriggerBox = await trigger.boundingBox();
+  expect(sideMenuBox?.x ?? 0).toBeGreaterThanOrEqual(
+    (collapsedTriggerBox?.x ?? 0) + (collapsedTriggerBox?.width ?? 0)
+  );
+  await menu.getByRole("menuitem", { name: "Settings" }).click();
+  await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
+  await expect(menu).toBeHidden();
+
+  await trigger.click();
+  await menu.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
+});
+
+test("a surface yields Escape to the layer above it, returns the focus to its opener and takes a covered chat out of reach", async ({
+  page
+}) => {
+  const slot = page.locator("aside[data-surface-kind]");
+  const card = page.locator('div[role="button"][aria-label="Open in side panel"]');
+  const palette = page.getByRole("dialog", { name: "Search" });
+  const composer = page.getByPlaceholder("Message");
+  const chatOutOfReach = () => composer.evaluate((element) => element.closest("[inert]") !== null);
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaUi(page, normalUser);
+  await composer.fill(
+    `/tool show_view ${JSON.stringify({ html: "<p>Surface body</p>", mode: "side_panel", title: "Surface view" })}`
+  );
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  expect(await chatOutOfReach()).toBe(false);
+
+  // The header of the surface and the header of the chat are one line.
+  const surfaceHeading = await slot.getByRole("heading", { name: "Surface view" }).boundingBox();
+  const chatHeader = await page.locator("header").first().boundingBox();
+  const middle = (box: { y: number; height: number } | null) =>
+    box ? box.y + box.height / 2 : Number.NaN;
+  expect(Math.abs(middle(surfaceHeading) - middle(chatHeader))).toBeLessThanOrEqual(1);
+
+  // Escape closes the palette first and the menu first; the surface stays.
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(palette).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(palette).toBeHidden();
+  await expect(slot).toBeVisible();
+  await page.getByRole("button", { name: "E2E User account" }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toBeHidden();
+  await expect(slot).toBeVisible();
+  // With nothing above it, Escape closes the surface.
+  await page.keyboard.press("Escape");
+  await expect(slot).toBeHidden();
+
+  // Opened from its card, it gives the focus back to the card when it closes.
+  await card.click();
+  await expect(slot).toBeVisible();
+  await page.getByRole("button", { name: "Close display panel" }).click();
+  await expect(slot).toBeHidden();
+  await expect(card).toBeFocused();
+
+  // Covering the main area, it takes the conversation and its header out of the tab order.
+  await card.click();
+  await page.setViewportSize({ width: 1024, height: 720 });
+  await expect(slot).toHaveAttribute("data-surface-mode", "covering");
+  await expect.poll(chatOutOfReach).toBe(true);
+  await expect(page.locator("header[inert]")).toHaveCount(1);
+  await page.getByRole("button", { name: "Show chat" }).click();
+  await expect(slot).toBeHidden();
+  await expect.poll(chatOutOfReach).toBe(false);
+  await expect(card).toBeFocused();
 });
 
 test("superadmin resets a user's password from the users panel", async ({ page }) => {
@@ -3127,7 +3388,7 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await expect(page.getByText("Password updated", { exact: false })).toBeVisible();
 
   await page.getByRole("button", { name: "E2E Superadmin account" }).click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
 
   await signInViaUi(
@@ -3196,7 +3457,7 @@ test("superadmin creates a user with a password from the users panel", async ({ 
   await expect(page.getByText("better-auth")).toBeVisible();
 
   await page.getByRole("button", { name: "E2E Superadmin account" }).click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
 
   await signInViaUi(
@@ -3396,8 +3657,8 @@ async function signInViaUi(
    */
   await expect(
     page
-      .getByRole("complementary", { name: "Conversations" })
-      .getByRole("searchbox", { name: "Search conversations" })
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("button", { name: "Search", exact: true })
   ).toBeVisible();
 }
 
@@ -3593,7 +3854,8 @@ async function ensureDarkMode(page: Page): Promise<void> {
     .first()
     .evaluate((element) => element.classList.contains("dark"));
   if (!isDark) {
-    await page.getByRole("button", { name: "Switch to dark theme" }).click();
+    await page.getByRole("button", { name: / account$/u }).click();
+    await page.getByRole("menuitem", { name: "Switch to dark theme" }).click();
   }
   await expect
     .poll(() =>

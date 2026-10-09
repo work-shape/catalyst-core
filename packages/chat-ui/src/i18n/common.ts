@@ -18,7 +18,6 @@ export const common = defineTranslations({
     language: "Language",
     localeDe: "Deutsch",
     localeEn: "English",
-    newConversation: "New",
     newPassword: "New password",
     newPasswordTooShort: "New password must be at least 8 characters",
     password: "Password",
@@ -27,8 +26,7 @@ export const common = defineTranslations({
     settings: "Settings",
     tryAgain: "Try again",
     update: "Update",
-    viewFullscreen: "View fullscreen",
-    workspace: "Workspace"
+    viewFullscreen: "View fullscreen"
   },
   de: {
     allStatuses: "Alle Status",
@@ -47,7 +45,6 @@ export const common = defineTranslations({
     language: "Sprache",
     localeDe: "Deutsch",
     localeEn: "English",
-    newConversation: "Neu",
     newPassword: "Neues Passwort",
     newPasswordTooShort: "Neues Passwort muss mindestens 8 Zeichen lang sein",
     password: "Passwort",
@@ -56,7 +53,6 @@ export const common = defineTranslations({
     settings: "Einstellungen",
     tryAgain: "Erneut versuchen",
     update: "Aktualisieren",
-    viewFullscreen: "Im Vollbild anzeigen",
-    workspace: "Arbeitsbereich"
+    viewFullscreen: "Im Vollbild anzeigen"
   }
 });

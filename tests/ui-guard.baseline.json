@@ -16,7 +16,6 @@
     "packages/chat-ui/src/assistant/model-picker.tsx": {"elements":5,"roles":2},
     "packages/chat-ui/src/assistant/model-vendor.tsx": {"hex":3},
     "packages/chat-ui/src/attachment-preview.tsx": {"elements":1,"font-size":2},
-    "packages/chat-ui/src/chat-workspace.tsx": {"elements":1,"palette":1},
     "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-accent.ts": {"hex":72},
     "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-fields.tsx": {"elements":5},
     "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector.tsx": {"elements":1,"roles":1},
@@ -33,7 +32,6 @@
     "packages/chat-ui/src/control-plane/user-administration-panel.tsx": {"elements":3,"palette":2},
     "packages/chat-ui/src/control-plane/user-permission-overview.tsx": {"elements":1},
     "packages/chat-ui/src/conversation-file-presentation.tsx": {"elements":1},
-    "packages/chat-ui/src/conversation/conversation-button.tsx": {"elements":1},
     "packages/chat-ui/src/locale-selector.tsx": {"elements":2,"roles":1},
     "packages/chat-ui/src/login-panel.tsx": {"palette":1},
     "packages/chat-ui/src/message-attachments.tsx": {"elements":1},
@@ -44,9 +42,6 @@
     "packages/chat-ui/src/tool-artifacts.ts": {"palette":10},
     "packages/chat-ui/src/tool-call.tsx": {"elements":6,"font-size":1},
     "packages/chat-ui/src/workspace/agent-selector.tsx": {"elements":2,"roles":1},
-    "packages/chat-ui/src/workspace/user-menu.tsx": {"elements":1},
-    "packages/chat-ui/src/workspace/workspace-chrome.tsx": {"elements":1,"palette":3,"font-size":1},
-    "packages/chat-ui/src/workspace/workspace-rail.tsx": {"elements":1},
     "packages/config-schema/src/schemas.ts": {"hex":14},
     "packages/tool-execution/src/built-in-tools.ts": {"palette":1,"hex":3}
   }

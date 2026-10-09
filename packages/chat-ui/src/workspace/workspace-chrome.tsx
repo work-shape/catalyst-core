@@ -1,12 +1,19 @@
 import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
-import type { CSSProperties, ReactNode } from "react";
-import { Banner, Button, Card, CardContent, CardHeader, CardTitle, cn } from "@vivd-catalyst/ui";
+import type { ReactNode } from "react";
+import {
+  Banner,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  cn,
+  IconButton
+} from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { AgentSelector, type AgentChipDisplay } from "./agent-selector";
 import { useTranslation } from "../i18n";
-import { type ResolvedThemeMode } from "../theme";
-import { ThemeToggle } from "./theme-toggle";
 
 /**
  * Shown once when the server no longer knows an operation this interface calls, or answers one
@@ -158,97 +165,73 @@ function StatusPanel({
   );
 }
 
+/** Says on every page that this instance is the test environment. Other environments show nothing. */
+export function StagingBanner({ environment }: { environment: string }) {
+  const { t } = useTranslation();
+  if (environment !== "staging") {
+    return null;
+  }
+  return (
+    <Banner tone="warning" layout="page" icon={null} className="shrink-0 justify-center">
+      {t("testEnvironment")}
+    </Banner>
+  );
+}
+
+/**
+ * The header of the chat: the button that opens the rail's drawer under 768 px and the agent
+ * selector. It floats over the conversation and ends where a surface beside it begins.
+ */
 export function WorkspaceChrome({
   agentDisplay,
   agents,
-  displayPanelOpen,
-  displayPanelWidth,
-  environment,
-  sidebarOpen,
+  surfaceBesideWidth,
+  covered,
   selectedAgentName,
   showAgentSelector,
-  themeMode,
   onSelectAgent,
-  onToggleSidebar,
-  onToggleTheme
+  onOpenSidebar
 }: {
   agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
-  displayPanelOpen: boolean;
-  displayPanelWidth: number;
-  environment: SafeConfig["clientInstance"]["environment"] | undefined;
-  sidebarOpen: boolean;
+  /** What a surface takes of the main area beside the conversation, in pixels. */
+  surfaceBesideWidth: number;
+  /** A surface covers the main area, so the header leaves the tab order with the chat. */
+  covered: boolean;
   selectedAgentName: string | undefined;
   /** False while the start page shows the agent above its heading. */
   showAgentSelector: boolean;
-  themeMode: ResolvedThemeMode;
   onSelectAgent: (agentName: string) => void;
-  onToggleSidebar: () => void;
-  onToggleTheme: () => void;
+  onOpenSidebar: () => void;
 }) {
   const { t } = useTranslation();
-  const isStaging = environment === "staging";
 
   return (
-    <>
-      {isStaging ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-[60] grid h-6 place-items-center border-b border-amber-600/35 bg-amber-400 text-[11px] font-semibold tracking-[0.08em] text-amber-950"
-          role="status"
-        >
-          {t("testEnvironment")}
-        </div>
-      ) : null}
-
-      <header
-        className={cn(
-          "pointer-events-none absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 px-4 transition-[left,top] duration-200 right-[var(--display-panel-width)]",
-          isStaging ? "top-6" : "top-0",
-          sidebarOpen && "max-md:hidden md:left-80"
-        )}
-        style={
-          {
-            "--display-panel-width": displayPanelOpen ? `${displayPanelWidth}px` : "0px"
-          } as CSSProperties
-        }
-      >
-        {/* The chat scrolls all the way to the top, so the controls float over
-            it; this fade keeps them legible once messages pass underneath. */}
-        <div
-          className="pointer-events-none absolute inset-x-0 -top-px bottom-0 -z-10 bg-gradient-to-b from-background/25 via-background/3 to-transparent"
-          aria-hidden="true"
-        />
-
-        <div className="pointer-events-auto flex min-w-0 items-center gap-2">
-          {!sidebarOpen ? (
-            <button
-              type="button"
-              className={cn(
-                "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none",
-                "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
-              )}
-              aria-label={t("openSidebar")}
-              title={t("openSidebar")}
-              aria-pressed="false"
-              onClick={onToggleSidebar}
-            >
-              <PanelLeft size={17} aria-hidden="true" />
-            </button>
-          ) : null}
-          {showAgentSelector && agents.length > 0 ? (
-            <AgentSelector
-              agents={agents}
-              display={agentDisplay}
-              placement="header"
-              selectedAgentName={selectedAgentName}
-              onSelectAgent={onSelectAgent}
-            />
-          ) : null}
-        </div>
-        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-          <ThemeToggle mode={themeMode} onToggle={onToggleTheme} />
-        </div>
-      </header>
-    </>
+    <header
+      className="pointer-events-none absolute top-0 left-0 z-40 flex h-(--layout-header) min-w-0 items-center gap-2 px-4"
+      style={{ right: surfaceBesideWidth }}
+      inert={covered}
+    >
+      {/* The chat scrolls all the way to the top, so the controls float over
+          it; this fade keeps them legible once messages pass underneath. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 -top-px bottom-0 -z-10 bg-gradient-to-b from-background/25 via-background/3 to-transparent"
+        aria-hidden="true"
+      />
+      <div className="pointer-events-auto flex min-w-0 items-center gap-2">
+        <IconButton className="md:hidden" label={t("openSidebar")} onClick={onOpenSidebar}>
+          <PanelLeft aria-hidden="true" />
+        </IconButton>
+        {showAgentSelector && agents.length > 0 ? (
+          <AgentSelector
+            agents={agents}
+            display={agentDisplay}
+            placement="header"
+            selectedAgentName={selectedAgentName}
+            onSelectAgent={onSelectAgent}
+          />
+        ) : null}
+      </div>
+    </header>
   );
 }

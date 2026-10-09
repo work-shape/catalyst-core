@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { cn, Spinner, UiRoot } from "@vivd-catalyst/ui";
+import { cn, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { ApprovalsView } from "./approvals/approvals-view";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
@@ -19,17 +19,20 @@ import { uiLabelsFor } from "./ui-labels";
 import { ViewPolicyProvider } from "./view-policy";
 import { agentChipDisplayFor } from "./workspace/agent-selector";
 import { ClientBrandingHeader } from "./workspace/client-branding";
+import { ConversationPalette } from "./workspace/conversation-palette";
 import { UserMenu } from "./workspace/user-menu";
 import {
   ConfigCheckPanel,
   OutdatedInterfaceNotice,
   SessionCheckPanel,
+  StagingBanner,
   WorkspaceChrome
 } from "./workspace/workspace-chrome";
 import { WorkspaceRail } from "./workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./workspace/workspace-providers";
+import { useWorkspaceShortcuts } from "./workspace/workspace-shortcuts";
 
 // The gallery of the shared UI library is its own chunk, loaded only when its route is opened.
 const UiGallery = lazy(async () => {
@@ -106,6 +109,8 @@ function ChatWorkspaceContent({
   const onStartPage = model.route.view === "chat" && !model.route.selectedConversationId;
   // What the surface takes of the main area beside the conversation; 0 when it does not.
   const [surfaceBesideWidth, setSurfaceBesideWidth] = useState(0);
+  const [surfaceCovering, setSurfaceCovering] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [passwordSetupToken, setPasswordSetupToken] = useState(readPasswordSetupToken);
 
   function clearPasswordSetupToken() {
@@ -123,6 +128,8 @@ function ChatWorkspaceContent({
     enabled: resourcesAvailable
   });
   const displayPanel = useToolDisplayPanel();
+  // The slot reports its placement a render late; a surface that has closed covers nothing at once.
+  const chatCovered = surfaceCovering && displayPanel.open;
   const resourcesVisible = resourcesPanel.open && !displayPanel.open;
   const showsLogin = model.auth.loginRequired || Boolean(passwordSetupToken);
   const themeMode = model.config.resolvedThemeMode;
@@ -209,18 +216,24 @@ function ChatWorkspaceContent({
     );
   }
 
-  const userMenu = (
+  const accountMenu = (
     <UserMenu
       user={model.auth.user}
       signingOut={model.auth.signingOut}
-      onOpenSettings={model.auth.openSettings}
+      themeMode={themeMode}
+      onOpenProfile={() => {
+        model.chrome.closeSidebarDrawer();
+        model.auth.openSettings("profile");
+      }}
+      onOpenLanguageAppearance={() => {
+        model.chrome.closeSidebarDrawer();
+        model.auth.openSettings("language-appearance");
+      }}
+      onToggleTheme={model.config.toggleTheme}
       onSignOut={model.auth.signOut}
-      placement="top"
-      align="start"
     />
   );
   const chat = model.selectedChat;
-  const isStaging = model.config.config.clientInstance.environment === "staging";
   const collaborationWorkspace = model.collaborationWorkspace;
   const approvals = model.conversationRail.approvals;
   const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
@@ -239,6 +252,19 @@ function ChatWorkspaceContent({
     />
   ) : undefined;
 
+  const rail = model.conversationRail;
+  const closeDrawer = model.chrome.closeSidebarDrawer;
+  const startNewChat = () => {
+    closeDrawer();
+    rail.startNewConversation();
+  };
+  // A conversation opened from the rail or the palette puts the focus in the composer.
+  const openConversation = (conversationId: string) => {
+    closeDrawer();
+    rail.selectConversation(conversationId);
+    model.chrome.requestComposerFocus();
+  };
+
   const workspace = (
     <TranslationProvider locale={model.config.activeLocale}>
       <UiRoot
@@ -247,136 +273,169 @@ function ChatWorkspaceContent({
         mode={themeMode}
         labels={uiLabels}
         className={cn(
-          "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
-          model.chrome.sidebarOpen
-            ? "md:grid-cols-[20rem_minmax(0,1fr)]"
-            : "md:grid-cols-[minmax(0,1fr)]",
-          isStaging && "pt-6",
+          "flex h-dvh w-full min-h-0 flex-col overflow-hidden bg-background text-foreground",
           className
         )}
       >
-        <OutdatedInterfaceNotice />
-        {model.chrome.sidebarOpen ? <SidebarBackdrop onClose={model.chrome.closeSidebar} /> : null}
-
-        {model.chrome.sidebarOpen ? (
-          <div
-            className={cn(
-              "fixed bottom-0 left-0 z-50 w-[min(20rem,calc(100vw-2rem))] min-w-0 translate-x-0 transition-[top,transform] duration-200 md:static md:z-50 md:w-auto md:translate-x-0",
-              isStaging ? "top-6" : "top-0"
-            )}
-          >
-            <WorkspaceRail
-              config={model.config.config}
-              collaborationWorkspaceSelector={collaborationWorkspaceSelector}
-              conversations={model.conversationRail.conversations}
-              selectedConversationId={model.conversationRail.selectedConversationId}
-              canViewAdministration={model.conversationRail.canViewAdministration}
-              canViewBuild={model.controlPlane.canViewBuild}
-              approvals={approvals}
-              view={model.conversationRail.view}
-              creatingConversation={model.conversationRail.creatingConversation}
-              deletingConversation={model.conversationRail.deletingConversation}
-              canMoveConversation={model.conversationRail.canMoveConversation}
-              userMenu={userMenu}
-              onToggleSidebar={model.chrome.closeSidebar}
-              onViewChange={model.conversationRail.selectWorkspaceView}
-              onCreateConversation={model.conversationRail.startNewConversation}
-              onSelectConversation={model.conversationRail.selectConversation}
-              onRenameConversation={model.conversationRail.renameConversation}
-              onMoveConversation={model.conversationRail.moveConversation}
-              onDeleteConversation={model.conversationRail.deleteConversation}
-            />
-          </div>
-        ) : null}
-
-        <WorkspaceChrome
-          agents={model.config.config.agents}
-          agentDisplay={agentChipDisplayFor(model.config.config.ui)}
-          displayPanelOpen={surfaceBesideWidth > 0}
-          displayPanelWidth={surfaceBesideWidth}
-          environment={model.config.config.clientInstance.environment}
-          sidebarOpen={model.chrome.sidebarOpen}
-          selectedAgentName={model.config.activeAgentName}
-          showAgentSelector={!onStartPage}
-          themeMode={themeMode}
-          onSelectAgent={model.config.selectAgentName}
-          onToggleSidebar={model.chrome.toggleSidebar}
-          onToggleTheme={model.config.toggleTheme}
+        <WorkspaceShortcuts
+          paletteOpen={paletteOpen}
+          onTogglePalette={() => setPaletteOpen((open) => !open)}
+          onNewChat={startNewChat}
         />
-
-        {collaborationWorkspacesAvailable ? (
-          <CollaborationWorkspacePanel
-            apiBaseUrl={model.auth.apiBaseUrl}
-            authScope={WORKSPACE_AUTH_SCOPE}
-            client={chat.client}
-            userLabel={userLabel}
-            collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
-            activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
-            dialog={collaborationWorkspace.dialog}
-            onClose={collaborationWorkspace.closeDialog}
-            onCollaborationWorkspaceCreated={collaborationWorkspace.selectCollaborationWorkspace}
-            onConversationMoved={collaborationWorkspace.conversationMoved}
+        <SkipLink target={CONTENT_ID}>
+          <SkipLinkLabel />
+        </SkipLink>
+        <OutdatedInterfaceNotice />
+        <StagingBanner environment={model.config.config.clientInstance.environment} />
+        <div className="flex min-h-0 flex-1">
+          <WorkspaceRail
+            config={model.config.config}
+            collaborationWorkspaceSelector={collaborationWorkspaceSelector}
+            conversations={rail.conversations}
+            conversationsStatus={rail.conversationsStatus}
+            selectedConversationId={rail.selectedConversationId}
+            canViewAdministration={rail.canViewAdministration}
+            canViewBuild={model.controlPlane.canViewBuild}
+            approvals={approvals}
+            view={rail.view}
+            deletingConversation={rail.deletingConversation}
+            canMoveConversation={rail.canMoveConversation}
+            accountMenu={accountMenu}
+            collapsed={model.chrome.sidebarCollapsed}
+            drawerOpen={model.chrome.sidebarDrawerOpen}
+            onDrawerClose={closeDrawer}
+            onToggleCollapsed={model.chrome.toggleSidebarCollapsed}
+            onOpenSearch={() => {
+              closeDrawer();
+              setPaletteOpen(true);
+            }}
+            onViewChange={(view) => {
+              closeDrawer();
+              rail.selectWorkspaceView(view);
+            }}
+            onCreateConversation={startNewChat}
+            onSelectConversation={openConversation}
+            onReloadConversations={rail.reloadConversations}
+            onRenameConversation={rail.renameConversation}
+            onMoveConversation={rail.moveConversation}
+            onDeleteConversation={rail.deleteConversation}
           />
-        ) : null}
 
-        <ApprovalRevisionHostProvider value={model.approvalRevision}>
-          <ControlPlaneRoutes
-            controlPlane={model.controlPlane}
-            approvalsView={
-              approvals && model.route.view === "approvals" ? (
-                <ApprovalsView pendingCount={approvals.pendingCount} />
-              ) : undefined
-            }
-          >
-            <section className="relative h-full min-h-0 min-w-0">
-              <AttachmentContentProvider
+          <div id={CONTENT_ID} tabIndex={-1} className="relative min-w-0 flex-1 outline-none">
+            <WorkspaceChrome
+              agents={model.config.config.agents}
+              agentDisplay={agentChipDisplayFor(model.config.config.ui)}
+              surfaceBesideWidth={surfaceBesideWidth}
+              covered={chatCovered}
+              selectedAgentName={model.config.activeAgentName}
+              showAgentSelector={!onStartPage}
+              onSelectAgent={model.config.selectAgentName}
+              onOpenSidebar={model.chrome.openSidebarDrawer}
+            />
+
+            {collaborationWorkspacesAvailable ? (
+              <CollaborationWorkspacePanel
+                apiBaseUrl={model.auth.apiBaseUrl}
+                authScope={WORKSPACE_AUTH_SCOPE}
                 client={chat.client}
-                selectedConversationId={chat.selectedConversationId}
+                userLabel={userLabel}
+                collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
+                activeCollaborationWorkspaceId={
+                  collaborationWorkspace.activeCollaborationWorkspaceId
+                }
+                dialog={collaborationWorkspace.dialog}
+                onClose={collaborationWorkspace.closeDialog}
+                onCollaborationWorkspaceCreated={
+                  collaborationWorkspace.selectCollaborationWorkspace
+                }
+                onConversationMoved={collaborationWorkspace.conversationMoved}
+              />
+            ) : null}
+
+            <ApprovalRevisionHostProvider value={model.approvalRevision}>
+              <ControlPlaneRoutes
+                controlPlane={model.controlPlane}
+                approvalsView={
+                  approvals && model.route.view === "approvals" ? (
+                    <ApprovalsView pendingCount={approvals.pendingCount} />
+                  ) : undefined
+                }
               >
-                <div className="flex h-full min-h-0 min-w-0">
-                  <div
-                    className={cn(
-                      "relative h-full min-h-0 min-w-0 flex-1",
-                      // 23.5rem = panel width (22rem) + its right-6 offset, so the
-                      // thread centers with equal gaps to sidebar and panel edge
-                      resourcesVisible && "lg:[--resources-inset:23.5rem]"
-                    )}
-                    onDragEnter={chat.fileDropzone.onChatDragEnter}
-                    onDragOver={chat.fileDropzone.onChatDragOver}
-                    onDragLeave={chat.fileDropzone.onChatDragLeave}
-                    onDrop={chat.fileDropzone.onChatDrop}
+                <section className="relative h-full min-h-0 min-w-0">
+                  <AttachmentContentProvider
+                    client={chat.client}
+                    selectedConversationId={chat.selectedConversationId}
                   >
-                    <AssistantRuntimePanel chat={chat} />
-                    {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                    {resourcesAvailable &&
-                    resourcesConversationId &&
-                    resourcesPanel.hasResources ? (
-                      resourcesVisible ? (
-                        <ResourcesPanel
-                          client={resourcesPanel.client}
-                          conversationId={resourcesConversationId}
-                          error={resourcesPanel.error}
-                          loading={resourcesPanel.loading}
-                          onClose={resourcesPanel.close}
-                          open
-                          resources={resourcesPanel.resources}
-                        />
-                      ) : (
-                        <ResourcesPanelToggle
-                          onOpen={() => {
-                            displayPanel.close();
-                            resourcesPanel.openExplicitly();
-                          }}
-                        />
-                      )
-                    ) : null}
-                  </div>
-                  <SurfaceSlot onBesideWidthChange={setSurfaceBesideWidth} />
-                </div>
-              </AttachmentContentProvider>
-            </section>
-          </ControlPlaneRoutes>
-        </ApprovalRevisionHostProvider>
+                    <div className="flex h-full min-h-0 min-w-0">
+                      <div
+                        className={cn(
+                          "relative h-full min-h-0 min-w-0 flex-1",
+                          // 23.5rem = panel width (22rem) + its right-6 offset, so the
+                          // thread centers with equal gaps to sidebar and panel edge
+                          resourcesVisible && "lg:[--resources-inset:23.5rem]"
+                        )}
+                        // Under a surface that covers it the chat leaves the tab order.
+                        inert={chatCovered}
+                        onDragEnter={chat.fileDropzone.onChatDragEnter}
+                        onDragOver={chat.fileDropzone.onChatDragOver}
+                        onDragLeave={chat.fileDropzone.onChatDragLeave}
+                        onDrop={chat.fileDropzone.onChatDrop}
+                      >
+                        <AssistantRuntimePanel chat={chat} />
+                        {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+                        {resourcesAvailable &&
+                        resourcesConversationId &&
+                        resourcesPanel.hasResources ? (
+                          resourcesVisible ? (
+                            <ResourcesPanel
+                              client={resourcesPanel.client}
+                              conversationId={resourcesConversationId}
+                              error={resourcesPanel.error}
+                              loading={resourcesPanel.loading}
+                              onClose={resourcesPanel.close}
+                              open
+                              resources={resourcesPanel.resources}
+                            />
+                          ) : (
+                            <ResourcesPanelToggle
+                              onOpen={() => {
+                                displayPanel.close();
+                                resourcesPanel.openExplicitly();
+                              }}
+                            />
+                          )
+                        ) : null}
+                      </div>
+                      <SurfaceSlot
+                        onBesideWidthChange={setSurfaceBesideWidth}
+                        onCoveringChange={setSurfaceCovering}
+                      />
+                    </div>
+                  </AttachmentContentProvider>
+                </section>
+              </ControlPlaneRoutes>
+            </ApprovalRevisionHostProvider>
+          </div>
+        </div>
+        <ConversationPalette
+          open={paletteOpen}
+          apiBaseUrl={model.auth.apiBaseUrl}
+          authScope={WORKSPACE_AUTH_SCOPE}
+          client={chat.client}
+          collaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
+          collaborationWorkspacesAvailable={collaborationWorkspacesAvailable}
+          recentConversations={rail.conversations}
+          goToTargets={model.controlPlane.goToTargets}
+          onNewChat={startNewChat}
+          onSelectConversation={openConversation}
+          onGoTo={(targetId) => {
+            const target = model.controlPlane.goToTargets.find(({ id }) => id === targetId);
+            if (target) {
+              model.route.showRoute(target.route);
+            }
+          }}
+          onClose={() => setPaletteOpen(false)}
+        />
       </UiRoot>
     </TranslationProvider>
   );
@@ -398,15 +457,26 @@ function readPasswordSetupToken(): string | undefined {
     : undefined;
 }
 
-/** Covers the chat beside the open sidebar on small screens; a click on it closes the sidebar. */
-function SidebarBackdrop({ onClose }: { onClose: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <button
-      type="button"
-      className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px] md:hidden"
-      aria-label={t("closeSidebar")}
-      onClick={onClose}
-    />
+/** The id of the main area, where the skip link puts the focus. */
+const CONTENT_ID = "workspace-content";
+
+function SkipLinkLabel() {
+  return useTranslation().t("nav.skipToContent");
+}
+
+/** The frame's shortcuts. They rest while a dialog other than the palette holds the window. */
+function WorkspaceShortcuts({
+  paletteOpen,
+  onTogglePalette,
+  onNewChat
+}: {
+  paletteOpen: boolean;
+  onTogglePalette(): void;
+  onNewChat(): void;
+}) {
+  useWorkspaceShortcuts(
+    { search: onTogglePalette, newChat: onNewChat },
+    () => !paletteOpen && document.querySelector("dialog:modal") !== null
   );
+  return null;
 }

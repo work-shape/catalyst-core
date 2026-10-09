@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import { describe, expect, it } from "vitest";
 import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
 import { TranslationProvider } from "./chat-ui-render-harness";
@@ -50,16 +50,12 @@ function renderHeader({
       createElement(WorkspaceChrome, {
         agentDisplay: display({ showAgentName }),
         agents,
-        displayPanelOpen: false,
-        displayPanelWidth: 0,
-        environment: "production" as const,
-        sidebarOpen: false,
+        surfaceBesideWidth: 0,
+        covered: false,
         selectedAgentName: "catalyst_assistant",
         showAgentSelector,
-        themeMode: "light" as const,
         onSelectAgent: noop,
-        onToggleSidebar: noop,
-        onToggleTheme: noop
+        onOpenSidebar: noop
       })
     )
   );

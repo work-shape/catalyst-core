@@ -6,6 +6,9 @@ import {
   Button,
   cn,
   Dialog,
+  IconButton,
+  Input,
+  NavItem,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -123,21 +126,87 @@ export function ConversationButton({
     }
   }
 
+  const options = (
+    <ThreadListItemMorePrimitive.Root>
+      <ThreadListItemMorePrimitive.Trigger asChild disabled={deleting || saving}>
+        <IconButton size="sm" label={t("conversationOptions", { title: conversation.title })}>
+          <MoreHorizontal aria-hidden="true" />
+        </IconButton>
+      </ThreadListItemMorePrimitive.Trigger>
+      <ThreadListItemMorePrimitive.Content
+        align="end"
+        sideOffset={6}
+        className="z-50 min-w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-overlay"
+        onCloseAutoFocus={(event) => {
+          if (renamingFromMenuRef.current) {
+            event.preventDefault();
+            renamingFromMenuRef.current = false;
+          }
+        }}
+      >
+        {expiryLabel ? (
+          // Touch has no hover: the menu, always visible there, repeats the hint.
+          <div
+            className="mb-1 flex items-start gap-2 border-b px-2.5 pb-2 pt-1 text-xs text-muted-foreground"
+            data-testid="conversation-expiry-menu-hint"
+          >
+            <Clock size={13} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+            <span className="max-w-56">{expiryLabel}</span>
+          </div>
+        ) : null}
+        <ThreadListItemMorePrimitive.Item
+          className={cn(
+            "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+            "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+          )}
+          disabled={deleting || saving}
+          onSelect={() => {
+            renamingFromMenuRef.current = true;
+            startEditing();
+          }}
+        >
+          <Pencil size={15} aria-hidden="true" />
+          <span>{t("renameConversationMenuItem")}</span>
+        </ThreadListItemMorePrimitive.Item>
+        {onMove ? (
+          <ThreadListItemMorePrimitive.Item
+            className={cn(
+              "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+              "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+            )}
+            disabled={deleting || saving}
+            onSelect={onMove}
+          >
+            <FolderInput size={15} aria-hidden="true" />
+            <span>{t("moveConversationMenuItem")}</span>
+          </ThreadListItemMorePrimitive.Item>
+        ) : null}
+        <ThreadListItemMorePrimitive.Item
+          className={cn(
+            "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+            "text-destructive focus:bg-destructive/10 data-[highlighted]:bg-destructive/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+          )}
+          disabled={deleting || saving}
+          onSelect={() => setConfirmDeleteOpen(true)}
+        >
+          <Trash2 size={15} aria-hidden="true" />
+          <span>{t("deleteConversationMenuItem")}</span>
+        </ThreadListItemMorePrimitive.Item>
+      </ThreadListItemMorePrimitive.Content>
+    </ThreadListItemMorePrimitive.Root>
+  );
+
   return (
     <>
       <div
         data-testid="conversation-row"
         data-selected={selected ? "true" : undefined}
-        className={cn(
-          "group/conversation relative grid min-h-8 min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center overflow-hidden rounded-md transition-colors",
-          "hover:bg-state-hover",
-          selected && "bg-state-selected hover:bg-state-selected"
-        )}
+        className="min-w-0"
       >
         {editing ? (
           <form
             ref={editorFormRef}
-            className="grid min-w-0 px-1 py-0.5"
+            className="flex h-8 min-w-0 items-center"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 exitEditing();
@@ -148,14 +217,14 @@ export function ConversationButton({
               void saveTitle();
             }}
           >
-            <input
+            <Input
               ref={titleInputRef}
+              size="sm"
               type="text"
               value={draftTitle}
               maxLength={120}
               disabled={saving}
               aria-label={t("renameConversationField")}
-              className="h-7 min-w-0 rounded-md border border-input bg-background px-2 text-sm font-medium text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:opacity-60"
               onChange={(event) => setDraftTitle(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -166,11 +235,22 @@ export function ConversationButton({
             />
           </form>
         ) : (
-          <Button
-            className="h-auto min-w-0 justify-start px-2 py-1.5 text-left text-foreground hover:bg-transparent"
-            type="button"
-            variant="ghost"
+          <NavItem
+            selected={selected}
             aria-describedby={expiryLabel ? expiryHintId : undefined}
+            trailing={
+              <>
+                {expiryLabel ? (
+                  <RetentionClock
+                    name={t("conversationExpiresSoon")}
+                    hint={expiryLabel}
+                    open={retentionHintOpen(expiryHint)}
+                    onHintEvent={onExpiryHintEvent}
+                  />
+                ) : null}
+                {options}
+              </>
+            }
             onClick={() => {
               onExpiryHintEvent("dismiss");
               onSelect();
@@ -182,7 +262,7 @@ export function ConversationButton({
             }}
             onBlur={() => onExpiryHintEvent("blur")}
           >
-            <span className="inline-flex min-w-0 items-center gap-1.5">
+            <span className="flex min-w-0 items-center gap-1.5">
               {running ? (
                 <Spinner
                   size="sm"
@@ -194,7 +274,8 @@ export function ConversationButton({
                 />
               ) : null}
               <span
-                className="min-w-0"
+                className="min-w-0 truncate"
+                title={conversation.title}
                 onClick={(event) => {
                   if (!selected) {
                     return;
@@ -204,7 +285,7 @@ export function ConversationButton({
                   startEditing();
                 }}
               >
-                <AnimatedConversationTitle title={conversation.title} />
+                {conversation.title}
               </span>
               {conversation.visibility === "private" ? (
                 <span
@@ -214,16 +295,8 @@ export function ConversationButton({
                   aria-label={t("conversationPrivate")}
                   title={t("conversationPrivate")}
                 >
-                  <Lock size={12} aria-hidden="true" />
+                  <Lock className="size-3" aria-hidden="true" />
                 </span>
-              ) : null}
-              {expiryLabel ? (
-                <RetentionClock
-                  name={t("conversationExpiresSoon")}
-                  hint={expiryLabel}
-                  open={retentionHintOpen(expiryHint)}
-                  onHintEvent={onExpiryHintEvent}
-                />
               ) : null}
               {unread ? (
                 <span
@@ -235,7 +308,7 @@ export function ConversationButton({
                 />
               ) : null}
             </span>
-          </Button>
+          </NavItem>
         )}
         {expiryLabel && !editing ? (
           // The row's name stays short; the full sentence is its description.
@@ -243,83 +316,6 @@ export function ConversationButton({
             {expiryLabel}
           </span>
         ) : null}
-
-        <ThreadListItemMorePrimitive.Root>
-          <ThreadListItemMorePrimitive.Trigger
-            className={cn(
-              "mx-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
-              "hover:bg-state-hover hover:text-accent-foreground focus-visible:focus-ring",
-              "opacity-100 md:opacity-0 md:group-hover/conversation:opacity-100 md:group-focus-within/conversation:opacity-100",
-              "data-[state=open]:bg-state-hover data-[state=open]:text-accent-foreground data-[state=open]:opacity-100"
-            )}
-            type="button"
-            disabled={deleting || saving}
-            aria-label={t("conversationOptions", { title: conversation.title })}
-            title={t("conversationOptions", { title: conversation.title })}
-          >
-            <MoreHorizontal size={16} aria-hidden="true" />
-          </ThreadListItemMorePrimitive.Trigger>
-          <ThreadListItemMorePrimitive.Content
-            align="end"
-            sideOffset={6}
-            className="z-50 min-w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-overlay"
-            onCloseAutoFocus={(event) => {
-              if (renamingFromMenuRef.current) {
-                event.preventDefault();
-                renamingFromMenuRef.current = false;
-              }
-            }}
-          >
-            {expiryLabel ? (
-              // Touch has no hover: the menu, always visible there, repeats the hint.
-              <div
-                className="mb-1 flex items-start gap-2 border-b px-2.5 pb-2 pt-1 text-xs text-muted-foreground"
-                data-testid="conversation-expiry-menu-hint"
-              >
-                <Clock size={13} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
-                <span className="max-w-56">{expiryLabel}</span>
-              </div>
-            ) : null}
-            <ThreadListItemMorePrimitive.Item
-              className={cn(
-                "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
-                "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-              )}
-              disabled={deleting || saving}
-              onSelect={() => {
-                renamingFromMenuRef.current = true;
-                startEditing();
-              }}
-            >
-              <Pencil size={15} aria-hidden="true" />
-              <span>{t("renameConversationMenuItem")}</span>
-            </ThreadListItemMorePrimitive.Item>
-            {onMove ? (
-              <ThreadListItemMorePrimitive.Item
-                className={cn(
-                  "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
-                  "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                )}
-                disabled={deleting || saving}
-                onSelect={onMove}
-              >
-                <FolderInput size={15} aria-hidden="true" />
-                <span>{t("moveConversationMenuItem")}</span>
-              </ThreadListItemMorePrimitive.Item>
-            ) : null}
-            <ThreadListItemMorePrimitive.Item
-              className={cn(
-                "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
-                "text-destructive focus:bg-destructive/10 data-[highlighted]:bg-destructive/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-              )}
-              disabled={deleting || saving}
-              onSelect={() => setConfirmDeleteOpen(true)}
-            >
-              <Trash2 size={15} aria-hidden="true" />
-              <span>{t("deleteConversationMenuItem")}</span>
-            </ThreadListItemMorePrimitive.Item>
-          </ThreadListItemMorePrimitive.Content>
-        </ThreadListItemMorePrimitive.Root>
       </div>
 
       <Dialog
@@ -410,7 +406,7 @@ function RetentionClock({
   // The span stays mounted while the hint opens and closes, so its pointer tracking holds.
   return (
     <span
-      className="shrink-0 text-warning"
+      className="flex shrink-0 px-1 text-warning"
       data-testid="conversation-expiry-warning"
       role="img"
       aria-label={name}
@@ -426,7 +422,7 @@ function RetentionClock({
         // while it shows.
         <Tooltip open disableHoverableContent>
           <TooltipTrigger asChild>
-            <Clock size={13} aria-hidden="true" />
+            <Clock className="size-3.5" aria-hidden="true" />
           </TooltipTrigger>
           <TooltipContent
             data-testid="conversation-expiry-hint"
@@ -436,75 +432,8 @@ function RetentionClock({
           </TooltipContent>
         </Tooltip>
       ) : (
-        <Clock size={13} aria-hidden="true" />
+        <Clock className="size-3.5" aria-hidden="true" />
       )}
     </span>
-  );
-}
-
-function AnimatedConversationTitle({ title }: { title: string }) {
-  const { text, typing } = useTypewriterTitle(title);
-
-  return (
-    <span
-      className="inline-flex min-w-0 max-w-full items-baseline text-sm font-normal leading-5 group-data-[selected=true]/conversation:font-medium"
-      title={title}
-      aria-label={title}
-    >
-      <span className="truncate" aria-hidden="true">
-        {text}
-      </span>
-      {typing ? (
-        <span className="ml-0.5 h-3 w-px shrink-0 animate-pulse bg-current" aria-hidden="true" />
-      ) : null}
-    </span>
-  );
-}
-
-function useTypewriterTitle(title: string): { text: string; typing: boolean } {
-  const previousTitleRef = useRef(title);
-  const [state, setState] = useState({ text: title, typing: false });
-
-  useEffect(() => {
-    if (previousTitleRef.current === title) {
-      return undefined;
-    }
-    previousTitleRef.current = title;
-
-    if (prefersReducedMotion() || title.length === 0) {
-      setState({ text: title, typing: false });
-      return undefined;
-    }
-
-    let index = 0;
-    let timeout: number | undefined;
-    setState({ text: "", typing: true });
-
-    function tick() {
-      index += 1;
-      setState({
-        text: title.slice(0, index),
-        typing: index < title.length
-      });
-      if (index < title.length) {
-        timeout = window.setTimeout(tick, 24);
-      }
-    }
-
-    timeout = window.setTimeout(tick, 24);
-    return () => {
-      if (timeout !== undefined) {
-        window.clearTimeout(timeout);
-      }
-    };
-  }, [title]);
-
-  return state;
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
   );
 }

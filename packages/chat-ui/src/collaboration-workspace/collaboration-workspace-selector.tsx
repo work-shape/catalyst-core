@@ -2,6 +2,7 @@ import { ChevronsUpDown, Compass, Plus, Settings } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
 import {
+  Avatar,
   Button,
   cn,
   CountBadge,
@@ -66,6 +67,8 @@ export function CollaborationWorkspaceSelector({
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        // Taken: an open surface under the menu stays open.
+        event.preventDefault();
         setOpen(false);
         triggerRef.current?.focus();
       }
@@ -97,14 +100,13 @@ export function CollaborationWorkspaceSelector({
 
   return (
     <div ref={rootRef} className="relative min-w-0">
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
+        variant="ghost"
         data-testid="collaboration-workspace-selector-trigger"
         className={cn(
-          "grid h-11 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 text-left outline-none transition-colors",
-          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/40",
-          open && "bg-sidebar-accent text-sidebar-accent-foreground"
+          "w-full min-w-0 justify-start rounded-md px-2",
+          open && "bg-state-hover text-foreground"
         )}
         aria-label={t("collaborationWorkspaceSelectorLabel")}
         aria-expanded={open}
@@ -116,13 +118,15 @@ export function CollaborationWorkspaceSelector({
             name={activeCollaborationWorkspace.name}
             emoji={activeCollaborationWorkspace.emoji}
             accentColor={activeCollaborationWorkspace.accentColor}
+            size="sm"
           />
         ) : (
-          <PersonalCollaborationWorkspaceAvatar label={userLabel} />
+          // The head of the rail marks a workspace, so the personal one is a square here too.
+          <Avatar kind="workspace" name={userLabel} size="sm" />
         )}
-        <span className="truncate text-sm font-medium">{triggerLabel}</span>
-        <ChevronsUpDown size={15} className="text-muted-foreground" aria-hidden="true" />
-      </button>
+        <span className="min-w-0 flex-1 truncate text-left">{triggerLabel}</span>
+        <ChevronsUpDown className="text-muted-foreground" aria-hidden="true" />
+      </Button>
 
       {open ? (
         <CollaborationWorkspaceSelectorMenu

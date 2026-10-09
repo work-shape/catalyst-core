@@ -188,7 +188,8 @@ export interface WorkspaceAuthModel {
   sessionRetrying: boolean;
   signingOut: boolean;
   signOut(): void;
-  openSettings(): void;
+  /** Opens one of the user's own Settings pages. */
+  openSettings(page: OwnSettingsPage): void;
   invalidateCurrentUser(): void;
   retryCurrentUser(): void;
 }
@@ -216,22 +217,33 @@ export interface WorkspaceConfigModel {
   attachmentAccept: string;
 }
 
+/** The pages of the Settings group "You" that the account menu leads to. */
+export type OwnSettingsPage = "profile" | "language-appearance";
+
 export interface WorkspaceRouteModel {
   route: WorkspaceRoute;
   view: WorkspaceView;
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
+  /** Opens a route by its value, as the command palette's "Go to" group does. */
+  showRoute(route: WorkspaceRoute): void;
 }
 
 export interface WorkspaceChromeModel {
-  sidebarOpen: boolean;
+  sidebarCollapsed: boolean;
+  sidebarDrawerOpen: boolean;
   composerFocusRequestId: number;
-  closeSidebar(): void;
-  toggleSidebar(): void;
+  toggleSidebarCollapsed(): void;
+  openSidebarDrawer(): void;
+  closeSidebarDrawer(): void;
+  requestComposerFocus(): void;
 }
 
 export interface ConversationRailModel {
   conversations: ConversationListItem[];
+  /** How the list stands: still on its first load, failed without a list to show, or there. */
+  conversationsStatus: "loading" | "failed" | "ready";
+  reloadConversations(): void;
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
   /** Present only for users who may review Approval Requests. */
@@ -873,7 +885,7 @@ export function useWorkspaceChatModel({
       sessionRetrying: meQuery.isFetching,
       signingOut: signOutMutation.isPending,
       signOut: () => signOutMutation.mutate(),
-      openSettings: () => routeState.showSettings(),
+      openSettings: (page) => routeState.showSettings("you", page),
       invalidateCurrentUser: workspaceCache.invalidateCurrentUser,
       retryCurrentUser: () => void meQuery.refetch()
     },
@@ -898,17 +910,32 @@ export function useWorkspaceChatModel({
       route,
       view,
       selectedConversationId,
-      canViewAdministration
+      canViewAdministration,
+      showRoute: routeState.showRoute
     },
     chrome: {
-      sidebarOpen: chrome.sidebarOpen,
+      sidebarCollapsed: chrome.sidebarCollapsed,
+      sidebarDrawerOpen: chrome.sidebarDrawerOpen,
       composerFocusRequestId: chrome.composerFocusRequestId,
-      closeSidebar: chrome.closeSidebar,
-      toggleSidebar: chrome.toggleSidebar
+      toggleSidebarCollapsed: chrome.toggleSidebarCollapsed,
+      openSidebarDrawer: chrome.openSidebarDrawer,
+      closeSidebarDrawer: chrome.closeSidebarDrawer,
+      requestComposerFocus: chrome.requestComposerFocus
     },
     collaborationWorkspace,
     conversationRail: {
       conversations,
+      conversationsStatus:
+        conversationsQuery.data !== undefined
+          ? "ready"
+          : conversationsQuery.isError
+            ? "failed"
+            : // A query that waits for its workspace is not loading yet, and shows as loading.
+              "loading",
+      // A reload that fails again shows in the state of the query.
+      reloadConversations: () => {
+        conversationsQuery.refetch().catch(() => undefined);
+      },
       selectedConversationId,
       canViewAdministration,
       approvals,

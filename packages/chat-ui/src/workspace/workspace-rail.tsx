@@ -1,111 +1,290 @@
-import {
-  Blocks,
-  ChevronLeft,
-  ClipboardCheck,
-  PanelLeft,
-  Plus,
-  Search,
-  Settings
-} from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { Blocks, ClipboardCheck, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
+import type { ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
-import { Button, cn, CountBadge, Input, NavItem } from "@vivd-catalyst/ui";
+import {
+  Avatar,
+  Button,
+  CountBadge,
+  EmptyState,
+  IconButton,
+  NavGroup,
+  NavItem,
+  Sidebar,
+  Skeleton,
+  useSidebarCollapsed
+} from "@vivd-catalyst/ui";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
+import { railSections, shownRailSections, type RailSection } from "./rail-sections";
 import type { WorkspaceRouteView } from "./workspace-route";
+import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
 export type WorkspaceView = WorkspaceRouteView;
+export { railSections, shownRailSections, type RailSection };
 
-export function WorkspaceRail({
-  config,
-  collaborationWorkspaceSelector,
-  conversations,
-  selectedConversationId,
-  canViewAdministration,
-  canViewBuild = false,
-  approvals,
-  view,
-  creatingConversation,
-  deletingConversation,
-  canMoveConversation,
-  userMenu,
-  onToggleSidebar,
-  onViewChange,
-  onCreateConversation,
-  onSelectConversation,
-  onRenameConversation,
-  onMoveConversation,
-  onDeleteConversation
-}: {
+interface WorkspaceRailProps {
   config: SafeConfig;
-  /** Absent for embedded token sessions, which have no workspace UI at all. */
+  /** Absent for embedded token sessions, which show the client's branding in its place. */
   collaborationWorkspaceSelector?: ReactNode;
+  /** The section rows. One section alone shows no row. */
+  sections?: readonly RailSection[];
   conversations: ConversationListItem[];
+  conversationsStatus: "loading" | "failed" | "ready";
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
-  /** The viewer may open Build: the rail shows its row. */
+  /** The viewer may open Build: the rail shows its row above the account row. */
   canViewBuild?: boolean;
   /** Present only for users who may review Approval Requests. */
   approvals?: { pendingCount: number };
   view: WorkspaceView;
-  creatingConversation: boolean;
   deletingConversation: boolean;
   canMoveConversation: boolean;
-  userMenu: ReactNode;
-  onToggleSidebar: () => void;
+  /** The account menu. It shows its avatar alone in the collapsed rail. */
+  accountMenu: ReactNode;
+  collapsed: boolean;
+  drawerOpen: boolean;
+  onDrawerClose: () => void;
+  onToggleCollapsed: () => void;
+  onOpenSearch: () => void;
   onViewChange: (view: WorkspaceView) => void;
   onCreateConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
+  onReloadConversations: () => void;
   onRenameConversation: (conversationId: string, title: string) => Promise<void>;
   onMoveConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
-}) {
+}
+
+/**
+ * The frame's navigation: the workspace selector with search and collapse, New chat, the
+ * section rows, the conversations under "Recent", and a footer with the account menu, the
+ * approvals and the settings. Collapsed it is a strip of icons; under 768 px it is a drawer.
+ */
+export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
-  const [conversationQuery, setConversationQuery] = useState("");
-  const branding = clientBrandingFrom(config);
-  const filteredConversations = useMemo(() => {
-    const query = conversationQuery.trim().toLocaleLowerCase();
-    if (!query) {
-      return conversations;
-    }
-    return conversations.filter((conversation) =>
-      conversation.title.toLocaleLowerCase().includes(query)
-    );
-  }, [conversationQuery, conversations]);
-  const administrationButton = canViewAdministration ? (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className={view === "settings" ? "bg-sidebar-accent text-primary" : "text-muted-foreground"}
-      aria-label={view === "settings" ? t("returnToChat") : t("settings")}
-      title={view === "settings" ? t("returnToChat") : t("settings")}
-      onClick={() => onViewChange(view === "settings" ? "chat" : "settings")}
+  const sections = shownRailSections(props.sections ?? railSections);
+
+  return (
+    <Sidebar
+      label={t("nav.label")}
+      collapsed={props.collapsed}
+      drawerOpen={props.drawerOpen}
+      onDrawerClose={props.onDrawerClose}
+      header={<RailHeader {...props} sections={sections} />}
+      footer={<RailFooter {...props} />}
     >
-      <Settings size={16} aria-hidden="true" />
-    </Button>
-  ) : null;
+      <RecentConversations {...props} />
+    </Sidebar>
+  );
+}
+
+function RailHeader({
+  config,
+  collaborationWorkspaceSelector,
+  sections,
+  view,
+  collapsed,
+  onToggleCollapsed,
+  onOpenSearch,
+  onViewChange,
+  onCreateConversation
+}: WorkspaceRailProps & { sections: readonly RailSection[] }) {
+  const { t } = useTranslation();
+  // A drawer is never collapsed, so the sidebar says what it shows.
+  const iconsOnly = useSidebarCollapsed();
+  const search = (
+    <IconButton
+      label={t("nav.search")}
+      shortcut={workspaceShortcutLabel("search")}
+      onClick={onOpenSearch}
+    >
+      <Search aria-hidden="true" />
+    </IconButton>
+  );
+  const collapse = (
+    <IconButton
+      // A drawer has no collapsed strip.
+      className="max-md:hidden"
+      label={t(collapsed ? "nav.expand" : "nav.collapse")}
+      aria-expanded={!collapsed}
+      onClick={onToggleCollapsed}
+    >
+      <PanelLeft aria-hidden="true" />
+    </IconButton>
+  );
+  const newChat = (
+    <NavItem
+      icon={<SquarePen aria-hidden="true" />}
+      shortcut={workspaceShortcutLabel("newChat")}
+      onClick={onCreateConversation}
+    >
+      {t("nav.newChat")}
+    </NavItem>
+  );
+  const sectionRows =
+    sections.length === 0 ? null : (
+      <NavGroup className={iconsOnly ? undefined : "mt-4"}>
+        {sections.map((section) => (
+          <NavItem
+            key={section.id}
+            icon={<section.icon aria-hidden="true" />}
+            selected={view === section.view}
+            onClick={() => onViewChange(section.view)}
+          >
+            {t(section.label)}
+          </NavItem>
+        ))}
+      </NavGroup>
+    );
+
+  if (iconsOnly) {
+    return (
+      <div className="grid justify-items-center gap-0.5">
+        <div className="grid h-(--layout-header) place-items-center">{collapse}</div>
+        {search}
+        {newChat}
+        {sectionRows}
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="flex h-(--layout-header) min-w-0 items-center gap-1">
+        <div className="min-w-0 flex-1">
+          {collaborationWorkspaceSelector ?? <RailBranding config={config} />}
+        </div>
+        {search}
+        {collapse}
+      </div>
+      {newChat}
+      {sectionRows}
+    </>
+  );
+}
+
+/** The client's identity where an embedded session has no workspace to select. */
+function RailBranding({ config }: { config: SafeConfig }) {
+  const branding = clientBrandingFrom(config);
+  return (
+    <div className="flex h-control-md min-w-0 items-center gap-2 px-2">
+      {branding.logoUrl ? (
+        <ClientBrandingLogo
+          branding={branding}
+          className="max-h-6 max-w-full min-w-0 object-contain object-left"
+        />
+      ) : (
+        <>
+          <Avatar kind="workspace" size="sm" name={branding.clientLabel} />
+          <span className="min-w-0 truncate text-label">{branding.clientLabel}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RecentConversations({
+  config,
+  conversations,
+  conversationsStatus,
+  selectedConversationId,
+  deletingConversation,
+  canMoveConversation,
+  onSelectConversation,
+  onReloadConversations,
+  onRenameConversation,
+  onMoveConversation,
+  onDeleteConversation
+}: WorkspaceRailProps) {
+  const { t } = useTranslation();
+  // The collapsed strip hides the list with its label.
+  if (useSidebarCollapsed()) {
+    return null;
+  }
+
+  return (
+    <NavGroup label={t("nav.recent")}>
+      {conversations.length > 0 ? (
+        conversations.map((conversation) => (
+          <ConversationButton
+            key={conversation.id}
+            conversation={conversation}
+            selected={conversation.id === selectedConversationId}
+            retention={config.retention}
+            onSelect={() => onSelectConversation(conversation.id)}
+            onRename={(title) => onRenameConversation(conversation.id, title)}
+            onMove={
+              canMoveConversation
+                ? () => onMoveConversation(conversation.id, conversation.title)
+                : undefined
+            }
+            onDelete={() => onDeleteConversation(conversation.id)}
+            deleting={deletingConversation}
+          />
+        ))
+      ) : conversationsStatus === "loading" ? (
+        <RecentSkeleton />
+      ) : conversationsStatus === "failed" ? (
+        <EmptyState
+          layout="inline"
+          className="px-2 py-1.5"
+          role="alert"
+          action={
+            <Button variant="link" size="sm" className="px-0" onClick={onReloadConversations}>
+              {t("tryAgain")}
+            </Button>
+          }
+        >
+          {t("nav.recentLoadFailed")}
+        </EmptyState>
+      ) : (
+        <EmptyState layout="inline" className="px-2 py-1.5">
+          {t("noConversations")}
+        </EmptyState>
+      )}
+    </NavGroup>
+  );
+}
+
+const SKELETON_ROW_WIDTHS = ["w-3/4", "w-1/2", "w-2/3"];
+
+function RecentSkeleton() {
+  return (
+    <div data-testid="conversations-loading" aria-busy="true">
+      {SKELETON_ROW_WIDTHS.map((width) => (
+        <div key={width} className="flex h-8 items-center px-2">
+          <Skeleton className={width} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RailFooter({
+  canViewAdministration,
+  canViewBuild = false,
+  approvals,
+  view,
+  accountMenu,
+  onViewChange
+}: WorkspaceRailProps) {
+  const { t } = useTranslation();
+  const iconsOnly = useSidebarCollapsed();
   const approvalsLabel =
     view === "approvals"
       ? t("returnToChat")
       : approvals && approvals.pendingCount > 0
         ? t("openApprovalsPending", { count: approvals.pendingCount })
         : t("openApprovals");
+  const activeClassName = "bg-state-selected text-foreground hover:bg-state-selected";
   const approvalsButton = approvals ? (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className={cn(
-        "relative",
-        view === "approvals" ? "bg-sidebar-accent text-primary" : "text-muted-foreground"
-      )}
-      aria-label={approvalsLabel}
-      title={approvalsLabel}
+    <IconButton
+      className={view === "approvals" ? activeClassName : undefined}
+      label={approvalsLabel}
+      aria-pressed={view === "approvals"}
       onClick={() => onViewChange(view === "approvals" ? "chat" : "approvals")}
     >
-      <ClipboardCheck size={16} aria-hidden="true" />
+      <ClipboardCheck aria-hidden="true" />
       {approvals.pendingCount > 0 ? (
         <CountBadge
           count={approvals.pendingCount}
@@ -113,170 +292,47 @@ export function WorkspaceRail({
           aria-hidden="true"
         />
       ) : null}
-    </Button>
+    </IconButton>
   ) : null;
-  const closeSidebarButton = (className: string) => (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className={cn("size-9 text-muted-foreground hover:text-sidebar-foreground", className)}
-      aria-label={t("closeSidebar")}
-      title={t("closeSidebar")}
-      aria-pressed="true"
-      onClick={onToggleSidebar}
+  const settingsButton = canViewAdministration ? (
+    <IconButton
+      className={view === "settings" ? activeClassName : undefined}
+      label={view === "settings" ? t("returnToChat") : t("nav.settings")}
+      aria-pressed={view === "settings"}
+      onClick={() => onViewChange(view === "settings" ? "chat" : "settings")}
     >
-      <PanelLeft size={17} aria-hidden="true" />
-    </Button>
-  );
+      <Settings aria-hidden="true" />
+    </IconButton>
+  ) : null;
 
+  const buildRow = canViewBuild ? (
+    <NavItem
+      icon={<Blocks aria-hidden="true" />}
+      selected={view === "build"}
+      onClick={() => onViewChange("build")}
+    >
+      {t("nav.build")}
+    </NavItem>
+  ) : null;
+
+  if (iconsOnly) {
+    return (
+      <div className="grid justify-items-center gap-0.5">
+        {buildRow}
+        {approvalsButton}
+        {settingsButton}
+        {accountMenu}
+      </div>
+    );
+  }
   return (
-    <aside
-      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] border-r border-sidebar-border bg-sidebar px-5 pb-4 pt-5 text-sidebar-foreground"
-      aria-label={t("conversations")}
-    >
-      {collaborationWorkspaceSelector ? null : closeSidebarButton("absolute right-4 top-4 z-20")}
-
-      {/*
-        The collapse handle sits on the rail's right border, where it would cover the
-        list's scrollbar. It shows only while the pointer is on the border: this narrow
-        zone straddles it, and the list's scrollbar ends to the left of the zone.
-      */}
-      <div className="group/rail-edge absolute inset-y-0 -right-1.5 z-20 hidden w-3 md:block">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-11 w-6 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-sidebar-border/60 bg-sidebar/95 text-muted-foreground/70 opacity-0 shadow-none transition-opacity hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/rail-edge:pointer-events-auto group-hover/rail-edge:opacity-100"
-          aria-label={t("collapseSidebar")}
-          title={t("collapseSidebar")}
-          onClick={onToggleSidebar}
-        >
-          <ChevronLeft size={12} strokeWidth={1.75} aria-hidden="true" />
-        </Button>
+    <>
+      {buildRow ? <div className="pb-2">{buildRow}</div> : null}
+      <div className="flex min-w-0 items-center gap-1">
+        {accountMenu}
+        {approvalsButton}
+        {settingsButton}
       </div>
-
-      {/*
-        With workspace chrome visible the selector is the rail's top element and
-        carries the collapse toggle; the client branding moves into its popover.
-        Without the chrome — feature off or embedded — the branding row stays
-        exactly as it was.
-      */}
-      {collaborationWorkspaceSelector ? (
-        <div className="min-w-0 pb-3">
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
-            <div className="-ml-2 min-w-0">{collaborationWorkspaceSelector}</div>
-            {closeSidebarButton("shrink-0")}
-          </div>
-        </div>
-      ) : branding.logoUrl ? (
-        <div className="flex h-16 min-w-0 items-start pb-3 pr-11">
-          <button
-            type="button"
-            className="flex h-12 min-w-0 max-w-[11rem] cursor-pointer items-center justify-start overflow-hidden rounded-sm border-0 bg-transparent p-0 text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
-            aria-label={branding.clientLabel}
-            onClick={onCreateConversation}
-          >
-            <ClientBrandingLogo
-              branding={branding}
-              className="max-h-11 w-full object-contain object-left"
-            />
-          </button>
-        </div>
-      ) : (
-        <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 pb-3 pr-11">
-          <div className="grid size-9 place-items-center overflow-hidden rounded-md border border-sidebar-border bg-sidebar-accent/50 text-foreground">
-            <span className="text-sm font-semibold" aria-hidden="true">
-              {branding.clientInitial}
-            </span>
-          </div>
-          <div className="grid min-w-0 gap-1 pt-0.5">
-            <strong className="truncate text-sm font-semibold">{branding.clientLabel}</strong>
-            <span className="truncate text-xs text-muted-foreground">{t("workspace")}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-3 pb-3 pt-4">
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <span className="truncate text-caption font-medium text-muted-foreground">
-            {t("conversations")}
-          </span>
-          <Button
-            className="size-8 text-muted-foreground hover:text-foreground"
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={t("newConversation")}
-            title={t("newConversation")}
-            onClick={onCreateConversation}
-            disabled={creatingConversation}
-          >
-            <Plus size={17} aria-hidden="true" />
-          </Button>
-        </div>
-        <Input
-          type="search"
-          size="sm"
-          value={conversationQuery}
-          leadingIcon={<Search aria-hidden="true" />}
-          placeholder={t("searchConversations")}
-          aria-label={t("searchConversations")}
-          onChange={(event) => setConversationQuery(event.currentTarget.value)}
-        />
-      </div>
-
-      <nav className="chat-scrollbar -ml-1 -mr-3 grid min-h-0 auto-rows-max content-start gap-0.5 overflow-y-auto overflow-x-hidden pl-1 pr-3 pb-3">
-        {conversations.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-muted-foreground">{t("noConversations")}</div>
-        ) : filteredConversations.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-muted-foreground">
-            {t("noConversationMatches")}
-          </div>
-        ) : (
-          filteredConversations.map((conversation) => (
-            <ConversationButton
-              key={conversation.id}
-              conversation={conversation}
-              selected={conversation.id === selectedConversationId}
-              retention={config.retention}
-              onSelect={() => onSelectConversation(conversation.id)}
-              onRename={(title) => onRenameConversation(conversation.id, title)}
-              onMove={
-                canMoveConversation
-                  ? () => onMoveConversation(conversation.id, conversation.title)
-                  : undefined
-              }
-              onDelete={() => onDeleteConversation(conversation.id)}
-              deleting={deletingConversation}
-            />
-          ))
-        )}
-      </nav>
-
-      {/* One row of the rail: Build, set apart by a group gap, above the account row. */}
-      <div className="grid min-w-0">
-        {canViewBuild ? (
-          <div className="-mx-2 pt-4">
-            <NavItem
-              icon={<Blocks aria-hidden="true" />}
-              selected={view === "build"}
-              onClick={() => onViewChange("build")}
-            >
-              {t("nav.build")}
-            </NavItem>
-          </div>
-        ) : null}
-        <footer className="-mx-5 flex min-w-0 items-center justify-between gap-2 px-5 pt-4">
-          {userMenu}
-          {approvalsButton || administrationButton ? (
-            <div className="flex shrink-0 items-center gap-1">
-              {approvalsButton}
-              {administrationButton}
-            </div>
-          ) : null}
-        </footer>
-      </div>
-    </aside>
+    </>
   );
 }
