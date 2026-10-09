@@ -485,9 +485,9 @@ export function mapAuditEvent(row: AuditEventRow | undefined): AuditEvent {
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     type: row.type,
     status: row.status,
-    actor: row.actor ?? undefined,
-    subject: row.subject ?? undefined,
-    reason: row.reason ?? undefined,
+    ...(row.actor ? { actor: row.actor } : {}),
+    ...(row.subject === null ? {} : { subject: row.subject }),
+    ...(row.reason === null ? {} : { reason: row.reason }),
     correlationId: row.correlationId,
     createdAt: row.createdAt.toISOString(),
     metadata: row.metadata
