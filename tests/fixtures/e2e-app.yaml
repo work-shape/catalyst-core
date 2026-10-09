@@ -106,3 +106,9 @@ ui:
   clientName: E2E Customer
   title: Vivd Catalyst E2E
   welcomeMessage: E2E ready.
+
+# The suite signs one account in from one address many times a minute, which no person does.
+# Every other limit stays at its default, so a run would show a default that is too low.
+rateLimits:
+  signInPerAccountPerMinute: 1000
+  signInPerAddressPerMinute: 3000
