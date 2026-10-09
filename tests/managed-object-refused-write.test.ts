@@ -7,7 +7,7 @@ describe("managed object access writing into a deleted conversation", () => {
   async function createFixture() {
     const clientInstanceId = asClientInstanceId(`refused_${globalThis.crypto.randomUUID()}`);
     const store = createTestInstance().stores;
-    const owner = await store.resolveUserIdentity({
+    const owner = await store.users.resolveUserIdentity({
       clientInstanceId,
       authSource: "test",
       externalUserId: "author",
@@ -16,11 +16,11 @@ describe("managed object access writing into a deleted conversation", () => {
       permissionRefs: [],
       permissions: []
     });
-    const workspace = await store.ensurePersonalWorkspace({
+    const workspace = await store.workspaces.ensurePersonalWorkspace({
       clientInstanceId,
       userId: asUserId(owner.id)
     });
-    const conversation = await store.createConversation({
+    const conversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: workspace.id,
@@ -40,11 +40,11 @@ describe("managed object access writing into a deleted conversation", () => {
     };
     const managedObjects = createTestManagedObjectAccess({
       clientInstanceId,
-      files: store,
+      files: store.files,
       byteStore,
       logger
     });
-    await store.deleteConversation({
+    await store.conversations.deleteConversation({
       clientInstanceId,
       conversationId: conversation.id,
       deletedAt: new Date().toISOString()

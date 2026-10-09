@@ -19,7 +19,7 @@ import {
 } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
-import { AppError, type PlatformStore } from "@vivd-catalyst/core";
+import { AppError, type PlatformStores } from "@vivd-catalyst/core";
 import {
   type ClientInstanceConfig,
   getClientInstanceId,
@@ -85,7 +85,7 @@ export interface CreateClientInstanceAppInput {
 export interface ClientInstanceApp {
   readonly config: ClientInstanceConfig;
   readonly server: FastifyInstance;
-  readonly store: PlatformStore;
+  readonly store: PlatformStores;
   listen(input?: { host?: string; port?: number }): Promise<void>;
   close(): Promise<void>;
 }
@@ -104,19 +104,18 @@ export async function createClientInstanceApp(
     managedObjects,
     workspaceFileByteStore,
     auditRecorder,
-    assetSource,
     usageGovernance,
     modelProvider,
     localAgentRuntimeOptions
   } = execution;
   const agentRuntime =
     input.agentRuntimeMode === "worker"
-      ? new StoreBackedAgentRuntime({ store })
+      ? new StoreBackedAgentRuntime({ store: store.agentRuns })
       : new LocalAgentRuntime({
           ...localAgentRuntimeOptions,
-          conversationHistory: store,
-          agentRunStore: store,
-          runObservationStore: store
+          conversationHistory: store.conversations,
+          agentRunStore: store.agentRuns,
+          runObservationStore: store.agentRuns
         });
   const { authAdapter, standaloneAuth, sessionToken, serviceAccessToken, allowedOrigins } =
     await createClientInstanceAuth({
@@ -131,16 +130,13 @@ export async function createClientInstanceApp(
     config,
     clientInstanceId,
     authAdapter,
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    apiAccessStore: store,
+    stores: store,
     usageGovernance,
     auditRecorder,
     approvalRequests: {
-      store,
+      store: store.approvals,
       handlers: execution.approvalRequestHandlers,
-      onDecided: (request) => store.appendApprovalDecision(request)
+      onDecided: (request) => store.approvals.appendApprovalDecision(request)
     },
     configAssets: execution.configAssets,
     agentRuntime,
@@ -148,7 +144,7 @@ export async function createClientInstanceApp(
     managedObjects,
     executionWorkspaceCleanup: workspaceFileByteStore?.deleteObject
       ? {
-          store,
+          store: store.executionWorkspaces,
           objects: {
             deleteObject(key) {
               const deleteObject = workspaceFileByteStore.deleteObject;
@@ -213,12 +209,12 @@ export async function createClientInstanceExecutionAssembly(
     clientInstanceId,
     dataSources,
     env,
-    files: store,
+    files: store.files,
     managedObjectAccess: {
       createAccess(accessInput) {
         return createManagedObjectAccess({
           clientInstanceId,
-          files: store,
+          files: store.files,
           logger,
           ...accessInput
         });
@@ -232,7 +228,7 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceSourceAttachment = executionWorkspaceObjectRoot
     ? createExecutionWorkspaceSourceAttachmentHandler({
         clientInstanceId,
-        files: store,
+        files: store.files,
         objectRootDirectory: executionWorkspaceObjectRoot,
         maxFileBytes: config.executionWorkspaces.sourceFiles.maxFileBytes,
         markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
@@ -245,18 +241,18 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceManagedObjectReader = workspaceFileByteStore
     ? createExecutionWorkspaceManagedObjectReader({
         clientInstanceId,
-        files: store,
+        files: store.files,
         byteStore: workspaceFileByteStore
       })
     : undefined;
-  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store });
+  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
   const managedObjects = resolveManagedObjectReaders([
     ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
   ]);
-  const assetSource = createConfigAssetSource({ store, clientInstanceId });
+  const assetSource = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
-    store,
+    store: store.configAssets,
     source: assetSource,
     validationRefs: {
       modelProviderIds: config.modelProviders.map((provider) => provider.id),
@@ -288,7 +284,7 @@ export async function createClientInstanceExecutionAssembly(
     approvalRequestHandlers.set(handler.kind, handler);
   }
   const usageGovernance = new ModelUsageGovernance({
-    store,
+    store: store.usage,
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
     costs: config.usage.costs
@@ -296,7 +292,7 @@ export async function createClientInstanceExecutionAssembly(
   const modelProvider = createModelProviderRegistry({ configs: config.modelProviders, env });
   const approvalRequestCreator = new ApprovalRequestWorkflow({
     clientInstanceId,
-    store,
+    store: store.approvals,
     handlers: approvalRequestHandlers,
     checkRunner: new ApprovalCheckRunner({
       clientInstanceId,
@@ -304,7 +300,7 @@ export async function createClientInstanceExecutionAssembly(
       modelProvider,
       usageGovernance
     }),
-    onDecided: (request) => store.appendApprovalDecision(request),
+    onDecided: (request) => store.approvals.appendApprovalDecision(request),
     auditRecorder
   });
   const workspaceTools = config.executionWorkspaces.enabled
@@ -375,7 +371,7 @@ export async function createClientInstanceExecutionAssembly(
     modelProviders: config.modelProviders,
     modelBindings: config.modelBindings,
     defaultModelProvider,
-    modelProviderContinuationStore: store,
+    modelProviderContinuationStore: store.conversations,
     modelProvider,
     toolRegistry,
     toolExecution,

@@ -7,7 +7,7 @@ import {
   type AuditRecorder,
   type JsonObject,
   type ManagedFileId,
-  type PlatformStore,
+  type PlatformStores,
   type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult,
@@ -86,22 +86,7 @@ export type { WorkspaceCommandServiceLimits } from "./workspace-tool-schemas";
 
 export const EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE = "execution_workspace";
 
-export type WorkspaceToolStore = Pick<
-  PlatformStore,
-  | "ensureExecutionWorkspace"
-  | "listWorkspaceFiles"
-  | "upsertWorkspaceFile"
-  | "deleteWorkspaceFile"
-  | "enqueueWorkspaceCommand"
-  | "getWorkspaceCommand"
-  | "requestWorkspaceCommandCancellation"
-  | "countActiveWorkspaceCommands"
-  | "createManagedArtifact"
-  | "getManagedArtifact"
-  | "enqueueArtifactPreviewJob"
-  | "getArtifactPreviewJob"
-  | "getArtifactPreviewManifest"
->;
+export type WorkspaceToolStore = Pick<PlatformStores, "files" | "executionWorkspaces">;
 
 export interface WorkspaceSourceFileReader {
   readSourceFile(input: {
@@ -125,7 +110,7 @@ export interface WorkspaceCommandResultSource {
 }
 
 export interface WorkspaceCommandServiceOptions {
-  store: WorkspaceToolStore;
+  store: Pick<PlatformStores, "files" | "executionWorkspaces">;
   objectStore?: WorkspaceObjectStore;
   fileStore?: WorkspaceFileByteStore;
   sourceFileReader?: WorkspaceSourceFileReader;
@@ -139,7 +124,7 @@ export interface WorkspaceCommandServiceOptions {
 }
 
 export class WorkspaceCommandService {
-  private readonly store: WorkspaceToolStore;
+  private readonly store: Pick<PlatformStores, "files" | "executionWorkspaces">;
   private readonly objectStore?: WorkspaceObjectStore;
   private readonly fileStore?: WorkspaceFileByteStore;
   private readonly sourceFileReader?: WorkspaceSourceFileReader;
@@ -206,7 +191,7 @@ export class WorkspaceCommandService {
         expectedOutputs.length > 0
           ? new Set(
               (
-                await this.store.listWorkspaceFiles({
+                await this.store.executionWorkspaces.listWorkspaceFiles({
                   clientInstanceId: context.clientInstanceId,
                   workspaceId: workspace.value.id
                 })
@@ -246,7 +231,7 @@ export class WorkspaceCommandService {
     if (workspace.status === "failed") {
       return workspace.result;
     }
-    const files = await this.store.listWorkspaceFiles({
+    const files = await this.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: context.clientInstanceId,
       workspaceId: workspace.value.id
     });
@@ -308,21 +293,26 @@ export class WorkspaceCommandService {
         checksum: file.checksum,
         mimeType: file.mimeType
       });
-      await upsertStoredWorkspaceFile(this.store, this.fileStore, this.telemetry, {
-        clientInstanceId: context.clientInstanceId,
-        workspaceId: workspace.value.id,
-        path: file.path,
-        objectKey: stored.objectKey,
-        byteSize: file.byteSize,
-        checksum: file.checksum,
-        mimeType: file.mimeType,
-        metadata: {
-          source: "managed_file_upload",
-          sourceFileId: file.fileId,
-          filename: file.filename
-        },
-        updatedAt: this.now()
-      });
+      await upsertStoredWorkspaceFile(
+        this.store.executionWorkspaces,
+        this.fileStore,
+        this.telemetry,
+        {
+          clientInstanceId: context.clientInstanceId,
+          workspaceId: workspace.value.id,
+          path: file.path,
+          objectKey: stored.objectKey,
+          byteSize: file.byteSize,
+          checksum: file.checksum,
+          mimeType: file.mimeType,
+          metadata: {
+            source: "managed_file_upload",
+            sourceFileId: file.fileId,
+            filename: file.filename
+          },
+          updatedAt: this.now()
+        }
+      );
       importedFiles.push({
         fileId: file.fileId,
         path: file.path,
@@ -446,23 +436,28 @@ export class WorkspaceCommandService {
         checksum: write.checksum,
         mimeType: write.mimeType
       });
-      const file = await upsertStoredWorkspaceFile(this.store, this.fileStore, this.telemetry, {
-        clientInstanceId: context.clientInstanceId,
-        workspaceId: workspace.value.id,
-        path: write.path,
-        objectKey: stored.objectKey,
-        byteSize: write.bytes.byteLength,
-        checksum: write.checksum,
-        mimeType: write.mimeType,
-        metadata: {
-          ...(write.existing?.metadata ?? {}),
-          ...(write.existing
-            ? { modifiedBy: "workspace.apply_patch" }
-            : { source: "workspace.apply_patch" })
-        },
-        lastCommandId: patchCommandId,
-        updatedAt: this.now()
-      });
+      const file = await upsertStoredWorkspaceFile(
+        this.store.executionWorkspaces,
+        this.fileStore,
+        this.telemetry,
+        {
+          clientInstanceId: context.clientInstanceId,
+          workspaceId: workspace.value.id,
+          path: write.path,
+          objectKey: stored.objectKey,
+          byteSize: write.bytes.byteLength,
+          checksum: write.checksum,
+          mimeType: write.mimeType,
+          metadata: {
+            ...(write.existing?.metadata ?? {}),
+            ...(write.existing
+              ? { modifiedBy: "workspace.apply_patch" }
+              : { source: "workspace.apply_patch" })
+          },
+          lastCommandId: patchCommandId,
+          updatedAt: this.now()
+        }
+      );
       changedFiles.push({
         path: file.path,
         byteSize: file.byteSize,
@@ -473,7 +468,7 @@ export class WorkspaceCommandService {
 
     const deletedFiles = [];
     for (const deletion of prepared.value.deletes) {
-      const deleted = await this.store.deleteWorkspaceFile({
+      const deleted = await this.store.executionWorkspaces.deleteWorkspaceFile({
         clientInstanceId: context.clientInstanceId,
         workspaceId: workspace.value.id,
         path: deletion.path,
@@ -570,7 +565,7 @@ export class WorkspaceCommandService {
       return this.previewWorkspaceImagePaths(input, context);
     }
     return resolveWorkspacePreviewImages(input, context, {
-      store: this.store,
+      store: this.store.files,
       maxImages: this.limits.maxPreviewImages
     });
   }
@@ -614,7 +609,7 @@ export class WorkspaceCommandService {
     if (workspace.status === "failed") {
       return workspace.result;
     }
-    const files = await this.store.listWorkspaceFiles({
+    const files = await this.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: context.clientInstanceId,
       workspaceId: workspace.value.id
     });
@@ -660,7 +655,7 @@ export class WorkspaceCommandService {
           }
         );
       }
-      const artifact = await this.store.createManagedArtifact({
+      const artifact = await this.store.files.createManagedArtifact({
         clientInstanceId: context.clientInstanceId,
         conversationId: workspace.value.conversationId,
         kind: previewImageKind(mimeType),
@@ -836,7 +831,7 @@ export class WorkspaceCommandService {
     try {
       return {
         status: "success",
-        value: await this.store.enqueueWorkspaceCommand({
+        value: await this.store.executionWorkspaces.enqueueWorkspaceCommand({
           clientInstanceId: context.clientInstanceId,
           workspaceId,
           ownerUserId: getRuntimeSubjectUserId(context),
@@ -933,7 +928,7 @@ export class WorkspaceCommandService {
       if (context.signal?.aborted) {
         continue;
       }
-      const latest = await this.store.getWorkspaceCommand({
+      const latest = await this.store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id
       });
@@ -992,7 +987,7 @@ export class WorkspaceCommandService {
     reason: string
   ): Promise<WorkspaceCommand> {
     try {
-      return await this.store.requestWorkspaceCommandCancellation({
+      return await this.store.executionWorkspaces.requestWorkspaceCommandCancellation({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
         reason,
@@ -1000,7 +995,7 @@ export class WorkspaceCommandService {
       });
     } catch (error) {
       if (isAppError(error) && error.code === "CONFLICT") {
-        const latest = await this.store.getWorkspaceCommand({
+        const latest = await this.store.executionWorkspaces.getWorkspaceCommand({
           clientInstanceId: command.clientInstanceId,
           commandId: command.id
         });
@@ -1014,9 +1009,14 @@ export class WorkspaceCommandService {
 
   private async readActiveCommandCounts(
     clientInstanceId: ClientInstanceId
-  ): Promise<Awaited<ReturnType<WorkspaceToolStore["countActiveWorkspaceCommands"]>> | undefined> {
+  ): Promise<
+    | Awaited<ReturnType<WorkspaceToolStore["executionWorkspaces"]["countActiveWorkspaceCommands"]>>
+    | undefined
+  > {
     try {
-      return await this.store.countActiveWorkspaceCommands({ clientInstanceId });
+      return await this.store.executionWorkspaces.countActiveWorkspaceCommands({
+        clientInstanceId
+      });
     } catch {
       return undefined;
     }
@@ -1036,7 +1036,7 @@ export class WorkspaceCommandService {
     if (workspace.status === "failed") {
       return workspace;
     }
-    const files = await this.store.listWorkspaceFiles({
+    const files = await this.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: context.clientInstanceId,
       workspaceId: workspace.value.id
     });
@@ -1133,7 +1133,7 @@ export class WorkspaceCommandService {
     context: ToolExecutionContext,
     files: ReadonlyArray<{ path: string; byteSize: number }>
   ): Promise<ValidationResult<void>> {
-    const existingFiles = await this.store.listWorkspaceFiles({
+    const existingFiles = await this.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: context.clientInstanceId,
       workspaceId
     });
@@ -1176,7 +1176,7 @@ export class WorkspaceCommandService {
     if (!this.objectStore) {
       return failedValidationResult("Workspace file bytes are not available");
     }
-    const existingFiles = await this.store.listWorkspaceFiles({
+    const existingFiles = await this.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: input.context.clientInstanceId,
       workspaceId: input.workspaceId
     });
@@ -1274,7 +1274,9 @@ export class WorkspaceCommandService {
   private async ensureWorkspace(
     context: ToolExecutionContext
   ): Promise<
-    ValidationResult<Awaited<ReturnType<WorkspaceToolStore["ensureExecutionWorkspace"]>>>
+    ValidationResult<
+      Awaited<ReturnType<WorkspaceToolStore["executionWorkspaces"]["ensureExecutionWorkspace"]>>
+    >
   > {
     const conversationId = context.toolRequest?.conversationId;
     if (!conversationId) {
@@ -1282,7 +1284,7 @@ export class WorkspaceCommandService {
     }
     return {
       status: "success",
-      value: await this.store.ensureExecutionWorkspace({
+      value: await this.store.executionWorkspaces.ensureExecutionWorkspace({
         clientInstanceId: context.clientInstanceId,
         conversationId,
         ownerUserId: getRuntimeSubjectUserId(context),

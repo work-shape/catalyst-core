@@ -319,7 +319,7 @@ describe("workspace tools", () => {
     });
 
     expect(result.status).toBe("success");
-    const auditEvents = await harness.store.listAuditEvents({
+    const auditEvents = await harness.store.audit.listAuditEvents({
       clientInstanceId: harness.clientInstanceId,
       limit: 20
     });
@@ -366,7 +366,7 @@ describe("workspace tools", () => {
     expect(results).toHaveLength(2);
     expect(results.every((result) => result.status === "success")).toBe(true);
     await expect(
-      harness.store.countActiveWorkspaceCommands({
+      harness.store.executionWorkspaces.countActiveWorkspaceCommands({
         clientInstanceId: harness.clientInstanceId,
         conversationId: harness.conversation.id
       })
@@ -386,7 +386,7 @@ describe("workspace tools", () => {
     });
     const worker = new WorkspaceCommandWorker({
       clientInstanceId: harness.clientInstanceId,
-      store: harness.store,
+      store: harness.store.executionWorkspaces,
       runner,
       pollIntervalMs: 10,
       tempStateCleanupIntervalMs: 60_000
@@ -473,46 +473,51 @@ describe("workspace tools", () => {
         execResultWaitMs: null,
         execResultPollIntervalMs: 1000,
         serviceStore(store) {
-          return new Proxy(store, {
-            get(target, property, receiver) {
-              if (property === "getWorkspaceCommand") {
-                return async (input: Parameters<typeof store.getWorkspaceCommand>[0]) => {
-                  reads += 1;
-                  const current = await store.getWorkspaceCommand(input);
-                  if (!current || reads < 8) {
-                    return current;
-                  }
-                  const claimed = await store.claimNextWorkspaceCommand({
-                    clientInstanceId: input.clientInstanceId,
-                    workerId: "queued-wait-worker",
-                    leaseToken,
-                    now: "2026-06-29T12:00:07.000Z",
-                    leaseExpiresAt: "2026-06-29T12:05:07.000Z"
-                  });
-                  if (!claimed) {
-                    throw new Error("Expected queued command to be claimable");
-                  }
-                  return store.completeWorkspaceCommand({
-                    clientInstanceId: input.clientInstanceId,
-                    commandId: input.commandId,
-                    leaseToken,
-                    output: shapeWorkspaceCommandOutput(
-                      {
-                        exitCode: 0,
-                        stdout: "started after queue wait",
-                        stderr: "",
-                        durationMs: 17
-                      },
-                      claimed.limits
-                    ),
-                    completedAt: "2026-06-29T12:00:08.000Z"
-                  });
-                };
+          return {
+            ...store,
+            executionWorkspaces: new Proxy(store.executionWorkspaces, {
+              get(target, property, receiver) {
+                if (property === "getWorkspaceCommand") {
+                  return async (
+                    input: Parameters<typeof store.executionWorkspaces.getWorkspaceCommand>[0]
+                  ) => {
+                    reads += 1;
+                    const current = await store.executionWorkspaces.getWorkspaceCommand(input);
+                    if (!current || reads < 8) {
+                      return current;
+                    }
+                    const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
+                      clientInstanceId: input.clientInstanceId,
+                      workerId: "queued-wait-worker",
+                      leaseToken,
+                      now: "2026-06-29T12:00:07.000Z",
+                      leaseExpiresAt: "2026-06-29T12:05:07.000Z"
+                    });
+                    if (!claimed) {
+                      throw new Error("Expected queued command to be claimable");
+                    }
+                    return store.executionWorkspaces.completeWorkspaceCommand({
+                      clientInstanceId: input.clientInstanceId,
+                      commandId: input.commandId,
+                      leaseToken,
+                      output: shapeWorkspaceCommandOutput(
+                        {
+                          exitCode: 0,
+                          stdout: "started after queue wait",
+                          stderr: "",
+                          durationMs: 17
+                        },
+                        claimed.limits
+                      ),
+                      completedAt: "2026-06-29T12:00:08.000Z"
+                    });
+                  };
+                }
+                const value = Reflect.get(target, property, receiver);
+                return typeof value === "function" ? value.bind(target) : value;
               }
-              const value = Reflect.get(target, property, receiver);
-              return typeof value === "function" ? value.bind(target) : value;
-            }
-          });
+            })
+          };
         }
       });
 
@@ -571,7 +576,7 @@ describe("workspace tools", () => {
     const commandId = jsonObject(result.error.details).commandId;
     expect(typeof commandId).toBe("string");
     await expect(
-      harness.store.getWorkspaceCommand({
+      harness.store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: harness.clientInstanceId,
         commandId: asWorkspaceCommandId(text(commandId))
       })
@@ -599,7 +604,7 @@ describe("workspace tools", () => {
     });
     const commandId = jsonObject(result.error.details).commandId;
     expect(typeof commandId).toBe("string");
-    const command = await harness.store.getWorkspaceCommand({
+    const command = await harness.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
       commandId: asWorkspaceCommandId(text(commandId))
     });
@@ -612,45 +617,50 @@ describe("workspace tools", () => {
       execResultWaitMs: 1,
       execResultPollIntervalMs: 1,
       serviceStore(store) {
-        return new Proxy(store, {
-          get(target, property, receiver) {
-            if (property === "requestWorkspaceCommandCancellation") {
-              return async (
-                input: Parameters<typeof store.requestWorkspaceCommandCancellation>[0]
-              ) => {
-                const claimed = await store.claimNextWorkspaceCommand({
-                  clientInstanceId: input.clientInstanceId,
-                  workerId: "race-worker",
-                  leaseToken,
-                  now: "2026-06-29T12:00:01.000Z",
-                  leaseExpiresAt: "2026-06-29T12:05:01.000Z"
-                });
-                expect(claimed?.id).toBe(input.commandId);
-                if (!claimed) {
-                  throw new Error("Expected queued command to be claimable");
-                }
-                await store.completeWorkspaceCommand({
-                  clientInstanceId: input.clientInstanceId,
-                  commandId: input.commandId,
-                  leaseToken,
-                  output: shapeWorkspaceCommandOutput(
-                    {
-                      exitCode: 0,
-                      stdout: "finished before cancellation",
-                      stderr: "",
-                      durationMs: 17
-                    },
-                    claimed.limits
-                  ),
-                  completedAt: "2026-06-29T12:00:02.000Z"
-                });
-                return store.requestWorkspaceCommandCancellation(input);
-              };
+        return {
+          ...store,
+          executionWorkspaces: new Proxy(store.executionWorkspaces, {
+            get(target, property, receiver) {
+              if (property === "requestWorkspaceCommandCancellation") {
+                return async (
+                  input: Parameters<
+                    typeof store.executionWorkspaces.requestWorkspaceCommandCancellation
+                  >[0]
+                ) => {
+                  const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
+                    clientInstanceId: input.clientInstanceId,
+                    workerId: "race-worker",
+                    leaseToken,
+                    now: "2026-06-29T12:00:01.000Z",
+                    leaseExpiresAt: "2026-06-29T12:05:01.000Z"
+                  });
+                  expect(claimed?.id).toBe(input.commandId);
+                  if (!claimed) {
+                    throw new Error("Expected queued command to be claimable");
+                  }
+                  await store.executionWorkspaces.completeWorkspaceCommand({
+                    clientInstanceId: input.clientInstanceId,
+                    commandId: input.commandId,
+                    leaseToken,
+                    output: shapeWorkspaceCommandOutput(
+                      {
+                        exitCode: 0,
+                        stdout: "finished before cancellation",
+                        stderr: "",
+                        durationMs: 17
+                      },
+                      claimed.limits
+                    ),
+                    completedAt: "2026-06-29T12:00:02.000Z"
+                  });
+                  return store.executionWorkspaces.requestWorkspaceCommandCancellation(input);
+                };
+              }
+              const value = Reflect.get(target, property, receiver);
+              return typeof value === "function" ? value.bind(target) : value;
             }
-            const value = Reflect.get(target, property, receiver);
-            return typeof value === "function" ? value.bind(target) : value;
-          }
-        });
+          })
+        };
       }
     });
 
@@ -669,7 +679,7 @@ describe("workspace tools", () => {
       stderrPreview: "",
       durationMs: 17
     });
-    const command = await harness.store.getWorkspaceCommand({
+    const command = await harness.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
       commandId: asWorkspaceCommandId(text(jsonObject(result.output).commandId))
     });
@@ -766,7 +776,7 @@ describe("workspace tools", () => {
     });
     const worker = new WorkspaceCommandWorker({
       clientInstanceId: harness.clientInstanceId,
-      store: harness.store,
+      store: harness.store.executionWorkspaces,
       runner,
       pollIntervalMs: 10,
       tempStateCleanupIntervalMs: 60_000
@@ -961,7 +971,7 @@ describe("workspace tools", () => {
       });
       // The Conversation is deleted between the bytes and the record.
       harness.objectStore.afterPutWorkspaceFile = async () => {
-        await harness.store.deleteConversation({
+        await harness.store.conversations.deleteConversation({
           clientInstanceId: harness.clientInstanceId,
           conversationId: harness.conversation.id,
           deletedAt: "2026-06-29T12:00:01.000Z"
@@ -986,7 +996,7 @@ describe("workspace tools", () => {
       }
     });
     harness.objectStore.afterPutWorkspaceFile = async () => {
-      await harness.store.deleteConversation({
+      await harness.store.conversations.deleteConversation({
         clientInstanceId: harness.clientInstanceId,
         conversationId: harness.conversation.id,
         deletedAt: "2026-06-29T12:00:01.000Z"
@@ -1047,7 +1057,7 @@ describe("workspace tools", () => {
     });
     expect(JSON.stringify(imported)).not.toContain("objectKey");
 
-    const workspaceFiles = await harness.store.listWorkspaceFiles({
+    const workspaceFiles = await harness.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: asExecutionWorkspaceId(text(jsonObject(imported.output).workspaceId))
     });
@@ -1094,7 +1104,7 @@ describe("workspace tools", () => {
       mimeType: "application/pdf"
     });
 
-    const workspaceFiles = await harness.store.listWorkspaceFiles({
+    const workspaceFiles = await harness.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: asExecutionWorkspaceId(text(jsonObject(imported.output).workspaceId))
     });
@@ -1190,7 +1200,7 @@ describe("workspace tools", () => {
       filename: "final.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     });
-    const artifact = await harness.store.getManagedArtifact({
+    const artifact = await harness.store.files.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: promoted.artifacts![0]!.artifactId
     });
@@ -1205,7 +1215,7 @@ describe("workspace tools", () => {
       }
     });
     expect(artifact?.metadata).not.toHaveProperty("preview");
-    const previewJob = await harness.store.getArtifactPreviewJob({
+    const previewJob = await harness.store.files.getArtifactPreviewJob({
       clientInstanceId: harness.clientInstanceId,
       sourceArtifactId: promoted.artifacts![0]!.artifactId
     });
@@ -1216,7 +1226,7 @@ describe("workspace tools", () => {
       sourceMimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     });
     const promotedFile = (
-      await harness.store.listWorkspaceFiles({
+      await harness.store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: harness.clientInstanceId,
         workspaceId: sourceFile.workspaceId
       })
@@ -1352,13 +1362,13 @@ describe("workspace tools", () => {
 
   it("does not register a ready preview artifact when workspace bytes are missing", async () => {
     const harness = await createWorkspaceHarness();
-    const workspace = await harness.store.ensureExecutionWorkspace({
+    const workspace = await harness.store.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       ownerUserId: harness.ownerUserId,
       now: "2026-06-29T12:00:00.000Z"
     });
-    await harness.store.upsertWorkspaceFile({
+    await harness.store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id,
       path: "previews/missing/page-1.png",
@@ -1381,7 +1391,7 @@ describe("workspace tools", () => {
       }
     });
     expect(
-      await harness.store.listConversationManagedArtifacts({
+      await harness.store.files.listConversationManagedArtifacts({
         clientInstanceId: harness.clientInstanceId,
         conversationId: harness.conversation.id
       })
@@ -1431,7 +1441,7 @@ async function waitForQueuedCommand(
   harness: Awaited<ReturnType<typeof createWorkspaceHarness>>
 ): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    const counts = await harness.store.countActiveWorkspaceCommands({
+    const counts = await harness.store.executionWorkspaces.countActiveWorkspaceCommands({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id
     });

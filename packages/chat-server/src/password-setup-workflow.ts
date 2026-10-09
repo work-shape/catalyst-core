@@ -141,7 +141,7 @@ export class PasswordSetupWorkflow {
   }
 
   private async findUserByPasswordSignIn(externalUserId: string): Promise<UserRecord | undefined> {
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     return users.find((candidate) =>

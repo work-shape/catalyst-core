@@ -111,7 +111,7 @@ describe("client instance app vertical slice", () => {
     const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
@@ -123,13 +123,13 @@ describe("client instance app vertical slice", () => {
       title: "Failed projection test",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const userMessage = await store.appendMessage({
+    const userMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId: conversation.id,
       role: "user",
       text: "process these documents"
     });
-    const run = await store.createAgentRun({
+    const run = await store.agentRuns.createAgentRun({
       id: createPlatformId<"AgentRunId">("run"),
       clientInstanceId,
       conversationId: conversation.id,
@@ -139,7 +139,7 @@ describe("client instance app vertical slice", () => {
       correlationId: "failed-projection",
       startedAt: "2026-08-11T00:00:00.000Z"
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -157,7 +157,7 @@ describe("client instance app vertical slice", () => {
       message: "Daily customer billable cost is incomplete",
       category: "app_error" as const
     };
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -170,7 +170,7 @@ describe("client instance app vertical slice", () => {
         createdAt: "2026-08-11T00:00:02.000Z"
       }
     });
-    await store.updateAgentRunStatus({
+    await store.agentRuns.updateAgentRunStatus({
       clientInstanceId,
       runId: run.id,
       status: "failed",
@@ -191,9 +191,7 @@ describe("client instance app vertical slice", () => {
             return owner;
           }
         },
-        conversationStore: store,
-        auditEventStore: store,
-        userStore: store,
+        stores: store,
         usageGovernance,
         auditRecorder: new NoopAuditRecorder(),
         agentRuntime: createMissingRuntime(),
@@ -234,7 +232,7 @@ describe("client instance app vertical slice", () => {
     const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
@@ -246,13 +244,13 @@ describe("client instance app vertical slice", () => {
       title: "Completed projection test",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const userMessage = await store.appendMessage({
+    const userMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId: conversation.id,
       role: "user",
       text: "müssen supermärkte jegliches Pfand annehmen?"
     });
-    const run = await store.createAgentRun({
+    const run = await store.agentRuns.createAgentRun({
       id: createPlatformId<"AgentRunId">("run"),
       clientInstanceId,
       conversationId: conversation.id,
@@ -268,7 +266,7 @@ describe("client instance app vertical slice", () => {
     const finalText = "Kurz: Nein. Supermärkte müssen nicht jegliches Pfand annehmen.";
     const finalMessageId = createPlatformId<"MessageId">("msg");
 
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -281,7 +279,7 @@ describe("client instance app vertical slice", () => {
         delta: progressText
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -298,7 +296,7 @@ describe("client instance app vertical slice", () => {
         }
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -316,7 +314,7 @@ describe("client instance app vertical slice", () => {
         modelOutput: '{"sourceCount":1}'
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -329,7 +327,7 @@ describe("client instance app vertical slice", () => {
         delta: finalText
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -349,7 +347,7 @@ describe("client instance app vertical slice", () => {
         }
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -361,7 +359,7 @@ describe("client instance app vertical slice", () => {
         createdAt: "2026-07-01T12:00:06.000Z"
       }
     });
-    await store.updateAgentRunStatus({
+    await store.agentRuns.updateAgentRunStatus({
       clientInstanceId,
       runId: run.id,
       status: "completed",
@@ -369,7 +367,7 @@ describe("client instance app vertical slice", () => {
       completedAt: "2026-07-01T12:00:06.000Z",
       lastSequence: 6
     });
-    await store.appendMessage({
+    await store.conversations.appendMessage({
       id: finalMessageId,
       clientInstanceId,
       conversationId: conversation.id,
@@ -380,13 +378,13 @@ describe("client instance app vertical slice", () => {
       })
     });
 
-    const finalOnlyUserMessage = await store.appendMessage({
+    const finalOnlyUserMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId: conversation.id,
       role: "user",
       text: "split this PDF into three files"
     });
-    const finalOnlyRun = await store.createAgentRun({
+    const finalOnlyRun = await store.agentRuns.createAgentRun({
       id: createPlatformId<"AgentRunId">("run_final_only"),
       clientInstanceId,
       conversationId: conversation.id,
@@ -401,7 +399,7 @@ describe("client instance app vertical slice", () => {
     const finalOnlyText = "Done. I split the PDF into 3 files.";
     const finalOnlyMessageId = createPlatformId<"MessageId">("msg_final_only");
 
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: finalOnlyRun.id,
       conversationId: conversation.id,
@@ -414,7 +412,7 @@ describe("client instance app vertical slice", () => {
         delta: finalOnlyProgressText
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: finalOnlyRun.id,
       conversationId: conversation.id,
@@ -431,7 +429,7 @@ describe("client instance app vertical slice", () => {
         }
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: finalOnlyRun.id,
       conversationId: conversation.id,
@@ -449,7 +447,7 @@ describe("client instance app vertical slice", () => {
         modelOutput: '{"ok":true}'
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: finalOnlyRun.id,
       conversationId: conversation.id,
@@ -462,7 +460,7 @@ describe("client instance app vertical slice", () => {
         delta: finalOnlyText
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: finalOnlyRun.id,
       conversationId: conversation.id,
@@ -482,7 +480,7 @@ describe("client instance app vertical slice", () => {
         }
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: finalOnlyRun.id,
       conversationId: conversation.id,
@@ -494,7 +492,7 @@ describe("client instance app vertical slice", () => {
         createdAt: "2026-07-01T12:01:06.000Z"
       }
     });
-    await store.updateAgentRunStatus({
+    await store.agentRuns.updateAgentRunStatus({
       clientInstanceId,
       runId: finalOnlyRun.id,
       status: "completed",
@@ -502,7 +500,7 @@ describe("client instance app vertical slice", () => {
       completedAt: "2026-07-01T12:01:06.000Z",
       lastSequence: 6
     });
-    await store.appendMessage({
+    await store.conversations.appendMessage({
       id: finalOnlyMessageId,
       clientInstanceId,
       conversationId: conversation.id,
@@ -524,9 +522,7 @@ describe("client instance app vertical slice", () => {
             return owner;
           }
         },
-        conversationStore: store,
-        auditEventStore: store,
-        userStore: store,
+        stores: store,
         usageGovernance,
         auditRecorder: new NoopAuditRecorder(),
         agentRuntime: createMissingRuntime(),
@@ -594,7 +590,7 @@ describe("client instance app vertical slice", () => {
     const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
@@ -606,13 +602,13 @@ describe("client instance app vertical slice", () => {
       title: "Incomplete completed projection test",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const userMessage = await store.appendMessage({
+    const userMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId: conversation.id,
       role: "user",
       text: "müssen supermärkte jegliches Pfand annehmen?"
     });
-    const run = await store.createAgentRun({
+    const run = await store.agentRuns.createAgentRun({
       id: createPlatformId<"AgentRunId">("run-incomplete"),
       clientInstanceId,
       conversationId: conversation.id,
@@ -622,7 +618,7 @@ describe("client instance app vertical slice", () => {
       correlationId: "incomplete-completed-projection",
       startedAt: "2026-07-01T12:00:00.000Z"
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -635,7 +631,7 @@ describe("client instance app vertical slice", () => {
         delta: "Ich prüfe kurz die aktuellen offiziellen Regeln."
       }
     });
-    await store.appendRunObservation({
+    await store.agentRuns.appendRunObservation({
       clientInstanceId,
       runId: run.id,
       conversationId: conversation.id,
@@ -647,7 +643,7 @@ describe("client instance app vertical slice", () => {
         createdAt: "2026-07-01T12:00:02.000Z"
       }
     });
-    await store.updateAgentRunStatus({
+    await store.agentRuns.updateAgentRunStatus({
       clientInstanceId,
       runId: run.id,
       status: "completed",
@@ -655,7 +651,7 @@ describe("client instance app vertical slice", () => {
       completedAt: "2026-07-01T12:00:02.000Z",
       lastSequence: 2
     });
-    await store.appendMessage({
+    await store.conversations.appendMessage({
       clientInstanceId,
       conversationId: conversation.id,
       role: "assistant",
@@ -676,9 +672,7 @@ describe("client instance app vertical slice", () => {
             return owner;
           }
         },
-        conversationStore: store,
-        auditEventStore: store,
-        userStore: store,
+        stores: store,
         usageGovernance,
         auditRecorder: new NoopAuditRecorder(),
         agentRuntime: createMissingRuntime(),

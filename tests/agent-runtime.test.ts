@@ -53,20 +53,20 @@ describe("local agent runtime", () => {
       commandKind: "start_conversation_run" as const
     };
 
-    const firstClaim = await store.claimRunStartCommand({
+    const firstClaim = await store.agentRuns.claimRunStartCommand({
       ...baseInput,
       createdAt: "2026-06-27T00:00:00.000Z"
     });
     expect(firstClaim.status).toBe("claimed");
 
-    const freshRetry = await store.claimRunStartCommand({
+    const freshRetry = await store.agentRuns.claimRunStartCommand({
       ...baseInput,
       createdAt: "2026-06-27T00:01:00.000Z",
       reclaimPendingBefore: "2026-06-26T23:59:00.000Z"
     });
     expect(freshRetry.status).toBe("existing");
 
-    const reclaimed = await store.claimRunStartCommand({
+    const reclaimed = await store.agentRuns.claimRunStartCommand({
       ...baseInput,
       createdAt: "2026-06-27T00:06:00.000Z",
       reclaimPendingBefore: "2026-06-27T00:05:00.000Z"
@@ -77,7 +77,7 @@ describe("local agent runtime", () => {
       updatedAt: "2026-06-27T00:06:00.000Z"
     });
     await expect(
-      store.completeRunStartCommand({
+      store.agentRuns.completeRunStartCommand({
         ...baseInput,
         claimedAt: firstClaim.command.updatedAt,
         conversationId: asConversationId("conv_reclaim_old"),
@@ -141,7 +141,7 @@ describe("local agent runtime", () => {
       },
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider: {
         id: "test-provider",
         async complete(request) {
@@ -157,7 +157,7 @@ describe("local agent runtime", () => {
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -234,7 +234,7 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider: {
         id: "test-provider",
         async complete() {
@@ -248,7 +248,7 @@ describe("local agent runtime", () => {
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -332,7 +332,7 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider: {
         id: "test-provider",
         async complete() {
@@ -366,7 +366,7 @@ describe("local agent runtime", () => {
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -423,7 +423,7 @@ describe("local agent runtime", () => {
     });
 
     const assistantMessages = (
-      await store.listMessages({
+      await store.conversations.listMessages({
         clientInstanceId,
         conversationId
       })
@@ -491,7 +491,7 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider: {
         id: "test-provider",
         async complete() {
@@ -551,7 +551,7 @@ describe("local agent runtime", () => {
         }
       },
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -644,12 +644,12 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -702,7 +702,7 @@ describe("local agent runtime", () => {
       clientInstanceId,
       messages: []
     });
-    const inputMessage = await store.appendMessage({
+    const inputMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId,
       role: "user",
@@ -737,8 +737,8 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
-      agentRunStore: store,
+      conversationHistory: store.conversations,
+      agentRunStore: store.agentRuns,
       runObservationStore: failingObservationStore,
       modelProvider: {
         id: "test-provider",
@@ -753,7 +753,7 @@ describe("local agent runtime", () => {
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -873,12 +873,12 @@ describe("local agent runtime", () => {
         }
       ],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -1034,11 +1034,11 @@ describe("local agent runtime", () => {
         }
       ],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({ store, budget: {}, safeguards: {} })
+      usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
     });
 
     for (const modelBindingId of [undefined, "plainBinding"]) {
@@ -1057,7 +1057,7 @@ describe("local agent runtime", () => {
       ["fast-model", true],
       ["plain-model", false]
     ]);
-    const events = await store.listModelUsageEvents({ clientInstanceId });
+    const events = await store.usage.listModelUsageEvents({ clientInstanceId });
     expect(
       events
         .map((event) => [event.model, event.fastMode, event.providerServiceTier])
@@ -1159,12 +1159,12 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -1259,12 +1259,12 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       }),
@@ -1391,7 +1391,7 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({
         tools: [
@@ -1419,7 +1419,7 @@ describe("local agent runtime", () => {
         }
       },
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -1466,7 +1466,7 @@ describe("local agent runtime", () => {
     expect(completedMessages).toEqual(["The page contains the invoice total."]);
 
     const assistantMessages = (
-      await store.listMessages({
+      await store.conversations.listMessages({
         clientInstanceId,
         conversationId
       })
@@ -1559,12 +1559,12 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -1698,11 +1698,15 @@ describe("local agent runtime", () => {
           }),
           modelProviders: [providerConfig],
           defaultModelProvider: providerConfig,
-          conversationHistory: store,
+          conversationHistory: store.conversations,
           modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
           toolRegistry: new ToolRegistry({ tools: [] }),
           toolExecution: createUnusedToolExecution(),
-          usageGovernance: new ModelUsageGovernance({ store, budget: {}, safeguards: {} })
+          usageGovernance: new ModelUsageGovernance({
+            store: store.usage,
+            budget: {},
+            safeguards: {}
+          })
         });
         const run = await runtime.start(
           { agentName: "retry_agent", conversationId, message: { text: "hello" } },
@@ -1795,12 +1799,12 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -1917,7 +1921,7 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
@@ -1964,7 +1968,7 @@ describe("local agent runtime", () => {
       title: "Tool artifact observation",
       retainedUntil: "2026-07-29T00:00:00.000Z"
     });
-    const userMessage = await store.appendMessage({
+    const userMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId: conversation.id,
       role: "user",
@@ -2025,9 +2029,9 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
-      agentRunStore: store,
-      runObservationStore: store,
+      conversationHistory: store.conversations,
+      agentRunStore: store.agentRuns,
+      runObservationStore: store.agentRuns,
       modelProvider,
       toolRegistry: new ToolRegistry({
         tools: [
@@ -2057,7 +2061,7 @@ describe("local agent runtime", () => {
         }
       },
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -2079,7 +2083,7 @@ describe("local agent runtime", () => {
       // Drain the run so event persistence has completed.
     }
 
-    const observations = await store.listRunObservations({
+    const observations = await store.agentRuns.listRunObservations({
       clientInstanceId,
       runId: run.runId
     });
@@ -2095,7 +2099,7 @@ describe("local agent runtime", () => {
     });
 
     const toolMessage = (
-      await store.listMessages({
+      await store.conversations.listMessages({
         clientInstanceId,
         conversationId: conversation.id
       })
@@ -2219,7 +2223,7 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({
         tools: [
@@ -2248,7 +2252,7 @@ describe("local agent runtime", () => {
         }
       },
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -2389,21 +2393,21 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
-      modelProviderContinuationStore: store,
-      agentRunStore: store,
-      runObservationStore: store,
+      conversationHistory: store.conversations,
+      modelProviderContinuationStore: store.conversations,
+      agentRunStore: store.agentRuns,
+      runObservationStore: store.agentRuns,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
     });
 
-    const firstUserMessage = await store.appendMessage({
+    const firstUserMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId,
       role: "user",
@@ -2432,14 +2436,14 @@ describe("local agent runtime", () => {
       compacted: true
     });
 
-    const persistedAfterCompaction = await store.listMessages({
+    const persistedAfterCompaction = await store.conversations.listMessages({
       clientInstanceId,
       conversationId
     });
     const checkpoint = persistedAfterCompaction.at(-1);
     expect(readAssistantProviderContinuation(checkpoint?.metadata)).toBeUndefined();
     expect(
-      await store.getModelProviderContinuation({
+      await store.conversations.getModelProviderContinuation({
         clientInstanceId,
         conversationId,
         providerId: "test-provider"
@@ -2453,7 +2457,7 @@ describe("local agent runtime", () => {
       updatedAt: checkpoint?.createdAt
     });
 
-    const secondUserMessage = await store.appendMessage({
+    const secondUserMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId,
       role: "user",
@@ -2488,7 +2492,7 @@ describe("local agent runtime", () => {
       providerId: "test-provider",
       state: { compaction: { encrypted_content: "newer-legacy-checkpoint" } }
     };
-    await store.appendMessage({
+    await store.conversations.appendMessage({
       clientInstanceId,
       conversationId,
       role: "assistant",
@@ -2503,7 +2507,7 @@ describe("local agent runtime", () => {
         }
       }
     });
-    const thirdUserMessage = await store.appendMessage({
+    const thirdUserMessage = await store.conversations.appendMessage({
       clientInstanceId,
       conversationId,
       role: "user",
@@ -2586,12 +2590,12 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       }),
@@ -2670,12 +2674,12 @@ describe("local agent runtime", () => {
       }),
       modelProviders: [providerConfig],
       defaultModelProvider: providerConfig,
-      conversationHistory: store,
+      conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: {},
         safeguards: {}
       })
@@ -2717,7 +2721,7 @@ async function createConversationWithMessages(
     retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
   });
   for (const message of input.messages) {
-    await store.appendMessage({
+    await store.conversations.appendMessage({
       clientInstanceId: input.clientInstanceId,
       conversationId: conversation.id,
       role: message.role,
@@ -2779,7 +2783,7 @@ async function waitForPersistedRunStatus(
   }
 ) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const run = await store.getAgentRun({
+    const run = await store.agentRuns.getAgentRun({
       clientInstanceId: input.clientInstanceId,
       runId: input.runId
     });

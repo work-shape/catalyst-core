@@ -178,7 +178,7 @@ describe("docker workspace command runner", () => {
       exitCode: 124,
       stderrPreview: "timed out"
     });
-    const command = await harness.store.getWorkspaceCommand({
+    const command = await harness.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
       commandId: asWorkspaceCommandId(result.output!.commandId)
     });

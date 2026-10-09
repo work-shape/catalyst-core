@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import type {
   ApiKeyAccessTokenExchange,
   HmacSessionTokenIssuer,
@@ -6,22 +7,11 @@ import type {
 import type {
   AgentConfig,
   AgentRuntime,
-  AgentRunStore,
-  ApiAccessStore,
-  AuditEventStore,
   ClientInstanceId,
-  CollaborationWorkspaceStore,
   ConfigAssetSource,
   ConfigAssetStore,
-  ConversationRetentionStore,
-  ConversationStore,
   ExecutionWorkspaceCleanupStore,
-  ManagedArtifactId,
-  PlatformFileStore,
-  RunObservationStore,
-  StructuredDataStore,
-  UserStore,
-  WorkspaceCommandStore
+  ManagedArtifactId
 } from "@vivd-catalyst/core";
 import type { AuditRecorder } from "@vivd-catalyst/core";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
@@ -59,16 +49,7 @@ export interface ChatServerOptions {
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;
   authAdapter: AuthAdapter;
-  conversationStore: ConversationStore &
-    ConversationRetentionStore &
-    PlatformFileStore &
-    AgentRunStore &
-    RunObservationStore &
-    StructuredDataStore &
-    Pick<WorkspaceCommandStore, "countActiveWorkspaceCommands">;
-  auditEventStore: AuditEventStore;
-  userStore: UserStore & CollaborationWorkspaceStore;
-  apiAccessStore: ApiAccessStore;
+  stores: PlatformStores;
   usageGovernance: ModelUsageGovernance;
   auditRecorder: AuditRecorder;
   configAssets: {

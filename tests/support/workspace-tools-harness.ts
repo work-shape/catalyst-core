@@ -1,4 +1,5 @@
-import { type TestMemoryStore, createTestInstance } from "./test-instance";
+import type { PlatformStores } from "@vivd-catalyst/core";
+import { createTestInstance } from "./test-instance";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -33,7 +34,7 @@ export async function createWorkspaceHarness(
     >[0]["execResultPollIntervalMs"];
     limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
     serviceStore?: (
-      store: TestMemoryStore
+      store: PlatformStores
     ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
     telemetry?: WorkspaceCommandTelemetry;
     withAuditRecorder?: boolean;
@@ -49,7 +50,7 @@ export async function createWorkspaceHarness(
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`);
   const store = createTestInstance().stores;
-  const owner = await store.resolveUserIdentity({
+  const owner = await store.users.resolveUserIdentity({
     clientInstanceId,
     authSource: "test",
     externalUserId: "user-1",
@@ -59,11 +60,11 @@ export async function createWorkspaceHarness(
     permissions: []
   });
   const ownerUserId = owner.id;
-  const personalWorkspace = await store.ensurePersonalWorkspace({
+  const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
     clientInstanceId,
     userId: asUserId(owner.id)
   });
-  const conversation = await store.createConversation({
+  const conversation = await store.conversations.createConversation({
     visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
@@ -74,7 +75,7 @@ export async function createWorkspaceHarness(
   });
   const objectStore = new TestWorkspaceObjectStore();
   const auditRecorder = input.withAuditRecorder
-    ? new StoreBackedAuditRecorder({ clientInstanceId, store })
+    ? new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
     : undefined;
   const service = new WorkspaceCommandService({
     store: input.serviceStore?.(store) ?? store,
@@ -152,7 +153,7 @@ export async function createWorkspaceHarness(
       mimeType?: string;
       metadata?: JsonObject;
     }) {
-      const workspace = await store.ensureExecutionWorkspace({
+      const workspace = await store.executionWorkspaces.ensureExecutionWorkspace({
         clientInstanceId,
         conversationId: conversation.id,
         ownerUserId,
@@ -161,7 +162,7 @@ export async function createWorkspaceHarness(
       const bytes =
         typeof file.bytes === "string" ? new TextEncoder().encode(file.bytes) : file.bytes;
       objectStore.putObject(file.objectKey, bytes);
-      return store.upsertWorkspaceFile({
+      return store.executionWorkspaces.upsertWorkspaceFile({
         clientInstanceId,
         workspaceId: workspace.id,
         path: file.path,

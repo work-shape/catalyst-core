@@ -9,7 +9,7 @@ import {
   type ManagedArtifactId,
   type ManagedArtifactRecord,
   type ManagedArtifactRef,
-  type PlatformStore,
+  type PlatformStores,
   type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult
@@ -30,8 +30,8 @@ import { failed } from "./workspace-tool-results";
 export type WorkspacePreviewImagesInput = z.infer<typeof workspacePreviewImagesInputSchema>;
 export type WorkspacePreviewImagesOutput = z.infer<typeof workspacePreviewImagesOutputSchema>;
 
-export type WorkspacePreviewImagesStore = Pick<
-  PlatformStore,
+type WorkspacePreviewImagesStore = Pick<
+  PlatformStores["files"],
   | "enqueueArtifactPreviewJob"
   | "getArtifactPreviewJob"
   | "getArtifactPreviewManifest"

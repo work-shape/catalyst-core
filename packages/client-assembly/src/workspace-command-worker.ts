@@ -52,7 +52,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
   });
   const auditRecorder = new StoreBackedAuditRecorder({
     clientInstanceId,
-    store
+    store: store.audit
   });
   const telemetry = createConsoleWorkspaceCommandTelemetry(logger);
   const processExecutor =
@@ -71,7 +71,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
   });
   const worker = new WorkspaceCommandWorker({
     clientInstanceId,
-    store,
+    store: store.executionWorkspaces,
     runner,
     workerId: env.WORKSPACE_COMMAND_WORKER_ID,
     ...config.executionWorkspaces.worker,

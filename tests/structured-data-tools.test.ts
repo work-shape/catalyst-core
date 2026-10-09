@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import {
@@ -28,7 +29,7 @@ describe("structured_data.publish", () => {
       harness.clientInstanceId,
       harness.conversation.id
     );
-    await harness.store.appendMessage({
+    await harness.store.conversations.appendMessage({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       role: "assistant",
@@ -605,7 +606,7 @@ async function createHarness(publicationReviewer?: StructuredDataPublicationRevi
     store,
     conversation,
     resources: () =>
-      store.listStructuredDataResources({
+      store.structuredData.listStructuredDataResources({
         clientInstanceId,
         conversationId: conversation.id
       }),
@@ -631,7 +632,7 @@ function appendResult(
   harness: Awaited<ReturnType<typeof createHarness>>,
   result: Parameters<typeof createToolResultMetadata>[0]["result"]
 ) {
-  return harness.store.appendMessage({
+  return harness.store.conversations.appendMessage({
     clientInstanceId: harness.clientInstanceId,
     conversationId: harness.conversation.id,
     role: "tool",
@@ -650,11 +651,13 @@ function appendResult(
 }
 
 async function createSentAttachment(
-  store: TestMemoryStore,
+  store: PlatformStores,
   clientInstanceId: ReturnType<typeof asClientInstanceId>,
-  conversationId: Parameters<TestMemoryStore["createConversationAttachment"]>[0]["conversationId"]
+  conversationId: Parameters<
+    TestMemoryStore["files"]["createConversationAttachment"]
+  >[0]["conversationId"]
 ) {
-  const file = await store.createManagedFile({
+  const file = await store.files.createManagedFile({
     clientInstanceId,
     ownerUserId: "user-1",
     filename: "source.pdf",
@@ -663,7 +666,7 @@ async function createSentAttachment(
     checksum: `sha256:${globalThis.crypto.randomUUID()}`,
     objectKey: `private/${globalThis.crypto.randomUUID()}`
   });
-  const attachment = await store.createConversationAttachment({
+  const attachment = await store.files.createConversationAttachment({
     clientInstanceId,
     conversationId,
     fileId: file.id,
@@ -674,7 +677,7 @@ async function createSentAttachment(
     status: "ready",
     format: "pdf"
   });
-  await store.claimReadyDraftAttachmentsForMessage({
+  await store.files.claimReadyDraftAttachmentsForMessage({
     clientInstanceId,
     conversationId,
     messageId: asMessageId(`msg_${globalThis.crypto.randomUUID()}`),

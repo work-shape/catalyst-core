@@ -104,7 +104,11 @@ function fixture(checks: ApprovalCheckConfig[] = [rule]) {
   const complete = vi
     .fn<ModelProvider["complete"]>()
     .mockResolvedValue(completion('{"violates":false,"reason":"Keine personenbezogenen Daten."}'));
-  const usageGovernance = new ModelUsageGovernance({ store, budget: {}, safeguards: {} });
+  const usageGovernance = new ModelUsageGovernance({
+    store: store.usage,
+    budget: {},
+    safeguards: {}
+  });
   const runner = new ApprovalCheckRunner({
     config,
     clientInstanceId,
@@ -113,10 +117,10 @@ function fixture(checks: ApprovalCheckConfig[] = [rule]) {
   });
   const workflow = new ApprovalRequestWorkflow({
     clientInstanceId,
-    store,
+    store: store.approvals,
     handlers: new Map([[handler.kind, handler]]),
     checkRunner: runner,
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store })
+    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
   });
   return { config, store, complete, runner, workflow, usageGovernance };
 }
@@ -157,7 +161,7 @@ describe("approval check runner", () => {
       correlationId: context.correlationId
     });
     expect(callContext?.signal).toBeInstanceOf(AbortSignal);
-    expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([
+    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
       expect.objectContaining({
         conversationId: command.origin?.conversationId,
         agentRunId: command.origin?.agentRunId,
@@ -191,7 +195,7 @@ describe("approval check runner", () => {
       const f = fixture([{ ...rule, onFail }]);
       f.complete.mockRejectedValue(new Error("secret provider detail"));
       expect(await f.runner.run(handler, command, context)).toEqual([unevaluated(onFail)]);
-      expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([
+      expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ source: "not_reported", totalTokens: 0 })
       ]);
     }
@@ -208,7 +212,7 @@ describe("approval check runner", () => {
     const f = fixture([{ ...rule, onFail: "block" }]);
     f.complete.mockResolvedValue(completion(text));
     expect(await f.runner.run(handler, command, context)).toEqual([unevaluated("block")]);
-    expect(await f.store.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
+    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
   });
 
   it.each(["warn", "block"] as const)(
@@ -221,7 +225,7 @@ describe("approval check runner", () => {
       await vi.advanceTimersByTimeAsync(10_000);
       expect(await result).toEqual([unevaluated(onFail)]);
       expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(true);
-      expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([
+      expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ source: "not_reported" })
       ]);
     }
@@ -268,7 +272,7 @@ describe("approval check runner", () => {
         message: "Check 'second' could not be evaluated. Try again later."
       }
     ]);
-    expect(await f.store.listModelUsageEvents({ clientInstanceId })).toHaveLength(2);
+    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(2);
   });
 
   it("ignores checks for another kind, empty configuration, and handlers without checkContent", async () => {
@@ -288,7 +292,7 @@ describe("approval check runner", () => {
       (await f.runner.run(handler, { ...command, origin: undefined }, context))[0]?.status
     ).toBe("passed");
     expect(f.complete).toHaveBeenCalledTimes(1);
-    expect(await f.store.listModelUsageEvents({ clientInstanceId })).toEqual([]);
+    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([]);
   });
 });
 
@@ -298,17 +302,17 @@ describe("approval checks at creation", () => {
     f.complete.mockResolvedValue(
       completion('{"violates":true,"reason":"Remove the personal data."}')
     );
-    const create = vi.spyOn(f.store, "createApprovalRequest");
+    const create = vi.spyOn(f.store.approvals, "createApprovalRequest");
     await expect(f.workflow.createRequest(user, context, command)).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
       message: "Approval request blocked: Remove the personal data."
     });
     expect(create).not.toHaveBeenCalled();
-    expect(await f.store.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })).toEqual(
-      []
-    );
-    expect(await f.store.listAuditEvents({ clientInstanceId })).toEqual([]);
-    expect(await f.store.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
+    expect(
+      await f.store.approvals.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })
+    ).toEqual([]);
+    expect(await f.store.audit.listAuditEvents({ clientInstanceId })).toEqual([]);
+    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
   });
 
   it("does not bypass a blocking verdict when usage storage fails", async () => {
@@ -323,9 +327,9 @@ describe("approval checks at creation", () => {
       code: "INTERNAL",
       message: "Approval check usage could not be recorded"
     });
-    expect(await f.store.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })).toEqual(
-      []
-    );
+    expect(
+      await f.store.approvals.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })
+    ).toEqual([]);
   });
 
   it("stores warnings, exposes them in views, and audits only check ids and statuses", async () => {
@@ -338,9 +342,9 @@ describe("approval checks at creation", () => {
     expect(request.checks).toEqual(checks);
     expect(await f.workflow.getRequest(user, context, request.id)).toMatchObject({ checks });
     expect(
-      await f.store.getApprovalRequest({ clientInstanceId, requestId: request.id })
+      await f.store.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id })
     ).toMatchObject({ checks });
-    expect((await f.store.listAuditEvents({ clientInstanceId }))[0]?.metadata).toEqual({
+    expect((await f.store.audit.listAuditEvents({ clientInstanceId }))[0]?.metadata).toEqual({
       requestId: request.id,
       kind: command.kind,
       status: "pending",
@@ -364,7 +368,7 @@ describe("approval checks at creation", () => {
       message: `Approval request blocked: Check '${rule.id}' could not be evaluated. Try again later.`
     });
     expect(
-      await f.store.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })
+      await f.store.approvals.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })
     ).toHaveLength(1);
   });
 
@@ -400,19 +404,19 @@ async function skillFixture() {
     skillNames: [skill.name],
     initialPrompts: []
   };
-  await f.store.applyConfigAssetMutations({
+  await f.store.configAssets.applyConfigAssetMutations({
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "skill", name: skill.name, config: skill },
       { type: "upsert", kind: "agent", name: agent.name, config: agent }
     ]
   });
-  const source = createConfigAssetSource({ store: f.store, clientInstanceId });
+  const source = createConfigAssetSource({ store: f.store.configAssets, clientInstanceId });
   const skillHandler = createSkillChangeApprovalHandler({
     config: f.config,
     clientInstanceId,
     configAssets: {
-      store: f.store,
+      store: f.store.configAssets,
       source,
       validationRefs: {
         modelProviderIds: ["local"],
@@ -426,10 +430,10 @@ async function skillFixture() {
   });
   const workflow = new ApprovalRequestWorkflow({
     clientInstanceId,
-    store: f.store,
+    store: f.store.approvals,
     handlers: new Map([[skillHandler.kind, skillHandler]]),
     checkRunner: f.runner,
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: f.store })
+    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: f.store.audit })
   });
   const tool = createProposeSkillChangeTool({
     assetSource: source,
@@ -525,10 +529,10 @@ describe("skill change approval checks", () => {
       (await createModelVisibleToolOutput(result, { toolOutput: { maxTokens: 1000 } })).text
     ).toContain("Remove the personal data.");
     expect(
-      await f.store.listApprovalRequests({ clientInstanceId, kinds: ["skill_change"] })
+      await f.store.approvals.listApprovalRequests({ clientInstanceId, kinds: ["skill_change"] })
     ).toEqual([]);
     expect(
-      await f.store.listConfigAssetRevisions({
+      await f.store.configAssets.listConfigAssetRevisions({
         clientInstanceId,
         kind: "skill",
         name: f.skill.name

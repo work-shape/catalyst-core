@@ -57,7 +57,7 @@ export class ApiAccessAdministrationWorkflow {
     context: RuntimeCallContext
   ): Promise<ServicePrincipalDetail[]> {
     await this.recordAccess(actor, context, "api_access.service_principals_viewed");
-    const principals = await this.options.apiAccessStore.listServicePrincipals({
+    const principals = await this.options.stores.apiAccess.listServicePrincipals({
       clientInstanceId: this.options.clientInstanceId
     });
     return Promise.all(principals.map((principal) => this.detail(principal)));
@@ -71,7 +71,7 @@ export class ApiAccessAdministrationWorkflow {
     this.requireSuperadmin(actor, "Service principal creation");
     await this.recordAccess(actor, context, "api_access.service_principal_create_authorized");
     this.requireServicePermissions(command.permissions);
-    const principal = await this.options.apiAccessStore.createServicePrincipal({
+    const principal = await this.options.stores.apiAccess.createServicePrincipal({
       clientInstanceId: this.options.clientInstanceId,
       displayLabel: command.displayLabel,
       description: command.description,
@@ -97,7 +97,7 @@ export class ApiAccessAdministrationWorkflow {
     this.requireSuperadmin(actor, "Service principal updates");
     await this.recordAccess(actor, context, "api_access.service_principal_update_authorized");
     this.requireServicePermissions(command.permissions);
-    const principal = await this.options.apiAccessStore.updateServicePrincipal({
+    const principal = await this.options.stores.apiAccess.updateServicePrincipal({
       clientInstanceId: this.options.clientInstanceId,
       servicePrincipalId: asServicePrincipalId(command.servicePrincipalId),
       displayLabel: command.displayLabel,
@@ -123,7 +123,7 @@ export class ApiAccessAdministrationWorkflow {
     await this.recordAccess(actor, context, "api_access.credential_create_authorized");
     this.requireCredentialScopes(command.scopes);
     this.requireFutureExpiry(command.expiresAt);
-    const created = await this.options.apiAccessStore.createApiCredential({
+    const created = await this.options.stores.apiAccess.createApiCredential({
       clientInstanceId: this.options.clientInstanceId,
       servicePrincipalId: asServicePrincipalId(command.servicePrincipalId),
       name: command.name,
@@ -154,7 +154,7 @@ export class ApiAccessAdministrationWorkflow {
   ): Promise<ApiCredentialRecord> {
     this.requireSuperadmin(actor, "API credential revocation");
     await this.recordAccess(actor, context, "api_access.credential_revoke_authorized");
-    const credential = await this.options.apiAccessStore.revokeApiCredential({
+    const credential = await this.options.stores.apiAccess.revokeApiCredential({
       clientInstanceId: this.options.clientInstanceId,
       credentialId: asApiCredentialId(credentialId)
     });
@@ -176,7 +176,7 @@ export class ApiAccessAdministrationWorkflow {
   private async detail(principal: ServicePrincipalRecord): Promise<ServicePrincipalDetail> {
     return {
       principal,
-      credentials: await this.options.apiAccessStore.listApiCredentials({
+      credentials: await this.options.stores.apiAccess.listApiCredentials({
         clientInstanceId: this.options.clientInstanceId,
         servicePrincipalId: principal.id
       })

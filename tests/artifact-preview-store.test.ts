@@ -8,7 +8,7 @@ import {
   type Conversation,
   type ManagedArtifactRecord,
   type ManagedFileRecord,
-  type PlatformStore
+  type PlatformStores
 } from "@vivd-catalyst/core";
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const postgresIt = databaseUrl ? it : it.skip;
@@ -139,23 +139,15 @@ describe("artifact preview store adapters", () => {
 });
 
 async function expectManagedArtifactEnsureContract(
-  store: Pick<
-    PlatformStore,
-    | "createConversation"
-    | "createUser"
-    | "ensurePersonalWorkspace"
-    | "createManagedFile"
-    | "ensureManagedArtifact"
-    | "listManagedArtifactsForFile"
-  >
+  store: Pick<PlatformStores, "conversations" | "files" | "workspaces" | "users">
 ): Promise<void> {
   const clientInstanceId = asClientInstanceId(`preview_source_${globalThis.crypto.randomUUID()}`);
-  const user = await store.createUser({ clientInstanceId, displayLabel: "Preview user" });
-  const personalWorkspace = await store.ensurePersonalWorkspace({
+  const user = await store.users.createUser({ clientInstanceId, displayLabel: "Preview user" });
+  const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
     clientInstanceId,
     userId: user.id
   });
-  const conversation = await store.createConversation({
+  const conversation = await store.conversations.createConversation({
     visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
@@ -164,7 +156,7 @@ async function expectManagedArtifactEnsureContract(
     title: "Attachment preview source",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
-  const file = await store.createManagedFile({
+  const file = await store.files.createManagedFile({
     clientInstanceId,
     ownerUserId: user.id,
     filename: "deck.pptx",
@@ -188,14 +180,14 @@ async function expectManagedArtifactEnsureContract(
   };
 
   const [first, second] = await Promise.all([
-    store.ensureManagedArtifact(input),
-    store.ensureManagedArtifact(input)
+    store.files.ensureManagedArtifact(input),
+    store.files.ensureManagedArtifact(input)
   ]);
 
   expect(first.id).toBe(input.id);
   expect(second.id).toBe(input.id);
   await expect(
-    store.listManagedArtifactsForFile({
+    store.files.listManagedArtifactsForFile({
       clientInstanceId,
       conversationId: conversation.id,
       fileId: file.id,
@@ -218,22 +210,22 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
     queuedAt: "2026-07-01T10:00:00.000Z"
   };
 
-  const first = await store.enqueueArtifactPreviewJob(baseInput);
-  const duplicate = await store.enqueueArtifactPreviewJob({
+  const first = await store.files.enqueueArtifactPreviewJob(baseInput);
+  const duplicate = await store.files.enqueueArtifactPreviewJob({
     ...baseInput,
     queuedAt: "2026-07-01T10:05:00.000Z"
   });
-  const changedRenderer = await store.enqueueArtifactPreviewJob({
+  const changedRenderer = await store.files.enqueueArtifactPreviewJob({
     ...baseInput,
     renderer: "preview-renderer-b",
     queuedAt: "2026-07-01T10:10:00.000Z"
   });
-  const changedRendererVersion = await store.enqueueArtifactPreviewJob({
+  const changedRendererVersion = await store.files.enqueueArtifactPreviewJob({
     ...baseInput,
     rendererVersion: "1.0.1",
     queuedAt: "2026-07-01T10:15:00.000Z"
   });
-  const changedSettings = await store.enqueueArtifactPreviewJob({
+  const changedSettings = await store.files.enqueueArtifactPreviewJob({
     ...baseInput,
     settingsHash: "settings-b",
     queuedAt: "2026-07-01T10:20:00.000Z"
@@ -263,7 +255,7 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
     settingsHash: "settings-b"
   });
   await expect(
-    store.getArtifactPreviewJob({
+    store.files.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.artifact.id,
       renderer: "preview-renderer-a",
@@ -275,13 +267,13 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
     settingsHash: "settings-b"
   });
   await expect(
-    store.getArtifactPreviewJob({
+    store.files.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.artifact.id
     })
   ).resolves.toBeUndefined();
 
-  await store.writeArtifactPreviewManifest({
+  await store.files.writeArtifactPreviewManifest({
     clientInstanceId: fixture.clientInstanceId,
     conversationId: fixture.conversation.id,
     sourceArtifactId: fixture.artifact.id,
@@ -289,7 +281,7 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
     errorCode: "conversion_failed",
     writtenAt: "2026-07-01T10:25:00.000Z"
   });
-  await store.writeArtifactPreviewManifest({
+  await store.files.writeArtifactPreviewManifest({
     clientInstanceId: fixture.clientInstanceId,
     conversationId: fixture.conversation.id,
     sourceArtifactId: fixture.artifact.id,
@@ -303,7 +295,7 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
     writtenAt: "2026-07-01T10:30:00.000Z"
   });
   await expect(
-    store.getArtifactPreviewManifest({
+    store.files.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.artifact.id
     })
@@ -314,7 +306,7 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
     settingsHash: "default-image-pages-v1"
   });
   await expect(
-    store.getArtifactPreviewManifest({
+    store.files.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.artifact.id,
       renderer: "preview-renderer-a",
@@ -331,7 +323,7 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
 
 async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Promise<void> {
   const fixture = await createPreviewFixture(store);
-  const job = await store.enqueueArtifactPreviewJob({
+  const job = await store.files.enqueueArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     conversationId: fixture.conversation.id,
     sourceArtifactId: fixture.artifact.id,
@@ -343,7 +335,7 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
     queuedAt: "2026-07-01T11:00:00.000Z"
   });
 
-  const claimed = await store.claimNextArtifactPreviewJob({
+  const claimed = await store.files.claimNextArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     workerId: "preview-worker-a",
     leaseToken: "lease-a",
@@ -358,7 +350,7 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
     attempts: 1
   });
   await expect(
-    store.claimNextArtifactPreviewJob({
+    store.files.claimNextArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       workerId: "preview-worker-b",
       leaseToken: "lease-b",
@@ -367,7 +359,7 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
     })
   ).resolves.toBeUndefined();
   await expect(
-    store.completeClaimedArtifactPreviewJob({
+    store.files.completeClaimedArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       jobId: job.id,
       leaseToken: "wrong-lease",
@@ -377,7 +369,7 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
     })
   ).rejects.toMatchObject({ code: "CONFLICT" });
 
-  const page = await store.createManagedArtifact({
+  const page = await store.files.createManagedArtifact({
     clientInstanceId: fixture.clientInstanceId,
     conversationId: fixture.conversation.id,
     sourceFileId: fixture.artifact.sourceFileId,
@@ -394,7 +386,7 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
       rendererVersion: "1.0.0"
     }
   });
-  const completed = await store.completeClaimedArtifactPreviewJob({
+  const completed = await store.files.completeClaimedArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     jobId: job.id,
     leaseToken: "lease-a",
@@ -418,7 +410,7 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
     attempts: 1
   });
   await expect(
-    store.getArtifactPreviewManifest({
+    store.files.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.artifact.id,
       renderer: "preview-renderer-lease",
@@ -436,7 +428,7 @@ async function expectPreviewArtifactCompletionContract(
   store: PreviewJobIdentityStore
 ): Promise<void> {
   const fixture = await createPreviewFixture(store);
-  const job = await store.enqueueArtifactPreviewJob({
+  const job = await store.files.enqueueArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     conversationId: fixture.conversation.id,
     sourceArtifactId: fixture.artifact.id,
@@ -447,7 +439,7 @@ async function expectPreviewArtifactCompletionContract(
     settingsHash: "settings-completion",
     queuedAt: "2026-07-01T11:30:00.000Z"
   });
-  await store.claimNextArtifactPreviewJob({
+  await store.files.claimNextArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     workerId: "preview-worker-completion",
     leaseToken: "lease-completion",
@@ -474,7 +466,7 @@ async function expectPreviewArtifactCompletionContract(
   };
 
   await expect(
-    store.completeClaimedArtifactPreviewJob({
+    store.files.completeClaimedArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       jobId: job.id,
       leaseToken: "wrong-lease",
@@ -484,7 +476,7 @@ async function expectPreviewArtifactCompletionContract(
     })
   ).rejects.toMatchObject({ code: "CONFLICT" });
   await expect(
-    store.listManagedArtifactsForFile({
+    store.files.listManagedArtifactsForFile({
       clientInstanceId: fixture.clientInstanceId,
       conversationId: fixture.conversation.id,
       fileId: fixture.file.id,
@@ -492,7 +484,7 @@ async function expectPreviewArtifactCompletionContract(
     })
   ).resolves.toEqual([]);
 
-  const completed = await store.completeClaimedArtifactPreviewJob({
+  const completed = await store.files.completeClaimedArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     jobId: job.id,
     leaseToken: "lease-completion",
@@ -505,7 +497,7 @@ async function expectPreviewArtifactCompletionContract(
     status: "completed",
     leaseToken: undefined
   });
-  const manifest = await store.getArtifactPreviewManifest({
+  const manifest = await store.files.getArtifactPreviewManifest({
     clientInstanceId: fixture.clientInstanceId,
     sourceArtifactId: fixture.artifact.id,
     renderer: "preview-renderer-completion",
@@ -529,7 +521,7 @@ async function expectPreviewArtifactCompletionContract(
     throw new Error("Expected ready preview manifest");
   }
   await expect(
-    store.getManagedArtifact({
+    store.files.getManagedArtifact({
       clientInstanceId: fixture.clientInstanceId,
       artifactId: manifest.pages[0]!.artifactId
     })
@@ -545,7 +537,7 @@ async function expectPreviewJobStaleRecoveryContract(
   store: PreviewJobIdentityStore
 ): Promise<void> {
   const fixture = await createPreviewFixture(store);
-  await store.enqueueArtifactPreviewJob({
+  await store.files.enqueueArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     conversationId: fixture.conversation.id,
     sourceArtifactId: fixture.artifact.id,
@@ -556,7 +548,7 @@ async function expectPreviewJobStaleRecoveryContract(
     settingsHash: "settings-stale",
     queuedAt: "2026-07-01T12:00:00.000Z"
   });
-  const firstClaim = await store.claimNextArtifactPreviewJob({
+  const firstClaim = await store.files.claimNextArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     workerId: "preview-worker-stale",
     leaseToken: "lease-stale-1",
@@ -566,7 +558,7 @@ async function expectPreviewJobStaleRecoveryContract(
   expect(firstClaim).toMatchObject({ status: "processing", attempts: 1 });
 
   await expect(
-    store.recoverStaleArtifactPreviewJobs({
+    store.files.recoverStaleArtifactPreviewJobs({
       clientInstanceId: fixture.clientInstanceId,
       staleLeaseExpiredBefore: "2026-07-01T12:00:30.000Z",
       recoveredAt: "2026-07-01T12:00:30.000Z",
@@ -575,7 +567,7 @@ async function expectPreviewJobStaleRecoveryContract(
     })
   ).resolves.toHaveLength(0);
 
-  const retried = await store.recoverStaleArtifactPreviewJobs({
+  const retried = await store.files.recoverStaleArtifactPreviewJobs({
     clientInstanceId: fixture.clientInstanceId,
     staleLeaseExpiredBefore: "2026-07-01T12:02:00.000Z",
     recoveredAt: "2026-07-01T12:02:01.000Z",
@@ -590,7 +582,7 @@ async function expectPreviewJobStaleRecoveryContract(
     errorCode: "stale_lease"
   });
 
-  const secondClaim = await store.claimNextArtifactPreviewJob({
+  const secondClaim = await store.files.claimNextArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     workerId: "preview-worker-stale",
     leaseToken: "lease-stale-2",
@@ -599,7 +591,7 @@ async function expectPreviewJobStaleRecoveryContract(
   });
   expect(secondClaim).toMatchObject({ status: "processing", attempts: 2 });
 
-  const failed = await store.recoverStaleArtifactPreviewJobs({
+  const failed = await store.files.recoverStaleArtifactPreviewJobs({
     clientInstanceId: fixture.clientInstanceId,
     staleLeaseExpiredBefore: "2026-07-01T12:04:00.000Z",
     recoveredAt: "2026-07-01T12:04:01.000Z",
@@ -614,7 +606,7 @@ async function expectPreviewJobStaleRecoveryContract(
     errorCode: "stale_lease"
   });
   await expect(
-    store.getArtifactPreviewManifest({
+    store.files.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.artifact.id,
       renderer: "preview-renderer-stale",
@@ -628,7 +620,7 @@ async function expectPreviewJobStaleRecoveryContract(
 }
 
 async function expectPreviewJobRetryReplacementRaceContract(
-  store: TestPostgresStore,
+  store: PlatformStores,
   rawSql: Sql
 ): Promise<void> {
   const fixture = await createPreviewFixture(store);
@@ -642,11 +634,11 @@ async function expectPreviewJobRetryReplacementRaceContract(
     rendererVersion: "1.0.0",
     settingsHash: "settings-retry-race"
   };
-  const job = await store.enqueueArtifactPreviewJob({
+  const job = await store.files.enqueueArtifactPreviewJob({
     ...retryInput,
     queuedAt: "2026-07-01T12:30:00.000Z"
   });
-  const claimed = await store.claimNextArtifactPreviewJob({
+  const claimed = await store.files.claimNextArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     workerId: "preview-worker-initial",
     leaseToken: "lease-initial",
@@ -659,7 +651,7 @@ async function expectPreviewJobRetryReplacementRaceContract(
     leaseToken: "lease-initial",
     attempts: 1
   });
-  await store.failClaimedArtifactPreviewJob({
+  await store.files.failClaimedArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     jobId: job.id,
     leaseToken: "lease-initial",
@@ -668,10 +660,10 @@ async function expectPreviewJobRetryReplacementRaceContract(
     failedAt: "2026-07-01T12:30:02.000Z"
   });
 
-  let replacement: ReturnType<TestPostgresStore["enqueueArtifactPreviewJob"]> | undefined;
+  let replacement: ReturnType<TestPostgresStore["files"]["enqueueArtifactPreviewJob"]> | undefined;
   await rawSql.begin(async (tx) => {
     await tx`select id from artifact_preview_jobs where id = ${job.id} for update`;
-    replacement = store.enqueueArtifactPreviewJob({
+    replacement = store.files.enqueueArtifactPreviewJob({
       ...retryInput,
       queuedAt: "2026-07-01T12:30:03.000Z",
       replaceTerminal: true
@@ -701,7 +693,7 @@ async function expectPreviewJobRetryReplacementRaceContract(
     leaseToken: "lease-race"
   });
   await expect(
-    store.getArtifactPreviewJob({
+    store.files.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.artifact.id,
       renderer: retryInput.renderer,
@@ -741,12 +733,12 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
   artifact: ManagedArtifactRecord;
 }> {
   const clientInstanceId = asClientInstanceId(`preview_store_${globalThis.crypto.randomUUID()}`);
-  const user = await store.createUser({ clientInstanceId, displayLabel: "Preview user" });
-  const personalWorkspace = await store.ensurePersonalWorkspace({
+  const user = await store.users.createUser({ clientInstanceId, displayLabel: "Preview user" });
+  const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
     clientInstanceId,
     userId: user.id
   });
-  const conversation = await store.createConversation({
+  const conversation = await store.conversations.createConversation({
     visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
@@ -755,7 +747,7 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
     title: "Artifact preview store parity",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
-  const file = await store.createManagedFile({
+  const file = await store.files.createManagedFile({
     clientInstanceId,
     ownerUserId: user.id,
     filename: "report.docx",
@@ -764,7 +756,7 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
     checksum: "sha256:report-docx",
     objectKey: "execution-workspaces/private/report.docx"
   });
-  const artifact = await store.createManagedArtifact({
+  const artifact = await store.files.createManagedArtifact({
     clientInstanceId,
     conversationId: conversation.id,
     sourceFileId: file.id,
@@ -779,21 +771,6 @@ async function createPreviewFixture(store: PreviewJobIdentityStore): Promise<{
 }
 
 type PreviewJobIdentityStore = Pick<
-  PlatformStore,
-  | "createManagedFile"
-  | "createUser"
-  | "ensurePersonalWorkspace"
-  | "createConversation"
-  | "createManagedArtifact"
-  | "getManagedArtifact"
-  | "listManagedArtifactsForFile"
-  | "enqueueArtifactPreviewJob"
-  | "getArtifactPreviewJob"
-  | "claimNextArtifactPreviewJob"
-  | "completeClaimedArtifactPreviewJob"
-  | "failClaimedArtifactPreviewJob"
-  | "markClaimedArtifactPreviewJobUnsupported"
-  | "recoverStaleArtifactPreviewJobs"
-  | "getArtifactPreviewManifest"
-  | "writeArtifactPreviewManifest"
+  PlatformStores,
+  "files" | "conversations" | "workspaces" | "users"
 >;

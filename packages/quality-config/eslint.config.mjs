@@ -281,6 +281,62 @@ const plugin = {
   rules: {
     // ESLint's no-restricted-globals and no-restricted-properties would cover these three,
     // but under one rule name. The baseline counts by rule and each boundary has its own owner.
+    "sql-boundary": rule(
+      "SQL drivers and Drizzle belong in postgres-store, auth or data-source",
+      (filename) => {
+        const directory = packageAt(filename)?.directory;
+        return (
+          directory !== undefined &&
+          !["packages/postgres-store", "packages/auth", "packages/data-source"].includes(directory)
+        );
+      },
+      (_context, report) => {
+        /** @param {AnyNode} node */
+        const check = (node) => {
+          const loaded = loadedModule(node);
+          if (
+            loaded &&
+            /^(?:drizzle-orm|drizzle-kit|postgres|pg|pg-pool|pg-native)(?:\/|$)/.test(loaded)
+          )
+            report(node);
+        };
+        return {
+          ImportDeclaration: check,
+          ImportExpression: check,
+          CallExpression: check,
+          ExportNamedDeclaration: (node) => {
+            if (
+              node.source?.type === "Literal" &&
+              typeof node.source.value === "string" &&
+              /^(?:drizzle-orm|drizzle-kit|postgres|pg|pg-pool|pg-native)(?:\/|$)/.test(
+                node.source.value
+              )
+            )
+              report(node);
+          },
+          ExportAllDeclaration: (node) => {
+            if (
+              typeof node.source.value === "string" &&
+              /^(?:drizzle-orm|drizzle-kit|postgres|pg|pg-pool|pg-native)(?:\/|$)/.test(
+                node.source.value
+              )
+            )
+              report(node);
+          },
+          /** @param {AnyNode & { source: { type: string, value?: unknown } }} node */
+          TSImportType: (node) => {
+            if (
+              node.source.type === "Literal" &&
+              typeof node.source.value === "string" &&
+              /^(?:drizzle-orm|drizzle-kit|postgres|pg|pg-pool|pg-native)(?:\/|$)/.test(
+                node.source.value
+              )
+            )
+              report(node);
+          }
+        };
+      }
+    ),
     "console-boundary": rule(
       "Server packages log through core Logger; only config-cli may use console",
       isServerSource,
@@ -450,12 +506,12 @@ const plugin = {
       })
     ),
     "test-store": rule(
-      "Platform store classes belong in tests/support; use createTestInstance().stores",
+      "Platform store construction belongs in tests/support; use createTestInstance().stores",
       isTestCaller,
       (_context, report) => ({
         ImportSpecifier: (node) => {
           if (
-            /^(?:InMemoryPlatformStore|PostgresPlatformStore)$/.test(
+            /^(?:InMemoryPlatformStore|createPostgresStores)$/.test(
               keyName(node.imported, false) ?? ""
             )
           )
@@ -464,13 +520,17 @@ const plugin = {
         NewExpression: (node) => {
           if (
             node.callee.type === "Identifier" &&
-            /^(?:InMemoryPlatformStore|PostgresPlatformStore)$/.test(node.callee.name)
+            /^(?:InMemoryPlatformStore|createPostgresStores)$/.test(node.callee.name)
           )
+            report(node);
+        },
+        CallExpression: (node) => {
+          if (node.callee.type === "Identifier" && node.callee.name === "createPostgresStores")
             report(node);
         },
         MemberExpression: (node) => {
           if (
-            /^(?:InMemoryPlatformStore|PostgresPlatformStore)$/.test(
+            /^(?:InMemoryPlatformStore|createPostgresStores)$/.test(
               keyName(node.property, node.computed) ?? ""
             )
           )

@@ -3,16 +3,13 @@ import {
   type ISODateString,
   type ManagedArtifactKind,
   type ManagedArtifactRecord,
-  type PlatformStore,
+  type PlatformStores,
   type WorkspaceCommandId,
   type WorkspaceFile
 } from "@vivd-catalyst/core";
 import { readPromotedFileArtifacts } from "./workspace-tool-results";
 
-export type WorkspaceArtifactPromotionStore = Pick<
-  PlatformStore,
-  "createManagedArtifact" | "enqueueArtifactPreviewJob" | "upsertWorkspaceFile"
->;
+export type WorkspaceArtifactPromotionStore = Pick<PlatformStores, "files" | "executionWorkspaces">;
 
 export async function promoteWorkspaceFile(
   store: WorkspaceArtifactPromotionStore,
@@ -25,7 +22,7 @@ export async function promoteWorkspaceFile(
     now: () => ISODateString;
   }
 ): Promise<ManagedArtifactRecord> {
-  const artifact = await store.createManagedArtifact({
+  const artifact = await store.files.createManagedArtifact({
     clientInstanceId: input.file.clientInstanceId,
     conversationId: input.file.conversationId,
     kind: input.kind,
@@ -46,7 +43,7 @@ export async function promoteWorkspaceFile(
     previewCapability === "office_document_pages" ||
     previewCapability === "office_presentation_pages"
   ) {
-    await store.enqueueArtifactPreviewJob({
+    await store.files.enqueueArtifactPreviewJob({
       clientInstanceId: artifact.clientInstanceId,
       conversationId: artifact.conversationId,
       sourceArtifactId: artifact.id,
@@ -54,7 +51,7 @@ export async function promoteWorkspaceFile(
       sourceMimeType: artifact.mimeType
     });
   }
-  await store.upsertWorkspaceFile({
+  await store.executionWorkspaces.upsertWorkspaceFile({
     clientInstanceId: input.file.clientInstanceId,
     workspaceId: input.file.workspaceId,
     path: input.file.path,

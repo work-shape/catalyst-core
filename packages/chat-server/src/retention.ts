@@ -73,7 +73,7 @@ export class ConversationRetentionWorkflow {
         currentTime.getTime() - ABANDONED_CONVERSATION_GRACE_MS
       ).toISOString()
     };
-    const expired = await this.options.conversationStore.listExpiredConversations({
+    const expired = await this.options.stores.conversations.listExpiredConversations({
       clientInstanceId: this.options.clientInstanceId,
       ...criteria,
       limit: this.batchSize
@@ -111,7 +111,7 @@ export class ConversationRetentionWorkflow {
       return summary;
     }
     const deletedAt = this.now().toISOString();
-    const pending = await this.options.conversationStore.listConversationsPendingObjectCleanup({
+    const pending = await this.options.stores.files.listConversationsPendingObjectCleanup({
       clientInstanceId: this.options.clientInstanceId,
       limit: this.batchSize
     });
@@ -151,11 +151,11 @@ export class ConversationRetentionWorkflow {
     const currentTime = this.now();
     const deletedAt = currentTime.toISOString();
     const createdBefore = new Date(currentTime.getTime() - ORPHANED_FILE_GRACE_MS).toISOString();
-    const store = this.options.conversationStore;
+    const store = this.options.stores;
     try {
       let afterFileId: ManagedFileId | undefined;
       for (;;) {
-        const orphans = await store.listOrphanedManagedFiles({
+        const orphans = await store.files.listOrphanedManagedFiles({
           clientInstanceId: this.options.clientInstanceId,
           createdBefore,
           afterFileId,
@@ -173,7 +173,7 @@ export class ConversationRetentionWorkflow {
         const settled = orphans.filter(
           (file) => file.objectKeyInUse || removedKeys.has(file.objectKey)
         );
-        summary.fileCount += await store.markOrphanedManagedFilesDeleted({
+        summary.fileCount += await store.files.markOrphanedManagedFilesDeleted({
           clientInstanceId: this.options.clientInstanceId,
           fileIds: settled.map((file) => file.id),
           createdBefore,
@@ -223,7 +223,7 @@ export class ConversationRetentionWorkflow {
   ): Promise<"expired" | "cleanup_pending" | "skipped" | "failed"> {
     let result: ExpireConversationResult;
     try {
-      result = await this.options.conversationStore.expireConversation({
+      result = await this.options.stores.conversations.expireConversation({
         clientInstanceId: this.options.clientInstanceId,
         conversationId: conversation.id,
         expiredAt,

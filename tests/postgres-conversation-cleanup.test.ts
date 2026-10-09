@@ -14,7 +14,7 @@ describe("Postgres conversation cleanup after the claim", () => {
     const author = await fixture.createUser("author");
     const draft = await fixture.createConversation(author, "draft", { withMessage: false });
     const data = await fixture.createData(draft);
-    await db.store.deleteDraftAttachment({
+    await db.store.files.deleteDraftAttachment({
       ...fixture.scope,
       conversationId: draft.id,
       attachmentId: data.attachment.id,
@@ -26,12 +26,14 @@ describe("Postgres conversation cleanup after the claim", () => {
     `;
 
     // The first message arrives after the job has listed the draft and before it claims it.
-    const listExpiredConversations = db.store.listExpiredConversations.bind(db.store);
+    const listExpiredConversations = db.store.conversations.listExpiredConversations.bind(
+      db.store.conversations
+    );
     const listed: string[] = [];
-    db.store.listExpiredConversations = async (input) => {
+    db.store.conversations.listExpiredConversations = async (input) => {
       const conversations = await listExpiredConversations(input);
       listed.push(...conversations.map((conversation) => conversation.id));
-      await db.store.appendMessage({
+      await db.store.conversations.appendMessage({
         ...fixture.scope,
         conversationId: draft.id,
         role: "user",
@@ -44,7 +46,7 @@ describe("Postgres conversation cleanup after the claim", () => {
         new ConversationRetentionWorkflow(fixture.options).expireDueConversations()
       ).resolves.toEqual({ expiredCount: 0, failedCount: 0, cleanupPendingCount: 0 });
     } finally {
-      db.store.listExpiredConversations = listExpiredConversations;
+      db.store.conversations.listExpiredConversations = listExpiredConversations;
     }
 
     expect(listed).toEqual([draft.id]);
@@ -52,17 +54,19 @@ describe("Postgres conversation cleanup after the claim", () => {
     await expect(fixture.statusOf(draft)).resolves.toBe("active");
     await fixture.expectDataLeft(draft, data);
     await expect(
-      db.store.listMessages({ ...fixture.scope, conversationId: draft.id })
+      db.store.conversations.listMessages({ ...fixture.scope, conversationId: draft.id })
     ).resolves.toEqual([expect.objectContaining({ text: "First message" })]);
     await expect(
-      db.store.reactivateDraftAttachment({
+      db.store.files.reactivateDraftAttachment({
         ...fixture.scope,
         conversationId: draft.id,
         attachmentId: data.attachment.id,
         status: "ready"
       })
     ).resolves.toMatchObject({ status: "ready" });
-    await expect(db.store.listAuditEvents({ ...fixture.scope, limit: 100 })).resolves.toEqual([]);
+    await expect(db.store.audit.listAuditEvents({ ...fixture.scope, limit: 100 })).resolves.toEqual(
+      []
+    );
   });
 
   it("leaves the conversation expired when cleanup fails and finishes it in a later run", async () => {
@@ -83,7 +87,7 @@ describe("Postgres conversation cleanup after the claim", () => {
 
     await expect(fixture.statusOf(conversation)).resolves.toBe("retention_expired");
     await expect(
-      db.store.listMessages({ ...fixture.scope, conversationId: conversation.id })
+      db.store.conversations.listMessages({ ...fixture.scope, conversationId: conversation.id })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await fixture.expectDataLeft(conversation, data);
     await expect(fixture.pending()).resolves.toEqual([conversation.id]);

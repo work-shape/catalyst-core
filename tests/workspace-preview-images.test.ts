@@ -10,7 +10,7 @@ import { createWorkspaceHarness, encode } from "./support/workspace-tools-harnes
 describe("workspace.preview_images", () => {
   it("loads ready preview images as model-visible artifacts without exposing internal storage", async () => {
     const harness = await createWorkspaceHarness();
-    const source = await harness.store.createManagedArtifact({
+    const source = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "document.pdf",
@@ -23,7 +23,7 @@ describe("workspace.preview_images", () => {
     const previewBytes = encode("page-1-png");
     const settingsHash = createArtifactPreviewSettingsHash({ pages: [1], maxImages: 1 });
     harness.objectStore.putObject("artifact-previews/private/report-page-1.png", previewBytes);
-    const previewPage = await harness.store.createManagedArtifact({
+    const previewPage = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "document.preview_page_image",
@@ -38,7 +38,7 @@ describe("workspace.preview_images", () => {
         pageNumber: 1
       }
     });
-    await harness.store.writeArtifactPreviewManifest({
+    await harness.store.files.writeArtifactPreviewManifest({
       status: "ready",
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -112,7 +112,7 @@ describe("workspace.preview_images", () => {
       toolOutput: { maxTokens: 60_000 },
       artifactReader: {
         async readArtifact(input) {
-          const artifact = await harness.store.getManagedArtifact({
+          const artifact = await harness.store.files.getManagedArtifact({
             clientInstanceId: input.clientInstanceId,
             artifactId: input.artifactId
           });
@@ -144,7 +144,7 @@ describe("workspace.preview_images", () => {
 
   it("loads ready spreadsheet sheet and range previews as model-visible artifacts", async () => {
     const harness = await createWorkspaceHarness();
-    const source = await harness.store.createManagedArtifact({
+    const source = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "spreadsheet.xlsx",
@@ -164,7 +164,7 @@ describe("workspace.preview_images", () => {
       "artifact-previews/private/workbook-summary-range.png",
       previewBytes
     );
-    const previewRange = await harness.store.createManagedArtifact({
+    const previewRange = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "spreadsheet.preview_range_image",
@@ -180,7 +180,7 @@ describe("workspace.preview_images", () => {
         range: "Summary!A1:H10"
       }
     });
-    await harness.store.writeArtifactPreviewManifest({
+    await harness.store.files.writeArtifactPreviewManifest({
       status: "ready",
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -256,7 +256,7 @@ describe("workspace.preview_images", () => {
       toolOutput: { maxTokens: 60_000 },
       artifactReader: {
         async readArtifact(input) {
-          const artifact = await harness.store.getManagedArtifact({
+          const artifact = await harness.store.files.getManagedArtifact({
             clientInstanceId: input.clientInstanceId,
             artifactId: input.artifactId
           });
@@ -286,7 +286,7 @@ describe("workspace.preview_images", () => {
 
   it("canonicalizes a single-sheet range and matches manifest casing", async () => {
     const harness = await createWorkspaceHarness();
-    const source = await harness.store.createManagedArtifact({
+    const source = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "spreadsheet.xlsx",
@@ -324,7 +324,7 @@ describe("workspace.preview_images", () => {
       "artifact-previews/private/workbook-summary-a1-b4.png",
       previewBytes
     );
-    const previewRange = await harness.store.createManagedArtifact({
+    const previewRange = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "spreadsheet.preview_range_image",
@@ -340,7 +340,7 @@ describe("workspace.preview_images", () => {
         range: "Summary!A1:B4"
       }
     });
-    await harness.store.writeArtifactPreviewManifest({
+    await harness.store.files.writeArtifactPreviewManifest({
       status: "ready",
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -406,7 +406,7 @@ describe("workspace.preview_images", () => {
 
   it("rejects selector requests that exceed maxImages before queueing", async () => {
     const harness = await createWorkspaceHarness();
-    const source = await harness.store.createManagedArtifact({
+    const source = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "spreadsheet.xlsx",
@@ -433,7 +433,7 @@ describe("workspace.preview_images", () => {
       message: "workspace.preview_images selector count exceeds maxImages"
     });
     await expect(
-      harness.store.getArtifactPreviewJob({
+      harness.store.files.getArtifactPreviewJob({
         clientInstanceId: harness.clientInstanceId,
         sourceArtifactId: source.id
       })
@@ -442,7 +442,7 @@ describe("workspace.preview_images", () => {
 
   it("attaches image artifacts directly as model-visible preview images", async () => {
     const harness = await createWorkspaceHarness();
-    const image = await harness.store.createManagedArtifact({
+    const image = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "image.png",
@@ -547,7 +547,7 @@ describe("workspace.preview_images", () => {
     expect(JSON.stringify(result)).not.toContain("objectKey");
     expect(JSON.stringify(result)).not.toContain("execution-workspaces/private");
 
-    const storedArtifact = await harness.store.getManagedArtifact({
+    const storedArtifact = await harness.store.files.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: asManagedArtifactId(text(jsonObject(result.output).artifactId))
     });
@@ -557,7 +557,7 @@ describe("workspace.preview_images", () => {
     }
     const workspaceReader = createExecutionWorkspaceManagedObjectReader({
       clientInstanceId: harness.clientInstanceId,
-      files: harness.store,
+      files: harness.store.files,
       byteStore: harness.objectStore
     });
 
@@ -577,7 +577,7 @@ describe("workspace.preview_images", () => {
       }
     ]);
 
-    const legacyArtifact = await harness.store.createManagedArtifact({
+    const legacyArtifact = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "image.png",
@@ -599,7 +599,7 @@ describe("workspace.preview_images", () => {
 
   it("queues selector-specific previews when an existing manifest does not cover the request", async () => {
     const harness = await createWorkspaceHarness();
-    const pdf = await harness.store.createManagedArtifact({
+    const pdf = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "document.pdf",
@@ -609,7 +609,7 @@ describe("workspace.preview_images", () => {
       byteSize: 128,
       checksum: "sha256:report"
     });
-    await harness.store.writeArtifactPreviewManifest({
+    await harness.store.files.writeArtifactPreviewManifest({
       status: "ready",
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -641,7 +641,7 @@ describe("workspace.preview_images", () => {
       warnings: [expect.objectContaining({ code: "preview_pending" })]
     });
 
-    const deck = await harness.store.createManagedArtifact({
+    const deck = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "presentation.pptx",
@@ -651,7 +651,7 @@ describe("workspace.preview_images", () => {
       byteSize: 128,
       checksum: "sha256:deck"
     });
-    await harness.store.writeArtifactPreviewManifest({
+    await harness.store.files.writeArtifactPreviewManifest({
       status: "ready",
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -683,7 +683,7 @@ describe("workspace.preview_images", () => {
       warnings: [expect.objectContaining({ code: "preview_pending" })]
     });
 
-    const workbook = await harness.store.createManagedArtifact({
+    const workbook = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "spreadsheet.xlsx",
@@ -693,7 +693,7 @@ describe("workspace.preview_images", () => {
       byteSize: 128,
       checksum: "sha256:workbook"
     });
-    await harness.store.writeArtifactPreviewManifest({
+    await harness.store.files.writeArtifactPreviewManifest({
       status: "ready",
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -731,7 +731,7 @@ describe("workspace.preview_images", () => {
 
   it("queues selector-specific previews instead of reusing a default failed manifest", async () => {
     const harness = await createWorkspaceHarness();
-    const source = await harness.store.createManagedArtifact({
+    const source = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "document.pdf",
@@ -741,7 +741,7 @@ describe("workspace.preview_images", () => {
       byteSize: 128,
       checksum: "sha256:report"
     });
-    await harness.store.writeArtifactPreviewManifest({
+    await harness.store.files.writeArtifactPreviewManifest({
       status: "failed",
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -766,7 +766,7 @@ describe("workspace.preview_images", () => {
       warnings: [expect.objectContaining({ code: "preview_pending" })]
     });
     await expect(
-      harness.store.getArtifactPreviewManifest({
+      harness.store.files.getArtifactPreviewManifest({
         clientInstanceId: harness.clientInstanceId,
         sourceArtifactId: source.id
       })
@@ -775,7 +775,7 @@ describe("workspace.preview_images", () => {
       errorCode: "conversion_failed"
     });
     await expect(
-      harness.store.getArtifactPreviewJob({
+      harness.store.files.getArtifactPreviewJob({
         clientInstanceId: harness.clientInstanceId,
         sourceArtifactId: source.id,
         settingsHash: createArtifactPreviewSettingsHash({ pages: [2], maxImages: 1 })
@@ -788,7 +788,7 @@ describe("workspace.preview_images", () => {
 
   it("loads a legacy embedded GIF preview snapshot without format metadata", async () => {
     const harness = await createWorkspaceHarness();
-    const gif = await harness.store.createManagedArtifact({
+    const gif = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "document.preview_page_image",
@@ -798,7 +798,7 @@ describe("workspace.preview_images", () => {
       byteSize: 32,
       checksum: "sha256:legacy-gif"
     });
-    const source = await harness.store.createManagedArtifact({
+    const source = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "presentation.pptx",
@@ -851,7 +851,7 @@ describe("workspace.preview_images", () => {
 
   it("reports pending and unsupported preview states without attaching images", async () => {
     const harness = await createWorkspaceHarness();
-    const document = await harness.store.createManagedArtifact({
+    const document = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "document.docx",
@@ -876,7 +876,7 @@ describe("workspace.preview_images", () => {
     });
     expect(pending.artifacts).toBeUndefined();
 
-    const workbook = await harness.store.createManagedArtifact({
+    const workbook = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "spreadsheet.xlsx",
@@ -902,7 +902,7 @@ describe("workspace.preview_images", () => {
     });
     expect(workbookPending.artifacts).toBeUndefined();
 
-    const archive = await harness.store.createManagedArtifact({
+    const archive = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       kind: "archive.zip",

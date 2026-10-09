@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import {
   CompositeAuthAdapter,
   ApiKeyAccessTokenExchange,
@@ -9,13 +10,7 @@ import {
   createStandaloneAuthRuntime,
   type AuthAdapter
 } from "@vivd-catalyst/auth";
-import {
-  AppError,
-  normalizeAllowedOrigins,
-  type ApiAccessStore,
-  type ClientInstanceId,
-  type UserStore
-} from "@vivd-catalyst/core";
+import { AppError, normalizeAllowedOrigins, type ClientInstanceId } from "@vivd-catalyst/core";
 import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceEnv } from "./env";
 
@@ -36,7 +31,7 @@ export interface CreateClientInstanceAuthInput {
   config: ClientInstanceConfig;
   env: ClientInstanceEnv;
   clientInstanceId: ClientInstanceId;
-  userStore: UserStore & ApiAccessStore;
+  userStore: Pick<PlatformStores, "users" | "apiAccess">;
   allowedOrigins?: string | string[];
 }
 
@@ -54,7 +49,7 @@ export async function createClientInstanceAuth(
     const serviceAccessOptions = {
       secret: serviceAccessTokenSecret,
       clientInstanceId: input.clientInstanceId,
-      apiAccessStore: input.userStore
+      apiAccessStore: input.userStore.apiAccess
     };
     adapters.push(new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions));
     serviceAccessToken = {
@@ -106,7 +101,7 @@ export async function createClientInstanceAuth(
     authAdapter: new IdentityResolvingAuthAdapter(
       // The composite excludes ambient cookie/development auth for explicit credentials.
       new CompositeAuthAdapter(adapters),
-      input.userStore,
+      input.userStore.users,
       {
         linkByVerifiedEmail: input.config.auth.identityLinking.byVerifiedEmail
       }

@@ -227,7 +227,7 @@ describe("model usage governance", () => {
     );
 
     const changedGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: {},
       safeguards: {},
       costs: {
@@ -414,7 +414,7 @@ function createGovernance(
     clientInstanceId,
     store,
     governance: new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget,
       safeguards,
       costs: { customer: customerRateCard }

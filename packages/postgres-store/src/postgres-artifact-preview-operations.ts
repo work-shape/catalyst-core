@@ -17,7 +17,7 @@ import {
   createPlatformId,
   normalizeArtifactPreviewIdentity
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapArtifactPreviewJob, mapArtifactPreviewManifest } from "./rows";
 import {
   artifactPreviewJobs,
@@ -27,7 +27,7 @@ import {
 } from "./schema";
 
 export async function enqueueArtifactPreviewJob(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: EnqueueArtifactPreviewJobInput
 ): Promise<ArtifactPreviewJobRecord> {
   const now = new Date(input.queuedAt ?? new Date().toISOString());
@@ -131,7 +131,7 @@ function isTerminalArtifactPreviewJob(status: ArtifactPreviewJobRecord["status"]
 }
 
 export async function getArtifactPreviewJob(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
@@ -158,7 +158,7 @@ export async function getArtifactPreviewJob(
 }
 
 export async function claimNextArtifactPreviewJob(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ClaimNextArtifactPreviewJobInput
 ): Promise<ArtifactPreviewJobRecord | undefined> {
   const claimed = await db.transaction(async (tx) => {
@@ -210,7 +210,7 @@ export async function claimNextArtifactPreviewJob(
 }
 
 export async function renewClaimedArtifactPreviewJobLease(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: RenewClaimedArtifactPreviewJobLeaseInput
 ): Promise<ArtifactPreviewJobRecord> {
   const [job] = await db
@@ -228,7 +228,7 @@ export async function renewClaimedArtifactPreviewJobLease(
 }
 
 export async function completeClaimedArtifactPreviewJob(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CompleteClaimedArtifactPreviewJobInput
 ): Promise<ArtifactPreviewJobRecord> {
   const completedAt = new Date(input.completedAt);
@@ -336,7 +336,7 @@ export async function completeClaimedArtifactPreviewJob(
 }
 
 export async function failClaimedArtifactPreviewJob(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: FailClaimedArtifactPreviewJobInput
 ): Promise<ArtifactPreviewJobRecord> {
   const failedAt = new Date(input.failedAt);
@@ -372,7 +372,7 @@ export async function failClaimedArtifactPreviewJob(
 }
 
 export async function markClaimedArtifactPreviewJobUnsupported(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: MarkClaimedArtifactPreviewJobUnsupportedInput
 ): Promise<ArtifactPreviewJobRecord> {
   const unsupportedAt = new Date(input.unsupportedAt);
@@ -406,7 +406,7 @@ export async function markClaimedArtifactPreviewJobUnsupported(
 }
 
 export async function recoverStaleArtifactPreviewJobs(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: RecoverStaleArtifactPreviewJobsInput
 ): Promise<ArtifactPreviewJobRecord[]> {
   if (input.limit <= 0) {
@@ -480,7 +480,7 @@ export async function recoverStaleArtifactPreviewJobs(
 }
 
 export async function getArtifactPreviewManifest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
@@ -507,7 +507,7 @@ export async function getArtifactPreviewManifest(
 }
 
 export async function writeArtifactPreviewManifest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: WriteArtifactPreviewManifestInput
 ): Promise<ArtifactPreviewManifest> {
   const existing = await getArtifactPreviewManifest(db, input);
@@ -555,7 +555,7 @@ export async function writeArtifactPreviewManifest(
   return mapArtifactPreviewManifest(row);
 }
 
-type PreviewTransaction = Parameters<Parameters<PostgresDatabase["transaction"]>[0]>[0];
+type PreviewTransaction = Parameters<Parameters<PostgresConnection["transaction"]>[0]>[0];
 type ArtifactPreviewJobRow = typeof artifactPreviewJobs.$inferSelect;
 
 async function createPreviewArtifacts(

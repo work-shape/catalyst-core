@@ -265,7 +265,7 @@ describe("local workspace command runner", () => {
       checksum: updatedChecksum,
       mimeType: "text/plain"
     });
-    await harness.store.upsertWorkspaceFile({
+    await harness.store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id,
       path: "notes.txt",
@@ -327,7 +327,7 @@ describe("local workspace command runner", () => {
     });
     expect(created.status).toBe("success");
     const workspace = await harness.workspace();
-    await harness.store.deleteWorkspaceFile({
+    await harness.store.executionWorkspaces.deleteWorkspaceFile({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id,
       path: "foo/bar.txt",
@@ -345,7 +345,7 @@ describe("local workspace command runner", () => {
       checksum: checksum(bytes),
       mimeType: "text/plain"
     });
-    await harness.store.upsertWorkspaceFile({
+    await harness.store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id,
       path: "foo",
@@ -376,7 +376,7 @@ describe("local workspace command runner", () => {
     });
     expect(created.status).toBe("success");
     const workspace = await harness.workspace();
-    await harness.store.upsertWorkspaceFile({
+    await harness.store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id,
       path: "missing.txt",
@@ -411,7 +411,7 @@ describe("local workspace command runner", () => {
       throw new Error("Expected create command to succeed");
     }
     const workspace = await harness.workspace();
-    const beforeDelete = await harness.store.listWorkspaceFiles({
+    const beforeDelete = await harness.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id
     });
@@ -436,7 +436,7 @@ describe("local workspace command runner", () => {
         .then((bytes) => new TextDecoder().decode(bytes))
     ).resolves.toBe("alpha");
 
-    const listedAfterDelete = await harness.store.listWorkspaceFiles({
+    const listedAfterDelete = await harness.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id
     });
@@ -480,7 +480,7 @@ describe("local workspace command runner", () => {
       exitCode: 7,
       changedFiles: [expect.objectContaining({ path: "failed.txt", byteSize: 7 })]
     });
-    const command = await harness.store.getWorkspaceCommand({
+    const command = await harness.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
       commandId: asWorkspaceCommandId(result.output!.commandId)
     });
@@ -560,7 +560,7 @@ describe("local workspace command runner", () => {
       bytes,
       checksum: checksum(bytes)
     });
-    await traversal.store.upsertWorkspaceFile({
+    await traversal.store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: traversal.clientInstanceId,
       workspaceId: unsafeWorkspace.id,
       path: "../escape.txt",
@@ -591,7 +591,7 @@ describe("local workspace command runner", () => {
       status: "failed",
       changedFiles: []
     });
-    const symlinkCommand = await symlink.store.getWorkspaceCommand({
+    const symlinkCommand = await symlink.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: symlink.clientInstanceId,
       commandId: asWorkspaceCommandId(symlinkResult.output!.commandId)
     });
@@ -646,7 +646,7 @@ describe("local workspace command runner", () => {
       status: "failed",
       exitCode: 124
     });
-    const wallClockCommand = await wallClock.store.getWorkspaceCommand({
+    const wallClockCommand = await wallClock.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: wallClock.clientInstanceId,
       commandId: asWorkspaceCommandId(wallClockResult.output!.commandId)
     });
@@ -668,7 +668,7 @@ describe("local workspace command runner", () => {
     if (idleResult.status !== "success") {
       throw new Error("Expected idle timeout result");
     }
-    const idleCommand = await idle.store.getWorkspaceCommand({
+    const idleCommand = await idle.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: idle.clientInstanceId,
       commandId: asWorkspaceCommandId(idleResult.output!.commandId)
     });
@@ -698,7 +698,7 @@ describe("local workspace command runner", () => {
     });
 
     expect(result.status).toBe("success");
-    const auditEvents = await harness.store.listAuditEvents({
+    const auditEvents = await harness.store.audit.listAuditEvents({
       clientInstanceId: harness.clientInstanceId,
       limit: 20
     });
@@ -751,7 +751,7 @@ describe("local workspace command runner", () => {
       throw new Error("Expected list_files result");
     }
     expect(listed.output?.files).toEqual([]);
-    const command = await harness.store.getWorkspaceCommand({
+    const command = await harness.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
       commandId: asWorkspaceCommandId(result.output!.commandId)
     });
@@ -774,7 +774,7 @@ describe("local workspace command runner", () => {
       checksum: checksum(initialBytes),
       mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     });
-    await harness.store.upsertWorkspaceFile({
+    await harness.store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id,
       path: "deck.pptx",
@@ -803,13 +803,13 @@ describe("local workspace command runner", () => {
       promotedArtifacts: [expect.objectContaining({ path: "deck.pptx", kind: "presentation.pptx" })]
     });
     expect(required(result.output).changedFiles[0]).not.toHaveProperty("objectKey");
-    const workspaceFiles = await harness.store.listWorkspaceFiles({
+    const workspaceFiles = await harness.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: asExecutionWorkspaceId(required(result.output).workspaceId)
     });
     const deckFile = workspaceFiles.find((file) => file.path === "deck.pptx");
     expect(deckFile).toBeDefined();
-    const artifact = await harness.store.getManagedArtifact({
+    const artifact = await harness.store.files.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: asManagedArtifactId(result.output!.promotedArtifacts[0]!.artifactId)
     });
@@ -824,7 +824,7 @@ describe("local workspace command runner", () => {
       }
     });
     expect(artifact?.metadata).not.toHaveProperty("preview");
-    const previewJob = await harness.store.getArtifactPreviewJob({
+    const previewJob = await harness.store.files.getArtifactPreviewJob({
       clientInstanceId: harness.clientInstanceId,
       sourceArtifactId: asManagedArtifactId(result.output!.promotedArtifacts[0]!.artifactId)
     });
@@ -864,7 +864,7 @@ describe("local workspace command runner", () => {
     }
     const workspaceId = asExecutionWorkspaceId(required(created.output).workspaceId);
     const artifactId = required(promoted.output).artifactId;
-    const artifact = await harness.store.getManagedArtifact({
+    const artifact = await harness.store.files.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: asManagedArtifactId(artifactId)
     });
@@ -884,7 +884,7 @@ describe("local workspace command runner", () => {
     });
 
     await expect(
-      harness.store.listWorkspaceFiles({
+      harness.store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: harness.clientInstanceId,
         workspaceId
       })
@@ -1008,7 +1008,7 @@ describe("local workspace command runner", () => {
       })
     });
     deleteConversation = () =>
-      harness.store.deleteConversation({
+      harness.store.conversations.deleteConversation({
         clientInstanceId: harness.clientInstanceId,
         conversationId: harness.conversation.id,
         deletedAt: new Date().toISOString()
@@ -1021,7 +1021,7 @@ describe("local workspace command runner", () => {
     expect(deleted).toEqual(stored);
     await expect(harness.byteStore.getObject(required(stored[0]))).rejects.toThrow();
     await expect(
-      harness.store.listWorkspaceFiles({
+      harness.store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: harness.clientInstanceId,
         workspaceId: workspace.id
       })
@@ -1093,7 +1093,7 @@ async function createRunnerHarness(
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
   const store = createTestInstance().stores;
-  const owner = await store.resolveUserIdentity({
+  const owner = await store.users.resolveUserIdentity({
     clientInstanceId,
     authSource: "test",
     externalUserId: "user-1",
@@ -1103,11 +1103,11 @@ async function createRunnerHarness(
     permissions: []
   });
   const ownerUserId = owner.id;
-  const [personalWorkspace] = await store.listWorkspacesForUser({
+  const [personalWorkspace] = await store.workspaces.listWorkspacesForUser({
     clientInstanceId,
     userId: asUserId(owner.id)
   });
-  const conversation = await store.createConversation({
+  const conversation = await store.conversations.createConversation({
     visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace!.id,
@@ -1124,7 +1124,7 @@ async function createRunnerHarness(
   });
   const byteStore = input.wrapByteStore?.(localByteStore) ?? localByteStore;
   const auditRecorder = input.withAuditRecorder
-    ? new StoreBackedAuditRecorder({ clientInstanceId, store })
+    ? new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
     : undefined;
   const runner = new LocalWorkspaceCommandRunner({
     store,
@@ -1148,7 +1148,7 @@ async function createRunnerHarness(
   });
   const context = createToolContext(clientInstanceId, conversation, ownerUserId);
   const ensureWorkspace = () =>
-    store.ensureExecutionWorkspace({
+    store.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId,
       conversationId: conversation.id,
       ownerUserId
@@ -1184,7 +1184,7 @@ async function createRunnerHarness(
     },
     async enqueue(command: string, limits: Partial<WorkspaceCommandLimits> = {}) {
       const workspace = await ensureWorkspace();
-      return store.enqueueWorkspaceCommand({
+      return store.executionWorkspaces.enqueueWorkspaceCommand({
         clientInstanceId,
         workspaceId: workspace.id,
         ownerUserId,

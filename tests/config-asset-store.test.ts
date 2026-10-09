@@ -1,14 +1,12 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  asClientInstanceId,
-  createPlatformId,
-  type CollaborationWorkspaceStore,
-  type ConfigAssetStore,
-  type UserStore
-} from "@vivd-catalyst/core";
+import { asClientInstanceId, createPlatformId } from "@vivd-catalyst/core";
 
-interface ConfigAssetStoreFixture extends ConfigAssetStore, CollaborationWorkspaceStore, UserStore {
+interface ConfigAssetStoreFixture extends Pick<
+  PlatformStores,
+  "configAssets" | "workspaces" | "users"
+> {
   close?: () => Promise<void>;
 }
 
@@ -47,11 +45,11 @@ function runConfigAssetStoreSuite(
 
     it("starts at version zero and increments once for a multi-asset upsert", async () => {
       const clientInstanceId = createClientInstanceId();
-      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 0
       });
 
-      const result = await store.applyConfigAssetMutations({
+      const result = await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         baseVersion: 0,
         mutations: [
@@ -61,10 +59,10 @@ function runConfigAssetStoreSuite(
       });
 
       expect(result).toEqual({ version: 1 });
-      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 1
       });
-      const revisions = await store.listConfigAssetRevisions({
+      const revisions = await store.configAssets.listConfigAssetRevisions({
         clientInstanceId,
         kind: "agent",
         name: "assistant"
@@ -76,7 +74,7 @@ function runConfigAssetStoreSuite(
 
     it("leaves unlisted assets active and increments once for a merge-style upsert", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -84,14 +82,16 @@ function runConfigAssetStoreSuite(
         ]
       });
 
-      const result = await store.applyConfigAssetMutations({
+      const result = await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         baseVersion: 1,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
 
       expect(result).toEqual({ version: 2 });
-      await expect(store.listActiveConfigAssets({ clientInstanceId })).resolves.toMatchObject([
+      await expect(
+        store.configAssets.listActiveConfigAssets({ clientInstanceId })
+      ).resolves.toMatchObject([
         { kind: "agent", name: "assistant", config: agentConfig("v2") },
         { kind: "skill", name: "research", config: skillConfig("v1") }
       ]);
@@ -99,14 +99,14 @@ function runConfigAssetStoreSuite(
 
     it("rejects a stale base version without committing mutations", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         baseVersion: 0,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
       });
 
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseVersion: 0,
           mutations: [
@@ -118,11 +118,15 @@ function runConfigAssetStoreSuite(
         message: "Config version mismatch",
         details: { currentVersion: 1, baseVersion: 0 }
       });
-      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 1
       });
       await expect(
-        store.listConfigAssetRevisions({ clientInstanceId, kind: "agent", name: "assistant" })
+        store.configAssets.listConfigAssetRevisions({
+          clientInstanceId,
+          kind: "agent",
+          name: "assistant"
+        })
       ).resolves.toHaveLength(1);
     });
 
@@ -131,14 +135,14 @@ function runConfigAssetStoreSuite(
       async (operation) => {
         const clientInstanceId = createClientInstanceId();
         if (operation !== "create") {
-          await store.applyConfigAssetMutations({
+          await store.configAssets.applyConfigAssetMutations({
             clientInstanceId,
             mutations: [
               { type: "upsert", kind: "skill", name: "research", config: skillConfig("baseline") }
             ]
           });
         }
-        await store.applyConfigAssetMutations({
+        await store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           actor: { displayLabel: "Remote editor", roles: ["admin"] },
           mutations:
@@ -146,9 +150,9 @@ function runConfigAssetStoreSuite(
               ? [{ type: "delete", kind: "skill", name: "research" }]
               : [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("remote") }]
         });
-        const before = await store.getConfigAssetState({ clientInstanceId });
+        const before = await store.configAssets.getConfigAssetState({ clientInstanceId });
         await expect(
-          store.applyConfigAssetMutations({
+          store.configAssets.applyConfigAssetMutations({
             clientInstanceId,
             baseRevisions: {
               "skill:research": operation === "create" ? null : 1,
@@ -179,16 +183,20 @@ function runConfigAssetStoreSuite(
             ]
           }
         });
-        expect(await store.getConfigAssetState({ clientInstanceId })).toEqual(before);
+        expect(await store.configAssets.getConfigAssetState({ clientInstanceId })).toEqual(before);
         expect(
-          await store.getConfigAsset({ clientInstanceId, kind: "skill", name: "other" })
+          await store.configAssets.getConfigAsset({
+            clientInstanceId,
+            kind: "skill",
+            name: "other"
+          })
         ).toBeUndefined();
       }
     );
 
     it("lists every conflicting asset before applying any mutation", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("remote") },
@@ -196,7 +204,7 @@ function runConfigAssetStoreSuite(
         ]
       });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseRevisions: { "agent:assistant": null, "skill:research": null },
           mutations: [
@@ -213,12 +221,14 @@ function runConfigAssetStoreSuite(
           ]
         }
       });
-      expect(await store.getConfigAssetState({ clientInstanceId })).toEqual({ version: 1 });
+      expect(await store.configAssets.getConfigAssetState({ clientInstanceId })).toEqual({
+        version: 1
+      });
     });
 
     it("ignores untouched remote changes and guards explicit deletions", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "skill", name: "research", config: skillConfig("baseline") },
@@ -230,14 +240,14 @@ function runConfigAssetStoreSuite(
           }
         ]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "skill", name: "research", config: skillConfig("remote") }
         ]
       });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseVersion: 0,
           baseRevisions: { "skill:other": 1 },
@@ -245,10 +255,14 @@ function runConfigAssetStoreSuite(
         })
       ).resolves.toEqual({ version: 3 });
       expect(
-        await store.getConfigAsset({ clientInstanceId, kind: "skill", name: "research" })
+        await store.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "skill",
+          name: "research"
+        })
       ).toMatchObject({ revision: 2, config: skillConfig("remote") });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseRevisions: { "skill:research": 1 },
           mutations: [{ type: "delete", kind: "skill", name: "research" }]
@@ -258,7 +272,7 @@ function runConfigAssetStoreSuite(
 
     it("guards the default pointer only when changed and requires every touched baseline", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("baseline") },
@@ -266,7 +280,7 @@ function runConfigAssetStoreSuite(
         ]
       });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseRevisions: {},
           baseDefaultAgentName: null,
@@ -277,7 +291,7 @@ function runConfigAssetStoreSuite(
         details: { defaultAgentConflict: { currentAgentName: "assistant" } }
       });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseRevisions: {},
           mutations: [
@@ -286,7 +300,7 @@ function runConfigAssetStoreSuite(
         })
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseRevisions: { "agent:assistant": 1 },
           baseDefaultAgentName: null,
@@ -296,7 +310,7 @@ function runConfigAssetStoreSuite(
         })
       ).resolves.toEqual({ version: 2 });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseRevisions: {},
           baseDefaultAgentName: "assistant",
@@ -307,24 +321,24 @@ function runConfigAssetStoreSuite(
 
     it("numbers revisions independently per asset", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
           { type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }
         ]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
 
-      const agentRevisions = await store.listConfigAssetRevisions({
+      const agentRevisions = await store.configAssets.listConfigAssetRevisions({
         clientInstanceId,
         kind: "agent",
         name: "assistant"
       });
-      const skillRevisions = await store.listConfigAssetRevisions({
+      const skillRevisions = await store.configAssets.listConfigAssetRevisions({
         clientInstanceId,
         kind: "skill",
         name: "research"
@@ -332,31 +346,35 @@ function runConfigAssetStoreSuite(
       expect(agentRevisions.map((revision) => revision.revision)).toEqual([1, 2]);
       expect(skillRevisions.map((revision) => revision.revision)).toEqual([1]);
       await expect(
-        store.getConfigAsset({ clientInstanceId, kind: "agent", name: "assistant" })
+        store.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name: "assistant" })
       ).resolves.toMatchObject({ revision: 2, config: agentConfig("v2") });
     });
 
     it("writes one delete tombstone and treats repeated deletes as idempotent", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "research" }]
       });
-      const repeated = await store.applyConfigAssetMutations({
+      const repeated = await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "research" }]
       });
 
       expect(repeated).toEqual({ version: 3 });
       await expect(
-        store.getConfigAsset({ clientInstanceId, kind: "skill", name: "research" })
+        store.configAssets.getConfigAsset({ clientInstanceId, kind: "skill", name: "research" })
       ).resolves.toMatchObject({ status: "deleted", revision: 2, config: null });
       await expect(
-        store.listConfigAssetRevisions({ clientInstanceId, kind: "skill", name: "research" })
+        store.configAssets.listConfigAssetRevisions({
+          clientInstanceId,
+          kind: "skill",
+          name: "research"
+        })
       ).resolves.toMatchObject([
         { revision: 1, operation: "create", globalVersion: 1 },
         { revision: 2, operation: "delete", config: null, globalVersion: 2 }
@@ -365,38 +383,42 @@ function runConfigAssetStoreSuite(
 
     it("revives deleted assets with a create revision while preserving history", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "research" }]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v2") }]
       });
 
       await expect(
-        store.listConfigAssetRevisions({ clientInstanceId, kind: "skill", name: "research" })
+        store.configAssets.listConfigAssetRevisions({
+          clientInstanceId,
+          kind: "skill",
+          name: "research"
+        })
       ).resolves.toMatchObject([
         { revision: 1, operation: "create" },
         { revision: 2, operation: "delete" },
         { revision: 3, operation: "create", config: skillConfig("v2") }
       ]);
       await expect(
-        store.getConfigAsset({ clientInstanceId, kind: "skill", name: "research" })
+        store.configAssets.getConfigAsset({ clientInstanceId, kind: "skill", name: "research" })
       ).resolves.toMatchObject({ status: "active", revision: 3, config: skillConfig("v2") });
     });
 
     it("records explicit revert operations and actors", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         actor: {
           userId: "user-1",
@@ -415,7 +437,7 @@ function runConfigAssetStoreSuite(
         ]
       });
 
-      const revisions = await store.listConfigAssetRevisions({
+      const revisions = await store.configAssets.listConfigAssetRevisions({
         clientInstanceId,
         kind: "agent",
         name: "assistant"
@@ -429,7 +451,7 @@ function runConfigAssetStoreSuite(
 
     it("sets and clears the default agent and rolls back invalid references", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         baseVersion: 0,
         mutations: [
@@ -437,47 +459,47 @@ function runConfigAssetStoreSuite(
           { type: "setDefaultAgent", agentName: "assistant" }
         ]
       });
-      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 1,
         defaultAgentName: "assistant"
       });
 
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseVersion: 1,
           mutations: [{ type: "setDefaultAgent", agentName: "missing" }]
         })
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
-      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 1,
         defaultAgentName: "assistant"
       });
 
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           baseVersion: 1,
           mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
         })
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
       await expect(
-        store.getConfigAsset({ clientInstanceId, kind: "agent", name: "assistant" })
+        store.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name: "assistant" })
       ).resolves.toMatchObject({ status: "active", revision: 1 });
 
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         baseVersion: 1,
         mutations: [{ type: "setDefaultAgent", agentName: undefined }]
       });
-      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 2
       });
     });
 
     it("lists only active assets with an optional kind filter", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -485,13 +507,16 @@ function runConfigAssetStoreSuite(
           { type: "upsert", kind: "skill", name: "deleted", config: skillConfig("deleted") }
         ]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "deleted" }]
       });
 
-      const all = await store.listActiveConfigAssets({ clientInstanceId });
-      const skills = await store.listActiveConfigAssets({ clientInstanceId, kind: "skill" });
+      const all = await store.configAssets.listActiveConfigAssets({ clientInstanceId });
+      const skills = await store.configAssets.listActiveConfigAssets({
+        clientInstanceId,
+        kind: "skill"
+      });
       expect(all.map((asset) => `${asset.kind}:${asset.name}`)).toEqual([
         "agent:assistant",
         "skill:active"
@@ -501,7 +526,7 @@ function runConfigAssetStoreSuite(
 
     it("gives new agents an availability record and removes it with the agent", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -513,35 +538,35 @@ function runConfigAssetStoreSuite(
         personalWorkspaces: false,
         collaborationWorkspaceIds: []
       };
-      expect([...(await store.listAgentAvailability({ clientInstanceId }))]).toEqual([
+      expect([...(await store.configAssets.listAgentAvailability({ clientInstanceId }))]).toEqual([
         ["assistant", everywhere]
       ]);
 
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
-      await store.setAgentAvailability({
+      await store.configAssets.setAgentAvailability({
         clientInstanceId,
         agentName: "assistant",
         availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v3") }]
       });
       // An update never widens what an admin restricted.
-      expect([...(await store.listAgentAvailability({ clientInstanceId }))]).toEqual([
+      expect([...(await store.configAssets.listAgentAvailability({ clientInstanceId }))]).toEqual([
         ["assistant", { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }]
       ]);
 
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
       });
-      expect((await store.listAgentAvailability({ clientInstanceId })).size).toBe(0);
+      expect((await store.configAssets.listAgentAvailability({ clientInstanceId })).size).toBe(0);
       await expect(
-        store.setAgentAvailability({
+        store.configAssets.setAgentAvailability({
           clientInstanceId,
           agentName: "assistant",
           availability: everywhere
@@ -549,18 +574,18 @@ function runConfigAssetStoreSuite(
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
       // A revived agent starts from the initial availability, not from its old record.
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v4") }]
       });
-      expect([...(await store.listAgentAvailability({ clientInstanceId }))]).toEqual([
+      expect([...(await store.configAssets.listAgentAvailability({ clientInstanceId }))]).toEqual([
         ["assistant", everywhere]
       ]);
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
       });
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         initialAgentAvailability: "selected",
         mutations: [
@@ -569,7 +594,9 @@ function runConfigAssetStoreSuite(
         ]
       });
       const hidden = { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] };
-      expect([...(await store.listAgentAvailability({ clientInstanceId }))].sort()).toEqual([
+      expect(
+        [...(await store.configAssets.listAgentAvailability({ clientInstanceId }))].sort()
+      ).toEqual([
         ["assistant", hidden],
         ["second", hidden]
       ]);
@@ -577,21 +604,21 @@ function runConfigAssetStoreSuite(
 
     it("starts agents hidden when the same batch deletes a selected agent", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "open", config: agentConfig("v1") },
           { type: "upsert", kind: "agent", name: "restricted", config: agentConfig("v1") }
         ]
       });
-      await store.setAgentAvailability({
+      await store.configAssets.setAgentAvailability({
         clientInstanceId,
         agentName: "restricted",
         availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
       });
 
       // Replacing an unrestricted agent keeps the default.
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         initialAgentAvailability: "selected_when_replacing_selected",
         mutations: [
@@ -599,12 +626,12 @@ function runConfigAssetStoreSuite(
           { type: "upsert", kind: "agent", name: "open-renamed", config: agentConfig("v1") }
         ]
       });
-      expect((await store.listAgentAvailability({ clientInstanceId })).get("open-renamed")).toEqual(
-        { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
-      );
+      expect(
+        (await store.configAssets.listAgentAvailability({ clientInstanceId })).get("open-renamed")
+      ).toEqual({ mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] });
 
       // The rule applies regardless of mutation order and leaves existing agents alone.
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         initialAgentAvailability: "selected_when_replacing_selected",
         mutations: [
@@ -612,7 +639,7 @@ function runConfigAssetStoreSuite(
           { type: "delete", kind: "agent", name: "restricted" }
         ]
       });
-      const availability = await store.listAgentAvailability({ clientInstanceId });
+      const availability = await store.configAssets.listAgentAvailability({ clientInstanceId });
       expect(availability.has("restricted")).toBe(false);
       expect(availability.get("restricted-renamed")).toEqual({
         mode: "selected",
@@ -622,7 +649,7 @@ function runConfigAssetStoreSuite(
       expect(availability.get("open-renamed")?.mode).toBe("all");
 
       // Without the push rule, a batch that deletes a restricted agent still creates `all`.
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "delete", kind: "agent", name: "restricted-renamed" },
@@ -630,13 +657,14 @@ function runConfigAssetStoreSuite(
         ]
       });
       expect(
-        (await store.listAgentAvailability({ clientInstanceId })).get("interactive")?.mode
+        (await store.configAssets.listAgentAvailability({ clientInstanceId })).get("interactive")
+          ?.mode
       ).toBe("all");
     });
 
     it("keeps the default agent available everywhere", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -650,23 +678,24 @@ function runConfigAssetStoreSuite(
         collaborationWorkspaceIds: []
       };
       await expect(
-        store.setAgentAvailability({
+        store.configAssets.setAgentAvailability({
           clientInstanceId,
           agentName: "assistant",
           availability: restricted
         })
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
-      expect((await store.listAgentAvailability({ clientInstanceId })).get("assistant")?.mode).toBe(
-        "all"
-      );
+      expect(
+        (await store.configAssets.listAgentAvailability({ clientInstanceId })).get("assistant")
+          ?.mode
+      ).toBe("all");
 
-      await store.setAgentAvailability({
+      await store.configAssets.setAgentAvailability({
         clientInstanceId,
         agentName: "restricted",
         availability: restricted
       });
       await expect(
-        store.applyConfigAssetMutations({
+        store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
           mutations: [{ type: "setDefaultAgent", agentName: "restricted" }]
         })
@@ -674,7 +703,7 @@ function runConfigAssetStoreSuite(
         code: "VALIDATION_FAILED",
         message: "Default agent 'restricted' must be available in all workspaces"
       });
-      await expect(store.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
+      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 1,
         defaultAgentName: "assistant"
       });
@@ -682,10 +711,10 @@ function runConfigAssetStoreSuite(
 
     it("stores selected workspaces and drops them with the workspace", async () => {
       const clientInstanceId = createClientInstanceId();
-      const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+      const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
       const [kept, removed] = await Promise.all(
         ["Kept", "Removed"].map((name) =>
-          store.createWorkspace({
+          store.workspaces.createWorkspace({
             clientInstanceId,
             kind: "shared",
             name,
@@ -693,12 +722,12 @@ function runConfigAssetStoreSuite(
           })
         )
       );
-      await store.applyConfigAssetMutations({
+      await store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
       });
       await expect(
-        store.setAgentAvailability({
+        store.configAssets.setAgentAvailability({
           clientInstanceId,
           agentName: "assistant",
           availability: {
@@ -713,20 +742,27 @@ function runConfigAssetStoreSuite(
         collaborationWorkspaceIds: [kept!.id, removed!.id].sort()
       });
 
-      await store.deleteWorkspace({ clientInstanceId, collaborationWorkspaceId: removed!.id });
-      expect((await store.listAgentAvailability({ clientInstanceId })).get("assistant")).toEqual({
+      await store.workspaces.deleteWorkspace({
+        clientInstanceId,
+        collaborationWorkspaceId: removed!.id
+      });
+      expect(
+        (await store.configAssets.listAgentAvailability({ clientInstanceId })).get("assistant")
+      ).toEqual({
         mode: "selected",
         personalWorkspaces: false,
         collaborationWorkspaceIds: [kept!.id]
       });
 
       // Replacing the selection removes workspaces that are no longer listed.
-      await store.setAgentAvailability({
+      await store.configAssets.setAgentAvailability({
         clientInstanceId,
         agentName: "assistant",
         availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
       });
-      expect((await store.listAgentAvailability({ clientInstanceId })).get("assistant")).toEqual({
+      expect(
+        (await store.configAssets.listAgentAvailability({ clientInstanceId })).get("assistant")
+      ).toEqual({
         mode: "selected",
         personalWorkspaces: true,
         collaborationWorkspaceIds: []

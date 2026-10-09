@@ -73,10 +73,10 @@ async function fixture() {
   };
   const workflow = new ApprovalRequestWorkflow({
     clientInstanceId,
-    store,
+    store: store.approvals,
     handlers: new Map([[handler.kind, handler]]),
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
-    onDecided: (request) => store.appendApprovalDecision(request)
+    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
+    onDecided: (request) => store.approvals.appendApprovalDecision(request)
   });
   const create = () =>
     workflow.createRequest(owner, context, {
@@ -90,7 +90,8 @@ async function fixture() {
         agentName: "agent"
       }
     });
-  const messages = () => store.listMessages({ clientInstanceId, conversationId: conversation.id });
+  const messages = () =>
+    store.conversations.listMessages({ clientInstanceId, conversationId: conversation.id });
   return { store, conversation, workflow, handler, create, messages };
 }
 
@@ -128,8 +129,8 @@ describe("approval decision history", () => {
           )
         : decided;
     await Promise.all([
-      f.store.appendApprovalDecision(result),
-      f.store.appendApprovalDecision(result)
+      f.store.approvals.appendApprovalDecision(result),
+      f.store.approvals.appendApprovalDecision(result)
     ]);
     const messages = await f.messages();
     expect(messages).toHaveLength(status === "reverted" ? 2 : 1);
@@ -217,9 +218,9 @@ describe("approval decision history", () => {
     const f = await fixture();
     const workflow = new ApprovalRequestWorkflow({
       clientInstanceId,
-      store: f.store,
+      store: f.store.approvals,
       handlers: new Map([[f.handler.kind, f.handler]]),
-      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: f.store }),
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: f.store.audit }),
       onDecided: () => {
         throw new Error("Hook failed");
       }
@@ -238,7 +239,7 @@ describe("approval decision history", () => {
   it("does not create history without an origin or resurrect deleted conversations", async () => {
     const f = await fixture();
     const request = await f.create();
-    await f.store.deleteConversation({
+    await f.store.conversations.deleteConversation({
       clientInstanceId,
       conversationId: f.conversation.id,
       deletedAt: new Date().toISOString()
@@ -256,7 +257,7 @@ describe("approval decision history", () => {
 
   it("keeps unknown metadata readable and excludes decisions after the run input boundary", async () => {
     const f = await fixture();
-    const input = await f.store.appendMessage({
+    const input = await f.store.conversations.appendMessage({
       clientInstanceId,
       conversationId: f.conversation.id,
       role: "user",
@@ -347,7 +348,7 @@ describe("approval decision history", () => {
         }),
         modelProviders: [providerConfig],
         defaultModelProvider: providerConfig,
-        conversationHistory: f.store,
+        conversationHistory: f.store.conversations,
         modelProviderContinuationStore: f.store,
         agentRunStore: f.store,
         runObservationStore: f.store,
@@ -367,10 +368,14 @@ describe("approval decision history", () => {
             return { status: "success", output: { checked: true } };
           }
         },
-        usageGovernance: new ModelUsageGovernance({ store: f.store, budget: {}, safeguards: {} })
+        usageGovernance: new ModelUsageGovernance({
+          store: f.store.usage,
+          budget: {},
+          safeguards: {}
+        })
       });
       const runTurn = async (text: string) => {
-        const input = await f.store.appendMessage({
+        const input = await f.store.conversations.appendMessage({
           clientInstanceId,
           conversationId: f.conversation.id,
           role: "user",
@@ -401,7 +406,7 @@ describe("approval decision history", () => {
         "tool",
         "assistant"
       ]);
-      const checkpoint = await f.store.getModelProviderContinuation({
+      const checkpoint = await f.store.conversations.getModelProviderContinuation({
         clientInstanceId,
         conversationId: f.conversation.id,
         providerId: providerConfig.id
@@ -423,7 +428,7 @@ describe("approval decision history", () => {
         }
         final.metadata.agentRuntime.providerContinuation = continuation;
         // Exercise the legacy metadata checkpoint independently of the dedicated store.
-        f.store.getModelProviderContinuation = async () => undefined;
+        f.store.conversations.getModelProviderContinuation = async () => undefined;
       }
       const replay = await projectAgentVisibleHistory(stored, { toolOutput: { maxTokens: 1000 } });
       expect(replay.map((message) => message.role)).toEqual([

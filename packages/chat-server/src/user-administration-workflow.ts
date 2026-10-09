@@ -71,7 +71,7 @@ export class UserAdministrationWorkflow {
 
   async listUsers(user: AuthenticatedUser, context: RuntimeCallContext): Promise<UserRecord[]> {
     await this.recordAccess(user, context, "governance.users_viewed");
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     if (this.isSuperadmin(user)) {
@@ -92,7 +92,7 @@ export class UserAdministrationWorkflow {
       throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
     }
 
-    let created = await this.options.userStore.createUser({
+    let created = await this.options.stores.users.createUser({
       clientInstanceId: this.options.clientInstanceId,
       displayLabel: command.displayLabel,
       email: command.email,
@@ -121,7 +121,7 @@ export class UserAdministrationWorkflow {
     this.requireManageableUser(actor, existing);
     this.requireAssignableRoles(actor, command.roles);
     this.requireAssignablePermissions(actor, command.permissions, existing.permissions);
-    const updated = await this.options.userStore.updateUser({
+    const updated = await this.options.stores.users.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
       displayLabel: command.displayLabel,
@@ -173,7 +173,7 @@ export class UserAdministrationWorkflow {
       throw error;
     }
     await this.deleteStandalonePasswordSignIns(existing);
-    const deleted = await this.options.userStore.deleteUser({
+    const deleted = await this.options.stores.users.deleteUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId
     });
@@ -189,7 +189,7 @@ export class UserAdministrationWorkflow {
     await this.recordAccess(actor, context, "governance.user_identity_upsert_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
-    const updated = await this.options.userStore.upsertUserIdentity({
+    const updated = await this.options.stores.users.upsertUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
       authSource: command.authSource,
@@ -221,7 +221,7 @@ export class UserAdministrationWorkflow {
     await this.recordAccess(actor, context, "governance.user_identity_delete_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
-    const updated = await this.options.userStore.deleteUserIdentity({
+    const updated = await this.options.stores.users.deleteUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
       authSource: command.authSource,
@@ -391,7 +391,7 @@ export class UserAdministrationWorkflow {
       password: input.password
     });
     await this.requireAvailablePasswordIdentity(user, signIn.externalUserId);
-    const updated = await this.options.userStore.upsertUserIdentity({
+    const updated = await this.options.stores.users.upsertUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: user.id,
       authSource: STANDALONE_AUTH_SOURCE,
@@ -418,7 +418,7 @@ export class UserAdministrationWorkflow {
     if (!normalizedEmail) {
       return;
     }
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     const conflict = users.find(
@@ -443,7 +443,7 @@ export class UserAdministrationWorkflow {
     user: UserRecord,
     externalUserId: string
   ): Promise<void> {
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     const conflict = users.find(
@@ -464,7 +464,7 @@ export class UserAdministrationWorkflow {
   }
 
   private async getUserOrThrow(userId: UserId): Promise<UserRecord> {
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     const user = users.find((candidate) => candidate.id === userId);
@@ -551,7 +551,7 @@ export class UserAdministrationWorkflow {
     if (!deletedUser.roles.includes("superadmin")) {
       return;
     }
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     const remainingActiveSuperadmin = users.some(

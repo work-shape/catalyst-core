@@ -5,13 +5,13 @@ import {
   type ApprovalRequest,
   type ApprovalRequestStore
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapApprovalRequest } from "./rows";
 import { approvalRequests } from "./schema";
 import { appendApprovalDecision } from "./postgres-conversation-operations";
 
 export async function createApprovalRequest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
   const now = new Date();
@@ -31,7 +31,7 @@ export async function createApprovalRequest(
 }
 
 export async function getApprovalRequest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["getApprovalRequest"]>[0]
 ): Promise<ApprovalRequest | undefined> {
   const [row] = await db
@@ -48,7 +48,7 @@ export async function getApprovalRequest(
 }
 
 export async function listApprovalRequests(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["listApprovalRequests"]>[0]
 ): Promise<ApprovalRequest[]> {
   if (input.kinds.length === 0) return [];
@@ -71,7 +71,7 @@ export async function listApprovalRequests(
 }
 
 export async function countPendingApprovalRequests(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["countPendingApprovalRequests"]>[0]
 ): Promise<number> {
   if (input.kinds.length === 0) return 0;
@@ -89,19 +89,19 @@ export async function countPendingApprovalRequests(
 }
 
 export async function transitionPendingApprovalRequest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
   return transition(db, input, "pending");
 }
 export async function transitionApprovedApprovalRequest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
   return transition(db, input, "approved");
 }
 async function transition(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0],
   expectedStatus: "pending" | "approved"
 ): Promise<ApprovalRequest> {

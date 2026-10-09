@@ -9,7 +9,7 @@ import {
   type ArtifactPreviewSourceKind,
   type ClientInstanceId,
   type ManagedArtifactRecord,
-  type PlatformStore
+  type PlatformStores
 } from "@vivd-catalyst/core";
 import { readArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import {
@@ -56,7 +56,7 @@ const DEFAULT_PREVIEW_DPI = 144;
 const DEFAULT_OUTPUT_FORMAT: ArtifactPreviewImageFormat = "png";
 
 export type ArtifactPreviewWorkerStore = Pick<
-  PlatformStore,
+  PlatformStores["files"],
   | "claimNextArtifactPreviewJob"
   | "renewClaimedArtifactPreviewJobLease"
   | "completeClaimedArtifactPreviewJob"

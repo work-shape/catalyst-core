@@ -16,7 +16,7 @@ import { createTestInstanceWith, listTestRoutes } from "./support/test-instance"
 const authAdapter = createCallerAuthAdapter();
 const instance = createTestInstanceWith((stores) => ({
   authAdapter,
-  approvalRequests: { store: stores, handlers: new Map() },
+  approvalRequests: { store: stores.approvals, handlers: new Map() },
   allowedOrigins: ["https://ui.example.test"],
   mail: {
     sender: { send: () => Promise.resolve({ ok: true }) },

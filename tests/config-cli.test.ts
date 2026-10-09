@@ -381,7 +381,7 @@ describe("config CLI command flows", () => {
 
   it("prefers API-key exchange, then pulls, pushes, and reports a stale-version conflict", async () => {
     const fixture = await createFixture();
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -475,14 +475,14 @@ skills:
     expect(await runConfigCommand("push", commandOptions)).toBe(0);
     expect(stdout.join("")).toContain("Pushed 1 agent, 0 skills, version 2.");
     expect(
-      await fixture.store.getConfigAsset({
+      await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
         kind: "agent",
         name: "assistant"
       })
     ).toMatchObject({ config: { instructions: "Local instructions" } });
 
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       baseVersion: 2,
       mutations: [
@@ -510,7 +510,7 @@ skills:
 
   it("rejects noncanonical pull globs before writing or deleting assets", async () => {
     const fixture = await createFixture();
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -883,7 +883,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         ...["local", "remote", "both"].map((name) => ({
@@ -912,7 +912,7 @@ skills:
         "utf8"
       );
     }
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       actor: { displayLabel: "Skill reviewer", roles: ["admin"] },
       mutations: ["remote", "both"].map((name) => ({
@@ -932,7 +932,7 @@ skills:
     expect(errors.join("")).toContain("skill:both: revision 2, update by Skill reviewer at");
     expect(errors.join("")).toContain("catalyst config pull --only skill:both");
     expect(
-      await fixture.store.getConfigAsset({
+      await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
         kind: "skill",
         name: "local"
@@ -940,7 +940,7 @@ skills:
     ).toMatchObject({ revision: 1 });
     expect(await runConfigCommand("push", { ...options, only: ["skill:local"] })).toBe(0);
     expect(
-      await fixture.store.getConfigAsset({
+      await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
         kind: "skill",
         name: "remote"
@@ -962,7 +962,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("Baseline") },
@@ -999,7 +999,9 @@ skills:
     expect(await runConfigCommand("push", options)).toBe(0);
     expect(output.join("")).toContain("No local changes to push");
     expect(
-      await fixture.store.getConfigAssetState({ clientInstanceId: fixture.clientInstanceId })
+      await fixture.store.configAssets.getConfigAssetState({
+        clientInstanceId: fixture.clientInstanceId
+      })
     ).toMatchObject({ version: 1 });
   });
 
@@ -1007,7 +1009,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         ...["assistant", "other", "third"].map((name) => ({
@@ -1034,7 +1036,7 @@ skills:
       stderr: (text: string) => errors.push(text)
     };
     expect(await runConfigCommand("pull", options)).toBe(0);
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [{ type: "setDefaultAgent", agentName: "other" }]
     });
@@ -1045,7 +1047,9 @@ skills:
     );
     expect(await runConfigCommand("push", options)).toBe(0);
     expect(
-      await fixture.store.getConfigAssetState({ clientInstanceId: fixture.clientInstanceId })
+      await fixture.store.configAssets.getConfigAssetState({
+        clientInstanceId: fixture.clientInstanceId
+      })
     ).toMatchObject({ defaultAgentName: "other" });
     await updateManifestDefaultAgent(resolve(directory, "catalyst.yaml"), "third");
     expect(await runConfigCommand("push", options)).toBe(1);
@@ -1064,7 +1068,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -1091,7 +1095,7 @@ skills:
       serializeSkillMarkdown(skillConfig("review", "Local")),
       "utf8"
     );
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       actor: { displayLabel: "Remote editor", roles: ["admin"] },
       mutations: [{ type: "delete", kind: "skill", name: "review" }]
@@ -1111,7 +1115,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Baseline") }
@@ -1126,7 +1130,7 @@ skills:
     };
     expect(await runConfigCommand("pull", options)).toBe(0);
     await rm(resolve(directory, "skills", "review"), { recursive: true });
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Remote") }
@@ -1135,7 +1139,7 @@ skills:
     expect(await runConfigCommand("push", { ...options, prune: true })).toBe(1);
     expect(await runConfigCommand("push", { ...options, prune: true, force: true })).toBe(0);
     expect(
-      await fixture.store.getConfigAsset({
+      await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
         kind: "skill",
         name: "review"
@@ -1474,18 +1478,18 @@ async function createFixture() {
     clientInstanceId,
     apiAccessStore: store
   };
-  const servicePrincipal = await store.createServicePrincipal({
+  const servicePrincipal = await store.apiAccess.createServicePrincipal({
     clientInstanceId,
     displayLabel: "Catalyst CLI",
     permissions: ["config_assets.read", "config_assets.release"]
   });
-  const createdCredential = await store.createApiCredential({
+  const createdCredential = await store.apiAccess.createApiCredential({
     clientInstanceId,
     servicePrincipalId: servicePrincipal.id,
     name: "config CLI test",
     scopes: ["config_assets:read", "config_assets:release"]
   });
-  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store });
+  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
   const server = await createTestInstance({
     server: {
       config,
@@ -1495,20 +1499,18 @@ async function createFixture() {
           new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
           new HmacSessionTokenAuthAdapter(authOptions)
         ]),
-        store
+        store.users
       ),
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
+      stores: store,
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: config.usage.budget,
         safeguards: config.usage.safeguards,
         costs: config.usage.costs
       }),
       auditRecorder,
       configAssets: {
-        store,
+        store: store.configAssets,
         validationRefs: {
           modelProviderIds: ["local"],
           modelBindingIds: [],

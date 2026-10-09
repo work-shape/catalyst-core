@@ -1,7 +1,7 @@
 import {
   STRUCTURED_DATA_RESOURCE_DISPLAY_KIND,
   currentStructuredResults,
-  type PlatformStore,
+  type PlatformStores,
   type StructuredDataFieldSource,
   type StructuredDataPublicationReviewer,
   type StructuredDataState
@@ -21,17 +21,10 @@ import {
   structuredResultReadOutputSchema
 } from "./structured-data-tool-schemas";
 
-type StructuredDataToolStore = Pick<
-  PlatformStore,
-  | "publishStructuredDataResource"
-  | "getStructuredDataResource"
-  | "listStructuredDataResources"
-  | "listMessages"
-  | "listSentConversationAttachments"
->;
+type StructuredDataToolStore = Pick<PlatformStores, "structuredData" | "conversations" | "files">;
 
 export function createStructuredDataToolDefinitions(input: {
-  store: StructuredDataToolStore;
+  store: Pick<PlatformStores, "structuredData" | "conversations" | "files">;
   publicationReviewer?: StructuredDataPublicationReviewer;
 }): AnyToolDefinition[] {
   return [
@@ -64,10 +57,10 @@ export function createStructuredDataToolDefinitions(input: {
           )
         ];
         let sentAttachments:
-          | Awaited<ReturnType<StructuredDataToolStore["listSentConversationAttachments"]>>
+          | Awaited<ReturnType<StructuredDataToolStore["files"]["listSentConversationAttachments"]>>
           | undefined;
         const getSentAttachments = async () => {
-          sentAttachments ??= await input.store.listSentConversationAttachments({
+          sentAttachments ??= await input.store.files.listSentConversationAttachments({
             clientInstanceId: context.clientInstanceId,
             conversationId
           });
@@ -105,7 +98,7 @@ export function createStructuredDataToolDefinitions(input: {
           };
         } else {
           const current = (
-            await input.store.listStructuredDataResources({
+            await input.store.structuredData.listStructuredDataResources({
               clientInstanceId: context.clientInstanceId,
               conversationId
             })
@@ -186,7 +179,7 @@ export function createStructuredDataToolDefinitions(input: {
                     resourceKey: toolInput.resourceKey,
                     title,
                     state,
-                    messages: await input.store.listMessages({
+                    messages: await input.store.conversations.listMessages({
                       clientInstanceId: context.clientInstanceId,
                       conversationId
                     }),
@@ -203,7 +196,7 @@ export function createStructuredDataToolDefinitions(input: {
             ]
           : [];
 
-        const resource = await input.store.publishStructuredDataResource({
+        const resource = await input.store.structuredData.publishStructuredDataResource({
           clientInstanceId: context.clientInstanceId,
           conversationId,
           resourceKey: toolInput.resourceKey,
@@ -275,7 +268,7 @@ export function createStructuredDataToolDefinitions(input: {
           );
         }
         const current = (
-          await input.store.listStructuredDataResources({
+          await input.store.structuredData.listStructuredDataResources({
             clientInstanceId: context.clientInstanceId,
             conversationId
           })
@@ -286,7 +279,7 @@ export function createStructuredDataToolDefinitions(input: {
             `Structured data resource '${toolInput.resourceKey}' does not exist`
           );
         }
-        const attachments = await input.store.listSentConversationAttachments({
+        const attachments = await input.store.files.listSentConversationAttachments({
           clientInstanceId: context.clientInstanceId,
           conversationId
         });
@@ -341,7 +334,7 @@ export function createStructuredDataToolDefinitions(input: {
           );
         }
         const current = currentStructuredResults(
-          await input.store.listMessages({
+          await input.store.conversations.listMessages({
             clientInstanceId: context.clientInstanceId,
             conversationId
           })

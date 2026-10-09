@@ -10,7 +10,7 @@ import {
   type ConfigAssetState,
   type ConfigAssetStore
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
+import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import {
   mapConfigAsset,
   mapConfigAssetRevision,
@@ -26,7 +26,7 @@ import {
 } from "./schema";
 
 export async function getConfigAssetState(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
 ): Promise<ConfigAssetState> {
   const [row] = await db
@@ -38,7 +38,7 @@ export async function getConfigAssetState(
 }
 
 export async function listActiveConfigAssets(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
 ): Promise<ConfigAssetRecord[]> {
   const conditions = [
@@ -58,7 +58,7 @@ export async function listActiveConfigAssets(
 }
 
 export async function getConfigAsset(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
 ): Promise<ConfigAssetRecord | undefined> {
   const [row] = await db
@@ -77,7 +77,7 @@ export async function getConfigAsset(
 }
 
 export async function listConfigAssetRevisions(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listConfigAssetRevisions"]>[0]
 ): Promise<ConfigAssetRevisionRecord[]> {
   const [asset] = await db
@@ -108,7 +108,7 @@ export async function listConfigAssetRevisions(
 }
 
 export async function applyConfigAssetMutations(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
 ): Promise<{ version: number }> {
   return db.transaction(async (tx) => {
@@ -314,7 +314,7 @@ export async function applyConfigAssetMutations(
 }
 
 export async function listAgentAvailability(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
 ): Promise<Map<string, AgentAvailability>> {
   const rows = await db
@@ -360,7 +360,7 @@ export async function listAgentAvailability(
 }
 
 export async function setAgentAvailability(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
 ): Promise<AgentAvailability> {
   return db.transaction(async (tx) => {

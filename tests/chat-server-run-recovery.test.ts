@@ -38,7 +38,7 @@ describe("client instance app vertical slice", () => {
     });
 
     await server.call("getConversationThread", { params: { conversationId: conversation.id } });
-    const observations = await store.listRunObservations({
+    const observations = await store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
     });
@@ -66,7 +66,7 @@ describe("client instance app vertical slice", () => {
     expect(listedConversation).toBeDefined();
     expect(listedConversation).not.toHaveProperty("activeRun");
 
-    const recoveredRun = await store.getAgentRun({
+    const recoveredRun = await store.agentRuns.getAgentRun({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
     });
@@ -101,7 +101,7 @@ describe("client instance app vertical slice", () => {
       })
     ]);
 
-    const recoveredRun = await store.getAgentRun({
+    const recoveredRun = await store.agentRuns.getAgentRun({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
     });
@@ -134,7 +134,7 @@ describe("client instance app vertical slice", () => {
       staleActiveRunMs: 60 * 60 * 1000
     });
     const { server, store, conversation, run } = fixture;
-    await store.updateAgentRunStatus({
+    await store.agentRuns.updateAgentRunStatus({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id,
       status: "running",
@@ -171,7 +171,7 @@ describe("client instance app vertical slice", () => {
       staleActiveRunMs: 60 * 60 * 1000
     });
     const { server, store, conversation, run } = fixture;
-    await store.updateAgentRunStatus({
+    await store.agentRuns.updateAgentRunStatus({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id,
       status: "running",
@@ -196,7 +196,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const replay = await store.listRunObservations({
+    const replay = await store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
     });
@@ -210,14 +210,14 @@ describe("client instance app vertical slice", () => {
     });
     const { server, store, conversation, run } = fixture;
     const now = Date.now();
-    await store.updateAgentRunStatus({
+    await store.agentRuns.updateAgentRunStatus({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id,
       status: "queued",
       updatedAt: new Date(now).toISOString(),
       lastSequence: 1
     });
-    await store.claimNextAgentRun({
+    await store.agentRuns.claimNextAgentRun({
       clientInstanceId: fixture.clientInstanceId,
       workerId: "worker-a",
       leaseToken: "lease-a",
@@ -262,7 +262,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(wrongOwnerSnapshot.statusCode).toBe(404);
 
-    const unchangedRun = await store.getAgentRun({
+    const unchangedRun = await store.agentRuns.getAgentRun({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
     });
@@ -270,7 +270,7 @@ describe("client instance app vertical slice", () => {
       status: "running",
       lastSequence: 1
     });
-    const observations = await store.listRunObservations({
+    const observations = await store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
     });

@@ -17,7 +17,7 @@ import {
   type ExecutionWorkspace,
   type AuditRecorder,
   type JsonObject,
-  type PlatformStore,
+  type PlatformStores,
   type WorkspaceCommand,
   type WorkspaceCommandChangedFile,
   type WorkspaceCommandError,
@@ -54,22 +54,10 @@ const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
 const DEFAULT_WORKSPACE_BYTES = 100 * 1024 * 1024;
 const STANDARD_WORKSPACE_DIRECTORIES = ["scripts", "artifacts", "previews", "tmp"] as const;
 
-export type WorkspaceCommandRunnerStore = Pick<
-  PlatformStore,
-  | "getExecutionWorkspace"
-  | "listWorkspaceFiles"
-  | "upsertWorkspaceFile"
-  | "deleteWorkspaceFile"
-  | "claimNextWorkspaceCommand"
-  | "completeWorkspaceCommand"
-  | "failWorkspaceCommand"
-  | "cancelClaimedWorkspaceCommand"
-  | "createManagedArtifact"
-  | "enqueueArtifactPreviewJob"
->;
+export type WorkspaceCommandRunnerStore = Pick<PlatformStores, "files" | "executionWorkspaces">;
 
 export interface LocalWorkspaceCommandRunnerOptions {
-  store: WorkspaceCommandRunnerStore;
+  store: Pick<PlatformStores, "files" | "executionWorkspaces">;
   byteStore: WorkspaceFileByteStore;
   workerId?: string;
   tempRootDirectory?: string;
@@ -117,7 +105,7 @@ export interface RunClaimedWorkspaceCommandOptions {
 }
 
 export class LocalWorkspaceCommandRunner {
-  private readonly store: WorkspaceCommandRunnerStore;
+  private readonly store: Pick<PlatformStores, "files" | "executionWorkspaces">;
   private readonly byteStore: WorkspaceFileByteStore;
   private readonly workerId: string;
   private readonly tempRootDirectory: string;
@@ -148,7 +136,7 @@ export class LocalWorkspaceCommandRunner {
 
   async runNextCommand(input: RunNextWorkspaceCommandInput): Promise<WorkspaceCommand | undefined> {
     const now = this.now();
-    const claimed = await this.store.claimNextWorkspaceCommand({
+    const claimed = await this.store.executionWorkspaces.claimNextWorkspaceCommand({
       clientInstanceId: input.clientInstanceId,
       workerId: this.workerId,
       leaseToken: randomUUID(),
@@ -175,7 +163,7 @@ export class LocalWorkspaceCommandRunner {
     const completedAt = this.now();
     let terminal: WorkspaceCommand;
     if (result.cancelled) {
-      terminal = await this.store.cancelClaimedWorkspaceCommand({
+      terminal = await this.store.executionWorkspaces.cancelClaimedWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
         leaseToken,
@@ -187,7 +175,7 @@ export class LocalWorkspaceCommandRunner {
       return terminal;
     }
     if (result.error) {
-      terminal = await this.store.failWorkspaceCommand({
+      terminal = await this.store.executionWorkspaces.failWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
         leaseToken,
@@ -199,7 +187,7 @@ export class LocalWorkspaceCommandRunner {
       return terminal;
     }
     if (!result.output) {
-      terminal = await this.store.failWorkspaceCommand({
+      terminal = await this.store.executionWorkspaces.failWorkspaceCommand({
         clientInstanceId: command.clientInstanceId,
         commandId: command.id,
         leaseToken,
@@ -213,7 +201,7 @@ export class LocalWorkspaceCommandRunner {
       await this.recordTerminalCommand(terminal);
       return terminal;
     }
-    terminal = await this.store.completeWorkspaceCommand({
+    terminal = await this.store.executionWorkspaces.completeWorkspaceCommand({
       clientInstanceId: command.clientInstanceId,
       commandId: command.id,
       leaseToken,
@@ -360,7 +348,7 @@ export class LocalWorkspaceCommandRunner {
   }
 
   private async requireWorkspace(command: WorkspaceCommand): Promise<ExecutionWorkspace> {
-    const workspace = await this.store.getExecutionWorkspace({
+    const workspace = await this.store.executionWorkspaces.getExecutionWorkspace({
       clientInstanceId: command.clientInstanceId,
       workspaceId: command.workspaceId
     });
@@ -398,7 +386,7 @@ export class LocalWorkspaceCommandRunner {
       }
       await mkdir(workspaceDirectory, { recursive: true });
       await this.ensureStandardWorkspaceDirectories(workspaceDirectory);
-      const files = await this.store.listWorkspaceFiles({
+      const files = await this.store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: command.clientInstanceId,
         workspaceId: workspace.id
       });
@@ -608,21 +596,26 @@ export class LocalWorkspaceCommandRunner {
         checksum: scanned.checksum,
         mimeType: scanned.mimeType
       });
-      const file = await upsertStoredWorkspaceFile(this.store, this.byteStore, this.telemetry, {
-        clientInstanceId: command.clientInstanceId,
-        workspaceId: workspace.id,
-        path: scanned.path,
-        objectKey: stored.objectKey,
-        byteSize: scanned.byteSize,
-        checksum: scanned.checksum,
-        mimeType: scanned.mimeType,
-        metadata: {
-          ...baseline?.metadata,
-          source: "workspace.exec"
-        },
-        lastCommandId: command.id,
-        updatedAt: this.now()
-      });
+      const file = await upsertStoredWorkspaceFile(
+        this.store.executionWorkspaces,
+        this.byteStore,
+        this.telemetry,
+        {
+          clientInstanceId: command.clientInstanceId,
+          workspaceId: workspace.id,
+          path: scanned.path,
+          objectKey: stored.objectKey,
+          byteSize: scanned.byteSize,
+          checksum: scanned.checksum,
+          mimeType: scanned.mimeType,
+          metadata: {
+            ...baseline?.metadata,
+            source: "workspace.exec"
+          },
+          lastCommandId: command.id,
+          updatedAt: this.now()
+        }
+      );
       changedFiles.push({
         file,
         output: {
@@ -638,7 +631,7 @@ export class LocalWorkspaceCommandRunner {
       if (scannedPaths.has(path)) {
         continue;
       }
-      await this.store.deleteWorkspaceFile({
+      await this.store.executionWorkspaces.deleteWorkspaceFile({
         clientInstanceId: command.clientInstanceId,
         workspaceId: workspace.id,
         path,

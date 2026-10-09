@@ -28,12 +28,12 @@ describePostgres("Postgres conversation store", () => {
     const clientInstanceId = asClientInstanceId(
       `recent_messages_${globalThis.crypto.randomUUID()}`
     );
-    const user = await store.createUser({ clientInstanceId, displayLabel: "Test user" });
-    const personalWorkspace = await store.ensurePersonalWorkspace({
+    const user = await store.users.createUser({ clientInstanceId, displayLabel: "Test user" });
+    const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
       clientInstanceId,
       userId: user.id
     });
-    const conversation = await store.createConversation({
+    const conversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: personalWorkspace.id,
@@ -48,7 +48,7 @@ describePostgres("Postgres conversation store", () => {
 
     try {
       for (const [index, id] of messageIds.entries()) {
-        await store.appendMessage({
+        await store.conversations.appendMessage({
           id,
           clientInstanceId,
           conversationId: conversation.id,
@@ -56,7 +56,7 @@ describePostgres("Postgres conversation store", () => {
           text: `Message ${index + 1}`
         });
       }
-      const firstCheckpointMessage = await store.appendAssistantMessage({
+      const firstCheckpointMessage = await store.conversations.appendAssistantMessage({
         clientInstanceId,
         conversationId: conversation.id,
         text: "First checkpoint",
@@ -65,7 +65,7 @@ describePostgres("Postgres conversation store", () => {
           state: { checkpoint: "first" }
         }
       });
-      const latestCheckpointMessage = await store.appendAssistantMessage({
+      const latestCheckpointMessage = await store.conversations.appendAssistantMessage({
         clientInstanceId,
         conversationId: conversation.id,
         text: "Latest checkpoint",
@@ -94,7 +94,7 @@ describePostgres("Postgres conversation store", () => {
           < excluded.source_storage_ordinal
       `;
       await expect(
-        store.getModelProviderContinuation({
+        store.conversations.getModelProviderContinuation({
           clientInstanceId,
           conversationId: conversation.id,
           providerId: "test-provider"
@@ -111,7 +111,7 @@ describePostgres("Postgres conversation store", () => {
       `;
 
       await expect(
-        store.listRecentMessages({
+        store.conversations.listRecentMessages({
           clientInstanceId,
           conversationId: conversation.id,
           limit: 2
@@ -121,7 +121,7 @@ describePostgres("Postgres conversation store", () => {
         { id: latestCheckpointMessage.id }
       ]);
       await expect(
-        store.listConversationsForWorkspace({
+        store.conversations.listConversationsForWorkspace({
           clientInstanceId,
           collaborationWorkspaceId: personalWorkspace.id,
           scope: { kind: "lifecycle" }
@@ -148,9 +148,12 @@ describePostgres("Postgres conversation store", () => {
     ).stores;
     const sql = postgres(databaseUrl!, { max: 1 });
     const clientInstanceId = asClientInstanceId(`unsent_drafts_${globalThis.crypto.randomUUID()}`);
-    const user = await store.createUser({ clientInstanceId, displayLabel: "Author" });
-    const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: user.id });
-    const conversation = await store.createConversation({
+    const user = await store.users.createUser({ clientInstanceId, displayLabel: "Author" });
+    const workspace = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: user.id
+    });
+    const conversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: workspace.id,
@@ -161,7 +164,7 @@ describePostgres("Postgres conversation store", () => {
     });
     const listedFor = async (userId: string) =>
       (
-        await store.listConversationsForWorkspace({
+        await store.conversations.listConversationsForWorkspace({
           clientInstanceId,
           collaborationWorkspaceId: workspace.id,
           scope: { kind: "viewer", userId }
@@ -170,21 +173,26 @@ describePostgres("Postgres conversation store", () => {
     const now = new Date().toISOString();
     const expiredWith = async (abandonedBefore?: string) =>
       (
-        await store.listExpiredConversations({ clientInstanceId, now, abandonedBefore, limit: 10 })
+        await store.conversations.listExpiredConversations({
+          clientInstanceId,
+          now,
+          abandonedBefore,
+          limit: 10
+        })
       ).map(({ id }) => id);
     const later = "2998-01-01T00:00:00.000Z";
 
     try {
       await expect(listedFor(user.id)).resolves.toEqual([]);
       await expect(
-        store.listConversationsForWorkspace({
+        store.conversations.listConversationsForWorkspace({
           clientInstanceId,
           collaborationWorkspaceId: workspace.id,
           scope: { kind: "lifecycle" }
         })
       ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
 
-      const file = await store.createManagedFile({
+      const file = await store.files.createManagedFile({
         clientInstanceId,
         ownerUserId: user.id,
         filename: "draft.txt",
@@ -192,7 +200,7 @@ describePostgres("Postgres conversation store", () => {
         checksum: "draft",
         objectKey: `files/${conversation.id}/draft`
       });
-      const attachment = await store.createConversationAttachment({
+      const attachment = await store.files.createConversationAttachment({
         clientInstanceId,
         conversationId: conversation.id,
         fileId: file.id,
@@ -205,7 +213,7 @@ describePostgres("Postgres conversation store", () => {
       await expect(listedFor("usr_colleague")).resolves.toEqual([]);
       await expect(expiredWith(later)).resolves.toEqual([]);
 
-      await store.deleteDraftAttachment({
+      await store.files.deleteDraftAttachment({
         clientInstanceId,
         conversationId: conversation.id,
         attachmentId: attachment.id,
@@ -217,13 +225,17 @@ describePostgres("Postgres conversation store", () => {
       await expect(expiredWith(later)).resolves.toEqual([conversation.id]);
       // Without `now` only the abandoned criterion applies, whatever the stamped date.
       await expect(
-        store.listExpiredConversations({ clientInstanceId, abandonedBefore: later, limit: 10 })
+        store.conversations.listExpiredConversations({
+          clientInstanceId,
+          abandonedBefore: later,
+          limit: 10
+        })
       ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
       await expect(
-        store.listExpiredConversations({ clientInstanceId, limit: 10 })
+        store.conversations.listExpiredConversations({ clientInstanceId, limit: 10 })
       ).resolves.toEqual([]);
 
-      await store.appendMessage({
+      await store.conversations.appendMessage({
         clientInstanceId,
         conversationId: conversation.id,
         role: "user",
@@ -234,14 +246,18 @@ describePostgres("Postgres conversation store", () => {
       await expect(expiredWith(later)).resolves.toEqual([]);
       // A started conversation past its date is not returned without `now`.
       await expect(
-        store.listExpiredConversations({
+        store.conversations.listExpiredConversations({
           clientInstanceId,
           now: "3000-01-01T00:00:00.000Z",
           limit: 10
         })
       ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
       await expect(
-        store.listExpiredConversations({ clientInstanceId, abandonedBefore: later, limit: 10 })
+        store.conversations.listExpiredConversations({
+          clientInstanceId,
+          abandonedBefore: later,
+          limit: 10
+        })
       ).resolves.toEqual([]);
     } finally {
       await sql`delete from conversations where id = ${conversation.id}`;
@@ -265,13 +281,13 @@ describePostgres("Postgres conversation store", () => {
     ).stores;
     const sql = postgres(databaseUrl!, { max: 1 });
     const clientInstanceId = asClientInstanceId(`orphan_files_${globalThis.crypto.randomUUID()}`);
-    const user = await store.createUser({ clientInstanceId, displayLabel: "Test user" });
-    const personalWorkspace = await store.ensurePersonalWorkspace({
+    const user = await store.users.createUser({ clientInstanceId, displayLabel: "Test user" });
+    const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
       clientInstanceId,
       userId: user.id
     });
     const createConversation = (title: string) =>
-      store.createConversation({
+      store.conversations.createConversation({
         visibility: "workspace",
         clientInstanceId,
         collaborationWorkspaceId: personalWorkspace.id,
@@ -281,7 +297,7 @@ describePostgres("Postgres conversation store", () => {
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
     const createFile = (name: string, objectKey = `orphan-test/${clientInstanceId}/${name}`) =>
-      store.createManagedFile({
+      store.files.createManagedFile({
         clientInstanceId,
         ownerUserId: user.id,
         filename: name,
@@ -293,7 +309,7 @@ describePostgres("Postgres conversation store", () => {
       conversationId: ConversationId,
       file: { id: ManagedFileId; filename: string }
     ) =>
-      store.createConversationAttachment({
+      store.files.createConversationAttachment({
         clientInstanceId,
         conversationId,
         fileId: file.id,
@@ -311,14 +327,14 @@ describePostgres("Postgres conversation store", () => {
       await attach(active.id, attached);
       const removedDraft = await createFile("removed-draft");
       const removedDraftAttachment = await attach(active.id, removedDraft);
-      await store.deleteDraftAttachment({
+      await store.files.deleteDraftAttachment({
         clientInstanceId,
         conversationId: active.id,
         attachmentId: removedDraftAttachment.id,
         deletedAt: new Date().toISOString()
       });
       const artifactSource = await createFile("artifact-source");
-      await store.createManagedArtifact({
+      await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: active.id,
         sourceFileId: artifactSource.id,
@@ -331,7 +347,7 @@ describePostgres("Postgres conversation store", () => {
       const neverAttached = await createFile("never-attached");
       const inSoftDeleted = await createFile("in-soft-deleted");
       await attach(softDeleted.id, inSoftDeleted);
-      await store.deleteConversation({
+      await store.conversations.deleteConversation({
         clientInstanceId,
         conversationId: softDeleted.id,
         deletedAt: new Date().toISOString()
@@ -348,10 +364,10 @@ describePostgres("Postgres conversation store", () => {
       const past = new Date(Date.now() - 60_000).toISOString();
       const future = new Date(Date.now() + 60_000).toISOString();
       await expect(
-        store.listOrphanedManagedFiles({ clientInstanceId, createdBefore: past, limit: 10 })
+        store.files.listOrphanedManagedFiles({ clientInstanceId, createdBefore: past, limit: 10 })
       ).resolves.toEqual([]);
 
-      const listed = await store.listOrphanedManagedFiles({
+      const listed = await store.files.listOrphanedManagedFiles({
         clientInstanceId,
         createdBefore: future,
         limit: 10
@@ -360,12 +376,12 @@ describePostgres("Postgres conversation store", () => {
       expect(listed.filter((file) => file.objectKeyInUse).map((file) => file.id)).toEqual([
         sharedKey.id
       ]);
-      const firstPage = await store.listOrphanedManagedFiles({
+      const firstPage = await store.files.listOrphanedManagedFiles({
         clientInstanceId,
         createdBefore: future,
         limit: 3
       });
-      const secondPage = await store.listOrphanedManagedFiles({
+      const secondPage = await store.files.listOrphanedManagedFiles({
         clientInstanceId,
         createdBefore: future,
         afterFileId: firstPage.at(-1)!.id,
@@ -375,7 +391,7 @@ describePostgres("Postgres conversation store", () => {
 
       const everyFileId = [attached, removedDraft, artifactSource].map((file) => file.id);
       await expect(
-        store.markOrphanedManagedFilesDeleted({
+        store.files.markOrphanedManagedFilesDeleted({
           clientInstanceId,
           fileIds: [...everyFileId, ...orphanIds],
           createdBefore: future,
@@ -383,15 +399,19 @@ describePostgres("Postgres conversation store", () => {
         })
       ).resolves.toBe(orphanIds.length);
       for (const fileId of everyFileId) {
-        await expect(store.getManagedFile({ clientInstanceId, fileId })).resolves.toMatchObject({
+        await expect(
+          store.files.getManagedFile({ clientInstanceId, fileId })
+        ).resolves.toMatchObject({
           status: "available"
         });
       }
       for (const fileId of orphanIds) {
-        await expect(store.getManagedFile({ clientInstanceId, fileId })).resolves.toBeUndefined();
+        await expect(
+          store.files.getManagedFile({ clientInstanceId, fileId })
+        ).resolves.toBeUndefined();
       }
       await expect(
-        store.listOrphanedManagedFiles({ clientInstanceId, createdBefore: future, limit: 10 })
+        store.files.listOrphanedManagedFiles({ clientInstanceId, createdBefore: future, limit: 10 })
       ).resolves.toEqual([]);
     } finally {
       await sql`delete from conversations where client_instance_id = ${clientInstanceId}`;
@@ -437,14 +457,14 @@ describePostgres("Postgres conversation store", () => {
     };
 
     try {
-      await store.appendModelUsageEvent({ ...event, fastMode: false });
-      await store.appendModelUsageEvent({
+      await store.usage.appendModelUsageEvent({ ...event, fastMode: false });
+      await store.usage.appendModelUsageEvent({
         ...event,
         fastMode: true,
         providerServiceTier: "priority"
       });
 
-      const stored = await store.listModelUsageEvents({ clientInstanceId });
+      const stored = await store.usage.listModelUsageEvents({ clientInstanceId });
       expect(stored.filter((candidate) => !candidate.fastMode)).toEqual([
         expect.not.objectContaining({ providerServiceTier: expect.anything() })
       ]);

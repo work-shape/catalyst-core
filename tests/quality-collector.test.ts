@@ -63,7 +63,8 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
     "@fixture/config-cli": [],
     "@fixture/ghost": [],
     "@fixture/chat-server": [],
-    "@fixture/document-worker": []
+    "@fixture/document-worker": [],
+    "@fixture/auth": []
   }),
   "packages/alpha/package.json": JSON.stringify({
     name: "@fixture/alpha",
@@ -115,9 +116,9 @@ export type Handler = (event: globalThis.Event) => void;
   "tests/injection.test.ts": `declare const server: { inject(): void }; server.inject();\n`,
   "tests/computed-injection.test.ts": `declare const server: { inject(): void }; server["inject"]();\n`,
   "tests/aliased-injection.test.ts": `declare const server: { inject(): void }; const { inject: send } = server; send();\n`,
-  "tests/store-class.test.ts": `declare class PostgresPlatformStore {} new PostgresPlatformStore();\n`,
-  "tests/store-alias.test.ts": `import { PostgresPlatformStore as Store } from "@fixture/beta"; export { Store };\n`,
-  "tests/support/allowed.ts": `declare const server: { inject(): void }; server.inject(); export const path = "/api/conversations"; declare class PostgresPlatformStore {} new PostgresPlatformStore();\n`,
+  "tests/store-class.test.ts": `declare function createPostgresStores(): void; createPostgresStores();\n`,
+  "tests/store-alias.test.ts": `import { createPostgresStores as Store } from "@fixture/beta"; export { Store };\n`,
+  "tests/support/allowed.ts": `declare const server: { inject(): void }; server.inject(); export const path = "/api/conversations"; declare function createPostgresStores(): void; createPostgresStores();\n`,
 
   // typescript-eslint
   [`${source}/floating.ts`]: `Promise.resolve(1);\n`,
@@ -192,6 +193,15 @@ export const response = g.fetch("https://example.test");
   [`${source}/host-computed.ts`]: `const name = "fetch" as string;
 export const transport: unknown = Reflect.get(self, name);
 `,
+
+  // SQL imports are allowed only in the three persistence adapters.
+  [`${source}/sql-import.ts`]: `import type { SQL } from "drizzle-orm"; export type Query = SQL;\n`,
+  [`${source}/sql-dynamic.ts`]: `export const driver = import("postgres");\n`,
+  [`${source}/sql-require.cjs`]: `module.exports = require("pg");\n`,
+  [`${source}/sql-export.ts`]: `export * from "drizzle-orm/pg-core";\n`,
+  [`${source}/sql-import-type.ts`]: `export type Query = import("drizzle-orm").SQL;\n`,
+  "packages/auth/package.json": JSON.stringify({ name: "@fixture/auth" }),
+  "packages/auth/src/allowed.ts": `import type { SQL } from "drizzle-orm"; export type Query = SQL;\n`,
 
   // Package boundaries, with each bypass
   [`${source}/deep-import.ts`]: `export { hidden } from "@fixture/beta/src/internal";\n`,
@@ -404,6 +414,12 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `@typescript-eslint/ban-ts-comment ${source}/ts-comment.ts`,
         `eslint/inline-config ${source}/inline-config.ts`,
         `no-debugger ${source}/warned.ts`,
+        `catalyst/sql-boundary ${source}/sql-import.ts`,
+        `catalyst/sql-boundary ${source}/sql-dynamic.ts`,
+        `catalyst/sql-boundary ${source}/sql-require.cjs`,
+        `catalyst/sql-boundary ${source}/sql-export.ts`,
+        `catalyst/sql-boundary ${source}/sql-import-type.ts`,
+        `import-x/no-unresolved ${source}/sql-require.cjs`,
         `catalyst/logger-boundary ${source}/logger-interface.ts`,
         `catalyst/console-boundary ${source}/console-member.ts`,
         `catalyst/console-boundary ${source}/console-destructured.ts`,

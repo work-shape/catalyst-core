@@ -51,14 +51,14 @@ describe("service access tokens", () => {
     const fixture = await createFixture();
     const issued = await fixture.exchange.exchange(fixture.apiKey);
     const resolving = new CompositeAuthAdapter([
-      new IdentityResolvingAuthAdapter(fixture.adapter, fixture.store)
+      new IdentityResolvingAuthAdapter(fixture.adapter, fixture.store.users)
     ]);
 
     await expect(
       resolving.authenticate(authRequest(fixture.clientInstanceId, issued.accessToken))
     ).resolves.toMatchObject({ kind: "service", id: fixture.servicePrincipalId });
     await expect(
-      fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })
+      fixture.store.users.listUsers({ clientInstanceId: fixture.clientInstanceId })
     ).resolves.toEqual([]);
   });
 
@@ -72,7 +72,7 @@ describe("service access tokens", () => {
     const otherClientExchange = new ApiKeyAccessTokenExchange({
       secret,
       clientInstanceId: asClientInstanceId("other-client"),
-      apiAccessStore: fixture.store
+      apiAccessStore: fixture.store.apiAccess
     });
     await expect(otherClientExchange.exchange(fixture.apiKey)).rejects.toMatchObject({
       code: "UNAUTHENTICATED"
@@ -81,7 +81,7 @@ describe("service access tokens", () => {
 
   it("rejects revoked, expired, and disabled credentials", async () => {
     const revoked = await createFixture();
-    await revoked.store.revokeApiCredential({
+    await revoked.store.apiAccess.revokeApiCredential({
       clientInstanceId: revoked.clientInstanceId,
       credentialId: revoked.credentialId
     });
@@ -91,7 +91,7 @@ describe("service access tokens", () => {
     await expect(expired.exchange.exchange(expired.apiKey)).rejects.toThrow("expired");
 
     const disabled = await createFixture();
-    await disabled.store.updateServicePrincipal({
+    await disabled.store.apiAccess.updateServicePrincipal({
       clientInstanceId: disabled.clientInstanceId,
       servicePrincipalId: disabled.servicePrincipalId,
       status: "disabled"
@@ -102,7 +102,7 @@ describe("service access tokens", () => {
   it("rechecks revocation while verifying an already-issued access token", async () => {
     const fixture = await createFixture();
     const issued = await fixture.exchange.exchange(fixture.apiKey);
-    await fixture.store.revokeApiCredential({
+    await fixture.store.apiAccess.revokeApiCredential({
       clientInstanceId: fixture.clientInstanceId,
       credentialId: fixture.credentialId
     });
@@ -120,7 +120,7 @@ describe("service access tokens", () => {
         new ApiKeyAccessTokenExchange({
           secret: "too-short",
           clientInstanceId,
-          apiAccessStore: store
+          apiAccessStore: store.apiAccess
         })
     ).toThrow("at least 32 characters");
     expect(
@@ -129,7 +129,7 @@ describe("service access tokens", () => {
           secret,
           clientInstanceId,
           ttlSeconds: 901,
-          apiAccessStore: store
+          apiAccessStore: store.apiAccess
         })
     ).toThrow("between 10 and 15 minutes");
   });
@@ -144,12 +144,12 @@ async function createFixture(
 ) {
   const clientInstanceId = asClientInstanceId("service-auth-test");
   const store = createTestInstance().stores;
-  const servicePrincipal = await store.createServicePrincipal({
+  const servicePrincipal = await store.apiAccess.createServicePrincipal({
     clientInstanceId,
     displayLabel: "Catalyst CLI",
     permissions: input.permissions ?? ["config_assets.read", "config_assets.release"]
   });
-  const created = await store.createApiCredential({
+  const created = await store.apiAccess.createApiCredential({
     clientInstanceId,
     servicePrincipalId: servicePrincipal.id,
     name: "test key",

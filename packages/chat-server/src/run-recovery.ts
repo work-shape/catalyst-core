@@ -1,7 +1,6 @@
 import type {
   AgentRun,
   AgentRunError,
-  AgentRunId,
   AgentRuntimeEvent,
   RunObservation
 } from "@vivd-catalyst/core";
@@ -89,7 +88,7 @@ export class RunRecoveryWatchdog {
     this.running = true;
     try {
       const staleUpdatedBefore = staleCutoff(now, this.staleActiveRunMs);
-      const candidates = await this.options.conversationStore.listStaleActiveAgentRuns({
+      const candidates = await this.options.stores.agentRuns.listStaleActiveAgentRuns({
         clientInstanceId: this.options.clientInstanceId,
         staleUpdatedBefore,
         limit: this.batchSize
@@ -156,7 +155,7 @@ async function recoverActiveRun(
     staleUpdatedBefore: string;
   }
 ): Promise<RunRecoveryResult | undefined> {
-  const recovered = await options.conversationStore.recoverStaleAgentRun({
+  const recovered = await options.stores.agentRuns.recoverStaleAgentRun({
     clientInstanceId: options.clientInstanceId,
     runId: run.id,
     ownerUserId: run.ownerUserId,

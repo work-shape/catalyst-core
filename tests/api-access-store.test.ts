@@ -1,17 +1,16 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
   createPlatformId,
   hashApiCredentialSecret,
-  parseApiCredentialSecret,
-  type ApiAccessStore,
-  type UserStore
+  parseApiCredentialSecret
 } from "@vivd-catalyst/core";
 
 import postgres from "postgres";
 
-interface ApiAccessStoreFixture extends ApiAccessStore, Pick<UserStore, "createUser"> {
+interface ApiAccessStoreFixture extends Pick<PlatformStores, "apiAccess" | "users"> {
   close?: () => Promise<void>;
 }
 
@@ -92,21 +91,23 @@ function runApiAccessStoreSuite(
     it("creates, lists, and updates service principals independently per client", async () => {
       const clientInstanceId = createClientInstanceId();
       const otherClientInstanceId = createClientInstanceId();
-      const created = await store.createServicePrincipal({
+      const created = await store.apiAccess.createServicePrincipal({
         clientInstanceId,
         displayLabel: "Catalyst CLI",
         description: "Config asset synchronization",
         permissionRefs: ["config-operators"],
         permissions: ["config_assets.read"]
       });
-      await store.createServicePrincipal({
+      await store.apiAccess.createServicePrincipal({
         clientInstanceId: otherClientInstanceId,
         displayLabel: "Other tenant CLI"
       });
 
-      await expect(store.listServicePrincipals({ clientInstanceId })).resolves.toEqual([created]);
+      await expect(store.apiAccess.listServicePrincipals({ clientInstanceId })).resolves.toEqual([
+        created
+      ]);
 
-      const updated = await store.updateServicePrincipal({
+      const updated = await store.apiAccess.updateServicePrincipal({
         clientInstanceId,
         servicePrincipalId: created.id,
         displayLabel: "Catalyst automation",
@@ -128,25 +129,25 @@ function runApiAccessStoreSuite(
     it("rejects a creator user owned by another client instance", async () => {
       const clientInstanceId = createClientInstanceId();
       const otherClientInstanceId = createClientInstanceId();
-      const otherClientUser = await store.createUser({
+      const otherClientUser = await store.users.createUser({
         clientInstanceId: otherClientInstanceId,
         displayLabel: "Other tenant administrator"
       });
 
       await expect(
-        store.createServicePrincipal({
+        store.apiAccess.createServicePrincipal({
           clientInstanceId,
           displayLabel: "Invalid automation",
           createdByUserId: otherClientUser.id
         })
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-      const localUser = await store.createUser({
+      const localUser = await store.users.createUser({
         clientInstanceId,
         displayLabel: "Local administrator"
       });
       await expect(
-        store.createServicePrincipal({
+        store.apiAccess.createServicePrincipal({
           clientInstanceId,
           displayLabel: "Valid automation",
           createdByUserId: localUser.id
@@ -156,13 +157,13 @@ function runApiAccessStoreSuite(
 
     it("returns a raw API key once while exposing only public credential metadata", async () => {
       const clientInstanceId = createClientInstanceId();
-      const principal = await store.createServicePrincipal({
+      const principal = await store.apiAccess.createServicePrincipal({
         clientInstanceId,
         displayLabel: "Release automation",
         permissions: ["config_assets.read", "config_assets.release"]
       });
       const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
-      const created = await store.createApiCredential({
+      const created = await store.apiAccess.createApiCredential({
         clientInstanceId,
         servicePrincipalId: principal.id,
         name: "CI",
@@ -181,14 +182,14 @@ function runApiAccessStoreSuite(
         expiresAt
       });
 
-      const listed = await store.listApiCredentials({
+      const listed = await store.apiAccess.listApiCredentials({
         clientInstanceId,
         servicePrincipalId: principal.id
       });
       expect(listed).toEqual([created.credential]);
       expect(listed[0]).not.toHaveProperty("secretHash");
 
-      const resolved = await store.resolveApiCredential({
+      const resolved = await store.apiAccess.resolveApiCredential({
         clientInstanceId,
         credentialId: created.credential.id
       });
@@ -202,11 +203,11 @@ function runApiAccessStoreSuite(
 
     it("updates credential and principal last-used metadata, then revokes idempotently", async () => {
       const clientInstanceId = createClientInstanceId();
-      const principal = await store.createServicePrincipal({
+      const principal = await store.apiAccess.createServicePrincipal({
         clientInstanceId,
         displayLabel: "Developer CLI"
       });
-      const { credential } = await store.createApiCredential({
+      const { credential } = await store.apiAccess.createApiCredential({
         clientInstanceId,
         servicePrincipalId: principal.id,
         name: "Laptop"
@@ -217,31 +218,31 @@ function runApiAccessStoreSuite(
         .toISOString()
         .replace("Z", "+02:00");
 
-      const used = await store.updateApiCredentialLastUsed({
+      const used = await store.apiAccess.updateApiCredentialLastUsed({
         clientInstanceId,
         credentialId: credential.id,
         usedAt
       });
       expect(used.lastUsedAt).toBe(usedAt);
-      const delayed = await store.updateApiCredentialLastUsed({
+      const delayed = await store.apiAccess.updateApiCredentialLastUsed({
         clientInstanceId,
         credentialId: credential.id,
         usedAt: delayedOlderUsedAt
       });
       expect(delayed.lastUsedAt).toBe(usedAt);
-      const delayedWithOffset = await store.updateApiCredentialLastUsed({
+      const delayedWithOffset = await store.apiAccess.updateApiCredentialLastUsed({
         clientInstanceId,
         credentialId: credential.id,
         usedAt: delayedOlderOffsetUsedAt
       });
       expect(delayedWithOffset.lastUsedAt).toBe(usedAt);
-      await expect(store.listServicePrincipals({ clientInstanceId })).resolves.toMatchObject([
-        { id: principal.id, lastUsedAt: usedAt }
-      ]);
+      await expect(
+        store.apiAccess.listServicePrincipals({ clientInstanceId })
+      ).resolves.toMatchObject([{ id: principal.id, lastUsedAt: usedAt }]);
 
       const [firstRevocation, concurrentRevocation] = await Promise.all([
-        store.revokeApiCredential({ clientInstanceId, credentialId: credential.id }),
-        store.revokeApiCredential({ clientInstanceId, credentialId: credential.id })
+        store.apiAccess.revokeApiCredential({ clientInstanceId, credentialId: credential.id }),
+        store.apiAccess.revokeApiCredential({ clientInstanceId, credentialId: credential.id })
       ]);
       expect(firstRevocation.revokedAt).toBeDefined();
       expect(concurrentRevocation).toEqual(firstRevocation);
@@ -250,31 +251,31 @@ function runApiAccessStoreSuite(
     it("does not resolve or mutate credentials through a different client instance", async () => {
       const clientInstanceId = createClientInstanceId();
       const otherClientInstanceId = createClientInstanceId();
-      const principal = await store.createServicePrincipal({
+      const principal = await store.apiAccess.createServicePrincipal({
         clientInstanceId,
         displayLabel: "Scoped CLI"
       });
-      const { credential } = await store.createApiCredential({
+      const { credential } = await store.apiAccess.createApiCredential({
         clientInstanceId,
         servicePrincipalId: principal.id,
         name: "Scoped key"
       });
 
       await expect(
-        store.resolveApiCredential({
+        store.apiAccess.resolveApiCredential({
           clientInstanceId: otherClientInstanceId,
           credentialId: credential.id
         })
       ).resolves.toBeUndefined();
       await expect(
-        store.createApiCredential({
+        store.apiAccess.createApiCredential({
           clientInstanceId: otherClientInstanceId,
           servicePrincipalId: principal.id,
           name: "Cross-tenant key"
         })
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
       await expect(
-        store.revokeApiCredential({
+        store.apiAccess.revokeApiCredential({
           clientInstanceId: otherClientInstanceId,
           credentialId: credential.id
         })

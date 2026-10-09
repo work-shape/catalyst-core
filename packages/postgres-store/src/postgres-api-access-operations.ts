@@ -13,12 +13,12 @@ import {
   type ServicePrincipalRecord,
   type UpdateServicePrincipalInput
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapApiCredential, mapServicePrincipal } from "./rows";
 import { apiCredentials, productUsers, servicePrincipals } from "./schema";
 
 export async function listServicePrincipals(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
 ): Promise<ServicePrincipalRecord[]> {
   const rows = await db
@@ -30,7 +30,7 @@ export async function listServicePrincipals(
 }
 
 export async function createServicePrincipal(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CreateServicePrincipalInput
 ): Promise<ServicePrincipalRecord> {
   if (input.createdByUserId) {
@@ -69,7 +69,7 @@ export async function createServicePrincipal(
 }
 
 export async function updateServicePrincipal(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UpdateServicePrincipalInput
 ): Promise<ServicePrincipalRecord> {
   const set: Partial<typeof servicePrincipals.$inferInsert> = { updatedAt: new Date() };
@@ -106,7 +106,7 @@ export async function updateServicePrincipal(
 }
 
 export async function listApiCredentials(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApiAccessStore["listApiCredentials"]>[0]
 ): Promise<ApiCredentialRecord[]> {
   await requireServicePrincipal(db, input.clientInstanceId, input.servicePrincipalId);
@@ -124,7 +124,7 @@ export async function listApiCredentials(
 }
 
 export async function createApiCredential(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CreateApiCredentialInput
 ): Promise<CreatedApiCredential> {
   await requireServicePrincipal(db, input.clientInstanceId, input.servicePrincipalId);
@@ -148,7 +148,7 @@ export async function createApiCredential(
 }
 
 export async function revokeApiCredential(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApiAccessStore["revokeApiCredential"]>[0]
 ): Promise<ApiCredentialRecord> {
   const [row] = await db
@@ -168,7 +168,7 @@ export async function revokeApiCredential(
 }
 
 export async function resolveApiCredential(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApiAccessStore["resolveApiCredential"]>[0]
 ): Promise<ResolvedApiCredential | undefined> {
   const [row] = await db
@@ -199,7 +199,7 @@ export async function resolveApiCredential(
 }
 
 export async function updateApiCredentialLastUsed(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ApiAccessStore["updateApiCredentialLastUsed"]>[0]
 ): Promise<ApiCredentialRecord> {
   return db.transaction(async (tx) => {
@@ -239,7 +239,7 @@ export async function updateApiCredentialLastUsed(
 }
 
 async function requireServicePrincipal(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   clientInstanceId: ServicePrincipalRecord["clientInstanceId"],
   servicePrincipalId: ServicePrincipalRecord["id"]
 ) {

@@ -115,7 +115,7 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceAccess> {
     const userId = asUserId(getSubjectUserId(user));
-    const membership = await this.options.userStore.getMembership({
+    const membership = await this.options.stores.workspaces.getMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId
@@ -123,7 +123,7 @@ export class CollaborationWorkspaceWorkflow {
     const membershipRole = membership?.role ?? null;
     // Only a superadmin's access depends on the workspace itself, so only they load it here.
     const workspace = isSuperadmin(user)
-      ? await this.options.userStore.getWorkspace(
+      ? await this.options.stores.workspaces.getWorkspace(
           this.options.clientInstanceId,
           collaborationWorkspaceId
         )
@@ -151,14 +151,14 @@ export class CollaborationWorkspaceWorkflow {
 
   async listWorkspaces(user: AuthenticatedUser): Promise<WorkspaceListItem[]> {
     const userId = asUserId(getSubjectUserId(user));
-    const memberWorkspaces = await this.options.userStore.listWorkspacesForUser({
+    const memberWorkspaces = await this.options.stores.workspaces.listWorkspacesForUser({
       clientInstanceId: this.options.clientInstanceId,
       userId
     });
     const memberWorkspaceIds = new Set(memberWorkspaces.map((workspace) => workspace.id));
     const otherSharedWorkspaces = isSuperadmin(user)
       ? (
-          await this.options.userStore.listSharedWorkspaces({
+          await this.options.stores.workspaces.listSharedWorkspaces({
             clientInstanceId: this.options.clientInstanceId
           })
         ).filter((workspace) => !memberWorkspaceIds.has(workspace.id))
@@ -183,7 +183,7 @@ export class CollaborationWorkspaceWorkflow {
     command: CreateSharedWorkspaceCommand
   ): Promise<WorkspaceListItem> {
     this.requireCollaborationWorkspacesEnabled();
-    const workspace = await this.options.userStore.createWorkspace({
+    const workspace = await this.options.stores.workspaces.createWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       kind: "shared",
       name: normalizeRequiredName(command.name),
@@ -214,16 +214,16 @@ export class CollaborationWorkspaceWorkflow {
     requireOwner(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const [conversations, memberships, accessRequests] = await Promise.all([
-      this.options.conversationStore.listConversationsForWorkspace({
+      this.options.stores.conversations.listConversationsForWorkspace({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId,
         scope: { kind: "lifecycle" }
       }),
-      this.options.userStore.listMemberships({
+      this.options.stores.workspaces.listMemberships({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId
       }),
-      this.options.userStore.listAccessRequestsForWorkspace({
+      this.options.stores.workspaces.listAccessRequestsForWorkspace({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId
       })
@@ -248,7 +248,7 @@ export class CollaborationWorkspaceWorkflow {
       throw new AppError("VALIDATION_FAILED", "Workspace name confirmation does not match");
     }
 
-    const conversations = await this.options.conversationStore.listConversationsForWorkspace({
+    const conversations = await this.options.stores.conversations.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       scope: { kind: "lifecycle" }
@@ -256,7 +256,7 @@ export class CollaborationWorkspaceWorkflow {
     for (const conversation of conversations) {
       await this.assertConversationIdle(conversation.id);
     }
-    const memberships = await this.options.userStore.listMemberships({
+    const memberships = await this.options.stores.workspaces.listMemberships({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId
     });
@@ -264,7 +264,7 @@ export class CollaborationWorkspaceWorkflow {
     let conversationCount = 0;
     let fileCount = 0;
     for (const conversation of conversations) {
-      const current = await this.options.conversationStore.getConversation(
+      const current = await this.options.stores.conversations.getConversation(
         this.options.clientInstanceId,
         conversation.id
       );
@@ -292,7 +292,7 @@ export class CollaborationWorkspaceWorkflow {
     }
 
     try {
-      await this.options.userStore.deleteWorkspace({
+      await this.options.stores.workspaces.deleteWorkspace({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId
       });
@@ -333,23 +333,23 @@ export class CollaborationWorkspaceWorkflow {
 
   async assertConversationIdle(conversationId: ConversationId): Promise<void> {
     const [activeRun, draftAttachments, activeCommands, artifacts] = await Promise.all([
-      this.options.conversationStore.getActiveConversationAgentRun({
+      this.options.stores.agentRuns.getActiveConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,
         conversationId
       }),
       this.options.attachments?.listDraftAttachments(conversationId) ?? [],
-      this.options.conversationStore.countActiveWorkspaceCommands({
+      this.options.stores.executionWorkspaces.countActiveWorkspaceCommands({
         clientInstanceId: this.options.clientInstanceId,
         conversationId
       }),
-      this.options.conversationStore.listConversationManagedArtifacts({
+      this.options.stores.files.listConversationManagedArtifacts({
         clientInstanceId: this.options.clientInstanceId,
         conversationId
       })
     ]);
     const previewJobs = await Promise.all(
       artifacts.map((artifact) =>
-        this.options.conversationStore.getArtifactPreviewJob({
+        this.options.stores.files.getArtifactPreviewJob({
           clientInstanceId: this.options.clientInstanceId,
           sourceArtifactId: artifact.id
         })
@@ -407,7 +407,7 @@ export class CollaborationWorkspaceWorkflow {
     if (changedFields.length === 0) {
       return this.getWorkspace(user, collaborationWorkspaceId);
     }
-    const updated = await this.options.userStore.updateWorkspace(update);
+    const updated = await this.options.stores.workspaces.updateWorkspace(update);
     await this.record(context, user, collaborationWorkspaceId, "collaboration_workspace.updated", {
       changedFields
     });
@@ -421,11 +421,11 @@ export class CollaborationWorkspaceWorkflow {
     const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     requireOwnerOrAdmin(access);
     const [memberships, users] = await Promise.all([
-      this.options.userStore.listMemberships({
+      this.options.stores.workspaces.listMemberships({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId
       }),
-      this.options.userStore.listUsers({ clientInstanceId: this.options.clientInstanceId })
+      this.options.stores.users.listUsers({ clientInstanceId: this.options.clientInstanceId })
     ]);
     const usersById = new Map(users.map((candidate) => [candidate.id, candidate]));
     return memberships.map((membership) => {
@@ -451,7 +451,7 @@ export class CollaborationWorkspaceWorkflow {
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < 2) return [];
-    return this.options.userStore.searchMemberCandidates({
+    return this.options.stores.workspaces.searchMemberCandidates({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       query: normalizedQuery,
@@ -472,7 +472,7 @@ export class CollaborationWorkspaceWorkflow {
     const normalizedEmail = email.trim().toLocaleLowerCase("en-US");
     if (!normalizedEmail) throw new AppError("VALIDATION_FAILED", CANNOT_ADD_MEMBER_MESSAGE);
 
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     const matches = users.filter(
@@ -489,26 +489,26 @@ export class CollaborationWorkspaceWorkflow {
     if (matches.length !== 1 || !target) {
       throw new AppError("VALIDATION_FAILED", CANNOT_ADD_MEMBER_MESSAGE);
     }
-    const existing = await this.options.userStore.getMembership({
+    const existing = await this.options.stores.workspaces.getMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: target.id
     });
     if (existing) throw new AppError("CONFLICT", "User is already a workspace member");
-    const pendingAccessRequest = await this.options.userStore.getAccessRequest({
+    const pendingAccessRequest = await this.options.stores.workspaces.getAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: target.id
     });
 
-    await this.options.userStore.addMembership({
+    await this.options.stores.workspaces.addMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: target.id,
       role: "member"
     });
     if (pendingAccessRequest) {
-      await this.options.userStore.deleteAccessRequest({
+      await this.options.stores.workspaces.deleteAccessRequest({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId,
         userId: target.id
@@ -553,7 +553,7 @@ export class CollaborationWorkspaceWorkflow {
     if (target.role === "owner" && role !== "owner") {
       await this.requireAnotherActiveOwner(collaborationWorkspaceId, target.userId);
     }
-    const updated = await this.options.userStore.updateMembershipRole({
+    const updated = await this.options.stores.workspaces.updateMembershipRole({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: targetUserId,
@@ -587,7 +587,7 @@ export class CollaborationWorkspaceWorkflow {
     if (target.role === "owner") {
       await this.requireAnotherActiveOwner(collaborationWorkspaceId, target.userId);
     }
-    const removed = await this.options.userStore.removeMembership({
+    const removed = await this.options.stores.workspaces.removeMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: targetUserId
@@ -615,7 +615,7 @@ export class CollaborationWorkspaceWorkflow {
     if (access.membershipRole === "owner") {
       await this.requireAnotherActiveOwner(collaborationWorkspaceId, access.userId);
     }
-    const removed = await this.options.userStore.removeMembership({
+    const removed = await this.options.stores.workspaces.removeMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: access.userId
@@ -633,18 +633,18 @@ export class CollaborationWorkspaceWorkflow {
   async browseDirectory(user: AuthenticatedUser): Promise<WorkspaceDirectoryItem[]> {
     this.requireCollaborationWorkspacesEnabled();
     const subjectUserId = asUserId(getSubjectUserId(user));
-    const workspaces = await this.options.userStore.listDiscoverableWorkspaces({
+    const workspaces = await this.options.stores.workspaces.listDiscoverableWorkspaces({
       clientInstanceId: this.options.clientInstanceId
     });
     return Promise.all(
       workspaces.map(async (workspace) => {
         const [membership, request] = await Promise.all([
-          this.options.userStore.getMembership({
+          this.options.stores.workspaces.getMembership({
             clientInstanceId: this.options.clientInstanceId,
             collaborationWorkspaceId: workspace.id,
             userId: subjectUserId
           }),
-          this.options.userStore.getAccessRequest({
+          this.options.stores.workspaces.getAccessRequest({
             clientInstanceId: this.options.clientInstanceId,
             collaborationWorkspaceId: workspace.id,
             userId: subjectUserId
@@ -669,7 +669,7 @@ export class CollaborationWorkspaceWorkflow {
   ) {
     this.requireCollaborationWorkspacesEnabled();
     const subjectUserId = asUserId(getSubjectUserId(user));
-    const workspace = await this.options.userStore.getWorkspace(
+    const workspace = await this.options.stores.workspaces.getWorkspace(
       this.options.clientInstanceId,
       collaborationWorkspaceId
     );
@@ -677,7 +677,7 @@ export class CollaborationWorkspaceWorkflow {
       throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
     }
     if (
-      await this.options.userStore.getMembership({
+      await this.options.stores.workspaces.getMembership({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId,
         userId: subjectUserId
@@ -686,7 +686,7 @@ export class CollaborationWorkspaceWorkflow {
       throw new AppError("CONFLICT", "User is already a workspace member");
     }
     if (
-      await this.options.userStore.getAccessRequest({
+      await this.options.stores.workspaces.getAccessRequest({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId,
         userId: subjectUserId
@@ -694,7 +694,7 @@ export class CollaborationWorkspaceWorkflow {
     ) {
       throw new AppError("CONFLICT", "A workspace access request is already pending");
     }
-    const request = await this.options.userStore.createAccessRequest({
+    const request = await this.options.stores.workspaces.createAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: subjectUserId
@@ -716,11 +716,11 @@ export class CollaborationWorkspaceWorkflow {
     const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     requireOwnerOrAdmin(access);
     const [requests, users] = await Promise.all([
-      this.options.userStore.listAccessRequestsForWorkspace({
+      this.options.stores.workspaces.listAccessRequestsForWorkspace({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId
       }),
-      this.options.userStore.listUsers({ clientInstanceId: this.options.clientInstanceId })
+      this.options.stores.users.listUsers({ clientInstanceId: this.options.clientInstanceId })
     ]);
     const usersById = new Map(users.map((candidate) => [candidate.id, candidate]));
     return requests.map((request) => {
@@ -744,13 +744,13 @@ export class CollaborationWorkspaceWorkflow {
     const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     requireOwnerOrAdmin(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
-    const request = await this.options.userStore.getAccessRequest({
+    const request = await this.options.stores.workspaces.getAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: targetUserId
     });
     if (!request) throw new AppError("NOT_FOUND", "Workspace Access Request is not available");
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     if (
@@ -758,13 +758,13 @@ export class CollaborationWorkspaceWorkflow {
     ) {
       throw new AppError("CONFLICT", CANNOT_ADD_MEMBER_MESSAGE);
     }
-    const added = await this.options.userStore.addMembership({
+    const added = await this.options.stores.workspaces.addMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: targetUserId,
       role: "member"
     });
-    await this.options.userStore.deleteAccessRequest({
+    await this.options.stores.workspaces.deleteAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: targetUserId
@@ -787,7 +787,7 @@ export class CollaborationWorkspaceWorkflow {
   ) {
     const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     requireOwnerOrAdmin(access);
-    const request = await this.options.userStore.deleteAccessRequest({
+    const request = await this.options.stores.workspaces.deleteAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: targetUserId
@@ -829,7 +829,7 @@ export class CollaborationWorkspaceWorkflow {
     membershipRole: WorkspaceMembershipRole | null
   ): Promise<number> {
     if (membershipRole !== "owner" && membershipRole !== "admin") return 0;
-    const requests = await this.options.userStore.listAccessRequestsForWorkspace({
+    const requests = await this.options.stores.workspaces.listAccessRequestsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId
     });
@@ -839,7 +839,7 @@ export class CollaborationWorkspaceWorkflow {
   private async requireWorkspace(
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<CollaborationWorkspace> {
-    const workspace = await this.options.userStore.getWorkspace(
+    const workspace = await this.options.stores.workspaces.getWorkspace(
       this.options.clientInstanceId,
       collaborationWorkspaceId
     );
@@ -861,7 +861,7 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     userId: UserRecord["id"]
   ): Promise<WorkspaceMembership> {
-    const membership = await this.options.userStore.getMembership({
+    const membership = await this.options.stores.workspaces.getMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId
@@ -875,11 +875,11 @@ export class CollaborationWorkspaceWorkflow {
     excludedUserId: UserRecord["id"]
   ): Promise<void> {
     const [memberships, users] = await Promise.all([
-      this.options.userStore.listMemberships({
+      this.options.stores.workspaces.listMemberships({
         clientInstanceId: this.options.clientInstanceId,
         collaborationWorkspaceId
       }),
-      this.options.userStore.listUsers({ clientInstanceId: this.options.clientInstanceId })
+      this.options.stores.users.listUsers({ clientInstanceId: this.options.clientInstanceId })
     ]);
     const activeUserIds = new Set(
       users.filter((candidate) => candidate.status === "active").map((candidate) => candidate.id)

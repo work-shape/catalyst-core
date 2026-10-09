@@ -49,7 +49,7 @@ describe("Collaboration Workspace API", () => {
       collaborationWorkspaceId: personalWorkspace!.id
     });
     const conversationId = conversation.json<{ id: string }>().id;
-    await seedConversationMessage(app.stores, conversationId);
+    await seedConversationMessage(app.stores.conversations, conversationId);
     const listedConversations = await app.call("listConversations", {}, "owner");
     expect(listedConversations.statusCode).toBe(200);
     expect(listedConversations.json()).toContainEqual(
@@ -117,21 +117,21 @@ describe("Collaboration Workspace API", () => {
     );
     await addWorkspaceMember(app, "owner", workspaceId, "member@example.test");
 
-    await app.stores.createUser({
+    await app.stores.users.createUser({
       clientInstanceId,
       displayLabel: "Label Search Person",
       email: "label-result@example.test"
     });
-    await app.stores.createUser({
+    await app.stores.users.createUser({
       clientInstanceId,
       displayLabel: "Email Result",
       email: "Mixed.Email@example.test"
     });
-    const identityMatch = await app.stores.createUser({
+    const identityMatch = await app.stores.users.createUser({
       clientInstanceId,
       displayLabel: "Identity Email Result"
     });
-    await app.stores.upsertUserIdentity({
+    await app.stores.users.upsertUserIdentity({
       clientInstanceId,
       userId: identityMatch.id,
       authSource: "oidc",
@@ -237,7 +237,7 @@ describe("Collaboration Workspace API", () => {
     ).toBe(404);
 
     for (let index = 0; index < 10; index += 1) {
-      await app.stores.createUser({
+      await app.stores.users.createUser({
         clientInstanceId,
         displayLabel: `Limit Candidate ${index.toString().padStart(2, "0")}`,
         email: `limit-${index}@example.test`
@@ -258,13 +258,13 @@ describe("Collaboration Workspace API", () => {
       }))
     );
 
-    const auditBefore = await app.stores.listAuditEvents({ clientInstanceId });
+    const auditBefore = await app.stores.audit.listAuditEvents({ clientInstanceId });
     await app.call(
       "listCollaborationWorkspaceMemberCandidates",
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "email" } },
       "owner"
     );
-    const auditAfter = await app.stores.listAuditEvents({ clientInstanceId });
+    const auditAfter = await app.stores.audit.listAuditEvents({ clientInstanceId });
     expect(auditAfter).toHaveLength(auditBefore.length);
 
     await app.close();
@@ -310,7 +310,7 @@ describe("Collaboration Workspace API", () => {
     );
     expect(deleted.statusCode).toBe(200);
     await expect(
-      app.stores.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
+      app.stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
     ).resolves.toBeUndefined();
 
     await app.close();
@@ -433,12 +433,12 @@ describe("Collaboration Workspace API", () => {
     );
     expect(alreadyMember.statusCode).toBe(409);
 
-    const identityMatch = await app.stores.createUser({
+    const identityMatch = await app.stores.users.createUser({
       clientInstanceId,
       displayLabel: "Identity match",
       email: "managed@example.test"
     });
-    await app.stores.upsertUserIdentity({
+    await app.stores.users.upsertUserIdentity({
       clientInstanceId,
       userId: identityMatch.id,
       authSource: "oidc",
@@ -484,7 +484,7 @@ describe("Collaboration Workspace API", () => {
       { displayLabel: "Ambiguous two", email: "ambiguous@example.test", status: "active" as const }
     ]) {
       if (input.displayLabel !== "Unknown") {
-        await app.stores.createUser({ clientInstanceId, ...input });
+        await app.stores.users.createUser({ clientInstanceId, ...input });
       }
     }
     for (const email of [
@@ -749,7 +749,7 @@ describe("Collaboration Workspace API", () => {
     expect(explicit.statusCode).toBe(200);
     expect(explicit.json()).toMatchObject({ collaborationWorkspaceId, createdByUserId: owner.id });
     const conversationId = explicit.json<{ id: string }>().id;
-    await seedConversationMessage(app.stores, conversationId);
+    await seedConversationMessage(app.stores.conversations, conversationId);
 
     const defaulted = await app.call(
       "createConversation",
@@ -920,7 +920,7 @@ describe("Collaboration Workspace API", () => {
       ).statusCode
     ).toBe(404);
 
-    const privateFile = await app.stores.createManagedFile({
+    const privateFile = await app.stores.files.createManagedFile({
       clientInstanceId,
       ownerUserId: owner.id,
       filename: "private.txt",
@@ -929,7 +929,7 @@ describe("Collaboration Workspace API", () => {
       checksum: "private-file",
       objectKey: "private-file"
     });
-    await app.stores.createConversationAttachment({
+    await app.stores.files.createConversationAttachment({
       clientInstanceId,
       conversationId: asConversationId(privateConversationId),
       fileId: privateFile.id,
@@ -950,7 +950,7 @@ describe("Collaboration Workspace API", () => {
     );
     expect(crossWorkspaceFile.statusCode).toBe(404);
 
-    const privateArtifact = await app.stores.createManagedArtifact({
+    const privateArtifact = await app.stores.files.createManagedArtifact({
       clientInstanceId,
       conversationId: asConversationId(privateConversationId),
       kind: "file",
@@ -998,7 +998,7 @@ describe("Collaboration Workspace API", () => {
       "member"
     );
     const conversationId = await createConversation(app, "member", workspaceId, "Team");
-    await seedConversationMessage(app.stores, conversationId);
+    await seedConversationMessage(app.stores.conversations, conversationId);
 
     const workspaceUrl = testRequest("getCollaborationWorkspace", {
       params: { collaborationWorkspaceId: workspaceId }
@@ -1189,7 +1189,7 @@ describe("Collaboration Workspace API", () => {
       personalWorkspaceId,
       "Personal"
     );
-    await seedConversationMessage(app.stores, personalConversationId);
+    await seedConversationMessage(app.stores.conversations, personalConversationId);
     expect((await listWorkspaces("superadmin")).map((row) => row.id)).not.toContain(
       personalWorkspaceId
     );
@@ -1455,7 +1455,7 @@ describe("Collaboration Workspace API", () => {
     );
     expect(busyDelete.statusCode).toBe(409);
     expect(busyDelete.json()).toMatchObject({ error: { code: "CONFLICT" } });
-    await app.stores.updateAgentRunStatus({
+    await app.stores.agentRuns.updateAgentRunStatus({
       clientInstanceId,
       runId: activeRunId,
       status: "completed",
@@ -1475,7 +1475,7 @@ describe("Collaboration Workspace API", () => {
       payload: upload.payload
     });
     const fileId = uploaded.json<{ attachment: { fileId: string } }>().attachment.fileId;
-    const executionWorkspace = await app.stores.ensureExecutionWorkspace({
+    const executionWorkspace = await app.stores.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId,
       conversationId: asConversationId(first),
       ownerUserId: owner.id
@@ -1484,7 +1484,7 @@ describe("Collaboration Workspace API", () => {
     const objectPath = join(WORKSPACE_OBJECT_ROOT, objectKey);
     await mkdir(dirname(objectPath), { recursive: true });
     await writeFile(objectPath, "workspace bytes");
-    await app.stores.upsertWorkspaceFile({
+    await app.stores.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId,
       workspaceId: executionWorkspace.id,
       path: "workspace.txt",
@@ -1511,26 +1511,26 @@ describe("Collaboration Workspace API", () => {
     });
     await expect(access(objectPath)).rejects.toThrow();
     await expect(
-      app.stores.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
+      app.stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
     ).resolves.toBeUndefined();
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(first))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(first))
     ).resolves.toBeUndefined();
     await expect(
-      app.stores.getExecutionWorkspaceForConversation({
+      app.stores.executionWorkspaces.getExecutionWorkspaceForConversation({
         clientInstanceId,
         conversationId: asConversationId(first)
       })
     ).resolves.toBeUndefined();
     await expect(
-      app.stores.getMembership({
+      app.stores.workspaces.getMembership({
         clientInstanceId,
         collaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId),
         userId: member.id
       })
     ).resolves.toBeUndefined();
     await expect(
-      app.stores.getAccessRequest({
+      app.stores.workspaces.getAccessRequest({
         clientInstanceId,
         collaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId),
         userId: requester.id
@@ -1596,10 +1596,10 @@ describe("Collaboration Workspace API", () => {
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toMatchObject({ conversationCount: 1 });
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(first))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(first))
     ).resolves.toBeUndefined();
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(second))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(second))
     ).resolves.toBeUndefined();
     await app.close();
   });
@@ -1616,19 +1616,22 @@ describe("Collaboration Workspace API", () => {
       workspaceId,
       "Delete normally"
     );
-    await app.stores.appendMessage({
+    await app.stores.conversations.appendMessage({
       clientInstanceId,
       conversationId: asConversationId(moved),
       role: "user",
       text: "preserve this data"
     });
 
-    const getConversation = app.stores.getConversation.bind(app.stores);
+    const getConversation = app.stores.conversations.getConversation.bind(app.stores.conversations);
     let movedDuringDeletion = false;
-    app.stores.getConversation = async (requestedClientInstanceId, conversationId) => {
+    app.stores.conversations.getConversation = async (
+      requestedClientInstanceId,
+      conversationId
+    ) => {
       if (!movedDuringDeletion && conversationId === moved) {
         movedDuringDeletion = true;
-        await app.stores.moveConversation({
+        await app.stores.conversations.moveConversation({
           clientInstanceId,
           conversationId: asConversationId(moved),
           fromCollaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId),
@@ -1650,19 +1653,22 @@ describe("Collaboration Workspace API", () => {
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toMatchObject({ conversationCount: 1 });
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(moved))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(moved))
     ).resolves.toMatchObject({ collaborationWorkspaceId: destinationId, status: "active" });
     await expect(
-      app.stores.listMessages({
+      app.stores.conversations.listMessages({
         clientInstanceId,
         conversationId: asConversationId(moved)
       })
     ).resolves.toEqual([expect.objectContaining({ text: "preserve this data" })]);
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(deletedConversation))
+      app.stores.conversations.getConversation(
+        clientInstanceId,
+        asConversationId(deletedConversation)
+      )
     ).resolves.toBeUndefined();
     await expect(
-      app.stores.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
+      app.stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
     ).resolves.toBeUndefined();
     await app.close();
   });
@@ -1688,7 +1694,7 @@ describe("Conversation visibility", () => {
     // The composer creates the conversation before the first upload lands.
     const conversationId = await createConversation(app, "owner", workspaceId, "2 attached files");
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(conversationId))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(conversationId))
     ).resolves.toMatchObject({ visibility: "workspace" });
     await expect(listedIds("owner")).resolves.toEqual([]);
     await expect(listedIds("member")).resolves.toEqual([]);
@@ -1732,7 +1738,7 @@ describe("Conversation visibility", () => {
     await expect(listedIds("owner")).resolves.toEqual([]);
     await expect(listedIds("member")).resolves.toEqual([]);
 
-    await seedConversationMessage(app.stores, conversationId);
+    await seedConversationMessage(app.stores.conversations, conversationId);
     await expect(listedIds("owner")).resolves.toEqual([conversationId]);
     await expect(listedIds("member")).resolves.toEqual([conversationId]);
     await app.close();
@@ -1790,7 +1796,7 @@ describe("Conversation visibility", () => {
     // Nothing a non-author sent may have changed the conversation: still the two fixture
     // messages and the one draft attachment.
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(conversationId))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(conversationId))
     ).resolves.toMatchObject({
       status: "active",
       title: "Private thread",
@@ -1798,13 +1804,13 @@ describe("Conversation visibility", () => {
       collaborationWorkspaceId: workspaceId
     });
     await expect(
-      app.stores.listMessages({
+      app.stores.conversations.listMessages({
         clientInstanceId,
         conversationId: asConversationId(conversationId)
       })
     ).resolves.toHaveLength(2);
     await expect(
-      app.stores.listDraftAttachments({
+      app.stores.files.listDraftAttachments({
         clientInstanceId,
         conversationId: asConversationId(conversationId)
       })
@@ -1849,7 +1855,7 @@ describe("Conversation visibility", () => {
       expect((await callAs(app, actor, thread)).statusCode, actor).toBe(404);
     }
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(conversationId))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(conversationId))
     ).resolves.toMatchObject({ status: "active", visibility: "private" });
 
     await addWorkspaceMember(app, "owner", workspaceId, "direct@example.test");
@@ -1956,7 +1962,10 @@ describe("Conversation visibility", () => {
     expect(openConversation.json()).toMatchObject({ visibility: "workspace" });
     const openConversationId = openConversation.json<{ id: string }>().id;
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(privateConversationId))
+      app.stores.conversations.getConversation(
+        clientInstanceId,
+        asConversationId(privateConversationId)
+      )
     ).resolves.toMatchObject({ visibility: "private" });
     expect(
       (
@@ -1977,7 +1986,10 @@ describe("Conversation visibility", () => {
       "owner"
     );
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(openConversationId))
+      app.stores.conversations.getConversation(
+        clientInstanceId,
+        asConversationId(openConversationId)
+      )
     ).resolves.toMatchObject({ visibility: "workspace" });
     expect(
       (
@@ -1992,7 +2004,7 @@ describe("Conversation visibility", () => {
     const personalWorkspaceId = personalConversation.json<{ collaborationWorkspaceId: string }>()
       .collaborationWorkspaceId;
     await expect(
-      app.stores.updateWorkspace({
+      app.stores.workspaces.updateWorkspace({
         clientInstanceId,
         collaborationWorkspaceId: asCollaborationWorkspaceId(personalWorkspaceId),
         defaultConversationVisibility: "private"
@@ -2059,7 +2071,7 @@ describe("Conversation visibility", () => {
     });
     expect((await move("member", ownersId, otherOpenId, "private")).statusCode).toBe(422);
     await expect(
-      app.stores.getConversation(clientInstanceId, asConversationId(ownersId))
+      app.stores.conversations.getConversation(clientInstanceId, asConversationId(ownersId))
     ).resolves.toMatchObject({ collaborationWorkspaceId: openId, visibility: "workspace" });
     const nonCreatorExplicit = await move("member", ownersId, privateDefaultId, "workspace");
     expect(nonCreatorExplicit.statusCode).toBe(200);
@@ -2114,7 +2126,7 @@ async function createPrivateConversationFixture() {
   expect(promoted.statusCode).toBe(200);
 
   const conversationId = await createConversation(app, "direct", workspaceId, "Private thread");
-  await app.stores.appendMessage({
+  await app.stores.conversations.appendMessage({
     clientInstanceId,
     conversationId: asConversationId(conversationId),
     role: "user",
@@ -2133,7 +2145,7 @@ async function createPrivateConversationFixture() {
   });
   expect(uploaded.statusCode).toBe(200);
   const attachment = uploaded.json<{ attachment: { id: string; fileId: string } }>().attachment;
-  const artifact = await app.stores.createManagedArtifact({
+  const artifact = await app.stores.files.createManagedArtifact({
     clientInstanceId,
     conversationId: asConversationId(conversationId),
     kind: "file",
@@ -2160,7 +2172,7 @@ async function createPrivateConversationFixture() {
     workspaceId,
     "Shared thread"
   );
-  await seedConversationMessage(app.stores, sharedConversationId);
+  await seedConversationMessage(app.stores.conversations, sharedConversationId);
   return {
     app,
     author,
@@ -2339,13 +2351,13 @@ async function createActiveRun(
   conversationId: string,
   ownerUserId: string
 ) {
-  const message = await app.stores.appendMessage({
+  const message = await app.stores.conversations.appendMessage({
     clientInstanceId,
     conversationId: asConversationId(conversationId),
     role: "user",
     text: "background work"
   });
-  const run = await app.stores.createAgentRun({
+  const run = await app.stores.agentRuns.createAgentRun({
     id: createPlatformId<"AgentRunId">("run"),
     clientInstanceId,
     conversationId: asConversationId(conversationId),
@@ -2365,14 +2377,14 @@ async function createCompletedRun(
 ) {
   const runId = await createActiveRun(app, conversationId, ownerUserId);
   const completedAt = new Date().toISOString();
-  await app.stores.appendRunObservation({
+  await app.stores.agentRuns.appendRunObservation({
     clientInstanceId,
     runId,
     conversationId: asConversationId(conversationId),
     ownerUserId,
     event: { type: "run_completed", runId, sequence: 1, createdAt: completedAt }
   });
-  await app.stores.updateAgentRunStatus({
+  await app.stores.agentRuns.updateAgentRunStatus({
     clientInstanceId,
     runId,
     status: "completed",

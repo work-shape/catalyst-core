@@ -413,7 +413,7 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
   const passwords = new Map<string, string>();
   const signIns = new Map<string, { externalUserId: string; displayLabel: string }>();
   const tokens = new Map<string, string>();
-  const admin: AuthenticatedUser = await store.resolveUserIdentity({
+  const admin: AuthenticatedUser = await store.users.resolveUserIdentity({
     permissions: [],
     clientInstanceId,
     authSource: "development",
@@ -476,17 +476,14 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
           return { ...admin, scopes: ["*"] };
         }
       },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      apiAccessStore: store,
+      stores: store,
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: config.usage.budget,
         safeguards: config.usage.safeguards,
         costs: config.usage.costs
       }),
-      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
       agentRuntime: createMissingRuntime(),
       modelProvider: createUnusedModelProvider(),
       standaloneAuth,
@@ -506,11 +503,11 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
     transport,
     passwords,
     requestReset: (email: string) => server.call("requestPasswordReset", { payload: { email } }),
-    listAuditEvents: () => store.listAuditEvents({ clientInstanceId }),
+    listAuditEvents: () => store.audit.listAuditEvents({ clientInstanceId }),
     async addPasswordUser(email: string, displayLabel: string) {
       const externalUserId = `auth-${email}`;
       signIns.set(email, { externalUserId, displayLabel });
-      await store.resolveUserIdentity({
+      await store.users.resolveUserIdentity({
         permissions: [],
         clientInstanceId,
         authSource: STANDALONE_AUTH_SOURCE,

@@ -26,14 +26,14 @@ export async function cleanupProductUserData(input: {
   userId: UserId;
 }): Promise<UserDeletionTotals> {
   const { options } = input;
-  const workspaces = await options.userStore.listWorkspacesForUser({
+  const workspaces = await options.stores.workspaces.listWorkspacesForUser({
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
   });
   const personalWorkspace = workspaces.find(
     (workspace) => workspace.kind === "personal" && workspace.personalUserId === input.userId
   );
-  const users = await options.userStore.listUsers({
+  const users = await options.stores.users.listUsers({
     clientInstanceId: options.clientInstanceId
   });
   const activeUserIds = new Set(
@@ -42,7 +42,7 @@ export async function cleanupProductUserData(input: {
   let blockingWorkspaceCount = 0;
   for (const workspace of workspaces) {
     if (workspace.kind !== "shared" || workspace.role !== "owner") continue;
-    const memberships = await options.userStore.listMemberships({
+    const memberships = await options.stores.workspaces.listMemberships({
       clientInstanceId: options.clientInstanceId,
       collaborationWorkspaceId: workspace.id
     });
@@ -66,14 +66,14 @@ export async function cleanupProductUserData(input: {
   // are part of the user's own data rather than a shared resource that outlives the account.
   const conversations = [
     ...(personalWorkspace
-      ? await options.conversationStore.listConversationsForWorkspace({
+      ? await options.stores.conversations.listConversationsForWorkspace({
           clientInstanceId: options.clientInstanceId,
           collaborationWorkspaceId: personalWorkspace.id,
           scope: { kind: "lifecycle" }
         })
       : []),
     ...(
-      await options.conversationStore.listPrivateConversationsCreatedByUser({
+      await options.stores.conversations.listPrivateConversationsCreatedByUser({
         clientInstanceId: options.clientInstanceId,
         userId: input.userId
       })
@@ -123,17 +123,17 @@ export async function cleanupProductUserData(input: {
   // The store refuses this while a cleanup is pending, so it comes before anything else of the
   // account is removed: a refusal leaves the user with every membership and access request.
   if (personalWorkspace) {
-    await options.userStore.deletePersonalWorkspaceForUser({
+    await options.stores.workspaces.deletePersonalWorkspaceForUser({
       clientInstanceId: options.clientInstanceId,
       userId: input.userId
     });
   }
 
-  totals.accessRequestCount = await options.userStore.deleteAccessRequestsForUser({
+  totals.accessRequestCount = await options.stores.workspaces.deleteAccessRequestsForUser({
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
   });
-  totals.sharedMembershipCount = await options.userStore.removeMembershipsForUser({
+  totals.sharedMembershipCount = await options.stores.workspaces.removeMembershipsForUser({
     clientInstanceId: options.clientInstanceId,
     userId: input.userId
   });
@@ -149,7 +149,7 @@ export async function deleteConversationAggregate(
   conversationId: ConversationId,
   deletedAt: string
 ): Promise<ConversationDataCleanupOutcome> {
-  await options.conversationStore.deleteConversation({
+  await options.stores.conversations.deleteConversation({
     clientInstanceId: options.clientInstanceId,
     conversationId,
     deletedAt

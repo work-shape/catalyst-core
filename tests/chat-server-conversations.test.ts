@@ -217,7 +217,7 @@ describe("client instance app vertical slice", () => {
     const config = createTestConfig();
     const owner = createTestUser("user-1", clientInstanceId);
     const usageGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
@@ -234,11 +234,9 @@ describe("client instance app vertical slice", () => {
             return owner;
           }
         },
-        conversationStore: store,
-        auditEventStore: store,
-        userStore: store,
+        stores: store,
         usageGovernance,
-        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
         agentRuntime: createMissingRuntime(),
         modelProvider: createUnusedModelProvider(),
         managedObjects: {
@@ -267,7 +265,7 @@ describe("client instance app vertical slice", () => {
         title: "Other conversation",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const artifact = await store.createManagedArtifact({
+      const artifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "document.csv",
@@ -328,7 +326,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
-    const structuredData = await app.stores.publishStructuredDataResource({
+    const structuredData = await app.stores.structuredData.publishStructuredDataResource({
       clientInstanceId: asClientInstanceId("demo-local"),
       conversationId: asConversationId(conversation.id),
       resourceKey: "retention_data",
@@ -359,7 +357,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(deleted.statusCode).toBe(200);
     await expect(
-      app.stores.getStructuredDataResource({
+      app.stores.structuredData.getStructuredDataResource({
         clientInstanceId: asClientInstanceId("demo-local"),
         conversationId: asConversationId(conversation.id),
         structuredDataResourceId: structuredData.id
@@ -428,7 +426,7 @@ describe("client instance app vertical slice", () => {
     expect(fixture.objects.has(objectKey!)).toBe(false);
     expect(fixture.deletedObjectKeys).toContain(objectKey);
     await expect(
-      app.stores.getManagedFile({
+      app.stores.files.getManagedFile({
         clientInstanceId: asClientInstanceId("demo-local"),
         fileId: asManagedFileId(attachment.fileId)
       })

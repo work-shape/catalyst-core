@@ -44,9 +44,9 @@ describe("config asset admin routes", () => {
 
   it("exchanges an API key for subjectless config access without creating a product user", async () => {
     const fixture = await createFixture({ serviceAccess: true });
-    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual(
-      []
-    );
+    expect(
+      await fixture.store.users.listUsers({ clientInstanceId: fixture.clientInstanceId })
+    ).toEqual([]);
 
     const exchange = await fixture.server.call("exchangeApiKey", {
       headers: { authorization: `Bearer ${fixture.apiKey}` }
@@ -72,9 +72,9 @@ describe("config asset admin routes", () => {
 
     const humanRoute = await request(fixture.server, token, "listConversations", {});
     expect(humanRoute.statusCode).toBe(403);
-    expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual(
-      []
-    );
+    expect(
+      await fixture.store.users.listUsers({ clientInstanceId: fixture.clientInstanceId })
+    ).toEqual([]);
 
     const revisions = await request(fixture.server, token, "listConfigAssetRevisions", {
       params: { kind: "agent", name: "assistant" }
@@ -88,7 +88,7 @@ describe("config asset admin routes", () => {
         }
       }
     ]);
-    const events = await fixture.store.listAuditEvents({
+    const events = await fixture.store.audit.listAuditEvents({
       clientInstanceId: fixture.clientInstanceId,
       limit: 100
     });
@@ -211,7 +211,7 @@ describe("config asset admin routes", () => {
       skills: bundle.skills
     });
 
-    const events = await fixture.store.listAuditEvents({
+    const events = await fixture.store.audit.listAuditEvents({
       clientInstanceId: fixture.clientInstanceId,
       limit: 100
     });
@@ -283,14 +283,14 @@ describe("config asset admin routes", () => {
       const fixture = await createFixture();
       const token = await mintToken(fixture.server);
       if (operation !== "create") {
-        await fixture.store.applyConfigAssetMutations({
+        await fixture.store.configAssets.applyConfigAssetMutations({
           clientInstanceId: fixture.clientInstanceId,
           mutations: [
             { type: "upsert", kind: "skill", name: "research", config: skillConfig("Baseline") }
           ]
         });
       }
-      await fixture.store.applyConfigAssetMutations({
+      await fixture.store.configAssets.applyConfigAssetMutations({
         clientInstanceId: fixture.clientInstanceId,
         actor: { displayLabel: "Remote editor", roles: ["admin"] },
         mutations:
@@ -325,7 +325,7 @@ describe("config asset admin routes", () => {
         }
       });
       expect(
-        await fixture.store.getConfigAsset({
+        await fixture.store.configAssets.getConfigAsset({
           clientInstanceId: fixture.clientInstanceId,
           kind: "skill",
           name: "new"
@@ -337,7 +337,7 @@ describe("config asset admin routes", () => {
   it("advertises guards and preserves untouched remote assets and default agent", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("Remote") },
@@ -361,7 +361,7 @@ describe("config asset admin routes", () => {
     });
     expect(response.statusCode).toBe(200);
     expect(
-      await fixture.store.getConfigAsset({
+      await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
         kind: "skill",
         name: "research"
@@ -701,7 +701,7 @@ describe("config asset admin routes", () => {
       agentConfiguration: { enabled: true, editableAgentFields: [] }
     });
     // A JSON store may return object keys in another order than the client sends them.
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -842,7 +842,7 @@ describe("config asset admin routes", () => {
     );
 
     // A stored id that is no longer eligible does not block later edits of the agent.
-    await fixture.store.applyConfigAssetMutations({
+    await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -870,22 +870,28 @@ describe("config asset admin routes", () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
     const { clientInstanceId, store } = fixture;
-    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
-    const shared = await store.createWorkspace({
+    const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const shared = await store.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "KAI",
       visibility: "private",
       creatorUserId: owner.id
     });
-    const personal = await store.ensurePersonalWorkspace({ clientInstanceId, userId: owner.id });
+    const personal = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: owner.id
+    });
     const foreignInstanceId = asClientInstanceId("another-instance");
-    const foreign = await store.createWorkspace({
+    const foreign = await store.workspaces.createWorkspace({
       clientInstanceId: foreignInstanceId,
       kind: "shared",
       name: "Foreign",
       creatorUserId: (
-        await store.createUser({ clientInstanceId: foreignInstanceId, displayLabel: "Foreign" })
+        await store.users.createUser({
+          clientInstanceId: foreignInstanceId,
+          displayLabel: "Foreign"
+        })
       ).id
     });
     const imported = await request(fixture.server, token, "replaceConfigAssets", {
@@ -941,7 +947,7 @@ describe("config asset admin routes", () => {
       availability: selected.json()
     });
     expect(
-      (await store.listAuditEvents({ clientInstanceId })).some(
+      (await store.audit.listAuditEvents({ clientInstanceId })).some(
         (event) => event.type === "config_asset.availability_set" && event.metadata?.name === "kai"
       )
     ).toBe(true);
@@ -1037,7 +1043,9 @@ describe("config asset admin routes", () => {
     expect(unauthenticated.statusCode).toBe(401);
     expect(
       (
-        await fixture.store.listAgentAvailability({ clientInstanceId: fixture.clientInstanceId })
+        await fixture.store.configAssets.listAgentAvailability({
+          clientInstanceId: fixture.clientInstanceId
+        })
       ).get("kai")?.mode
     ).toBe("all");
 
@@ -1063,7 +1071,7 @@ describe("config asset admin routes", () => {
       defaultAgentName: "assistant",
       agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })]
     });
-    await fixture.store.setAgentAvailability({
+    await fixture.store.configAssets.setAgentAvailability({
       clientInstanceId: fixture.clientInstanceId,
       agentName: "kai",
       availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
@@ -1079,7 +1087,7 @@ describe("config asset admin routes", () => {
     });
     expect(renamed.statusCode).toBe(200);
     expect(renamed.json()).toEqual({ version: 3, hiddenAgentNames: ["kai-tax"] });
-    const availability = await fixture.store.listAgentAvailability({
+    const availability = await fixture.store.configAssets.listAgentAvailability({
       clientInstanceId: fixture.clientInstanceId
     });
     expect(availability.get("kai-tax")).toEqual({
@@ -1092,7 +1100,7 @@ describe("config asset admin routes", () => {
     expect(availability.get("open")?.mode).toBe("all");
 
     // A mirror push that drops a restricted agent is the same rename.
-    await fixture.store.setAgentAvailability({
+    await fixture.store.configAssets.setAgentAvailability({
       clientInstanceId: fixture.clientInstanceId,
       agentName: "kai-tax",
       availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
@@ -1419,14 +1427,14 @@ async function createFixture(
   };
   const issuer = new HmacSessionTokenIssuer(authOptions);
   const servicePrincipal = input.serviceAccess
-    ? await store.createServicePrincipal({
+    ? await store.apiAccess.createServicePrincipal({
         clientInstanceId,
         displayLabel: "Catalyst CLI",
         permissions: ["config_assets.read", "config_assets.release"]
       })
     : undefined;
   const createdCredential = servicePrincipal
-    ? await store.createApiCredential({
+    ? await store.apiAccess.createApiCredential({
         clientInstanceId,
         servicePrincipalId: servicePrincipal.id,
         name: "test key",
@@ -1442,7 +1450,7 @@ async function createFixture(
     : undefined;
   const auditRecorder = new StoreBackedAuditRecorder({
     clientInstanceId,
-    store
+    store: store.audit
   });
   const agentSelectableBindings = config.modelBindings.filter(
     (binding) => binding.agentSelectable !== false
@@ -1457,21 +1465,19 @@ async function createFixture(
               new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
               new HmacSessionTokenAuthAdapter(authOptions)
             ]),
-            store
+            store.users
           )
         : new HmacSessionTokenAuthAdapter(authOptions),
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
+      stores: store,
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: config.usage.budget,
         safeguards: config.usage.safeguards,
         costs: config.usage.costs
       }),
       auditRecorder,
       configAssets: {
-        store,
+        store: store.configAssets,
         validationRefs: {
           modelProviderIds: modelProviders.map((provider) => provider.id),
           modelBindingIds: agentSelectableBindings.map((binding) => binding.id),

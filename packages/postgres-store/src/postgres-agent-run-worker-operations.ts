@@ -16,7 +16,7 @@ import {
   asAgentRunId,
   createPlatformId
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
@@ -27,7 +27,7 @@ import {
 } from "./schema";
 
 export async function claimNextAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ClaimAgentRunInput
 ): Promise<AgentRun | undefined> {
   return db.transaction(async (tx) => {
@@ -64,7 +64,7 @@ export async function claimNextAgentRun(
 }
 
 export async function heartbeatAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: HeartbeatAgentRunInput
 ): Promise<AgentRun> {
   const heartbeatAt = new Date(input.heartbeatAt);
@@ -82,7 +82,7 @@ export async function heartbeatAgentRun(
 }
 
 export async function requestAgentRunCancellation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: RequestAgentRunCancellationInput
 ): Promise<AgentRun> {
   return db.transaction(async (tx) => {
@@ -165,7 +165,7 @@ export async function requestAgentRunCancellation(
 }
 
 export async function appendClaimedRunObservation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: AppendClaimedRunObservationInput
 ): Promise<RunObservation> {
   if (input.event.runId !== input.runId) {
@@ -205,7 +205,7 @@ export async function appendClaimedRunObservation(
 }
 
 export async function assertClaimedAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: AssertClaimedAgentRunInput
 ): Promise<AgentRun> {
   const [row] = await db.select().from(agentRuns).where(effectLeaseWhere(input)).limit(1);
@@ -214,7 +214,7 @@ export async function assertClaimedAgentRun(
 }
 
 export async function appendClaimedAgentRunMessage(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: AppendClaimedAgentRunMessageInput
 ) {
   return db.transaction(async (tx) => {
@@ -285,7 +285,7 @@ export async function appendClaimedAgentRunMessage(
 }
 
 export async function recoverExpiredAgentRuns(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: RecoverExpiredAgentRunsInput
 ): Promise<AgentRun[]> {
   if (input.limit <= 0) return [];

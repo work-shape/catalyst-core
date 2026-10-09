@@ -21,7 +21,6 @@ import {
   type JsonObject,
   type ReasoningEffortConfig,
   type RuntimeCallContext,
-  type RunObservation,
   type RunStartCommand,
   type RunStartCommandKind,
   addDays,
@@ -170,20 +169,20 @@ export class ConversationWorkflow {
     user: AuthenticatedUser
   ): Promise<ConversationListItem[]> {
     collaborationWorkspaceId ??= (
-      await this.options.userStore.ensurePersonalWorkspace({
+      await this.options.stores.workspaces.ensurePersonalWorkspace({
         clientInstanceId: this.options.clientInstanceId,
         userId: asUserId(getSubjectUserId(user))
       })
     ).id;
     await this.workspaces.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    const conversations = await this.options.conversationStore.listConversationsForWorkspace({
+    const conversations = await this.options.stores.conversations.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       scope: { kind: "viewer", userId: getSubjectUserId(user) }
     });
     return Promise.all(
       conversations.map(async (conversation): Promise<ConversationListItem> => {
-        const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
+        const activeRun = await this.options.stores.agentRuns.getActiveConversationAgentRun({
           clientInstanceId: this.options.clientInstanceId,
           conversationId: conversation.id
         });
@@ -206,7 +205,7 @@ export class ConversationWorkflow {
   ): Promise<Conversation> {
     const subjectUserId = getSubjectUserId(user);
     const workspace = await this.resolveTargetWorkspace(user, command.collaborationWorkspaceId);
-    const conversation = await this.options.conversationStore.createConversation({
+    const conversation = await this.options.stores.conversations.createConversation({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId: workspace.id,
       createdByUserId: subjectUserId,
@@ -237,7 +236,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser
   ): Promise<ChatMessage[]> {
     await this.requireConversationAccess(conversationId, user);
-    const messages = await this.options.conversationStore.listMessages({
+    const messages = await this.options.stores.conversations.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
@@ -249,18 +248,18 @@ export class ConversationWorkflow {
     user: AuthenticatedUser
   ): Promise<ConversationThreadSnapshot> {
     const conversation = await this.requireConversationAccess(conversationId, user);
-    const messages = await this.options.conversationStore.listMessages({
+    const messages = await this.options.stores.conversations.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
-    const activeRun = await this.options.conversationStore.getActiveConversationAgentRun({
+    const activeRun = await this.options.stores.agentRuns.getActiveConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
     const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
     const latestRun = activeRun
       ? undefined
-      : await this.options.conversationStore.getLatestConversationAgentRun({
+      : await this.options.stores.agentRuns.getLatestConversationAgentRun({
           clientInstanceId: this.options.clientInstanceId,
           conversationId
         });
@@ -321,7 +320,7 @@ export class ConversationWorkflow {
       return conversation;
     }
 
-    const updated = await this.options.conversationStore.updateConversationTitle({
+    const updated = await this.options.stores.conversations.updateConversationTitle({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       title,
@@ -366,7 +365,7 @@ export class ConversationWorkflow {
       );
     }
     await this.workspaces.assertConversationIdle(conversationId);
-    const moved = await this.options.conversationStore.moveConversation({
+    const moved = await this.options.stores.conversations.moveConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       fromCollaborationWorkspaceId: conversation.collaborationWorkspaceId,
@@ -405,7 +404,7 @@ export class ConversationWorkflow {
     );
     const projections: Record<string, AgentRunProjection> = {};
     for (const runId of runIds) {
-      const run = await this.options.conversationStore.getConversationAgentRun({
+      const run = await this.options.stores.agentRuns.getConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
         runId
@@ -413,7 +412,7 @@ export class ConversationWorkflow {
       if (!run || isActiveRun(run)) {
         continue;
       }
-      const observations = await this.options.conversationStore.listRunObservations({
+      const observations = await this.options.stores.agentRuns.listRunObservations({
         clientInstanceId: this.options.clientInstanceId,
         runId
       });
@@ -469,7 +468,7 @@ export class ConversationWorkflow {
       const userMessageId = createPlatformId<"MessageId">("msg");
       const runId = createPlatformId<"AgentRunId">("run");
       const startedAt = new Date().toISOString();
-      const prepared = await this.options.conversationStore.prepareConversationRunStart({
+      const prepared = await this.options.stores.agentRuns.prepareConversationRunStart({
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
         ownerUserId: getSubjectUserId(user),
@@ -612,7 +611,7 @@ export class ConversationWorkflow {
         idempotencyKey: undefined
       });
       if (command.idempotencyKey) {
-        await this.options.conversationStore.completeRunStartCommand({
+        await this.options.stores.agentRuns.completeRunStartCommand({
           clientInstanceId: this.options.clientInstanceId,
           ownerUserId: getSubjectUserId(user),
           idempotencyKey: command.idempotencyKey,
@@ -646,7 +645,7 @@ export class ConversationWorkflow {
     context: RuntimeCallContext,
     options: AgentRuntimeObserveOptions = {}
   ): AsyncIterable<AgentRuntimeEvent> {
-    const persistedRun = await this.options.conversationStore.getAgentRun({
+    const persistedRun = await this.options.stores.agentRuns.getAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       runId
     });
@@ -657,7 +656,7 @@ export class ConversationWorkflow {
     await this.requireConversationAccess(persistedRun.conversationId, context.user);
 
     let lastSequence = options.afterSequence ?? 0;
-    const observations = await this.options.conversationStore.listRunObservations({
+    const observations = await this.options.stores.agentRuns.listRunObservations({
       clientInstanceId: this.options.clientInstanceId,
       runId,
       afterSequence: lastSequence
@@ -668,7 +667,7 @@ export class ConversationWorkflow {
     }
 
     const latestRun =
-      (await this.options.conversationStore.getAgentRun({
+      (await this.options.stores.agentRuns.getAgentRun({
         clientInstanceId: this.options.clientInstanceId,
         runId
       })) ?? persistedRun;
@@ -683,7 +682,7 @@ export class ConversationWorkflow {
     } catch (error) {
       if (isMissingLocalRuntimeState(error)) {
         const staleRun =
-          (await this.options.conversationStore.getAgentRun({
+          (await this.options.stores.agentRuns.getAgentRun({
             clientInstanceId: this.options.clientInstanceId,
             runId
           })) ?? latestRun;
@@ -701,7 +700,7 @@ export class ConversationWorkflow {
   }
 
   async getRunStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {
-    const run = await this.options.conversationStore.getAgentRun({
+    const run = await this.options.stores.agentRuns.getAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       runId
     });
@@ -713,7 +712,7 @@ export class ConversationWorkflow {
   }
 
   async getRunForUser(runId: AgentRunId, user: AuthenticatedUser): Promise<AgentRun | undefined> {
-    const run = await this.options.conversationStore.getAgentRun({
+    const run = await this.options.stores.agentRuns.getAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       runId
     });
@@ -728,7 +727,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser
   ): Promise<AgentRun | undefined> {
     await this.requireConversationAccess(conversationId, user);
-    const run = await this.options.conversationStore.getConversationAgentRun({
+    const run = await this.options.stores.agentRuns.getConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       runId
@@ -740,7 +739,7 @@ export class ConversationWorkflow {
   }
 
   private async createRunProjection(run: AgentRun): Promise<AgentRunProjection> {
-    const observations = await this.options.conversationStore.listRunObservations({
+    const observations = await this.options.stores.agentRuns.listRunObservations({
       clientInstanceId: this.options.clientInstanceId,
       runId: run.id,
       afterSequence: 0
@@ -775,7 +774,7 @@ export class ConversationWorkflow {
       throw error;
     }
     return (
-      (await this.options.conversationStore.getConversationAgentRun({
+      (await this.options.stores.agentRuns.getConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
         runId
@@ -796,7 +795,7 @@ export class ConversationWorkflow {
     }
     await this.options.agentRuntime.resume(runId, command, context);
     return (
-      (await this.options.conversationStore.getConversationAgentRun({
+      (await this.options.stores.agentRuns.getConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
         runId
@@ -849,7 +848,7 @@ export class ConversationWorkflow {
     }
 
     const conversation = await this.requireConversationAccess(conversationId, user);
-    const messages = await this.options.conversationStore.listMessages({
+    const messages = await this.options.stores.conversations.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
@@ -900,7 +899,7 @@ export class ConversationWorkflow {
         return undefined;
       }
 
-      const updated = await this.options.conversationStore.updateConversationTitle({
+      const updated = await this.options.stores.conversations.updateConversationTitle({
         clientInstanceId: this.options.clientInstanceId,
         conversationId,
         title,
@@ -997,7 +996,7 @@ export class ConversationWorkflow {
     }
     await this.requireConversationAccess(conversationId, user);
     const deletedAt = new Date().toISOString();
-    const deleted = await this.options.conversationStore.deleteConversation({
+    const deleted = await this.options.stores.conversations.deleteConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       deletedAt
@@ -1025,7 +1024,7 @@ export class ConversationWorkflow {
     conversationId: ConversationId,
     user: AuthenticatedUser
   ): Promise<Conversation> {
-    const conversation = await this.options.conversationStore.getConversation(
+    const conversation = await this.options.stores.conversations.getConversation(
       this.options.clientInstanceId,
       conversationId
     );
@@ -1055,7 +1054,7 @@ export class ConversationWorkflow {
   ): Promise<CollaborationWorkspace> {
     return collaborationWorkspaceId
       ? this.requireMemberWorkspace(user, collaborationWorkspaceId)
-      : this.options.userStore.ensurePersonalWorkspace({
+      : this.options.stores.workspaces.ensurePersonalWorkspace({
           clientInstanceId: this.options.clientInstanceId,
           userId: asUserId(getSubjectUserId(user))
         });
@@ -1066,7 +1065,7 @@ export class ConversationWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<CollaborationWorkspace> {
     await this.workspaces.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    const workspace = await this.options.userStore.getWorkspace(
+    const workspace = await this.options.stores.workspaces.getWorkspace(
       this.options.clientInstanceId,
       collaborationWorkspaceId
     );
@@ -1093,7 +1092,7 @@ export class ConversationWorkflow {
       reclaimPendingBefore: new Date(Date.now() - IDEMPOTENCY_PENDING_RECLAIM_MS).toISOString()
     };
 
-    let claim = await this.options.conversationStore.claimRunStartCommand(claimInput);
+    let claim = await this.options.stores.agentRuns.claimRunStartCommand(claimInput);
     if (claim.status === "claimed") {
       return { status: "claimed", command: claim.command };
     }
@@ -1111,7 +1110,7 @@ export class ConversationWorkflow {
       }
 
       await delay(IDEMPOTENCY_WAIT_MS);
-      claim = await this.options.conversationStore.claimRunStartCommand(claimInput);
+      claim = await this.options.stores.agentRuns.claimRunStartCommand(claimInput);
       if (claim.status === "claimed") {
         return { status: "claimed", command: claim.command };
       }
@@ -1132,7 +1131,7 @@ export class ConversationWorkflow {
       throw new AppError("NOT_FOUND", "Agent run is not available");
     }
     await this.requireConversationAccess(command.conversationId, user);
-    const run = await this.options.conversationStore.getConversationAgentRun({
+    const run = await this.options.stores.agentRuns.getConversationAgentRun({
       clientInstanceId: this.options.clientInstanceId,
       conversationId: command.conversationId,
       runId: command.runId
@@ -1153,7 +1152,7 @@ export class ConversationWorkflow {
     user: AuthenticatedUser,
     claimedAt: string | undefined
   ): Promise<void> {
-    await this.options.conversationStore.releaseRunStartCommand({
+    await this.options.stores.agentRuns.releaseRunStartCommand({
       clientInstanceId: this.options.clientInstanceId,
       ownerUserId: getSubjectUserId(user),
       idempotencyKey,
@@ -1163,7 +1162,7 @@ export class ConversationWorkflow {
   }
 
   private async requireRunInputMessage(run: AgentRun): Promise<ChatMessage> {
-    const messages = await this.options.conversationStore.listMessages({
+    const messages = await this.options.stores.conversations.listMessages({
       clientInstanceId: this.options.clientInstanceId,
       conversationId: run.conversationId
     });

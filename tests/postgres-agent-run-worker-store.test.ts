@@ -1,4 +1,5 @@
-import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
+import type { PlatformStores } from "@vivd-catalyst/core";
+import { createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -12,8 +13,8 @@ const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 
 describePostgres("Postgres agent run worker store", () => {
-  let store: TestPostgresStore;
-  let secondStore: TestPostgresStore;
+  let store: PlatformStores;
+  let secondStore: PlatformStores;
 
   beforeAll(async () => {
     store = (
@@ -30,15 +31,15 @@ describePostgres("Postgres agent run worker store", () => {
   });
 
   afterAll(async () => {
-    await secondStore?.close();
-    await store?.close();
+    await secondStore?.close?.();
+    await store?.close?.();
   });
 
   it("claims a queued run once across separate connections", async () => {
     const fixture = await createQueuedRun(store);
     const [first, second] = await Promise.all([
-      store.claimNextAgentRun(claimInput(fixture, "worker-a", "lease-a")),
-      secondStore.claimNextAgentRun(claimInput(fixture, "worker-b", "lease-b"))
+      store.agentRuns.claimNextAgentRun(claimInput(fixture, "worker-a", "lease-a")),
+      secondStore.agentRuns.claimNextAgentRun(claimInput(fixture, "worker-b", "lease-b"))
     ]);
 
     expect([first, second].filter(Boolean)).toHaveLength(1);
@@ -50,10 +51,12 @@ describePostgres("Postgres agent run worker store", () => {
 
   it("fences observation and terminal writes by lease token", async () => {
     const fixture = await createQueuedRun(store);
-    const claimed = await store.claimNextAgentRun(claimInput(fixture, "worker-a", "current-token"));
+    const claimed = await store.agentRuns.claimNextAgentRun(
+      claimInput(fixture, "worker-a", "current-token")
+    );
     expect(claimed).toBeDefined();
     await expect(
-      secondStore.appendClaimedRunObservation({
+      secondStore.agentRuns.appendClaimedRunObservation({
         clientInstanceId: fixture.clientInstanceId,
         runId: fixture.run.id,
         leaseToken: "stale-token",
@@ -66,7 +69,7 @@ describePostgres("Postgres agent run worker store", () => {
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
-    await store.appendClaimedRunObservation({
+    await store.agentRuns.appendClaimedRunObservation({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id,
       leaseToken: "current-token",
@@ -78,7 +81,7 @@ describePostgres("Postgres agent run worker store", () => {
       }
     });
     await expect(
-      secondStore.appendClaimedRunObservation({
+      secondStore.agentRuns.appendClaimedRunObservation({
         clientInstanceId: fixture.clientInstanceId,
         runId: fixture.run.id,
         leaseToken: "current-token",
@@ -95,7 +98,7 @@ describePostgres("Postgres agent run worker store", () => {
 
   it("terminalizes an expired lease once", async () => {
     const fixture = await createQueuedRun(store);
-    await store.claimNextAgentRun(
+    await store.agentRuns.claimNextAgentRun(
       claimInput(fixture, "worker-a", "expired-token", "2026-09-02T12:00:01.000Z")
     );
     const input = {
@@ -109,10 +112,10 @@ describePostgres("Postgres agent run worker store", () => {
       },
       limit: 10
     };
-    expect(await store.recoverExpiredAgentRuns(input)).toHaveLength(1);
-    expect(await secondStore.recoverExpiredAgentRuns(input)).toEqual([]);
+    expect(await store.agentRuns.recoverExpiredAgentRuns(input)).toHaveLength(1);
+    expect(await secondStore.agentRuns.recoverExpiredAgentRuns(input)).toEqual([]);
     await expect(
-      store.listRunObservations({
+      store.agentRuns.listRunObservations({
         clientInstanceId: fixture.clientInstanceId,
         runId: fixture.run.id
       })
@@ -123,8 +126,8 @@ describePostgres("Postgres agent run worker store", () => {
 
   it("keeps cancellation monotonic against late permission and completion writes", async () => {
     const fixture = await createQueuedRun(store);
-    await store.claimNextAgentRun(claimInput(fixture, "worker-a", "cancel-token"));
-    await secondStore.requestAgentRunCancellation({
+    await store.agentRuns.claimNextAgentRun(claimInput(fixture, "worker-a", "cancel-token"));
+    await secondStore.agentRuns.requestAgentRunCancellation({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id,
       requestedAt: new Date().toISOString(),
@@ -132,7 +135,7 @@ describePostgres("Postgres agent run worker store", () => {
     });
     const createdAt = new Date().toISOString();
     await expect(
-      store.appendClaimedRunObservation({
+      store.agentRuns.appendClaimedRunObservation({
         clientInstanceId: fixture.clientInstanceId,
         runId: fixture.run.id,
         leaseToken: "cancel-token",
@@ -148,7 +151,7 @@ describePostgres("Postgres agent run worker store", () => {
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(
-      store.appendClaimedRunObservation({
+      store.agentRuns.appendClaimedRunObservation({
         clientInstanceId: fixture.clientInstanceId,
         runId: fixture.run.id,
         leaseToken: "cancel-token",
@@ -160,7 +163,7 @@ describePostgres("Postgres agent run worker store", () => {
         }
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    await store.appendClaimedRunObservation({
+    await store.agentRuns.appendClaimedRunObservation({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id,
       leaseToken: "cancel-token",
@@ -173,20 +176,29 @@ describePostgres("Postgres agent run worker store", () => {
       }
     });
     await expect(
-      store.getAgentRun({ clientInstanceId: fixture.clientInstanceId, runId: fixture.run.id })
+      store.agentRuns.getAgentRun({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: fixture.run.id
+      })
     ).resolves.toMatchObject({ status: "cancelled", lastSequence: 1 });
   });
 });
 
-async function createQueuedRun(store: TestPostgresStore): Promise<{
+async function createQueuedRun(store: PlatformStores): Promise<{
   clientInstanceId: ClientInstanceId;
   run: AgentRun;
 }> {
   const id = globalThis.crypto.randomUUID();
   const clientInstanceId = asClientInstanceId(`agent-worker-${id}`);
-  const user = await store.createUser({ clientInstanceId, displayLabel: "Agent worker owner" });
-  const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: user.id });
-  const conversation = await store.createConversation({
+  const user = await store.users.createUser({
+    clientInstanceId,
+    displayLabel: "Agent worker owner"
+  });
+  const workspace = await store.workspaces.ensurePersonalWorkspace({
+    clientInstanceId,
+    userId: user.id
+  });
+  const conversation = await store.conversations.createConversation({
     visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: workspace.id,
@@ -196,14 +208,14 @@ async function createQueuedRun(store: TestPostgresStore): Promise<{
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
   const inputMessageId = asMessageId(`msg-${id}`);
-  await store.appendMessage({
+  await store.conversations.appendMessage({
     id: inputMessageId,
     clientInstanceId,
     conversationId: conversation.id,
     role: "user",
     text: "Run it"
   });
-  const run = await store.createAgentRun({
+  const run = await store.agentRuns.createAgentRun({
     id: asAgentRunId(`run-${id}`),
     clientInstanceId,
     conversationId: conversation.id,

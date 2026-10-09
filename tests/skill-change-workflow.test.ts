@@ -88,7 +88,7 @@ async function fixture() {
     toolNames: ["read_skill", "propose_skill_change"],
     skillNames: [skill.name]
   });
-  await store.applyConfigAssetMutations({
+  await store.configAssets.applyConfigAssetMutations({
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "agent", name: agent.name, config: json(agent) },
@@ -96,12 +96,12 @@ async function fixture() {
       { type: "setDefaultAgent", agentName: agent.name }
     ]
   });
-  const source = createConfigAssetSource({ store, clientInstanceId });
+  const source = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
   const handler = createSkillChangeApprovalHandler({
     config,
     clientInstanceId,
     configAssets: {
-      store,
+      store: store.configAssets,
       source,
       validationRefs: {
         modelProviderIds: config.modelProviders.map((provider) => provider.id),
@@ -116,9 +116,9 @@ async function fixture() {
   const onDecided = vi.fn();
   const workflow = new ApprovalRequestWorkflow({
     clientInstanceId,
-    store,
+    store: store.approvals,
     handlers: new Map([[handler.kind, handler]]),
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
     onDecided
   });
   const propose = (ops = operations, name = skill.name) =>
@@ -136,7 +136,7 @@ async function fixture() {
   const approve = (requestId: string) =>
     workflow.decideRequest(reviewer, context, { requestId, decision: "approve" });
   const revisions = (name = skill.name, kind: "agent" | "skill" = "skill") =>
-    store.listConfigAssetRevisions({ clientInstanceId, kind, name });
+    store.configAssets.listConfigAssetRevisions({ clientInstanceId, kind, name });
   const tool = createProposeSkillChangeTool({
     assetSource: source,
     policy: config.administration.agentConfiguration.agentSkillChanges,
@@ -210,7 +210,7 @@ describe("skill change approval workflow", () => {
     });
     expect(f.onDecided).toHaveBeenLastCalledWith(reverted);
     expect(
-      (await f.store.listAuditEvents({ clientInstanceId })).find(
+      (await f.store.audit.listAuditEvents({ clientInstanceId })).find(
         (event) => event.type === "approval_request.reverted"
       )
     ).toMatchObject({
@@ -273,7 +273,7 @@ describe("skill change approval workflow", () => {
   it("supersedes a stale proposal and keeps its original preview readable", async () => {
     const f = await fixture();
     const request = await f.propose();
-    await f.store.applyConfigAssetMutations({
+    await f.store.configAssets.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
         {
@@ -306,7 +306,7 @@ describe("skill change approval workflow", () => {
     const detached = await f.propose();
     const orphaned = await f.propose();
     const orphanedCreation = await f.propose(creation, "new_skill");
-    await f.store.applyConfigAssetMutations({
+    await f.store.configAssets.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
         {
@@ -318,7 +318,7 @@ describe("skill change approval workflow", () => {
       ]
     });
     expect(await f.approve(detached.id)).toMatchObject({ status: "superseded" });
-    await f.store.applyConfigAssetMutations({
+    await f.store.configAssets.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
         { type: "delete", kind: "agent", name: f.agent.name },
@@ -339,7 +339,7 @@ describe("skill change approval workflow", () => {
       summary: request.summary
     };
     const applied = await f.handler.apply(request.payload, reviewer, handlerContext);
-    await f.store.applyConfigAssetMutations({
+    await f.store.configAssets.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
         {
@@ -407,7 +407,10 @@ describe("skill change approval workflow", () => {
     expect(await f.handler.apply(request.payload, reviewer, handlerContext)).toEqual(first);
     expect(await f.approve(request.id)).toMatchObject({ status: "approved", applyResult: first });
     expect(await f.revisions()).toHaveLength(2);
-    const approved = await f.store.getApprovalRequest({ clientInstanceId, requestId: request.id });
+    const approved = await f.store.approvals.getApprovalRequest({
+      clientInstanceId,
+      requestId: request.id
+    });
     if (!approved || !f.handler.revert) {
       throw new Error("Expected an approved request and revert handler");
     }
@@ -422,7 +425,7 @@ describe("skill change approval workflow", () => {
     const request = await f.propose();
     const snapshot = await f.source.getSnapshot();
     vi.spyOn(f.source, "getSnapshot").mockImplementationOnce(async () => {
-      const updated = await f.store.applyConfigAssetMutations({
+      const updated = await f.store.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [
           {
@@ -451,7 +454,7 @@ describe("skill change approval workflow", () => {
     const f = await fixture();
     const request = await f.propose();
     await f.approve(request.id);
-    await f.store.applyConfigAssetMutations({
+    await f.store.configAssets.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
         {
@@ -472,7 +475,7 @@ describe("skill change approval workflow", () => {
     const f = await fixture();
     const request = await f.propose(creation, "new_skill");
     await f.approve(request.id);
-    await f.store.applyConfigAssetMutations({
+    await f.store.configAssets.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [
         {

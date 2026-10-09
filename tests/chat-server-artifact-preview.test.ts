@@ -29,7 +29,7 @@ describe("artifact preview routes", () => {
         title: "Attachment preview",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const file = await store.createManagedFile({
+      const file = await store.files.createManagedFile({
         clientInstanceId,
         ownerUserId: owner.id,
         filename: "uploaded-deck.pptx",
@@ -38,7 +38,7 @@ describe("artifact preview routes", () => {
         checksum: "sha256:uploaded-deck",
         objectKey: "documents/private/uploaded-deck.pptx"
       });
-      const attachment = await store.createConversationAttachment({
+      const attachment = await store.files.createConversationAttachment({
         clientInstanceId,
         conversationId: conversation.id,
         fileId: file.id,
@@ -49,7 +49,7 @@ describe("artifact preview routes", () => {
         status: "ready",
         format: "pptx"
       });
-      await store.claimReadyDraftAttachmentsForMessage({
+      await store.files.claimReadyDraftAttachmentsForMessage({
         clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_attachment_preview"),
@@ -72,7 +72,7 @@ describe("artifact preview routes", () => {
       });
       const previewSourceId = first.json().artifactId as string;
       expect(concurrent.json()).toMatchObject({ artifactId: previewSourceId });
-      const previewSource = await store.getManagedArtifact({
+      const previewSource = await store.files.getManagedArtifact({
         clientInstanceId,
         artifactId: asManagedArtifactId(previewSourceId)
       });
@@ -86,7 +86,7 @@ describe("artifact preview routes", () => {
           sourceAttachmentId: attachment.id
         }
       });
-      const updatedAttachment = await store.getConversationAttachment({
+      const updatedAttachment = await store.files.getConversationAttachment({
         clientInstanceId,
         attachmentId: attachment.id
       });
@@ -99,7 +99,7 @@ describe("artifact preview routes", () => {
       });
       expect(second.json()).toMatchObject({ artifactId: previewSourceId });
       await expect(
-        store.listManagedArtifactsForFile({
+        store.files.listManagedArtifactsForFile({
           clientInstanceId,
           conversationId: conversation.id,
           fileId: file.id,
@@ -121,7 +121,7 @@ describe("artifact preview routes", () => {
         title: "Native PDF preview",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const file = await store.createManagedFile({
+      const file = await store.files.createManagedFile({
         clientInstanceId,
         ownerUserId: owner.id,
         filename: "uploaded.pdf",
@@ -130,7 +130,7 @@ describe("artifact preview routes", () => {
         checksum: "sha256:uploaded-pdf",
         objectKey: "documents/private/uploaded.pdf"
       });
-      const attachment = await store.createConversationAttachment({
+      const attachment = await store.files.createConversationAttachment({
         clientInstanceId,
         conversationId: conversation.id,
         fileId: file.id,
@@ -141,7 +141,7 @@ describe("artifact preview routes", () => {
         status: "ready",
         format: "pdf"
       });
-      await store.claimReadyDraftAttachmentsForMessage({
+      await store.files.claimReadyDraftAttachmentsForMessage({
         clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_native_pdf_preview"),
@@ -154,7 +154,7 @@ describe("artifact preview routes", () => {
 
       expect(response.statusCode).toBe(422);
       await expect(
-        store.listManagedArtifactsForFile({
+        store.files.listManagedArtifactsForFile({
           clientInstanceId,
           conversationId: conversation.id,
           fileId: file.id,
@@ -183,7 +183,7 @@ describe("artifact preview routes", () => {
         title: "Other preview conversation",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const previewPage = await store.createManagedArtifact({
+      const previewPage = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "document.preview_page_image",
@@ -193,7 +193,7 @@ describe("artifact preview routes", () => {
         byteSize: 10,
         checksum: "sha256:page-1"
       });
-      const readyArtifact = await store.createManagedArtifact({
+      const readyArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "document.docx",
@@ -203,7 +203,7 @@ describe("artifact preview routes", () => {
         byteSize: 128,
         checksum: "sha256:ready-docx"
       });
-      await store.writeArtifactPreviewManifest({
+      await store.files.writeArtifactPreviewManifest({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: readyArtifact.id,
@@ -222,7 +222,7 @@ describe("artifact preview routes", () => {
           }
         ]
       });
-      const emptyReadyArtifact = await store.createManagedArtifact({
+      const emptyReadyArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "document.docx",
@@ -232,7 +232,7 @@ describe("artifact preview routes", () => {
         byteSize: 64,
         checksum: "sha256:empty-ready-docx"
       });
-      await store.writeArtifactPreviewManifest({
+      await store.files.writeArtifactPreviewManifest({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: emptyReadyArtifact.id,
@@ -242,7 +242,7 @@ describe("artifact preview routes", () => {
         pageCount: 1,
         pages: []
       });
-      const pendingArtifact = await store.createManagedArtifact({
+      const pendingArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "presentation.pptx",
@@ -252,7 +252,7 @@ describe("artifact preview routes", () => {
         byteSize: 256,
         checksum: "sha256:pending-pptx"
       });
-      await store.enqueueArtifactPreviewJob({
+      await store.files.enqueueArtifactPreviewJob({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: pendingArtifact.id,
@@ -260,7 +260,7 @@ describe("artifact preview routes", () => {
         sourceMimeType: pendingArtifact.mimeType,
         queuedAt: "2026-07-01T12:00:00.000Z"
       });
-      const failedArtifact = await store.createManagedArtifact({
+      const failedArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "document.doc",
@@ -270,14 +270,14 @@ describe("artifact preview routes", () => {
         byteSize: 64,
         checksum: "sha256:failed-doc"
       });
-      await store.writeArtifactPreviewManifest({
+      await store.files.writeArtifactPreviewManifest({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: failedArtifact.id,
         status: "failed",
         errorCode: "conversion_failed"
       });
-      const unsupportedManifestArtifact = await store.createManagedArtifact({
+      const unsupportedManifestArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "presentation.ppt",
@@ -287,14 +287,14 @@ describe("artifact preview routes", () => {
         byteSize: 64,
         checksum: "sha256:unsupported-ppt"
       });
-      await store.writeArtifactPreviewManifest({
+      await store.files.writeArtifactPreviewManifest({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: unsupportedManifestArtifact.id,
         status: "unsupported",
         errorCode: "unsupported_type"
       });
-      const unsupportedWithoutCodeArtifact = await store.createManagedArtifact({
+      const unsupportedWithoutCodeArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "presentation.ppt",
@@ -304,13 +304,13 @@ describe("artifact preview routes", () => {
         byteSize: 64,
         checksum: "sha256:unsupported-without-code"
       });
-      await store.writeArtifactPreviewManifest({
+      await store.files.writeArtifactPreviewManifest({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: unsupportedWithoutCodeArtifact.id,
         status: "unsupported"
       });
-      const spreadsheetArtifact = await store.createManagedArtifact({
+      const spreadsheetArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "spreadsheet.xlsx",
@@ -320,7 +320,7 @@ describe("artifact preview routes", () => {
         byteSize: 64,
         checksum: "sha256:sheet"
       });
-      const embeddedArtifact = await store.createManagedArtifact({
+      const embeddedArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "presentation.pptx",
@@ -350,7 +350,7 @@ describe("artifact preview routes", () => {
           }
         }
       });
-      const embeddedGifWithoutFormatArtifact = await store.createManagedArtifact({
+      const embeddedGifWithoutFormatArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "presentation.pptx",
@@ -403,7 +403,7 @@ describe("artifact preview routes", () => {
         queuedAt: expect.any(String)
       });
       await expect(
-        store.getArtifactPreviewJob({
+        store.files.getArtifactPreviewJob({
           clientInstanceId,
           sourceArtifactId: emptyReadyArtifact.id
         })
@@ -444,7 +444,7 @@ describe("artifact preview routes", () => {
       });
       expect(failedRetry.payload).not.toContain("artifact-previews/private");
       expect(failedRetry.payload).not.toContain("renderer");
-      const retriedJob = await store.getArtifactPreviewJob({
+      const retriedJob = await store.files.getArtifactPreviewJob({
         clientInstanceId,
         sourceArtifactId: failedArtifact.id
       });
@@ -461,7 +461,7 @@ describe("artifact preview routes", () => {
         payload: failedRetry.payload
       });
       await expect(
-        store.getArtifactPreviewJob({
+        store.files.getArtifactPreviewJob({
           clientInstanceId,
           sourceArtifactId: failedArtifact.id
         })
@@ -516,7 +516,7 @@ describe("artifact preview routes", () => {
           errorCode: "unsupported_type"
         })
       });
-      const nonRetryableArtifact = await store.createManagedArtifact({
+      const nonRetryableArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "document.docx",
@@ -526,7 +526,7 @@ describe("artifact preview routes", () => {
         byteSize: 1024,
         checksum: "sha256:large-docx"
       });
-      await store.writeArtifactPreviewManifest({
+      await store.files.writeArtifactPreviewManifest({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: nonRetryableArtifact.id,
@@ -542,12 +542,12 @@ describe("artifact preview routes", () => {
         artifactId: nonRetryableArtifact.id
       });
       await expect(
-        store.getArtifactPreviewJob({
+        store.files.getArtifactPreviewJob({
           clientInstanceId,
           sourceArtifactId: nonRetryableArtifact.id
         })
       ).resolves.toMatchObject({ status: "pending" });
-      const oldRendererFailureArtifact = await store.createManagedArtifact({
+      const oldRendererFailureArtifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "presentation.pptx",
@@ -557,7 +557,7 @@ describe("artifact preview routes", () => {
         byteSize: 1024,
         checksum: "sha256:old-runtime-pptx"
       });
-      await store.writeArtifactPreviewManifest({
+      await store.files.writeArtifactPreviewManifest({
         clientInstanceId,
         conversationId: conversation.id,
         sourceArtifactId: oldRendererFailureArtifact.id,
@@ -643,7 +643,7 @@ describe("artifact preview routes", () => {
         title: "Artifact preview forbidden",
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
-      const artifact = await store.createManagedArtifact({
+      const artifact = await store.files.createManagedArtifact({
         clientInstanceId,
         conversationId: conversation.id,
         kind: "document.docx",
@@ -680,7 +680,7 @@ async function createPreviewServer(
   const config = createPreviewConfig(clientInstanceId);
   const owner = input.owner ?? createTestUser("user-1", clientInstanceId);
   const usageGovernance = new ModelUsageGovernance({
-    store,
+    store: store.usage,
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
     costs: config.usage.costs
@@ -696,9 +696,7 @@ async function createPreviewServer(
           return owner;
         }
       },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
+      stores: store,
       usageGovernance,
       auditRecorder: new NoopAuditRecorder(),
       agentRuntime: createMissingRuntime(),

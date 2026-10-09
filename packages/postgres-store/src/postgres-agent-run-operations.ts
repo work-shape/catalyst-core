@@ -3,7 +3,6 @@ import {
   AppError,
   type AgentRun,
   type AgentRunId,
-  type AgentRuntimeEvent,
   type AppendRunObservationInput,
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
@@ -25,7 +24,7 @@ import {
   type UpdateAgentRunStatusInput
 } from "@vivd-catalyst/core";
 import { lockActiveConversation } from "./postgres-conversation-operations";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
@@ -37,7 +36,7 @@ import {
 } from "./schema";
 
 export async function claimRunStartCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ClaimRunStartCommandInput
 ): Promise<ClaimRunStartCommandResult> {
   const now = input.createdAt ? new Date(input.createdAt) : new Date();
@@ -99,7 +98,7 @@ export async function claimRunStartCommand(
 }
 
 export async function completeRunStartCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CompleteRunStartCommandInput
 ): Promise<RunStartCommand> {
   const [row] = await db
@@ -120,14 +119,14 @@ export async function completeRunStartCommand(
 }
 
 export async function releaseRunStartCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ReleaseRunStartCommandInput
 ): Promise<void> {
   await db.delete(runStartCommands).where(runStartCommandPendingClaimWhere(input));
 }
 
 export async function prepareConversationRunStart(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: PrepareConversationRunStartInput
 ): Promise<PreparedConversationRunStart> {
   return db.transaction(async (tx) => {
@@ -250,7 +249,7 @@ export async function prepareConversationRunStart(
 }
 
 export async function createAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CreateAgentRunInput
 ): Promise<AgentRun> {
   const now = input.startedAt ? new Date(input.startedAt) : new Date();
@@ -279,7 +278,7 @@ export async function createAgentRun(
 }
 
 export async function getAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     runId: AgentRunId;
@@ -296,7 +295,7 @@ export async function getAgentRun(
 }
 
 export async function getConversationAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -318,7 +317,7 @@ export async function getConversationAgentRun(
 }
 
 export async function getActiveConversationAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -339,7 +338,7 @@ export async function getActiveConversationAgentRun(
 }
 
 export async function getLatestConversationAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -360,7 +359,7 @@ export async function getLatestConversationAgentRun(
 }
 
 export async function updateAgentRunStatus(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UpdateAgentRunStatusInput
 ): Promise<AgentRun> {
   const [row] = await db
@@ -385,7 +384,7 @@ export async function updateAgentRunStatus(
 }
 
 export async function listStaleActiveAgentRuns(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     staleUpdatedBefore: string;
@@ -408,7 +407,7 @@ export async function listStaleActiveAgentRuns(
 }
 
 export async function recoverStaleAgentRun(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: RecoverStaleAgentRunInput
 ): Promise<RecoverStaleAgentRunResult> {
   return db.transaction(async (tx) => {
@@ -498,7 +497,7 @@ export {
 } from "./postgres-agent-run-worker-operations";
 
 export async function appendRunObservation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: AppendRunObservationInput
 ): Promise<RunObservation> {
   return db.transaction(async (tx) => {
@@ -546,7 +545,7 @@ export async function appendRunObservation(
 }
 
 export async function listRunObservations(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     runId: AgentRunId;
@@ -570,7 +569,7 @@ export async function listRunObservations(
 }
 
 async function getRunStartCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ClaimRunStartCommandInput
 ): Promise<RunStartCommand | undefined> {
   const [row] = await db

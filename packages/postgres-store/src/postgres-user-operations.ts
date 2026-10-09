@@ -18,13 +18,13 @@ import {
   createPlatformId,
   createUserId
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
+import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
 import { productUsers, userIdentities } from "./schema";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 
 export async function resolveUserIdentity(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ResolveUserIdentityInput,
   appendAuditEvent: (input: AuditEventInput) => Promise<AuditEvent>
 ) {
@@ -244,7 +244,7 @@ export async function resolveUserIdentity(
 }
 
 export async function listUsers(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId }
 ): Promise<UserRecord[]> {
   const rows = await db
@@ -272,7 +272,7 @@ export async function listUsers(
 }
 
 export async function createUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CreateUserInput
 ): Promise<UserRecord> {
   return db.transaction(async (tx) => {
@@ -302,7 +302,7 @@ export async function createUser(
 }
 
 export async function getUserModelPreference(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UserModelPreferenceInput
 ): Promise<UserModelPreference | undefined> {
   const [row] = await db
@@ -318,7 +318,7 @@ export async function getUserModelPreference(
 }
 
 export async function setUserModelPreference(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UserModelPreferenceInput & { preference: UserModelPreference }
 ): Promise<void> {
   const rows = await db
@@ -337,7 +337,7 @@ export async function setUserModelPreference(
 }
 
 export async function updateUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UpdateUserInput
 ): Promise<UserRecord> {
   const set: Partial<typeof productUsers.$inferInsert> = {
@@ -379,7 +379,7 @@ export async function updateUser(
 }
 
 export async function deleteUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: DeleteUserInput
 ): Promise<UserRecord> {
   const user = await getUserRecord(db, input.clientInstanceId, input.userId);
@@ -403,7 +403,7 @@ export async function deleteUser(
 }
 
 export async function upsertUserIdentity(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UpsertUserIdentityInput
 ): Promise<UserRecord> {
   const user = await getUserRecord(db, input.clientInstanceId, input.userId);
@@ -452,7 +452,7 @@ export async function upsertUserIdentity(
 }
 
 export async function deleteUserIdentity(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: DeleteUserIdentityInput
 ): Promise<UserRecord> {
   const user = await getUserRecord(db, input.clientInstanceId, input.userId);
@@ -487,7 +487,7 @@ export async function deleteUserIdentity(
 }
 
 export async function getUserRecord(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   clientInstanceId: ClientInstanceId,
   userId: string
 ): Promise<UserRecord | undefined> {
@@ -509,7 +509,7 @@ export async function getUserRecord(
 }
 
 export async function requireUserRecord(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   clientInstanceId: ClientInstanceId,
   userId: string
 ): Promise<UserRecord> {

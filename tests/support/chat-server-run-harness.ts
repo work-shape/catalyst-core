@@ -33,7 +33,7 @@ export async function createStaleRunRecoveryFixture(
   const store = createTestInstance().stores;
   const config = createTestConfig();
   const usageGovernance = new ModelUsageGovernance({
-    store,
+    store: store.usage,
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
     costs: config.usage.costs
@@ -51,9 +51,7 @@ export async function createStaleRunRecoveryFixture(
           return createTestUser(userId ?? owner.id, clientInstanceId);
         }
       },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
+      stores: store,
       usageGovernance,
       auditRecorder: new NoopAuditRecorder(),
       agentRuntime: createMissingRuntime(),
@@ -73,7 +71,7 @@ export async function createStaleRunRecoveryFixture(
     title: "Recovered run",
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
-  const message = await store.appendMessage({
+  const message = await store.conversations.appendMessage({
     clientInstanceId,
     conversationId: conversation.id,
     role: "user",
@@ -119,13 +117,13 @@ export async function createPersistedRecoveryRun(
     }));
   const message =
     fixture.message ??
-    (await fixture.store.appendMessage({
+    (await fixture.store.conversations.appendMessage({
       clientInstanceId: fixture.clientInstanceId,
       conversationId: conversation.id,
       role: "user",
       text: `recover ${input.status}`
     }));
-  const run = await fixture.store.createAgentRun({
+  const run = await fixture.store.agentRuns.createAgentRun({
     id: createPlatformId<"AgentRunId">("run"),
     clientInstanceId: fixture.clientInstanceId,
     conversationId: conversation.id,
@@ -135,7 +133,7 @@ export async function createPersistedRecoveryRun(
     correlationId: `corr-${input.status}`,
     startedAt: "2020-01-01T00:00:00.000Z"
   });
-  await fixture.store.appendRunObservation({
+  await fixture.store.agentRuns.appendRunObservation({
     clientInstanceId: fixture.clientInstanceId,
     runId: run.id,
     conversationId: conversation.id,
@@ -149,14 +147,14 @@ export async function createPersistedRecoveryRun(
     }
   });
   if (input.status === "running") {
-    return (await fixture.store.getAgentRun({
+    return (await fixture.store.agentRuns.getAgentRun({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
     })) as AgentRun;
   }
 
   const terminalAt = "2020-01-01T00:00:02.000Z";
-  return fixture.store.updateAgentRunStatus({
+  return fixture.store.agentRuns.updateAgentRunStatus({
     clientInstanceId: fixture.clientInstanceId,
     runId: run.id,
     status: input.status,
@@ -183,7 +181,9 @@ export async function expectRunStatus(
   runId: AgentRun["id"],
   status: AgentRun["status"]
 ): Promise<void> {
-  await expect(store.getAgentRun({ clientInstanceId, runId })).resolves.toMatchObject({ status });
+  await expect(store.agentRuns.getAgentRun({ clientInstanceId, runId })).resolves.toMatchObject({
+    status
+  });
 }
 
 export function createMissingRuntime(): AgentRuntime {

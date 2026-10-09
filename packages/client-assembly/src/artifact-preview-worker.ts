@@ -1,5 +1,5 @@
 import { createLogger } from "./logger";
-import { AppError, type PlatformStore } from "@vivd-catalyst/core";
+import { AppError, type PlatformStores } from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
@@ -26,7 +26,7 @@ export type ArtifactPreviewSourceReaderFactory = (input: {
   config: ClientInstanceConfig;
   clientInstanceId: ReturnType<typeof getClientInstanceId>;
   env: ClientInstanceEnv;
-  store: PlatformStore;
+  store: PlatformStores;
   storeMode: PlatformStoreMode;
 }) => ArtifactPreviewSourceReader | Promise<ArtifactPreviewSourceReader>;
 
@@ -55,7 +55,7 @@ export async function createClientInstanceArtifactPreviewWorker(
   });
   const worker = new ArtifactPreviewWorker({
     clientInstanceId,
-    store,
+    store: store.files,
     objectStore,
     sourceReader,
     renderer: new LibreOfficeArtifactPreviewRenderer({

@@ -31,7 +31,7 @@ describe("agent workspace file e2e", () => {
         title: "Read uploaded deck",
         retainedUntil: "2026-07-29T00:00:00.000Z"
       });
-      const inputMessage = await store.appendMessage({
+      const inputMessage = await store.conversations.appendMessage({
         clientInstanceId,
         conversationId: conversation.id,
         role: "user",
@@ -185,14 +185,14 @@ describe("agent workspace file e2e", () => {
           type: "deterministic",
           model: "test-model"
         },
-        conversationHistory: store,
-        agentRunStore: store,
-        runObservationStore: store,
+        conversationHistory: store.conversations,
+        agentRunStore: store.agentRuns,
+        runObservationStore: store.agentRuns,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools }),
         toolExecution,
         usageGovernance: new ModelUsageGovernance({
-          store,
+          store: store.usage,
           budget: {},
           safeguards: {}
         })

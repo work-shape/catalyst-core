@@ -5,11 +5,11 @@ import {
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { modelProviderContinuations } from "./schema";
 
 export async function getModelProviderContinuation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
 ): Promise<ModelProviderContinuationCheckpoint | undefined> {
   const [row] = await db

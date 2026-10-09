@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
@@ -13,8 +14,8 @@ const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 
 describePostgres("Postgres execution workspace store", () => {
-  let store: TestPostgresStore;
-  let secondStore: TestPostgresStore;
+  let store: PlatformStores;
+  let secondStore: PlatformStores;
   let rawSql: Sql;
 
   beforeAll(async () => {
@@ -39,14 +40,14 @@ describePostgres("Postgres execution workspace store", () => {
 
   afterAll(async () => {
     await rawSql?.end();
-    await secondStore?.close();
-    await store?.close();
+    await secondStore?.close?.();
+    await store?.close?.();
   });
 
   it("creates one execution workspace per conversation idempotently", async () => {
     const fixture = await createWorkspaceFixture(store);
 
-    const repeated = await store.ensureExecutionWorkspace({
+    const repeated = await store.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId: fixture.clientInstanceId,
       conversationId: fixture.conversation.id,
       ownerUserId: fixture.ownerUserId,
@@ -62,7 +63,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.ensureExecutionWorkspace({
+      store.executionWorkspaces.ensureExecutionWorkspace({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id,
         ownerUserId: "wrong-owner"
@@ -70,13 +71,13 @@ describePostgres("Postgres execution workspace store", () => {
     ).resolves.toEqual(fixture.workspace);
 
     await expect(
-      store.getExecutionWorkspace({
+      store.executionWorkspaces.getExecutionWorkspace({
         clientInstanceId: fixture.clientInstanceId,
         workspaceId: fixture.workspace.id
       })
     ).resolves.toEqual(fixture.workspace);
     await expect(
-      store.getExecutionWorkspaceForConversation({
+      store.executionWorkspaces.getExecutionWorkspaceForConversation({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id
       })
@@ -86,7 +87,7 @@ describePostgres("Postgres execution workspace store", () => {
   it("upserts and lists the workspace file manifest by path", async () => {
     const fixture = await createWorkspaceFixture(store);
 
-    const first = await store.upsertWorkspaceFile({
+    const first = await store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       path: "reports/analysis.csv",
@@ -97,7 +98,7 @@ describePostgres("Postgres execution workspace store", () => {
       metadata: { source: "initial" },
       updatedAt: "2026-06-29T10:10:00.000Z"
     });
-    const updated = await store.upsertWorkspaceFile({
+    const updated = await store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       path: "reports/analysis.csv",
@@ -123,7 +124,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
     expect(updated.createdAt).toBe(first.createdAt);
 
-    await store.upsertWorkspaceFile({
+    await store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       path: "notes.txt",
@@ -133,7 +134,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.listWorkspaceFiles({
+      store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: fixture.clientInstanceId,
         workspaceId: fixture.workspace.id
       })
@@ -146,7 +147,7 @@ describePostgres("Postgres execution workspace store", () => {
   it("tombstones deleted workspace files and keeps superseded object keys cleanup-visible", async () => {
     const fixture = await createWorkspaceFixture(store);
 
-    await store.upsertWorkspaceFile({
+    await store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       path: "tmp/scratch.txt",
@@ -155,7 +156,7 @@ describePostgres("Postgres execution workspace store", () => {
       checksum: "sha256:scratch-v1",
       updatedAt: "2026-06-29T10:12:00.000Z"
     });
-    await store.upsertWorkspaceFile({
+    await store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       path: "tmp/scratch.txt",
@@ -165,7 +166,7 @@ describePostgres("Postgres execution workspace store", () => {
       updatedAt: "2026-06-29T10:13:00.000Z"
     });
 
-    const deleted = await store.deleteWorkspaceFile({
+    const deleted = await store.executionWorkspaces.deleteWorkspaceFile({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       path: "tmp/scratch.txt",
@@ -181,13 +182,13 @@ describePostgres("Postgres execution workspace store", () => {
       }
     });
     await expect(
-      store.listWorkspaceFiles({
+      store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: fixture.clientInstanceId,
         workspaceId: fixture.workspace.id
       })
     ).resolves.toEqual([]);
     await expect(
-      store.listExecutionWorkspaceObjectsForDeletion({
+      store.executionWorkspaces.listExecutionWorkspaceObjectsForDeletion({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id
       })
@@ -200,7 +201,7 @@ describePostgres("Postgres execution workspace store", () => {
       ])
     });
 
-    const recreated = await store.upsertWorkspaceFile({
+    const recreated = await store.executionWorkspaces.upsertWorkspaceFile({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       path: "tmp/scratch.txt",
@@ -219,7 +220,7 @@ describePostgres("Postgres execution workspace store", () => {
       }
     });
     await expect(
-      store.listExecutionWorkspaceObjectsForDeletion({
+      store.executionWorkspaces.listExecutionWorkspaceObjectsForDeletion({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id
       })
@@ -234,7 +235,7 @@ describePostgres("Postgres execution workspace store", () => {
 
   it("enqueues, claims, completes, and reads a command through separate store connections", async () => {
     const fixture = await createWorkspaceFixture(store);
-    const command = await store.enqueueWorkspaceCommand({
+    const command = await store.executionWorkspaces.enqueueWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       ownerUserId: fixture.ownerUserId,
@@ -261,7 +262,7 @@ describePostgres("Postgres execution workspace store", () => {
       attempts: 0
     });
     await expect(
-      store.countActiveWorkspaceCommands({
+      store.executionWorkspaces.countActiveWorkspaceCommands({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id
       })
@@ -272,7 +273,7 @@ describePostgres("Postgres execution workspace store", () => {
       total: 1
     });
 
-    const claimed = await secondStore.claimNextWorkspaceCommand({
+    const claimed = await secondStore.executionWorkspaces.claimNextWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
       workerId: "worker-a",
       leaseToken: "lease-a",
@@ -288,7 +289,7 @@ describePostgres("Postgres execution workspace store", () => {
       startedAt: "2026-06-29T10:21:00.000Z"
     });
     await expect(
-      store.countActiveWorkspaceCommands({
+      store.executionWorkspaces.countActiveWorkspaceCommands({
         clientInstanceId: fixture.clientInstanceId,
         ownerUserId: fixture.ownerUserId
       })
@@ -311,7 +312,7 @@ describePostgres("Postgres execution workspace store", () => {
         }
       ]
     });
-    const completed = await secondStore.completeWorkspaceCommand({
+    const completed = await secondStore.executionWorkspaces.completeWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
       commandId: command.id,
       leaseToken: "lease-a",
@@ -326,7 +327,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.getWorkspaceCommand({
+      store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         commandId: command.id
       })
@@ -335,7 +336,7 @@ describePostgres("Postgres execution workspace store", () => {
       output
     });
     await expect(
-      store.countActiveWorkspaceCommands({
+      store.executionWorkspaces.countActiveWorkspaceCommands({
         clientInstanceId: fixture.clientInstanceId
       })
     ).resolves.toEqual({
@@ -350,7 +351,7 @@ describePostgres("Postgres execution workspace store", () => {
     const fixture = await createWorkspaceFixture(store);
 
     await Promise.all([
-      store.enqueueWorkspaceCommand({
+      store.executionWorkspaces.enqueueWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         workspaceId: fixture.workspace.id,
         ownerUserId: fixture.ownerUserId,
@@ -358,7 +359,7 @@ describePostgres("Postgres execution workspace store", () => {
         limits: { timeoutSeconds: 60 },
         queuedAt: "2026-06-29T10:25:00.000Z"
       }),
-      secondStore.enqueueWorkspaceCommand({
+      secondStore.executionWorkspaces.enqueueWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         workspaceId: fixture.workspace.id,
         ownerUserId: fixture.ownerUserId,
@@ -369,7 +370,7 @@ describePostgres("Postgres execution workspace store", () => {
     ]);
 
     await expect(
-      store.countActiveWorkspaceCommands({
+      store.executionWorkspaces.countActiveWorkspaceCommands({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id
       })
@@ -390,7 +391,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.failWorkspaceCommand({
+      store.executionWorkspaces.failWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         commandId: command.id,
         leaseToken: "wrong-lease",
@@ -403,7 +404,7 @@ describePostgres("Postgres execution workspace store", () => {
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
-    const failed = await store.failWorkspaceCommand({
+    const failed = await store.executionWorkspaces.failWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
       commandId: command.id,
       leaseToken: "lease-fail",
@@ -436,7 +437,7 @@ describePostgres("Postgres execution workspace store", () => {
 
   it("supports queued and claimed command cancellation", async () => {
     const fixture = await createWorkspaceFixture(store);
-    const queued = await store.enqueueWorkspaceCommand({
+    const queued = await store.executionWorkspaces.enqueueWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       ownerUserId: fixture.ownerUserId,
@@ -446,7 +447,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.requestWorkspaceCommandCancellation({
+      store.executionWorkspaces.requestWorkspaceCommandCancellation({
         clientInstanceId: fixture.clientInstanceId,
         commandId: queued.id,
         reason: "user stopped it",
@@ -463,7 +464,7 @@ describePostgres("Postgres execution workspace store", () => {
       now: "2026-06-29T10:41:00.000Z",
       leaseExpiresAt: "2026-06-29T10:42:00.000Z"
     });
-    const requested = await store.requestWorkspaceCommandCancellation({
+    const requested = await store.executionWorkspaces.requestWorkspaceCommandCancellation({
       clientInstanceId: fixture.clientInstanceId,
       commandId: claimed.id,
       reason: "new user request",
@@ -476,7 +477,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.cancelClaimedWorkspaceCommand({
+      store.executionWorkspaces.cancelClaimedWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         commandId: claimed.id,
         leaseToken: "lease-cancel",
@@ -492,7 +493,7 @@ describePostgres("Postgres execution workspace store", () => {
 
   it("does not clear a lease when cancellation races with command claim", async () => {
     const fixture = await createWorkspaceFixture(store);
-    const command = await store.enqueueWorkspaceCommand({
+    const command = await store.executionWorkspaces.enqueueWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
       workspaceId: fixture.workspace.id,
       ownerUserId: fixture.ownerUserId,
@@ -502,10 +503,11 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     let cancellation:
-      ReturnType<TestPostgresStore["requestWorkspaceCommandCancellation"]> | undefined;
+      | ReturnType<TestPostgresStore["executionWorkspaces"]["requestWorkspaceCommandCancellation"]>
+      | undefined;
     await rawSql.begin(async (tx) => {
       await tx`select id from workspace_commands where id = ${command.id} for update`;
-      cancellation = store.requestWorkspaceCommandCancellation({
+      cancellation = store.executionWorkspaces.requestWorkspaceCommandCancellation({
         clientInstanceId: fixture.clientInstanceId,
         commandId: command.id,
         reason: "user stopped it",
@@ -535,7 +537,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.getWorkspaceCommand({
+      store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         commandId: command.id
       })
@@ -557,7 +559,11 @@ describePostgres("Postgres execution workspace store", () => {
       | Promise<
           | {
               status: "resolved";
-              value: Awaited<ReturnType<TestPostgresStore["requestWorkspaceCommandCancellation"]>>;
+              value: Awaited<
+                ReturnType<
+                  TestPostgresStore["executionWorkspaces"]["requestWorkspaceCommandCancellation"]
+                >
+              >;
             }
           | {
               status: "rejected";
@@ -567,7 +573,7 @@ describePostgres("Postgres execution workspace store", () => {
       | undefined;
     await rawSql.begin(async (tx) => {
       await tx`select id from workspace_commands where id = ${command.id} for update`;
-      cancellation = store
+      cancellation = store.executionWorkspaces
         .requestWorkspaceCommandCancellation({
           clientInstanceId: fixture.clientInstanceId,
           commandId: command.id,
@@ -599,7 +605,7 @@ describePostgres("Postgres execution workspace store", () => {
     }
 
     await expect(
-      store.getWorkspaceCommand({
+      store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         commandId: command.id
       })
@@ -623,7 +629,7 @@ describePostgres("Postgres execution workspace store", () => {
       leaseExpiresAt: "2026-06-29T10:55:00.000Z"
     });
 
-    const recovered = await store.recoverStaleWorkspaceCommands({
+    const recovered = await store.executionWorkspaces.recoverStaleWorkspaceCommands({
       clientInstanceId: fixture.clientInstanceId,
       staleLeaseExpiredBefore: "2026-06-29T10:52:00.000Z",
       recoveredAt: "2026-06-29T10:52:05.000Z",
@@ -648,7 +654,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     await expect(
-      store.getWorkspaceCommand({
+      store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: fixture.clientInstanceId,
         commandId: active.id
       })
@@ -659,20 +665,20 @@ describePostgres("Postgres execution workspace store", () => {
   });
 });
 
-async function createWorkspaceFixture(store: TestPostgresStore): Promise<{
+async function createWorkspaceFixture(store: PlatformStores): Promise<{
   clientInstanceId: ClientInstanceId;
   ownerUserId: string;
-  conversation: Awaited<ReturnType<TestPostgresStore["createConversation"]>>;
+  conversation: Awaited<ReturnType<TestPostgresStore["conversations"]["createConversation"]>>;
   workspace: ExecutionWorkspace;
 }> {
   const clientInstanceId = asClientInstanceId(`client_${globalThis.crypto.randomUUID()}`);
-  const user = await store.createUser({ clientInstanceId, displayLabel: "Workspace owner" });
+  const user = await store.users.createUser({ clientInstanceId, displayLabel: "Workspace owner" });
   const ownerUserId = user.id;
-  const personalWorkspace = await store.ensurePersonalWorkspace({
+  const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
     clientInstanceId,
     userId: user.id
   });
-  const conversation = await store.createConversation({
+  const conversation = await store.conversations.createConversation({
     visibility: "workspace",
     clientInstanceId,
     collaborationWorkspaceId: personalWorkspace.id,
@@ -681,7 +687,7 @@ async function createWorkspaceFixture(store: TestPostgresStore): Promise<{
     title: "Workspace test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });
-  const workspace = await store.ensureExecutionWorkspace({
+  const workspace = await store.executionWorkspaces.ensureExecutionWorkspace({
     clientInstanceId,
     conversationId: conversation.id,
     ownerUserId,
@@ -696,7 +702,7 @@ async function createWorkspaceFixture(store: TestPostgresStore): Promise<{
 }
 
 async function enqueueAndClaim(
-  store: TestPostgresStore,
+  store: PlatformStores,
   fixture: {
     clientInstanceId: ClientInstanceId;
     ownerUserId: string;
@@ -708,7 +714,7 @@ async function enqueueAndClaim(
     leaseExpiresAt: string;
   }
 ) {
-  await store.enqueueWorkspaceCommand({
+  await store.executionWorkspaces.enqueueWorkspaceCommand({
     clientInstanceId: fixture.clientInstanceId,
     workspaceId: fixture.workspace.id,
     ownerUserId: fixture.ownerUserId,
@@ -716,7 +722,7 @@ async function enqueueAndClaim(
     limits: { timeoutSeconds: 60 },
     queuedAt: lease.now
   });
-  const claimed = await store.claimNextWorkspaceCommand({
+  const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
     clientInstanceId: fixture.clientInstanceId,
     workerId: "worker-test",
     leaseToken: lease.leaseToken,

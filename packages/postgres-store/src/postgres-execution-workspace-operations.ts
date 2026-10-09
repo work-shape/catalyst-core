@@ -29,7 +29,7 @@ import {
   createPlatformId
 } from "@vivd-catalyst/core";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
-import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapExecutionWorkspace, mapWorkspaceCommand, mapWorkspaceFile } from "./rows";
 import {
   conversations,
@@ -39,7 +39,7 @@ import {
 } from "./schema";
 
 export async function ensureExecutionWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: EnsureExecutionWorkspaceInput
 ): Promise<ExecutionWorkspace> {
   const now = input.now ? new Date(input.now) : new Date();
@@ -83,7 +83,7 @@ export async function ensureExecutionWorkspace(
 }
 
 export async function getExecutionWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     workspaceId: ExecutionWorkspaceId;
@@ -104,7 +104,7 @@ export async function getExecutionWorkspace(
 }
 
 export async function getExecutionWorkspaceForConversation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -125,7 +125,7 @@ export async function getExecutionWorkspaceForConversation(
 }
 
 export async function upsertWorkspaceFile(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UpsertWorkspaceFileInput
 ): Promise<WorkspaceFile> {
   return db.transaction(async (tx) => {
@@ -198,7 +198,7 @@ export async function upsertWorkspaceFile(
 }
 
 export async function deleteWorkspaceFile(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: DeleteWorkspaceFileInput
 ): Promise<WorkspaceFile | undefined> {
   return db.transaction(async (tx) => {
@@ -255,7 +255,7 @@ export async function deleteWorkspaceFile(
 }
 
 export async function listWorkspaceFiles(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     workspaceId: ExecutionWorkspaceId;
@@ -276,7 +276,7 @@ export async function listWorkspaceFiles(
 }
 
 export async function enqueueWorkspaceCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: EnqueueWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
   return db.transaction(async (tx) => {
@@ -314,7 +314,7 @@ export async function enqueueWorkspaceCommand(
 }
 
 export async function getWorkspaceCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     commandId: WorkspaceCommandId;
@@ -334,7 +334,7 @@ export async function getWorkspaceCommand(
 }
 
 export async function countActiveWorkspaceCommands(
-  db: PostgresDatabase | PostgresTransaction,
+  db: PostgresConnection,
   input: CountActiveWorkspaceCommandsInput
 ): Promise<ActiveWorkspaceCommandCounts> {
   const filters = [
@@ -374,7 +374,7 @@ export async function countActiveWorkspaceCommands(
 }
 
 export async function claimNextWorkspaceCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ClaimWorkspaceCommandInput
 ): Promise<WorkspaceCommand | undefined> {
   const claimed = await db.transaction(async (tx) => {
@@ -424,7 +424,7 @@ export async function claimNextWorkspaceCommand(
 }
 
 export async function completeWorkspaceCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CompleteWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
   const completedAt = new Date(input.completedAt);
@@ -450,7 +450,7 @@ export async function completeWorkspaceCommand(
 }
 
 export async function failWorkspaceCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: FailWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
   const failedAt = new Date(input.failedAt);
@@ -476,7 +476,7 @@ export async function failWorkspaceCommand(
 }
 
 export async function requestWorkspaceCommandCancellation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: RequestWorkspaceCommandCancellationInput
 ): Promise<WorkspaceCommand> {
   const requestedAt = input.requestedAt;
@@ -533,7 +533,7 @@ export async function requestWorkspaceCommandCancellation(
 }
 
 export async function cancelClaimedWorkspaceCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CancelClaimedWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
   const cancelledAt = new Date(input.cancelledAt);
@@ -559,7 +559,7 @@ export async function cancelClaimedWorkspaceCommand(
 }
 
 export async function heartbeatWorkspaceCommand(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: HeartbeatWorkspaceCommandInput
 ): Promise<WorkspaceCommand> {
   const heartbeatAt = new Date(input.heartbeatAt);
@@ -580,7 +580,7 @@ export async function heartbeatWorkspaceCommand(
 }
 
 export async function recoverStaleWorkspaceCommands(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: RecoverStaleWorkspaceCommandsInput
 ): Promise<WorkspaceCommand[]> {
   if (input.limit <= 0) {
@@ -627,7 +627,7 @@ export async function recoverStaleWorkspaceCommands(
 }
 
 export async function listExecutionWorkspaceCleanupTargets(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ListExecutionWorkspaceCleanupTargetsInput
 ): Promise<ExecutionWorkspaceCleanupTarget[]> {
   if (input.limit <= 0) {
@@ -666,14 +666,14 @@ export async function listExecutionWorkspaceCleanupTargets(
 }
 
 export async function listExecutionWorkspaceObjectsForDeletion(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ListExecutionWorkspaceObjectsForDeletionInput
 ): Promise<ExecutionWorkspaceDeletionSummary> {
   return collectExecutionWorkspaceDeletionSummary(db, input);
 }
 
 export async function markExecutionWorkspaceDeleted(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: MarkExecutionWorkspaceDeletedInput
 ): Promise<ExecutionWorkspaceDeletionSummary> {
   const deletedAt = new Date(input.deletedAt);
@@ -727,7 +727,7 @@ export async function markExecutionWorkspaceDeleted(
 }
 
 async function requireActiveConversation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -750,7 +750,7 @@ async function requireActiveConversation(
 }
 
 async function requireActiveWorkspace(
-  db: PostgresDatabase | PostgresTransaction,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     workspaceId: ExecutionWorkspaceId;
@@ -794,7 +794,7 @@ function claimedCommandWhere(
 }
 
 async function collectExecutionWorkspaceDeletionSummary(
-  db: PostgresDatabase | PostgresTransaction,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

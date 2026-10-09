@@ -16,7 +16,7 @@ import {
   createWorkspaceAccessRequestId,
   validateWorkspaceCreation
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
+import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
 import {
   mapCollaborationWorkspace,
@@ -33,10 +33,10 @@ import {
   userIdentities
 } from "./schema";
 
-type WorkspaceDatabase = PostgresDatabase | PostgresTransaction;
+type WorkspaceDatabase = PostgresConnection;
 
 export async function createWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CreateWorkspaceInput
 ): Promise<CollaborationWorkspace> {
   validateWorkspaceCreation(input);
@@ -62,7 +62,7 @@ export async function getWorkspace(
 }
 
 export async function listWorkspacesForUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listWorkspacesForUser"]>[0]
 ): Promise<CollaborationWorkspaceWithRole[]> {
   const rows = await db
@@ -89,7 +89,7 @@ export async function listWorkspacesForUser(
 }
 
 export async function listDiscoverableWorkspaces(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listDiscoverableWorkspaces"]>[0]
 ): Promise<CollaborationWorkspace[]> {
   const rows = await db
@@ -107,7 +107,7 @@ export async function listDiscoverableWorkspaces(
 }
 
 export async function listSharedWorkspaces(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listSharedWorkspaces"]>[0]
 ): Promise<CollaborationWorkspace[]> {
   const rows = await db
@@ -124,7 +124,7 @@ export async function listSharedWorkspaces(
 }
 
 export async function updateWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: UpdateWorkspaceInput
 ): Promise<CollaborationWorkspace> {
   const workspace = await requireWorkspace(
@@ -170,7 +170,7 @@ export async function updateWorkspace(
 }
 
 export async function deleteWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]
 ): Promise<CollaborationWorkspace> {
   return db.transaction(async (tx) => {
@@ -248,7 +248,7 @@ export async function deleteWorkspace(
 }
 
 export async function ensurePersonalWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["ensurePersonalWorkspace"]>[0]
 ): Promise<CollaborationWorkspace> {
   return db.transaction(async (tx) => ensurePersonalWorkspaceInTransaction(tx, input));
@@ -301,7 +301,7 @@ export async function ensurePersonalWorkspaceInTransaction(
 }
 
 export async function addMembership(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["addMembership"]>[0]
 ): Promise<WorkspaceMembership> {
   const workspace = await requireWorkspace(
@@ -324,7 +324,7 @@ export async function addMembership(
 }
 
 export async function updateMembershipRole(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["updateMembershipRole"]>[0]
 ): Promise<WorkspaceMembership> {
   const workspace = await requireWorkspace(
@@ -345,7 +345,7 @@ export async function updateMembershipRole(
 }
 
 export async function removeMembership(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["removeMembership"]>[0]
 ): Promise<WorkspaceMembership> {
   const workspace = await requireWorkspace(
@@ -365,7 +365,7 @@ export async function removeMembership(
 }
 
 export async function listMemberships(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listMemberships"]>[0]
 ): Promise<WorkspaceMembership[]> {
   await requireWorkspace(db, input.clientInstanceId, input.collaborationWorkspaceId);
@@ -386,7 +386,7 @@ export async function listMemberships(
 }
 
 export async function searchMemberCandidates(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["searchMemberCandidates"]>[0]
 ): Promise<WorkspaceMemberCandidate[]> {
   await requireWorkspace(db, input.clientInstanceId, input.collaborationWorkspaceId);
@@ -477,7 +477,7 @@ export async function getMembership(
 }
 
 export async function createAccessRequest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["createAccessRequest"]>[0]
 ): Promise<WorkspaceAccessRequest> {
   const workspace = await requireWorkspace(
@@ -509,7 +509,7 @@ export async function createAccessRequest(
 }
 
 export async function deleteAccessRequest(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["deleteAccessRequest"]>[0]
 ): Promise<WorkspaceAccessRequest> {
   const [row] = await db
@@ -521,7 +521,7 @@ export async function deleteAccessRequest(
 }
 
 export async function listAccessRequestsForWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["listAccessRequestsForWorkspace"]>[0]
 ): Promise<WorkspaceAccessRequest[]> {
   await requireWorkspace(db, input.clientInstanceId, input.collaborationWorkspaceId);
@@ -554,7 +554,7 @@ export async function getAccessRequest(
 }
 
 export async function deleteAccessRequestsForUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["deleteAccessRequestsForUser"]>[0]
 ): Promise<number> {
   const rows = await db
@@ -570,7 +570,7 @@ export async function deleteAccessRequestsForUser(
 }
 
 export async function removeMembershipsForUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["removeMembershipsForUser"]>[0]
 ): Promise<number> {
   const sharedWorkspaceRows = await db
@@ -600,7 +600,7 @@ export async function removeMembershipsForUser(
 }
 
 export async function deletePersonalWorkspaceForUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<CollaborationWorkspaceStore["deletePersonalWorkspaceForUser"]>[0]
 ): Promise<CollaborationWorkspace> {
   return db.transaction(async (tx) => {

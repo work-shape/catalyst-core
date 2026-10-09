@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import { describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -8,7 +9,6 @@ import {
 } from "@vivd-catalyst/core";
 import { settled, waitUntilBlocked } from "./support/postgres-concurrency-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
-import type { TestPostgresStore } from "./support/test-instance";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -19,8 +19,8 @@ describe("Postgres conversation expiry claim", () => {
 
   async function createFixture(label: string) {
     const clientInstanceId = db.clientInstance(label);
-    const user = await db.store.createUser({ clientInstanceId, displayLabel: "Author" });
-    const workspace = await db.store.ensurePersonalWorkspace({
+    const user = await db.store.users.createUser({ clientInstanceId, displayLabel: "Author" });
+    const workspace = await db.store.workspaces.ensurePersonalWorkspace({
       clientInstanceId,
       userId: user.id
     });
@@ -31,7 +31,7 @@ describe("Postgres conversation expiry claim", () => {
     };
 
     const createConversation = (title: string, retainedUntil = "2999-01-01T00:00:00.000Z") =>
-      db.store.createConversation({
+      db.store.conversations.createConversation({
         visibility: "workspace",
         clientInstanceId,
         collaborationWorkspaceId: workspace.id,
@@ -49,7 +49,7 @@ describe("Postgres conversation expiry claim", () => {
       `;
     };
     const createFile = (conversation: Conversation, name: string) =>
-      db.store.createManagedFile({
+      db.store.files.createManagedFile({
         clientInstanceId,
         ownerUserId: user.id,
         filename: `${name}.txt`,
@@ -58,7 +58,7 @@ describe("Postgres conversation expiry claim", () => {
         objectKey: `files/${conversation.id}/${name}`
       });
     const attach = (conversation: Conversation, file: ManagedFileRecord) =>
-      db.store.createConversationAttachment({
+      db.store.files.createConversationAttachment({
         clientInstanceId,
         conversationId: conversation.id,
         fileId: file.id,
@@ -72,7 +72,7 @@ describe("Postgres conversation expiry claim", () => {
       const conversation = await createConversation(title);
       const file = await createFile(conversation, `${title}-removed`);
       const attachment = await attach(conversation, file);
-      await db.store.deleteDraftAttachment({
+      await db.store.files.deleteDraftAttachment({
         clientInstanceId,
         conversationId: conversation.id,
         attachmentId: attachment.id,
@@ -89,7 +89,7 @@ describe("Postgres conversation expiry claim", () => {
     const claimAcceptance = async (conversation: Conversation) => {
       const id = globalThis.crypto.randomUUID();
       const idempotencyKey = `key_${id}`;
-      const claim = await db.store.claimRunStartCommand({
+      const claim = await db.store.agentRuns.claimRunStartCommand({
         clientInstanceId,
         ownerUserId: user.id,
         idempotencyKey,
@@ -136,9 +136,9 @@ describe("Postgres conversation expiry claim", () => {
       return { messages: messages?.count, runs: runs?.count };
     };
     const statusOf = async (conversation: Conversation) =>
-      (await db.store.getConversation(clientInstanceId, conversation.id))?.status;
-    const expire = (store: TestPostgresStore, conversation: Conversation) =>
-      store.expireConversation({
+      (await db.store.conversations.getConversation(clientInstanceId, conversation.id))?.status;
+    const expire = (store: PlatformStores, conversation: Conversation) =>
+      store.conversations.expireConversation({
         clientInstanceId,
         conversationId: conversation.id,
         expiredAt: criteria.now,
@@ -166,12 +166,18 @@ describe("Postgres conversation expiry claim", () => {
     const fixture = await createFixture("acceptance_wins");
     const draft = await fixture.createAbandonedDraft("draft");
     await expect(
-      db.store.listExpiredConversations({ ...fixture.scope, ...fixture.criteria, limit: 10 })
+      db.store.conversations.listExpiredConversations({
+        ...fixture.scope,
+        ...fixture.criteria,
+        limit: 10
+      })
     ).resolves.toEqual([expect.objectContaining({ id: draft.conversation.id })]);
     const acceptanceInput = await fixture.claimAcceptance(draft.conversation);
     const held = await fixture.lockCommand(acceptanceInput.idempotencyKey);
 
-    const acceptance = settled(db.store.prepareConversationRunStart(acceptanceInput.input));
+    const acceptance = settled(
+      db.store.agentRuns.prepareConversationRunStart(acceptanceInput.input)
+    );
     await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
     const expiry = settled(fixture.expire(db.secondStore, draft.conversation));
     await waitUntilBlocked(db.sql, { waiter: db.second, holder: db.first });
@@ -181,15 +187,18 @@ describe("Postgres conversation expiry claim", () => {
     expect(await expiry).toEqual({ status: "fulfilled", value: { status: "not_expired" } });
     await expect(fixture.statusOf(draft.conversation)).resolves.toBe("active");
     await expect(
-      db.store.listMessages({ ...fixture.scope, conversationId: draft.conversation.id })
+      db.store.conversations.listMessages({
+        ...fixture.scope,
+        conversationId: draft.conversation.id
+      })
     ).resolves.toEqual([expect.objectContaining({ text: "First message" })]);
     await expect(fixture.countRows(draft.conversation)).resolves.toEqual({ messages: 1, runs: 1 });
     // The removed upload is still restorable: its file and its attachment row are untouched.
     await expect(
-      db.store.getManagedFile({ ...fixture.scope, fileId: draft.file.id })
+      db.store.files.getManagedFile({ ...fixture.scope, fileId: draft.file.id })
     ).resolves.toMatchObject({ status: "available" });
     await expect(
-      db.store.reactivateDraftAttachment({
+      db.store.files.reactivateDraftAttachment({
         ...fixture.scope,
         conversationId: draft.conversation.id,
         attachmentId: draft.attachment.id,
@@ -201,7 +210,7 @@ describe("Postgres conversation expiry claim", () => {
   it("refuses a message once expiry holds the lock and stores nothing of it", async () => {
     const fixture = await createFixture("expiry_wins");
     const conversation = await fixture.createConversation("due", "2024-01-01T00:00:00.000Z");
-    const existing = await db.store.appendMessage({
+    const existing = await db.store.conversations.appendMessage({
       ...fixture.scope,
       conversationId: conversation.id,
       role: "user",
@@ -216,7 +225,9 @@ describe("Postgres conversation expiry claim", () => {
 
     const expiry = settled(fixture.expire(db.store, conversation));
     await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
-    const acceptance = settled(db.secondStore.prepareConversationRunStart(acceptanceInput.input));
+    const acceptance = settled(
+      db.secondStore.agentRuns.prepareConversationRunStart(acceptanceInput.input)
+    );
     await waitUntilBlocked(db.sql, { waiter: db.second, holder: db.first });
     await held.commit();
 
@@ -253,7 +264,9 @@ describe("Postgres conversation expiry claim", () => {
       `
     );
 
-    const acceptance = settled(db.store.prepareConversationRunStart(acceptanceInput.input));
+    const acceptance = settled(
+      db.store.agentRuns.prepareConversationRunStart(acceptanceInput.input)
+    );
     await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
     const expiry = settled(fixture.expire(db.secondStore, draft.conversation));
     await waitUntilBlocked(db.sql, { waiter: db.second, holder: db.first });
@@ -295,7 +308,10 @@ describe("Postgres conversation expiry claim", () => {
     expect(await expiry).toEqual({ status: "fulfilled", value: { status: "not_expired" } });
     await expect(fixture.statusOf(draft.conversation)).resolves.toBe("active");
     await expect(
-      db.store.listDraftAttachments({ ...fixture.scope, conversationId: draft.conversation.id })
+      db.store.files.listDraftAttachments({
+        ...fixture.scope,
+        conversationId: draft.conversation.id
+      })
     ).resolves.toEqual([expect.objectContaining({ fileId: file.id, status: "ready" })]);
   });
 
@@ -309,7 +325,7 @@ describe("Postgres conversation expiry claim", () => {
     );
 
     const restore = settled(
-      db.store.reactivateDraftAttachment({
+      db.store.files.reactivateDraftAttachment({
         ...fixture.scope,
         conversationId: draft.conversation.id,
         attachmentId: draft.attachment.id,
@@ -325,7 +341,10 @@ describe("Postgres conversation expiry claim", () => {
     expect(await expiry).toEqual({ status: "fulfilled", value: { status: "not_expired" } });
     await expect(fixture.statusOf(draft.conversation)).resolves.toBe("active");
     await expect(
-      db.store.listDraftAttachments({ ...fixture.scope, conversationId: draft.conversation.id })
+      db.store.files.listDraftAttachments({
+        ...fixture.scope,
+        conversationId: draft.conversation.id
+      })
     ).resolves.toEqual([expect.objectContaining({ id: draft.attachment.id, status: "ready" })]);
   });
 
@@ -341,7 +360,7 @@ describe("Postgres conversation expiry claim", () => {
       code: "NOT_FOUND"
     });
     await expect(
-      db.store.reactivateDraftAttachment({
+      db.store.files.reactivateDraftAttachment({
         ...fixture.scope,
         conversationId: draft.conversation.id,
         attachmentId: draft.attachment.id,
@@ -359,7 +378,9 @@ describe("Postgres conversation expiry claim", () => {
     const acceptanceInput = await fixture.claimAcceptance(conversation);
     const held = await fixture.lockCommand(acceptanceInput.idempotencyKey);
 
-    const acceptance = settled(db.store.prepareConversationRunStart(acceptanceInput.input));
+    const acceptance = settled(
+      db.store.agentRuns.prepareConversationRunStart(acceptanceInput.input)
+    );
     await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
     const expiry = settled(fixture.expire(db.secondStore, conversation));
     await waitUntilBlocked(db.sql, { waiter: db.second, holder: db.first });
@@ -369,18 +390,26 @@ describe("Postgres conversation expiry claim", () => {
     // The message does not move the date, but its run is in progress: the next pass takes it.
     expect(await expiry).toEqual({ status: "fulfilled", value: { status: "not_expired" } });
     await expect(
-      db.store.listExpiredConversations({ ...fixture.scope, ...fixture.criteria, limit: 10 })
+      db.store.conversations.listExpiredConversations({
+        ...fixture.scope,
+        ...fixture.criteria,
+        limit: 10
+      })
     ).resolves.toEqual([]);
     await expect(fixture.countRows(conversation)).resolves.toEqual({ messages: 1, runs: 1 });
 
-    await db.store.updateAgentRunStatus({
+    await db.store.agentRuns.updateAgentRunStatus({
       ...fixture.scope,
       runId: acceptanceInput.input.run.id,
       status: "completed",
       updatedAt: new Date().toISOString()
     });
     await expect(
-      db.store.listExpiredConversations({ ...fixture.scope, ...fixture.criteria, limit: 10 })
+      db.store.conversations.listExpiredConversations({
+        ...fixture.scope,
+        ...fixture.criteria,
+        limit: 10
+      })
     ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
     await expect(fixture.expire(db.secondStore, conversation)).resolves.toMatchObject({
       status: "expired",
@@ -392,7 +421,7 @@ describe("Postgres conversation expiry claim", () => {
   it("claims exactly the conversations the list returns", async () => {
     const fixture = await createFixture("predicate");
     const due = await fixture.createConversation("due", "2024-01-01T00:00:00.000Z");
-    await db.store.appendMessage({
+    await db.store.conversations.appendMessage({
       ...fixture.scope,
       conversationId: due.id,
       role: "user",
@@ -400,7 +429,7 @@ describe("Postgres conversation expiry claim", () => {
     });
     const abandoned = (await fixture.createAbandonedDraft("abandoned")).conversation;
     const started = await fixture.createConversation("started");
-    await db.store.appendMessage({
+    await db.store.conversations.appendMessage({
       ...fixture.scope,
       conversationId: started.id,
       role: "user",
@@ -412,7 +441,9 @@ describe("Postgres conversation expiry claim", () => {
     await fixture.age(drafting);
     const fresh = await fixture.createConversation("fresh");
     const running = await fixture.createConversation("running", "2024-01-01T00:00:00.000Z");
-    await db.store.prepareConversationRunStart((await fixture.claimAcceptance(running)).input);
+    await db.store.agentRuns.prepareConversationRunStart(
+      (await fixture.claimAcceptance(running)).input
+    );
     const everything = [due, abandoned, started, drafting, fresh, running];
 
     const expectClaimsToFollowTheList = async (
@@ -420,11 +451,15 @@ describe("Postgres conversation expiry claim", () => {
       reasons: Record<string, "retention_due" | "abandoned_draft">
     ) => {
       const listed = (
-        await db.store.listExpiredConversations({ ...fixture.scope, ...criteria, limit: 10 })
+        await db.store.conversations.listExpiredConversations({
+          ...fixture.scope,
+          ...criteria,
+          limit: 10
+        })
       ).map(({ id }) => id);
       expect([...listed].sort()).toEqual(Object.keys(reasons).sort());
       for (const conversation of everything) {
-        const result = await db.secondStore.expireConversation({
+        const result = await db.secondStore.conversations.expireConversation({
           ...fixture.scope,
           conversationId: conversation.id,
           expiredAt: fixture.criteria.now,
@@ -453,10 +488,10 @@ describe("Postgres conversation expiry claim", () => {
   it("lists the conversations that still have data to clean up", async () => {
     const fixture = await createFixture("pending_cleanup");
     const pending = () =>
-      db.store.listConversationsPendingObjectCleanup({ ...fixture.scope, limit: 10 });
+      db.store.files.listConversationsPendingObjectCleanup({ ...fixture.scope, limit: 10 });
     const withMessage = async (title: string) => {
       const conversation = await fixture.createConversation(title);
-      await db.store.appendMessage({
+      await db.store.conversations.appendMessage({
         ...fixture.scope,
         conversationId: conversation.id,
         role: "user",
@@ -465,13 +500,13 @@ describe("Postgres conversation expiry claim", () => {
       return conversation;
     };
     const deleteConversation = (conversation: Conversation) =>
-      db.store.deleteConversation({
+      db.store.conversations.deleteConversation({
         ...fixture.scope,
         conversationId: conversation.id,
         deletedAt: fixture.criteria.now
       });
     const createArtifact = (conversation: Conversation, name: string) =>
-      db.store.createManagedArtifact({
+      db.store.files.createManagedArtifact({
         ...fixture.scope,
         conversationId: conversation.id,
         kind: "test.preview",
@@ -494,7 +529,7 @@ describe("Postgres conversation expiry claim", () => {
     await createArtifact(withArtifact, "left");
     const withPreview = await withMessage("deleted with preview state");
     const previewSource = await createArtifact(withPreview, "source");
-    await db.store.enqueueArtifactPreviewJob({
+    await db.store.files.enqueueArtifactPreviewJob({
       ...fixture.scope,
       conversationId: withPreview.id,
       sourceArtifactId: previewSource.id,
@@ -515,21 +550,21 @@ describe("Postgres conversation expiry claim", () => {
     const expected = [withFile.id, withArtifact.id, withPreview.id].sort();
     await expect(pending().then((ids) => [...ids].sort())).resolves.toEqual(expected);
     await expect(
-      db.store.listConversationsPendingObjectCleanup({ ...fixture.scope, limit: 2 })
+      db.store.files.listConversationsPendingObjectCleanup({ ...fixture.scope, limit: 2 })
     ).resolves.toHaveLength(2);
     await expect(
-      db.store.listConversationsPendingObjectCleanup({ ...fixture.scope, limit: 0 })
+      db.store.files.listConversationsPendingObjectCleanup({ ...fixture.scope, limit: 0 })
     ).resolves.toEqual([]);
 
     // The claim marked the attachment row deleted; the file behind it is what is left.
     await expect(
-      db.store.getConversationAttachment({
+      db.store.files.getConversationAttachment({
         ...fixture.scope,
         attachmentId: withFileAttachment.id
       })
     ).resolves.toBeUndefined();
     for (const conversation of [withFile, withArtifact, withPreview]) {
-      await db.store.markConversationManagedObjectsDeleted({
+      await db.store.files.markConversationManagedObjectsDeleted({
         ...fixture.scope,
         conversationId: conversation.id,
         deletedAt: fixture.criteria.now

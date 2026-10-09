@@ -18,7 +18,7 @@ export function registerAuditRoutes(route: Route, options: ChatServerOptions): v
       context,
       auditType: "governance.audit_events_viewed"
     });
-    return options.auditEventStore.listAuditEvents({
+    return options.stores.audit.listAuditEvents({
       clientInstanceId: options.clientInstanceId,
       limit: 100
     });
@@ -33,7 +33,7 @@ export function registerAuditRoutes(route: Route, options: ChatServerOptions): v
       context,
       auditType: "governance.audit_events_viewed"
     });
-    const events = await options.auditEventStore.listAuditEvents({
+    const events = await options.stores.audit.listAuditEvents({
       clientInstanceId: options.clientInstanceId,
       limit: AUDIT_EVENT_FETCH_LIMIT
     });

@@ -236,7 +236,7 @@ export class ConfigAssetWorkflow {
       ? (command.collaborationWorkspaceIds ?? []).map(asCollaborationWorkspaceId)
       : [];
     for (const collaborationWorkspaceId of collaborationWorkspaceIds) {
-      const workspace = await this.options.userStore.getWorkspace(
+      const workspace = await this.options.stores.workspaces.getWorkspace(
         this.options.clientInstanceId,
         collaborationWorkspaceId
       );
@@ -268,7 +268,7 @@ export class ConfigAssetWorkflow {
 
   /** The Shared Workspaces an instance admin can make an agent available in. */
   async listAdministeredWorkspaces() {
-    const workspaces = await this.options.userStore.listSharedWorkspaces({
+    const workspaces = await this.options.stores.workspaces.listSharedWorkspaces({
       clientInstanceId: this.options.clientInstanceId
     });
     return workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name }));

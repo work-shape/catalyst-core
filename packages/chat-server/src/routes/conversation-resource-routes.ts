@@ -13,7 +13,7 @@ export function registerConversationResourceRoutes(route: Route, options: ChatSe
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     return listConversationResources({
-      store: options.conversationStore,
+      store: options.stores,
       clientInstanceId: options.clientInstanceId,
       conversationId
     });
@@ -22,7 +22,7 @@ export function registerConversationResourceRoutes(route: Route, options: ChatSe
   route(apiOperations.getStructuredDataResource, async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
-    const resource = await options.conversationStore.getStructuredDataResource({
+    const resource = await options.stores.structuredData.getStructuredDataResource({
       clientInstanceId: options.clientInstanceId,
       conversationId,
       structuredDataResourceId: asStructuredDataResourceId(
@@ -32,7 +32,7 @@ export function registerConversationResourceRoutes(route: Route, options: ChatSe
     if (!resource) {
       throw new AppError("NOT_FOUND", "Structured data resource is not available");
     }
-    const attachments = await options.conversationStore.listSentConversationAttachments({
+    const attachments = await options.stores.files.listSentConversationAttachments({
       clientInstanceId: options.clientInstanceId,
       conversationId
     });

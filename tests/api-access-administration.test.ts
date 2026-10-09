@@ -83,7 +83,7 @@ describe("API Access administration", () => {
     const revoked = await client.apiAccess.revokeCredential(createdCredential.credential.id);
     expect(revoked.revokedAt).toEqual(expect.any(String));
 
-    const events = await fixture.store.listAuditEvents({
+    const events = await fixture.store.audit.listAuditEvents({
       clientInstanceId: fixture.clientInstanceId,
       limit: 100
     });
@@ -206,23 +206,23 @@ async function createFixture() {
   const clientInstanceId = asClientInstanceId("api-access-admin-test");
   const store = createTestInstance().stores;
   const records = {
-    superadmin: await store.createUser({
+    superadmin: await store.users.createUser({
       clientInstanceId,
       displayLabel: "Superadmin",
       roles: ["superadmin"]
     }),
-    admin: await store.createUser({
+    admin: await store.users.createUser({
       clientInstanceId,
       displayLabel: "Admin",
       roles: ["admin"]
     }),
-    "admin-manager": await store.createUser({
+    "admin-manager": await store.users.createUser({
       clientInstanceId,
       displayLabel: "API access manager",
       roles: ["admin"],
       permissions: ["api_access.manage"]
     }),
-    user: await store.createUser({
+    user: await store.users.createUser({
       clientInstanceId,
       displayLabel: "User",
       roles: ["user"]
@@ -251,7 +251,7 @@ async function createFixture() {
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
     tools: []
   });
-  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store });
+  const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
   const server = await createTestInstance({
     server: {
       config,
@@ -270,19 +270,16 @@ async function createFixture() {
           return { ...user, correlationId: request.correlationId };
         }
       },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      apiAccessStore: store,
+      stores: store,
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: config.usage.budget,
         safeguards: config.usage.safeguards,
         costs: config.usage.costs
       }),
       auditRecorder,
       configAssets: {
-        store,
+        store: store.configAssets,
         source: {
           async getSnapshot() {
             return { version: 0, agents: [], skills: [] };

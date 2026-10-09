@@ -24,9 +24,12 @@ describePostgres("Postgres approval request store", () => {
     ).stores;
     const sql = postgres(databaseUrl!, { max: 1 });
     const clientInstanceId = asClientInstanceId(`approval_${globalThis.crypto.randomUUID()}`);
-    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
-    const workspace = await store.ensurePersonalWorkspace({ clientInstanceId, userId: owner.id });
-    const conversation = await store.createConversation({
+    const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const workspace = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: owner.id
+    });
+    const conversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: workspace.id,
@@ -39,7 +42,7 @@ describePostgres("Postgres approval request store", () => {
       { id: "example_check", status: "warned", message: "Review the proposed content." }
     ];
     try {
-      const request = await store.createApprovalRequest({
+      const request = await store.approvals.createApprovalRequest({
         clientInstanceId,
         kind: "fake",
         summary: "Proposed",
@@ -55,25 +58,27 @@ describePostgres("Postgres approval request store", () => {
       });
       expect(request).toMatchObject({ status: "pending", checks });
       expect(
-        await store.getApprovalRequest({
+        await store.approvals.getApprovalRequest({
           clientInstanceId: asClientInstanceId("other"),
           requestId: request.id
         })
       ).toBeUndefined();
       expect(
-        await store.listApprovalRequests({
+        await store.approvals.listApprovalRequests({
           clientInstanceId,
           kinds: ["fake"],
           conversationId: conversation.id
         })
       ).toEqual([request]);
-      expect(await store.listApprovalRequests({ clientInstanceId, kinds: [] })).toEqual([]);
-      expect(await store.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })).toBe(
-        1
+      expect(await store.approvals.listApprovalRequests({ clientInstanceId, kinds: [] })).toEqual(
+        []
       );
+      expect(
+        await store.approvals.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })
+      ).toBe(1);
       let applied = 0;
       const transition = () =>
-        store.transitionPendingApprovalRequest({
+        store.approvals.transitionPendingApprovalRequest({
           clientInstanceId,
           requestId: request.id,
           resolve: async () => {
@@ -96,15 +101,18 @@ describePostgres("Postgres approval request store", () => {
         reason: { code: "CONFLICT" }
       });
       expect(applied).toBe(1);
-      const approved = await store.getApprovalRequest({ clientInstanceId, requestId: request.id });
+      const approved = await store.approvals.getApprovalRequest({
+        clientInstanceId,
+        requestId: request.id
+      });
       if (!approved) {
         throw new Error("Expected approved request");
       }
       await Promise.all([
-        store.appendApprovalDecision(approved),
-        store.appendApprovalDecision(approved)
+        store.approvals.appendApprovalDecision(approved),
+        store.approvals.appendApprovalDecision(approved)
       ]);
-      const history = await store.listMessages({
+      const history = await store.conversations.listMessages({
         clientInstanceId,
         conversationId: conversation.id
       });
@@ -114,7 +122,7 @@ describePostgres("Postgres approval request store", () => {
         status: "approved",
         decidedByLabel: "Reviewer"
       });
-      const reverted = await store.transitionApprovedApprovalRequest({
+      const reverted = await store.approvals.transitionApprovedApprovalRequest({
         clientInstanceId,
         requestId: request.id,
         resolve: async (current) => ({
@@ -128,30 +136,37 @@ describePostgres("Postgres approval request store", () => {
           }
         })
       });
-      await store.appendApprovalDecision(reverted);
+      await store.approvals.appendApprovalDecision(reverted);
       expect(
-        (await store.listMessages({ clientInstanceId, conversationId: conversation.id })).map(
-          (message) => readApprovalDecisionMetadata(message.metadata)?.status
-        )
+        (
+          await store.conversations.listMessages({
+            clientInstanceId,
+            conversationId: conversation.id
+          })
+        ).map((message) => readApprovalDecisionMetadata(message.metadata)?.status)
       ).toEqual(["approved", "reverted"]);
 
       expect(
-        await store.getApprovalRequest({ clientInstanceId, requestId: request.id })
+        await store.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id })
       ).toMatchObject({
         status: "reverted",
         checks,
         applyResult: { value: "applied" },
         decision: { decidedByLabel: "Reviewer" }
       });
-      expect(await store.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })).toBe(
-        0
-      );
       expect(
-        await store.listApprovalRequests({ clientInstanceId, kinds: ["fake"], status: "pending" })
+        await store.approvals.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })
+      ).toBe(0);
+      expect(
+        await store.approvals.listApprovalRequests({
+          clientInstanceId,
+          kinds: ["fake"],
+          status: "pending"
+        })
       ).toEqual([]);
       const queued = await Promise.all(
         Array.from({ length: 205 }, () =>
-          store.createApprovalRequest({
+          store.approvals.createApprovalRequest({
             clientInstanceId,
             kind: "fake",
             summary: "Queued",
@@ -160,7 +175,7 @@ describePostgres("Postgres approval request store", () => {
           })
         )
       );
-      await store.createApprovalRequest({
+      await store.approvals.createApprovalRequest({
         clientInstanceId,
         kind: "other",
         summary: "Unrelated",
@@ -174,11 +189,15 @@ describePostgres("Postgres approval request store", () => {
         )
         .slice(0, 200);
       expect(
-        await store.listApprovalRequests({ clientInstanceId, kinds: ["fake"], status: "pending" })
+        await store.approvals.listApprovalRequests({
+          clientInstanceId,
+          kinds: ["fake"],
+          status: "pending"
+        })
       ).toEqual(newest);
-      expect(await store.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })).toBe(
-        205
-      );
+      expect(
+        await store.approvals.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })
+      ).toBe(205);
     } finally {
       await sql`delete from approval_requests where client_instance_id = ${clientInstanceId}`;
       await sql`delete from conversations where client_instance_id = ${clientInstanceId}`;

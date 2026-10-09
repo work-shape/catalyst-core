@@ -90,7 +90,7 @@ describe("client instance app vertical slice", () => {
       collaborationWorkspaceId: string;
       createdByUserId: string;
     };
-    await seedConversationMessage(app.stores, personalConversation.id);
+    await seedConversationMessage(app.stores.conversations, personalConversation.id);
 
     const firstPartyListing = await app.call("listCollaborationWorkspaces", {
       headers: { "x-dev-user-id": "superadmin-1" }
@@ -102,7 +102,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(firstPartyCreation.statusCode).toBe(200);
     const sharedWorkspaceId = (firstPartyCreation.json() as { id: string }).id;
-    await app.stores.addMembership({
+    await app.stores.workspaces.addMembership({
       clientInstanceId: asClientInstanceId("demo-local"),
       collaborationWorkspaceId: asCollaborationWorkspaceId(sharedWorkspaceId),
       userId: asUserId(personalConversation.createdByUserId),
@@ -114,7 +114,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(sharedConversation.statusCode).toBe(200);
     const sharedConversationId = (sharedConversation.json() as { id: string }).id;
-    await seedConversationMessage(app.stores, sharedConversationId);
+    await seedConversationMessage(app.stores.conversations, sharedConversationId);
 
     const personalConversations = await app.call("listConversations", {
       headers: { authorization: `Bearer ${token}` }
@@ -157,7 +157,7 @@ describe("client instance app vertical slice", () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const store = createTestInstance().stores;
     const config = createTestConfig();
-    const profile = await store.createUser({
+    const profile = await store.users.createUser({
       clientInstanceId,
       displayLabel: "Standalone user",
       email: "standalone@example.test"
@@ -179,7 +179,7 @@ describe("client instance app vertical slice", () => {
       expect.arrayContaining(["collaboration_workspace:read", "collaboration_workspace:manage"])
     );
     const usageGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
@@ -195,11 +195,9 @@ describe("client instance app vertical slice", () => {
             return standaloneUser;
           }
         },
-        conversationStore: store,
-        auditEventStore: store,
-        userStore: store,
+        stores: store,
         usageGovernance,
-        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
         agentRuntime: createMissingRuntime(),
         modelProvider: createUnusedModelProvider()
       }
@@ -400,14 +398,14 @@ describe("client instance app vertical slice", () => {
     };
     const jane = await issueFor("customer-jane");
     const john = await issueFor("customer-john");
-    const workspace = await app.stores.createWorkspace({
+    const workspace = await app.stores.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Delegated",
       defaultConversationVisibility: "private",
       creatorUserId: john.userId
     });
-    await app.stores.addMembership({
+    await app.stores.workspaces.addMembership({
       clientInstanceId,
       collaborationWorkspaceId: workspace.id,
       userId: jane.userId,
@@ -447,7 +445,7 @@ describe("client instance app vertical slice", () => {
     const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
@@ -470,11 +468,9 @@ describe("client instance app vertical slice", () => {
             return createTestUser("superadmin-1", clientInstanceId);
           }
         },
-        conversationStore: store,
-        auditEventStore: store,
-        userStore: store,
+        stores: store,
         usageGovernance,
-        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
         agentRuntime: createMissingRuntime(),
         modelProvider: createUnusedModelProvider(),
         standaloneAuth: {

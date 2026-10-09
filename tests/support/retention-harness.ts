@@ -17,7 +17,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
+import type { PostgresStores } from "@vivd-catalyst/postgres-store";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 import { completeServerOptions } from "./test-instance";
@@ -50,7 +50,7 @@ export function createTestManagedObjectAccess(input: {
  */
 export function createRetentionOptions(input: {
   clientInstanceId: ClientInstanceId;
-  store: InMemoryPlatformStore | PostgresPlatformStore;
+  store: InMemoryPlatformStore | PostgresStores;
   attachments?: ChatAttachmentService;
   workspaceObjects?: { deleteObject(key: string): Promise<void> };
   expireConversations?: boolean;
@@ -95,24 +95,22 @@ export function createRetentionOptions(input: {
           return input.authenticate(Array.isArray(header) ? header[0] : header);
         }
       },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
+      stores: store,
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: config.usage.budget,
         safeguards: config.usage.safeguards,
         costs: config.usage.costs
       }),
       auditRecorder: new StoreBackedAuditRecorder({
         clientInstanceId: input.clientInstanceId,
-        store
+        store: store.audit
       }),
       agentRuntime: createMissingRuntime(),
       attachments: input.attachments,
       executionWorkspaceCleanup: input.workspaceObjects
         ? {
-            store,
+            store: store.executionWorkspaces,
             objects: input.workspaceObjects,
             jobOptions: {
               checkIntervalMs: 0,
@@ -176,12 +174,12 @@ export async function createAttachedObjects(input: {
 
 /** An execution workspace with one stored file, as a run leaves it behind. */
 export async function createExecutionWorkspaceData(input: {
-  store: InMemoryPlatformStore | PostgresPlatformStore;
+  store: InMemoryPlatformStore | PostgresStores;
   byteStore: RecordingByteStore;
   clientInstanceId: ClientInstanceId;
   conversation: Conversation;
 }): Promise<{ workspaceId: ExecutionWorkspaceId; objectKey: string }> {
-  const workspace = await input.store.ensureExecutionWorkspace({
+  const workspace = await input.store.executionWorkspaces.ensureExecutionWorkspace({
     clientInstanceId: input.clientInstanceId,
     conversationId: input.conversation.id,
     ownerUserId: input.conversation.createdByUserId,
@@ -190,7 +188,7 @@ export async function createExecutionWorkspaceData(input: {
   const objectKey = `execution-workspaces/${input.conversation.id}/report.csv`;
   const bytes = new TextEncoder().encode("value\n42\n");
   await input.byteStore.putObject({ key: objectKey, body: bytes });
-  await input.store.upsertWorkspaceFile({
+  await input.store.executionWorkspaces.upsertWorkspaceFile({
     clientInstanceId: input.clientInstanceId,
     workspaceId: workspace.id,
     path: "report.csv",

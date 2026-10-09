@@ -71,7 +71,7 @@ async function fixture(empty = false) {
   const stranger = client("stranger");
   const requesterUser = await requester.account.get();
   const create = (origin?: ApprovalRequest["origin"]) =>
-    app.stores.createApprovalRequest({
+    app.stores.approvals.createApprovalRequest({
       clientInstanceId: asClientInstanceId(getTestConfig(app).clientInstance.id),
       kind: "fake",
       summary: "Proposed",
@@ -114,7 +114,7 @@ describe("approval routes and generated instance client", () => {
       });
       expect(thread.activeRun).toBeUndefined();
       expect(
-        await f.app.stores.getLatestConversationAgentRun({
+        await f.app.stores.agentRuns.getLatestConversationAgentRun({
           clientInstanceId: asClientInstanceId(getTestConfig(f.app).clientInstance.id),
           conversationId: asConversationId(conversation.id)
         })
@@ -261,7 +261,7 @@ describe("approval routes and generated instance client", () => {
       const admin = me.json<{ id: string; displayLabel: string }>();
       const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
       const create = () =>
-        app.stores.createApprovalRequest({
+        app.stores.approvals.createApprovalRequest({
           clientInstanceId,
           kind: "fake",
           summary: "Proposed",
@@ -293,7 +293,7 @@ describe("approval routes and generated instance client", () => {
         (await call("revertApprovalRequest", { params: { requestId: pending.id } })).statusCode
       ).toBe(403);
       expect(
-        await app.stores.getApprovalRequest({ clientInstanceId, requestId: pending.id })
+        await app.stores.approvals.getApprovalRequest({ clientInstanceId, requestId: pending.id })
       ).toMatchObject({ status: "pending" });
       expect(
         (await call("withdrawApprovalRequest", { params: { requestId: pending.id } })).statusCode

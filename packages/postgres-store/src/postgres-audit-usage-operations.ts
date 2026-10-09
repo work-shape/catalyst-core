@@ -8,12 +8,12 @@ import {
   type ModelUsageWindowSummary,
   createPlatformId
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapAuditEvent, mapModelUsageEvent } from "./rows";
 import { auditEvents, modelUsageEvents } from "./schema";
 
 export async function appendAuditEvent(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: AuditEventInput
 ): Promise<AuditEvent> {
   const id = createPlatformId<"AuditEventId">("audit");
@@ -36,7 +36,7 @@ export async function appendAuditEvent(
 }
 
 export async function listAuditEvents(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     limit?: number;
@@ -60,7 +60,7 @@ export async function listAuditEvents(
 }
 
 export async function appendModelUsageEvent(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: ModelUsageEventRecordInput
 ): Promise<ModelUsageEvent> {
   const id = createPlatformId<"ModelUsageEventId">("usage");
@@ -91,7 +91,7 @@ export async function appendModelUsageEvent(
 }
 
 export async function summarizeModelUsageEvents(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     start?: string;
@@ -123,7 +123,7 @@ export async function summarizeModelUsageEvents(
 }
 
 export async function listModelUsageEvents(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     start?: string;

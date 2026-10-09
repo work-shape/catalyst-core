@@ -42,7 +42,7 @@ export function registerUserAccountRoutes(route: Route, options: ChatServerOptio
   });
 
   route(apiOperations.getCurrentUserModelPreference, async ({ user }) => {
-    const preference = await options.userStore.getUserModelPreference({
+    const preference = await options.stores.users.getUserModelPreference({
       clientInstanceId: options.clientInstanceId,
       userId: asUserId(getSubjectUserId(user))
     });
@@ -50,7 +50,7 @@ export function registerUserAccountRoutes(route: Route, options: ChatServerOptio
   });
 
   route(apiOperations.setCurrentUserModelPreference, async ({ user, body }) => {
-    await options.userStore.setUserModelPreference({
+    await options.stores.users.setUserModelPreference({
       clientInstanceId: options.clientInstanceId,
       userId: asUserId(getSubjectUserId(user)),
       preference: body

@@ -1,3 +1,4 @@
+import type { PlatformStores } from "./platform-store";
 import {
   AppError,
   createApprovalDecisionMessage,
@@ -128,7 +129,23 @@ export class InMemoryPlatformStore
     ApprovalRequestStore,
     StructuredDataStore
 {
-  private readonly conversations = new Map<string, Conversation>();
+  readonly conversations: PlatformStores["conversations"] = this;
+  readonly agentRuns: PlatformStores["agentRuns"] = this;
+  readonly files: PlatformStores["files"] = this;
+  readonly audit: PlatformStores["audit"] = this;
+  readonly usage: PlatformStores["usage"] = this;
+  readonly users: PlatformStores["users"] = this;
+  readonly workspaces: PlatformStores["workspaces"] = this;
+  readonly apiAccess: PlatformStores["apiAccess"] = this;
+  readonly configAssets: PlatformStores["configAssets"] = this;
+  readonly approvals: PlatformStores["approvals"] = this;
+  readonly executionWorkspaces: PlatformStores["executionWorkspaces"] = this;
+  readonly structuredData: PlatformStores["structuredData"] = this;
+  /** Memory mode has no database transaction semantics; CB-3b-2 removes this adapter. */
+  async transaction<T>(_fn: (stores: PlatformStores) => Promise<T>): Promise<T> {
+    throw new Error("Transactions require Postgres stores");
+  }
+  private readonly memoryConversations = new Map<string, Conversation>();
   private readonly collaborationWorkspaces = new Map<string, CollaborationWorkspace>();
   private readonly workspaceMemberships = new Map<string, WorkspaceMembership>();
   private readonly workspaceAccessRequests = new Map<string, WorkspaceAccessRequest>();
@@ -146,7 +163,7 @@ export class InMemoryPlatformStore
       this.touchConversation(conversationId, updatedAt)
   });
   private readonly auditEvents: AuditEvent[] = [];
-  private readonly agentRuns = new Map<string, AgentRun>();
+  private readonly memoryAgentRuns = new Map<string, AgentRun>();
   private readonly runStartCommands = new Map<string, RunStartCommand>();
   private readonly runObservations = new Map<string, RunObservation[]>();
   private readonly executionWorkspaceStore: InMemoryExecutionWorkspaceStore =
@@ -159,12 +176,12 @@ export class InMemoryPlatformStore
       }
     });
   private readonly modelUsageEvents: ModelUsageEvent[] = [];
-  private readonly users = new Map<string, UserRecord>();
+  private readonly memoryUsers = new Map<string, UserRecord>();
   private readonly userModelPreferences = new Map<string, UserModelPreference>();
   private readonly identities = new Map<string, UserIdentity>();
   private readonly apiAccessStore = new InMemoryApiAccessStore({
     isUserInClient: ({ clientInstanceId, userId }) => {
-      const user = this.users.get(userId);
+      const user = this.memoryUsers.get(userId);
       return user?.clientInstanceId === clientInstanceId;
     }
   });
@@ -225,7 +242,7 @@ export class InMemoryPlatformStore
     if (!input) {
       return;
     }
-    const conversation = this.conversations.get(input.conversationId);
+    const conversation = this.memoryConversations.get(input.conversationId);
     if (
       !conversation ||
       conversation.clientInstanceId !== input.clientInstanceId ||
@@ -241,7 +258,7 @@ export class InMemoryPlatformStore
     const createdAt = new Date().toISOString();
     messages.push({ ...input, createdAt });
     this.messages.set(input.conversationId, messages);
-    this.conversations.set(input.conversationId, { ...conversation, updatedAt: createdAt });
+    this.memoryConversations.set(input.conversationId, { ...conversation, updatedAt: createdAt });
   }
 
   createApprovalRequest(input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]) {
@@ -493,7 +510,7 @@ export class InMemoryPlatformStore
       throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be deleted");
     }
     if (
-      [...this.conversations.values()].some(
+      [...this.memoryConversations.values()].some(
         (conversation) =>
           conversation.collaborationWorkspaceId === workspace.id && conversation.status === "active"
       )
@@ -501,9 +518,9 @@ export class InMemoryPlatformStore
       throw new AppError("CONFLICT", "Workspace still contains conversations");
     }
     await this.requireNoPendingConversationCleanup(workspace);
-    for (const [id, conversation] of this.conversations) {
+    for (const [id, conversation] of this.memoryConversations) {
       if (conversation.collaborationWorkspaceId === workspace.id) {
-        this.conversations.delete(id);
+        this.memoryConversations.delete(id);
         this.messages.delete(id);
       }
     }
@@ -527,7 +544,7 @@ export class InMemoryPlatformStore
     ]);
     const pendingCleanupCount = [...pending].filter(
       (conversationId) =>
-        this.conversations.get(conversationId)?.collaborationWorkspaceId === workspace.id
+        this.memoryConversations.get(conversationId)?.collaborationWorkspaceId === workspace.id
     ).length;
     if (pendingCleanupCount > 0) {
       throw pendingConversationCleanupError(workspace.kind, pendingCleanupCount);
@@ -633,7 +650,7 @@ export class InMemoryPlatformStore
   }): Promise<WorkspaceMemberCandidate[]> {
     this.requireWorkspace(input.clientInstanceId, input.collaborationWorkspaceId);
     const normalizedQuery = input.query.toLocaleLowerCase("en-US");
-    return [...this.users.values()]
+    return [...this.memoryUsers.values()]
       .filter(
         (user) =>
           user.clientInstanceId === input.clientInstanceId &&
@@ -801,7 +818,7 @@ export class InMemoryPlatformStore
       throw new AppError("NOT_FOUND", "Personal Workspace is not available");
     }
     if (
-      [...this.conversations.values()].some(
+      [...this.memoryConversations.values()].some(
         (conversation) =>
           conversation.collaborationWorkspaceId === workspace.id && conversation.status === "active"
       )
@@ -809,9 +826,9 @@ export class InMemoryPlatformStore
       throw new AppError("CONFLICT", "Personal Workspace still has active conversations");
     }
     await this.requireNoPendingConversationCleanup(workspace);
-    for (const [id, conversation] of this.conversations) {
+    for (const [id, conversation] of this.memoryConversations) {
       if (conversation.collaborationWorkspaceId === workspace.id) {
-        this.conversations.delete(id);
+        this.memoryConversations.delete(id);
         this.messages.delete(id);
       }
     }
@@ -835,7 +852,7 @@ export class InMemoryPlatformStore
       updatedAt: now,
       retainedUntil: input.retainedUntil
     };
-    this.conversations.set(conversation.id, conversation);
+    this.memoryConversations.set(conversation.id, conversation);
     this.messages.set(conversation.id, []);
     return conversation;
   }
@@ -843,7 +860,7 @@ export class InMemoryPlatformStore
   async createConversationForTesting(
     input: Omit<CreateConversationInput, "collaborationWorkspaceId" | "visibility">
   ): Promise<Conversation> {
-    let user = this.users.get(input.createdByUserId);
+    let user = this.memoryUsers.get(input.createdByUserId);
     if (!user) {
       const now = new Date().toISOString();
       user = {
@@ -858,7 +875,7 @@ export class InMemoryPlatformStore
         updatedAt: now,
         identities: []
       };
-      this.users.set(user.id, user);
+      this.memoryUsers.set(user.id, user);
     }
     if (user.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("CONFLICT", "Test user belongs to another client instance");
@@ -878,7 +895,7 @@ export class InMemoryPlatformStore
     clientInstanceId: ClientInstanceId,
     conversationId: ConversationId
   ): Promise<Conversation | undefined> {
-    const conversation = this.conversations.get(conversationId);
+    const conversation = this.memoryConversations.get(conversationId);
     if (!conversation || conversation.clientInstanceId !== clientInstanceId) {
       return undefined;
     }
@@ -891,7 +908,7 @@ export class InMemoryPlatformStore
     scope: ConversationListScope;
   }): Promise<Conversation[]> {
     const { scope } = input;
-    const candidates = [...this.conversations.values()].filter(
+    const candidates = [...this.memoryConversations.values()].filter(
       (conversation) =>
         conversation.clientInstanceId === input.clientInstanceId &&
         conversation.collaborationWorkspaceId === input.collaborationWorkspaceId &&
@@ -922,7 +939,7 @@ export class InMemoryPlatformStore
     conversation: Conversation,
     criteria: { now?: string; abandonedBefore?: string }
   ): Promise<ConversationExpiryReason | undefined> {
-    const runInProgress = [...this.agentRuns.values()].some(
+    const runInProgress = [...this.memoryAgentRuns.values()].some(
       (run) =>
         run.clientInstanceId === conversation.clientInstanceId &&
         run.conversationId === conversation.id &&
@@ -985,7 +1002,7 @@ export class InMemoryPlatformStore
     clientInstanceId: ClientInstanceId;
     userId: string;
   }): Promise<Conversation[]> {
-    return [...this.conversations.values()].filter(
+    return [...this.memoryConversations.values()].filter(
       (conversation) =>
         conversation.clientInstanceId === input.clientInstanceId &&
         conversation.status === "active" &&
@@ -1009,7 +1026,7 @@ export class InMemoryPlatformStore
       collaborationWorkspaceId: input.toCollaborationWorkspaceId,
       visibility: input.visibility
     };
-    this.conversations.set(input.conversationId, moved);
+    this.memoryConversations.set(input.conversationId, moved);
     return moved;
   }
 
@@ -1020,7 +1037,7 @@ export class InMemoryPlatformStore
     limit: number;
   }): Promise<Conversation[]> {
     const due: Conversation[] = [];
-    for (const conversation of this.conversations.values()) {
+    for (const conversation of this.memoryConversations.values()) {
       if (
         conversation.clientInstanceId !== input.clientInstanceId ||
         conversation.status !== "active"
@@ -1054,7 +1071,7 @@ export class InMemoryPlatformStore
       title: input.title,
       updatedAt: input.updatedAt
     };
-    this.conversations.set(input.conversationId, updated);
+    this.memoryConversations.set(input.conversationId, updated);
     return updated;
   }
 
@@ -1076,7 +1093,7 @@ export class InMemoryPlatformStore
     const messages = this.messages.get(input.conversationId) ?? [];
     messages.push(message);
     this.messages.set(input.conversationId, messages);
-    this.conversations.set(input.conversationId, {
+    this.memoryConversations.set(input.conversationId, {
       ...conversation,
       updatedAt: message.createdAt
     });
@@ -1117,7 +1134,7 @@ export class InMemoryPlatformStore
         checkpoint
       );
     }
-    this.conversations.set(input.conversationId, {
+    this.memoryConversations.set(input.conversationId, {
       ...conversation,
       updatedAt: message.createdAt
     });
@@ -1315,11 +1332,11 @@ export class InMemoryPlatformStore
   }
 
   async createAgentRun(input: CreateAgentRunInput): Promise<AgentRun> {
-    const existing = this.agentRuns.get(input.id);
+    const existing = this.memoryAgentRuns.get(input.id);
     if (existing) {
       throw new AppError("CONFLICT", "Agent run already exists");
     }
-    const activeRun = [...this.agentRuns.values()].find(
+    const activeRun = [...this.memoryAgentRuns.values()].find(
       (run) =>
         run.clientInstanceId === input.clientInstanceId &&
         run.conversationId === input.conversationId &&
@@ -1329,7 +1346,7 @@ export class InMemoryPlatformStore
       throw new AppError("CONFLICT", "Conversation already has an active agent run");
     }
     if (input.idempotencyKey) {
-      const idempotentRun = [...this.agentRuns.values()].find(
+      const idempotentRun = [...this.memoryAgentRuns.values()].find(
         (run) =>
           run.clientInstanceId === input.clientInstanceId &&
           run.conversationId === input.conversationId &&
@@ -1359,7 +1376,7 @@ export class InMemoryPlatformStore
       lastSequence: 0,
       correlationId: input.correlationId
     };
-    this.agentRuns.set(run.id, run);
+    this.memoryAgentRuns.set(run.id, run);
     this.runObservations.set(run.id, []);
     return run;
   }
@@ -1368,7 +1385,7 @@ export class InMemoryPlatformStore
     clientInstanceId: ClientInstanceId;
     runId: AgentRunId;
   }): Promise<AgentRun | undefined> {
-    const run = this.agentRuns.get(input.runId);
+    const run = this.memoryAgentRuns.get(input.runId);
     return run?.clientInstanceId === input.clientInstanceId ? run : undefined;
   }
 
@@ -1385,7 +1402,7 @@ export class InMemoryPlatformStore
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<AgentRun | undefined> {
-    return [...this.agentRuns.values()].find(
+    return [...this.memoryAgentRuns.values()].find(
       (run) =>
         run.clientInstanceId === input.clientInstanceId &&
         run.conversationId === input.conversationId &&
@@ -1397,7 +1414,7 @@ export class InMemoryPlatformStore
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<AgentRun | undefined> {
-    return [...this.agentRuns.values()]
+    return [...this.memoryAgentRuns.values()]
       .filter(
         (run) =>
           run.clientInstanceId === input.clientInstanceId &&
@@ -1424,7 +1441,7 @@ export class InMemoryPlatformStore
       failedAt: input.failedAt ?? run.failedAt,
       error: input.error ?? run.error
     };
-    this.agentRuns.set(run.id, updated);
+    this.memoryAgentRuns.set(run.id, updated);
     return updated;
   }
 
@@ -1433,7 +1450,7 @@ export class InMemoryPlatformStore
     staleUpdatedBefore: string;
     limit: number;
   }): Promise<AgentRun[]> {
-    return [...this.agentRuns.values()]
+    return [...this.memoryAgentRuns.values()]
       .filter(
         (run) =>
           run.clientInstanceId === input.clientInstanceId &&
@@ -1465,7 +1482,7 @@ export class InMemoryPlatformStore
       .find((observation) => isTerminalRunObservation(observation));
     if (terminalObservation) {
       const updated = terminalRunFromObservation(run, terminalObservation);
-      this.agentRuns.set(run.id, updated);
+      this.memoryAgentRuns.set(run.id, updated);
       return {
         status: "recovered",
         run: updated
@@ -1499,7 +1516,7 @@ export class InMemoryPlatformStore
       lastSequence: sequence,
       error: input.error
     };
-    this.agentRuns.set(run.id, updated);
+    this.memoryAgentRuns.set(run.id, updated);
     return {
       status: "recovered",
       run: updated,
@@ -1508,7 +1525,7 @@ export class InMemoryPlatformStore
   }
 
   async claimNextAgentRun(input: ClaimAgentRunInput): Promise<AgentRun | undefined> {
-    const run = [...this.agentRuns.values()]
+    const run = [...this.memoryAgentRuns.values()]
       .filter(
         (candidate) =>
           candidate.clientInstanceId === input.clientInstanceId && candidate.status === "queued"
@@ -1526,7 +1543,7 @@ export class InMemoryPlatformStore
       heartbeatAt: input.now,
       updatedAt: input.now
     };
-    this.agentRuns.set(run.id, claimed);
+    this.memoryAgentRuns.set(run.id, claimed);
     return claimed;
   }
 
@@ -1538,7 +1555,7 @@ export class InMemoryPlatformStore
       leaseExpiresAt: input.leaseExpiresAt,
       updatedAt: input.heartbeatAt
     };
-    this.agentRuns.set(run.id, updated);
+    this.memoryAgentRuns.set(run.id, updated);
     return updated;
   }
 
@@ -1575,7 +1592,7 @@ export class InMemoryPlatformStore
         updatedAt: input.requestedAt,
         lastSequence: sequence
       };
-      this.agentRuns.set(run.id, cancelled);
+      this.memoryAgentRuns.set(run.id, cancelled);
       return cancelled;
     }
     const cancelling: AgentRun = {
@@ -1585,7 +1602,7 @@ export class InMemoryPlatformStore
       cancellationReason: input.reason,
       updatedAt: input.requestedAt
     };
-    this.agentRuns.set(run.id, cancelling);
+    this.memoryAgentRuns.set(run.id, cancelling);
     return cancelling;
   }
 
@@ -1626,7 +1643,7 @@ export class InMemoryPlatformStore
         heartbeatAt: undefined
       };
     }
-    this.agentRuns.set(run.id, updated);
+    this.memoryAgentRuns.set(run.id, updated);
     return observation;
   }
 
@@ -1647,7 +1664,7 @@ export class InMemoryPlatformStore
   }
 
   async recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]> {
-    const stale = [...this.agentRuns.values()]
+    const stale = [...this.memoryAgentRuns.values()]
       .filter(
         (run) =>
           run.clientInstanceId === input.clientInstanceId &&
@@ -1694,7 +1711,7 @@ export class InMemoryPlatformStore
         leaseExpiresAt: undefined,
         heartbeatAt: undefined
       };
-      this.agentRuns.set(run.id, failed);
+      this.memoryAgentRuns.set(run.id, failed);
       recovered.push(failed);
     }
     return recovered;
@@ -1745,7 +1762,7 @@ export class InMemoryPlatformStore
     observations.push(observation);
     observations.sort((left, right) => left.sequence - right.sequence);
     this.runObservations.set(input.runId, observations);
-    this.agentRuns.set(input.runId, {
+    this.memoryAgentRuns.set(input.runId, {
       ...run,
       lastSequence: Math.max(run.lastSequence, observation.sequence),
       updatedAt: observation.createdAt
@@ -2153,7 +2170,7 @@ export class InMemoryPlatformStore
       deletedAt: input.deletedAt,
       updatedAt: input.deletedAt
     };
-    this.conversations.set(input.conversationId, deleted);
+    this.memoryConversations.set(input.conversationId, deleted);
     this.messages.set(input.conversationId, []);
     for (const [key, checkpoint] of this.modelProviderContinuations) {
       if (checkpoint.conversationId === input.conversationId) {
@@ -2168,12 +2185,12 @@ export class InMemoryPlatformStore
         this.structuredDataResources.delete(resource.id);
       }
     }
-    for (const run of this.agentRuns.values()) {
+    for (const run of this.memoryAgentRuns.values()) {
       if (
         run.clientInstanceId === input.clientInstanceId &&
         run.conversationId === input.conversationId
       ) {
-        this.agentRuns.delete(run.id);
+        this.memoryAgentRuns.delete(run.id);
         this.runObservations.delete(run.id);
       }
     }
@@ -2253,7 +2270,7 @@ export class InMemoryPlatformStore
     const now = new Date().toISOString();
     const existingIdentity = this.identities.get(identityKey);
     if (existingIdentity) {
-      const user = this.users.get(existingIdentity.userId);
+      const user = this.memoryUsers.get(existingIdentity.userId);
       if (!user || user.clientInstanceId !== input.clientInstanceId) {
         throw new AppError("INTERNAL", "User identity mapping points to a missing user");
       }
@@ -2272,7 +2289,7 @@ export class InMemoryPlatformStore
         identities: replaceIdentity(user.identities, updatedIdentity)
       };
       this.identities.set(identityKey, updatedIdentity);
-      this.users.set(user.id, updatedUser);
+      this.memoryUsers.set(user.id, updatedUser);
       await this.ensurePersonalWorkspace({
         clientInstanceId: input.clientInstanceId,
         userId: user.id
@@ -2318,7 +2335,7 @@ export class InMemoryPlatformStore
       identities: replaceIdentity(user.identities, identity)
     };
     this.identities.set(identityKey, identity);
-    this.users.set(updatedUser.id, updatedUser);
+    this.memoryUsers.set(updatedUser.id, updatedUser);
     await this.ensurePersonalWorkspace({
       clientInstanceId: input.clientInstanceId,
       userId: updatedUser.id
@@ -2331,7 +2348,7 @@ export class InMemoryPlatformStore
   }
 
   async listUsers(input: { clientInstanceId: ClientInstanceId }): Promise<UserRecord[]> {
-    return [...this.users.values()]
+    return [...this.memoryUsers.values()]
       .filter((user) => user.clientInstanceId === input.clientInstanceId)
       .map((user) => this.attachIdentities(user))
       .sort((left, right) => left.displayLabel.localeCompare(right.displayLabel));
@@ -2352,7 +2369,7 @@ export class InMemoryPlatformStore
       updatedAt: now,
       identities: []
     };
-    this.users.set(user.id, user);
+    this.memoryUsers.set(user.id, user);
     await this.ensurePersonalWorkspace({
       clientInstanceId: input.clientInstanceId,
       userId: user.id
@@ -2361,7 +2378,7 @@ export class InMemoryPlatformStore
   }
 
   async updateUser(input: UpdateUserInput): Promise<UserRecord> {
-    const user = this.users.get(input.userId);
+    const user = this.memoryUsers.get(input.userId);
     if (!user || user.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("NOT_FOUND", "User is not available");
     }
@@ -2376,12 +2393,12 @@ export class InMemoryPlatformStore
       status: input.status ?? user.status,
       updatedAt: new Date().toISOString()
     };
-    this.users.set(updated.id, updated);
+    this.memoryUsers.set(updated.id, updated);
     return this.attachIdentities(updated);
   }
 
   async deleteUser(input: DeleteUserInput): Promise<UserRecord> {
-    const user = this.users.get(input.userId);
+    const user = this.memoryUsers.get(input.userId);
     if (!user || user.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("NOT_FOUND", "User is not available");
     }
@@ -2404,12 +2421,12 @@ export class InMemoryPlatformStore
     for (const identity of deleted.identities) {
       this.identities.delete(createIdentityKey(identity));
     }
-    this.users.delete(user.id);
+    this.memoryUsers.delete(user.id);
     return deleted;
   }
 
   async upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord> {
-    const user = this.users.get(input.userId);
+    const user = this.memoryUsers.get(input.userId);
     if (!user || user.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("NOT_FOUND", "User is not available");
     }
@@ -2435,12 +2452,12 @@ export class InMemoryPlatformStore
       updatedAt: now,
       identities: replaceIdentity(this.attachIdentities(user).identities, identity)
     };
-    this.users.set(updated.id, updated);
+    this.memoryUsers.set(updated.id, updated);
     return updated;
   }
 
   async deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord> {
-    const user = this.users.get(input.userId);
+    const user = this.memoryUsers.get(input.userId);
     if (!user || user.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("NOT_FOUND", "User is not available");
     }
@@ -2454,7 +2471,7 @@ export class InMemoryPlatformStore
       updatedAt: new Date().toISOString(),
       identities: this.getIdentitiesForUser(user)
     };
-    this.users.set(updated.id, updated);
+    this.memoryUsers.set(updated.id, updated);
     return updated;
   }
 
@@ -2467,7 +2484,7 @@ export class InMemoryPlatformStore
   async setUserModelPreference(
     input: UserModelPreferenceInput & { preference: UserModelPreference }
   ): Promise<void> {
-    const user = this.users.get(input.userId);
+    const user = this.memoryUsers.get(input.userId);
     if (!user || user.clientInstanceId !== input.clientInstanceId) {
       throw new AppError("NOT_FOUND", "User is not available");
     }
@@ -2475,11 +2492,11 @@ export class InMemoryPlatformStore
   }
 
   private touchConversation(conversationId: ConversationId, updatedAt: string): void {
-    const conversation = this.conversations.get(conversationId);
+    const conversation = this.memoryConversations.get(conversationId);
     if (!conversation) {
       return;
     }
-    this.conversations.set(conversationId, {
+    this.memoryConversations.set(conversationId, {
       ...conversation,
       updatedAt
     });
@@ -2500,7 +2517,7 @@ export class InMemoryPlatformStore
     now: string
   ): { user: UserRecord; linkedByVerifiedEmail: boolean } {
     if (input.sourceUserId) {
-      const existing = this.users.get(input.sourceUserId);
+      const existing = this.memoryUsers.get(input.sourceUserId);
       if (existing?.clientInstanceId === input.clientInstanceId) {
         return { user: this.attachIdentities(existing), linkedByVerifiedEmail: false };
       }
@@ -2525,7 +2542,7 @@ export class InMemoryPlatformStore
       lastAuthenticatedAt: now,
       identities: []
     };
-    this.users.set(user.id, user);
+    this.memoryUsers.set(user.id, user);
     return { user, linkedByVerifiedEmail: false };
   }
 
@@ -2545,7 +2562,7 @@ export class InMemoryPlatformStore
         candidateIds.add(identity.userId);
       }
     }
-    for (const user of this.users.values()) {
+    for (const user of this.memoryUsers.values()) {
       if (
         user.clientInstanceId === input.clientInstanceId &&
         user.email?.trim().toLowerCase() === normalizedEmail
@@ -2558,7 +2575,7 @@ export class InMemoryPlatformStore
       return undefined;
     }
     const candidateId = [...candidateIds][0];
-    return candidateId ? this.users.get(candidateId) : undefined;
+    return candidateId ? this.memoryUsers.get(candidateId) : undefined;
   }
 
   private attachIdentities(user: UserRecord): UserRecord {
@@ -2569,7 +2586,7 @@ export class InMemoryPlatformStore
   }
 
   private requireUser(clientInstanceId: ClientInstanceId, userId: UserRecord["id"]): UserRecord {
-    const user = this.users.get(userId);
+    const user = this.memoryUsers.get(userId);
     if (!user || user.clientInstanceId !== clientInstanceId) {
       throw new AppError("NOT_FOUND", "User is not available");
     }

@@ -1,4 +1,5 @@
-import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
+import type { PlatformStores } from "@vivd-catalyst/core";
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
   AppError,
@@ -27,14 +28,14 @@ describe("agent run worker", () => {
   it("lets only one competing worker claim a queued run", async () => {
     const fixture = await createQueuedRun("claim-race");
     const [first, second] = await Promise.all([
-      fixture.store.claimNextAgentRun({
+      fixture.store.agentRuns.claimNextAgentRun({
         clientInstanceId: fixture.clientInstanceId,
         workerId: "worker-a",
         leaseToken: "lease-a",
         now: "2026-09-02T12:00:00.000Z",
         leaseExpiresAt: "2026-09-02T12:10:00.000Z"
       }),
-      fixture.store.claimNextAgentRun({
+      fixture.store.agentRuns.claimNextAgentRun({
         clientInstanceId: fixture.clientInstanceId,
         workerId: "worker-b",
         leaseToken: "lease-b",
@@ -49,7 +50,7 @@ describe("agent run worker", () => {
   it("extends a live lease and rejects writes from a stale token", async () => {
     const fixture = await createQueuedRun("lease-fence");
     const claimed = await claim(fixture, "current-token");
-    const heartbeat = await fixture.store.heartbeatAgentRun({
+    const heartbeat = await fixture.store.agentRuns.heartbeatAgentRun({
       clientInstanceId: fixture.clientInstanceId,
       runId: claimed.id,
       leaseToken: "current-token",
@@ -59,7 +60,7 @@ describe("agent run worker", () => {
     expect(heartbeat.leaseExpiresAt).toBe("2026-09-02T12:11:00.000Z");
 
     await expect(
-      fixture.store.appendClaimedRunObservation({
+      fixture.store.agentRuns.appendClaimedRunObservation({
         clientInstanceId: fixture.clientInstanceId,
         runId: claimed.id,
         leaseToken: "stale-token",
@@ -70,7 +71,7 @@ describe("agent run worker", () => {
 
   it("cancels queued work without executing and marks claimed work for cancellation", async () => {
     const queued = await createQueuedRun("queued-cancel");
-    const cancelled = await queued.store.requestAgentRunCancellation({
+    const cancelled = await queued.store.agentRuns.requestAgentRunCancellation({
       clientInstanceId: queued.clientInstanceId,
       runId: queued.run.id,
       requestedAt: "2026-09-02T12:01:00.000Z",
@@ -78,7 +79,7 @@ describe("agent run worker", () => {
     });
     expect(cancelled).toMatchObject({ status: "cancelled", lastSequence: 1 });
     expect(
-      await queued.store.claimNextAgentRun({
+      await queued.store.agentRuns.claimNextAgentRun({
         clientInstanceId: queued.clientInstanceId,
         workerId: "worker",
         leaseToken: "unused",
@@ -89,7 +90,7 @@ describe("agent run worker", () => {
 
     const running = await createQueuedRun("running-cancel");
     await claim(running, "running-token");
-    const cancelling = await running.store.requestAgentRunCancellation({
+    const cancelling = await running.store.agentRuns.requestAgentRunCancellation({
       clientInstanceId: running.clientInstanceId,
       runId: running.run.id,
       requestedAt: "2026-09-02T12:03:00.000Z",
@@ -120,7 +121,7 @@ describe("agent run worker", () => {
       }
     ]) {
       await expect(
-        running.store.appendClaimedRunObservation({
+        running.store.agentRuns.appendClaimedRunObservation({
           clientInstanceId: running.clientInstanceId,
           runId: running.run.id,
           leaseToken: "running-token",
@@ -128,7 +129,7 @@ describe("agent run worker", () => {
         })
       ).rejects.toMatchObject({ code: "CONFLICT" });
     }
-    await running.store.appendClaimedRunObservation({
+    await running.store.agentRuns.appendClaimedRunObservation({
       clientInstanceId: running.clientInstanceId,
       runId: running.run.id,
       leaseToken: "running-token",
@@ -144,20 +145,24 @@ describe("agent run worker", () => {
 
   it("finishes cancellation when it races with a terminal worker event", async () => {
     const fixture = await createQueuedRun("cancellation-terminal-race");
-    const appendObservation = fixture.store.appendClaimedRunObservation.bind(fixture.store);
+    const appendObservation = fixture.store.agentRuns.appendClaimedRunObservation.bind(
+      fixture.store.agentRuns
+    );
     let cancellationInjected = false;
-    vi.spyOn(fixture.store, "appendClaimedRunObservation").mockImplementation(async (input) => {
-      if (!cancellationInjected && input.event.type !== "run_cancelled") {
-        cancellationInjected = true;
-        await fixture.store.requestAgentRunCancellation({
-          clientInstanceId: fixture.clientInstanceId,
-          runId: fixture.run.id,
-          requestedAt: "2026-09-02T12:00:30.000Z",
-          reason: "Stop during completion"
-        });
+    vi.spyOn(fixture.store.agentRuns, "appendClaimedRunObservation").mockImplementation(
+      async (input) => {
+        if (!cancellationInjected && input.event.type !== "run_cancelled") {
+          cancellationInjected = true;
+          await fixture.store.agentRuns.requestAgentRunCancellation({
+            clientInstanceId: fixture.clientInstanceId,
+            runId: fixture.run.id,
+            requestedAt: "2026-09-02T12:00:30.000Z",
+            reason: "Stop during completion"
+          });
+        }
+        return appendObservation(input);
       }
-      return appendObservation(input);
-    });
+    );
     const worker = createWorker(fixture, async function* (input) {
       yield completedEvent(input.preparedRun!.id, 1, "2026-09-02T12:01:00.000Z");
     });
@@ -168,7 +173,7 @@ describe("agent run worker", () => {
       status: "cancelled",
       cancellationReason: "Stop during completion"
     });
-    const observations = await fixture.store.listRunObservations({
+    const observations = await fixture.store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id
     });
@@ -189,12 +194,12 @@ describe("agent run worker", () => {
       },
       limit: 10
     };
-    const recovered = await fixture.store.recoverExpiredAgentRuns(recoveryInput);
+    const recovered = await fixture.store.agentRuns.recoverExpiredAgentRuns(recoveryInput);
     expect(recovered).toHaveLength(1);
     expect(recovered[0]).toMatchObject({ status: "failed", lastSequence: 1 });
-    expect(await fixture.store.recoverExpiredAgentRuns(recoveryInput)).toEqual([]);
+    expect(await fixture.store.agentRuns.recoverExpiredAgentRuns(recoveryInput)).toEqual([]);
     await expect(
-      fixture.store.appendClaimedRunObservation({
+      fixture.store.agentRuns.appendClaimedRunObservation({
         clientInstanceId: fixture.clientInstanceId,
         runId: claimed.id,
         leaseToken: "expired-token",
@@ -206,7 +211,7 @@ describe("agent run worker", () => {
   it("resumes durable observation after a sequence cursor", async () => {
     const fixture = await createQueuedRun("observation-resume");
     const claimed = await claim(fixture, "observation-token");
-    await fixture.store.appendClaimedRunObservation({
+    await fixture.store.agentRuns.appendClaimedRunObservation({
       clientInstanceId: fixture.clientInstanceId,
       runId: claimed.id,
       leaseToken: "observation-token",
@@ -218,13 +223,16 @@ describe("agent run worker", () => {
         delta: "partial"
       }
     });
-    await fixture.store.appendClaimedRunObservation({
+    await fixture.store.agentRuns.appendClaimedRunObservation({
       clientInstanceId: fixture.clientInstanceId,
       runId: claimed.id,
       leaseToken: "observation-token",
       event: completedEvent(claimed.id, 2, "2026-09-02T12:02:00.000Z")
     });
-    const runtime = new StoreBackedAgentRuntime({ store: fixture.store, pollIntervalMs: 1 });
+    const runtime = new StoreBackedAgentRuntime({
+      store: fixture.store.agentRuns,
+      pollIntervalMs: 1
+    });
     const events: AgentRuntimeEvent[] = [];
     for await (const event of runtime.observe(claimed.id, fixture.context, { afterSequence: 1 })) {
       events.push(event);
@@ -235,13 +243,16 @@ describe("agent run worker", () => {
   it("lets another authorized viewer observe a run without ending it", async () => {
     const fixture = await createQueuedRun("observation-viewer");
     const claimed = await claim(fixture, "viewer-token");
-    await fixture.store.appendClaimedRunObservation({
+    await fixture.store.agentRuns.appendClaimedRunObservation({
       clientInstanceId: fixture.clientInstanceId,
       runId: claimed.id,
       leaseToken: "viewer-token",
       event: completedEvent(claimed.id, 1, "2026-09-02T12:01:00.000Z")
     });
-    const runtime = new StoreBackedAgentRuntime({ store: fixture.store, pollIntervalMs: 1 });
+    const runtime = new StoreBackedAgentRuntime({
+      store: fixture.store.agentRuns,
+      pollIntervalMs: 1
+    });
     const viewerContext: RuntimeCallContext = {
       ...fixture.context,
       user: { ...fixture.context.user, id: "user-viewer", externalUserId: "external-viewer" },
@@ -338,7 +349,7 @@ describe("agent run worker", () => {
       status: "failed",
       error: { code: "AGENT_RUN_PERMISSION_UNSUPPORTED" }
     });
-    const observations = await fixture.store.listRunObservations({
+    const observations = await fixture.store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id
     });
@@ -366,7 +377,7 @@ describe("agent run worker", () => {
     await worker.stop({ interruptActive: true });
     await loop;
 
-    const observations = await fixture.store.listRunObservations({
+    const observations = await fixture.store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id
     });
@@ -403,7 +414,7 @@ describe("agent run worker", () => {
     await stopped;
     await loop;
 
-    const observations = await fixture.store.listRunObservations({
+    const observations = await fixture.store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id
     });
@@ -431,7 +442,7 @@ describe("agent run worker", () => {
     await worker.stop({ drainTimeoutMs: 10 });
     await loop;
 
-    const observations = await fixture.store.listRunObservations({
+    const observations = await fixture.store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id
     });
@@ -471,7 +482,7 @@ describe("agent run worker", () => {
     release();
     await running;
 
-    const observations = await fixture.store.listRunObservations({
+    const observations = await fixture.store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id
     });
@@ -480,7 +491,7 @@ describe("agent run worker", () => {
 
   it("runs the real Local Runtime with the worker as its only run-state writer", async () => {
     const fixture = await createQueuedRun("local-runtime");
-    const updateStatus = vi.spyOn(fixture.store, "updateAgentRunStatus");
+    const updateStatus = vi.spyOn(fixture.store.agentRuns, "updateAgentRunStatus");
     const provider: ModelProviderConfig = {
       id: "worker-provider",
       type: "deterministic",
@@ -529,7 +540,7 @@ describe("agent run worker", () => {
         }
       },
       usageGovernance: new ModelUsageGovernance({
-        store: fixture.store,
+        store: fixture.store.usage,
         budget: {},
         safeguards: {}
       })
@@ -539,7 +550,7 @@ describe("agent run worker", () => {
 
     expect(result.run).toMatchObject({ status: "completed", lastSequence: 3 });
     expect(updateStatus).not.toHaveBeenCalled();
-    const observations = await fixture.store.listRunObservations({
+    const observations = await fixture.store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: fixture.run.id
     });
@@ -548,7 +559,7 @@ describe("agent run worker", () => {
       "message_completed",
       "run_completed"
     ]);
-    const messages = await fixture.store.listMessages({
+    const messages = await fixture.store.conversations.listMessages({
       clientInstanceId: fixture.clientInstanceId,
       conversationId: fixture.conversationId
     });
@@ -557,7 +568,7 @@ describe("agent run worker", () => {
 });
 
 interface Fixture {
-  store: TestMemoryStore;
+  store: PlatformStores;
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   run: AgentRun;
@@ -592,14 +603,14 @@ async function createQueuedRun(
     retainedUntil: "2027-09-02T00:00:00.000Z"
   });
   const inputMessageId = asMessageId(`msg-${suffix}`);
-  await store.appendMessage({
+  await store.conversations.appendMessage({
     id: inputMessageId,
     clientInstanceId,
     conversationId: conversation.id,
     role: "user",
     text: "Do the work"
   });
-  const run = await store.createAgentRun({
+  const run = await store.agentRuns.createAgentRun({
     id: asAgentRunId(`run-${suffix}`),
     clientInstanceId,
     conversationId: conversation.id,
@@ -643,8 +654,8 @@ function createWorker(
 ): AgentRunWorker {
   return new AgentRunWorker({
     clientInstanceId: fixture.clientInstanceId,
-    store: fixture.store,
-    conversationHistory: fixture.store,
+    store: fixture.store.agentRuns,
+    conversationHistory: fixture.store.conversations,
     loadCurrentUser: async () => fixture.user,
     execute,
     pollIntervalMs: 1,
@@ -657,7 +668,7 @@ async function claim(
   leaseToken: string,
   leaseExpiresAt = "2026-09-02T12:10:00.000Z"
 ): Promise<AgentRun> {
-  const run = await fixture.store.claimNextAgentRun({
+  const run = await fixture.store.agentRuns.claimNextAgentRun({
     clientInstanceId: fixture.clientInstanceId,
     workerId: "worker",
     leaseToken,

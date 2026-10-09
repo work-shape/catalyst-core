@@ -63,10 +63,10 @@ function fixture() {
   const onDecided = vi.fn(async (_request: ApprovalRequest) => {});
   const workflow = new ApprovalRequestWorkflow({
     clientInstanceId,
-    store,
+    store: store.approvals,
     handlers,
     onDecided,
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store })
+    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
   });
   const create = (kind = "fake") =>
     workflow.createRequest(requester, context, {
@@ -93,7 +93,7 @@ describe("approval request workflow", () => {
       checks: [],
       requestedBy: { id: requester.id }
     });
-    const events = await f.store.listAuditEvents({ clientInstanceId });
+    const events = await f.store.audit.listAuditEvents({ clientInstanceId });
     expect(events).toHaveLength(1);
     expect(events[0]?.metadata).toEqual({ requestId: request.id, kind: "fake", status: "pending" });
   });
@@ -119,9 +119,9 @@ describe("approval request workflow", () => {
     const f = fixture();
     const request = await f.create();
     f.onDecided.mockImplementation(async (updated) => {
-      expect(await f.store.getApprovalRequest({ clientInstanceId, requestId: updated.id })).toEqual(
-        updated
-      );
+      expect(
+        await f.store.approvals.getApprovalRequest({ clientInstanceId, requestId: updated.id })
+      ).toEqual(updated);
     });
     const updated = await f.workflow.decideRequest(reviewer, context, {
       requestId: request.id,
@@ -146,7 +146,7 @@ describe("approval request workflow", () => {
     expect(f.validate).toHaveBeenCalledTimes(2);
     expect(f.onDecided).toHaveBeenCalledWith(updated);
     expect(
-      (await f.store.listAuditEvents({ clientInstanceId })).find(
+      (await f.store.audit.listAuditEvents({ clientInstanceId })).find(
         (e) => e.type === "approval_request.decided"
       )?.metadata
     ).toEqual({ requestId: request.id, kind: "fake", status: "approved" });

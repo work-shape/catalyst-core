@@ -29,7 +29,7 @@ describe("test instance", () => {
     );
     expect(created.statusCode).toBe(200);
     const { id } = created.json<{ id: string }>();
-    await seedConversationMessage(first.stores, id);
+    await seedConversationMessage(first.stores.conversations, id);
     expect(
       (await first.call("getConversationThread", { params: { conversationId: id } }, other))
         .statusCode
@@ -114,9 +114,9 @@ describe("test instance", () => {
     const first = createTestInstance();
     const second = createTestInstance();
     const clientInstanceId = asClientInstanceId("store-only");
-    await first.stores.createUser({ clientInstanceId, displayLabel: "Only in first" });
-    expect(await first.stores.listUsers({ clientInstanceId })).toHaveLength(1);
-    expect(await second.stores.listUsers({ clientInstanceId })).toEqual([]);
+    await first.stores.users.createUser({ clientInstanceId, displayLabel: "Only in first" });
+    expect(await first.stores.users.listUsers({ clientInstanceId })).toHaveLength(1);
+    expect(await second.stores.users.listUsers({ clientInstanceId })).toEqual([]);
     await first.close();
     await first.close();
     await second.close();

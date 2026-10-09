@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AuditRecorder,
   ClientInstanceId,
-  PlatformStore,
+  PlatformStores,
   WorkspaceCommand,
   WorkspaceCommandError
 } from "@vivd-catalyst/core";
@@ -25,7 +25,7 @@ const DEFAULT_TEMP_STATE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const DEFAULT_HYDRATED_WORKSPACE_IDLE_TTL_MS = 60 * 60 * 1000;
 
 export type WorkspaceCommandWorkerStore = Pick<
-  PlatformStore,
+  PlatformStores["executionWorkspaces"],
   | "claimNextWorkspaceCommand"
   | "countActiveWorkspaceCommands"
   | "getWorkspaceCommand"

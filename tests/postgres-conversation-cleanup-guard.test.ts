@@ -89,13 +89,13 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     }> = [];
     for (const user of [removedUser, leavingUser]) {
       const userId = asUserId(user.id);
-      await db.store.addMembership({
+      await db.store.workspaces.addMembership({
         ...fixture.scope,
         collaborationWorkspaceId: joined.id,
         userId,
         role: "member"
       });
-      await db.store.createAccessRequest({
+      await db.store.workspaces.createAccessRequest({
         ...fixture.scope,
         collaborationWorkspaceId: requested.id,
         userId
@@ -119,12 +119,17 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
       await api.call("deleteCurrentUser", {}, leavingUser.id)
     ];
     const memberIds = async () =>
-      (await db.store.listMemberships({ ...fixture.scope, collaborationWorkspaceId: joined.id }))
+      (
+        await db.store.workspaces.listMemberships({
+          ...fixture.scope,
+          collaborationWorkspaceId: joined.id
+        })
+      )
         .map((membership) => membership.userId)
         .sort();
     const requesterIds = async () =>
       (
-        await db.store.listAccessRequestsForWorkspace({
+        await db.store.workspaces.listAccessRequestsForWorkspace({
           ...fixture.scope,
           collaborationWorkspaceId: requested.id
         })
@@ -132,7 +137,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
         .map((request) => request.userId)
         .sort();
     const userIds = async () =>
-      (await db.store.listUsers(fixture.scope)).map((user) => user.id).sort();
+      (await db.store.users.listUsers(fixture.scope)).map((user) => user.id).sort();
     const everyone = [superadmin.id, removedUser.id, leavingUser.id].sort();
 
     fixture.byteStore.failDeletes = true;
@@ -211,7 +216,10 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     await fixture.createData(conversation);
     const workflow = new ConversationRetentionWorkflow(fixture.options);
     const deleteWorkspace = () =>
-      db.store.deleteWorkspace({ ...fixture.scope, collaborationWorkspaceId: workspace.id });
+      db.store.workspaces.deleteWorkspace({
+        ...fixture.scope,
+        collaborationWorkspaceId: workspace.id
+      });
 
     fixture.byteStore.failDeletes = true;
     await expect(workflow.expireDueConversations()).resolves.toMatchObject({
@@ -251,7 +259,10 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     const workspaceData = await fixture.createWorkspaceData(conversation);
     const personalWorkspace = await fixture.personalWorkspaceOf(author);
     const deletePersonalWorkspace = () =>
-      db.store.deletePersonalWorkspaceForUser({ ...fixture.scope, userId: asUserId(author.id) });
+      db.store.workspaces.deletePersonalWorkspaceForUser({
+        ...fixture.scope,
+        userId: asUserId(author.id)
+      });
     const api = await fixture.api();
 
     // The Conversation has no file or artifact, so only the workspace cleanup can fail.
@@ -298,7 +309,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     const personalWorkspace = await fixture.personalWorkspaceOf(leavingUser);
     // The workspace cleanup cancels a queued command and keeps its row for one more pass. The
     // row names no stored object, so it must not hold the account back.
-    const command = await db.store.enqueueWorkspaceCommand({
+    const command = await db.store.executionWorkspaces.enqueueWorkspaceCommand({
       ...fixture.scope,
       workspaceId: workspaceData.workspaceId,
       ownerUserId: leavingUser.id,

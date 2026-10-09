@@ -30,7 +30,7 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     const download = query.download === "true";
     const sentAttachment = download
       ? (
-          await options.conversationStore.listSentConversationAttachments({
+          await options.stores.files.listSentConversationAttachments({
             clientInstanceId: options.clientInstanceId,
             conversationId
           })
@@ -72,7 +72,7 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const artifactId = asManagedArtifactId(artifactIdParam(params));
-    const artifactRecord = await options.conversationStore.getManagedArtifact({
+    const artifactRecord = await options.stores.files.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
       artifactId
     });
@@ -104,14 +104,14 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const artifactId = asManagedArtifactId(artifactIdParam(params));
-    const artifactRecord = await options.conversationStore.getManagedArtifact({
+    const artifactRecord = await options.stores.files.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
       artifactId
     });
     if (!artifactRecord || artifactRecord.conversationId !== conversationId) {
       throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
     }
-    const preview = await readArtifactPreviewState(options.conversationStore, artifactRecord);
+    const preview = await readArtifactPreviewState(options.stores.files, artifactRecord);
     void reply.header("cache-control", "private, no-store, max-age=0");
     return preview;
   });
@@ -119,7 +119,7 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
   route(apiOperations.getConversationAttachmentPreview, async ({ user, params, reply }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
-    const attachment = await options.conversationStore.getConversationAttachment({
+    const attachment = await options.stores.files.getConversationAttachment({
       clientInstanceId: options.clientInstanceId,
       attachmentId: asConversationAttachmentId(attachmentIdParam(params))
     });
@@ -135,7 +135,7 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
       throw new AppError("VALIDATION_FAILED", "This attachment uses its native preview path");
     }
     const source = await ensureAttachmentPreviewSource(options, attachment);
-    const preview = await readArtifactPreviewState(options.conversationStore, source);
+    const preview = await readArtifactPreviewState(options.stores.files, source);
     void reply.header("cache-control", "private, no-store, max-age=0");
     return preview;
   });
@@ -144,14 +144,14 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const artifactId = asManagedArtifactId(artifactIdParam(params));
-    const artifactRecord = await options.conversationStore.getManagedArtifact({
+    const artifactRecord = await options.stores.files.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
       artifactId
     });
     if (!artifactRecord || artifactRecord.conversationId !== conversationId) {
       throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
     }
-    const preview = await retryArtifactPreviewState(options.conversationStore, artifactRecord);
+    const preview = await retryArtifactPreviewState(options.stores.files, artifactRecord);
     void reply.header("cache-control", "private, no-store, max-age=0");
     return preview;
   });
@@ -188,7 +188,7 @@ async function ensureAttachmentPreviewSource(
 ): Promise<ManagedArtifactRecord> {
   const referencedId = attachment.artifactRefs[ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF];
   if (referencedId) {
-    const referenced = await options.conversationStore.getManagedArtifact({
+    const referenced = await options.stores.files.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
       artifactId: referencedId
     });
@@ -202,7 +202,7 @@ async function ensureAttachmentPreviewSource(
   }
 
   const existing = (
-    await options.conversationStore.listManagedArtifactsForFile({
+    await options.stores.files.listManagedArtifactsForFile({
       clientInstanceId: options.clientInstanceId,
       conversationId: attachment.conversationId,
       fileId: attachment.fileId,
@@ -214,14 +214,14 @@ async function ensureAttachmentPreviewSource(
     return existing;
   }
 
-  const file = await options.conversationStore.getManagedFile({
+  const file = await options.stores.files.getManagedFile({
     clientInstanceId: options.clientInstanceId,
     fileId: attachment.fileId
   });
   if (!file || file.status !== "available" || file.checksum !== attachment.checksum) {
     throw new AppError("NOT_FOUND", "Attachment source file is not available");
   }
-  const source = await options.conversationStore.ensureManagedArtifact({
+  const source = await options.stores.files.ensureManagedArtifact({
     id: attachmentPreviewSourceArtifactId(attachment),
     clientInstanceId: options.clientInstanceId,
     conversationId: attachment.conversationId,
@@ -252,7 +252,7 @@ async function rememberAttachmentPreviewSource(
   attachment: ConversationAttachment,
   source: ManagedArtifactRecord
 ): Promise<void> {
-  await options.conversationStore.updateConversationAttachment({
+  await options.stores.files.updateConversationAttachment({
     clientInstanceId: options.clientInstanceId,
     attachmentId: attachment.id,
     artifactRefs: {

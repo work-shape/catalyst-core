@@ -77,7 +77,7 @@ import {
   schema
 } from "./schema";
 
-type PostgresDatabase = PostgresJsDatabase<typeof schema>;
+type PostgresConnection = PostgresJsDatabase<typeof schema>;
 
 export interface PostgresPlatformFileStoreCallbacks {
   touchConversation(
@@ -88,7 +88,7 @@ export interface PostgresPlatformFileStoreCallbacks {
 }
 
 export function createPostgresPlatformFileStore(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   callbacks: PostgresPlatformFileStoreCallbacks
 ): PlatformFileStore {
   return new PostgresPlatformFileStore(db, callbacks);
@@ -96,7 +96,7 @@ export function createPostgresPlatformFileStore(
 
 class PostgresPlatformFileStore implements PlatformFileStore {
   constructor(
-    private readonly db: PostgresDatabase,
+    private readonly db: PostgresConnection,
     private readonly callbacks: PostgresPlatformFileStoreCallbacks
   ) {}
 
@@ -1066,7 +1066,7 @@ function managedArtifactMatchesEnsureInput(
 }
 
 type PostgresFileStoreDatabase =
-  PostgresDatabase | Parameters<Parameters<PostgresDatabase["transaction"]>[0]>[0];
+  PostgresConnection | Parameters<Parameters<PostgresConnection["transaction"]>[0]>[0];
 
 async function collectConversationManagedObjectsForDeletion(
   db: PostgresFileStoreDatabase,

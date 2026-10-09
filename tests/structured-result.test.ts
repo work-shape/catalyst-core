@@ -95,7 +95,7 @@ describe("structured result projection", () => {
         retainedUntil: "2030-01-01T00:00:00.000Z"
       });
       for (const id of ["msg_b", "msg_a"]) {
-        await store.appendMessage({
+        await store.conversations.appendMessage({
           id: asMessageId(id),
           clientInstanceId,
           conversationId: conversation.id,
@@ -105,7 +105,7 @@ describe("structured result projection", () => {
       }
 
       await expect(
-        store.listMessages({ clientInstanceId, conversationId: conversation.id })
+        store.conversations.listMessages({ clientInstanceId, conversationId: conversation.id })
       ).resolves.toMatchObject([{ id: "msg_b" }, { id: "msg_a" }]);
     } finally {
       vi.useRealTimers();

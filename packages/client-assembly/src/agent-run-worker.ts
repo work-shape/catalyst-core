@@ -8,7 +8,7 @@ import {
   AppError,
   type AgentRun,
   type AuthenticatedUser,
-  type PlatformStore,
+  type PlatformStores,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
@@ -47,8 +47,8 @@ export async function createClientInstanceAgentRunWorker(
 
   const worker = new AgentRunWorker({
     clientInstanceId: execution.clientInstanceId,
-    store: execution.store,
-    conversationHistory: execution.store,
+    store: execution.store.agentRuns,
+    conversationHistory: execution.store.conversations,
     workerId: execution.env.AGENT_RUN_WORKER_ID,
     concurrency: readAgentRunWorkerConcurrency(execution.env),
     loadCurrentUser: (run) => loadCurrentUser(execution.store, run),
@@ -124,8 +124,8 @@ export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | 
   return value;
 }
 
-async function loadCurrentUser(store: PlatformStore, run: AgentRun): Promise<AuthenticatedUser> {
-  const user = (await store.listUsers({ clientInstanceId: run.clientInstanceId })).find(
+async function loadCurrentUser(store: PlatformStores, run: AgentRun): Promise<AuthenticatedUser> {
+  const user = (await store.users.listUsers({ clientInstanceId: run.clientInstanceId })).find(
     (candidate) => candidate.id === run.ownerUserId
   );
   if (!user || user.status !== "active") {

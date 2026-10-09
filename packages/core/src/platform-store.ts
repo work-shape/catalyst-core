@@ -20,26 +20,35 @@ import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
 import type { StructuredDataStore } from "./structured-data";
 
-export interface PlatformStore
+export interface ConversationsStore
+  extends ConversationStore, ConversationRetentionStore, ModelProviderContinuationStore {}
+
+export interface AgentRunsStore extends AgentRunStore, RunObservationStore {}
+
+export interface ApprovalsStore extends ApprovalRequestStore, ApprovalDecisionStore {}
+
+export interface ExecutionWorkspacesStore
   extends
-    ConversationStore,
-    ConversationRetentionStore,
-    ModelProviderContinuationStore,
-    CollaborationWorkspaceStore,
-    PlatformFileStore,
-    AgentRunStore,
-    RunObservationStore,
     ExecutionWorkspaceMetadataStore,
     ExecutionWorkspaceFileStore,
     WorkspaceCommandStore,
-    ExecutionWorkspaceCleanupStore,
-    AuditEventStore,
-    ModelUsageEventStore,
-    UserStore,
-    ApiAccessStore,
-    ConfigAssetStore,
-    ApprovalRequestStore,
-    ApprovalDecisionStore,
-    StructuredDataStore {
+    ExecutionWorkspaceCleanupStore {}
+
+/** Domain stores bound to the same persistence connection or transaction. */
+export interface PlatformStores {
+  conversations: ConversationsStore;
+  agentRuns: AgentRunsStore;
+  files: PlatformFileStore;
+  audit: AuditEventStore;
+  usage: ModelUsageEventStore;
+  users: UserStore;
+  workspaces: CollaborationWorkspaceStore;
+  apiAccess: ApiAccessStore;
+  configAssets: ConfigAssetStore;
+  approvals: ApprovalsStore;
+  executionWorkspaces: ExecutionWorkspacesStore;
+  structuredData: StructuredDataStore;
+  /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
+  transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;
 }

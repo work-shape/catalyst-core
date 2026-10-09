@@ -8,7 +8,7 @@ import {
   asConversationId,
   type ClientInstanceId,
   type ConversationId,
-  type PlatformStore
+  type PlatformStores
 } from "@vivd-catalyst/core";
 import { createLocalWorkspaceObjectStorage } from "@vivd-catalyst/tool-execution";
 import { jsonObject, required, text } from "./support/assertions";
@@ -95,15 +95,15 @@ describe("Postgres conversation cleanup through a client assembly", () => {
       const deleted = await app.call("deleteConversation", { params: { conversationId } });
       expect(deleted.statusCode).toBe(200);
 
-      const [deletion] = (await app.stores.listAuditEvents({ clientInstanceId, limit: 50 })).filter(
-        (event) => event.type === "conversation.deleted"
-      );
+      const [deletion] = (
+        await app.stores.audit.listAuditEvents({ clientInstanceId, limit: 50 })
+      ).filter((event) => event.type === "conversation.deleted");
       expect(deletion).toMatchObject({
         subject: conversationId,
         metadata: expect.objectContaining({ cleanup: "complete", fileCount: uploads.length })
       });
       await expect(
-        app.stores.listConversationsPendingObjectCleanup({ clientInstanceId, limit: 10 })
+        app.stores.files.listConversationsPendingObjectCleanup({ clientInstanceId, limit: 10 })
       ).resolves.toEqual([]);
       const [left] = await db.sql<Array<{ count: number }>>`
         select count(*)::int as count from managed_files
@@ -119,9 +119,12 @@ describe("Postgres conversation cleanup through a client assembly", () => {
       // The object store holds no key of the Conversation any more.
       expect(await storedKeys(root)).toEqual([]);
       // With nothing pending the personal workspace of the author can go.
-      const [author] = await app.stores.listUsers({ clientInstanceId });
+      const [author] = await app.stores.users.listUsers({ clientInstanceId });
       await expect(
-        app.stores.deletePersonalWorkspaceForUser({ clientInstanceId, userId: required(author).id })
+        app.stores.workspaces.deletePersonalWorkspaceForUser({
+          clientInstanceId,
+          userId: required(author).id
+        })
       ).resolves.toMatchObject({ kind: "personal" });
     } finally {
       await app.close();
@@ -144,7 +147,7 @@ async function storedKeys(root: string): Promise<string[]> {
  * both objects stored, the job completed, the manifest written. Returns the object keys.
  */
 async function createCompletedPreview(input: {
-  store: PlatformStore;
+  store: PlatformStores;
   root: string;
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
@@ -158,7 +161,7 @@ async function createCompletedPreview(input: {
   const pageKey = keyOf("artifact-previews", "page-1.png");
   await objects.putObject({ key: sourceKey, body: bytes });
   await objects.putObject({ key: pageKey, body: bytes });
-  const source = await input.store.createManagedArtifact({
+  const source = await input.store.files.createManagedArtifact({
     ...scope,
     conversationId: input.conversationId,
     kind: "document.docx",
@@ -168,7 +171,7 @@ async function createCompletedPreview(input: {
     byteSize: bytes.byteLength,
     checksum: "sha256:report"
   });
-  const job = await input.store.enqueueArtifactPreviewJob({
+  const job = await input.store.files.enqueueArtifactPreviewJob({
     ...scope,
     conversationId: input.conversationId,
     sourceArtifactId: source.id,
@@ -176,14 +179,14 @@ async function createCompletedPreview(input: {
     sourceMimeType: source.mimeType
   });
   const now = new Date();
-  await input.store.claimNextArtifactPreviewJob({
+  await input.store.files.claimNextArtifactPreviewJob({
     ...scope,
     workerId: "preview-worker",
     leaseToken: "lease",
     now: now.toISOString(),
     leaseExpiresAt: new Date(now.getTime() + 60_000).toISOString()
   });
-  const page = await input.store.createManagedArtifact({
+  const page = await input.store.files.createManagedArtifact({
     ...scope,
     conversationId: input.conversationId,
     kind: "document.preview_page_image",
@@ -194,7 +197,7 @@ async function createCompletedPreview(input: {
     checksum: "sha256:page-1",
     metadata: { sourceArtifactId: source.id, previewRole: "page", pageNumber: 1 }
   });
-  await input.store.completeClaimedArtifactPreviewJob({
+  await input.store.files.completeClaimedArtifactPreviewJob({
     ...scope,
     jobId: job.id,
     leaseToken: "lease",

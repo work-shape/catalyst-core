@@ -41,7 +41,7 @@ describe("composite auth credential modes", () => {
       const authenticate = vi.fn(async () => user);
       const wrapped = new IdentityResolvingAuthAdapter(
         { id: "custom", credentialMode, authenticate },
-        createTestInstance().stores
+        createTestInstance().stores.users
       );
       expect(wrapped.credentialMode).toBe(credentialMode);
       const composite = new CompositeAuthAdapter([wrapped]);

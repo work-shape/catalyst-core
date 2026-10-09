@@ -11,9 +11,9 @@ import {
   type ChatServerOptions,
   type Route
 } from "@vivd-catalyst/chat-server";
-import { asClientInstanceId, NoopAuditRecorder, type PlatformStore } from "@vivd-catalyst/core";
+import { asClientInstanceId, NoopAuditRecorder, type PlatformStores } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore, createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
+import { createPostgresStores, type PostgresStores } from "@vivd-catalyst/postgres-store";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { testOperations, type TestOperationName, type TestCallInput } from "./operations";
@@ -23,7 +23,7 @@ type TestHttpServer = Awaited<ReturnType<typeof createChatServer>>;
 type TestResponse = Awaited<ReturnType<TestHttpServer["inject"]>>;
 type TestRouteHandler = NonNullable<Parameters<TestHttpServer["route"]>[0]["handler"]>;
 
-export interface TestInstance<S extends PlatformStore = PlatformStore> {
+export interface TestInstance<S extends PlatformStores = PlatformStores> {
   call(
     operation: TestOperationName,
     input?: TestCallInput,
@@ -36,12 +36,9 @@ export interface TestInstance<S extends PlatformStore = PlatformStore> {
 
 type TestIdentity = string | { headers: TestCallInput["headers"] };
 export type TestMemoryStore = InMemoryPlatformStore;
-export type TestPostgresStore = PostgresPlatformStore;
-export type TestServerOptions = Omit<
-  ChatServerOptions,
-  "apiAccessStore" | "configAssets" | "logger"
-> &
-  Partial<Pick<ChatServerOptions, "apiAccessStore" | "logger">> & {
+export type TestPostgresStore = PostgresStores;
+export type TestServerOptions = Omit<ChatServerOptions, "configAssets" | "logger"> &
+  Partial<Pick<ChatServerOptions, "logger">> & {
     configAssets?: Omit<ChatServerOptions["configAssets"], "source"> &
       Partial<Pick<ChatServerOptions["configAssets"], "source">>;
   };
@@ -82,15 +79,15 @@ export function createTestInstance(input: {
 }): Promise<TestInstance>;
 export function createTestInstance(): TestInstance<InMemoryPlatformStore>;
 export function createTestInstance(input: {
-  postgres: Parameters<typeof PostgresPlatformStore.connect>[0];
-}): Promise<TestInstance<PostgresPlatformStore>>;
+  postgres: Parameters<typeof createPostgresStores>[0];
+}): Promise<TestInstance<PostgresStores>>;
 export function createTestInstance(input: { server: TestServerOptions }): Promise<TestInstance>;
 export function createTestInstance(input: TestAppInput): Promise<TestInstance>;
 export function createTestInstance(
   input?:
     | TestAppInput
     | { execution: Parameters<typeof createClientInstanceExecutionAssembly>[0] }
-    | { postgres: Parameters<typeof PostgresPlatformStore.connect>[0] }
+    | { postgres: Parameters<typeof createPostgresStores>[0] }
     | { server: TestServerOptions }
 ): TestInstance<InMemoryPlatformStore> | Promise<TestInstance> {
   if (!input) return createDefaultInstance();
@@ -128,9 +125,7 @@ function createDefaultInstance(
       {
         config,
         clientInstanceId,
-        conversationStore: stores,
-        auditEventStore: stores,
-        userStore: stores,
+        stores: stores,
         authAdapter: {
           id: "test",
           credentialMode: "ambient",
@@ -138,7 +133,7 @@ function createDefaultInstance(
             const actor = request.headers["x-dev-user-id"];
             const externalUserId = typeof actor === "string" ? actor : "user-1";
             return {
-              ...(await stores.resolveUserIdentity({
+              ...(await stores.users.resolveUserIdentity({
                 clientInstanceId,
                 authSource: "test",
                 externalUserId,
@@ -154,7 +149,7 @@ function createDefaultInstance(
         },
         auditRecorder: new NoopAuditRecorder(),
         usageGovernance: new ModelUsageGovernance({
-          store: stores,
+          store: stores.usage,
           budget: config.usage.budget,
           safeguards: config.usage.safeguards,
           costs: config.usage.costs
@@ -196,7 +191,7 @@ async function createConfiguredInstance(
   input:
     | TestAppInput
     | { execution: Parameters<typeof createClientInstanceExecutionAssembly>[0] }
-    | { postgres: Parameters<typeof PostgresPlatformStore.connect>[0] }
+    | { postgres: Parameters<typeof createPostgresStores>[0] }
     | { server: TestServerOptions }
 ): Promise<TestInstance> {
   if ("execution" in input) {
@@ -216,7 +211,7 @@ async function createConfiguredInstance(
     return instance;
   }
   if ("postgres" in input) {
-    const stores = await PostgresPlatformStore.connect(input.postgres);
+    const stores = await createPostgresStores(input.postgres);
     const cleanup = stores.close.bind(stores);
     const instance = bindInstance(stores, { closed: false, cleanup });
     stores.close = instance.close;
@@ -224,11 +219,7 @@ async function createConfiguredInstance(
   }
   if ("server" in input) {
     const options = input.server;
-    const stores =
-      options.conversationStore instanceof InMemoryPlatformStore ||
-      options.conversationStore instanceof PostgresPlatformStore
-        ? options.conversationStore
-        : new InMemoryPlatformStore();
+    const stores = options.stores;
     const server = await createChatServer(completeServerOptions(options, stores));
     return bindInstance(stores, {
       server,
@@ -260,19 +251,19 @@ async function createConfiguredInstance(
 
 export function completeServerOptions(
   options: TestServerOptions,
-  stores: PlatformStore
+  stores: PlatformStores
 ): ChatServerOptions {
   return {
     ...options,
     logger: options.logger ?? createLogger(),
-    apiAccessStore: options.apiAccessStore ?? stores,
+    stores: options.stores,
     configAssets: options.configAssets
       ? {
           ...options.configAssets,
           source: options.configAssets.source ?? createStaticConfigAssetSource({})
         }
       : {
-          store: stores,
+          store: stores.configAssets,
           source: createStaticConfigAssetSource({}),
           validationRefs: {
             modelProviderIds: [],
@@ -286,7 +277,7 @@ export function completeServerOptions(
   };
 }
 
-function bindInstance<S extends PlatformStore>(
+function bindInstance<S extends PlatformStores>(
   stores: S,
   state: Metadata,
   start?: () => Promise<TestHttpServer>

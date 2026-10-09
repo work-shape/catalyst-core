@@ -203,12 +203,12 @@ describe("client instance app vertical slice", () => {
     const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
-      store,
+      store: store.usage,
       budget: config.usage.budget,
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
     });
-    const user = await store.resolveUserIdentity({
+    const user = await store.users.resolveUserIdentity({
       permissions: [],
       clientInstanceId,
       authSource: STANDALONE_AUTH_SOURCE,
@@ -220,7 +220,7 @@ describe("client instance app vertical slice", () => {
       permissionRefs: ["demo-tools"],
       correlationId: "corr_delete_me"
     });
-    const otherUser = await store.resolveUserIdentity({
+    const otherUser = await store.users.resolveUserIdentity({
       permissions: [],
       clientInstanceId,
       authSource: "development",
@@ -230,17 +230,17 @@ describe("client instance app vertical slice", () => {
       permissionRefs: ["demo-tools"],
       correlationId: "corr_other"
     });
-    const [personalWorkspace] = await store.listWorkspacesForUser({
+    const [personalWorkspace] = await store.workspaces.listWorkspacesForUser({
       clientInstanceId,
       userId: asUserId(user.id)
     });
-    const [otherPersonalWorkspace] = await store.listWorkspacesForUser({
+    const [otherPersonalWorkspace] = await store.workspaces.listWorkspacesForUser({
       clientInstanceId,
       userId: asUserId(otherUser.id)
     });
     expect(personalWorkspace).toMatchObject({ kind: "personal", role: "owner" });
     expect(otherPersonalWorkspace).toMatchObject({ kind: "personal", role: "owner" });
-    const conversation = await store.createConversation({
+    const conversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: personalWorkspace!.id,
@@ -249,13 +249,13 @@ describe("client instance app vertical slice", () => {
       title: "Delete this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    await store.appendMessage({
+    await store.conversations.appendMessage({
       clientInstanceId,
       conversationId: conversation.id,
       role: "user",
       text: "remove this message"
     });
-    const otherConversation = await store.createConversation({
+    const otherConversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: otherPersonalWorkspace!.id,
@@ -264,9 +264,9 @@ describe("client instance app vertical slice", () => {
       title: "Keep this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const deleteUser = store.deleteUser.bind(store);
+    const deleteUser = store.users.deleteUser.bind(store.users);
     let deleteUserAttempts = 0;
-    store.deleteUser = async (input) => {
+    store.users.deleteUser = async (input) => {
       deleteUserAttempts += 1;
       if (deleteUserAttempts === 1) {
         throw new AppError("INTERNAL", "Injected final user deletion failure");
@@ -303,11 +303,9 @@ describe("client instance app vertical slice", () => {
             return { ...user, scopes: ["*"] };
           }
         },
-        conversationStore: store,
-        auditEventStore: store,
-        userStore: store,
+        stores: store,
         usageGovernance,
-        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
         agentRuntime: createMissingRuntime(),
         modelProvider: createUnusedModelProvider(),
         standaloneAuth: {
@@ -346,9 +344,9 @@ describe("client instance app vertical slice", () => {
     const failed = await server.call("deleteCurrentUser", {});
     expect(failed.statusCode).toBe(500);
     await expect(
-      store.listWorkspacesForUser({ clientInstanceId, userId: asUserId(user.id) })
+      store.workspaces.listWorkspacesForUser({ clientInstanceId, userId: asUserId(user.id) })
     ).resolves.toEqual([]);
-    await expect(store.listUsers({ clientInstanceId })).resolves.toContainEqual(
+    await expect(store.users.listUsers({ clientInstanceId })).resolves.toContainEqual(
       expect.objectContaining({ id: user.id })
     );
 
@@ -361,17 +359,19 @@ describe("client instance app vertical slice", () => {
       { externalUserId: "auth-delete-me" }
     ]);
 
-    await expect(store.listUsers({ clientInstanceId })).resolves.not.toContainEqual(
+    await expect(store.users.listUsers({ clientInstanceId })).resolves.not.toContainEqual(
       expect.objectContaining({ id: user.id })
     );
-    await expect(store.getConversation(clientInstanceId, conversation.id)).resolves.toBeUndefined();
     await expect(
-      store.getConversation(clientInstanceId, otherConversation.id)
+      store.conversations.getConversation(clientInstanceId, conversation.id)
+    ).resolves.toBeUndefined();
+    await expect(
+      store.conversations.getConversation(clientInstanceId, otherConversation.id)
     ).resolves.toMatchObject({
       status: "active"
     });
     await expect(
-      store.listMessages({
+      store.conversations.listMessages({
         clientInstanceId,
         conversationId: conversation.id
       })
@@ -379,7 +379,7 @@ describe("client instance app vertical slice", () => {
       code: "NOT_FOUND"
     });
 
-    const audit = await store.listAuditEvents({ clientInstanceId });
+    const audit = await store.audit.listAuditEvents({ clientInstanceId });
     expect(audit).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -423,18 +423,18 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
     await app.call("getCurrentUser", {});
-    const [superadmin] = await app.stores.listUsers({ clientInstanceId });
+    const [superadmin] = await app.stores.users.listUsers({ clientInstanceId });
     const created = await app.call("createAdministeredUser", {
       payload: { displayLabel: "Delete by admin", roles: ["user"] }
     });
     expect(created.statusCode).toBe(200);
     const deletedUserId = asUserId((created.json() as { id: string }).id);
-    const [personal] = await app.stores.listWorkspacesForUser({
+    const [personal] = await app.stores.workspaces.listWorkspacesForUser({
       clientInstanceId,
       userId: deletedUserId
     });
     expect(personal).toMatchObject({ kind: "personal", role: "owner" });
-    const personalConversation = await app.stores.createConversation({
+    const personalConversation = await app.stores.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: personal!.id,
@@ -443,19 +443,19 @@ describe("client instance app vertical slice", () => {
       title: "Delete private data",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const shared = await app.stores.createWorkspace({
+    const shared = await app.stores.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Preserved shared data",
       creatorUserId: superadmin!.id
     });
-    await app.stores.addMembership({
+    await app.stores.workspaces.addMembership({
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
       userId: deletedUserId,
       role: "member"
     });
-    const sharedConversation = await app.stores.createConversation({
+    const sharedConversation = await app.stores.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
@@ -464,7 +464,7 @@ describe("client instance app vertical slice", () => {
       title: "Preserve shared data",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const privateInShared = await app.stores.createConversation({
+    const privateInShared = await app.stores.conversations.createConversation({
       visibility: "private",
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
@@ -473,7 +473,7 @@ describe("client instance app vertical slice", () => {
       title: "Delete private data in a shared workspace",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const otherUsersPrivate = await app.stores.createConversation({
+    const otherUsersPrivate = await app.stores.conversations.createConversation({
       visibility: "private",
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
@@ -482,13 +482,13 @@ describe("client instance app vertical slice", () => {
       title: "Preserve another user's private data",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const formerWorkspace = await app.stores.createWorkspace({
+    const formerWorkspace = await app.stores.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Left before deletion",
       creatorUserId: superadmin!.id
     });
-    const privateInFormerWorkspace = await app.stores.createConversation({
+    const privateInFormerWorkspace = await app.stores.conversations.createConversation({
       visibility: "private",
       clientInstanceId,
       collaborationWorkspaceId: formerWorkspace.id,
@@ -497,13 +497,13 @@ describe("client instance app vertical slice", () => {
       title: "Delete private data nobody else can open",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const requestTarget = await app.stores.createWorkspace({
+    const requestTarget = await app.stores.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Requested workspace",
       creatorUserId: superadmin!.id
     });
-    await app.stores.createAccessRequest({
+    await app.stores.workspaces.createAccessRequest({
       clientInstanceId,
       collaborationWorkspaceId: requestTarget.id,
       userId: deletedUserId
@@ -514,35 +514,39 @@ describe("client instance app vertical slice", () => {
     });
     expect(response.statusCode).toBe(200);
     await expect(
-      app.stores.getConversation(clientInstanceId, personalConversation.id)
+      app.stores.conversations.getConversation(clientInstanceId, personalConversation.id)
     ).resolves.toBe(undefined);
     await expect(
-      app.stores.getConversation(clientInstanceId, sharedConversation.id)
+      app.stores.conversations.getConversation(clientInstanceId, sharedConversation.id)
     ).resolves.toMatchObject({ status: "active" });
     for (const conversation of [privateInShared, privateInFormerWorkspace]) {
       await expect(
-        app.stores.getConversation(clientInstanceId, conversation.id)
+        app.stores.conversations.getConversation(clientInstanceId, conversation.id)
       ).resolves.toMatchObject({ status: "deleted" });
     }
     await expect(
-      app.stores.getConversation(clientInstanceId, otherUsersPrivate.id)
+      app.stores.conversations.getConversation(clientInstanceId, otherUsersPrivate.id)
     ).resolves.toMatchObject({ status: "active", visibility: "private" });
     await expect(
-      app.stores.getMembership({
+      app.stores.workspaces.getMembership({
         clientInstanceId,
         collaborationWorkspaceId: shared.id,
         userId: deletedUserId
       })
     ).resolves.toBeUndefined();
     await expect(
-      app.stores.getAccessRequest({
+      app.stores.workspaces.getAccessRequest({
         clientInstanceId,
         collaborationWorkspaceId: requestTarget.id,
         userId: deletedUserId
       })
     ).resolves.toBeUndefined();
-    await expect(app.stores.getWorkspace(clientInstanceId, shared.id)).resolves.toBeDefined();
-    await expect(app.stores.getWorkspace(clientInstanceId, personal!.id)).resolves.toBeUndefined();
+    await expect(
+      app.stores.workspaces.getWorkspace(clientInstanceId, shared.id)
+    ).resolves.toBeDefined();
+    await expect(
+      app.stores.workspaces.getWorkspace(clientInstanceId, personal!.id)
+    ).resolves.toBeUndefined();
 
     await app.close();
   });
@@ -609,10 +613,10 @@ describe("client instance app vertical slice", () => {
     expect(fixture.deletedObjectKeys).toEqual(expect.arrayContaining(objectKeys));
     for (const fileId of fileIds) {
       await expect(
-        app.stores.getManagedFile({ clientInstanceId, fileId: asManagedFileId(fileId) })
+        app.stores.files.getManagedFile({ clientInstanceId, fileId: asManagedFileId(fileId) })
       ).resolves.toBeUndefined();
     }
-    const audit = await app.stores.listAuditEvents({ clientInstanceId });
+    const audit = await app.stores.audit.listAuditEvents({ clientInstanceId });
     expect(audit).toContainEqual(
       expect.objectContaining({
         type: "user.deleted",
@@ -651,7 +655,7 @@ describe("client instance app vertical slice", () => {
         "agent_models.manage",
         "!agent_models.manage"
       ]) {
-        const managedUser = await app.stores.createUser({
+        const managedUser = await app.stores.users.createUser({
           clientInstanceId,
           displayLabel: "Managed user",
           roles: ["user"],
@@ -989,7 +993,7 @@ describe("client instance app vertical slice", () => {
     expect(createdConversation.statusCode).toBe(200);
     const conversation = createdConversation.json() as { id: string; createdByUserId: string };
     expect(conversation.createdByUserId).toBe(administeredUser.id);
-    await seedConversationMessage(app.stores, conversation.id);
+    await seedConversationMessage(app.stores.conversations, conversation.id);
 
     const standaloneConversations = await app.call(
       "listConversations",
@@ -1096,7 +1100,7 @@ describe("client instance app vertical slice", () => {
     expect(createdConversation.statusCode).toBe(200);
     const conversation = createdConversation.json() as { id: string; createdByUserId: string };
     expect(conversation.createdByUserId).toBe(administeredUser.id);
-    await seedConversationMessage(app.stores, conversation.id);
+    await seedConversationMessage(app.stores.conversations, conversation.id);
 
     const standaloneConversations = await app.call(
       "listConversations",

@@ -4,12 +4,12 @@ import {
   type StructuredDataResourceRecord,
   type StructuredDataStore
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapStructuredDataResource } from "./rows";
 import { structuredDataResources } from "./schema";
 
 export async function getStructuredDataResource(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<StructuredDataStore["getStructuredDataResource"]>[0]
 ): Promise<StructuredDataResourceRecord | undefined> {
   const [row] = await db
@@ -27,7 +27,7 @@ export async function getStructuredDataResource(
 }
 
 export async function listStructuredDataResources(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<StructuredDataStore["listStructuredDataResources"]>[0]
 ): Promise<StructuredDataResourceRecord[]> {
   const rows = await db
@@ -44,7 +44,7 @@ export async function listStructuredDataResources(
 }
 
 export async function publishStructuredDataResource(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: Parameters<StructuredDataStore["publishStructuredDataResource"]>[0]
 ): Promise<StructuredDataResourceRecord> {
   const now = new Date();

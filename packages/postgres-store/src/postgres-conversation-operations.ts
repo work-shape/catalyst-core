@@ -29,7 +29,7 @@ import {
   type MoveConversationInput,
   createPlatformId
 } from "@vivd-catalyst/core";
-import type { PostgresDatabase, PostgresTransaction } from "./postgres-database";
+import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   agentRuns,
@@ -41,7 +41,7 @@ import {
 } from "./schema";
 
 export async function createConversation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CreateConversationInput
 ): Promise<Conversation> {
   const id = createPlatformId<"ConversationId">("conv");
@@ -66,7 +66,7 @@ export async function createConversation(
 }
 
 export async function getConversation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   clientInstanceId: ClientInstanceId,
   conversationId: ConversationId
 ): Promise<Conversation | undefined> {
@@ -84,7 +84,7 @@ export async function getConversation(
 }
 
 export async function listConversationsForWorkspace(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
@@ -123,7 +123,7 @@ export async function listConversationsForWorkspace(
   return rows.map(mapConversation);
 }
 
-function conversationMessages(db: PostgresDatabase) {
+function conversationMessages(db: PostgresConnection) {
   return db
     .select({ id: messages.id })
     .from(messages)
@@ -135,7 +135,7 @@ function conversationMessages(db: PostgresDatabase) {
     );
 }
 
-function conversationDraftAttachments(db: PostgresDatabase) {
+function conversationDraftAttachments(db: PostgresConnection) {
   return db
     .select({ id: conversationAttachments.id })
     .from(conversationAttachments)
@@ -150,7 +150,7 @@ function conversationDraftAttachments(db: PostgresDatabase) {
 }
 
 export async function listPrivateConversationsCreatedByUser(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; userId: string }
 ): Promise<Conversation[]> {
   const rows = await db
@@ -168,7 +168,7 @@ export async function listPrivateConversationsCreatedByUser(
 }
 
 export async function moveConversation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: MoveConversationInput
 ): Promise<Conversation> {
   const [row] = await db
@@ -232,7 +232,7 @@ export async function requireActiveConversationLock(
   }
 }
 
-function conversationRunsInProgress(db: PostgresDatabase | PostgresTransaction) {
+function conversationRunsInProgress(db: PostgresConnection) {
   return db
     .select({ id: agentRuns.id })
     .from(agentRuns)
@@ -250,7 +250,7 @@ function conversationRunsInProgress(db: PostgresDatabase | PostgresTransaction) 
  * them, so they cannot drift. A Conversation with an agent run in progress meets neither.
  */
 function conversationExpiryCriteria(
-  db: PostgresDatabase | PostgresTransaction,
+  db: PostgresConnection,
   input: { now?: string; abandonedBefore?: string }
 ): { due: SQL | undefined; abandoned: SQL | undefined } {
   const idle = notExists(conversationRunsInProgress(db));
@@ -268,7 +268,7 @@ function conversationExpiryCriteria(
 }
 
 export async function listExpiredConversations(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     now?: string;
@@ -296,7 +296,7 @@ export async function listExpiredConversations(
 }
 
 export async function updateConversationTitle(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -326,7 +326,7 @@ export async function updateConversationTitle(
 
 /** Called inside the approval transaction; the public hook reuses this idempotently. */
 export async function appendApprovalDecision(
-  db: PostgresDatabase | PostgresTransaction,
+  db: PostgresConnection,
   request: ApprovalRequest
 ): Promise<void> {
   const input = createApprovalDecisionMessage(request);
@@ -364,14 +364,14 @@ export async function appendApprovalDecision(
 }
 
 export async function appendMessage(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: CreateMessageInput
 ): Promise<ChatMessage> {
   return db.transaction(async (tx) => mapMessage(await appendMessageRecord(tx, input)));
 }
 
 export async function appendAssistantMessage(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: AppendAssistantMessageInput
 ): Promise<ChatMessage> {
   return db.transaction(async (tx) => {
@@ -443,7 +443,7 @@ async function appendMessageRecord(
 }
 
 export async function listMessages(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -468,7 +468,7 @@ export async function listMessages(
 }
 
 export async function listRecentMessages(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -495,7 +495,7 @@ export async function listRecentMessages(
 }
 
 export async function deleteConversation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -511,7 +511,7 @@ export async function deleteConversation(
 }
 
 export async function expireConversation(
-  db: PostgresDatabase,
+  db: PostgresConnection,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -635,7 +635,7 @@ async function markLockedConversationDeleted(
 }
 
 export async function touchConversation(
-  db: PostgresDatabase | PostgresTransaction,
+  db: PostgresConnection,
   clientInstanceId: ClientInstanceId,
   conversationId: ConversationId,
   updatedAt: Date

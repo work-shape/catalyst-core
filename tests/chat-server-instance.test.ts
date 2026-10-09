@@ -533,7 +533,7 @@ describe("client instance app vertical slice", () => {
     try {
       const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
       const names = ["personal", "restricted"];
-      await app.stores.applyConfigAssetMutations({
+      await app.stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: names.map((name) => ({
           type: "upsert" as const,
@@ -558,12 +558,12 @@ describe("client instance app vertical slice", () => {
         ).agents.map((agent) => agent.name);
       expect(await readAgentNames()).toEqual(["personal", "restricted", "test_agent"]);
 
-      await app.stores.setAgentAvailability({
+      await app.stores.configAssets.setAgentAvailability({
         clientInstanceId,
         agentName: "personal",
         availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
       });
-      await app.stores.setAgentAvailability({
+      await app.stores.configAssets.setAgentAvailability({
         clientInstanceId,
         agentName: "restricted",
         availability: { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] }

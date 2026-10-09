@@ -161,7 +161,7 @@ describe("execution workspace source attachments", () => {
       await mkdir(join(fixture.root, ...artifactPathParts.slice(0, -1)), { recursive: true });
       await writeFile(artifactPath, "final,total\nAda,42\n", "utf8");
 
-      const artifact = await fixture.store.createManagedArtifact({
+      const artifact = await fixture.store.files.createManagedArtifact({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id,
         kind: "text/csv",
@@ -184,7 +184,7 @@ describe("execution workspace source attachments", () => {
       expect(deletion.artifactObjectKeys).toContain(artifactObjectKey);
       await expect(access(artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
       await expect(
-        fixture.store.getManagedArtifact({
+        fixture.store.files.getManagedArtifact({
           clientInstanceId: fixture.clientInstanceId,
           artifactId: artifact.id
         })
@@ -444,7 +444,7 @@ async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = 
     store,
     handler: createExecutionWorkspaceSourceAttachmentHandler({
       clientInstanceId,
-      files: store,
+      files: store.files,
       objectRootDirectory: root,
       markDeletedOnDelete: true,
       ...input

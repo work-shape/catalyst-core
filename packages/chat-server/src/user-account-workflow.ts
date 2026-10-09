@@ -29,7 +29,7 @@ export class UserAccountWorkflow {
     context: RuntimeCallContext,
     command: UpdateCurrentUserCommand
   ): Promise<AuthenticatedUser> {
-    const updated = await this.options.userStore.updateUser({
+    const updated = await this.options.stores.users.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: asUserId(actor.id),
       displayLabel: command.displayLabel
@@ -127,7 +127,7 @@ export class UserAccountWorkflow {
       throw error;
     }
     await this.deleteStandalonePasswordSignIns(existing);
-    const deleted = await this.options.userStore.deleteUser({
+    const deleted = await this.options.stores.users.deleteUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: asUserId(actor.id)
     });
@@ -151,7 +151,7 @@ export class UserAccountWorkflow {
   }
 
   private async getCurrentUserOrThrow(actor: AuthenticatedUser): Promise<UserRecord> {
-    const users = await this.options.userStore.listUsers({
+    const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     const user = users.find((candidate) => candidate.id === actor.id);

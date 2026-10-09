@@ -55,7 +55,7 @@ describe("client instance app vertical slice", () => {
       const result = started.json() as { run: { id: string; status: string } };
       expect(result.run.status).toBe("queued");
       expect(
-        await app.stores.listRunObservations({
+        await app.stores.agentRuns.listRunObservations({
           clientInstanceId: asClientInstanceId(getTestConfig(app).clientInstance.id),
           runId: asAgentRunId(result.run.id),
           afterSequence: 0,
@@ -988,7 +988,7 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(withDefault.json()).toMatchObject({ run: { agentName: "test_agent" } });
 
       // Without an instance default available here, the first available agent is used.
-      await app.stores.applyConfigAssetMutations({
+      await app.stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "setDefaultAgent", agentName: undefined }]
       });
@@ -1023,7 +1023,7 @@ describe("agent availability per Collaboration Workspace", () => {
       await fixture.setAvailability("shared_only", SELECTED_NOWHERE);
 
       await expect(
-        app.stores.getAgentRun({ clientInstanceId, runId: asAgentRunId(run.id) })
+        app.stores.agentRuns.getAgentRun({ clientInstanceId, runId: asAgentRunId(run.id) })
       ).resolves.toMatchObject({ agentName: "shared_only", status: "queued" });
       const next = await fixture.startRun(
         await fixture.createConversation(sharedWorkspaceId),
@@ -1129,9 +1129,9 @@ async function createAvailabilityFixture() {
   const personalWorkspaceId = workspaces.find((workspace) => workspace.kind === "personal")!.id;
 
   const setAvailability = (agentName: string, availability: AgentAvailability) =>
-    app.stores.setAgentAvailability({ clientInstanceId, agentName, availability });
+    app.stores.configAssets.setAgentAvailability({ clientInstanceId, agentName, availability });
   const names = ["shared_only", "personal_only", "hidden"];
-  await app.stores.applyConfigAssetMutations({
+  await app.stores.configAssets.applyConfigAssetMutations({
     clientInstanceId,
     mutations: names.map((name) => ({
       type: "upsert" as const,

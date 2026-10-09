@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import { describe, expect, it } from "vitest";
 import type postgres from "postgres";
 import {
@@ -7,7 +8,7 @@ import {
 } from "@vivd-catalyst/core";
 import { settled, waitUntilBlocked } from "./support/postgres-concurrency-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
-import type { TestPostgresStore } from "./support/test-instance";
+
 import { RecordingByteStore, createTestManagedObjectAccess } from "./support/retention-harness";
 
 const NOT_AVAILABLE = { code: "NOT_FOUND", message: "Conversation is not available" };
@@ -20,8 +21,8 @@ describe("Postgres writes into a conversation that is being deleted", () => {
   async function createFixture(label: string) {
     const clientInstanceId = db.clientInstance(label);
     const scope = { clientInstanceId };
-    const user = await db.store.createUser({ clientInstanceId, displayLabel: "Author" });
-    const personalWorkspace = await db.store.ensurePersonalWorkspace({
+    const user = await db.store.users.createUser({ clientInstanceId, displayLabel: "Author" });
+    const personalWorkspace = await db.store.workspaces.ensurePersonalWorkspace({
       clientInstanceId,
       userId: user.id
     });
@@ -29,13 +30,13 @@ describe("Postgres writes into a conversation that is being deleted", () => {
     /** Writes through the second pool, as a run does that works while the first side deletes. */
     const writer = createTestManagedObjectAccess({
       clientInstanceId,
-      files: db.secondStore,
+      files: db.secondStore.files,
       byteStore
     });
     const now = () => new Date().toISOString();
 
     const createSharedWorkspace = (name: string) =>
-      db.store.createWorkspace({
+      db.store.workspaces.createWorkspace({
         clientInstanceId,
         kind: "shared",
         name,
@@ -56,8 +57,10 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       title: string,
       workspace: CollaborationWorkspace = personalWorkspace
     ) => {
-      const conversation = await db.store.createConversation(conversationInput(title, workspace));
-      const message = await db.store.appendMessage({
+      const conversation = await db.store.conversations.createConversation(
+        conversationInput(title, workspace)
+      );
+      const message = await db.store.conversations.appendMessage({
         ...scope,
         conversationId: conversation.id,
         role: "user",
@@ -82,8 +85,12 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       byteSize: name.length,
       checksum: name
     });
-    const deleteConversation = (store: TestPostgresStore, conversation: Conversation) =>
-      store.deleteConversation({ ...scope, conversationId: conversation.id, deletedAt: now() });
+    const deleteConversation = (store: PlatformStores, conversation: Conversation) =>
+      store.conversations.deleteConversation({
+        ...scope,
+        conversationId: conversation.id,
+        deletedAt: now()
+      });
     /**
      * The deletion claim removes the messages after it has taken the Conversation lock, so a
      * row lock on a message holds it there.
@@ -114,7 +121,8 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       count(db.sql`
         select count(*)::int as count from collaboration_workspaces where id = ${workspace.id}
       `);
-    const pending = () => db.store.listConversationsPendingObjectCleanup({ ...scope, limit: 10 });
+    const pending = () =>
+      db.store.files.listConversationsPendingObjectCleanup({ ...scope, limit: 10 });
 
     return {
       clientInstanceId,
@@ -175,7 +183,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       (tx) => tx`select 1 from managed_artifacts where id = ${existing.id} for update`
     );
     const marking = settled(
-      db.store.markConversationManagedObjectsDeleted({
+      db.store.files.markConversationManagedObjectsDeleted({
         ...fixture.scope,
         conversationId: conversation.id,
         deletedAt: fixture.now()
@@ -184,7 +192,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
     await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
 
     const insert = await settled(
-      db.secondStore.createManagedArtifact(fixture.artifactRow(conversation, "late"))
+      db.secondStore.files.createManagedArtifact(fixture.artifactRow(conversation, "late"))
     );
     await held.commit();
 
@@ -219,7 +227,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       `
     );
 
-    const insert = settled(db.secondStore.ensureManagedArtifact(early));
+    const insert = settled(db.secondStore.files.ensureManagedArtifact(early));
     await waitUntilBlocked(db.sql, { waiter: db.second, holder: db.barrier });
     const deletion = settled(fixture.deleteConversation(db.store, conversation));
     await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.second });
@@ -248,7 +256,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
   it("refuses an artifact, an ensured artifact and a workspace file in a deleted conversation", async () => {
     const fixture = await createFixture("refused");
     const { conversation } = await fixture.createConversation("deleted");
-    const workspace = await db.store.ensureExecutionWorkspace({
+    const workspace = await db.store.executionWorkspaces.ensureExecutionWorkspace({
       ...fixture.scope,
       conversationId: conversation.id,
       ownerUserId: fixture.user.id,
@@ -257,16 +265,16 @@ describe("Postgres writes into a conversation that is being deleted", () => {
     await fixture.deleteConversation(db.store, conversation);
 
     await expect(
-      db.secondStore.createManagedArtifact(fixture.artifactRow(conversation, "late"))
+      db.secondStore.files.createManagedArtifact(fixture.artifactRow(conversation, "late"))
     ).rejects.toMatchObject(NOT_AVAILABLE);
     await expect(
-      db.secondStore.ensureManagedArtifact({
+      db.secondStore.files.ensureManagedArtifact({
         ...fixture.artifactRow(conversation, "ensured"),
         id: asManagedArtifactId(`art_${globalThis.crypto.randomUUID()}`)
       })
     ).rejects.toMatchObject(NOT_AVAILABLE);
     await expect(
-      db.secondStore.upsertWorkspaceFile({
+      db.secondStore.executionWorkspaces.upsertWorkspaceFile({
         ...fixture.scope,
         workspaceId: workspace.id,
         path: "late.csv",
@@ -291,7 +299,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
     const deletion = settled(fixture.deleteConversation(db.store, conversation));
     await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
     const append = settled(
-      db.secondStore.appendAssistantMessage({
+      db.secondStore.conversations.appendAssistantMessage({
         ...fixture.scope,
         conversationId: conversation.id,
         text: "An answer that arrives too late"
@@ -304,7 +312,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
     expect(await append).toMatchObject({ status: "rejected", reason: NOT_AVAILABLE });
     await expect(fixture.messageCount(conversation)).resolves.toBe(0);
     await expect(
-      db.secondStore.appendMessage({
+      db.secondStore.conversations.appendMessage({
         ...fixture.scope,
         conversationId: conversation.id,
         role: "user",
@@ -326,11 +334,11 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       await fixture.deleteConversation(db.store, removed);
       const hardDelete = () =>
         kind === "shared"
-          ? db.store.deleteWorkspace({
+          ? db.store.workspaces.deleteWorkspace({
               ...fixture.scope,
               collaborationWorkspaceId: workspace.id
             })
-          : db.store.deletePersonalWorkspaceForUser({
+          : db.store.workspaces.deletePersonalWorkspaceForUser({
               ...fixture.scope,
               userId: fixture.user.id
             });
@@ -349,7 +357,9 @@ describe("Postgres writes into a conversation that is being deleted", () => {
         const deletion = settled(hardDelete());
         await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
         const creation = settled(
-          db.secondStore.createConversation(fixture.conversationInput("too late", workspace))
+          db.secondStore.conversations.createConversation(
+            fixture.conversationInput("too late", workspace)
+          )
         );
         await waitUntilBlocked(db.sql, { waiter: db.second, holder: db.first });
         await held.commit();
@@ -375,7 +385,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       const deletion = settled(hardDelete());
       await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
       const move = settled(
-        db.secondStore.moveConversation({
+        db.secondStore.conversations.moveConversation({
           ...fixture.scope,
           conversationId: moving.id,
           fromCollaborationWorkspaceId: fixture.personalWorkspace.id,
@@ -391,7 +401,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       await expect(fixture.workspaceRows(workspace)).resolves.toBe(0);
       // The Conversation stays where it was, with its message.
       await expect(
-        db.store.getConversation(fixture.clientInstanceId, moving.id)
+        db.store.conversations.getConversation(fixture.clientInstanceId, moving.id)
       ).resolves.toMatchObject({
         status: "active",
         collaborationWorkspaceId: fixture.personalWorkspace.id

@@ -313,7 +313,7 @@
       "target": "lint",
       "rule": "catalyst/memory-store",
       "scope": "tests",
-      "count": 3,
+      "count": 2,
       "owner": "CB-3b"
     },
     {
@@ -486,13 +486,6 @@
     },
     {
       "target": "lint",
-      "rule": "knip/types",
-      "scope": "packages/tool-execution",
-      "count": 1,
-      "owner": "EW-1"
-    },
-    {
-      "target": "lint",
       "rule": "knip/unlisted",
       "scope": "tests",
       "count": 3,
@@ -613,13 +606,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/postgres-store/src/index.ts",
-      "count": 1,
-      "owner": "CB-3a"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
       "count": 1,
       "owner": "CB-3a"
@@ -628,13 +614,6 @@
       "target": "lint",
       "rule": "max-lines",
       "scope": "packages/postgres-store/src/postgres-file-store.ts",
-      "count": 1,
-      "owner": "CB-3a"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
-      "scope": "packages/postgres-store/src/schema.ts",
       "count": 1,
       "owner": "CB-3a"
     },
@@ -802,30 +781,9 @@
     {
       "target": "types:packages",
       "rule": "typescript/unused",
-      "scope": "packages/chat-server",
-      "count": 2,
-      "owner": "CB-4d"
-    },
-    {
-      "target": "types:packages",
-      "rule": "typescript/unused",
       "scope": "packages/chat-ui",
       "count": 5,
       "owner": "G-5c"
-    },
-    {
-      "target": "types:packages",
-      "rule": "typescript/unused",
-      "scope": "packages/client-assembly",
-      "count": 1,
-      "owner": "CB-10a"
-    },
-    {
-      "target": "types:packages",
-      "rule": "typescript/unused",
-      "scope": "packages/postgres-store",
-      "count": 2,
-      "owner": "CB-3a"
     },
     {
       "target": "types:packages",
@@ -851,30 +809,9 @@
     {
       "target": "types:tests",
       "rule": "typescript/unused",
-      "scope": "packages/chat-server",
-      "count": 2,
-      "owner": "CB-4d"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/unused",
       "scope": "packages/chat-ui",
       "count": 5,
       "owner": "G-5c"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/unused",
-      "scope": "packages/client-assembly",
-      "count": 1,
-      "owner": "CB-10a"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/unused",
-      "scope": "packages/postgres-store",
-      "count": 2,
-      "owner": "CB-3a"
     },
     {
       "target": "types:tests",

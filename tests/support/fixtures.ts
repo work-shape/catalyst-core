@@ -183,7 +183,7 @@ export async function seedTestAssets(
 ): Promise<void> {
   const assets = testAssetsByConfig.get(app.config);
   if (!assets) return;
-  await app.store.applyConfigAssetMutations({
+  await app.store.configAssets.applyConfigAssetMutations({
     clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
     mutations: [
       { type: "upsert", kind: "agent", name: assets.defaultAgentName, config: assets.agent },

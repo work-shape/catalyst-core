@@ -236,7 +236,7 @@ describe("standalone auth email routes", () => {
         request: { clientInstanceId }
       } = await createMixedCredentials();
       const authAdapter = wrapped
-        ? new IdentityResolvingAuthAdapter(auth.authAdapter, createTestInstance().stores)
+        ? new IdentityResolvingAuthAdapter(auth.authAdapter, createTestInstance().stores.users)
         : auth.authAdapter;
       const authenticate = vi.spyOn(auth.authAdapter, "authenticate");
       const httpServer = Fastify();

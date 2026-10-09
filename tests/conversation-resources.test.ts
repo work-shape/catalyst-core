@@ -50,13 +50,13 @@ describe("conversation resource store queries", () => {
       conversationId: conversation.id,
       filename: "deleted.txt"
     });
-    await store.claimReadyDraftAttachmentsForMessage({
+    await store.files.claimReadyDraftAttachmentsForMessage({
       clientInstanceId,
       conversationId: conversation.id,
       messageId: asMessageId("msg_sent"),
       claimedAt: new Date().toISOString()
     });
-    await store.updateConversationAttachment({
+    await store.files.updateConversationAttachment({
       clientInstanceId,
       attachmentId: deleted.id,
       status: "deleted"
@@ -83,13 +83,19 @@ describe("conversation resource store queries", () => {
     await createArtifact(store, clientInstanceId, otherConversation.id, "other.csv");
 
     await expect(
-      store.listSentConversationAttachments({ clientInstanceId, conversationId: conversation.id })
+      store.files.listSentConversationAttachments({
+        clientInstanceId,
+        conversationId: conversation.id
+      })
     ).resolves.toEqual([
       expect.objectContaining({ id: second.id }),
       expect.objectContaining({ id: first.id })
     ]);
     await expect(
-      store.listConversationManagedArtifacts({ clientInstanceId, conversationId: conversation.id })
+      store.files.listConversationManagedArtifacts({
+        clientInstanceId,
+        conversationId: conversation.id
+      })
     ).resolves.toEqual([
       expect.objectContaining({ id: secondArtifact.id }),
       expect.objectContaining({ id: firstArtifact.id })
@@ -111,14 +117,14 @@ describe("conversation resource routes", () => {
         conversationId: conversation.id,
         filename: "claim.pdf"
       });
-      await fixture.store.claimReadyDraftAttachmentsForMessage({
+      await fixture.store.files.claimReadyDraftAttachmentsForMessage({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_structured_source"),
         claimedAt: new Date().toISOString()
       });
       await tick();
-      const resource = await fixture.store.publishStructuredDataResource({
+      const resource = await fixture.store.structuredData.publishStructuredDataResource({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         resourceKey: "claim_data",
@@ -445,7 +451,7 @@ describe("conversation resource routes", () => {
         ownerId
       );
       const pdfBytes = new TextEncoder().encode("%PDF-1.4 original");
-      const file = await fixture.store.createManagedFile({
+      const file = await fixture.store.files.createManagedFile({
         clientInstanceId: fixture.clientInstanceId,
         ownerUserId: ownerId,
         filename: "input.pdf",
@@ -459,7 +465,7 @@ describe("conversation resource routes", () => {
         mimeType: file.mimeType,
         bytes: pdfBytes
       });
-      const canonicalPdf = await fixture.store.createManagedArtifact({
+      const canonicalPdf = await fixture.store.files.createManagedArtifact({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         sourceFileId: file.id,
@@ -470,7 +476,7 @@ describe("conversation resource routes", () => {
         byteSize: 10,
         checksum: "sha256:input-canonical"
       });
-      const pagesJson = await fixture.store.createManagedArtifact({
+      const pagesJson = await fixture.store.files.createManagedArtifact({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         sourceFileId: file.id,
@@ -481,7 +487,7 @@ describe("conversation resource routes", () => {
         byteSize: 10,
         checksum: "sha256:input-pages"
       });
-      const sent = await fixture.store.createConversationAttachment({
+      const sent = await fixture.store.files.createConversationAttachment({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         fileId: file.id,
@@ -496,7 +502,7 @@ describe("conversation resource routes", () => {
           "document.canonical_pdf": canonicalPdf.id
         }
       });
-      await fixture.store.claimReadyDraftAttachmentsForMessage({
+      await fixture.store.files.claimReadyDraftAttachmentsForMessage({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_pdf"),
@@ -543,7 +549,7 @@ describe("conversation resource routes", () => {
         ownerId
       );
       const sourceBytes = new TextEncoder().encode("source document");
-      const file = await fixture.store.createManagedFile({
+      const file = await fixture.store.files.createManagedFile({
         clientInstanceId: fixture.clientInstanceId,
         ownerUserId: ownerId,
         filename: "brief.docx",
@@ -557,7 +563,7 @@ describe("conversation resource routes", () => {
         mimeType: file.mimeType,
         bytes: sourceBytes
       });
-      const prepared = await fixture.store.createManagedArtifact({
+      const prepared = await fixture.store.files.createManagedArtifact({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         sourceFileId: file.id,
@@ -568,7 +574,7 @@ describe("conversation resource routes", () => {
         byteSize: 10,
         checksum: "sha256:prepared"
       });
-      const sent = await fixture.store.createConversationAttachment({
+      const sent = await fixture.store.files.createConversationAttachment({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         fileId: file.id,
@@ -580,7 +586,7 @@ describe("conversation resource routes", () => {
         format: "docx",
         artifactRefs: { "document.canonical_pdf": prepared.id }
       });
-      await fixture.store.claimReadyDraftAttachmentsForMessage({
+      await fixture.store.files.claimReadyDraftAttachmentsForMessage({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_sent"),
@@ -723,7 +729,7 @@ async function createFixture() {
     maxFileBytes: 1024,
     acceptedFileTypes: [],
     listDraftAttachments: (conversationId) =>
-      store.listDraftAttachments({ clientInstanceId, conversationId }),
+      store.files.listDraftAttachments({ clientInstanceId, conversationId }),
     async uploadDraftAttachment() {
       throw new AppError("INTERNAL", "Uploads are not used by this test");
     },
@@ -734,7 +740,7 @@ async function createFixture() {
       throw new AppError("INTERNAL", "Deletion is not used by this test");
     },
     deleteConversationAttachments: (input) =>
-      store.markConversationManagedObjectsDeleted({
+      store.files.markConversationManagedObjectsDeleted({
         clientInstanceId,
         conversationId: input.conversationId,
         deletedAt: input.deletedAt
@@ -767,19 +773,16 @@ async function createFixture() {
       config,
       clientInstanceId,
       authAdapter: new HmacSessionTokenAuthAdapter(authOptions),
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      apiAccessStore: store,
+      stores: store,
       usageGovernance: new ModelUsageGovernance({
-        store,
+        store: store.usage,
         budget: config.usage.budget,
         safeguards: config.usage.safeguards,
         costs: config.usage.costs
       }),
       auditRecorder: new NoopAuditRecorder(),
       configAssets: {
-        store,
+        store: store.configAssets,
         source: {
           async getSnapshot() {
             return { version: 0, agents: [], skills: [] };
@@ -828,12 +831,12 @@ async function createAttachment(
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: Parameters<
-      TestMemoryStore["createConversationAttachment"]
+      TestMemoryStore["files"]["createConversationAttachment"]
     >[0]["conversationId"];
     filename: string;
   }
 ) {
-  const file = await store.createManagedFile({
+  const file = await store.files.createManagedFile({
     clientInstanceId: input.clientInstanceId,
     ownerUserId: "owner",
     filename: input.filename,
@@ -842,7 +845,7 @@ async function createAttachment(
     checksum: `sha256:${input.filename}`,
     objectKey: `private/${input.filename}`
   });
-  return store.createConversationAttachment({
+  return store.files.createConversationAttachment({
     clientInstanceId: input.clientInstanceId,
     conversationId: input.conversationId,
     fileId: file.id,
@@ -858,11 +861,13 @@ async function createAttachment(
 function createArtifact(
   store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
-  conversationId: Parameters<TestMemoryStore["createManagedArtifact"]>[0]["conversationId"],
+  conversationId: Parameters<
+    TestMemoryStore["files"]["createManagedArtifact"]
+  >[0]["conversationId"],
   filename: string,
   metadata: Record<string, string> = {}
 ) {
-  return store.createManagedArtifact({
+  return store.files.createManagedArtifact({
     clientInstanceId,
     conversationId,
     kind: "text/csv",
@@ -878,10 +883,12 @@ function createArtifact(
 function appendToolResult(
   store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
-  conversationId: Parameters<TestMemoryStore["appendMessage"]>[0]["conversationId"],
+  conversationId: Parameters<
+    TestMemoryStore["conversations"]["appendMessage"]
+  >[0]["conversationId"],
   result: ToolExecutionResult
 ) {
-  return store.appendMessage({
+  return store.conversations.appendMessage({
     clientInstanceId,
     conversationId,
     role: "tool",

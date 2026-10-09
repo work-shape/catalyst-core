@@ -6,10 +6,16 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   it("provisions exactly one private Personal Workspace and owner membership", async () => {
     const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-personal");
-    const user = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const user = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
 
-    const first = await store.ensurePersonalWorkspace({ clientInstanceId, userId: user.id });
-    const second = await store.ensurePersonalWorkspace({ clientInstanceId, userId: user.id });
+    const first = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: user.id
+    });
+    const second = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: user.id
+    });
 
     expect(second.id).toBe(first.id);
     expect(first).toMatchObject({
@@ -18,7 +24,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       personalUserId: user.id
     });
     await expect(
-      store.createWorkspace({
+      store.workspaces.createWorkspace({
         clientInstanceId,
         kind: "personal",
         name: "Duplicate",
@@ -27,7 +33,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(
-      store.getMembership({
+      store.workspaces.getMembership({
         clientInstanceId,
         collaborationWorkspaceId: first.id,
         userId: user.id
@@ -38,12 +44,15 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   it("protects Personal Workspace membership, name, visibility, and lifecycle", async () => {
     const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-invariants");
-    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
-    const other = await store.createUser({ clientInstanceId, displayLabel: "Other" });
-    const personal = await store.ensurePersonalWorkspace({ clientInstanceId, userId: owner.id });
+    const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const other = await store.users.createUser({ clientInstanceId, displayLabel: "Other" });
+    const personal = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: owner.id
+    });
 
     await expect(
-      store.addMembership({
+      store.workspaces.addMembership({
         clientInstanceId,
         collaborationWorkspaceId: personal.id,
         userId: other.id,
@@ -51,21 +60,21 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       })
     ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     await expect(
-      store.updateWorkspace({
+      store.workspaces.updateWorkspace({
         clientInstanceId,
         collaborationWorkspaceId: personal.id,
         name: "Renamed"
       })
     ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     await expect(
-      store.updateWorkspace({
+      store.workspaces.updateWorkspace({
         clientInstanceId,
         collaborationWorkspaceId: personal.id,
         visibility: "discoverable"
       })
     ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     await expect(
-      store.deleteWorkspace({
+      store.workspaces.deleteWorkspace({
         clientInstanceId,
         collaborationWorkspaceId: personal.id
       })
@@ -75,24 +84,24 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   it("updates Shared Workspace roles and keeps one pending access request per user", async () => {
     const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-shared");
-    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
-    const member = await store.createUser({ clientInstanceId, displayLabel: "Member" });
-    const requester = await store.createUser({ clientInstanceId, displayLabel: "Requester" });
-    const shared = await store.createWorkspace({
+    const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const member = await store.users.createUser({ clientInstanceId, displayLabel: "Member" });
+    const requester = await store.users.createUser({ clientInstanceId, displayLabel: "Requester" });
+    const shared = await store.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Shared",
       creatorUserId: owner.id
     });
 
-    await store.addMembership({
+    await store.workspaces.addMembership({
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
       userId: member.id,
       role: "member"
     });
     await expect(
-      store.updateMembershipRole({
+      store.workspaces.updateMembershipRole({
         clientInstanceId,
         collaborationWorkspaceId: shared.id,
         userId: member.id,
@@ -100,26 +109,26 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       })
     ).resolves.toMatchObject({ role: "admin" });
 
-    const request = await store.createAccessRequest({
+    const request = await store.workspaces.createAccessRequest({
       clientInstanceId,
       collaborationWorkspaceId: shared.id,
       userId: requester.id
     });
     await expect(
-      store.createAccessRequest({
+      store.workspaces.createAccessRequest({
         clientInstanceId,
         collaborationWorkspaceId: shared.id,
         userId: requester.id
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(
-      store.listAccessRequestsForWorkspace({
+      store.workspaces.listAccessRequestsForWorkspace({
         clientInstanceId,
         collaborationWorkspaceId: shared.id
       })
     ).resolves.toEqual([request]);
     await expect(
-      store.deleteAccessRequest({
+      store.workspaces.deleteAccessRequest({
         clientInstanceId,
         collaborationWorkspaceId: shared.id,
         userId: requester.id
@@ -130,26 +139,26 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   it("moves only from the expected workspace and finalizes cleaned shared workspaces", async () => {
     const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-lifecycle");
-    const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
-    const requester = await store.createUser({ clientInstanceId, displayLabel: "Requester" });
-    const source = await store.createWorkspace({
+    const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
+    const requester = await store.users.createUser({ clientInstanceId, displayLabel: "Requester" });
+    const source = await store.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Source",
       creatorUserId: owner.id
     });
-    const destination = await store.createWorkspace({
+    const destination = await store.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Destination",
       creatorUserId: owner.id
     });
-    await store.createAccessRequest({
+    await store.workspaces.createAccessRequest({
       clientInstanceId,
       collaborationWorkspaceId: source.id,
       userId: requester.id
     });
-    const conversation = await store.createConversation({
+    const conversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: source.id,
@@ -160,7 +169,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
     });
 
     await expect(
-      store.moveConversation({
+      store.conversations.moveConversation({
         clientInstanceId,
         conversationId: conversation.id,
         fromCollaborationWorkspaceId: source.id,
@@ -169,7 +178,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       })
     ).resolves.toMatchObject({ collaborationWorkspaceId: destination.id });
     await expect(
-      store.moveConversation({
+      store.conversations.moveConversation({
         clientInstanceId,
         conversationId: conversation.id,
         fromCollaborationWorkspaceId: source.id,
@@ -178,24 +187,26 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
-    await store.deleteConversation({
+    await store.conversations.deleteConversation({
       clientInstanceId,
       conversationId: conversation.id,
       deletedAt: new Date().toISOString()
     });
-    await store.deleteWorkspace({
+    await store.workspaces.deleteWorkspace({
       clientInstanceId,
       collaborationWorkspaceId: destination.id
     });
-    await expect(store.getWorkspace(clientInstanceId, destination.id)).resolves.toBeUndefined();
+    await expect(
+      store.workspaces.getWorkspace(clientInstanceId, destination.id)
+    ).resolves.toBeUndefined();
   });
 
   it("scopes conversation listings by visibility and keeps Personal Workspaces open", async () => {
     const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-visibility");
-    const author = await store.createUser({ clientInstanceId, displayLabel: "Author" });
-    const colleague = await store.createUser({ clientInstanceId, displayLabel: "Colleague" });
-    const workspace = await store.createWorkspace({
+    const author = await store.users.createUser({ clientInstanceId, displayLabel: "Author" });
+    const colleague = await store.users.createUser({ clientInstanceId, displayLabel: "Colleague" });
+    const workspace = await store.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Shared",
@@ -204,7 +215,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
     });
     expect(workspace.defaultConversationVisibility).toBe("private");
     const create = (visibility: "workspace" | "private", createdByUserId: string) =>
-      store.createConversation({
+      store.conversations.createConversation({
         clientInstanceId,
         collaborationWorkspaceId: workspace.id,
         createdByUserId,
@@ -217,7 +228,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
     const authorsPrivate = await create("private", author.id);
     const colleaguesPrivate = await create("private", colleague.id);
     for (const conversation of [open, authorsPrivate, colleaguesPrivate]) {
-      await store.appendMessage({
+      await store.conversations.appendMessage({
         clientInstanceId,
         conversationId: conversation.id,
         role: "user",
@@ -228,7 +239,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       scope: Parameters<typeof store.listConversationsForWorkspace>[0]["scope"]
     ) =>
       (
-        await store.listConversationsForWorkspace({
+        await store.conversations.listConversationsForWorkspace({
           clientInstanceId,
           collaborationWorkspaceId: workspace.id,
           scope
@@ -247,7 +258,10 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       [open.id, authorsPrivate.id, colleaguesPrivate.id].sort()
     );
     await expect(
-      store.listPrivateConversationsCreatedByUser({ clientInstanceId, userId: author.id })
+      store.conversations.listPrivateConversationsCreatedByUser({
+        clientInstanceId,
+        userId: author.id
+      })
     ).resolves.toEqual([expect.objectContaining({ id: authorsPrivate.id })]);
 
     const unsent = await create("workspace", author.id);
@@ -255,24 +269,27 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
     await expect(list({ kind: "viewer", userId: colleague.id })).resolves.not.toContain(unsent.id);
     await expect(list({ kind: "lifecycle" })).resolves.toContain(unsent.id);
 
-    const personal = await store.ensurePersonalWorkspace({ clientInstanceId, userId: author.id });
+    const personal = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: author.id
+    });
     expect(personal.defaultConversationVisibility).toBe("workspace");
     await expect(
-      store.updateWorkspace({
+      store.workspaces.updateWorkspace({
         clientInstanceId,
         collaborationWorkspaceId: personal.id,
         defaultConversationVisibility: "private"
       })
     ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     await expect(
-      store.updateWorkspace({
+      store.workspaces.updateWorkspace({
         clientInstanceId,
         collaborationWorkspaceId: workspace.id,
         defaultConversationVisibility: "workspace"
       })
     ).resolves.toMatchObject({ defaultConversationVisibility: "workspace" });
-    await expect(store.getConversation(clientInstanceId, authorsPrivate.id)).resolves.toMatchObject(
-      { visibility: "private" }
-    );
+    await expect(
+      store.conversations.getConversation(clientInstanceId, authorsPrivate.id)
+    ).resolves.toMatchObject({ visibility: "private" });
   });
 });

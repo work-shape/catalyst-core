@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import { posix } from "node:path";
 import type {
   ConversationResourceListItem,
@@ -12,11 +13,8 @@ import {
   type ClientInstanceId,
   type ConversationAttachment,
   type ConversationId,
-  type ConversationStore,
   type ManagedArtifactRecord,
-  type PlatformFileStore,
-  type StructuredDataResourceRecord,
-  type StructuredDataStore
+  type StructuredDataResourceRecord
 } from "@vivd-catalyst/core";
 
 type SourceFileResource = Extract<ConversationResourceListItem, { resourceType: "source_file" }>;
@@ -34,15 +32,15 @@ type StructuredDataResource = Extract<
 >;
 
 export async function listConversationResources(input: {
-  store: PlatformFileStore & Pick<ConversationStore, "listMessages"> & StructuredDataStore;
+  store: Pick<PlatformStores, "files" | "conversations" | "structuredData">;
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
 }): Promise<ConversationResourceListResponse> {
   const [attachments, artifacts, messages, structuredData] = await Promise.all([
-    input.store.listSentConversationAttachments(input),
-    input.store.listConversationManagedArtifacts(input),
-    input.store.listMessages(input),
-    input.store.listStructuredDataResources(input)
+    input.store.files.listSentConversationAttachments(input),
+    input.store.files.listConversationManagedArtifacts(input),
+    input.store.conversations.listMessages(input),
+    input.store.structuredData.listStructuredDataResources(input)
   ]);
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const resources: ConversationResourceListItem[] = [

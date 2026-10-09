@@ -33,7 +33,7 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
   const byteStore = new RecordingByteStore();
   const managedObjects = createTestManagedObjectAccess({
     clientInstanceId,
-    files: store,
+    files: store.files,
     byteStore
   });
   const users = new Map<string, AuthenticatedUser>();
@@ -52,7 +52,7 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
   });
 
   const createUser = async (name: string, roles: UserRole[] = ["user"]) => {
-    const user = await store.resolveUserIdentity({
+    const user = await store.users.resolveUserIdentity({
       clientInstanceId,
       authSource: "development",
       externalUserId: name,
@@ -66,7 +66,7 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
     return user;
   };
   const createSharedWorkspace = (owner: AuthenticatedUser, name: string) =>
-    store.createWorkspace({
+    store.workspaces.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name,
@@ -74,7 +74,7 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
       creatorUserId: asUserId(owner.id)
     });
   const personalWorkspaceOf = (user: AuthenticatedUser) =>
-    store.ensurePersonalWorkspace({ clientInstanceId, userId: asUserId(user.id) });
+    store.workspaces.ensurePersonalWorkspace({ clientInstanceId, userId: asUserId(user.id) });
   /**
    * A Conversation with a message, in the personal workspace of its author unless a workspace
    * is named.
@@ -89,7 +89,7 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
     } = {}
   ) => {
     const workspace = input.workspace ?? (await personalWorkspaceOf(author));
-    const conversation = await store.createConversation({
+    const conversation = await store.conversations.createConversation({
       visibility: "workspace",
       clientInstanceId,
       collaborationWorkspaceId: workspace.id,
@@ -99,7 +99,7 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
       retainedUntil: input.retainedUntil ?? "2999-01-01T00:00:00.000Z"
     });
     if (input.withMessage ?? true) {
-      await store.appendMessage({
+      await store.conversations.appendMessage({
         ...scope,
         conversationId: conversation.id,
         role: "user",
@@ -110,11 +110,11 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
   };
   /** A file with its bytes, an artifact with its bytes and an attachment. */
   const createObjects = (conversation: Conversation) =>
-    createAttachedObjects({ store, managedObjects, clientInstanceId, conversation });
+    createAttachedObjects({ store: store.files, managedObjects, clientInstanceId, conversation });
   /** The same, with a preview job for the artifact. */
   const createData = async (conversation: Conversation) => {
     const objects = await createObjects(conversation);
-    await store.enqueueArtifactPreviewJob({
+    await store.files.enqueueArtifactPreviewJob({
       ...scope,
       conversationId: conversation.id,
       sourceArtifactId: objects.artifact.id,
@@ -150,7 +150,9 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
     return row;
   };
   const eventsOfType = async (type: string) =>
-    (await store.listAuditEvents({ ...scope, limit: 200 })).filter((event) => event.type === type);
+    (await store.audit.listAuditEvents({ ...scope, limit: 200 })).filter(
+      (event) => event.type === type
+    );
   type Data = Awaited<ReturnType<typeof createData>>;
   /** Read from the row: a Conversation of a deleted user is no longer readable in the store. */
   const statusOf = async (conversation: Conversation) => {
@@ -159,7 +161,7 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
       `;
     return row?.status;
   };
-  const pending = () => store.listConversationsPendingObjectCleanup({ ...scope, limit: 10 });
+  const pending = () => store.files.listConversationsPendingObjectCleanup({ ...scope, limit: 10 });
   const previewJobCount = async (conversation: Conversation) => {
     const [row] = await sql<Array<{ count: number }>>`
         select count(*)::int as count from artifact_preview_jobs
@@ -168,27 +170,31 @@ export async function createConversationCleanupFixture(db: PostgresSuite, label:
     return row?.count;
   };
   const auditEvents = async (type: string, conversation: Conversation) =>
-    (await store.listAuditEvents({ ...scope, limit: 100 })).filter(
+    (await store.audit.listAuditEvents({ ...scope, limit: 100 })).filter(
       (event) => event.type === type && event.subject === conversation.id
     );
   /** The Conversation is gone, and everything that was stored for it is still there. */
   const expectDataLeft = async (conversation: Conversation, data: Data) => {
     expect(byteStore.has(data.file.objectKey)).toBe(true);
     expect(byteStore.has(data.artifact.objectKey)).toBe(true);
-    await expect(store.getManagedFile({ ...scope, fileId: data.file.id })).resolves.toMatchObject({
+    await expect(
+      store.files.getManagedFile({ ...scope, fileId: data.file.id })
+    ).resolves.toMatchObject({
       status: "available"
     });
     await expect(
-      store.getManagedArtifact({ ...scope, artifactId: data.artifact.id })
+      store.files.getManagedArtifact({ ...scope, artifactId: data.artifact.id })
     ).resolves.toMatchObject({ status: "available" });
     await expect(previewJobCount(conversation)).resolves.toBe(1);
   };
   const expectDataRemoved = async (conversation: Conversation, data: Data) => {
     expect(byteStore.has(data.file.objectKey)).toBe(false);
     expect(byteStore.has(data.artifact.objectKey)).toBe(false);
-    await expect(store.getManagedFile({ ...scope, fileId: data.file.id })).resolves.toBeUndefined();
     await expect(
-      store.getManagedArtifact({ ...scope, artifactId: data.artifact.id })
+      store.files.getManagedFile({ ...scope, fileId: data.file.id })
+    ).resolves.toBeUndefined();
+    await expect(
+      store.files.getManagedArtifact({ ...scope, artifactId: data.artifact.id })
     ).resolves.toBeUndefined();
     await expect(previewJobCount(conversation)).resolves.toBe(0);
   };

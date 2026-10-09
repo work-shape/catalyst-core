@@ -1,4 +1,5 @@
-import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
+import type { PlatformStores } from "@vivd-catalyst/core";
+import { createTestInstance } from "./support/test-instance";
 import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -68,7 +69,7 @@ describe("workspace command worker", () => {
 
     const run = harness.worker.runOnce({ recoverStale: false });
     await harness.executor.started;
-    await harness.store.requestWorkspaceCommandCancellation({
+    await harness.store.executionWorkspaces.requestWorkspaceCommandCancellation({
       clientInstanceId: harness.clientInstanceId,
       commandId: queued.id,
       reason: "user stopped it",
@@ -92,7 +93,7 @@ describe("workspace command worker", () => {
   it("recovers stale claimed commands as failed before claiming new work", async () => {
     const harness = await createWorkerHarness();
     const stale = await harness.enqueue("sleep 60");
-    const claimed = await harness.store.claimNextWorkspaceCommand({
+    const claimed = await harness.store.executionWorkspaces.claimNextWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
       workerId: "stale-worker",
       leaseToken: "stale-lease",
@@ -135,7 +136,7 @@ describe("workspace command worker", () => {
     await loop;
 
     await expect(
-      harness.store.getWorkspaceCommand({
+      harness.store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: harness.clientInstanceId,
         commandId: queued.id
       })
@@ -165,7 +166,7 @@ describe("workspace command worker", () => {
     await loop;
 
     await expect(
-      harness.store.getWorkspaceCommand({
+      harness.store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: harness.clientInstanceId,
         commandId: queued.id
       })
@@ -201,13 +202,13 @@ describe("workspace command worker", () => {
     const run = harness.worker.runOnce({ recoverStale: false });
     await harness.executor.started;
 
-    await harness.store.markExecutionWorkspaceDeleted({
+    await harness.store.executionWorkspaces.markExecutionWorkspaceDeleted({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       deletedAt: "2026-06-29T10:00:30.000Z"
     });
     await expect(
-      harness.store.getWorkspaceCommand({
+      harness.store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: harness.clientInstanceId,
         commandId: queued.id
       })
@@ -228,7 +229,7 @@ describe("workspace command worker", () => {
       }
     });
     await expect(
-      harness.store.getWorkspaceCommand({
+      harness.store.executionWorkspaces.getWorkspaceCommand({
         clientInstanceId: harness.clientInstanceId,
         commandId: queued.id
       })
@@ -236,7 +237,7 @@ describe("workspace command worker", () => {
       status: "completed"
     });
 
-    const events = await harness.store.listAuditEvents({
+    const events = await harness.store.audit.listAuditEvents({
       clientInstanceId: harness.clientInstanceId,
       limit: 20
     });
@@ -259,7 +260,7 @@ async function createWorkerHarness(
   const ownerUserId = "user-1";
   const store = createTestInstance().stores;
   const auditRecorder = input.withAuditRecorder
-    ? new StoreBackedAuditRecorder({ clientInstanceId, store })
+    ? new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
     : undefined;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
@@ -284,7 +285,7 @@ async function createWorkerHarness(
   let clock = 0;
   const worker = new WorkspaceCommandWorker({
     clientInstanceId,
-    store,
+    store: store.executionWorkspaces,
     runner,
     workerId: "worker-test",
     pollIntervalMs: input.pollIntervalMs ?? 20,
@@ -295,7 +296,7 @@ async function createWorkerHarness(
     auditRecorder,
     now: () => new Date(Date.UTC(2026, 5, 29, 10, 0, clock++)).toISOString()
   });
-  const workspace = await store.ensureExecutionWorkspace({
+  const workspace = await store.executionWorkspaces.ensureExecutionWorkspace({
     clientInstanceId,
     conversationId: conversation.id,
     ownerUserId,
@@ -311,7 +312,7 @@ async function createWorkerHarness(
     executor,
     worker,
     enqueue(command: string, limits: Partial<WorkspaceCommandLimits> = {}) {
-      return store.enqueueWorkspaceCommand({
+      return store.executionWorkspaces.enqueueWorkspaceCommand({
         clientInstanceId,
         workspaceId: workspace.id,
         ownerUserId,
@@ -383,14 +384,14 @@ function successProcessResult(input: Partial<ProcessResult> = {}): ProcessResult
 async function waitForCommand(
   harness: {
     clientInstanceId: ClientInstanceId;
-    store: TestMemoryStore;
+    store: PlatformStores;
   },
   commandId: WorkspaceCommand["id"],
   predicate: (command: WorkspaceCommand) => WorkspaceCommand | undefined
 ): Promise<WorkspaceCommand> {
   const deadline = Date.now() + 1000;
   while (Date.now() < deadline) {
-    const command = await harness.store.getWorkspaceCommand({
+    const command = await harness.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
       commandId
     });

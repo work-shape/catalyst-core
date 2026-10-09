@@ -1,4 +1,5 @@
-import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
+import type { PlatformStores } from "@vivd-catalyst/core";
+import { createTestInstance } from "./support/test-instance";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -70,7 +71,7 @@ describe("ArtifactPreviewWorker", () => {
       previewDpi: 144,
       outputFormat: "png"
     });
-    const manifest = await fixture.store.getArtifactPreviewManifest({
+    const manifest = await fixture.store.files.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
@@ -86,7 +87,7 @@ describe("ArtifactPreviewWorker", () => {
     if (!manifest || manifest.status !== "ready") {
       throw new Error("Expected ready preview manifest");
     }
-    const pageArtifact = await fixture.store.getManagedArtifact({
+    const pageArtifact = await fixture.store.files.getManagedArtifact({
       clientInstanceId: fixture.clientInstanceId,
       artifactId: manifest.pages[0]!.artifactId
     });
@@ -142,12 +143,12 @@ describe("ArtifactPreviewWorker", () => {
 
     const running = worker.runOnce();
     await renderer.called;
-    const initiallyClaimed = await fixture.store.getArtifactPreviewJob({
+    const initiallyClaimed = await fixture.store.files.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
     await sleep(20);
-    const renewed = await fixture.store.getArtifactPreviewJob({
+    const renewed = await fixture.store.files.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
@@ -183,7 +184,7 @@ describe("ArtifactPreviewWorker", () => {
     await worker.runOnce();
 
     await expect(
-      fixture.store.getArtifactPreviewManifest({
+      fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
@@ -231,12 +232,12 @@ describe("ArtifactPreviewWorker", () => {
 
     const running = worker.runOnce();
     await renderer.called;
-    const initiallyClaimed = await fixture.store.getArtifactPreviewJob({
+    const initiallyClaimed = await fixture.store.files.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
     await sleep(20);
-    const renewed = await fixture.store.getArtifactPreviewJob({
+    const renewed = await fixture.store.files.getArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
@@ -272,7 +273,7 @@ describe("ArtifactPreviewWorker", () => {
     await worker.runOnce();
 
     await expect(
-      fixture.store.getArtifactPreviewManifest({
+      fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
@@ -295,7 +296,7 @@ describe("ArtifactPreviewWorker", () => {
     fixture.objectStore.onPut = async (key) => {
       if (!deletionRan && key.startsWith("artifact-previews/")) {
         deletionRan = true;
-        await fixture.store.markConversationManagedObjectsDeleted({
+        await fixture.store.files.markConversationManagedObjectsDeleted({
           clientInstanceId: fixture.clientInstanceId,
           conversationId: fixture.conversation.id,
           deletedAt: "2026-07-01T10:02:00.000Z"
@@ -312,13 +313,13 @@ describe("ArtifactPreviewWorker", () => {
       fixture.objectStore.keys().filter((key) => key.startsWith("artifact-previews/"))
     ).toEqual([]);
     await expect(
-      fixture.store.getArtifactPreviewManifest({
+      fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
     ).resolves.toBeUndefined();
     await expect(
-      fixture.store.listManagedArtifactsForFile({
+      fixture.store.files.listManagedArtifactsForFile({
         clientInstanceId: fixture.clientInstanceId,
         conversationId: fixture.conversation.id,
         fileId: fixture.sourceFile.id,
@@ -363,7 +364,7 @@ describe("ArtifactPreviewWorker", () => {
       status: "completed",
       errorCode: undefined
     });
-    const manifest = await fixture.store.getArtifactPreviewManifest({
+    const manifest = await fixture.store.files.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
@@ -382,7 +383,7 @@ describe("ArtifactPreviewWorker", () => {
     if (!manifest || manifest.status !== "ready") {
       throw new Error("Expected ready PDF preview manifest");
     }
-    const pageArtifact = await fixture.store.getManagedArtifact({
+    const pageArtifact = await fixture.store.files.getManagedArtifact({
       clientInstanceId: fixture.clientInstanceId,
       artifactId: manifest.pages[0]!.artifactId
     });
@@ -444,7 +445,7 @@ describe("ArtifactPreviewWorker", () => {
       errorCode: undefined,
       leaseToken: undefined
     });
-    const manifest = await fixture.store.getArtifactPreviewManifest({
+    const manifest = await fixture.store.files.getArtifactPreviewManifest({
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id,
       settingsHash
@@ -465,7 +466,7 @@ describe("ArtifactPreviewWorker", () => {
     if (!manifest || manifest.status !== "ready") {
       throw new Error("Expected ready spreadsheet preview manifest");
     }
-    const pageArtifact = await fixture.store.getManagedArtifact({
+    const pageArtifact = await fixture.store.files.getManagedArtifact({
       clientInstanceId: fixture.clientInstanceId,
       artifactId: manifest.pages[0]!.artifactId
     });
@@ -612,7 +613,7 @@ describe("ArtifactPreviewWorker", () => {
       errorCode: "source_too_large"
     });
     await expect(
-      fixture.store.getArtifactPreviewManifest({
+      fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
@@ -665,7 +666,7 @@ describe("ArtifactPreviewWorker", () => {
       leaseToken: undefined
     });
     await expect(
-      fixture.store.getArtifactPreviewManifest({
+      fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
@@ -683,7 +684,7 @@ describe("ArtifactPreviewWorker", () => {
       leaseToken: undefined
     });
     await expect(
-      fixture.store.getArtifactPreviewManifest({
+      fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
@@ -713,7 +714,7 @@ describe("ArtifactPreviewWorker", () => {
     await loop;
 
     await expect(
-      fixture.store.getArtifactPreviewManifest({
+      fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
@@ -728,7 +729,7 @@ function createWorker(
 ): ArtifactPreviewWorker {
   return new ArtifactPreviewWorker({
     clientInstanceId: fixture.clientInstanceId,
-    store: fixture.store,
+    store: fixture.store.files,
     objectStore: fixture.objectStore,
     renderer,
     workerId: "artifact-preview-test-worker",
@@ -758,7 +759,7 @@ async function createWorkerFixture(
   });
   const sourceBytes = input.sourceBytes ?? bytes("source-docx");
   const sourceObjectKey = `execution-workspaces/${clientInstanceId}/${conversation.id}/source.docx`;
-  const sourceFile = await store.createManagedFile({
+  const sourceFile = await store.files.createManagedFile({
     clientInstanceId,
     ownerUserId: "user-1",
     filename: input.filename ?? "report.docx",
@@ -768,7 +769,7 @@ async function createWorkerFixture(
     checksum: "sha256:source-docx",
     objectKey: sourceObjectKey
   });
-  const source = await store.createManagedArtifact({
+  const source = await store.files.createManagedArtifact({
     clientInstanceId,
     conversationId: conversation.id,
     sourceFileId: sourceFile.id,
@@ -785,7 +786,7 @@ async function createWorkerFixture(
     body: sourceBytes,
     contentType: source.mimeType
   });
-  await store.enqueueArtifactPreviewJob({
+  await store.files.enqueueArtifactPreviewJob({
     clientInstanceId,
     conversationId: conversation.id,
     sourceArtifactId: source.id,
@@ -799,7 +800,7 @@ async function createWorkerFixture(
 
 interface WorkerFixture {
   clientInstanceId: ClientInstanceId;
-  store: TestMemoryStore;
+  store: PlatformStores;
   objectStore: MemoryObjectStorage;
   conversation: Conversation;
   sourceFile: ManagedFileRecord;
