@@ -69,7 +69,9 @@ contain breaking changes; a patch version does not.
   database tests of the previous and the oldest supported release against the new schema, and
   `pnpm test:upgrade` migrates a database of the oldest supported release.
 - **API (breaking):** every product operation is under `/api/v1`, and no old path answers any
-  more: each returns 404. A caller changes the path of every request. `/api/conversations…`
+  more. An old path returns 404 `NOT_FOUND` "Operation is not available" with
+  `details.reason: "unknown_operation"`; the one exception is the old API-key exchange below.
+  A caller changes the path of every request. `/api/conversations…`
   becomes `/api/v1/conversations…`, `/api/collaboration-workspaces…` becomes
   `/api/v1/workspaces…`, `/api/approval-requests…` becomes `/api/v1/approval-requests…`,
   `/api/me…` becomes `/api/v1/me…`, and `/api/password-reset` and `/api/password-setup` gain the
@@ -83,10 +85,17 @@ contain breaking changes; a patch version does not.
   become `/api/v1/instance/config` and `/api/v1/instance/branding`. Rights are unchanged.
   `/health` stays public and unversioned, and `/api/auth/*` stays the sign-in library's mount.
   A reverse proxy that forwards `/api/*` needs no change.
+- **Interface:** reload every open tab after the upgrade. A tab loaded before it calls the old
+  paths and shows "Operation is not available" with no hint; this release cannot change that
+  page. From this release on, the interface shows one notice with a reload action when the
+  server answers that it does not know an operation the interface called.
 - **API (breaking):** the API-key exchange moved from `POST /api/auth/access-token` to
   `POST /api/v1/auth/access-token`. Session-token issuance for embedding hosts moved from
   `POST /api/superadmin/session-tokens` to `POST /api/v1/instance/session-tokens`, and its
-  alias `POST /auth/session-token` is removed. A backend that issues chat session tokens
+  alias `POST /auth/session-token` is removed. An older CLI, which sends its key as a bearer
+  to the old exchange path, reads 401 `UNAUTHENTICATED` "Standalone auth endpoints do not
+  accept explicit credential headers" on an instance with standalone sign-in, because the
+  sign-in mount refuses the header before it routes, and 404 elsewhere. A backend that issues chat session tokens
   changes its URL; the `x-server-credential` header and the payload are unchanged. Before this
   release is deployed, search the production access log for both old token paths and move any
   caller found.
@@ -99,7 +108,11 @@ contain breaking changes; a patch version does not.
   `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` and its deprecation warning are
   removed; without a key the CLI stops before it sends a request. Create a service principal
   and a key under Administration → API Access and set `CATALYST_API_KEY` wherever the CLI runs.
-  CLI and server ship together: this CLI needs a server that answers under `/api/v1`.
+  The server needs `SERVICE_ACCESS_TOKEN_SECRET` set, at least 32 characters; without it the
+  instance has no API access and the CLI cannot sign in. For a local development instance,
+  `catalyst config local-key` creates the principal and key as the seeded superadmin and
+  writes the key into `.env`; it refuses any other host. CLI and server ship together: this
+  CLI needs a server that answers under `/api/v1`.
 - **Client:** `getAuthSession`, `signInWithEmail` and `signOut` are exported from
   `@vivd-catalyst/api-client`; the interface no longer fetches `/api/auth/*` itself.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.

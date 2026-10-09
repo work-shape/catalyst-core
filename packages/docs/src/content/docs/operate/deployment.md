@@ -103,6 +103,7 @@ Before deploying that release to an operated instance:
 1. Search the instance's access log for `POST /auth/session-token` and `POST /api/superadmin/session-tokens` over the log's whole retention.
 2. Record the result with the release: the two paths, the period searched, and per path the request count and the calling hosts. Record metadata only, never request bodies, tokens or the server credential.
 3. Move every caller found to `POST /api/v1/instance/session-tokens` in the same release. The `x-server-credential` header and the payload are unchanged.
-4. Give every CLI runner a `CATALYST_API_KEY`; the CLI no longer signs in with the server credential.
+4. Give every CLI runner a `CATALYST_API_KEY`; the CLI no longer signs in with the server credential. The server needs `SERVICE_ACCESS_TOKEN_SECRET` for the key exchange.
+5. Tell users to reload open tabs after the upgrade. A tab loaded before it calls the old paths and shows "Operation is not available"; later releases show a notice with a reload action instead.
 
 A reverse proxy that forwards `/api/*` and `/health` needs no change.
