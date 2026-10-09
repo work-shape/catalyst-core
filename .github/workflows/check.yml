@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:17.6
+        image: public.ecr.aws/docker/library/postgres:17.6
         env:
           POSTGRES_USER: catalyst
           POSTGRES_PASSWORD: local-check
