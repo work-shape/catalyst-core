@@ -649,24 +649,26 @@ export const executionWorkspacesConfigSchema = z
     }
   });
 
+// The base theme: neutral greys with a near-black accent in light mode and a near-white one in
+// dark mode. An instance that sets no colours gets it; a customer theme replaces all seven.
 const defaultLightUiTheme = {
-  accentColor: "#0f766e",
-  accentStrongColor: "#0b5f59",
-  backgroundColor: "#f5f3ee",
-  surfaceColor: "#fffdfa",
-  textColor: "#17201d",
-  mutedTextColor: "#6b746f",
-  borderColor: "#d8d3c7"
+  accentColor: "#1a1a1a",
+  accentStrongColor: "#0a0a0a",
+  backgroundColor: "#f5f5f5",
+  surfaceColor: "#ffffff",
+  textColor: "#1a1a1a",
+  mutedTextColor: "#5e5e5e",
+  borderColor: "#e5e5e5"
 };
 
 const defaultDarkUiTheme = {
-  accentColor: "#2dd4bf",
-  accentStrongColor: "#7dd3fc",
-  backgroundColor: "#0f1514",
-  surfaceColor: "#171f1d",
-  textColor: "#eef6f3",
-  mutedTextColor: "#9eaaa5",
-  borderColor: "#2b3734"
+  accentColor: "#ededed",
+  accentStrongColor: "#ffffff",
+  backgroundColor: "#121212",
+  surfaceColor: "#1b1b1b",
+  textColor: "#ededed",
+  mutedTextColor: "#b0b0b0",
+  borderColor: "#303030"
 };
 
 function createUiThemeSchema(defaultTheme: typeof defaultLightUiTheme) {
@@ -704,7 +706,7 @@ export const uiConfigSchema = z
     collaborationWorkspaces: z
       .object({ enabled: z.boolean().default(false) })
       .default({ enabled: false }),
-    accentColor: z.string().min(1).default("#0f766e"),
+    accentColor: z.string().min(1).default(defaultLightUiTheme.accentColor),
     theme: lightUiThemeSchema,
     darkTheme: darkUiThemeSchema,
     defaultThemeMode: z.enum(["light", "dark", "system"]).default("system")
@@ -716,7 +718,7 @@ export const uiConfigSchema = z
     showAgentDescriptions: false,
     resources: { enabled: true },
     collaborationWorkspaces: { enabled: false },
-    accentColor: "#0f766e",
+    accentColor: defaultLightUiTheme.accentColor,
     logoInvertOnDark: false,
     theme: defaultLightUiTheme,
     darkTheme: defaultDarkUiTheme,

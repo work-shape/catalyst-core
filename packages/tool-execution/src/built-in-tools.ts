@@ -56,23 +56,25 @@ const tailwindThemeBootstrapScript = [
 const displayHeightBootstrapScript = `(()=>{const t="vivd-catalyst:display-height";let e=0;function n(){const t=document.documentElement,n=document.body;return Math.ceil(Math.max(t?.scrollHeight??0,t?.offsetHeight??0,n?.scrollHeight??0,n?.offsetHeight??0))}function o(){const o=n();o>0&&Math.abs(o-e)>1&&(e=o,parent.postMessage({type:t,height:o},"*"))}document.addEventListener("DOMContentLoaded",()=>{o();if("ResizeObserver"in window&&document.body){window.__vivdCatalystResizeObserver=new ResizeObserver(o);window.__vivdCatalystResizeObserver.observe(document.body)}setTimeout(o,50);setTimeout(o,250);setTimeout(o,1000)});window.addEventListener("load",o)})();`;
 const visualizationThemeHelperScript = `(()=>{function color(name,fallback){const key=name.startsWith("--")?name:"--"+name;const value=getComputedStyle(document.documentElement).getPropertyValue(key).trim();return value||fallback||""}function chartColors(){return{background:color("background"),foreground:color("foreground"),card:color("card"),cardForeground:color("card-foreground"),mutedForeground:color("muted-foreground"),border:color("border"),primary:color("primary"),accent:color("accent"),destructive:color("destructive"),success:color("success"),warning:color("warning"),info:color("info")}}function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}window.vivdCatalystTheme={color,chartColors,chartPalette}})();`;
 const defaultVisualizationScriptSources = ["https://cdn.tailwindcss.com", "https://unpkg.com"];
+// The light default theme for a View shown outside a themed chat. tests/ui-theme.test.ts holds
+// every value equal to what the shared UI library derives from the config schema defaults.
 const visualizationDefaultThemeStyle = `<style id="vivd-catalyst-default-theme">
 :root {
   --radius: 0.5rem;
-  --background: #fffdfa;
-  --foreground: #17201d;
-  --card: #fffdfa;
-  --card-foreground: #17201d;
-  --popover: #fffdfa;
-  --popover-foreground: #17201d;
-  --primary: #0f766e;
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #1a1a1a;
   --primary-foreground: #ffffff;
-  --secondary: #ebe7dc;
-  --secondary-foreground: #17201d;
-  --muted: #ebe7dc;
-  --muted-foreground: #68746f;
-  --accent: #e5f3ef;
-  --accent-foreground: #0b5f59;
+  --secondary: color-mix(in srgb, #1a1a1a 6%, transparent);
+  --secondary-foreground: #1a1a1a;
+  --muted: #f5f5f5;
+  --muted-foreground: #5e5e5e;
+  --accent: color-mix(in srgb, #1a1a1a 6%, transparent);
+  --accent-foreground: #0a0a0a;
   --destructive: #b42318;
   --success: #047857;
   --warning: #b45309;
@@ -82,17 +84,17 @@ const visualizationDefaultThemeStyle = `<style id="vivd-catalyst-default-theme">
   --chart-3: #0369a1;
   --chart-4: #7c3aed;
   --chart-5: #be185d;
-  --border: #d8d3c7;
-  --input: #d8d3c7;
-  --ring: #0f766e;
-  --sidebar: #f4f1e8;
-  --sidebar-foreground: #17201d;
-  --sidebar-primary: #0f766e;
+  --border: #e5e5e5;
+  --input: color-mix(in srgb, #1a1a1a 12%, #e5e5e5);
+  --ring: #1a1a1a;
+  --sidebar: #f5f5f5;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #1a1a1a;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e5f3ef;
-  --sidebar-accent-foreground: #0b5f59;
-  --sidebar-border: #d8d3c7;
-  --sidebar-ring: #0f766e;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #1a1a1a;
 }
 html,
 body {

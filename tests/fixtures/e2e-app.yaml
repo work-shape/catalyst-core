@@ -108,12 +108,3 @@ ui:
   welcomeMessage: E2E ready.
   collaborationWorkspaces:
     enabled: true
-  accentColor: "#0f766e"
-  theme:
-    accentColor: "#0f766e"
-    accentStrongColor: "#0b5f59"
-    backgroundColor: "#f4f1ea"
-    surfaceColor: "#fffdfa"
-    textColor: "#17201d"
-    mutedTextColor: "#657069"
-    borderColor: "#d8d2c5"

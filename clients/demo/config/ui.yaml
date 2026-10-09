@@ -4,21 +4,4 @@ clientName:
 title:
   de: Demo Chat
   en: Demo Chat
-accentColor: "#0f766e"
 defaultThemeMode: system
-theme:
-  accentColor: "#0f766e"
-  accentStrongColor: "#155e75"
-  backgroundColor: "#f7faf8"
-  surfaceColor: "#ffffff"
-  textColor: "#16211f"
-  mutedTextColor: "#60706b"
-  borderColor: "#dbe5e1"
-darkTheme:
-  accentColor: "#2dd4bf"
-  accentStrongColor: "#7dd3fc"
-  backgroundColor: "#0f1514"
-  surfaceColor: "#171f1d"
-  textColor: "#eef6f3"
-  mutedTextColor: "#9eaaa5"
-  borderColor: "#2b3734"
