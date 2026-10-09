@@ -97,6 +97,7 @@ describe("api operation catalog and client", () => {
   // Registered by the server and absent from the released document.
   const undocumentedOperationIds = [
     "getHealth",
+    "getViewRuntimeFile",
     "listCapturedMail",
     "issueSessionTokenLegacyAlias"
   ];

@@ -13,6 +13,11 @@
 		reverse_proxy api:4100
 	}
 
+	# The runtime a generated view loads, served by the API.
+	handle /app-runtime/* {
+		reverse_proxy api:4100
+	}
+
 	handle {
 		reverse_proxy ui:80
 	}

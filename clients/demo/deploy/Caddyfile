@@ -2,5 +2,6 @@
   reverse_proxy /api/* api:4100
   reverse_proxy /auth/* api:4100
   reverse_proxy /health api:4100
+  reverse_proxy /app-runtime/* api:4100
 }
 

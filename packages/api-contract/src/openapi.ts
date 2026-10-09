@@ -20,10 +20,12 @@ type OpenApiPathItem = Record<string, unknown>;
 /**
  * Operations the server registers that the released document has never listed: the health
  * probe and the retired session-token path. CB-4a adds them to the catalog without changing
- * the document; CB-4b decides whether either is published.
+ * the document; CB-4b decides whether either is published. The view runtime files are script
+ * addresses for a frame, not calls of the API.
  */
 const UNDOCUMENTED_OPERATION_IDS: ReadonlySet<string> = new Set([
   "getHealth",
+  "getViewRuntimeFile",
   "issueSessionTokenLegacyAlias"
 ]);
 

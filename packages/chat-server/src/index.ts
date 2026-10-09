@@ -12,6 +12,7 @@ import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerDevMailRoutes } from "./routes/dev-mail-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
+import { registerViewRuntimeRoutes } from "./routes/view-runtime-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
 import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
@@ -56,6 +57,7 @@ export type {
   ExecutionWorkspaceCleanupJobOptions,
   RunRecoveryOptions
 } from "./types";
+export { loadViewRuntimeFiles } from "./view-runtime";
 export { createRoute } from "./http/route";
 export type { Route } from "./http/route";
 
@@ -109,6 +111,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   registerServiceAccessTokenRoutes(route, options);
   registerAgentRunRoutes(route, options, app.log);
   registerConfigRoutes(route, options);
+  registerViewRuntimeRoutes(route);
   registerCollaborationWorkspaceRoutes(route, options);
   registerConfigAssetRoutes(route, options);
   registerApprovalRequestRoutes(route, options);

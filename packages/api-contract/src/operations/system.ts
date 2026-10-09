@@ -1,6 +1,6 @@
 import { listQuerySchema } from "../shared";
 import { capturedMailSchema, healthSchema } from "../system";
-import { defineOperation, json, page } from "./define-operation";
+import { blob, defineOperation, json, page } from "./define-operation";
 
 export const systemOperations = {
   getHealth: defineOperation({
@@ -13,6 +13,20 @@ export const systemOperations = {
     effect: "reading",
     response: json(healthSchema),
     errors: [],
+    rateClass: "read"
+  }),
+  // Outside `/api`: a script address inside a sandboxed frame, called without credentials and
+  // never changed under a version. APP-1 serves the App Kit from the same path family.
+  getViewRuntimeFile: defineOperation({
+    id: "getViewRuntimeFile",
+    method: "GET",
+    path: "/app-runtime/view/:version/:file",
+    summary: "Serve one pinned file of the runtime a generated view loads",
+    tag: "System",
+    auth: "public",
+    effect: "reading",
+    response: blob(),
+    errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
   listCapturedMail: defineOperation({

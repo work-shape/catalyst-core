@@ -579,6 +579,8 @@ const config = [
       "**/dist/**",
       "packages/api-client/src/generated/**",
       "packages/postgres-store/migrations/**",
+      // Third-party files served as they were published; the manifest test holds their hashes.
+      "packages/chat-server/vendor/view-runtime/**",
       "**/.astro/**",
       "**/coverage/**",
       "**/playwright-report/**",

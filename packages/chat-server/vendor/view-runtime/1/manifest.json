@@ -1,0 +1,25 @@
+{
+  "version": "1",
+  "files": [
+    {
+      "file": "tailwind.js",
+      "library": "Tailwind CSS, in-browser compiler (Play CDN build)",
+      "libraryVersion": "3.4.17",
+      "source": "https://cdn.tailwindcss.com/3.4.17",
+      "sha256": "176e894661aa9cdc9a5cba6c720044cbbf7b8bd80d1c9a142a7c24b1b6c50d15",
+      "licence": "MIT",
+      "licenceFile": "tailwind.LICENSE.txt",
+      "licenceSource": "https://unpkg.com/tailwindcss@3.4.17/LICENSE"
+    },
+    {
+      "file": "lucide.js",
+      "library": "Lucide, UMD build",
+      "libraryVersion": "1.54.0",
+      "source": "https://unpkg.com/lucide@1.54.0/dist/umd/lucide.min.js",
+      "sha256": "0317cd85e86e59189cbc4b94cd0912ed248d0c923967ac2243389d90647e92c4",
+      "licence": "ISC",
+      "licenceFile": "lucide.LICENSE.txt",
+      "licenceSource": "https://unpkg.com/lucide@1.54.0/LICENSE"
+    }
+  ]
+}
