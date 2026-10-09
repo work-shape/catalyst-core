@@ -86,8 +86,10 @@ export interface StartedConversationMessageRun {
 
 const CONVERSATION_TITLE_AGENT_NAME = "conversation_title";
 const MAX_TITLE_SOURCE_CHARS = 800;
-const IDEMPOTENCY_WAIT_ATTEMPTS = 100;
-const IDEMPOTENCY_WAIT_MS = 10;
+// How long a repeated run start waits for the first one with the same idempotency key, and how
+// often it looks. A caller that waits longer gets 409 "Run start command is still pending".
+const IDEMPOTENCY_WAIT_MS = 10_000;
+const IDEMPOTENCY_WAIT_STEP_MS = 100;
 const IDEMPOTENCY_PENDING_RECLAIM_MS = 5 * 60 * 1000;
 
 export class ConversationWorkflow {
@@ -1165,7 +1167,7 @@ export class ConversationWorkflow {
       return { status: "claimed", command: claim.command };
     }
 
-    for (let attempt = 0; attempt < IDEMPOTENCY_WAIT_ATTEMPTS; attempt += 1) {
+    for (let waitedMs = 0; waitedMs < IDEMPOTENCY_WAIT_MS; waitedMs += IDEMPOTENCY_WAIT_STEP_MS) {
       if (claim.command.status === "completed") {
         return {
           status: "resolved",
@@ -1177,7 +1179,7 @@ export class ConversationWorkflow {
         throw new AppError("CONFLICT", "Run start command previously failed");
       }
 
-      await delay(IDEMPOTENCY_WAIT_MS);
+      await delay(IDEMPOTENCY_WAIT_STEP_MS);
       claim = await this.options.stores.agentRuns.claimRunStartCommand(claimInput);
       if (claim.status === "claimed") {
         return { status: "claimed", command: claim.command };
