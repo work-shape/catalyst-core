@@ -1,7 +1,15 @@
 import { ChevronsUpDown, Compass, Plus, Settings } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
-import { Button, cn, useScrollEdgeFade } from "@vivd-catalyst/ui";
+import {
+  Button,
+  cn,
+  CountBadge,
+  IconButton,
+  List,
+  ListRow,
+  useScrollEdgeFade
+} from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import {
   collaborationWorkspaceAccentAttributes,
@@ -219,39 +227,43 @@ export function CollaborationWorkspaceSelectorMenu({
             onScroll={fade.onScroll}
           >
             {personalCollaborationWorkspace ? (
-              <CollaborationWorkspaceRow
-                active={personalCollaborationWorkspace.id === activeCollaborationWorkspaceId}
-                avatar={<PersonalCollaborationWorkspaceAvatar label={userLabel} />}
-                name={t("collaborationWorkspacePersonalName")}
-                onSelect={() => onSelectCollaborationWorkspace(personalCollaborationWorkspace.id)}
-              />
+              <List>
+                <CollaborationWorkspaceRow
+                  active={personalCollaborationWorkspace.id === activeCollaborationWorkspaceId}
+                  avatar={<PersonalCollaborationWorkspaceAvatar label={userLabel} />}
+                  name={t("collaborationWorkspacePersonalName")}
+                  onSelect={() => onSelectCollaborationWorkspace(personalCollaborationWorkspace.id)}
+                />
+              </List>
             ) : null}
 
             {sharedCollaborationWorkspaceGroups.map((group) => (
               <Fragment key={group.heading}>
                 <p className="px-2 pb-1 pt-3 text-xs text-muted-foreground">{group.heading}</p>
-                {group.collaborationWorkspaces.map((collaborationWorkspace) => (
-                  <CollaborationWorkspaceRow
-                    key={collaborationWorkspace.id}
-                    accentColor={resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)}
-                    active={collaborationWorkspace.id === activeCollaborationWorkspaceId}
-                    avatar={
-                      <CollaborationWorkspaceAvatar
-                        name={collaborationWorkspace.name}
-                        emoji={collaborationWorkspace.emoji}
-                        accentColor={collaborationWorkspace.accentColor}
-                      />
-                    }
-                    name={collaborationWorkspace.name}
-                    pendingAccessRequestCount={collaborationWorkspace.pendingAccessRequestCount}
-                    onSelect={() => onSelectCollaborationWorkspace(collaborationWorkspace.id)}
-                    onOpenSettings={
-                      canManageCollaborationWorkspace(collaborationWorkspace)
-                        ? () => onOpenCollaborationWorkspaceSettings(collaborationWorkspace.id)
-                        : undefined
-                    }
-                  />
-                ))}
+                <List aria-label={group.heading}>
+                  {group.collaborationWorkspaces.map((collaborationWorkspace) => (
+                    <CollaborationWorkspaceRow
+                      key={collaborationWorkspace.id}
+                      accentColor={resolveCollaborationWorkspaceAccentColor(collaborationWorkspace)}
+                      active={collaborationWorkspace.id === activeCollaborationWorkspaceId}
+                      avatar={
+                        <CollaborationWorkspaceAvatar
+                          name={collaborationWorkspace.name}
+                          emoji={collaborationWorkspace.emoji}
+                          accentColor={collaborationWorkspace.accentColor}
+                        />
+                      }
+                      name={collaborationWorkspace.name}
+                      pendingAccessRequestCount={collaborationWorkspace.pendingAccessRequestCount}
+                      onSelect={() => onSelectCollaborationWorkspace(collaborationWorkspace.id)}
+                      onOpenSettings={
+                        canManageCollaborationWorkspace(collaborationWorkspace)
+                          ? () => onOpenCollaborationWorkspaceSettings(collaborationWorkspace.id)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </List>
               </Fragment>
             ))}
           </div>
@@ -311,54 +323,43 @@ function CollaborationWorkspaceRow({
       : undefined;
 
   return (
-    <div
+    <ListRow
       {...accentAttributes}
+      // A workspace colour marks the active row by itself, so the selection fill stays off it.
+      className={cn(
+        "rounded-md",
+        accentAttributes && "[&>div]:bg-transparent [&>div:hover]:bg-transparent"
+      )}
       data-testid="collaboration-workspace-row"
       data-active={active ? "true" : undefined}
-      className={cn(
-        "group/collaboration-workspace-row grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center rounded-md transition-colors",
-        "hover:bg-accent/60",
-        active && !accentAttributes && "bg-accent/70"
-      )}
-    >
-      <button
-        type="button"
-        aria-current={active ? "true" : undefined}
-        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-        onClick={onSelect}
-      >
-        {avatar}
-        <span className="truncate text-sm font-medium">{name}</span>
-      </button>
-      {onOpenSettings ? (
-        <button
-          type="button"
-          className={cn(
-            "relative mr-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
-            "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40",
-            pendingAccessRequestCount > 0
-              ? "opacity-100"
-              : "opacity-100 md:opacity-0 md:group-hover/collaboration-workspace-row:opacity-100 md:group-focus-within/collaboration-workspace-row:opacity-100"
-          )}
-          aria-label={t("collaborationWorkspaceOpenSettings", { name })}
-          title={t("collaborationWorkspaceOpenSettings", { name })}
-          onClick={onOpenSettings}
-        >
-          <Settings size={15} aria-hidden="true" />
-          {pendingAccessRequestCount > 0 ? (
-            <span
-              data-testid="collaboration-workspace-pending-badge"
-              className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[0.625rem] font-semibold leading-4 text-primary-foreground"
-              aria-label={t("collaborationWorkspacePendingRequestCount", {
-                count: pendingAccessRequestCount
-              })}
+      selected={active}
+      leading={avatar}
+      title={name}
+      onClick={onSelect}
+      actionsVisible={pendingAccessRequestCount > 0}
+      actions={
+        onOpenSettings ? (
+          <span className="relative inline-flex">
+            <IconButton
+              label={t("collaborationWorkspaceOpenSettings", { name })}
+              onClick={onOpenSettings}
             >
-              {pendingAccessRequestCount}
-            </span>
-          ) : null}
-        </button>
-      ) : null}
-    </div>
+              <Settings aria-hidden="true" />
+            </IconButton>
+            {pendingAccessRequestCount > 0 ? (
+              <CountBadge
+                data-testid="collaboration-workspace-pending-badge"
+                className="absolute -top-0.5 -right-0.5"
+                count={pendingAccessRequestCount}
+                aria-label={t("collaborationWorkspacePendingRequestCount", {
+                  count: pendingAccessRequestCount
+                })}
+              />
+            ) : null}
+          </span>
+        ) : undefined
+      }
+    />
   );
 }
 

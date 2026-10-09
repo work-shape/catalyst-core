@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
+import { ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import type {
   AdministeredCollaborationWorkspace,
@@ -7,7 +7,19 @@ import type {
   ConfigAssetsOverview
 } from "@vivd-catalyst/api-client";
 import { SKILL_RESOURCE_MEDIA_TYPES } from "@vivd-catalyst/core";
-import { Badge, Button, cn, Input, Select, Spinner, Switch, Textarea } from "@vivd-catalyst/ui";
+import {
+  Badge,
+  Button,
+  cn,
+  Input,
+  PageHeader,
+  SaveBar,
+  Section,
+  Select,
+  Spinner,
+  Switch,
+  Textarea
+} from "@vivd-catalyst/ui";
 import {
   CheckboxGroup,
   DeleteDialog,
@@ -302,7 +314,7 @@ export function AgentEditor({
       ) : null}
 
       {editableAgentFields.length > 0 || canManageAgentModels ? (
-        <SaveBar
+        <EditorSaveBar
           label={isNew ? t("configCreateAgent") : t("configSaveChanges")}
           mutating={mutating}
           saved={savedForm === form}
@@ -785,7 +797,7 @@ export function SkillEditor({
       ) : null}
 
       {editable ? (
-        <SaveBar
+        <EditorSaveBar
           label={isNew ? t("configCreateSkill") : t("configSaveChanges")}
           mutating={mutating}
           saved={savedForm === form}
@@ -1013,6 +1025,7 @@ export function configRevisionAction(
   return canRevert ? "restore" : undefined;
 }
 
+/** The editor's head: the library's detail header, in place because the editor is one pane of the page. */
 function EditorHeader({
   eyebrow,
   title,
@@ -1027,23 +1040,24 @@ function EditorHeader({
   actions: React.ReactNode;
 }) {
   return (
-    <header className="flex min-w-0 flex-wrap items-start justify-between gap-4 border-b px-5 py-5">
-      <div className="grid min-w-0 gap-1">
-        <span className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-          {eyebrow}
+    <PageHeader
+      variant="detail"
+      headingLevel={2}
+      className="static px-5 py-4"
+      title={title}
+      state={badges}
+      description={
+        <span className="flex min-w-0 items-center gap-2">
+          <span>{eyebrow}</span>
+          {identifier ? (
+            <code className="min-w-0 truncate text-code" title={identifier}>
+              {identifier}
+            </code>
+          ) : null}
         </span>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="min-w-0 break-words text-lg font-semibold tracking-normal">{title}</h2>
-          {badges}
-        </div>
-        {identifier ? (
-          <code className="min-w-0 truncate text-xs text-muted-foreground" title={identifier}>
-            {identifier}
-          </code>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
-    </header>
+      }
+      secondaryActions={actions}
+    />
   );
 }
 
@@ -1059,19 +1073,15 @@ function EditorSection({
   children: React.ReactNode;
 }) {
   return (
-    <section
-      className={cn(
-        "grid min-w-0 gap-4 border-b px-5 py-6 xl:grid-cols-[11rem_minmax(0,1fr)] xl:gap-6",
-        sidebar && "xl:grid-cols-[16rem_minmax(0,1fr)]"
-      )}
+    <Section
+      headingLevel={3}
+      className="px-5 first:pt-6 last:border-b"
+      title={title}
+      description={description}
+      aside={sidebar}
     >
-      <div className="grid content-start gap-1">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
-        {sidebar}
-      </div>
-      <div className="grid h-full min-w-0 gap-5">{children}</div>
-    </section>
+      {children}
+    </Section>
   );
 }
 
@@ -1096,7 +1106,7 @@ function EditorTextarea({
   );
 }
 
-function SaveBar({
+function EditorSaveBar({
   label,
   mutating,
   saved,
@@ -1111,23 +1121,14 @@ function SaveBar({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-wrap items-center gap-3 bg-muted/10 px-5 py-4">
-      <Button type="submit" className="w-full sm:w-auto" disabled={mutating || disabled}>
-        {mutating ? <Spinner className="size-4" /> : null}
-        {label}
-      </Button>
-      {saved && !mutating ? (
-        <span
-          role="status"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-success"
-          data-testid="config-saved-notice"
-        >
-          <Check size={15} aria-hidden="true" />
-          {t("configChangesSaved")}
-        </span>
-      ) : (
-        <span className="text-xs text-muted-foreground">{t("configAppliesImmediately")}</span>
-      )}
-    </div>
+    <SaveBar
+      className="px-5"
+      label={label}
+      saving={mutating}
+      disabled={disabled}
+      saved={saved}
+      savedLabel={t("configChangesSaved")}
+      hint={t("configAppliesImmediately")}
+    />
   );
 }

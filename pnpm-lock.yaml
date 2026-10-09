@@ -382,9 +382,6 @@ importers:
       ai:
         specifier: ^6.0.199
         version: 6.0.224(zod@4.4.3)
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
       echarts:
         specifier: 6.1.0
         version: 6.1.0

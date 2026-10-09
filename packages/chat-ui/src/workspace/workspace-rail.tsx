@@ -1,7 +1,7 @@
 import { ChevronLeft, ClipboardCheck, PanelLeft, Plus, Search, Shield } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
-import { Button, cn } from "@vivd-catalyst/ui";
+import { Button, cn, CountBadge } from "@vivd-catalyst/ui";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -96,12 +96,11 @@ export function WorkspaceRail({
     >
       <ClipboardCheck size={16} aria-hidden="true" />
       {approvals.pendingCount > 0 ? (
-        <span
-          className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[0.625rem] font-semibold leading-none text-primary-foreground"
+        <CountBadge
+          count={approvals.pendingCount}
+          className="absolute -top-0.5 -right-0.5"
           aria-hidden="true"
-        >
-          {approvals.pendingCount > 99 ? "99+" : approvals.pendingCount}
-        </span>
+        />
       ) : null}
     </Button>
   ) : null;

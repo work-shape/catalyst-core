@@ -39,6 +39,7 @@ export const administration = defineTranslations({
     updating: "Updating",
     userSettings: "User settings",
     userListView: "List",
+    userListViewChoice: "View",
     userRightAgentSkillsApprove: "Approve skill changes",
     userRightAgentSkillsApproveDescription:
       "Accept, reject and undo proposed changes to skills, and see their history.",
@@ -105,6 +106,7 @@ export const administration = defineTranslations({
     updating: "Aktualisiert",
     userSettings: "Benutzereinstellungen",
     userListView: "Liste",
+    userListViewChoice: "Ansicht",
     userRightAgentSkillsApprove: "Änderungen an Fähigkeiten freigeben",
     userRightAgentSkillsApproveDescription:
       "Vorgeschlagene Änderungen an Fähigkeiten übernehmen, ablehnen und rückgängig machen sowie den Verlauf sehen.",

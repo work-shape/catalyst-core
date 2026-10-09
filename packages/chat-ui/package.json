@@ -85,7 +85,6 @@
     "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/ui": "workspace:*",
     "ai": "^6.0.199",
-    "class-variance-authority": "^0.7.1",
     "echarts": "6.1.0",
     "exceljs": "4.4.0",
     "fast-xml-parser": "5.10.1",

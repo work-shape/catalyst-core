@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeft, KeyRound, Link2, Mail, Plus, Save, Trash2 } from "lucide-react";
 import type {
   AdministeredUser,
@@ -14,7 +14,9 @@ import {
   CardHeader,
   CardTitle,
   Dialog,
-  Input
+  Input,
+  KeyValue,
+  KeyValueList
 } from "@vivd-catalyst/ui";
 import { MaskedPasswordInput, UserFields } from "./user-administration-fields";
 import {
@@ -665,31 +667,24 @@ function AccountMetaCard({ user }: { user: AdministeredUser }) {
       <CardHeader className="p-4 pb-2">
         <CardTitle className="text-base">{t("account")}</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-2 p-4 pt-2 text-sm">
-        <MetaRow
-          label={t("settings.userId")}
-          value={<span className="font-mono text-xs break-all">{user.id}</span>}
-        />
-        <MetaRow label={t("settings.created")} value={formatDateTime(user.createdAt, locale)} />
-        <MetaRow label={t("settings.updated")} value={formatDateTime(user.updatedAt, locale)} />
-        <MetaRow
-          label={t("settings.userLastActive")}
-          value={
-            user.lastAuthenticatedAt
+      <CardContent className="p-4 pt-2">
+        <KeyValueList>
+          <KeyValue label={t("settings.userId")}>
+            <span className="font-mono text-xs break-all">{user.id}</span>
+          </KeyValue>
+          <KeyValue label={t("settings.created")}>
+            {formatDateTime(user.createdAt, locale)}
+          </KeyValue>
+          <KeyValue label={t("settings.updated")}>
+            {formatDateTime(user.updatedAt, locale)}
+          </KeyValue>
+          <KeyValue label={t("settings.userLastActive")}>
+            {user.lastAuthenticatedAt
               ? formatDateTime(user.lastAuthenticatedAt, locale)
-              : t("settings.never")
-          }
-        />
+              : t("settings.never")}
+          </KeyValue>
+        </KeyValueList>
       </CardContent>
     </Card>
-  );
-}
-
-function MetaRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-baseline gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="min-w-0">{value}</span>
-    </div>
   );
 }

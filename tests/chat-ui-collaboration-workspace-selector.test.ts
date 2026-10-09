@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import type { CollaborationWorkspaceWithRole, SafeConfig } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";

@@ -15,6 +15,10 @@ import {
   Input,
   Select,
   Spinner,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
   useScrollEdgeFade
 } from "@vivd-catalyst/ui";
@@ -62,6 +66,9 @@ const settingsTabs: Array<{ id: CollaborationWorkspaceSettingsTab; label: Transl
   { id: "members", label: "collaborationWorkspaceTabMembers" },
   { id: "requests", label: "collaborationWorkspaceTabRequests" }
 ];
+
+/** Every tab's panel has this one height, so the dialog's frame does not jump between tabs. */
+const settingsTabPanelClassName = "h-[clamp(20rem,68vh,44rem)] overflow-hidden";
 
 /** One settings dialog is on screen at a time, so fixed ids are enough here. */
 const collaborationWorkspaceMemberCandidateListId = "collaboration-workspace-member-candidates";
@@ -138,7 +145,6 @@ export function CollaborationWorkspaceSettingsDialog({
    * state it returns to when the dialog closes without saving.
    */
   const [draft, setDraft] = useState<CollaborationWorkspaceAppearance | undefined>();
-  const tabRefs = useRef<Partial<Record<CollaborationWorkspaceSettingsTab, HTMLButtonElement>>>({});
 
   useEffect(() => {
     if (!open) {
@@ -146,16 +152,6 @@ export function CollaborationWorkspaceSettingsDialog({
       setDraft(undefined);
     }
   }, [open]);
-
-  function selectTabByOffset(offset: number) {
-    const currentIndex = settingsTabs.findIndex((candidate) => candidate.id === tab);
-    const nextTab =
-      settingsTabs[(currentIndex + offset + settingsTabs.length) % settingsTabs.length];
-    if (nextTab) {
-      setTab(nextTab.id);
-      tabRefs.current[nextTab.id]?.focus();
-    }
-  }
 
   return (
     <Dialog
@@ -170,7 +166,16 @@ export function CollaborationWorkspaceSettingsDialog({
         and own their padding. Everything above the tabpanel stays put; only the
         active tab's content scrolls.
       */}
-      <div className="-m-5 grid">
+      <Tabs
+        className="-m-5 grid"
+        value={tab}
+        onValueChange={(value) => {
+          const selected = settingsTabs.find((candidate) => candidate.id === value);
+          if (selected) {
+            setTab(selected.id);
+          }
+        }}
+      >
         <div className="grid gap-5 px-5 pt-5">
           <CollaborationWorkspaceSettingsHeader
             name={collaborationWorkspace.name}
@@ -188,50 +193,15 @@ export function CollaborationWorkspaceSettingsDialog({
             content scrolling away passes under a real boundary instead of being
             cut off in open space.
           */}
-          <div
-            role="tablist"
-            aria-label={t("collaborationWorkspaceSettingsTitle")}
-            className="flex gap-1 border-b"
-            onKeyDown={(event) => {
-              if (event.key === "ArrowRight") {
-                event.preventDefault();
-                selectTabByOffset(1);
-              }
-              if (event.key === "ArrowLeft") {
-                event.preventDefault();
-                selectTabByOffset(-1);
-              }
-            }}
-          >
+          <TabsList label={t("collaborationWorkspaceSettingsTitle")}>
             {settingsTabs.map((candidate) => (
-              <button
-                key={candidate.id}
-                ref={(element) => {
-                  if (element) {
-                    tabRefs.current[candidate.id] = element;
-                  }
-                }}
-                type="button"
-                role="tab"
-                id={`collaboration-workspace-tab-${candidate.id}`}
-                aria-controls={`collaboration-workspace-panel-${candidate.id}`}
-                aria-selected={tab === candidate.id}
-                tabIndex={tab === candidate.id ? 0 : -1}
-                className={cn(
-                  "-mb-px border-b-2 px-3 py-2 text-sm font-medium outline-none transition-colors",
-                  "focus-visible:ring-[3px] focus-visible:ring-ring/40",
-                  tab === candidate.id
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                )}
-                onClick={() => setTab(candidate.id)}
-              >
+              <TabsTrigger key={candidate.id} value={candidate.id}>
                 {candidate.id === "requests"
                   ? t(candidate.label, { count: accessRequests.length })
                   : t(candidate.label)}
-              </button>
+              </TabsTrigger>
             ))}
-          </div>
+          </TabsList>
         </div>
 
         {errorMessage ? (
@@ -249,53 +219,46 @@ export function CollaborationWorkspaceSettingsDialog({
           into its own scrolling region and, where it has one, a pinned action
           footer, so a save button is never scrolled out of reach.
         */}
-        <div
-          role="tabpanel"
-          id={`collaboration-workspace-panel-${tab}`}
-          aria-labelledby={`collaboration-workspace-tab-${tab}`}
-          className="h-[clamp(20rem,68vh,44rem)] overflow-hidden"
-        >
-          {tab === "general" ? (
-            <CollaborationWorkspaceGeneralTab
-              collaborationWorkspace={collaborationWorkspace}
-              currentUserId={currentUserId}
-              members={members}
-              savePending={savePending}
-              membershipPending={membershipPending}
-              onSave={onSave}
-              onLeave={onLeave}
-              onRequestDelete={onRequestDelete}
-              onAppearanceDraftChange={setDraft}
-            />
-          ) : null}
-          {tab === "members" ? (
-            <CollaborationWorkspaceMembersTab
-              collaborationWorkspace={collaborationWorkspace}
-              currentUserId={currentUserId}
-              members={members}
-              loading={membersLoading}
-              loadFailed={membersLoadFailed}
-              memberCandidates={memberCandidates}
-              memberCandidatesLoading={memberCandidatesLoading}
-              pending={membershipPending}
-              onMemberCandidateSearchChange={onMemberCandidateSearchChange}
-              onAddMember={onAddMember}
-              onChangeMemberRole={onChangeMemberRole}
-              onRemoveMember={onRemoveMember}
-            />
-          ) : null}
-          {tab === "requests" ? (
-            <CollaborationWorkspaceRequestsTab
-              accessRequests={accessRequests}
-              loading={accessRequestsLoading}
-              loadFailed={accessRequestsLoadFailed}
-              pending={membershipPending}
-              onApprove={onApproveAccessRequest}
-              onDecline={onDeclineAccessRequest}
-            />
-          ) : null}
-        </div>
-      </div>
+        <TabsContent value="general" className={settingsTabPanelClassName}>
+          <CollaborationWorkspaceGeneralTab
+            collaborationWorkspace={collaborationWorkspace}
+            currentUserId={currentUserId}
+            members={members}
+            savePending={savePending}
+            membershipPending={membershipPending}
+            onSave={onSave}
+            onLeave={onLeave}
+            onRequestDelete={onRequestDelete}
+            onAppearanceDraftChange={setDraft}
+          />
+        </TabsContent>
+        <TabsContent value="members" className={settingsTabPanelClassName}>
+          <CollaborationWorkspaceMembersTab
+            collaborationWorkspace={collaborationWorkspace}
+            currentUserId={currentUserId}
+            members={members}
+            loading={membersLoading}
+            loadFailed={membersLoadFailed}
+            memberCandidates={memberCandidates}
+            memberCandidatesLoading={memberCandidatesLoading}
+            pending={membershipPending}
+            onMemberCandidateSearchChange={onMemberCandidateSearchChange}
+            onAddMember={onAddMember}
+            onChangeMemberRole={onChangeMemberRole}
+            onRemoveMember={onRemoveMember}
+          />
+        </TabsContent>
+        <TabsContent value="requests" className={settingsTabPanelClassName}>
+          <CollaborationWorkspaceRequestsTab
+            accessRequests={accessRequests}
+            loading={accessRequestsLoading}
+            loadFailed={accessRequestsLoadFailed}
+            pending={membershipPending}
+            onApprove={onApproveAccessRequest}
+            onDecline={onDeclineAccessRequest}
+          />
+        </TabsContent>
+      </Tabs>
     </Dialog>
   );
 }

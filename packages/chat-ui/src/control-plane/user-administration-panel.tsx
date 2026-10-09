@@ -12,9 +12,11 @@ import {
   Button,
   Card,
   CardContent,
-  cn,
   Dialog,
+  FilterBar,
   Input,
+  SegmentedControl,
+  SegmentedControlItem,
   Select,
   Table,
   TableBody,
@@ -172,65 +174,62 @@ export function UserAdministrationPanel({
         </Button>
       }
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-56 flex-1">
-          <Search
-            size={15}
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-          />
+      <FilterBar
+        search={
           <Input
             type="search"
-            className="pl-9"
+            leadingIcon={<Search aria-hidden="true" />}
             placeholder={t("settings.userSearch")}
             aria-label={t("settings.userSearch")}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-        </div>
-        <Select
-          className="h-10 w-full font-medium sm:w-40"
-          aria-label={t("settings.userFilterByStatus")}
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
-        >
-          <option value="all">{t("allStatuses")}</option>
-          <option value="active">{t("settings.statusActive")}</option>
-          <option value="disabled">{t("settings.statusDisabled")}</option>
-        </Select>
-        <Select
-          className="h-10 w-full font-medium sm:w-40"
-          aria-label={t("settings.userFilterByRole")}
-          value={roleFilter}
-          onChange={(event) => setRoleFilter(event.target.value)}
-        >
-          <option value="all">{t("settings.userAllRoles")}</option>
-          {roleOptions.map((role) => {
-            const label = roleLabel(role);
-            return (
-              <option key={role} value={role}>
-                {label ? t(label) : role}
-              </option>
-            );
-          })}
-        </Select>
-        <div className="flex shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5">
-          {(["users", "permissions"] as const).map((view) => (
-            <button
-              key={view}
-              type="button"
-              aria-pressed={listView === view}
-              className={cn(
-                "h-8 rounded-sm px-3 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                listView === view && "bg-secondary text-secondary-foreground"
-              )}
-              onClick={() => setListView(view)}
+        }
+        filters={
+          <>
+            <Select
+              className="w-full font-medium sm:w-40"
+              aria-label={t("settings.userFilterByStatus")}
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
             >
-              {t(view === "users" ? "userListView" : "userRightsOverview")}
-            </button>
-          ))}
-        </div>
-      </div>
+              <option value="all">{t("allStatuses")}</option>
+              <option value="active">{t("settings.statusActive")}</option>
+              <option value="disabled">{t("settings.statusDisabled")}</option>
+            </Select>
+            <Select
+              className="w-full font-medium sm:w-40"
+              aria-label={t("settings.userFilterByRole")}
+              value={roleFilter}
+              onChange={(event) => setRoleFilter(event.target.value)}
+            >
+              <option value="all">{t("settings.userAllRoles")}</option>
+              {roleOptions.map((role) => {
+                const label = roleLabel(role);
+                return (
+                  <option key={role} value={role}>
+                    {label ? t(label) : role}
+                  </option>
+                );
+              })}
+            </Select>
+          </>
+        }
+        actions={
+          <SegmentedControl
+            label={t("userListViewChoice")}
+            value={listView}
+            onValueChange={(value) =>
+              setListView(value === "permissions" ? "permissions" : "users")
+            }
+          >
+            <SegmentedControlItem value="users">{t("userListView")}</SegmentedControlItem>
+            <SegmentedControlItem value="permissions">
+              {t("userRightsOverview")}
+            </SegmentedControlItem>
+          </SegmentedControl>
+        }
+      />
 
       {error ? <FormNotice notice={{ kind: "error", text: error }} /> : null}
 
@@ -277,7 +276,7 @@ export function UserAdministrationPanel({
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableRow>
                 <TableHead className="w-10 px-4">
                   <input
                     type="checkbox"
@@ -287,21 +286,11 @@ export function UserAdministrationPanel({
                     onChange={(event) => togglePageSelection(event.target.checked)}
                   />
                 </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  {t("userRightsOverviewUser")}
-                </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  {t("settings.userAccess")}
-                </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  {t("settings.status")}
-                </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  {t("settings.userSignInMethods")}
-                </TableHead>
-                <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  {t("settings.userLastActive")}
-                </TableHead>
+                <TableHead className="px-4">{t("userRightsOverviewUser")}</TableHead>
+                <TableHead className="px-4">{t("settings.userAccess")}</TableHead>
+                <TableHead className="px-4">{t("settings.status")}</TableHead>
+                <TableHead className="px-4">{t("settings.userSignInMethods")}</TableHead>
+                <TableHead className="px-4">{t("settings.userLastActive")}</TableHead>
                 <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
