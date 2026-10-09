@@ -392,6 +392,10 @@ export function retentionHintOpen(state: RetentionHintState): boolean {
   return state.hovered || state.focused;
 }
 
+// The icon is swapped when the hint opens and closes. It takes no pointer events, so the swap
+// under a resting pointer does not read as the pointer entering the clock again.
+const clockClassName = "pointer-events-none size-3.5";
+
 function RetentionClock({
   name,
   hint,
@@ -422,7 +426,7 @@ function RetentionClock({
         // while it shows.
         <Tooltip open disableHoverableContent>
           <TooltipTrigger asChild>
-            <Clock className="size-3.5" aria-hidden="true" />
+            <Clock className={clockClassName} aria-hidden="true" />
           </TooltipTrigger>
           <TooltipContent
             data-testid="conversation-expiry-hint"
@@ -432,7 +436,7 @@ function RetentionClock({
           </TooltipContent>
         </Tooltip>
       ) : (
-        <Clock className="size-3.5" aria-hidden="true" />
+        <Clock className={clockClassName} aria-hidden="true" />
       )}
     </span>
   );
