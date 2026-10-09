@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { RunRecoveryWatchdog } from "@vivd-catalyst/chat-server";
-import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {

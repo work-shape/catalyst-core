@@ -1,21 +1,12 @@
 import { createLogger } from "./logger";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { createPostgresStores } from "@vivd-catalyst/postgres-store";
 import { AppError, type PlatformStores, type Logger } from "@vivd-catalyst/core";
 import type { ClientInstanceEnv } from "./env";
 
-export type PlatformStoreMode = "postgres" | "memory";
-
 export async function createPlatformStore(input: {
   env: ClientInstanceEnv;
   logger?: Logger;
-  storeMode?: PlatformStoreMode;
 }): Promise<PlatformStores> {
-  const mode = input.storeMode ?? resolveStoreMode(input.env);
-  if (mode === "memory") {
-    return new InMemoryPlatformStore();
-  }
-
   if (input.env.DATABASE_URL) {
     return createPostgresStores({
       databaseUrl: input.env.DATABASE_URL,
@@ -24,18 +15,5 @@ export async function createPlatformStore(input: {
     });
   }
 
-  throw new AppError(
-    "VALIDATION_FAILED",
-    "DATABASE_URL is required for the platform store; set STORE=memory only for explicit local/test memory mode"
-  );
-}
-
-function resolveStoreMode(env: ClientInstanceEnv): PlatformStoreMode {
-  if (!env.STORE) {
-    return "postgres";
-  }
-  if (env.STORE === "memory" || env.STORE === "postgres") {
-    return env.STORE;
-  }
-  throw new AppError("VALIDATION_FAILED", "STORE must be either 'postgres' or 'memory'");
+  throw new AppError("VALIDATION_FAILED", "DATABASE_URL is required for the platform store");
 }

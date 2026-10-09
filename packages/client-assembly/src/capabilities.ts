@@ -7,6 +7,5 @@ export type {
   ClientInstanceCapabilityFiles,
   ClientInstanceManagedObjectReader,
   ClientInstanceManagedObjectReaderContribution,
-  ManagedObjectAccessFactory,
-  PlatformStoreMode
+  ManagedObjectAccessFactory
 } from "@vivd-catalyst/capability-sdk";

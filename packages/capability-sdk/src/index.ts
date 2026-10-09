@@ -50,7 +50,6 @@ export type {
 };
 
 export type ClientInstanceEnv = Record<string, string | undefined>;
-export type PlatformStoreMode = "postgres" | "memory";
 
 export interface ClientInstanceCapabilityContext {
   logger?: import("@vivd-catalyst/core").Logger;
@@ -60,7 +59,6 @@ export interface ClientInstanceCapabilityContext {
   env: ClientInstanceEnv;
   files: ClientInstanceCapabilityFiles;
   managedObjectAccess: ManagedObjectAccessFactory;
-  storeMode: PlatformStoreMode;
 }
 
 export type ClientInstanceCapabilityFiles = Pick<

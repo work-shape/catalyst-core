@@ -31,7 +31,7 @@ export {
   type SeedStandaloneAuthInput,
   type SeedStandaloneAuthResult
 } from "./seed-auth";
-export { createPlatformStore, type PlatformStoreMode } from "./store";
+export { createPlatformStore } from "./store";
 export { createToolDefinitions } from "./tools";
 export {
   applyWorkspaceRunnerImageEnvOverride,

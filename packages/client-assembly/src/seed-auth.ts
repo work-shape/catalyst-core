@@ -31,10 +31,7 @@ export async function seedStandaloneAuth(
     );
   }
 
-  const store = await createPlatformStore({
-    env,
-    storeMode: "postgres"
-  });
+  const store = await createPlatformStore({ env });
 
   try {
     const authRuntime = await createStandaloneAuthRuntimeForClientInstance({

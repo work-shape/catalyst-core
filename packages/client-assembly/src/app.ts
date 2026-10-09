@@ -62,7 +62,7 @@ import type {
 } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
-import { createPlatformStore, type PlatformStoreMode } from "./store";
+import { createPlatformStore } from "./store";
 import { createToolDefinitions } from "./tools";
 import {
   createExecutionWorkspaceManagedObjectReader,
@@ -73,7 +73,6 @@ export interface CreateClientInstanceAppInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
-  storeMode?: PlatformStoreMode;
   tools: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
@@ -191,8 +190,7 @@ export async function createClientInstanceExecutionAssembly(
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
-  const resolvedStoreMode = resolveStoreMode(input.storeMode, env);
-  const store = await createPlatformStore({ env, storeMode: input.storeMode, logger });
+  const store = await createPlatformStore({ env, logger });
   const dataSources = createDataSourceRegistry({
     configs: config.dataSources,
     secretResolver: createEnvSecretResolver(env)
@@ -219,8 +217,7 @@ export async function createClientInstanceExecutionAssembly(
           ...accessInput
         });
       }
-    },
-    storeMode: resolvedStoreMode
+    }
   });
   const capabilityAttachmentHandlers = capabilityContributions.flatMap(
     (contribution) => contribution.attachments ?? []
@@ -418,7 +415,6 @@ export async function createClientInstanceExecutionAssembly(
     env,
     config,
     clientInstanceId,
-    storeMode: resolvedStoreMode,
     store,
     attachments,
     managedObjects,
@@ -691,20 +687,6 @@ async function closeCapabilityContributions(
   for (const contribution of [...contributions].reverse()) {
     await contribution.close?.();
   }
-}
-
-function resolveStoreMode(
-  explicitMode: PlatformStoreMode | undefined,
-  env: ClientInstanceEnv
-): PlatformStoreMode {
-  const value = explicitMode ?? env.STORE;
-  if (!value) {
-    return "postgres";
-  }
-  if (value === "memory" || value === "postgres") {
-    return value;
-  }
-  throw new AppError("VALIDATION_FAILED", "STORE must be either 'postgres' or 'memory'");
 }
 
 async function loadConfig(configPath: string | undefined): Promise<ClientInstanceConfig> {

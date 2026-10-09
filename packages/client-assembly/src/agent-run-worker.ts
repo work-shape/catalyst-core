@@ -16,13 +16,11 @@ import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { createClientInstanceExecutionAssembly } from "./app";
 import type { ClientInstanceCapability } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
-import type { PlatformStoreMode } from "./store";
 
 export interface CreateClientInstanceAgentRunWorkerInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
-  storeMode?: PlatformStoreMode;
   tools: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
@@ -40,10 +38,6 @@ export async function createClientInstanceAgentRunWorker(
   input: CreateClientInstanceAgentRunWorkerInput
 ): Promise<ClientInstanceAgentRunWorker> {
   const execution = await createClientInstanceExecutionAssembly(input);
-  if (execution.storeMode !== "postgres") {
-    await execution.close();
-    throw new AppError("VALIDATION_FAILED", "Agent workers require the Postgres platform store");
-  }
 
   const worker = new AgentRunWorker({
     clientInstanceId: execution.clientInstanceId,

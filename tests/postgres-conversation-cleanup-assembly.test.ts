@@ -47,7 +47,6 @@ describe("Postgres conversation cleanup through a client assembly", () => {
         tools: []
       }),
       env: { DATABASE_URL: db.databaseUrl, EXECUTION_WORKSPACE_OBJECT_ROOT: root },
-      storeMode: "postgres",
       capabilities: withCapability ? [acceptingOnly(capability.capability, ".note")] : [],
       tools: [],
       seedAssets: false

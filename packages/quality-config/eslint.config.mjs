@@ -539,7 +539,7 @@ const plugin = {
       })
     ),
     "memory-store": rule(
-      "CB-3b removes STORE=memory and the in-memory platform store",
+      "Postgres is the only platform store; STORE=memory and InMemoryPlatformStore stay removed",
       () => true,
       (_context, report) => ({
         /** @param {AnyNode} node */

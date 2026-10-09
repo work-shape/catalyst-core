@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { asClientInstanceId, asManagedFileId, type RuntimeCallContext } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { modelContentText, type ModelProvider } from "@vivd-catalyst/model-provider";
 import {

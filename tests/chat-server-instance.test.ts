@@ -685,8 +685,7 @@ describe("client instance app vertical slice", () => {
       })
     ).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
-      message:
-        "DATABASE_URL is required for the platform store; set STORE=memory only for explicit local/test memory mode"
+      message: "DATABASE_URL is required for the platform store"
     });
   });
 

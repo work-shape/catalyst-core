@@ -15,7 +15,7 @@ import {
   type ModelProviderConfig,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import {
   AgentRunWorker,
   StoreBackedAgentRuntime,

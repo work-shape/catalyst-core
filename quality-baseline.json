@@ -159,7 +159,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/core",
-      "count": 28,
+      "count": 26,
       "owner": "CB-8b"
     },
     {
@@ -287,20 +287,6 @@
       "scope": "packages/chat-ui",
       "count": 1,
       "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/memory-store",
-      "scope": "packages/client-assembly",
-      "count": 2,
-      "owner": "CB-3b"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/memory-store",
-      "scope": "packages/core",
-      "count": 1,
-      "owner": "CB-3b"
     },
     {
       "target": "lint",
@@ -460,7 +446,7 @@
       "target": "lint",
       "rule": "knip/types",
       "scope": "packages/client-assembly",
-      "count": 3,
+      "count": 2,
       "owner": "CB-10a"
     },
     {
@@ -574,20 +560,6 @@
       "scope": "packages/config-schema/src/schemas.ts",
       "count": 1,
       "owner": "MD-1"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
-      "scope": "packages/core/src/testing-in-memory-file-store.ts",
-      "count": 1,
-      "owner": "CB-3b"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
-      "scope": "packages/core/src/testing.ts",
-      "count": 1,
-      "owner": "CB-3b"
     },
     {
       "target": "lint",

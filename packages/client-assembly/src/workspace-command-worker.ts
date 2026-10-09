@@ -15,13 +15,12 @@ import {
   WorkspaceCommandWorker
 } from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceEnv } from "./env";
-import { createPlatformStore, type PlatformStoreMode } from "./store";
+import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
-  storeMode?: PlatformStoreMode;
 }
 
 export interface ClientInstanceWorkspaceCommandWorker {
@@ -45,7 +44,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
     throw new AppError("VALIDATION_FAILED", "Execution workspaces are disabled in release config");
   }
 
-  const store = await createPlatformStore({ env, storeMode: input.storeMode, logger });
+  const store = await createPlatformStore({ env, logger });
   const clientInstanceId = getClientInstanceId(config);
   const byteStore = createLocalWorkspaceFileByteStore({
     rootDirectory: requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")

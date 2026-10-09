@@ -12,7 +12,7 @@ import {
   type ToolExecutionContext,
   type ToolExecutionRequest
 } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
 import {
   createReadSkillTool,

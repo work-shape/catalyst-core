@@ -12,7 +12,7 @@ import {
   type Route
 } from "@vivd-catalyst/chat-server";
 import { asClientInstanceId, NoopAuditRecorder, type PlatformStores } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "./static-config-asset-source";
 import { createPostgresStores, type PostgresStores } from "@vivd-catalyst/postgres-store";
 import { fileTestDatabaseUrl, closeFileTestDatabase, resetFileTestDatabase } from "./test-database";
 import { addTestStoreHelpers, type TestStore } from "./test-store";
@@ -229,7 +229,6 @@ async function createConfiguredInstance(
   if ("execution" in input) {
     const assembly = await createClientInstanceExecutionAssembly({
       ...input.execution,
-      storeMode: "postgres",
       env: {
         ...input.execution.env,
         DATABASE_URL: await fileTestDatabaseUrl(),
@@ -279,8 +278,7 @@ async function createConfiguredInstance(
       ...input.env,
       DATABASE_URL: await fileTestDatabaseUrl(input.fixtureFile),
       RUN_MIGRATIONS: "false"
-    },
-    storeMode: "postgres"
+    }
   });
   try {
     if (input.seedAssets !== false) await seedTestAssets(app);
@@ -543,6 +541,6 @@ export function getTestExecution(
 export async function rejectStartupWithoutDatabase(
   input: Pick<CreateClientInstanceAppInput, "config" | "tools">
 ): Promise<void> {
-  const app = await createClientInstanceApp({ ...input, env: {}, storeMode: "postgres" });
+  const app = await createClientInstanceApp({ ...input, env: {} });
   await app.close();
 }

@@ -6,7 +6,6 @@
         "src/index.{ts,tsx}",
         "src/{shell,admin}.tsx",
         "src/vite.js",
-        "src/testing.ts",
         "scripts/**/*.{ts,mjs,js}",
         "*.config.{ts,js,mjs}"
       ],

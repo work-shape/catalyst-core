@@ -6,7 +6,6 @@ const sourceAlias = {
   "@vivd-catalyst/agent-runtime": "packages/agent-runtime/src/index.ts",
   "@vivd-catalyst/api-contract": "packages/api-contract/src/index.ts",
   "@vivd-catalyst/api-client": "packages/api-client/src/index.ts",
-  "@vivd-catalyst/core/testing": "packages/core/src/testing.ts",
   "@vivd-catalyst/auth": "packages/auth/src/index.ts",
   "@vivd-catalyst/core": "packages/core/src/index.ts",
   "@vivd-catalyst/chat-server": "packages/chat-server/src/index.ts",

@@ -50,7 +50,6 @@ export interface DefinedClientInstance {
     host?: string;
     port?: number;
     configPath?: string;
-    storeMode?: CreateClientInstanceAppInput["storeMode"];
     allowedOrigins?: string | string[];
   }): Promise<ClientInstanceApp>;
   createAgentRunWorker(
@@ -170,7 +169,6 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
       const app = await createApp({
         env: listenInput.env,
         configPath: listenInput.configPath,
-        storeMode: listenInput.storeMode,
         allowedOrigins: listenInput.allowedOrigins
       });
       await app.listen({

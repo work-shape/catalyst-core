@@ -17,7 +17,7 @@ import {
   type AuthenticatedUser,
   type ModelProviderConfig
 } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { type ModelProvider } from "@vivd-catalyst/model-provider";

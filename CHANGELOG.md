@@ -32,6 +32,13 @@ contain breaking changes; a patch version does not.
 
 ### Changed
 
+- **Platform store (breaking):** Postgres is the only platform store. The `STORE` environment
+  variable is no longer read, so `STORE=memory` no longer starts an instance without a
+  database; every process needs `DATABASE_URL`. Remove `STORE` from environment files. The
+  `storeMode` option is gone from `createClientInstanceApp`, the worker factories, `listen` and
+  the capability context, together with the `PlatformStoreMode` type, and an artifact preview
+  `sourceReaderFactory` no longer receives `storeMode`. `@vivd-catalyst/core/testing` and its
+  `InMemoryPlatformStore` are removed.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
   `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is
   absent on the last page; pass it back as `cursor` with the same filters to read the next
