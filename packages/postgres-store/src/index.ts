@@ -16,7 +16,7 @@ import { createPostgresConfigAssetsStore } from "./stores/configAssets";
 import { createPostgresApprovalsStore } from "./stores/approvals";
 import { createPostgresExecutionWorkspacesStore } from "./stores/executionWorkspaces";
 import { createPostgresStructuredDataStore } from "./stores/structuredData";
-import { createPostgresJobsStore } from "./jobs/store";
+import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 
 export interface PostgresStoresOptions {
   databaseUrl: string;
@@ -39,7 +39,15 @@ function handlePostgresNotice(notice: Notice, logger?: Logger): void {
   logger?.warn({ notice }, "Postgres notice");
 }
 
-function bindStores(db: PostgresConnection): PlatformStores {
+/**
+ * `enqueued` hears of every job the stores insert. `inTransaction` is false for the stores of
+ * the connection itself, whose `transaction` tells the workers of this process once it committed.
+ */
+function bindStores(
+  db: PostgresConnection,
+  enqueued: () => void = () => notifyJobsEnqueued(db),
+  inTransaction = false
+): PlatformStores {
   return {
     conversations: createPostgresConversationsStore(db),
     agentRuns: createPostgresAgentRunsStore(db),
@@ -53,8 +61,18 @@ function bindStores(db: PostgresConnection): PlatformStores {
     approvals: createPostgresApprovalsStore(db),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),
-    jobs: createPostgresJobsStore(db),
-    transaction: (fn) => db.transaction((tx) => fn(bindStores(tx)))
+    jobs: createPostgresJobsStore(db, enqueued),
+    async transaction(fn) {
+      // A nested transaction reports to the outermost one: nothing is visible before that commits.
+      if (inTransaction) return db.transaction((tx) => fn(bindStores(tx, enqueued, true)));
+      let enqueuedInside = false;
+      const noteEnqueued = () => {
+        enqueuedInside = true;
+      };
+      const result = await db.transaction((tx) => fn(bindStores(tx, noteEnqueued, true)));
+      if (enqueuedInside) notifyJobsEnqueued(db);
+      return result;
+    }
   };
 }
 

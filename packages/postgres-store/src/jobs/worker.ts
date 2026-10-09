@@ -26,7 +26,10 @@ import {
   listKindsWithWork,
   lockExhaustedJob,
   lockLeasedJob,
+  makeScheduleTickDue,
   mapJob,
+  onJobsEnqueued,
+  renewLockedJobLease,
   type JobEnding,
   type JobLease,
   type JobRow
@@ -86,6 +89,9 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
   let stopping = false;
   let loop: Promise<void> | undefined;
   let wake: (() => void) | undefined;
+  /** A job was enqueued in this process since the last pass began. */
+  let passRequested = false;
+  let stopListening: (() => void) | undefined;
   let schedulesCheckedAt: number | undefined;
   let passing: Promise<void> = Promise.resolve();
 
@@ -173,9 +179,14 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       logger: jobLogger,
       transaction: (fn) =>
         stores.transaction(async (txStores) => {
-          if (!(await lockLeasedJob(connectionOf(txStores.jobs), lease)))
-            throw new JobLeaseLostError(row.id);
-          return fn(txStores);
+          const tx = connectionOf(txStores.jobs);
+          if (!(await lockLeasedJob(tx, lease))) throw new JobLeaseLostError(row.id);
+          const result = await fn(txStores);
+          // The heartbeat waits behind this transaction's lock on the row, so a transaction
+          // longer than the lease would commit with a lease that looks expired and the job
+          // would run again. The lease leaves the transaction renewed instead.
+          await renewLockedJobLease(tx, lease, handler.kind.leaseMs);
+          return result;
         })
     };
     const ended = (async () => {
@@ -251,8 +262,11 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
     const now = Date.now();
     if (schedulesCheckedAt !== undefined && now - schedulesCheckedAt < SCHEDULE_CHECK_INTERVAL_MS)
       return;
-    for (const schedule of schedules.values())
+    for (const schedule of schedules.values()) {
       await ensureScheduleTick(db, clientInstanceId, schedule);
+      if (schedule.dueAtStart && schedulesCheckedAt === undefined)
+        await makeScheduleTickDue(db, clientInstanceId, schedule);
+    }
     schedulesCheckedAt = now;
   }
 
@@ -309,14 +323,21 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
   return {
     start() {
       if (loop || stopping) return;
+      // A job enqueued in this process is claimed at once, not at the next second.
+      stopListening = onJobsEnqueued(db, () => {
+        passRequested = true;
+        wake?.();
+      });
       loop = (async () => {
         while (!stopping) {
+          passRequested = false;
           try {
             await pass();
           } catch (error) {
             logger.error({ err: error }, "Job poll failed");
           }
           if (stopping) return;
+          if (passRequested) continue;
           await new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, POLL_INTERVAL_MS);
             timer.unref();
@@ -333,6 +354,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
     },
     async stop() {
       stopping = true;
+      stopListening?.();
       wake?.();
       await loop;
       await passing;

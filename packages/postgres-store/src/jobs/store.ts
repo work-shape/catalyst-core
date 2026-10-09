@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, lte, sql } from "drizzle-orm";
 import {
   AppError,
   createPlatformId,
@@ -42,9 +42,33 @@ export function connectionOf(jobs: JobsStore): PostgresConnection {
   return connection;
 }
 
-export function createPostgresJobsStore(db: PostgresConnection): JobsStore {
+const enqueueListeners = new WeakMap<PostgresConnection, Set<() => void>>();
+
+/**
+ * Calls `listener` after a job was enqueued through the stores of `connection` in this process
+ * and its transaction committed. A worker uses it to poll at once instead of at its next
+ * second. Returns the function that ends the subscription.
+ */
+export function onJobsEnqueued(connection: PostgresConnection, listener: () => void): () => void {
+  const listeners = enqueueListeners.get(connection) ?? new Set();
+  enqueueListeners.set(connection, listeners);
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Tells the workers of this process that the stores of `connection` committed a new job. */
+export function notifyJobsEnqueued(connection: PostgresConnection): void {
+  for (const listener of enqueueListeners.get(connection) ?? []) listener();
+}
+
+/** `enqueued` is called for every job this store inserts, before its transaction commits. */
+export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => void): JobsStore {
   const store: JobsStore = {
-    enqueue: (kind, payload, options) => enqueueJob(db, kind, payload, options),
+    async enqueue(kind, payload, options) {
+      const job = await enqueueJob(db, kind, payload, options);
+      enqueued();
+      return job;
+    },
     pruneEndedJobs: (input) => pruneEndedJobs(db, input)
   };
   connections.set(store, db);
@@ -150,6 +174,26 @@ export async function ensureScheduleTick(
     {},
     { clientInstanceId, dedupeKey: scheduleDedupeKey(schedule.kind.kind) }
   );
+}
+
+/** Makes the waiting tick of a schedule due now. A tick that runs is left alone. */
+export async function makeScheduleTickDue(
+  db: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  schedule: JobSchedule
+): Promise<void> {
+  await db
+    .update(platformJobs)
+    .set({ runAfter: sql`now()` })
+    .where(
+      and(
+        eq(platformJobs.clientInstanceId, clientInstanceId),
+        eq(platformJobs.kind, schedule.kind.kind),
+        eq(platformJobs.dedupeKey, scheduleDedupeKey(schedule.kind.kind)),
+        eq(platformJobs.status, "queued"),
+        gt(platformJobs.runAfter, sql`now()`)
+      )
+    );
 }
 
 /** The next tick of a schedule, due `every` after now. Called in the transaction that ends one. */
@@ -282,7 +326,11 @@ export async function claimJobs(
   });
 }
 
-/** Extends the lease. False when the lease is no longer this attempt's. */
+/**
+ * Extends the lease. False when the lease is no longer this attempt's, which includes a lease
+ * that ran out: an expired lease is never renewed, another worker may already count on it.
+ * The times are the wall clock's, so a call inside a long transaction extends from now.
+ */
 export async function heartbeatJob(
   db: PostgresConnection,
   lease: JobLease,
@@ -290,7 +338,10 @@ export async function heartbeatJob(
 ): Promise<boolean> {
   const rows = await db
     .update(platformJobs)
-    .set({ leaseExpiresAt: sql`now() + ${delay(leaseMs)}`, heartbeatAt: sql`now()` })
+    .set({
+      leaseExpiresAt: sql`clock_timestamp() + ${delay(leaseMs)}`,
+      heartbeatAt: sql`clock_timestamp()`
+    })
     .where(heldBy(lease))
     .returning({ id: platformJobs.id });
   return rows.length > 0;
@@ -303,6 +354,25 @@ export async function lockLeasedJob(
 ): Promise<JobRow | undefined> {
   const [row] = await tx.select().from(platformJobs).where(heldBy(lease)).for("update");
   return row;
+}
+
+/**
+ * Renews the lease of a row this transaction locked with `lockLeasedJob`. The lock kept every
+ * other worker off the row since the lease was checked, so the lease is this attempt's even
+ * when its time ran out meanwhile: the attempt's own heartbeat waits behind the same lock.
+ */
+export async function renewLockedJobLease(
+  tx: PostgresConnection,
+  lease: JobLease,
+  leaseMs: number
+): Promise<void> {
+  await tx
+    .update(platformJobs)
+    .set({
+      leaseExpiresAt: sql`clock_timestamp() + ${delay(leaseMs)}`,
+      heartbeatAt: sql`clock_timestamp()`
+    })
+    .where(and(eq(platformJobs.id, lease.jobId), eq(platformJobs.leaseToken, lease.token)));
 }
 
 /** The running jobs of a kind whose lease expired on their last attempt. */
@@ -411,11 +481,13 @@ const exhausted = and(
   sql`${platformJobs.attempts} >= ${platformJobs.maxAttempts}`
 );
 
+/** The lease is this attempt's and has not run out, by the database's clock. */
 function heldBy(lease: JobLease) {
   return and(
     eq(platformJobs.id, lease.jobId),
     eq(platformJobs.leaseToken, lease.token),
-    eq(platformJobs.status, "running")
+    eq(platformJobs.status, "running"),
+    gt(platformJobs.leaseExpiresAt, sql`clock_timestamp()`)
   );
 }
 

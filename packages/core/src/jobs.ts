@@ -69,6 +69,11 @@ export interface JobSchedule {
   readonly kind: JobKind<ScheduledJobPayload>;
   /** Milliseconds between the end of one tick and the start of the next. */
   readonly every: number;
+  /**
+   * A worker that starts makes the waiting tick due at once, whatever is left of its interval.
+   * For a kind that repairs what the last process left behind.
+   */
+  readonly dueAtStart?: boolean;
 }
 
 export function defineSchedule(schedule: JobSchedule): JobSchedule {
