@@ -3,7 +3,7 @@
   "info": {
     "title": "Workshape Catalyst API",
     "version": "0.6.3",
-    "description": "Every operation under `/api/v1` of release 0.6.3. Every error answers with the envelope `ApiErrorResponse`; its `code` is the stable part, its `correlationId` names the request in the instance's log."
+    "description": "Every operation under `/api/v1` of release 0.6.3, and the unversioned readiness probe `/ready`. Every error answers with the envelope `ApiErrorResponse`; its `code` is the stable part, its `correlationId` names the request in the instance's log."
   },
   "servers": [
     {
@@ -47,6 +47,9 @@
     },
     {
       "name": "Reference"
+    },
+    {
+      "name": "System"
     },
     {
       "name": "Users"
@@ -7212,6 +7215,53 @@
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "write"
       }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready.get",
+        "summary": "Report whether the database answers and holds this release's migrations",
+        "tags": [
+          "System"
+        ],
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ready"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "503": {
+            "description": "The instance cannot serve; the body says why",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotReady"
+                }
+              }
+            }
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
     }
   },
   "components": {
@@ -11939,6 +11989,32 @@
           "collaborationWorkspaceId"
         ]
       },
+      "NotReady": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "not_ready"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "database_unreachable",
+              "database_behind"
+            ]
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "reason"
+        ]
+      },
       "OpenApiDocument": {
         "type": "object",
         "properties": {
@@ -12690,6 +12766,22 @@
         "required": [
           "version",
           "revision"
+        ]
+      },
+      "Ready": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ready"
+          },
+          "migration": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "migration"
         ]
       },
       "ReasoningEffort": {

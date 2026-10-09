@@ -243,6 +243,7 @@ app.route({ method: "GET", url: "/api/users", handler });
 `,
   "packages/document-worker/package.json": JSON.stringify({ name: "@fixture/document-worker" }),
   "packages/document-worker/src/index.ts": `${httpServer}app.get("/health", handler);
+app.get("/ready", handler);
 app.get("/internal/pages", handler);
 app.get("/api/pages", handler);
 export const register = (path: string) => app.get(path, handler);

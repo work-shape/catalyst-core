@@ -1,8 +1,9 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres, { type Notice } from "postgres";
-import type { Logger, PlatformStores } from "@vivd-catalyst/core";
+import type { DatabaseReadiness, Logger, PlatformStores } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
 import { assertDatabaseMigrated } from "./migrations";
+import { checkDatabaseReadiness } from "./readiness";
 import { schema } from "./schema";
 import { createPostgresConversationsStore } from "./stores/conversations";
 import { createPostgresAgentRunsStore } from "./stores/agentRuns";
@@ -28,10 +29,12 @@ export interface PostgresStoresOptions {
 
 export interface PostgresStores extends PlatformStores {
   close(): Promise<void>;
+  readiness(): Promise<DatabaseReadiness>;
 }
 
 export { createPostgresJobWorker, type CreatePostgresJobWorkerInput } from "./jobs/worker";
 export { DatabaseBehindError, migrateDatabase, type MigrateDatabaseInput } from "./migrations";
+export { READINESS_DATABASE_TIMEOUT_MS } from "./readiness";
 
 function handlePostgresNotice(notice: Notice, logger?: Logger): void {
   if (
@@ -95,7 +98,8 @@ export async function createPostgresStores(
   const db = drizzle(sql, { schema });
   const stores: PostgresStores = {
     ...bindStores(db),
-    close: () => sql.end()
+    close: () => sql.end(),
+    readiness: () => checkDatabaseReadiness(sql)
   };
   try {
     await assertDatabaseMigrated(sql);

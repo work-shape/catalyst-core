@@ -29,9 +29,13 @@ const names = Object.keys(apiOperations).filter(
 // Read through the descriptor's own type: each catalog entry is narrower than a test needs.
 const descriptor = (name: ApiOperationName): Operation => apiOperations[name];
 const routeOf = (name: ApiOperationName) => `${descriptor(name).method} ${descriptor(name).path}`;
-// Outside the versioned API: the health probe, and the runtime files a sandboxed view frame
-// loads as script addresses.
-const unversioned: readonly ApiOperationName[] = ["health.get", "view_runtime.files.get"];
+// Outside the versioned API: the health and readiness probes, and the runtime files a
+// sandboxed view frame loads as script addresses.
+const unversioned: readonly ApiOperationName[] = [
+  "health.get",
+  "ready.get",
+  "view_runtime.files.get"
+];
 const versioned = names.filter((name) => !unversioned.includes(name));
 
 const capturedMail = {
@@ -113,6 +117,7 @@ describe("the operation catalog", () => {
         "operations.list_runs  GET /api/v1/operations/runs",
         "password_reset.request  POST /api/v1/password-reset",
         "password_setup.complete  POST /api/v1/password-setup",
+        "ready.get  GET /ready",
         "service_principals.create  POST /api/v1/instance/service-principals",
         "service_principals.list  GET /api/v1/instance/service-principals",
         "service_principals.update  PATCH /api/v1/instance/service-principals/:servicePrincipalId",
@@ -157,13 +162,15 @@ describe("the operation catalog", () => {
     }
   });
 
-  it("puts every operation except the health probe and the view runtime files under the version prefix", () => {
+  it("puts every operation except the two probes and the view runtime files under the version prefix", () => {
     expect(API_VERSION_PREFIX.split("/")).toEqual(["", "api", "v1"]);
     for (const name of versioned) {
       expect(descriptor(name).path.startsWith(`${API_VERSION_PREFIX}/`), name).toBe(true);
     }
     expect(routeOf("health.get")).toBe("GET /health");
     expect(descriptor("health.get").auth).toBe("public");
+    expect(routeOf("ready.get")).toBe("GET /ready");
+    expect(descriptor("ready.get").auth).toBe("public");
     expect(routeOf("view_runtime.files.get")).toBe("GET /app-runtime/view/:version/:file");
     expect(descriptor("view_runtime.files.get").auth).toBe("public");
   });
@@ -213,21 +220,23 @@ describe("the released document", () => {
     }))
   );
 
-  it("describes every versioned operation under its canonical id", () => {
+  it("describes every versioned operation and the readiness probe under its canonical id", () => {
     const ids = documented.map(({ operation }) =>
       typeof operation === "object" && operation !== null && "operationId" in operation
         ? operation.operationId
         : undefined
     );
     expect(ids.sort()).toEqual(
-      versioned.filter((name) => descriptor(name).devOnly !== true).sort()
+      [...versioned.filter((name) => descriptor(name).devOnly !== true), "ready.get"].sort()
     );
   });
 
-  it("leaves out the development mail listing and the unversioned paths", () => {
+  it("leaves out the development mail listing and every unversioned path but the readiness probe", () => {
     expect(descriptor("captured_mail.list").devOnly).toBe(true);
     const paths = Object.keys(document.paths);
-    expect(paths.every((path) => path.startsWith(`${API_VERSION_PREFIX}/`))).toBe(true);
+    expect(paths.filter((path) => !path.startsWith(`${API_VERSION_PREFIX}/`))).toEqual([
+      descriptor("ready.get").path
+    ]);
     expect(paths).not.toContain(descriptor("captured_mail.list").path);
     expect(paths).not.toContain(descriptor("health.get").path);
     expect(paths.some((path) => path.startsWith("/app-runtime"))).toBe(false);

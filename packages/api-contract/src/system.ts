@@ -7,6 +7,26 @@ export const healthSchema = z.object({
   time: timestampSchema
 });
 
+/** The database answers and holds every migration this release was built with. */
+export const readySchema = z.object({
+  status: z.literal("ready"),
+  /** The newest migration of this release. */
+  migration: z.string()
+});
+
+/**
+ * Why this process cannot serve. `missing` names the migrations of this release the database
+ * lacks, oldest first, and is present when the database is behind.
+ */
+export const notReadySchema = z.object({
+  status: z.literal("not_ready"),
+  reason: z.enum(["database_unreachable", "database_behind"]),
+  missing: z.array(z.string()).optional()
+});
+
+/** Either answer of `/ready`. */
+export const readinessSchema = z.discriminatedUnion("status", [readySchema, notReadySchema]);
+
 /**
  * The pinned files a generated view loads from the instance. A change to either file is a new
  * `version`, so an address never serves two contents and can be cached for good.
@@ -30,4 +50,5 @@ export const capturedMailSchema = z.object({
 });
 
 export type Health = z.infer<typeof healthSchema>;
+export type Readiness = z.infer<typeof readinessSchema>;
 export type CapturedMail = z.infer<typeof capturedMailSchema>;

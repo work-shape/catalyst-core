@@ -16,8 +16,8 @@ const committedMigrationsDirectory = resolve(
 );
 const migrationLockKey = "vivd-catalyst:postgres-store:migrations";
 
-/** Any query runner: the migration session, or the pool a starting process reads through. */
-type Queries = Pick<ReservedSql, "unsafe">;
+/** Any query runner: the migration session, or the pool a running process reads through. */
+export type Queries = Pick<ReservedSql, "unsafe">;
 
 interface CommittedMigration {
   name: string;
@@ -91,11 +91,29 @@ export async function migrateDatabase(input: MigrateDatabaseInput): Promise<stri
  * release this process may still serve.
  */
 export async function assertDatabaseMigrated(sql: Queries): Promise<void> {
-  const lastApplied = await readLastAppliedMigration(sql);
-  const missing = readCommittedMigrations()
-    .filter((migration) => lastApplied === undefined || migration.when > lastApplied)
-    .map((migration) => migration.name);
+  const { missing } = await readMigrationState(sql);
   if (missing.length > 0) throw new DatabaseBehindError(missing);
+}
+
+export interface MigrationState {
+  /** The migrations of this release the database holds, oldest first. */
+  applied: string[];
+  /** The migrations of this release the database lacks, oldest first. */
+  missing: string[];
+}
+
+/**
+ * The one rule for what a database owes this release. It only reads. Migrations a newer release
+ * applied are not counted against the database: it is ahead, and this release may serve it.
+ */
+export async function readMigrationState(sql: Queries): Promise<MigrationState> {
+  const lastApplied = await readLastAppliedMigration(sql);
+  const state: MigrationState = { applied: [], missing: [] };
+  for (const migration of readCommittedMigrations()) {
+    const isApplied = lastApplied !== undefined && migration.when <= lastApplied;
+    (isApplied ? state.applied : state.missing).push(migration.name);
+  }
+  return state;
 }
 
 export class DatabaseBehindError extends Error {

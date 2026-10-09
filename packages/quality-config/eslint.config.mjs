@@ -264,7 +264,8 @@ const routeRegistrars = [
   {
     directory: "packages/document-worker",
     file: "src/index.ts",
-    allows: (path) => path === "/health" || (path?.startsWith("/internal/") ?? false)
+    allows: (path) =>
+      path === "/health" || path === "/ready" || (path?.startsWith("/internal/") ?? false)
   }
 ];
 

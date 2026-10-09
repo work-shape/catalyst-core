@@ -23,22 +23,26 @@ const releaseVersion = packageManifest.version;
 
 export type ApiOperationCatalog = Record<string, Operation>;
 
-/** The document of the release: every versioned operation of the catalog. */
+/** The document of the release: every versioned operation of the catalog, and `/ready`. */
 export function createOpenApiDocument(): OpenApiDocument {
   return createOpenApiDocumentFromOperations(apiOperations);
 }
 
 /**
  * The document of the given operations. An instance passes the operations it registered, so
- * what it runs without is absent. The unversioned health probe and operations of development
- * instances are registered without being part of any document.
+ * what it runs without is absent. Of the unversioned operations the document lists the one in
+ * `DOCUMENTED_UNVERSIONED_OPERATIONS`; the others and the operations of development instances
+ * are registered without being part of any document.
  */
 export function createOpenApiDocumentFromOperations(
   operations: ApiOperationCatalog
 ): OpenApiDocument {
   const documented = Object.values(operations)
     .filter(
-      (operation) => !operation.devOnly && operation.path.startsWith(`${API_VERSION_PREFIX}/`)
+      (operation) =>
+        !operation.devOnly &&
+        (operation.path.startsWith(`${API_VERSION_PREFIX}/`) ||
+          DOCUMENTED_UNVERSIONED_OPERATIONS.includes(operation.id))
     )
     .sort(
       (left, right) =>
@@ -89,7 +93,7 @@ export function createOpenApiDocumentFromOperations(
     info: {
       title: "Workshape Catalyst API",
       version: releaseVersion,
-      description: `Every operation under \`${API_VERSION_PREFIX}\` of release ${releaseVersion}. Every error answers with the envelope \`ApiErrorResponse\`; its \`code\` is the stable part, its \`correlationId\` names the request in the instance's log.`
+      description: `Every operation under \`${API_VERSION_PREFIX}\` of release ${releaseVersion}, and the unversioned readiness probe \`/ready\`. Every error answers with the envelope \`ApiErrorResponse\`; its \`code\` is the stable part, its \`correlationId\` names the request in the instance's log.`
     },
     servers: [{ url: "/", description: "The instance that serves this document" }],
     tags: [...new Set(documented.map((operation) => operation.tag))]
@@ -105,6 +109,8 @@ export function createOpenApiDocumentFromOperations(
   };
 }
 
+/** What a proxy or a deploy step is configured against, so its two answers are documented. */
+const DOCUMENTED_UNVERSIONED_OPERATIONS: readonly string[] = ["ready.get"];
 const METHOD_ORDER: readonly Operation["method"][] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const API_ERROR_CODE_ORDER: readonly ApiErrorCode[] = appErrorCodeSchema.options;
 const errorResponseSchema = contractSchemas.apiErrorResponseSchema;
@@ -318,7 +324,17 @@ function createResultResponses(operation: Operation): Record<string, OpenApiResp
         "200": {
           description: response.kind === "page" ? "One page of the list" : "The result",
           content: { "application/json": { schema: schemaFor(response.schema, "output") } }
-        }
+        },
+        ...(response.kind === "json" && response.unavailable
+          ? {
+              "503": {
+                description: "The instance cannot serve; the body says why",
+                content: {
+                  "application/json": { schema: schemaFor(response.unavailable, "output") }
+                }
+              }
+            }
+          : {})
       };
     case "sse":
       // OpenAPI 3.1 has no notation for an event stream, so the schema is that of one event.

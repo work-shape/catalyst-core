@@ -1,6 +1,6 @@
 import { listQuerySchema } from "../shared";
-import { capturedMailSchema, healthSchema } from "../system";
-import { blob, defineOperation, json, page } from "./define-operation";
+import { capturedMailSchema, healthSchema, notReadySchema, readySchema } from "../system";
+import { blob, defineOperation, json, page, probe } from "./define-operation";
 
 export const systemOperations = {
   "health.get": defineOperation({
@@ -12,6 +12,20 @@ export const systemOperations = {
     auth: "public",
     effect: "reading",
     response: json(healthSchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  // What a proxy or a deploy step asks before it sends this process traffic. Providers are
+  // not part of it: a model or mail outage does not take the API out of rotation.
+  "ready.get": defineOperation({
+    id: "ready.get",
+    method: "GET",
+    path: "/ready",
+    summary: "Report whether the database answers and holds this release's migrations",
+    tag: "System",
+    auth: "public",
+    effect: "reading",
+    response: probe(readySchema, notReadySchema),
     errors: [],
     rateClass: "read"
   }),

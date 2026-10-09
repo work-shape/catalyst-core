@@ -91,12 +91,19 @@ type ResponseShape<Value> = Value extends string
           ? { [Key in keyof Value]: ResponseShape<Value[Key]> }
           : Value;
 
+/** What a probe returns while the instance cannot serve. */
+type UnavailableResult<Response> = Response extends {
+  unavailable: infer Unavailable extends z.ZodType;
+}
+  ? ResponseShape<z.input<Unavailable>>
+  : never;
+
 /** A JSON operation returns its payload; a stream or a file is sent by the handler itself. */
 type RouteResult<Op extends Operation> = Op["response"] extends {
   kind: "json";
   schema: infer Schema extends z.ZodType;
 }
-  ? ResponseShape<z.input<Schema>>
+  ? ResponseShape<z.input<Schema>> | UnavailableResult<Op["response"]>
   : Op["response"] extends { kind: "page"; schema: infer Schema extends z.ZodType }
     ? z.input<Schema> extends { items: infer Items }
       ? ResponseShape<Items>
@@ -152,6 +159,9 @@ export interface Route {
   /** Every operation registered on this server so far, through whichever helper. */
   readonly registered: readonly Operation[];
 }
+
+/** The status of a probe's `unavailable` answer: a proxy keeps the process out of rotation. */
+const UNAVAILABLE_STATUS = 503;
 
 const registeredOperations = new WeakMap<FastifyInstance, Operation[]>();
 
@@ -226,7 +236,13 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           return resultPage;
         }
         if (operation.response.kind === "json") {
-          checkResponse(options, operation, operation.response.schema, result);
+          const { schema, unavailable } = operation.response;
+          if (unavailable && !schema.safeParse(result).success) {
+            void reply.status(UNAVAILABLE_STATUS);
+            checkResponse(options, operation, unavailable, result);
+          } else {
+            checkResponse(options, operation, schema, result);
+          }
         }
         return result;
       }

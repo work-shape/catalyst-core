@@ -9,7 +9,10 @@ import { listEnvelopeSchema } from "../shared";
 import type { z } from "zod";
 import type { ApiErrorCode } from "../errors";
 
-/** Every product operation's path starts here; `/health` is the one unversioned operation. */
+/**
+ * Every product operation's path starts here. The probes `/health` and `/ready` and the view
+ * runtime files are the unversioned operations.
+ */
 export const API_VERSION_PREFIX = "/api/v1";
 
 export type OperationMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -33,7 +36,12 @@ export type OperationAuth = "public" | "user" | "principal" | "serverCredential"
 export type OperationRateClass = "read" | "write" | "auth";
 
 export type OperationResponse =
-  | { readonly kind: "json"; readonly schema: z.ZodType }
+  | {
+      readonly kind: "json";
+      readonly schema: z.ZodType;
+      /** What the operation answers with status 503 in place of its result. */
+      readonly unavailable?: z.ZodType;
+    }
   | {
       readonly kind: "page";
       readonly schema: z.ZodType;
@@ -45,6 +53,18 @@ export type OperationResponse =
 
 export function json<Schema extends z.ZodType>(schema: Schema) {
   return { kind: "json", schema } as const;
+}
+
+/**
+ * The answer of a probe: `schema` with status 200 while the instance can serve, `unavailable`
+ * with status 503 while it cannot. The handler returns either value and the route helper sets
+ * the status, so a proxy reads the status alone.
+ */
+export function probe<Schema extends z.ZodType, Unavailable extends z.ZodType>(
+  schema: Schema,
+  unavailable: Unavailable
+) {
+  return { kind: "json", schema, unavailable } as const;
 }
 
 /** List handlers return store rows; the helper owns the sole wire envelope. */
