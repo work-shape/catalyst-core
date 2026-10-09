@@ -36,7 +36,7 @@ CREATE TABLE "operation_runs" (
 ALTER TABLE "model_usage_events" ADD COLUMN "user_id" text;--> statement-breakpoint
 ALTER TABLE "model_usage_events" ADD COLUMN "collaboration_workspace_id" text;--> statement-breakpoint
 ALTER TABLE "model_usage_events" ADD COLUMN "operation_run_id" text;--> statement-breakpoint
-CREATE UNIQUE INDEX "operation_runs_idempotency_idx" ON "operation_runs" USING btree ("client_instance_id","actor_id","idempotency_key") WHERE "operation_runs"."idempotency_key" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "operation_runs_idempotency_idx" ON "operation_runs" USING btree ("client_instance_id","actor_kind","actor_id","idempotency_key") WHERE "operation_runs"."idempotency_key" is not null;--> statement-breakpoint
 CREATE INDEX "operation_runs_client_created_idx" ON "operation_runs" USING btree ("client_instance_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "operation_runs_actor_created_idx" ON "operation_runs" USING btree ("client_instance_id","actor_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "operation_runs_open_idx" ON "operation_runs" USING btree ("client_instance_id","status","expires_at") WHERE "operation_runs"."status" in ('running', 'pending_confirmation', 'pending_approval');--> statement-breakpoint

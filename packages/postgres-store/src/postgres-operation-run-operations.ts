@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import {
   INTERRUPTED_RUN_ERROR,
   type OperationRun,
@@ -40,9 +40,16 @@ export async function createOperationRun(
       updatedAt: startedAt
     })
     // The key is taken. Only a failed run of the same call is handed out again, as its next
-    // attempt; every other holder of the key leaves this statement without a row.
+    // attempt; every other holder of the key leaves this statement without a row. So does an
+    // interrupted run of a changing operation: its call may have changed something, and running
+    // it again would repeat it.
     .onConflictDoUpdate({
-      target: [operationRuns.clientInstanceId, operationRuns.actorId, operationRuns.idempotencyKey],
+      target: [
+        operationRuns.clientInstanceId,
+        operationRuns.actorKind,
+        operationRuns.actorId,
+        operationRuns.idempotencyKey
+      ],
       targetWhere: sql`${operationRuns.idempotencyKey} is not null`,
       set: {
         status: "running",
@@ -57,7 +64,10 @@ export async function createOperationRun(
         eq(operationRuns.status, "failed"),
         eq(operationRuns.operation, run.operation),
         eq(operationRuns.inputHash, run.inputHash),
-        eq(operationRuns.actorKind, run.actor.kind)
+        or(
+          eq(operationRuns.effect, "reading"),
+          sql`${operationRuns.error}->>'code' is distinct from ${INTERRUPTED_RUN_ERROR.code}`
+        )
       )
     })
     .returning();
@@ -103,7 +113,8 @@ export async function findOperationRunByIdempotencyKey(
     .where(
       and(
         eq(operationRuns.clientInstanceId, input.clientInstanceId),
-        eq(operationRuns.actorId, input.actorId),
+        eq(operationRuns.actorKind, input.actor.kind),
+        eq(operationRuns.actorId, input.actor.id),
         eq(operationRuns.idempotencyKey, input.idempotencyKey)
       )
     )

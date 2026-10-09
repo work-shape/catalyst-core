@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   AppError,
   IDEMPOTENCY_KEY_MAX_LENGTH,
+  INTERRUPTED_RUN_ERROR,
   callerCanConfirm,
   createPlatformId,
   isAuthenticatedServicePrincipal,
@@ -148,11 +149,11 @@ export async function runOperation(
     if (idempotencyKey === undefined) break;
     const held = await deps.runs.findByIdempotencyKey({
       clientInstanceId: deps.clientInstanceId,
-      actorId: actor.id,
+      actor,
       idempotencyKey
     });
     // A failed run is taken by the next `create`; a run that is gone frees the key.
-    if (held && held.status !== "failed") {
+    if (held && (held.status !== "failed" || isInterrupted(held))) {
       return { result: replay(held, definition, actor, inputHash), run: held, replayed: true };
     }
     if (held && !sameCall(held, definition, actor, inputHash)) {
@@ -207,6 +208,15 @@ function sameCall(
   );
 }
 
+/** A changing call that was cut off. A read that was cut off changed nothing and runs again. */
+function isInterrupted(run: OperationRun): boolean {
+  return (
+    run.effect === "changing" &&
+    run.status === "failed" &&
+    run.error?.code === INTERRUPTED_RUN_ERROR.code
+  );
+}
+
 function keyReused(): AppError {
   return new AppError(
     "IDEMPOTENCY_KEY_REUSED",
@@ -252,7 +262,13 @@ function replay(
         operationRunId: runId
       });
     case "failed":
-      break;
+      if (!isInterrupted(held)) break;
+      // Nobody knows how far the first call got, so the key never runs it a second time.
+      throw new AppError(
+        "OPERATION_IN_PROGRESS",
+        "The first call with this key was interrupted and its outcome is not known. Check what it changed, then call again with a new Idempotency-Key.",
+        { operationRunId: runId, interrupted: true }
+      );
   }
   throw new AppError("INTERNAL", `Operation run '${runId}' cannot be answered again`);
 }
@@ -320,7 +336,7 @@ async function executeRun(
     return { result: { status: "denied", runId: run.id, reason: denial }, run: denied };
   };
 
-  let executed = false;
+  let completed: Pick<OperationOutcome, "result" | "run"> | undefined;
   try {
     const access = await deps.authorizer.forActor(call.actor);
     if (definition.action !== null) {
@@ -393,7 +409,9 @@ async function executeRun(
       audit: auditForRun(deps.audit, run.id, call.correlationId)
     };
     const output = await definition.execute(call.input, context);
-    executed = true;
+    // From here on the call has happened. Whatever fails below is a failure to record it, and
+    // the caller is still told the outcome with the run: an error would make it call again.
+    completed = { result: { status: "done", runId: run.id, output }, run };
     const done = await end({
       status: "done",
       finishedAt: now().toISOString(),
@@ -402,12 +420,23 @@ async function executeRun(
         ? { decision: { mode: policy.decisionMode, by: run.actor.id, at: now().toISOString() } }
         : {})
     });
+    completed = { ...completed, run: done };
     await emit("operation.completed", "after", { status: "success" });
     if (definition.events?.after) await emit(definition.events.after, "after");
-    return { result: { status: "done", runId: run.id, output }, run: done };
+    return completed;
   } catch (error) {
-    // Once the call's work is done, a failure to record it is not a failure of the call.
-    if (executed) throw error;
+    if (completed) {
+      deps.logger.error(
+        {
+          operation: definition.name,
+          operationRunId: run.id,
+          correlationId: call.correlationId,
+          ...failureLogFields(error)
+        },
+        "An operation completed but recording it failed"
+      );
+      return completed;
+    }
     // An operation that checks a right itself refuses through `context.access.require`.
     const refused = forbiddenSchema.safeParse(error);
     if (refused.success) return deny({ kind: "forbidden", ...refused.data.details });

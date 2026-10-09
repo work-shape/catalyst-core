@@ -39,7 +39,7 @@ export const API_ERROR_MEANINGS: Record<z.infer<typeof appErrorCodeSchema>, stri
   IDEMPOTENCY_KEY_REUSED:
     "The `Idempotency-Key` was already used for another operation or another input. Send a new key.",
   OPERATION_IN_PROGRESS:
-    "The first call with this `Idempotency-Key` has not ended. `details.operationRunId` names its run.",
+    "The first call with this `Idempotency-Key` has not ended, or it was interrupted and its outcome is not known (`details.interrupted` is `true`). `details.operationRunId` names its run. An interrupted call is never run again under its key: check what it changed, then send a new key.",
   OPERATION_EXPIRED:
     "The call waited for an approval until it expired, and nothing was executed. Call again with a new key.",
   OUTPUT_NOT_RETAINED:

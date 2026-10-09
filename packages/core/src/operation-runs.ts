@@ -62,7 +62,7 @@ export interface OperationRun {
   ownerUserId?: string;
   workspaceId?: CollaborationWorkspaceId;
   origin: OperationOrigin;
-  /** Set from agent and app origins. A run with one is deleted with its conversation. */
+  /** Set from agent and app origins. */
   conversationId?: ConversationId;
   idempotencyKey?: string;
   inputHash: string;
@@ -135,7 +135,8 @@ export interface OperationRunStore {
   /**
    * Starts a run. Where the actor already used the run's idempotency key, nothing is inserted:
    * a failed run of the same operation and input is taken for its next attempt and returned,
-   * and any other run that holds the key leaves the answer `undefined`.
+   * and any other run that holds the key leaves the answer `undefined`. An interrupted run of
+   * a changing operation is never taken again: nobody knows how far its call got.
    */
   create(run: NewOperationRun): Promise<OperationRun | undefined>;
   /** Ends a run that is still `running`. `undefined` when it is not running any more. */
@@ -146,7 +147,7 @@ export interface OperationRunStore {
   }): Promise<OperationRun | undefined>;
   findByIdempotencyKey(input: {
     clientInstanceId: ClientInstanceId;
-    actorId: string;
+    actor: Pick<OperationRunActor, "kind" | "id">;
     idempotencyKey: string;
   }): Promise<OperationRun | undefined>;
   /** `id` is whatever a caller named: an id no run has answers `undefined`. */
@@ -167,7 +168,7 @@ export interface OperationRunStore {
 }
 
 /** The error of a run whose process ended before the call did. */
-export const INTERRUPTED_RUN_ERROR: OperationRunError = {
+export const INTERRUPTED_RUN_ERROR = {
   code: "interrupted",
   message: "The call was interrupted before it finished"
 };

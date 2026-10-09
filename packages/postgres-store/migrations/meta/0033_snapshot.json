@@ -1,5 +1,5 @@
 {
-  "id": "d98e301f-95e2-41e6-9621-d7d821587e93",
+  "id": "2eeb2944-dbc4-4acf-ad26-5f7a9c7ad591",
   "prevId": "111272ed-400c-4b13-a297-8df867c121f5",
   "version": "7",
   "dialect": "postgresql",
@@ -4953,6 +4953,12 @@
           "columns": [
             {
               "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_kind",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

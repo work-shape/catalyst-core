@@ -40,7 +40,7 @@ describe("Postgres operation run store", () => {
     expect(started).toHaveLength(1);
     const held = await runs.findByIdempotencyKey({
       clientInstanceId,
-      actorId: "usr_1",
+      actor: { kind: "user", id: "usr_1" },
       idempotencyKey: "key-1"
     });
     expect(held?.id).toBe(started[0]?.id);
@@ -64,10 +64,45 @@ describe("Postgres operation run store", () => {
     expect(
       await runs.findByIdempotencyKey({
         clientInstanceId,
-        actorId: "usr_3",
+        actor: { kind: "user", id: "usr_3" },
         idempotencyKey: "key-1"
       })
     ).toBeUndefined();
+  });
+
+  it("keeps the key of a person and of a service principal with the same id apart", async () => {
+    const runs = await createStore();
+    const service = { kind: "service_principal", id: "usr_1", label: "Key" } as const;
+    const byPerson = await runs.create(newRun({ idempotencyKey: "key-1" }));
+    const byService = await runs.create(newRun({ idempotencyKey: "key-1", actor: service }));
+    expect(byPerson).toBeDefined();
+    expect(byService).toBeDefined();
+    expect(byService?.id).not.toBe(byPerson?.id);
+    const held = await runs.findByIdempotencyKey({
+      clientInstanceId,
+      actor: service,
+      idempotencyKey: "key-1"
+    });
+    expect(held?.id).toBe(byService?.id);
+  });
+
+  it("never takes an interrupted changing run again, and takes an interrupted read", async () => {
+    const runs = await createStore();
+    const interrupt = async (run: NewOperationRun) => {
+      const started = await runs.create(run);
+      if (!started) throw new Error("The call must start a run");
+      await runs.markInterrupted({ clientInstanceId, id: started.id });
+      return started.id;
+    };
+    await interrupt(newRun({ idempotencyKey: "change" }));
+    expect(await runs.create(newRun({ idempotencyKey: "change" }))).toBeUndefined();
+
+    const read = await interrupt(newRun({ idempotencyKey: "read", effect: "reading" }));
+    expect(await runs.create(newRun({ idempotencyKey: "read", effect: "reading" }))).toMatchObject({
+      id: read,
+      status: "running",
+      attempt: 2
+    });
   });
 
   it("takes a failed run for the next attempt of the same call only", async () => {

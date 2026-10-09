@@ -27,8 +27,8 @@ import type {
 
 /**
  * One row per call of a registered operation. No foreign key to `conversations`: a run of an
- * app outlives the conversation that built the app, and conversation cleanup deletes by
- * `conversation_id` instead.
+ * app outlives the conversation that built the app. Retention of run rows is not built yet:
+ * nothing deletes a row, neither with its conversation nor after a time.
  */
 export const operationRuns = pgTable(
   "operation_runs",
@@ -77,8 +77,9 @@ export const operationRuns = pgTable(
       sql`${table.status} in ('running', 'pending_confirmation', 'pending_approval', 'done', 'failed', 'denied', 'expired')`
     ),
     // An idempotency key belongs to its actor: nobody reads another's result by guessing one.
+    // The kind is part of the actor, so a user and a service principal never share a key.
     uniqueIndex("operation_runs_idempotency_idx")
-      .on(table.clientInstanceId, table.actorId, table.idempotencyKey)
+      .on(table.clientInstanceId, table.actorKind, table.actorId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),
     index("operation_runs_client_created_idx").on(table.clientInstanceId, table.createdAt.desc()),
     index("operation_runs_actor_created_idx").on(
