@@ -90,8 +90,14 @@ const secondSharedCollaborationWorkspace: CollaborationWorkspaceWithRole = {
   pendingAccessRequestCount: 0
 };
 
+const owner: WorkspaceMember = {
+  userId: "user_1",
+  displayLabel: "Felix Pahlke",
+  email: "felix@example.com",
+  role: "owner"
+};
 const members: WorkspaceMember[] = [
-  { userId: "user_1", displayLabel: "Felix Pahlke", email: "felix@example.com", role: "owner" },
+  owner,
   { userId: "user_2", displayLabel: "Mara Ruiz", email: "mara@example.com", role: "member" }
 ];
 
@@ -269,7 +275,7 @@ describe("collaboration workspace settings tabs", () => {
       createElement(CollaborationWorkspaceGeneralTab, {
         collaborationWorkspace: sharedCollaborationWorkspace,
         currentUserId: "user_1",
-        members: [members[0]!],
+        members: [owner],
         savePending: false,
         membershipPending: false,
         onSave: noop,
@@ -289,7 +295,7 @@ describe("collaboration workspace settings tabs", () => {
       createElement(CollaborationWorkspaceGeneralTab, {
         collaborationWorkspace: { ...sharedCollaborationWorkspace, membershipRole: null },
         currentUserId: "user_9",
-        members: [members[0]!],
+        members: [owner],
         savePending: false,
         membershipPending: false,
         onSave: noop,

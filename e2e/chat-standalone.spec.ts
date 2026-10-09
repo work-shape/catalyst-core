@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { z } from "zod";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const normalUser = {
@@ -420,7 +421,7 @@ test("an opened conversation without messages has the agent in the header only",
     data: { collaborationWorkspaceId: decodeURIComponent(workspaceUrl.split("/w/")[1] ?? "") }
   });
   expect(created.ok()).toBe(true);
-  const conversation = (await created.json()) as { id: string };
+  const conversation = z.object({ id: z.string() }).parse(await created.json());
   await page.goto(`${workspaceUrl}/c/${encodeURIComponent(conversation.id)}`);
 
   // The welcome heading is there, as on the start page, but the agent is in the header alone:
@@ -1286,7 +1287,9 @@ test("a superadmin manages a shared workspace without being a member", async ({
     { data: { name: workspaceName, visibility: "private" } }
   );
   expect(createdCollaborationWorkspace.ok()).toBe(true);
-  const collaborationWorkspace = (await createdCollaborationWorkspace.json()) as { id: string };
+  const collaborationWorkspace = z
+    .object({ id: z.string() })
+    .parse(await createdCollaborationWorkspace.json());
   await memberContext.close();
 
   await signInViaApi(page, superadminUser);
@@ -1772,7 +1775,9 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
     `${apiBaseUrl}/api/conversations/${encodeURIComponent(id)}/thread`
   );
   expect(thread.ok()).toBe(true);
-  const { conversation } = (await thread.json()) as { conversation: { retainedUntil: string } };
+  const { conversation } = z
+    .object({ conversation: z.object({ retainedUntil: z.string() }) })
+    .parse(await thread.json());
   // The fixture keeps conversations for one day, so every row is about to be deleted.
   const sentence = `Will be deleted automatically on ${new Intl.DateTimeFormat("en", {
     weekday: "long",
@@ -2563,14 +2568,18 @@ async function createListedConversation(page: Page, title: string): Promise<{ id
     }
   });
   expect(started.ok()).toBe(true);
-  const { conversation } = (await started.json()) as { conversation: { id: string } };
+  const { conversation } = z
+    .object({ conversation: z.object({ id: z.string() }) })
+    .parse(await started.json());
   await expect
     .poll(async () => {
       const thread = await page.request.get(
         `${apiBaseUrl}/api/conversations/${encodeURIComponent(conversation.id)}/thread`
       );
       expect(thread.ok()).toBe(true);
-      const snapshot = (await thread.json()) as { activeRun?: unknown; messages: unknown[] };
+      const snapshot = z
+        .object({ activeRun: z.unknown(), messages: z.array(z.unknown()) })
+        .parse(await thread.json());
       return { running: snapshot.activeRun !== undefined, messages: snapshot.messages.length };
     })
     .toEqual({ running: false, messages: 2 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
@@ -27,9 +28,9 @@ describe("Collaboration Workspace API", () => {
       url: "/api/collaboration-workspaces"
     });
     expect(workspaces.statusCode).toBe(200);
-    const personalWorkspace = (workspaces.json() as Array<{ id: string; kind: string }>).find(
-      (workspace) => workspace.kind === "personal"
-    );
+    const personalWorkspace = workspaces
+      .json<Array<{ id: string; kind: string }>>()
+      .find((workspace) => workspace.kind === "personal");
     expect(personalWorkspace).toBeDefined();
 
     const conversation = await inject(app.server, "owner", {
@@ -41,7 +42,7 @@ describe("Collaboration Workspace API", () => {
     expect(conversation.json()).toMatchObject({
       collaborationWorkspaceId: personalWorkspace!.id
     });
-    const conversationId = (conversation.json() as { id: string }).id;
+    const conversationId = conversation.json<{ id: string }>().id;
     await seedConversationMessage(app.store, conversationId);
     const listedConversations = await inject(app.server, "owner", {
       method: "GET",
@@ -319,7 +320,7 @@ describe("Collaboration Workspace API", () => {
       role: "owner",
       visibility: "discoverable"
     });
-    const collaborationWorkspaceId = (created.json() as { id: string }).id;
+    const collaborationWorkspaceId = created.json<{ id: string }>().id;
 
     const addedAdmin = await inject(app.server, "owner", {
       method: "POST",
@@ -623,10 +624,12 @@ describe("Collaboration Workspace API", () => {
       url: "/api/audit-events"
     });
     expect(audit.statusCode).toBe(200);
-    const auditEvents = audit.json() as Array<{
-      type: string;
-      metadata?: Record<string, unknown>;
-    }>;
+    const auditEvents = audit.json<
+      Array<{
+        type: string;
+        metadata?: Record<string, unknown>;
+      }>
+    >();
     expect(auditEvents.map((event) => event.type)).toEqual(
       expect.arrayContaining([
         "collaboration_workspace.created",
@@ -655,16 +658,16 @@ describe("Collaboration Workspace API", () => {
       url: "/api/collaboration-workspaces",
       payload: { name: "Discoverable", description: "Limited metadata", accentColor: "ruby" }
     });
-    const collaborationWorkspaceId = (created.json() as { id: string }).id;
+    const collaborationWorkspaceId = created.json<{ id: string }>().id;
 
     const directory = await inject(app.server, "outsider", {
       method: "GET",
       url: "/api/collaboration-workspaces/directory"
     });
     expect(directory.statusCode).toBe(200);
-    const directoryRow = (directory.json() as Array<Record<string, unknown>>).find(
-      (row) => row.id === collaborationWorkspaceId
-    );
+    const directoryRow = directory
+      .json<Array<Record<string, unknown>>>()
+      .find((row) => row.id === collaborationWorkspaceId);
     expect(directoryRow).toEqual({
       id: collaborationWorkspaceId,
       name: "Discoverable",
@@ -684,7 +687,7 @@ describe("Collaboration Workspace API", () => {
     });
     expect(explicit.statusCode).toBe(200);
     expect(explicit.json()).toMatchObject({ collaborationWorkspaceId, createdByUserId: owner.id });
-    const conversationId = (explicit.json() as { id: string }).id;
+    const conversationId = explicit.json<{ id: string }>().id;
     await seedConversationMessage(app.store, conversationId);
 
     const defaulted = await inject(app.server, "owner", {
@@ -694,7 +697,7 @@ describe("Collaboration Workspace API", () => {
     });
     expect(defaulted.statusCode).toBe(200);
     expect(
-      (defaulted.json() as { collaborationWorkspaceId: string }).collaborationWorkspaceId
+      defaulted.json<{ collaborationWorkspaceId: string }>().collaborationWorkspaceId
     ).not.toBe(collaborationWorkspaceId);
 
     const unauthorized = await inject(app.server, "member", {
@@ -750,7 +753,7 @@ describe("Collaboration Workspace API", () => {
     });
     expect(personalCreateAndRun.statusCode).toBe(200);
     expect(
-      (personalCreateAndRun.json() as { conversation: { collaborationWorkspaceId: string } })
+      personalCreateAndRun.json<{ conversation: { collaborationWorkspaceId: string } }>()
         .conversation.collaborationWorkspaceId
     ).not.toBe(collaborationWorkspaceId);
 
@@ -785,7 +788,7 @@ describe("Collaboration Workspace API", () => {
       run: { ownerUserId: member.id },
       conversation: { createdByUserId: owner.id }
     });
-    const runId = (sent.json() as { run: { id: string } }).run.id;
+    const runId = sent.json<{ run: { id: string } }>().run.id;
     const observedByOwner = await inject(app.server, "owner", {
       method: "GET",
       url: `/api/conversations/${conversationId}/runs/${runId}/events`
@@ -800,9 +803,9 @@ describe("Collaboration Workspace API", () => {
       ).statusCode
     ).toBe(404);
 
-    const privateWorkspaceId = (defaulted.json() as { collaborationWorkspaceId: string })
+    const privateWorkspaceId = defaulted.json<{ collaborationWorkspaceId: string }>()
       .collaborationWorkspaceId;
-    const privateConversationId = (defaulted.json() as { id: string }).id;
+    const privateConversationId = defaulted.json<{ id: string }>().id;
     expect(
       (
         await inject(app.server, "owner", {
@@ -819,7 +822,7 @@ describe("Collaboration Workspace API", () => {
       payload: { idempotencyKey: "private-run", message: { text: "Private" } }
     });
     expect(privateRun.statusCode).toBe(200);
-    const privateRunId = (privateRun.json() as { run: { id: string } }).run.id;
+    const privateRunId = privateRun.json<{ run: { id: string } }>().run.id;
     expect(
       (
         await inject(app.server, "member", {
@@ -903,10 +906,13 @@ describe("Collaboration Workspace API", () => {
     await seedConversationMessage(app.store, conversationId);
 
     const workspaceUrl = `/api/collaboration-workspaces/${workspaceId}`;
+    const workspaceRows = z.array(z.looseObject({ id: z.string(), kind: z.string() }));
     const listWorkspaces = async (actor: string) =>
-      (
-        await inject(app.server, actor, { method: "GET", url: "/api/collaboration-workspaces" })
-      ).json() as Array<Record<string, unknown>>;
+      workspaceRows.parse(
+        (
+          await inject(app.server, actor, { method: "GET", url: "/api/collaboration-workspaces" })
+        ).json()
+      );
     const listed = (await listWorkspaces("superadmin")).find((row) => row.id === workspaceId);
     // Pending requests stay a to-do for the workspace's own Owners and Admins.
     expect(listed).toMatchObject({
@@ -950,9 +956,12 @@ describe("Collaboration Workspace API", () => {
       method: "GET",
       url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
     });
-    expect((conversations.json() as Array<{ id: string }>).map((row) => row.id)).toEqual([
-      conversationId
-    ]);
+    expect(
+      z
+        .array(z.object({ id: z.string() }))
+        .parse(conversations.json())
+        .map((row) => row.id)
+    ).toEqual([conversationId]);
 
     const renamed = await inject(app.server, "superadmin", {
       method: "PATCH",
@@ -1002,9 +1011,13 @@ describe("Collaboration Workspace API", () => {
       method: "GET",
       url: `${workspaceUrl}/members`
     });
-    expect((members.json() as Array<{ userId: string }>).map((row) => row.userId).sort()).toEqual(
-      [member.id, outsider.id].sort()
-    );
+    expect(
+      z
+        .array(z.object({ userId: z.string() }))
+        .parse(members.json())
+        .map((row) => row.userId)
+        .sort()
+    ).toEqual([member.id, outsider.id].sort());
 
     // A membership below Owner does not lower what the superadmin may do, and can be left again.
     await addWorkspaceMember(app.server, "superadmin", workspaceId, "superadmin@example.test");
@@ -1035,7 +1048,8 @@ describe("Collaboration Workspace API", () => {
     // Personal Workspaces stay with their user.
     const personalWorkspaceId = (await listWorkspaces("member")).find(
       (row) => row.kind === "personal"
-    )!.id as string;
+    )?.id;
+    if (!personalWorkspaceId) throw new Error("The member has no Personal Workspace");
     const personalConversationId = await createConversation(
       app.server,
       "member",
@@ -1078,7 +1092,7 @@ describe("Collaboration Workspace API", () => {
       url: "/api/conversations",
       payload: { title: "Movable", collaborationWorkspaceId: sourceId }
     });
-    const conversationId = (created.json() as { id: string }).id;
+    const conversationId = created.json<{ id: string }>().id;
     const upload = createMultipartFilePayload({
       fieldName: "file",
       filename: "move.csv",
@@ -1092,7 +1106,7 @@ describe("Collaboration Workspace API", () => {
       payload: upload.payload
     });
     expect(uploaded.statusCode).toBe(200);
-    const fileId = (uploaded.json() as { attachment: { fileId: string } }).attachment.fileId;
+    const fileId = uploaded.json<{ attachment: { fileId: string } }>().attachment.fileId;
     const runId = await createCompletedRun(app, conversationId, owner.id);
 
     const missingDestinationMembership = await inject(app.server, "declined", {
@@ -1124,7 +1138,7 @@ describe("Collaboration Workspace API", () => {
       url: "/api/conversations",
       payload: { title: "Busy", collaborationWorkspaceId: sourceId }
     });
-    const busyConversationId = (busyConversation.json() as { id: string }).id;
+    const busyConversationId = busyConversation.json<{ id: string }>().id;
     await createActiveRun(app, busyConversationId, owner.id);
     const busyMove = await inject(app.server, "owner", {
       method: "POST",
@@ -1245,7 +1259,7 @@ describe("Collaboration Workspace API", () => {
         method: "GET",
         url: "/api/collaboration-workspaces"
       })
-    ).json() as Array<{ id: string; kind: string; name: string }>;
+    ).json<Array<{ id: string; kind: string; name: string }>>();
     const personal = ownerWorkspaces.find((workspace) => workspace.kind === "personal")!;
     const personalDelete = await inject(app.server, "owner", {
       method: "DELETE",
@@ -1283,7 +1297,7 @@ describe("Collaboration Workspace API", () => {
       headers: { ...upload.headers, "x-dev-user-id": "owner" },
       payload: upload.payload
     });
-    const fileId = (uploaded.json() as { attachment: { fileId: string } }).attachment.fileId;
+    const fileId = uploaded.json<{ attachment: { fileId: string } }>().attachment.fileId;
     const executionWorkspace = await app.store.ensureExecutionWorkspace({
       clientInstanceId,
       conversationId: asConversationId(first),
@@ -1354,7 +1368,7 @@ describe("Collaboration Workspace API", () => {
         method: "GET",
         url: "/api/audit-events"
       })
-    ).json() as Array<{ type: string; subject: string; metadata?: Record<string, unknown> }>;
+    ).json<Array<{ type: string; subject: string; metadata?: Record<string, unknown> }>>();
     expect(audit).toContainEqual(
       expect.objectContaining({
         type: "collaboration_workspace.deleted",
@@ -1476,7 +1490,7 @@ describe("Conversation visibility", () => {
         url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
       });
       expect(listed.statusCode).toBe(200);
-      return (listed.json() as Array<{ id: string }>).map((row) => row.id);
+      return listed.json<Array<{ id: string }>>().map((row) => row.id);
     };
 
     // The composer creates the conversation before the first upload lands.
@@ -1507,7 +1521,7 @@ describe("Conversation visibility", () => {
         payload: upload.payload
       });
       expect(uploaded.statusCode).toBe(200);
-      attachmentIds.push((uploaded.json() as { attachment: { id: string } }).attachment.id);
+      attachmentIds.push(uploaded.json<{ attachment: { id: string } }>().attachment.id);
     }
     await expect(listedIds("owner")).resolves.toEqual([conversationId]);
     await expect(listedIds("member")).resolves.toEqual([]);
@@ -1568,7 +1582,7 @@ describe("Conversation visibility", () => {
         url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
       });
       expect(listed.statusCode).toBe(200);
-      expect((listed.json() as Array<{ id: string }>).map((row) => row.id)).toEqual([
+      expect(listed.json<Array<{ id: string }>>().map((row) => row.id)).toEqual([
         sharedConversationId
       ]);
     }
@@ -1576,9 +1590,12 @@ describe("Conversation visibility", () => {
       method: "GET",
       url: `/api/conversations?collaborationWorkspaceId=${workspaceId}`
     });
-    expect((listedByAuthor.json() as Array<{ id: string }>).map((row) => row.id).sort()).toEqual(
-      [conversationId, sharedConversationId].sort()
-    );
+    expect(
+      listedByAuthor
+        .json<Array<{ id: string }>>()
+        .map((row) => row.id)
+        .sort()
+    ).toEqual([conversationId, sharedConversationId].sort());
 
     // Nothing a non-author sent may have changed the conversation: still the two fixture
     // messages and the one draft attachment.
@@ -1613,7 +1630,7 @@ describe("Conversation visibility", () => {
       const allowed = await route.send("direct", conversationId);
       expect(
         allowed.statusCode === 404 &&
-          (allowed.json() as { error?: { message?: string } }).error?.message ===
+          allowed.json<{ error?: { message?: string } }>().error?.message ===
             "Conversation is not available",
         `author ${route.name} -> ${allowed.statusCode} ${allowed.body.slice(0, 200)}`
       ).toBe(false);
@@ -1656,7 +1673,7 @@ describe("Conversation visibility", () => {
     });
     expect(created.statusCode).toBe(200);
     expect(created.json()).toMatchObject({ defaultConversationVisibility: "private" });
-    const workspaceId = (created.json() as { id: string }).id;
+    const workspaceId = created.json<{ id: string }>().id;
     await addWorkspaceMember(app.server, "owner", workspaceId, "admin@example.test");
     await addWorkspaceMember(app.server, "owner", workspaceId, "member@example.test");
     await inject(app.server, "owner", {
@@ -1686,7 +1703,7 @@ describe("Conversation visibility", () => {
       payload: { title: "Stamped private", collaborationWorkspaceId: workspaceId }
     });
     expect(privateConversation.json()).toMatchObject({ visibility: "private" });
-    const privateConversationId = (privateConversation.json() as { id: string }).id;
+    const privateConversationId = privateConversation.json<{ id: string }>().id;
     const createdWithRun = await inject(app.server, "member", {
       method: "POST",
       url: "/api/conversations/runs",
@@ -1728,7 +1745,7 @@ describe("Conversation visibility", () => {
       payload: { title: "Stamped open", collaborationWorkspaceId: workspaceId }
     });
     expect(openConversation.json()).toMatchObject({ visibility: "workspace" });
-    const openConversationId = (openConversation.json() as { id: string }).id;
+    const openConversationId = openConversation.json<{ id: string }>().id;
     await expect(
       app.store.getConversation(clientInstanceId, asConversationId(privateConversationId))
     ).resolves.toMatchObject({ visibility: "private" });
@@ -1758,9 +1775,8 @@ describe("Conversation visibility", () => {
       ).statusCode
     ).toBe(200);
 
-    const personalWorkspaceId = (
-      personalConversation.json() as { collaborationWorkspaceId: string }
-    ).collaborationWorkspaceId;
+    const personalWorkspaceId = personalConversation.json<{ collaborationWorkspaceId: string }>()
+      .collaborationWorkspaceId;
     await expect(
       app.store.updateWorkspace({
         clientInstanceId,
@@ -1781,15 +1797,15 @@ describe("Conversation visibility", () => {
       url: "/api/collaboration-workspaces",
       payload: { name: "Private default", defaultConversationVisibility: "private" }
     });
-    const privateDefaultId = (privateDefault.json() as { id: string }).id;
+    const privateDefaultId = privateDefault.json<{ id: string }>().id;
     for (const workspaceId of [openId, otherOpenId, privateDefaultId]) {
       await addWorkspaceMember(app.server, "owner", workspaceId, "member@example.test");
     }
     const personalWorkspaceId = (
-      (
-        await inject(app.server, "member", { method: "GET", url: "/api/collaboration-workspaces" })
-      ).json() as Array<{ id: string; kind: string }>
-    ).find((workspace) => workspace.kind === "personal")!.id;
+      await inject(app.server, "member", { method: "GET", url: "/api/collaboration-workspaces" })
+    )
+      .json<Array<{ id: string; kind: string }>>()
+      .find((workspace) => workspace.kind === "personal")!.id;
     const move = (
       actor: string,
       conversationId: string,
@@ -1868,7 +1884,7 @@ async function createPrivateConversationFixture() {
     url: "/api/collaboration-workspaces",
     payload: { name: "Visibility matrix", defaultConversationVisibility: "private" }
   });
-  const workspaceId = (created.json() as { id: string }).id;
+  const workspaceId = created.json<{ id: string }>().id;
   for (const email of ["admin@example.test", "member@example.test", "direct@example.test"]) {
     await addWorkspaceMember(app.server, "owner", workspaceId, email);
   }
@@ -1904,7 +1920,7 @@ async function createPrivateConversationFixture() {
     payload: upload.payload
   });
   expect(uploaded.statusCode).toBe(200);
-  const attachment = (uploaded.json() as { attachment: { id: string; fileId: string } }).attachment;
+  const attachment = uploaded.json<{ attachment: { id: string; fileId: string } }>().attachment;
   const artifact = await app.store.createManagedArtifact({
     clientInstanceId,
     conversationId: asConversationId(conversationId),
@@ -2054,7 +2070,7 @@ async function createSharedWorkspace(server: TestServer, actor: string, name: st
     payload: { name }
   });
   expect(response.statusCode).toBe(200);
-  return (response.json() as { id: string }).id;
+  return response.json<{ id: string }>().id;
 }
 
 async function addWorkspaceMember(
@@ -2083,7 +2099,7 @@ async function createConversation(
     payload: { title, collaborationWorkspaceId }
   });
   expect(response.statusCode).toBe(200);
-  return (response.json() as { id: string }).id;
+  return response.json<{ id: string }>().id;
 }
 
 async function createActiveRun(
@@ -2150,13 +2166,13 @@ function testIdentity(id: string, email: string, roles = ["user"]) {
 async function currentUser(server: TestServer, externalUserId: string): Promise<{ id: string }> {
   const response = await inject(server, externalUserId, { method: "GET", url: "/api/me" });
   expect(response.statusCode).toBe(200);
-  return response.json() as { id: string };
+  return response.json<{ id: string }>();
 }
 
 function inject(
   server: TestServer,
   externalUserId: string,
-  input: { method: "GET" | "POST" | "PATCH" | "DELETE"; url: string; payload?: unknown }
+  input: { method: "GET" | "POST" | "PATCH" | "DELETE"; url: string; payload?: string | object }
 ) {
   return server.inject({
     ...input,
