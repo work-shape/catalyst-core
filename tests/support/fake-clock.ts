@@ -13,16 +13,21 @@ export function useFakeClockBesidePostgres(now?: Date): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], ...(now ? { now } : {}) });
 }
 
+/** How long, on the real clock, work may take to settle while the fake clock is stepped. */
+const SETTLE_DEADLINE_MS = 20_000;
+const realNow = Date.now.bind(Date);
+
 /**
  * Advances the fake clock by `stepMs` at a time until the work settles and returns its result.
  * Work that sleeps between database calls registers each sleep only after a real round trip, so
- * one advance over the whole span would pass before the later sleeps exist. Fails after
- * `maxSteps`, so work that never settles is reported here and not as a test timeout.
+ * one advance over the whole span would pass before the later sleeps exist. It steps for as long
+ * as the work takes on the real clock, so a slow machine sees more steps and more fake time, not
+ * a failure: a test that must keep the fake time below a bound does not use this. Work that never
+ * settles is reported here after 20 real seconds and not as a test timeout.
  */
 export async function advanceFakeClockUntilSettled<Result>(
   work: Promise<Result>,
-  stepMs: number,
-  maxSteps = 400
+  stepMs: number
 ): Promise<Result> {
   let settled = false;
   const watched = work.finally(() => {
@@ -30,13 +35,14 @@ export async function advanceFakeClockUntilSettled<Result>(
   });
   // The caller's `await` receives the rejection; this branch only keeps it from being unhandled.
   watched.catch(() => {});
-  for (let step = 0; step < maxSteps && !settled; step += 1) {
+  const deadline = realNow() + SETTLE_DEADLINE_MS;
+  while (!settled && realNow() < deadline) {
     await vi.advanceTimersByTimeAsync(stepMs);
     await new Promise<void>((resolve) => realSetTimeout(resolve, 5));
   }
   if (!settled)
     throw new Error(
-      `Work did not settle within ${maxSteps} steps of ${stepMs} ms on the fake clock`
+      `Work did not settle within ${SETTLE_DEADLINE_MS} ms while the fake clock moved in steps of ${stepMs} ms`
     );
   return watched;
 }

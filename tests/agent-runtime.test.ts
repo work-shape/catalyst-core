@@ -1879,7 +1879,7 @@ describe("local agent runtime", () => {
       random.mockReturnValue(0);
       f.attemptTimes.length = 0;
       f.rateLimitedAnswers = 99;
-      const failed = await advanceFakeClockUntilSettled(f.runToEnd("hello again"), stepMs, 2_000);
+      const failed = await advanceFakeClockUntilSettled(f.runToEnd("hello again"), stepMs);
 
       expect(failed).toEqual(["run_failed"]);
       expect(f.lastFailure).toEqual({
@@ -1937,7 +1937,7 @@ describe("local agent runtime", () => {
     try {
       f.rateLimitedAnswers = 2;
       f.retryAfterMs = 30_000;
-      const survived = await advanceFakeClockUntilSettled(f.runToEnd("hello"), stepMs, 1_000);
+      const survived = await advanceFakeClockUntilSettled(f.runToEnd("hello"), stepMs);
 
       expect(survived).toEqual(["message_delta", "message_completed", "run_completed"]);
       const waits = waitsBetween(f.attemptTimes);
