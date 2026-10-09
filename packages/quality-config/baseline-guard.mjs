@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { baselineRises } from "./baseline.mjs";
 
 // Fails a pull request that raises a count in quality-baseline.json or adds an entry to it,
-// compared with the commit where the pull request left its base branch.
+// compared with the commit where the pull request left its base branch. Both sides are read
+// from their commits: on a hosted runner the working tree is the merge with the base branch
+// and carries entries the pull request never touched.
 // Usage: catalyst-quality-baseline-guard <base commit> [<head commit>]
 
 const file = "quality-baseline.json";
@@ -29,7 +30,7 @@ if (git(["cat-file", "-e", `${mergeBase}:./${file}`], [0, 1, 128]).status !== 0)
 } else {
   const rises = baselineRises(
     JSON.parse(git(["show", `${mergeBase}:./${file}`], [0]).stdout),
-    JSON.parse(readFileSync(file, "utf8"))
+    JSON.parse(git(["show", `${head}:./${file}`], [0]).stdout)
   );
   if (rises.length) {
     console.error(

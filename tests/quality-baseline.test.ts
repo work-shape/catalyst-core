@@ -123,6 +123,41 @@ describe("quality baseline", () => {
       }
     }
 
+    it("passes on the merge with a base that gained an entry the branch never touched", () => {
+      const directory = mkdtempSync(join(tmpdir(), "catalyst-baseline-guard-"));
+      const git = (...args: string[]) => {
+        const identity = ["-c", "user.name=Test", "-c", "user.email=test@example.test"];
+        expect(spawnSync("git", [...identity, ...args], { cwd: directory }).status).toBe(0);
+      };
+      const commit = (file: string, content: object) => {
+        writeFileSync(join(directory, file), JSON.stringify(content));
+        git("add", "--all");
+        git("commit", "--quiet", "--message", file);
+      };
+      try {
+        git("init", "--quiet", "--initial-branch", "main");
+        commit("quality-baseline.json", baseline);
+        git("checkout", "--quiet", "-b", "change");
+        commit("unrelated.json", {});
+        git("checkout", "--quiet", "main");
+        commit("quality-baseline.json", {
+          version: 1,
+          entries: [entry, { ...entry, scope: "packages/other" }]
+        });
+        // A hosted runner checks out the merge of the pull request into its base.
+        git("checkout", "--quiet", "--detach");
+        git("merge", "--quiet", "--no-ff", "--message", "merge", "change");
+        const result = spawnSync(process.execPath, [guard, "main", "change"], {
+          cwd: directory,
+          encoding: "utf8"
+        });
+        expect(result.stderr).toBe("");
+        expect(result.status).toBe(0);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
     it("passes when counts fall or stay and when the base has no baseline yet", () => {
       expect(guardBranch(baseline, { version: 1, entries: [{ ...entry, count: 1 }] }).status).toBe(
         0
