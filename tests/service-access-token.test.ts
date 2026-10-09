@@ -112,8 +112,8 @@ describe("service access tokens", () => {
     ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
-  it("enforces the dedicated token-secret and TTL constraints", () => {
-    const store = createTestInstance().stores;
+  it("enforces the dedicated token-secret and TTL constraints", async () => {
+    const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("service-auth-test");
     expect(
       () =>
@@ -143,7 +143,7 @@ async function createFixture(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("service-auth-test");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const servicePrincipal = await store.apiAccess.createServicePrincipal({
     clientInstanceId,
     displayLabel: "Catalyst CLI",
@@ -159,7 +159,7 @@ async function createFixture(
   const options = {
     secret,
     clientInstanceId,
-    apiAccessStore: store
+    apiAccessStore: store.apiAccess
   };
   return {
     clientInstanceId,

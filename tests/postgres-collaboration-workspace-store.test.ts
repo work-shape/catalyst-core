@@ -1,21 +1,18 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import { asClientInstanceId, type ClientInstanceId } from "@vivd-catalyst/core";
 
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
-
-describePostgres("Postgres Collaboration Workspace store", () => {
+describe("Postgres Collaboration Workspace store", () => {
   let store: PlatformStores;
   let sql: Sql;
 
   beforeAll(async () => {
-    store = (
-      await createTestInstance({ postgres: { databaseUrl: databaseUrl!, runMigrations: true } })
-    ).stores;
-    sql = postgres(databaseUrl!, { max: 1 });
+    store = (await createTestInstance({ postgres: {} })).stores;
+    sql = postgres(databaseUrl, { max: 1 });
   });
 
   afterAll(async () => {
@@ -486,3 +483,8 @@ async function cleanupClient(sql: Sql, clientInstanceId: ClientInstanceId): Prom
   await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;
   await sql`delete from product_users where client_instance_id = ${clientInstanceId}`;
 }
+
+let databaseUrl: string;
+beforeAll(async () => {
+  databaseUrl = await fileTestDatabaseUrl();
+});

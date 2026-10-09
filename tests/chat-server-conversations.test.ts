@@ -213,7 +213,7 @@ describe("client instance app vertical slice", () => {
 
   it("serves promoted managed artifacts as conversation-scoped downloads", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const config = createTestConfig();
     const owner = createTestUser("user-1", clientInstanceId);
     const usageGovernance = new ModelUsageGovernance({

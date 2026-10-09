@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  asAgentRunId,
   asClientInstanceId,
   asConversationId,
   asExecutionWorkspaceId,
   asToolCallId,
   asWorkspaceCommandId,
+  type AgentRunId,
   type ClientInstanceId,
   type Conversation,
   type ToolExecutionContext
@@ -235,7 +235,7 @@ async function createDockerHarness(input: {
 }) {
   const clientInstanceId = asClientInstanceId(`docker_runner_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: ownerUserId,
@@ -264,7 +264,12 @@ async function createDockerHarness(input: {
     objectStore: byteStore,
     commandResults: new LocalWorkspaceCommandResultSource(runner)
   });
-  const context = createToolContext(clientInstanceId, conversation);
+  const context = createToolContext(
+    clientInstanceId,
+    conversation,
+
+    (await store.createAgentRunForTesting(conversation)).id
+  );
   return {
     clientInstanceId,
     store,
@@ -352,7 +357,8 @@ function dockerProcessInput(
 
 function createToolContext(
   clientInstanceId: ClientInstanceId,
-  conversation: Conversation
+  conversation: Conversation,
+  agentRunId: AgentRunId
 ): ToolExecutionContext {
   return {
     clientInstanceId,
@@ -369,7 +375,7 @@ function createToolContext(
     toolRequest: {
       toolName: "workspace.exec",
       toolCallId: asToolCallId(`toolcall_${globalThis.crypto.randomUUID()}`),
-      agentRunId: asAgentRunId(`run_${globalThis.crypto.randomUUID()}`),
+      agentRunId,
       conversationId: conversation.id,
       agentName: "workspace_agent",
       input: {}

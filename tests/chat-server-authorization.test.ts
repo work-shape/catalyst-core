@@ -155,7 +155,7 @@ describe("client instance app vertical slice", () => {
 
   it("grants standalone users workspace read and manage scopes", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const config = createTestConfig();
     const profile = await store.users.createUser({
       clientInstanceId,
@@ -446,7 +446,7 @@ describe("client instance app vertical slice", () => {
 
   it("creates and resets standalone password sign-ins from superadmin user administration", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store: store.usage,

@@ -1,5 +1,7 @@
+import { beforeAllWithPostgres as beforeAll } from "./postgres-hooks";
+import { fileTestDatabaseUrl } from "./test-database";
 import postgres from "postgres";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach } from "vitest";
 import { asClientInstanceId, type ClientInstanceId } from "@vivd-catalyst/core";
 import { required } from "./assertions";
 import {
@@ -34,7 +36,7 @@ export interface PostgresSuite {
 }
 
 /**
- * Connects the suite to the database named by `POSTGRES_STORE_TEST_DATABASE_URL` and removes
+ * Connects the suite to its isolated file database cloned from the migrated template and removes
  * what its tests wrote. The suite needs the database and fails without it. Call it in the
  * `describe` that holds the tests.
  */
@@ -52,19 +54,16 @@ export function usePostgresSuite(prefix: string): PostgresSuite {
   let sql: postgres.Sql | undefined;
 
   beforeAll(async () => {
-    const url = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-    if (!url) {
-      throw new Error("This suite needs Postgres: set POSTGRES_STORE_TEST_DATABASE_URL");
-    }
+    const url = await fileTestDatabaseUrl();
     databaseUrl = url;
     store = (
       await createTestInstance({
-        postgres: { databaseUrl: databaseUrlFor(url, first), runMigrations: true }
+        postgres: { applicationName: first }
       })
     ).stores;
     secondStore = (
       await createTestInstance({
-        postgres: { databaseUrl: databaseUrlFor(url, second), runMigrations: false }
+        postgres: { applicationName: second }
       })
     ).stores;
     barrierSql = postgres(databaseUrlFor(url, barrier), { max: 1 });

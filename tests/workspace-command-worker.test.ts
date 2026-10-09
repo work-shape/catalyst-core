@@ -258,7 +258,7 @@ async function createWorkerHarness(
 ) {
   const clientInstanceId = asClientInstanceId(`worker_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const auditRecorder = input.withAuditRecorder
     ? new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
     : undefined;

@@ -1,4 +1,8 @@
-import { createTestInstance, getTestConfig } from "./support/test-instance";
+import {
+  createTestInstance,
+  getTestConfig,
+  rejectStartupWithoutDatabase
+} from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { asClientInstanceId } from "@vivd-catalyst/core";
@@ -675,10 +679,8 @@ describe("client instance app vertical slice", () => {
 
   it("rejects Postgres startup without DATABASE_URL", async () => {
     await expect(
-      createTestInstance({
+      rejectStartupWithoutDatabase({
         config: createTestConfig(),
-        env: {},
-        storeMode: "postgres",
         tools: []
       })
     ).rejects.toMatchObject({

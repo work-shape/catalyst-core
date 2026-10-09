@@ -6,7 +6,7 @@ import { createTestInstance } from "./support/test-instance";
 describe("managed object access writing into a deleted conversation", () => {
   async function createFixture() {
     const clientInstanceId = asClientInstanceId(`refused_${globalThis.crypto.randomUUID()}`);
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const owner = await store.users.resolveUserIdentity({
       clientInstanceId,
       authSource: "test",

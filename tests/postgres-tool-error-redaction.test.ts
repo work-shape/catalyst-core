@@ -3,17 +3,14 @@ import { z } from "zod";
 import { AppError, asWorkspaceCommandId, type Logger } from "@vivd-catalyst/core";
 import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-import { usePostgresSuite } from "./support/postgres-suite";
-import { createWorkspaceHarnessOn } from "./support/workspace-tools-harness";
+import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 const marker = "PRIVATE_PARAMETER_VALUE";
 
 describe("tool handler error boundary on Postgres", () => {
-  const suite = usePostgresSuite("tool_redaction");
-
   it("keeps a driver error out of the tool result and hands it to the logger", async () => {
-    const harness = await createWorkspaceHarnessOn(suite.store, suite.clientInstance("driver"));
-    const workspace = await suite.store.executionWorkspaces.ensureExecutionWorkspace({
+    const harness = await createWorkspaceHarness();
+    const workspace = await harness.store.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       ownerUserId: harness.ownerUserId
@@ -25,7 +22,7 @@ describe("tool handler error boundary on Postgres", () => {
         description: "Writes a row that breaks a foreign key.",
         inputSchema: z.object({}),
         async execute() {
-          await suite.store.executionWorkspaces.upsertWorkspaceFile({
+          await harness.store.executionWorkspaces.upsertWorkspaceFile({
             clientInstanceId: harness.clientInstanceId,
             workspaceId: workspace.id,
             path: "notes.txt",
@@ -86,7 +83,7 @@ describe("tool handler error boundary on Postgres", () => {
   });
 
   it("passes the message of an error written for the model", async () => {
-    const harness = await createWorkspaceHarnessOn(suite.store, suite.clientInstance("authored"));
+    const harness = await createWorkspaceHarness();
     const logged: Array<{ input: unknown; message?: string }> = [];
     const execution = executionFor(
       defineTool({

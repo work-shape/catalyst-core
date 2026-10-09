@@ -1,5 +1,6 @@
 import { createTestInstance } from "./support/test-instance";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
+import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-clock";
 import {
   StoreBackedAuditRecorder,
   asAgentRunId,
@@ -87,7 +88,7 @@ function completion(text: string): ModelCompletion {
     }
   };
 }
-function fixture(checks: ApprovalCheckConfig[] = [rule]) {
+async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
   const config = createTestConfig({
     modelBindings: [
       {
@@ -100,7 +101,7 @@ function fixture(checks: ApprovalCheckConfig[] = [rule]) {
     ]
   });
   config.approvalChecks = checks;
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const complete = vi
     .fn<ModelProvider["complete"]>()
     .mockResolvedValue(completion('{"violates":false,"reason":"Keine personenbezogenen Daten."}'));
@@ -126,6 +127,19 @@ function fixture(checks: ApprovalCheckConfig[] = [rule]) {
 }
 afterEach(() => vi.useRealTimers());
 
+/**
+ * Makes the provider hang and resolves when it is called. The runner starts its timeout at that
+ * call, after its database reads, so the clock is advanced only from then on.
+ */
+function neverCompleting(complete: Mock<ModelProvider["complete"]>): Promise<void> {
+  return new Promise((resolve) => {
+    complete.mockImplementation(() => {
+      resolve();
+      return new Promise<ModelCompletion>(() => {});
+    });
+  });
+}
+
 function unevaluated(onFail: "warn" | "block") {
   return onFail === "block"
     ? {
@@ -138,7 +152,7 @@ function unevaluated(onFail: "warn" | "block") {
 
 describe("approval check runner", () => {
   it("passes, resolves the binding and sends only summary and new content as untrusted data", async () => {
-    const f = fixture();
+    const f = await fixture();
     expect(await f.runner.run(handler, command, context)).toEqual([
       { id: rule.id, status: "passed", message: "" }
     ]);
@@ -175,7 +189,7 @@ describe("approval check runner", () => {
   it.each(["warn", "block"] as const)(
     "returns the reason for a violation with onFail %s",
     async (onFail) => {
-      const f = fixture([{ ...rule, onFail }]);
+      const f = await fixture([{ ...rule, onFail }]);
       f.complete.mockResolvedValue(
         completion('{"violates":true,"reason":"Der Text enthält personenbezogene Daten."}')
       );
@@ -192,7 +206,7 @@ describe("approval check runner", () => {
   it.each(["warn", "block"] as const)(
     "does not leak provider failures and fails closed only for block: onFail %s",
     async (onFail) => {
-      const f = fixture([{ ...rule, onFail }]);
+      const f = await fixture([{ ...rule, onFail }]);
       f.complete.mockRejectedValue(new Error("secret provider detail"));
       expect(await f.runner.run(handler, command, context)).toEqual([unevaluated(onFail)]);
       expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
@@ -209,7 +223,7 @@ describe("approval check runner", () => {
     '{"violates":true,"reason":"Bad","extra":true}',
     '{"reason":"Missing verdict"}'
   ])("blocks a block rule on an invalid verdict: %s", async (text) => {
-    const f = fixture([{ ...rule, onFail: "block" }]);
+    const f = await fixture([{ ...rule, onFail: "block" }]);
     f.complete.mockResolvedValue(completion(text));
     expect(await f.runner.run(handler, command, context)).toEqual([unevaluated("block")]);
     expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
@@ -218,12 +232,14 @@ describe("approval check runner", () => {
   it.each(["warn", "block"] as const)(
     "bounds a provider that ignores cancellation with onFail %s",
     async (onFail) => {
-      vi.useFakeTimers();
-      const f = fixture([{ ...rule, onFail }]);
-      f.complete.mockImplementation(() => new Promise<ModelCompletion>(() => {}));
+      const f = await fixture([{ ...rule, onFail }]);
+      const called = neverCompleting(f.complete);
+      useFakeClockBesidePostgres();
       const result = f.runner.run(handler, command, context);
+      await settleOnFakeClock(called);
       await vi.advanceTimersByTimeAsync(10_000);
-      expect(await result).toEqual([unevaluated(onFail)]);
+      expect(await settleOnFakeClock(result)).toEqual([unevaluated(onFail)]);
+      vi.useRealTimers();
       expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(true);
       expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ source: "not_reported" })
@@ -232,19 +248,20 @@ describe("approval check runner", () => {
   );
 
   it("honors an earlier caller deadline", async () => {
-    vi.useFakeTimers();
-    const f = fixture();
-    f.complete.mockImplementation(() => new Promise<ModelCompletion>(() => {}));
+    const f = await fixture();
+    const called = neverCompleting(f.complete);
+    useFakeClockBesidePostgres();
     const result = f.runner.run(handler, command, {
       ...context,
       deadline: new Date(Date.now() + 100)
     });
+    await settleOnFakeClock(called);
     await vi.advanceTimersByTimeAsync(100);
-    expect((await result)[0]?.status).toBe("warned");
+    expect((await settleOnFakeClock(result))[0]?.status).toBe("warned");
   });
 
   it("runs checks concurrently, retains configured order and isolates a failed check", async () => {
-    const f = fixture([rule, { ...rule, id: "second", onFail: "block" }]);
+    const f = await fixture([rule, { ...rule, id: "second", onFail: "block" }]);
     let releaseFirst: ((value: ModelCompletion) => void) | undefined;
     let releaseSecond: ((value: ModelCompletion) => void) | undefined;
     f.complete
@@ -276,7 +293,7 @@ describe("approval check runner", () => {
   });
 
   it("ignores checks for another kind, empty configuration, and handlers without checkContent", async () => {
-    const f = fixture([{ ...rule, appliesTo: "other" }]);
+    const f = await fixture([{ ...rule, appliesTo: "other" }]);
     expect(await f.runner.run(handler, command, context)).toEqual([]);
     f.config.approvalChecks = [];
     expect(await f.runner.run(handler, command, context)).toEqual([]);
@@ -287,7 +304,7 @@ describe("approval check runner", () => {
   });
 
   it("still evaluates a request without origin, which the usage contract cannot attribute", async () => {
-    const f = fixture();
+    const f = await fixture();
     expect(
       (await f.runner.run(handler, { ...command, origin: undefined }, context))[0]?.status
     ).toBe("passed");
@@ -298,7 +315,7 @@ describe("approval check runner", () => {
 
 describe("approval checks at creation", () => {
   it("blocks before persistence and surfaces the reason without a creation audit", async () => {
-    const f = fixture([{ ...rule, onFail: "block" }]);
+    const f = await fixture([{ ...rule, onFail: "block" }]);
     f.complete.mockResolvedValue(
       completion('{"violates":true,"reason":"Remove the personal data."}')
     );
@@ -316,7 +333,7 @@ describe("approval checks at creation", () => {
   });
 
   it("does not bypass a blocking verdict when usage storage fails", async () => {
-    const f = fixture([{ ...rule, onFail: "block" }]);
+    const f = await fixture([{ ...rule, onFail: "block" }]);
     f.complete.mockResolvedValue(
       completion('{"violates":true,"reason":"Remove the personal data."}')
     );
@@ -333,7 +350,7 @@ describe("approval checks at creation", () => {
   });
 
   it("stores warnings, exposes them in views, and audits only check ids and statuses", async () => {
-    const f = fixture();
+    const f = await fixture();
     f.complete.mockResolvedValue(
       completion('{"violates":true,"reason":"Remove the personal data."}')
     );
@@ -358,7 +375,7 @@ describe("approval checks at creation", () => {
   });
 
   it("stores passed checks and refuses creation when a block rule cannot be evaluated", async () => {
-    const f = fixture([{ ...rule, onFail: "block" }]);
+    const f = await fixture([{ ...rule, onFail: "block" }]);
     expect((await f.workflow.createRequest(user, context, command)).checks[0]?.status).toBe(
       "passed"
     );
@@ -373,7 +390,7 @@ describe("approval checks at creation", () => {
   });
 
   it("stores a neutral warning when a warn rule cannot be evaluated", async () => {
-    const f = fixture();
+    const f = await fixture();
     f.complete.mockRejectedValueOnce(new Error("Unavailable"));
     const request = await f.workflow.createRequest(user, context, command);
     expect(await f.workflow.getRequest(user, context, request.id)).toMatchObject({
@@ -384,7 +401,7 @@ describe("approval checks at creation", () => {
 });
 
 async function skillFixture() {
-  const f = fixture([{ ...rule, appliesTo: "skill_change", onFail: "block" }]);
+  const f = await fixture([{ ...rule, appliesTo: "skill_change", onFail: "block" }]);
   f.config.administration.agentConfiguration.agentSkillChanges = {
     enabled: true,
     allowSkillCreation: true

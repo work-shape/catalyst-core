@@ -81,12 +81,12 @@ describe("structured result projection", () => {
     ]);
   });
 
-  it("preserves append order for equal-timestamp in-memory conversation reads", async () => {
-    vi.useFakeTimers();
+  it("preserves append order for equal-timestamp conversation reads", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(new Date("2026-08-06T10:00:00.000Z"));
       const clientInstanceId = asClientInstanceId("client_test");
-      const store = createTestInstance().stores;
+      const store = (await createTestInstance()).stores;
       const conversation = await store.createConversationForTesting({
         clientInstanceId,
         createdByUserId: "user_test",

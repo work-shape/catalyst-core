@@ -1,4 +1,5 @@
 import { createTestInstance } from "./support/test-instance";
+import { claimAttachmentsForStoredMessage } from "./support/test-store";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -49,7 +50,7 @@ describe("artifact preview routes", () => {
         status: "ready",
         format: "pptx"
       });
-      await store.files.claimReadyDraftAttachmentsForMessage({
+      await claimAttachmentsForStoredMessage(store, {
         clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_attachment_preview"),
@@ -150,7 +151,7 @@ describe("artifact preview routes", () => {
         status: "ready",
         format: "pdf"
       });
-      await store.files.claimReadyDraftAttachmentsForMessage({
+      await claimAttachmentsForStoredMessage(store, {
         clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_native_pdf_preview"),
@@ -685,7 +686,7 @@ async function createPreviewServer(
   } = {}
 ) {
   const clientInstanceId = input.clientInstanceId ?? asClientInstanceId("demo-local");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const config = createPreviewConfig(clientInstanceId);
   const owner = input.owner ?? createTestUser("user-1", clientInstanceId);
   const usageGovernance = new ModelUsageGovernance({

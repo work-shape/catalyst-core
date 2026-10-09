@@ -2,9 +2,9 @@ import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import { asClientInstanceId } from "@vivd-catalyst/core";
 
-describe("TestMemoryStore Collaboration Workspaces", () => {
+describe("Postgres Collaboration Workspaces", () => {
   it("provisions exactly one private Personal Workspace and owner membership", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-personal");
     const user = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
 
@@ -42,7 +42,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   });
 
   it("protects Personal Workspace membership, name, visibility, and lifecycle", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-invariants");
     const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
     const other = await store.users.createUser({ clientInstanceId, displayLabel: "Other" });
@@ -82,7 +82,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   });
 
   it("updates Shared Workspace roles and keeps one pending access request per user", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-shared");
     const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
     const member = await store.users.createUser({ clientInstanceId, displayLabel: "Member" });
@@ -137,7 +137,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   });
 
   it("moves only from the expected workspace and finalizes cleaned shared workspaces", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-lifecycle");
     const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
     const requester = await store.users.createUser({ clientInstanceId, displayLabel: "Requester" });
@@ -202,7 +202,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
   });
 
   it("scopes conversation listings by visibility and keeps Personal Workspaces open", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-visibility");
     const author = await store.users.createUser({ clientInstanceId, displayLabel: "Author" });
     const colleague = await store.users.createUser({ clientInstanceId, displayLabel: "Colleague" });
@@ -236,7 +236,7 @@ describe("TestMemoryStore Collaboration Workspaces", () => {
       });
     }
     const list = async (
-      scope: Parameters<typeof store.listConversationsForWorkspace>[0]["scope"]
+      scope: Parameters<typeof store.conversations.listConversationsForWorkspace>[0]["scope"]
     ) =>
       (
         await store.conversations.listConversationsForWorkspace({

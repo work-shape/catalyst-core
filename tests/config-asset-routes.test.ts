@@ -1284,7 +1284,7 @@ async function createFixture(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("config-routes-test");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const modelProviders = input.pricingCoverage
     ? [
         {
@@ -1447,7 +1447,7 @@ async function createFixture(
     ? {
         secret: "a-development-service-access-secret-with-enough-length",
         clientInstanceId,
-        apiAccessStore: store
+        apiAccessStore: store.apiAccess
       }
     : undefined;
   const auditRecorder = new StoreBackedAuditRecorder({

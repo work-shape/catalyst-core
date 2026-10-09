@@ -23,7 +23,7 @@ describe("agent workspace file e2e", () => {
     const rootDirectory = await mkdtemp(join(tmpdir(), "agent-workspace-file-e2e-"));
     try {
       const clientInstanceId = asClientInstanceId("agent-workspace-file-e2e-client");
-      const store = createTestInstance().stores;
+      const store = (await createTestInstance()).stores;
       const conversation = await store.createConversationForTesting({
         clientInstanceId,
         createdByUserId: "user-1",

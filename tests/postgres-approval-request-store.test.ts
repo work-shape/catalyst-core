@@ -1,3 +1,6 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import { fileTestDatabaseUrl } from "./support/test-database";
+import {} from "vitest";
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import postgres from "postgres";
@@ -9,20 +12,14 @@ import {
   readApprovalDecisionMetadata
 } from "@vivd-catalyst/core";
 
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
-
-describePostgres("Postgres approval request store", () => {
+describe("Postgres approval request store", () => {
   it("scopes and bounds reads and atomically allows only one pending transition", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
-    const sql = postgres(databaseUrl!, { max: 1 });
+    const sql = postgres(databaseUrl, { max: 1 });
     const clientInstanceId = asClientInstanceId(`approval_${globalThis.crypto.randomUUID()}`);
     const owner = await store.users.createUser({ clientInstanceId, displayLabel: "Owner" });
     const workspace = await store.workspaces.ensurePersonalWorkspace({
@@ -214,4 +211,9 @@ describePostgres("Postgres approval request store", () => {
       await store.close();
     }
   });
+});
+
+let databaseUrl: string;
+beforeAll(async () => {
+  databaseUrl = await fileTestDatabaseUrl();
 });

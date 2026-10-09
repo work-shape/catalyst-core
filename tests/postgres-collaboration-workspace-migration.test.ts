@@ -1,21 +1,23 @@
+import { PostgresFixtures } from "./support/postgres-fixtures";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, inject, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
+const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
+
 const migrationsDirectory = resolve("packages/postgres-store/migrations");
 const preflightScript = resolve("scripts/preflight-collaboration-workspaces.mjs");
 const createdDatabases: string[] = [];
 const runFile = promisify(execFile);
 
-describePostgres("Collaboration Workspace migration 0020", () => {
+describe("Collaboration Workspace migration 0020", () => {
   afterEach(async () => {
     while (createdDatabases.length > 0) {
-      await dropDatabase(createdDatabases.pop()!);
+      const url = createdDatabases.pop();
+      if (url) await fixtures.drop(url);
     }
   });
 
@@ -522,21 +524,8 @@ async function seedConversation(sql: Sql, id: string, ownerUserId: string): Prom
 }
 
 async function createFreshDatabase(): Promise<{ sql: Sql; databaseUrl: string }> {
-  const name = `catalyst_migration_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
-  const admin = postgres(databaseUrl!, { max: 1 });
-  await admin.unsafe(`create database "${name}"`);
-  await admin.end();
-  createdDatabases.push(name);
-  const url = new URL(databaseUrl!);
-  url.pathname = `/${name}`;
-  return { sql: postgres(url.toString(), { max: 1 }), databaseUrl: url.toString() };
-}
-
-async function dropDatabase(name: string): Promise<void> {
-  const admin = postgres(databaseUrl!, { max: 1 });
-  try {
-    await admin.unsafe(`drop database if exists "${name}" with (force)`);
-  } finally {
-    await admin.end();
-  }
+  // These assertions exercise historical migrations themselves, so they need an empty clone.
+  const url = await fixtures.database(`history_${globalThis.crypto.randomUUID()}`, false);
+  createdDatabases.push(url);
+  return { sql: postgres(url, { max: 1 }), databaseUrl: url };
 }

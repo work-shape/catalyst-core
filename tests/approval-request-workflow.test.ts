@@ -30,8 +30,8 @@ const reviewer: AuthenticatedUser = {
   permissions: ["agent_skills.approve"]
 };
 
-function fixture() {
-  const store = createTestInstance().stores;
+async function fixture() {
+  const store = (await createTestInstance()).stores;
   const apply = vi.fn(
     async (_payload: JsonObject, actor: AuthenticatedUser): Promise<JsonObject> => ({
       actorId: actor.id
@@ -79,7 +79,7 @@ function fixture() {
 
 describe("approval request workflow", () => {
   it("validates creation and stores empty checks without payload in the audit", async () => {
-    const f = fixture();
+    const f = await fixture();
     await expect(
       f.workflow.createRequest(requester, context, {
         kind: "fake",
@@ -99,7 +99,7 @@ describe("approval request workflow", () => {
   });
 
   it("denies decisions without the effective permission, including role revocations", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     for (const user of [
       requester,
@@ -116,7 +116,7 @@ describe("approval request workflow", () => {
   });
 
   it("approves as the deciding user and persists the apply result before the hook", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     f.onDecided.mockImplementation(async (updated) => {
       expect(
@@ -153,7 +153,7 @@ describe("approval request workflow", () => {
   });
 
   it("grants admins and superadmins approval by default", async () => {
-    const f = fixture();
+    const f = await fixture();
     for (const role of ["admin", "superadmin"]) {
       const request = await f.create();
       await expect(
@@ -166,7 +166,7 @@ describe("approval request workflow", () => {
   });
 
   it("supersedes stale requests without applying", async () => {
-    const f = fixture();
+    const f = await fixture();
     f.handler.isStale = async () => true;
     const request = await f.create();
     await expect(
@@ -180,7 +180,7 @@ describe("approval request workflow", () => {
   });
 
   it("rejects without validation or apply and retains the optional comment", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     await expect(
       f.workflow.decideRequest(reviewer, context, {
@@ -198,7 +198,7 @@ describe("approval request workflow", () => {
   });
 
   it("requires a nonblank comment for request_changes", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     for (const comment of [undefined, "", "   "]) {
       await expect(
@@ -224,7 +224,7 @@ describe("approval request workflow", () => {
   });
 
   it("allows withdrawal only by the requester while pending", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     await expect(f.workflow.withdrawRequest(reviewer, context, request.id)).rejects.toMatchObject({
       code: "FORBIDDEN"
@@ -253,7 +253,7 @@ describe("approval request workflow", () => {
   });
 
   it("lets only one concurrent decision apply", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
@@ -268,22 +268,27 @@ describe("approval request workflow", () => {
       decision: "approve"
     });
     await vi.waitFor(() => expect(f.apply).toHaveBeenCalledTimes(1));
-    await expect(
-      f.workflow.decideRequest(reviewer, context, {
-        requestId: request.id,
-        decision: "reject"
-      })
-    ).rejects.toMatchObject({ code: "CONFLICT" });
-    await expect(f.workflow.withdrawRequest(requester, context, request.id)).rejects.toMatchObject({
-      code: "CONFLICT"
+    // The approval holds the row lock until its handler returns, so the other two wait on it.
+    const rejection = f.workflow.decideRequest(reviewer, context, {
+      requestId: request.id,
+      decision: "reject"
     });
+    const withdrawal = f.workflow.withdrawRequest(requester, context, request.id);
     release?.();
-    await expect(first).resolves.toMatchObject({ status: "approved" });
+    const [approved, rejected, withdrawn] = await Promise.allSettled([
+      first,
+      rejection,
+      withdrawal
+    ]);
+    expect(approved).toMatchObject({ status: "fulfilled", value: { status: "approved" } });
+    expect(rejected).toMatchObject({ status: "rejected", reason: { code: "CONFLICT" } });
+    expect(withdrawn).toMatchObject({ status: "rejected", reason: { code: "CONFLICT" } });
+    expect(f.apply).toHaveBeenCalledTimes(1);
     expect(f.onDecided).toHaveBeenCalledTimes(1);
   });
 
   it("leaves failed apply pending and releases the transition lock", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     f.apply.mockRejectedValueOnce(new Error("Failed"));
     await expect(
@@ -305,7 +310,7 @@ describe("approval request workflow", () => {
   });
 
   it("refuses to reject or withdraw a request whose change is already applied", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     f.handler.isApplied = async () => true;
     await expect(
@@ -321,7 +326,7 @@ describe("approval request workflow", () => {
   });
 
   it("limits the queue and count to permitted kinds, including status filtering", async () => {
-    const f = fixture();
+    const f = await fixture();
     const visible = await f.create();
     await f.create("other");
     const rejected = await f.create();
@@ -346,7 +351,7 @@ describe("approval request workflow", () => {
   });
 
   it("returns the newest 200 requests while counting all pending requests", async () => {
-    const f = fixture();
+    const f = await fixture();
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       const requests: ApprovalRequest[] = [];
@@ -356,8 +361,14 @@ describe("approval request workflow", () => {
       }
       vi.setSystemTime(new Date(Date.UTC(2026, 9, 5, 13)));
       await f.create("other");
+      // The store returns the page it is asked for; the route always asks for one.
       expect(
-        (await f.workflow.listRequests(reviewer, context, { status: "pending" })).map((r) => r.id)
+        (
+          await f.workflow.listRequests(reviewer, context, {
+            status: "pending",
+            page: { limit: 200 }
+          })
+        ).map((r) => r.id)
       ).toEqual(
         requests
           .slice(-200)
@@ -377,7 +388,7 @@ describe("approval request workflow", () => {
   });
 
   it("shows previews and caller capabilities while hiding unrelated requests", async () => {
-    const f = fixture();
+    const f = await fixture();
     const request = await f.create();
     await expect(f.workflow.getRequest(requester, context, request.id)).resolves.toMatchObject({
       preview: { proposed: "new" },
@@ -416,7 +427,7 @@ describe("approval request workflow", () => {
   });
 
   it("offers no action the caller's token scopes would be refused", async () => {
-    const f = fixture();
+    const f = await fixture();
     f.handler.revert = async () => ({});
     const pending = await f.create();
     const chatScoped = (user: AuthenticatedUser, scopes: string[]) => ({ ...user, scopes });
@@ -445,7 +456,7 @@ describe("approval request workflow", () => {
   });
 
   it("handles an empty registry without granting queue access", async () => {
-    const f = fixture();
+    const f = await fixture();
     f.handlers.clear();
     await expect(f.workflow.pendingCount(reviewer)).resolves.toEqual({
       count: 0,

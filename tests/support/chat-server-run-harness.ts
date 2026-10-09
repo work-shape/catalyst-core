@@ -1,7 +1,7 @@
 import {
   type TestInstance as TestServer,
   createTestInstance,
-  type TestMemoryStore,
+  type TestStore,
   completeServerOptions
 } from "./test-instance";
 
@@ -30,7 +30,7 @@ export async function createStaleRunRecoveryFixture(
     /** Runs the watchdog's startup recovery when the server starts. */
     runOnStartup?: boolean;
     /** Replaces the runtime that has lost every run, and the assets a real runtime reads. */
-    runtime?: (store: TestMemoryStore) => {
+    runtime?: (store: TestStore) => {
       agentRuntime: AgentRuntime;
       assetSource: ConfigAssetSource;
     };
@@ -38,7 +38,7 @@ export async function createStaleRunRecoveryFixture(
 ) {
   const clientInstanceId = asClientInstanceId("demo-local");
   const owner = createTestUser("user-1", clientInstanceId);
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const runtime = input.runtime?.(store);
   const config = createTestConfig();
   const usageGovernance = new ModelUsageGovernance({
@@ -123,7 +123,7 @@ export async function createStaleRunRecoveryFixture(
 
 export async function createPersistedRecoveryRun(
   fixture: {
-    store: TestMemoryStore;
+    store: TestStore;
     clientInstanceId: ReturnType<typeof asClientInstanceId>;
     owner: AuthenticatedUser;
     conversation?: { id: AgentRun["conversationId"] };
@@ -201,7 +201,7 @@ export async function createPersistedRecoveryRun(
 }
 
 export async function expectRunStatus(
-  store: TestMemoryStore,
+  store: TestStore,
   clientInstanceId: ReturnType<typeof asClientInstanceId>,
   runId: AgentRun["id"],
   status: AgentRun["status"]

@@ -1,12 +1,12 @@
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./test-instance";
 import {
-  asAgentRunId,
   asClientInstanceId,
   asManagedFileId,
   asToolCallId,
   asUserId,
   StoreBackedAuditRecorder,
+  type AgentRunId,
   type ClientInstanceId,
   type Conversation,
   type JsonObject,
@@ -48,19 +48,8 @@ interface WorkspaceHarnessInput {
 }
 
 export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) {
-  return createWorkspaceHarnessOn(
-    createTestInstance().stores,
-    asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`),
-    input
-  );
-}
-
-/** The harness on a store the caller supplies, such as the Postgres store of a suite. */
-export async function createWorkspaceHarnessOn<Stores extends PlatformStores>(
-  store: Stores,
-  clientInstanceId: ClientInstanceId,
-  input: WorkspaceHarnessInput = {}
-) {
+  const clientInstanceId = asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`);
+  const store = (await createTestInstance()).stores;
   const owner = await store.users.resolveUserIdentity({
     clientInstanceId,
     authSource: "test",
@@ -84,6 +73,7 @@ export async function createWorkspaceHarnessOn<Stores extends PlatformStores>(
     title: "Workspace tools test",
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });
+  const agentRun = await store.createAgentRunForTesting(conversation);
   const objectStore = new TestWorkspaceObjectStore();
   const auditRecorder = input.withAuditRecorder
     ? new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
@@ -137,14 +127,14 @@ export async function createWorkspaceHarnessOn<Stores extends PlatformStores>(
     execution,
     context,
     createRequest(toolName: string, requestInput: unknown) {
-      return createToolRequest(conversation, toolName, requestInput);
+      return createToolRequest(conversation, agentRun.id, toolName, requestInput);
     },
     async runTool(
       toolName: string,
       requestInput: unknown,
       toolContext: ToolExecutionContext = context
     ) {
-      const request = createToolRequest(conversation, toolName, requestInput);
+      const request = createToolRequest(conversation, agentRun.id, toolName, requestInput);
       const decision = await execution.authorize(request, toolContext);
       if (decision.status !== "allowed") {
         return {
@@ -207,11 +197,16 @@ function createToolContext(
   };
 }
 
-function createToolRequest(conversation: Conversation, toolName: string, input: unknown) {
+function createToolRequest(
+  conversation: Conversation,
+  agentRunId: AgentRunId,
+  toolName: string,
+  input: unknown
+) {
   return {
     toolName,
     toolCallId: asToolCallId(`toolcall_${globalThis.crypto.randomUUID()}`),
-    agentRunId: asAgentRunId(`run_${globalThis.crypto.randomUUID()}`),
+    agentRunId,
     conversationId: conversation.id,
     agentName: "workspace_agent",
     input

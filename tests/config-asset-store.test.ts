@@ -1,6 +1,7 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { asClientInstanceId, createPlatformId } from "@vivd-catalyst/core";
 
 interface ConfigAssetStoreFixture extends Pick<
@@ -10,20 +11,13 @@ interface ConfigAssetStoreFixture extends Pick<
   close?: () => Promise<void>;
 }
 
-runConfigAssetStoreSuite("In-memory config asset store", async () => createTestInstance().stores);
-
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
 runConfigAssetStoreSuite(
   "Postgres config asset store",
   async () =>
     createTestInstance({
-      postgres: {
-        databaseUrl: databaseUrl!,
-        runMigrations: true
-      }
+      postgres: {}
     }).then((instance) => instance.stores),
-  describePostgres
+  describe
 );
 
 function runConfigAssetStoreSuite(

@@ -1,3 +1,4 @@
+import type { PlatformStores } from "@vivd-catalyst/core";
 import postgres from "postgres";
 
 /**
@@ -107,4 +108,48 @@ export async function waitUntilBlocked(
 export async function settled<T>(call: Promise<T>): Promise<PromiseSettledResult<T>> {
   const [result] = await Promise.allSettled([call]);
   return result;
+}
+
+/** Hold the first operation's row locks until Postgres proves the second is waiting. */
+export async function orderedStoreCalls<A, B>(
+  observer: postgres.Sql,
+  input: { first: PlatformStores; firstName: string; secondName: string },
+  first: (stores: PlatformStores) => Promise<A>,
+  second: () => Promise<B>
+): Promise<[PromiseSettledResult<A>, PromiseSettledResult<B>]> {
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let ready: () => void = () => undefined;
+  let failed: (error: unknown) => void = () => undefined;
+  const prepared = new Promise<void>((resolve, reject) => {
+    ready = resolve;
+    failed = reject;
+  });
+  const firstResult = settled(
+    input.first
+      .transaction(async (stores) => {
+        const result = await first(stores);
+        ready();
+        await released;
+        return result;
+      })
+      .catch((error: unknown) => {
+        failed(error);
+        throw error;
+      })
+  );
+  let secondResult: Promise<PromiseSettledResult<B>> | undefined;
+  try {
+    await prepared;
+    secondResult = settled(second());
+    await waitUntilBlocked(observer, { waiter: input.secondName, holder: input.firstName });
+  } finally {
+    release();
+    // Always drain both operations, including a failed observation or setup.
+    await Promise.all([firstResult, secondResult]);
+  }
+  if (secondResult === undefined) throw new Error("The second operation was never started");
+  return [await firstResult, await secondResult];
 }

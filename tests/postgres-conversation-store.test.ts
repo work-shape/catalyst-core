@@ -1,3 +1,6 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import {} from "vitest";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import postgres from "postgres";
@@ -11,20 +14,19 @@ import {
   type MessageId
 } from "@vivd-catalyst/core";
 
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
+let databaseUrl: string;
+beforeAll(async () => {
+  databaseUrl = await fileTestDatabaseUrl();
+});
 
-describePostgres("Postgres conversation store", () => {
+describe("Postgres conversation store", () => {
   it("selects recent equal-timestamp messages by persisted append order", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
-    const sql = postgres(databaseUrl!, { max: 1 });
+    const sql = postgres(databaseUrl, { max: 1 });
     const clientInstanceId = asClientInstanceId(
       `recent_messages_${globalThis.crypto.randomUUID()}`
     );
@@ -140,13 +142,10 @@ describePostgres("Postgres conversation store", () => {
   it("lists and expires message-less conversations by their draft attachments", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
-    const sql = postgres(databaseUrl!, { max: 1 });
+    const sql = postgres(databaseUrl, { max: 1 });
     const clientInstanceId = asClientInstanceId(`unsent_drafts_${globalThis.crypto.randomUUID()}`);
     const user = await store.users.createUser({ clientInstanceId, displayLabel: "Author" });
     const workspace = await store.workspaces.ensurePersonalWorkspace({
@@ -273,13 +272,10 @@ describePostgres("Postgres conversation store", () => {
   it("finds and marks only managed files without an active conversation", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
-    const sql = postgres(databaseUrl!, { max: 1 });
+    const sql = postgres(databaseUrl, { max: 1 });
     const clientInstanceId = asClientInstanceId(`orphan_files_${globalThis.crypto.randomUUID()}`);
     const user = await store.users.createUser({ clientInstanceId, displayLabel: "Test user" });
     const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
@@ -427,13 +423,10 @@ describePostgres("Postgres conversation store", () => {
   it("persists fast mode and the reported service tier with a usage event", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
-    const sql = postgres(databaseUrl!, { max: 1 });
+    const sql = postgres(databaseUrl, { max: 1 });
     const clientInstanceId = asClientInstanceId(`usage_fast_${globalThis.crypto.randomUUID()}`);
     const event = {
       clientInstanceId,

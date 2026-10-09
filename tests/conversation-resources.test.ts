@@ -1,10 +1,7 @@
 import type { TestOperationName, TestCallInput } from "./support/operations";
+import { claimAttachmentsForStoredMessage } from "./support/test-store";
 
-import {
-  createTestInstance,
-  type TestMemoryStore,
-  type TestInstance
-} from "./support/test-instance";
+import { createTestInstance, type TestStore, type TestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 
 import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
@@ -29,7 +26,7 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 describe("conversation resource store queries", () => {
   it("lists sent attachments and available conversation artifacts newest-first", async () => {
     const clientInstanceId = asClientInstanceId("conversation-resource-store-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversation = await createConversation(store, clientInstanceId, "owner");
     const otherConversation = await createConversation(store, clientInstanceId, "owner");
 
@@ -50,7 +47,7 @@ describe("conversation resource store queries", () => {
       conversationId: conversation.id,
       filename: "deleted.txt"
     });
-    await store.files.claimReadyDraftAttachmentsForMessage({
+    await claimAttachmentsForStoredMessage(store, {
       clientInstanceId,
       conversationId: conversation.id,
       messageId: asMessageId("msg_sent"),
@@ -117,7 +114,7 @@ describe("conversation resource routes", () => {
         conversationId: conversation.id,
         filename: "claim.pdf"
       });
-      await fixture.store.files.claimReadyDraftAttachmentsForMessage({
+      await claimAttachmentsForStoredMessage(fixture.store, {
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_structured_source"),
@@ -502,7 +499,7 @@ describe("conversation resource routes", () => {
           "document.canonical_pdf": canonicalPdf.id
         }
       });
-      await fixture.store.files.claimReadyDraftAttachmentsForMessage({
+      await claimAttachmentsForStoredMessage(fixture.store, {
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_pdf"),
@@ -586,7 +583,7 @@ describe("conversation resource routes", () => {
         format: "docx",
         artifactRefs: { "document.canonical_pdf": prepared.id }
       });
-      await fixture.store.files.claimReadyDraftAttachmentsForMessage({
+      await claimAttachmentsForStoredMessage(fixture.store, {
         clientInstanceId: fixture.clientInstanceId,
         conversationId: conversation.id,
         messageId: asMessageId("msg_sent"),
@@ -705,7 +702,7 @@ describe("conversation resource routes", () => {
 
 async function createFixture() {
   const clientInstanceId = asClientInstanceId("conversation-resource-route-test");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -813,7 +810,7 @@ async function createFixture() {
 }
 
 async function createConversation(
-  store: TestMemoryStore,
+  store: TestStore,
   clientInstanceId: ClientInstanceId,
   ownerUserId: string
 ) {
@@ -827,11 +824,11 @@ async function createConversation(
 }
 
 async function createAttachment(
-  store: TestMemoryStore,
+  store: TestStore,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: Parameters<
-      TestMemoryStore["files"]["createConversationAttachment"]
+      TestStore["files"]["createConversationAttachment"]
     >[0]["conversationId"];
     filename: string;
   }
@@ -859,11 +856,9 @@ async function createAttachment(
 }
 
 function createArtifact(
-  store: TestMemoryStore,
+  store: TestStore,
   clientInstanceId: ClientInstanceId,
-  conversationId: Parameters<
-    TestMemoryStore["files"]["createManagedArtifact"]
-  >[0]["conversationId"],
+  conversationId: Parameters<TestStore["files"]["createManagedArtifact"]>[0]["conversationId"],
   filename: string,
   metadata: Record<string, string> = {}
 ) {
@@ -881,11 +876,9 @@ function createArtifact(
 }
 
 function appendToolResult(
-  store: TestMemoryStore,
+  store: TestStore,
   clientInstanceId: ClientInstanceId,
-  conversationId: Parameters<
-    TestMemoryStore["conversations"]["appendMessage"]
-  >[0]["conversationId"],
+  conversationId: Parameters<TestStore["conversations"]["appendMessage"]>[0]["conversationId"],
   result: ToolExecutionResult
 ) {
   return store.conversations.appendMessage({

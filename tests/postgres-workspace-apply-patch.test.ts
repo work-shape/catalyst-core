@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { usePostgresSuite } from "./support/postgres-suite";
-import { createWorkspaceHarnessOn } from "./support/workspace-tools-harness";
+import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 describe("workspace.apply_patch on Postgres", () => {
-  const suite = usePostgresSuite("apply_patch");
-
   it("creates, updates and deletes files without naming a workspace command", async () => {
-    const harness = await createWorkspaceHarnessOn(suite.store, suite.clientInstance("patch"));
+    const harness = await createWorkspaceHarness();
 
     const created = await harness.runTool("workspace.apply_patch", {
       patch: [
@@ -37,12 +34,12 @@ describe("workspace.apply_patch on Postgres", () => {
       output: { changedFiles: [{ path: "scripts/build.py" }] }
     });
 
-    const workspace = await suite.store.executionWorkspaces.ensureExecutionWorkspace({
+    const workspace = await harness.store.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       ownerUserId: harness.ownerUserId
     });
-    const [file] = await suite.store.executionWorkspaces.listWorkspaceFiles({
+    const [file] = await harness.store.executionWorkspaces.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id
     });
@@ -71,7 +68,7 @@ describe("workspace.apply_patch on Postgres", () => {
       output: { changedFiles: [], deletedFiles: [{ path: "scripts/build.py" }] }
     });
     await expect(
-      suite.store.executionWorkspaces.listWorkspaceFiles({
+      harness.store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: harness.clientInstanceId,
         workspaceId: workspace.id
       })

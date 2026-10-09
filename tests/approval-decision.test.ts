@@ -1,3 +1,5 @@
+import postgres from "postgres";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import {
@@ -54,7 +56,7 @@ const usage = {
 };
 
 async function fixture() {
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: owner.id,
@@ -349,9 +351,9 @@ describe("approval decision history", () => {
         modelProviders: [providerConfig],
         defaultModelProvider: providerConfig,
         conversationHistory: f.store.conversations,
-        modelProviderContinuationStore: f.store,
-        agentRunStore: f.store,
-        runObservationStore: f.store,
+        modelProviderContinuationStore: f.store.conversations,
+        agentRunStore: f.store.agentRuns,
+        runObservationStore: f.store.agentRuns,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
         toolExecution: {
@@ -427,6 +429,18 @@ describe("approval decision history", () => {
           throw new Error("Expected final metadata");
         }
         final.metadata.agentRuntime.providerContinuation = continuation;
+        // A legacy row carries the checkpoint in its message metadata; no store call writes
+        // that any more, so the row is arranged in the database.
+        const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+        try {
+          await sql`
+            update messages
+            set metadata = jsonb_set(metadata, '{agentRuntime,providerContinuation}', ${sql.json(continuation)})
+            where client_instance_id = ${clientInstanceId} and id = ${final.id}
+          `;
+        } finally {
+          await sql.end();
+        }
         // Exercise the legacy metadata checkpoint independently of the dedicated store.
         f.store.conversations.getModelProviderContinuation = async () => undefined;
       }

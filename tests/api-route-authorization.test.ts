@@ -1,3 +1,4 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { describe, expect, it } from "vitest";
 import { apiOperations, type ApiOperationName, type Operation } from "@vivd-catalyst/api-contract";
 import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
@@ -8,31 +9,34 @@ import {
   operationPathParamNames
 } from "./support/route-catalog";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
-import { createTestInstanceWith, listTestRoutes } from "./support/test-instance";
+import { createTestInstanceWith, listTestRoutes, type TestInstance } from "./support/test-instance";
 
 // Generated from the catalog: every operation the server registers is called the ways it must
 // refuse. An operation added to the catalog is covered here without a line written for it.
 
 const authAdapter = createCallerAuthAdapter();
-const instance = createTestInstanceWith((stores) => ({
-  authAdapter,
-  approvalRequests: { store: stores.approvals, handlers: new Map() },
-  allowedOrigins: ["https://ui.example.test"],
-  mail: {
-    sender: { send: () => Promise.resolve({ ok: true }) },
-    appUrl: "https://ui.example.test",
-    listCaptured: () => []
-  },
-  sessionToken: {
-    serverCredential: "route-authorization-server-credential",
-    issuer: new HmacSessionTokenIssuer({
-      secret: "route-authorization-session-token-secret",
-      issuer: "test",
-      clientInstanceId: "route_authorization_test",
-      ttlSeconds: 60
-    })
-  }
-}));
+let instance: TestInstance;
+beforeAll(async () => {
+  instance = await createTestInstanceWith((stores) => ({
+    authAdapter,
+    approvalRequests: { store: stores.approvals, handlers: new Map() },
+    allowedOrigins: ["https://ui.example.test"],
+    mail: {
+      sender: { send: () => Promise.resolve({ ok: true }) },
+      appUrl: "https://ui.example.test",
+      listCaptured: () => []
+    },
+    sessionToken: {
+      serverCredential: "route-authorization-server-credential",
+      issuer: new HmacSessionTokenIssuer({
+        secret: "route-authorization-session-token-secret",
+        issuer: "test",
+        clientInstanceId: "route_authorization_test",
+        ttlSeconds: 60
+      })
+    }
+  }));
+});
 
 const names = Object.keys(apiOperations).filter(
   (name): name is ApiOperationName => name in apiOperations

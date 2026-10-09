@@ -1,5 +1,7 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance } from "./support/test-instance";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { hashPassword } from "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs";
 import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
 import { asClientInstanceId } from "@vivd-catalyst/core";
@@ -17,10 +19,12 @@ vi.mock(
   }
 );
 
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
+let databaseUrl: string;
+beforeAll(async () => {
+  databaseUrl = await fileTestDatabaseUrl();
+});
 
-describePostgres("standalone auth password setup tokens", () => {
+describe("standalone auth password setup tokens", () => {
   let auth: StandaloneAuthRuntime;
   let sql: ReturnType<typeof postgres>;
   let externalUserId: string;
@@ -29,17 +33,14 @@ describePostgres("standalone auth password setup tokens", () => {
   beforeAll(async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
     await store.close();
-    sql = postgres(databaseUrl!, { max: 1 });
+    sql = postgres(databaseUrl, { max: 1 });
     auth = await createStandaloneAuthRuntime({
       clientInstanceId: asClientInstanceId("password-setup-test"),
-      databaseUrl: databaseUrl!,
+      databaseUrl: databaseUrl,
       secret: "0123456789abcdef0123456789abcdef",
       baseUrl: "http://127.0.0.1:4100/api/auth"
     });

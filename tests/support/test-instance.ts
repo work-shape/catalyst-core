@@ -12,8 +12,10 @@ import {
   type Route
 } from "@vivd-catalyst/chat-server";
 import { asClientInstanceId, NoopAuditRecorder, type PlatformStores } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore, createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
 import { createPostgresStores, type PostgresStores } from "@vivd-catalyst/postgres-store";
+import { fileTestDatabaseUrl, closeFileTestDatabase, resetFileTestDatabase } from "./test-database";
+import { addTestStoreHelpers, type TestStore } from "./test-store";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { testOperations, type TestOperationName, type TestCallInput } from "./operations";
@@ -35,7 +37,7 @@ export interface TestInstance<S extends PlatformStores = PlatformStores> {
 }
 
 type TestIdentity = string | { headers: TestCallInput["headers"] };
-export type TestMemoryStore = InMemoryPlatformStore;
+export type { TestStore } from "./test-store";
 export type TestPostgresStore = PostgresStores;
 export type TestServerOptions = Omit<ChatServerOptions, "configAssets" | "logger"> &
   Partial<Pick<ChatServerOptions, "logger">> & {
@@ -43,7 +45,12 @@ export type TestServerOptions = Omit<ChatServerOptions, "configAssets" | "logger
       Partial<Pick<ChatServerOptions["configAssets"], "source">>;
   };
 
-type TestAppInput = CreateClientInstanceAppInput & { seedAssets?: boolean };
+type TestAppInput = CreateClientInstanceAppInput & { seedAssets?: boolean; fixtureFile?: string };
+type TestPostgresOptions = {
+  logger?: Parameters<typeof createPostgresStores>[0]["logger"];
+  applicationName?: string;
+  fixtureFile?: string;
+};
 
 type Metadata = {
   execution?: Awaited<ReturnType<typeof createClientInstanceExecutionAssembly>>;
@@ -55,17 +62,29 @@ type Metadata = {
 const metadata = new WeakMap<TestInstance, Metadata>();
 const instances = new Set<TestInstance>();
 let retained = new Set<TestInstance>();
+let preserveSuiteState = false;
+let testActive = false;
 beforeEach(() => {
+  testActive = true;
   retained = new Set(instances);
 });
 afterAll(async () => {
-  await Promise.all([...instances].map((instance) => instance.close()));
+  const results = await Promise.allSettled([...instances].map((instance) => instance.close()));
+  await closeFileTestDatabase();
+  const failed = results.filter((result) => result.status === "rejected");
+  if (failed.length)
+    throw new AggregateError(
+      failed.map((result) => result.reason),
+      "Test instance cleanup failed"
+    );
 });
 afterEach(async () => {
+  testActive = false;
   const closing = [...instances]
     .filter((instance) => !retained.has(instance))
     .map((instance) => instance.close());
   const results = await Promise.allSettled(closing);
+  if (!preserveSuiteState) await resetFileTestDatabase();
   const failures = results.filter((result) => result.status === "rejected");
   if (failures.length)
     throw new AggregateError(
@@ -77,9 +96,9 @@ afterEach(async () => {
 export function createTestInstance(input: {
   execution: Parameters<typeof createClientInstanceExecutionAssembly>[0];
 }): Promise<TestInstance>;
-export function createTestInstance(): TestInstance<InMemoryPlatformStore>;
+export function createTestInstance(): Promise<TestInstance<TestStore>>;
 export function createTestInstance(input: {
-  postgres: Parameters<typeof createPostgresStores>[0];
+  postgres: TestPostgresOptions;
 }): Promise<TestInstance<PostgresStores>>;
 export function createTestInstance(input: { server: TestServerOptions }): Promise<TestInstance>;
 export function createTestInstance(input: TestAppInput): Promise<TestInstance>;
@@ -87,36 +106,44 @@ export function createTestInstance(
   input?:
     | TestAppInput
     | { execution: Parameters<typeof createClientInstanceExecutionAssembly>[0] }
-    | { postgres: Parameters<typeof createPostgresStores>[0] }
+    | { postgres: TestPostgresOptions }
     | { server: TestServerOptions }
-): TestInstance<InMemoryPlatformStore> | Promise<TestInstance> {
+): Promise<TestInstance> {
+  if (!testActive) preserveSuiteState = true;
   if (!input) return createDefaultInstance();
   return createConfiguredInstance(input);
 }
 
 /**
- * The default in-memory instance with some server options replaced: its sign-in, or the
+ * The default Postgres instance with some server options replaced: its sign-in, or the
  * optional parts a default instance runs without.
  */
 export function createTestInstanceWith(
-  replace: (stores: InMemoryPlatformStore) => Partial<TestServerOptions>,
+  replace: (stores: TestStore) => Partial<TestServerOptions>,
   /** Registers fixture operations through the product's route helper, beside the product's. */
   register?: (route: Route) => void
-): TestInstance<InMemoryPlatformStore> {
+): Promise<TestInstance<TestStore>> {
+  if (!testActive) preserveSuiteState = true;
   return createDefaultInstance(replace, register);
 }
 
-function createDefaultInstance(
-  replace: (stores: InMemoryPlatformStore) => Partial<TestServerOptions> = () => ({}),
+async function createDefaultInstance(
+  replace: (stores: TestStore) => Partial<TestServerOptions> = () => ({}),
   register?: (route: Route) => void
-): TestInstance<InMemoryPlatformStore> {
-  const stores = new InMemoryPlatformStore();
+): Promise<TestInstance<TestStore>> {
+  const stores = addTestStoreHelpers(
+    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), runMigrations: false })
+  );
   const config = createTestConfig();
   const state: Metadata = {
     config,
     closed: false,
     async cleanup() {
-      await state.server?.close();
+      try {
+        await state.server?.close();
+      } finally {
+        await stores.close();
+      }
     }
   };
   return bindInstance(stores, state, async () => {
@@ -182,8 +209,13 @@ function createDefaultInstance(
       stores
     );
     const server = await createChatServer(options);
-    register?.(createRoute(server, options));
-    return server;
+    try {
+      register?.(createRoute(server, options));
+      return server;
+    } catch (error) {
+      await server.close();
+      throw error;
+    }
   });
 }
 
@@ -191,14 +223,18 @@ async function createConfiguredInstance(
   input:
     | TestAppInput
     | { execution: Parameters<typeof createClientInstanceExecutionAssembly>[0] }
-    | { postgres: Parameters<typeof createPostgresStores>[0] }
+    | { postgres: TestPostgresOptions }
     | { server: TestServerOptions }
 ): Promise<TestInstance> {
   if ("execution" in input) {
     const assembly = await createClientInstanceExecutionAssembly({
       ...input.execution,
-      storeMode: input.execution.storeMode ?? "memory",
-      env: input.execution.env ?? {}
+      storeMode: "postgres",
+      env: {
+        ...input.execution.env,
+        DATABASE_URL: await fileTestDatabaseUrl(),
+        RUN_MIGRATIONS: "false"
+      }
     });
     const cleanup = assembly.close.bind(assembly);
     const instance = bindInstance(assembly.store, {
@@ -211,7 +247,14 @@ async function createConfiguredInstance(
     return instance;
   }
   if ("postgres" in input) {
-    const stores = await createPostgresStores(input.postgres);
+    const url = new URL(await fileTestDatabaseUrl(input.postgres.fixtureFile));
+    if (input.postgres.applicationName)
+      url.searchParams.set("application_name", input.postgres.applicationName);
+    const stores = await createPostgresStores({
+      logger: input.postgres.logger,
+      databaseUrl: url.toString(),
+      runMigrations: false
+    });
     const cleanup = stores.close.bind(stores);
     const instance = bindInstance(stores, { closed: false, cleanup });
     stores.close = instance.close;
@@ -232,8 +275,12 @@ async function createConfiguredInstance(
   }
   const app = await createClientInstanceApp({
     ...input,
-    env: input.env ?? {},
-    storeMode: input.storeMode ?? "memory"
+    env: {
+      ...input.env,
+      DATABASE_URL: await fileTestDatabaseUrl(input.fixtureFile),
+      RUN_MIGRATIONS: "false"
+    },
+    storeMode: "postgres"
   });
   try {
     if (input.seedAssets !== false) await seedTestAssets(app);
@@ -391,16 +438,22 @@ export function addTestRoute(
 }
 
 /** Adapts a worker or a focused framework fixture without exposing injection to callers. */
-export function bindTestTransport(
+export async function bindTestTransport(
   server: TestHttpServer,
   close: () => Promise<void>
-): TestInstance<InMemoryPlatformStore> {
-  const stores = new InMemoryPlatformStore();
+): Promise<TestInstance<TestStore>> {
+  const stores = addTestStoreHelpers(
+    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), runMigrations: false })
+  );
   return bindInstance(stores, {
     server,
     closed: false,
     async cleanup() {
-      await close();
+      try {
+        await close();
+      } finally {
+        await stores.close();
+      }
     }
   });
 }
@@ -459,8 +512,8 @@ export async function rejectInvalidOrigins(
 ): Promise<void> {
   if (target === "server") await Reflect.apply(createChatServer, undefined, [{ allowedOrigins }]);
   else
-    await Reflect.apply(createClientInstanceApp, undefined, [
-      { config: createTestConfig(), env: {}, storeMode: "memory", tools: [], allowedOrigins }
+    await Reflect.apply(createTestInstance, undefined, [
+      { config: createTestConfig(), tools: [], allowedOrigins }
     ]);
 }
 
@@ -484,4 +537,12 @@ export function getTestExecution(
   const assembly = metadata.get(instance)?.execution;
   if (!assembly) throw new Error("No execution assembly fixture");
   return assembly;
+}
+
+/** Exercises the production missing-configuration guard before any persistence is created. */
+export async function rejectStartupWithoutDatabase(
+  input: Pick<CreateClientInstanceAppInput, "config" | "tools">
+): Promise<void> {
+  const app = await createClientInstanceApp({ ...input, env: {}, storeMode: "postgres" });
+  await app.close();
 }

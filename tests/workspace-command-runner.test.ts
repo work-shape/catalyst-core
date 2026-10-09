@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  asAgentRunId,
   asClientInstanceId,
   asConversationId,
   asExecutionWorkspaceId,
@@ -15,6 +14,7 @@ import {
   asUserId,
   asWorkspaceCommandId,
   StoreBackedAuditRecorder,
+  type AgentRunId,
   type ClientInstanceId,
   type Conversation,
   type ToolExecutionContext,
@@ -326,12 +326,15 @@ describe("local workspace command runner", () => {
       command: "mkdir -p foo && printf 'cached' > foo/bar.txt"
     });
     expect(created.status).toBe("success");
+    if (created.status !== "success") {
+      throw new Error("Expected the command that creates the file to succeed");
+    }
     const workspace = await harness.workspace();
     await harness.store.executionWorkspaces.deleteWorkspaceFile({
       clientInstanceId: harness.clientInstanceId,
       workspaceId: workspace.id,
       path: "foo/bar.txt",
-      lastCommandId: asWorkspaceCommandId("wcmd_external_delete"),
+      lastCommandId: asWorkspaceCommandId(required(created.output).commandId),
       deletedAt: "2026-06-29T12:05:00.000Z"
     });
     const bytes = encode("durable file");
@@ -1092,7 +1095,7 @@ async function createRunnerHarness(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const owner = await store.users.resolveUserIdentity({
     clientInstanceId,
     authSource: "test",
@@ -1146,7 +1149,12 @@ async function createRunnerHarness(
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits
   });
-  const context = createToolContext(clientInstanceId, conversation, ownerUserId);
+  const context = createToolContext(
+    clientInstanceId,
+    conversation,
+    ownerUserId,
+    (await store.createAgentRunForTesting(conversation)).id
+  );
   const ensureWorkspace = () =>
     store.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId,
@@ -1212,7 +1220,8 @@ async function createRunnerHarness(
 function createToolContext(
   clientInstanceId: ClientInstanceId,
   conversation: Conversation,
-  ownerUserId: string
+  ownerUserId: string,
+  agentRunId: AgentRunId
 ): ToolExecutionContext {
   return {
     clientInstanceId,
@@ -1229,7 +1238,7 @@ function createToolContext(
     toolRequest: {
       toolName: "workspace.exec",
       toolCallId: asToolCallId(`toolcall_${globalThis.crypto.randomUUID()}`),
-      agentRunId: asAgentRunId(`run_${globalThis.crypto.randomUUID()}`),
+      agentRunId,
       conversationId: conversation.id,
       agentName: "workspace_agent",
       input: {}

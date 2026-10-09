@@ -27,7 +27,7 @@ const serverCredential = "route-contract-server-credential";
 const allowedOrigin = "https://ui.example.test";
 const secret = "payload-that-must-not-leave";
 
-function createServer(
+async function createServer(
   input: { sessionToken?: boolean; environment?: "development" | "staging" | "production" } = {}
 ) {
   const authAdapter = createCallerAuthAdapter();
@@ -41,7 +41,7 @@ function createServer(
     child: () => logger
   };
   const config = createTestConfig();
-  const server = createTestInstanceWith(
+  const server = await createTestInstanceWith(
     (stores) => ({
       authAdapter,
       logger,
@@ -125,7 +125,7 @@ const allRights = { roles: ["superadmin"] };
 
 describe("route helper: who may call", () => {
   it("serves a public operation without authenticating anybody", async () => {
-    const { server, authAdapter } = createServer();
+    const { server, authAdapter } = await createServer();
     const response = await server.call("testPublic", {
       headers: { authorization: "Bearer anything" }
     });
@@ -135,7 +135,7 @@ describe("route helper: who may call", () => {
   });
 
   it("accepts only the instance's server credential on a server-credential operation", async () => {
-    const { server, authAdapter, handled } = createServer();
+    const { server, authAdapter, handled } = await createServer();
     for (const headers of [
       {},
       { "x-server-credential": "wrong" },
@@ -162,7 +162,7 @@ describe("route helper: who may call", () => {
   });
 
   it("answers not found on a server-credential operation when none is configured", async () => {
-    const { server } = createServer({ sessionToken: false });
+    const { server } = await createServer({ sessionToken: false });
     const response = await server.call("testServerCredential", {
       headers: { "x-server-credential": serverCredential }
     });
@@ -173,7 +173,7 @@ describe("route helper: who may call", () => {
   });
 
   it("refuses a service principal on a user operation and accepts it on a principal one", async () => {
-    const { server, handled } = createServer();
+    const { server, handled } = await createServer();
     const service = asCaller({
       kind: "service",
       permissions: ["audit.view", "usage.view"]
@@ -195,7 +195,7 @@ describe("route helper: who may call", () => {
   it.each(["authorization", "x-server-credential"])(
     "refuses an explicit %s credential before an ambient adapter runs",
     async (header) => {
-      const { server, authAdapter, handled } = createServer();
+      const { server, authAdapter, handled } = await createServer();
       for (const operation of ["testUser", "testPrincipal", "testInput"] as const) {
         const response = await server.call(operation, {
           ...(operation === "testInput" ? { params: { itemId: "1" } } : {}),
@@ -216,7 +216,7 @@ describe("route helper: who may call", () => {
   );
 
   it("guards a cookie session by HTTP method, so a reading operation on POST is guarded too", async () => {
-    const { server, handled } = createServer();
+    const { server, handled } = await createServer();
     const cookie = asCaller({ ...allRights, cookie: true }).headers;
     expect(operations.testReadingPost.effect).toBe("reading");
 
@@ -262,7 +262,7 @@ describe("route helper: who may call", () => {
 
 describe("route helper: scope and rights", () => {
   it("requires the operation's scope on the credential, whatever the holder may do", async () => {
-    const { server, handled } = createServer();
+    const { server, handled } = await createServer();
     const withoutScope = await server.call(
       "testPrincipal",
       {},
@@ -280,7 +280,7 @@ describe("route helper: scope and rights", () => {
   });
 
   it("requires every action of the operation from the holder, whatever the credential carries", async () => {
-    const { server, handled } = createServer();
+    const { server, handled } = await createServer();
     for (const [permissions, missing] of [
       [[], "audit.view"],
       [["usage.view"], "audit.view"],
@@ -304,7 +304,7 @@ describe("route helper: scope and rights", () => {
   });
 
   it("lets a call through only where the credential's scope and the holder's rights meet", async () => {
-    const { server } = createServer();
+    const { server } = await createServer();
     const call = (scopes: string[], permissions: string[]) =>
       server.call("testPrincipal", {}, asCaller({ scopes, roles: ["user"], permissions }));
     const rights = ["audit.view", "usage.view"];
@@ -316,7 +316,7 @@ describe("route helper: scope and rights", () => {
   });
 
   it("checks in a fixed order: caller, scope, input, rights, handler", async () => {
-    const { server, handled } = createServer();
+    const { server, handled } = await createServer();
     const call = (caller: Parameters<typeof asCaller>[0], payload: unknown, view = "full") =>
       server.call(
         "testInput",
@@ -381,7 +381,7 @@ describe("route helper: scope and rights", () => {
 
 describe("route helper: what leaves", () => {
   const read = async (result: string, environment?: "staging" | "production") => {
-    const { server, errors } = createServer({ environment });
+    const { server, errors } = await createServer({ environment });
     const response = await server.call("testResponse", { query: { result } }, asCaller());
     return Object.assign(response, { errors });
   };
@@ -451,7 +451,7 @@ describe("route helper: what leaves", () => {
   );
 
   it("correlates a RATE_LIMITED refusal and maps it to 429", async () => {
-    const { server } = createServer();
+    const { server } = await createServer();
     const response = await server.call(
       "testResponse",
       {
@@ -515,7 +515,7 @@ describe("operation catalog", () => {
 
 describe("list and timestamp conventions", () => {
   it("defaults to 50, accepts at most 200, and rejects invalid limits before handling", async () => {
-    const { server } = createServer();
+    const { server } = await createServer();
     const first = await server.call("testList", {}, asCaller());
     expect(first.statusCode).toBe(200);
     const body = operations.testList.response.schema.parse(first.json());
@@ -532,7 +532,7 @@ describe("list and timestamp conventions", () => {
   });
 
   it("uses exclusive tuple cursors across ties, and binds them to the list filters", async () => {
-    const { server } = createServer();
+    const { server } = await createServer();
     const ids: string[] = [];
     let cursor: string | undefined;
     do {
@@ -557,7 +557,7 @@ describe("list and timestamp conventions", () => {
   });
 
   it("rejects invalid timestamp responses in development and cursor key types everywhere", async () => {
-    const { server } = createServer();
+    const { server } = await createServer();
     const response = await server.call(
       "testList",
       { query: { filter: "bad-timestamp" } },
@@ -573,7 +573,7 @@ describe("list and timestamp conventions", () => {
   });
 
   it("lists the latest audit activities from one bounded read, without paging", async () => {
-    const { server } = createServer();
+    const { server } = await createServer();
     const clientInstanceId = asClientInstanceId(createTestConfig().clientInstance.id);
     // Each event and each request gets its own moment, as on a running instance.
     vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-10-09T12:00:00.000Z") });
@@ -649,7 +649,7 @@ describe("list and timestamp conventions", () => {
   });
 
   it("conversation and workspace lists do not provision personal workspaces", async () => {
-    const { server, authAdapter } = createServer();
+    const { server, authAdapter } = await createServer();
     const user = await server.stores.users.resolveUserIdentity({
       clientInstanceId: asClientInstanceId(createTestConfig().clientInstance.id),
       authSource: "test",

@@ -108,7 +108,7 @@ describe("client instance app vertical slice", () => {
   it("keeps the latest failed run in the thread snapshot after refresh", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const owner = createTestUser("user-1", clientInstanceId);
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store: store.usage,
@@ -229,7 +229,7 @@ describe("client instance app vertical slice", () => {
   it("exposes completed run projections in recorded observation order", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const owner = createTestUser("user-1", clientInstanceId);
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store: store.usage,
@@ -587,7 +587,7 @@ describe("client instance app vertical slice", () => {
   it("skips completed run projections when observations lack final completion text", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const owner = createTestUser("user-1", clientInstanceId);
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store: store.usage,

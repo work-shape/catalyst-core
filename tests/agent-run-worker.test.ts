@@ -50,14 +50,15 @@ describe("agent run worker", () => {
   it("extends a live lease and rejects writes from a stale token", async () => {
     const fixture = await createQueuedRun("lease-fence");
     const claimed = await claim(fixture, "current-token");
+    const extendedLease = minutesFromNow(11);
     const heartbeat = await fixture.store.agentRuns.heartbeatAgentRun({
       clientInstanceId: fixture.clientInstanceId,
       runId: claimed.id,
       leaseToken: "current-token",
       heartbeatAt: "2026-09-02T12:01:00.000Z",
-      leaseExpiresAt: "2026-09-02T12:11:00.000Z"
+      leaseExpiresAt: extendedLease
     });
-    expect(heartbeat.leaseExpiresAt).toBe("2026-09-02T12:11:00.000Z");
+    expect(heartbeat.leaseExpiresAt).toBe(extendedLease);
 
     await expect(
       fixture.store.agentRuns.appendClaimedRunObservation({
@@ -584,7 +585,7 @@ async function createQueuedRun(
     authorization?: AgentRunAuthorization | null;
   } = {}
 ): Promise<Fixture> {
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const clientInstanceId = asClientInstanceId(`worker-${suffix}`);
   const user: AuthenticatedUser = {
     id: `user-${suffix}`,
@@ -663,10 +664,15 @@ function createWorker(
   });
 }
 
+/** The store measures a lease against the database clock, so a live lease ends after today. */
+function minutesFromNow(minutes: number): string {
+  return new Date(Date.now() + minutes * 60 * 1000).toISOString();
+}
+
 async function claim(
   fixture: Fixture,
   leaseToken: string,
-  leaseExpiresAt = "2026-09-02T12:10:00.000Z"
+  leaseExpiresAt = minutesFromNow(10)
 ): Promise<AgentRun> {
   const run = await fixture.store.agentRuns.claimNextAgentRun({
     clientInstanceId: fixture.clientInstanceId,

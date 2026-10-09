@@ -1454,7 +1454,7 @@ async function createTemporaryDirectory(): Promise<string> {
 
 async function createFixture() {
   const clientInstanceId = asClientInstanceId("config-cli-test");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -1476,7 +1476,7 @@ async function createFixture() {
   const serviceAccessOptions = {
     secret: "a-development-service-access-secret-with-enough-length",
     clientInstanceId,
-    apiAccessStore: store
+    apiAccessStore: store.apiAccess
   };
   const servicePrincipal = await store.apiAccess.createServicePrincipal({
     clientInstanceId,

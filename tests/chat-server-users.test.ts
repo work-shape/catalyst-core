@@ -200,7 +200,7 @@ describe("client instance app vertical slice", () => {
 
   it("retries account deletion after final user deletion fails", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store: store.usage,

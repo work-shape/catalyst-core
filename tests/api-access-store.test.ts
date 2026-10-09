@@ -1,6 +1,8 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
   createPlatformId,
@@ -14,22 +16,15 @@ interface ApiAccessStoreFixture extends Pick<PlatformStores, "apiAccess" | "user
   close?: () => Promise<void>;
 }
 
-runApiAccessStoreSuite("In-memory API access store", async () => createTestInstance().stores);
-
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
 runApiAccessStoreSuite(
   "Postgres API access store",
   async () =>
     createTestInstance({
-      postgres: {
-        databaseUrl: databaseUrl!,
-        runMigrations: true
-      }
+      postgres: {}
     }).then((instance) => instance.stores),
-  describePostgres,
+  describe,
   async () => {
-    const sql = postgres(databaseUrl!, { max: 1 });
+    const sql = postgres(databaseUrl, { max: 1 });
     try {
       await expect(
         sql`
@@ -287,3 +282,8 @@ function runApiAccessStoreSuite(
 function createClientInstanceId() {
   return asClientInstanceId(createPlatformId("client"));
 }
+
+let databaseUrl: string;
+beforeAll(async () => {
+  databaseUrl = await fileTestDatabaseUrl();
+});

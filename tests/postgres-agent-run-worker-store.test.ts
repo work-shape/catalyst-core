@@ -1,6 +1,7 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -9,23 +10,15 @@ import {
   type ClientInstanceId
 } from "@vivd-catalyst/core";
 
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
-
-describePostgres("Postgres agent run worker store", () => {
+describe("Postgres agent run worker store", () => {
   let store: PlatformStores;
   let secondStore: PlatformStores;
 
   beforeAll(async () => {
-    store = (
-      await createTestInstance({ postgres: { databaseUrl: databaseUrl!, runMigrations: true } })
-    ).stores;
+    store = (await createTestInstance({ postgres: {} })).stores;
     secondStore = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: false
-        }
+        postgres: {}
       })
     ).stores;
   });

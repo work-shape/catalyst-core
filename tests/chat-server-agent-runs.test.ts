@@ -423,13 +423,19 @@ describe("client instance app vertical slice", () => {
       userMessage: { id: string; text: string };
       run: { id: string };
     };
+    // The two requests reach the database on separate connections, so either may create the
+    // run. Both answer with the one that was created.
+    expect([
+      "concurrent create and start should create once",
+      "duplicate concurrent create and start"
+    ]).toContain(concurrentCreateBodyA.userMessage.text);
     expect(concurrentCreateBodyB).toMatchObject({
       conversation: {
         id: concurrentCreateBodyA.conversation.id
       },
       userMessage: {
         id: concurrentCreateBodyA.userMessage.id,
-        text: "concurrent create and start should create once"
+        text: concurrentCreateBodyA.userMessage.text
       },
       run: {
         id: concurrentCreateBodyA.run.id

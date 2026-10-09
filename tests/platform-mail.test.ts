@@ -445,7 +445,7 @@ function readToken(text: string): string {
 
 async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: boolean } = {}) {
   const clientInstanceId = asClientInstanceId("demo-local");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const config = createTestConfig();
   const transport = new CaptureMailTransport();
   const passwords = new Map<string, string>();

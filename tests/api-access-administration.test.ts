@@ -204,7 +204,7 @@ describe("API Access administration", () => {
 
 async function createFixture() {
   const clientInstanceId = asClientInstanceId("api-access-admin-test");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const records = {
     superadmin: await store.users.createUser({
       clientInstanceId,

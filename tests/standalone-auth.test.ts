@@ -1,7 +1,10 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import postgres, { type Sql } from "postgres";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { bindTestTransport, createTestInstance } from "./support/test-instance";
 import { testOperations } from "./support/operations";
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { asClientInstanceId } from "@vivd-catalyst/core";
 
 import {
@@ -20,97 +23,45 @@ import { createLogger } from "@vivd-catalyst/client-assembly";
 import Fastify from "../packages/chat-server/node_modules/fastify/fastify.js";
 import { installErrorHandler } from "../packages/chat-server/src/errors";
 import { registerBetterAuthRoutes } from "../packages/chat-server/src/routes/better-auth-routes";
-import { hashPassword } from "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs";
 
 // What the route helper needs besides the sign-in under test.
 const routeDefaults = { config: createTestConfig(), logger: createLogger() };
-
-const { authDatabase, closeDatabase } = vi.hoisted(() => ({
-  authDatabase: {
-    user: [] as Record<string, unknown>[],
-    account: [] as Record<string, unknown>[],
-    session: [] as Record<string, unknown>[],
-    verification: [] as Record<string, unknown>[]
-  },
-  closeDatabase: vi.fn()
-}));
-
-vi.mock(
-  "../packages/auth/node_modules/better-auth/dist/adapters/drizzle-adapter/index.mjs",
-  async () => {
-    const adapterModule =
-      await import("../packages/auth/node_modules/better-auth/dist/adapters/memory-adapter/index.mjs");
-    const memoryAdapter: unknown = Reflect.get(adapterModule, "memoryAdapter");
-    if (typeof memoryAdapter !== "function") throw new Error("Memory auth adapter is unavailable");
-    return {
-      drizzleAdapter: () => memoryAdapter(authDatabase)
-    };
-  }
-);
-
-vi.mock("../packages/auth/node_modules/drizzle-orm/postgres-js/index.js", () => ({
-  drizzle: () => ({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => [
-            {
-              authUserId: "usr_provisioned",
-              externalUserId: "provisioned",
-              displayLabel: "Provisioned User",
-              roles: ["user"],
-              permissionRefs: [],
-              permissions: []
-            }
-          ]
-        })
-      })
-    })
-  })
-}));
-
-vi.mock("postgres", () => ({
-  default: () => ({
-    options: { parsers: {}, serializers: {} },
-    end: closeDatabase
-  })
-}));
 
 describe("standalone auth email routes", () => {
   const baseUrl = "http://localhost:3000";
   const email = "provisioned@example.test";
   const password = "provisioned-password";
   let auth: StandaloneAuthRuntime;
+  let sql: Sql;
+  let authUserId: string;
 
   beforeAll(async () => {
-    const now = new Date();
-    authDatabase.user.push({
-      id: "usr_provisioned",
-      name: "Provisioned User",
-      email,
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now
-    });
-    authDatabase.account.push({
-      id: "acc_provisioned",
-      accountId: "usr_provisioned",
-      providerId: "credential",
-      userId: "usr_provisioned",
-      password: await hashPassword(password),
-      createdAt: now,
-      updatedAt: now
-    });
+    await createTestInstance();
+    const databaseUrl = await fileTestDatabaseUrl();
+    sql = postgres(databaseUrl, { max: 1 });
     auth = await createStandaloneAuthRuntime({
       clientInstanceId: asClientInstanceId("standalone_auth_test"),
-      databaseUrl: "postgres://unused",
+      databaseUrl,
       secret: "test-secret-at-least-32-characters-long",
       baseUrl
     });
+    const signIn = await auth.setOrCreatePasswordSignIn({
+      email,
+      displayLabel: "Provisioned User",
+      password,
+      roles: ["user"],
+      permissionRefs: [],
+      permissions: []
+    });
+    const [user] = await sql<{ id: string }[]>`select id from "user" where email = ${email}`;
+    if (!user) throw new Error("Provisioned auth user missing");
+    authUserId = user.id;
+    expect(signIn.email).toBe(email);
   });
 
   afterAll(async () => {
     await auth?.close();
+    await sql?.end();
   });
 
   it("rejects public email sign-up without creating a user", async () => {
@@ -124,7 +75,7 @@ describe("standalone auth email routes", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "EMAIL_PASSWORD_SIGN_UP_DISABLED"
     });
-    expect(authDatabase.user).toHaveLength(1);
+    expect(await sql`select id from "user"`).toHaveLength(1);
   });
 
   it("still signs in a provisioned user", async () => {
@@ -150,7 +101,7 @@ describe("standalone auth email routes", () => {
       correlationId: "cookie-auth-test"
     });
     expect(user).toMatchObject({
-      id: "usr_provisioned",
+      id: authUserId,
       authenticationMethod: "session-cookie"
     });
     await expect(
@@ -165,7 +116,7 @@ describe("standalone auth email routes", () => {
   it("prefers a valid bearer identity over a valid session cookie", async () => {
     const { composite, request, cookie, chatSessionToken } = await createMixedCredentials();
     await expect(composite.authenticate(request)).resolves.toMatchObject({
-      id: "usr_provisioned",
+      id: authUserId,
       authenticationMethod: "session-cookie"
     });
     await expect(
@@ -200,7 +151,7 @@ describe("standalone auth email routes", () => {
       chatSessionToken
     } = await createMixedCredentials();
     const httpServer = Fastify();
-    const server = bindTestTransport(httpServer, () => httpServer.close());
+    const server = await bindTestTransport(httpServer, () => httpServer.close());
     installErrorHandler(httpServer);
     createRoute(httpServer, { ...routeDefaults, clientInstanceId, authAdapter: composite })(
       routeTestOperations.testIdentityWrite,
@@ -236,11 +187,14 @@ describe("standalone auth email routes", () => {
         request: { clientInstanceId }
       } = await createMixedCredentials();
       const authAdapter = wrapped
-        ? new IdentityResolvingAuthAdapter(auth.authAdapter, createTestInstance().stores.users)
+        ? new IdentityResolvingAuthAdapter(
+            auth.authAdapter,
+            (await createTestInstance()).stores.users
+          )
         : auth.authAdapter;
       const authenticate = vi.spyOn(auth.authAdapter, "authenticate");
       const httpServer = Fastify();
-      const server = bindTestTransport(httpServer, () => httpServer.close());
+      const server = await bindTestTransport(httpServer, () => httpServer.close());
       installErrorHandler(httpServer);
       createRoute(httpServer, { ...routeDefaults, clientInstanceId, authAdapter })(
         routeTestOperations.testIdentity,
@@ -268,11 +222,11 @@ describe("standalone auth email routes", () => {
   ] as const)("refuses %s on %s without changing the session", async (header, operation) => {
     const { cookie, chatSessionToken } = await createMixedCredentials();
     const httpServer = Fastify();
-    const server = bindTestTransport(httpServer, () => httpServer.close());
+    const server = await bindTestTransport(httpServer, () => httpServer.close());
     installErrorHandler(httpServer);
     registerBetterAuthRoutes(httpServer, { standaloneAuth: auth });
     try {
-      const sessionBefore = structuredClone(authDatabase.session);
+      const sessionBefore = await sql`select * from session order by id`;
       for (const value of [
         header === "authorization" ? `Bearer ${chatSessionToken}` : "invalid",
         ""
@@ -283,15 +237,15 @@ describe("standalone auth email routes", () => {
         expect(response.statusCode).toBe(401);
         expect(response.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
         expect(response.headers["set-cookie"]).toBeUndefined();
-        expect(authDatabase.session).toEqual(sessionBefore);
+        expect(await sql`select * from session order by id`).toEqual(sessionBefore);
       }
 
       const session = await server.call("authSession", { headers: { cookie } });
       expect(session.statusCode).toBe(200);
-      expect(session.json()).toMatchObject({ user: { id: "usr_provisioned" } });
+      expect(session.json()).toMatchObject({ user: { id: authUserId } });
       const signedOut = await server.call("authSignOut", { headers: { cookie, origin: baseUrl } });
       expect(signedOut.statusCode).toBe(200);
-      expect(authDatabase.session).toHaveLength(sessionBefore.length - 1);
+      expect(await sql`select * from session`).toHaveLength(sessionBefore.length - 1);
       const afterSignOut = await server.call("authSession", { headers: { cookie } });
       expect(afterSignOut.statusCode).toBe(200);
       expect(afterSignOut.json()).toBeNull();

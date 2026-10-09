@@ -80,7 +80,7 @@ async function fixture() {
     enabled: true,
     allowSkillCreation: true
   };
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const agent = agentConfigSchema.parse({
     name: "assistant",
     displayName: "Assistant",

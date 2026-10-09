@@ -429,7 +429,7 @@ describe("execution workspace source attachments", () => {
 async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = {}) {
   const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-"));
   const clientInstanceId = asClientInstanceId(`workspace_source_${globalThis.crypto.randomUUID()}`);
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: "user-1",

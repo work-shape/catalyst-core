@@ -1,4 +1,4 @@
-import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
+import { type TestStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -44,7 +44,7 @@ import {
 
 describe("local agent runtime", () => {
   it("reclaims stale pending run-start idempotency commands", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const clientInstanceId = asClientInstanceId("run-start-reclaim-client");
     const baseInput = {
       clientInstanceId,
@@ -105,7 +105,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -208,7 +208,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -302,7 +302,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -456,7 +456,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -591,7 +591,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: [
@@ -697,7 +697,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -805,7 +805,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -977,7 +977,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1083,7 +1083,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const runId = asAgentRunId("run_tool_history");
     const toolCall = {
       toolCallId: "call_old_page",
@@ -1215,7 +1215,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1315,7 +1315,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1498,7 +1498,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1633,7 +1633,7 @@ describe("local agent runtime", () => {
           authSource: "test"
         }
       };
-      const store = createTestInstance().stores;
+      const store = (await createTestInstance()).stores;
       const conversationId = await createConversationWithMessages(store, {
         clientInstanceId,
         messages: []
@@ -1740,7 +1740,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1869,7 +1869,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1960,7 +1960,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
       createdByUserId: "user-1",
@@ -2125,7 +2125,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -2317,7 +2317,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: [
@@ -2554,7 +2554,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -2642,7 +2642,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -2707,7 +2707,7 @@ describe("local agent runtime", () => {
 });
 
 async function createConversationWithMessages(
-  store: TestMemoryStore,
+  store: TestStore,
   input: {
     clientInstanceId: ChatMessage["clientInstanceId"];
     messages: Array<{ role: ChatMessage["role"]; text: string; metadata?: JsonObject }>;
@@ -2775,7 +2775,7 @@ async function firstRunFailedEvent(
 }
 
 async function waitForPersistedRunStatus(
-  store: TestMemoryStore,
+  store: TestStore,
   input: {
     clientInstanceId: ReturnType<typeof asClientInstanceId>;
     runId: ReturnType<typeof asAgentRunId>;

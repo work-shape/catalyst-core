@@ -748,7 +748,7 @@ async function createWorkerFixture(
   } = {}
 ): Promise<WorkerFixture> {
   const clientInstanceId = asClientInstanceId(`preview_worker_${globalThis.crypto.randomUUID()}`);
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const objectStore = new MemoryObjectStorage();
   const conversation = await store.createConversationForTesting({
     clientInstanceId,

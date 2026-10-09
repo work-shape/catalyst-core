@@ -15,7 +15,6 @@ import {
   type ManagedFileRecord,
   type PlatformFileStore
 } from "@vivd-catalyst/core";
-import type { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { PostgresStores } from "@vivd-catalyst/postgres-store";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
@@ -50,7 +49,7 @@ export function createTestManagedObjectAccess(input: {
  */
 export function createRetentionOptions(input: {
   clientInstanceId: ClientInstanceId;
-  store: InMemoryPlatformStore | PostgresStores;
+  store: PostgresStores;
   attachments?: ChatAttachmentService;
   workspaceObjects?: { deleteObject(key: string): Promise<void> };
   expireConversations?: boolean;
@@ -174,7 +173,7 @@ export async function createAttachedObjects(input: {
 
 /** An execution workspace with one stored file, as a run leaves it behind. */
 export async function createExecutionWorkspaceData(input: {
-  store: InMemoryPlatformStore | PostgresStores;
+  store: PostgresStores;
   byteStore: RecordingByteStore;
   clientInstanceId: ClientInstanceId;
   conversation: Conversation;

@@ -40,6 +40,11 @@ export default defineConfig({
     )
   },
   test: {
+    globalSetup: ["tests/support/postgres-global-setup.ts"],
+    // Close suite connections/held transactions before the file fixture is reset or dropped.
+    sequence: { hooks: "stack" },
+    hookTimeout: 60000,
+    testTimeout: 30000,
     include: ["tests/**/*.test.ts"]
   }
 });

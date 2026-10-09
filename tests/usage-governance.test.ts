@@ -40,7 +40,7 @@ const customerRateCard: UsageRateCardConfig = {
 
 describe("model usage governance", () => {
   it("prices cached and uncached input separately in EUR", async () => {
-    const { governance, clientInstanceId } = createGovernance();
+    const { governance, clientInstanceId } = await createGovernance();
 
     const event = await governance.recordModelUsage(
       usageInput(clientInstanceId, {
@@ -89,7 +89,7 @@ describe("model usage governance", () => {
   });
 
   it("settles a fast call with the fast rates and a normal call with the normal rates", async () => {
-    const { governance, clientInstanceId } = createGovernance();
+    const { governance, clientInstanceId } = await createGovernance();
     const tokens = {
       inputTokens: 1_000_000,
       cachedInputTokens: 800_000,
@@ -130,7 +130,7 @@ describe("model usage governance", () => {
   });
 
   it("settles a fast request by the tier the provider reports", async () => {
-    const { governance, clientInstanceId } = createGovernance();
+    const { governance, clientInstanceId } = await createGovernance();
     const record = (providerServiceTier?: string) =>
       governance.recordModelUsage(
         usageInput(clientInstanceId, {
@@ -162,7 +162,7 @@ describe("model usage governance", () => {
   });
 
   it("never settles a fast call with the normal rates when fast rates are missing", async () => {
-    const { governance, clientInstanceId } = createGovernance();
+    const { governance, clientInstanceId } = await createGovernance();
 
     const event = await governance.recordModelUsage({
       ...usageInput(clientInstanceId, { fastMode: true }),
@@ -181,7 +181,7 @@ describe("model usage governance", () => {
   });
 
   it("does not silently treat missing cached-token detail as zero", async () => {
-    const { governance, clientInstanceId } = createGovernance();
+    const { governance, clientInstanceId } = await createGovernance();
     const event = await governance.recordModelUsage(usageInput(clientInstanceId));
 
     expect(event.customerBillableCost).toMatchObject({
@@ -216,7 +216,7 @@ describe("model usage governance", () => {
   });
 
   it("keeps historical billable amounts stable when the active rate card changes", async () => {
-    const { governance, store, clientInstanceId } = createGovernance();
+    const { governance, store, clientInstanceId } = await createGovernance();
     await governance.recordModelUsage(
       usageInput(clientInstanceId, {
         inputTokens: 1_000,
@@ -251,7 +251,7 @@ describe("model usage governance", () => {
   });
 
   it("does not expose persisted rate-card provenance through the customer summary", async () => {
-    const { governance, clientInstanceId } = createGovernance();
+    const { governance, clientInstanceId } = await createGovernance();
     await governance.recordModelUsage(usageInput(clientInstanceId, { cachedInputTokens: 0 }));
 
     const serialized = JSON.stringify(await governance.createSafeSummary({ clientInstanceId }));
@@ -262,7 +262,7 @@ describe("model usage governance", () => {
   });
 
   it("fails closed when a spend budget contains incomplete costs", async () => {
-    const { governance, clientInstanceId } = createGovernance({
+    const { governance, clientInstanceId } = await createGovernance({
       dailySpendLimit: 50
     });
     await governance.recordModelUsage(usageInput(clientInstanceId));
@@ -276,7 +276,7 @@ describe("model usage governance", () => {
   });
 
   it("uses the private safety multiplier for budgets without changing billable costs", async () => {
-    const { governance, clientInstanceId } = createGovernance({
+    const { governance, clientInstanceId } = await createGovernance({
       dailySpendLimit: 5,
       costSafetyMultiplier: 1.3
     });
@@ -302,7 +302,7 @@ describe("model usage governance", () => {
   });
 
   it("uses the private safety multiplier for budgets without changing billable costs", async () => {
-    const { governance, clientInstanceId } = createGovernance({
+    const { governance, clientInstanceId } = await createGovernance({
       dailySpendLimit: 5,
       costSafetyMultiplier: 1.3
     });
@@ -328,7 +328,7 @@ describe("model usage governance", () => {
   });
 
   it("reserves model calls so a daily call limit cannot be raced", async () => {
-    const { governance, clientInstanceId } = createGovernance({}, { modelCallsPerDay: 1 });
+    const { governance, clientInstanceId } = await createGovernance({}, { modelCallsPerDay: 1 });
 
     const attempts = await Promise.allSettled([
       governance.runModelCall(clientInstanceId, async () => {
@@ -345,7 +345,7 @@ describe("model usage governance", () => {
   it.each(["complete", "reject"] as const)(
     "holds admission until a call settles: %s",
     async (outcome) => {
-      const { governance, clientInstanceId } = createGovernance({}, { modelCallsPerDay: 1 });
+      const { governance, clientInstanceId } = await createGovernance({}, { modelCallsPerDay: 1 });
       const started = deferred<void>();
       const execution = deferred<string>();
       const first = governance.runModelCall(clientInstanceId, () => {
@@ -373,7 +373,7 @@ describe("model usage governance", () => {
   );
 
   it("does not hold the accounting lock across provider latency", async () => {
-    const { governance, clientInstanceId } = createGovernance();
+    const { governance, clientInstanceId } = await createGovernance();
     let activeCalls = 0;
     let maxActiveCalls = 0;
 
@@ -396,7 +396,7 @@ describe("model usage governance", () => {
   });
 });
 
-function createGovernance(
+async function createGovernance(
   budget: {
     dailySpendLimit?: number;
     monthlySpendLimit?: number;
@@ -409,7 +409,7 @@ function createGovernance(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("client-usage-test");
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   return {
     clientInstanceId,
     store,

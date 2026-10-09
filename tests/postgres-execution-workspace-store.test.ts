@@ -1,6 +1,8 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import {
   asClientInstanceId,
@@ -10,10 +12,7 @@ import {
   type WorkspaceCommandOutput
 } from "@vivd-catalyst/core";
 
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const describePostgres = databaseUrl ? describe : describe.skip;
-
-describePostgres("Postgres execution workspace store", () => {
+describe("Postgres execution workspace store", () => {
   let store: PlatformStores;
   let secondStore: PlatformStores;
   let rawSql: Sql;
@@ -21,21 +20,15 @@ describePostgres("Postgres execution workspace store", () => {
   beforeAll(async () => {
     store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
     secondStore = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: false
-        }
+        postgres: {}
       })
     ).stores;
-    rawSql = postgres(databaseUrl!, { max: 5 });
+    rawSql = postgres(databaseUrl, { max: 5 });
   });
 
   afterAll(async () => {
@@ -766,3 +759,8 @@ function commandOutput(input: Partial<WorkspaceCommandOutput>): WorkspaceCommand
     }
   };
 }
+
+let databaseUrl: string;
+beforeAll(async () => {
+  databaseUrl = await fileTestDatabaseUrl();
+});

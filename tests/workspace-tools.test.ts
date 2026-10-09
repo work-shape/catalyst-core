@@ -15,6 +15,11 @@ import {
   WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
+import {
+  advanceFakeClockUntilSettled,
+  settleOnFakeClock,
+  useFakeClockBesidePostgres
+} from "./support/fake-clock";
 import { createWorkspaceHarness, encode } from "./support/workspace-tools-harness";
 
 describe("workspace tools", () => {
@@ -465,68 +470,70 @@ describe("workspace tools", () => {
   });
 
   it("does not consume the execution timeout while a command is queued", async () => {
-    vi.useFakeTimers({ now: new Date("2026-06-29T12:00:00.000Z") });
+    useFakeClockBesidePostgres(new Date("2026-06-29T12:00:00.000Z"));
     try {
       let reads = 0;
       const leaseToken = "queued-wait-lease";
-      const harness = await createWorkspaceHarness({
-        execResultWaitMs: null,
-        execResultPollIntervalMs: 1000,
-        serviceStore(store) {
-          return {
-            ...store,
-            executionWorkspaces: new Proxy(store.executionWorkspaces, {
-              get(target, property, receiver) {
-                if (property === "getWorkspaceCommand") {
-                  return async (
-                    input: Parameters<typeof store.executionWorkspaces.getWorkspaceCommand>[0]
-                  ) => {
-                    reads += 1;
-                    const current = await store.executionWorkspaces.getWorkspaceCommand(input);
-                    if (!current || reads < 8) {
-                      return current;
-                    }
-                    const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
-                      clientInstanceId: input.clientInstanceId,
-                      workerId: "queued-wait-worker",
-                      leaseToken,
-                      now: "2026-06-29T12:00:07.000Z",
-                      leaseExpiresAt: "2026-06-29T12:05:07.000Z"
-                    });
-                    if (!claimed) {
-                      throw new Error("Expected queued command to be claimable");
-                    }
-                    return store.executionWorkspaces.completeWorkspaceCommand({
-                      clientInstanceId: input.clientInstanceId,
-                      commandId: input.commandId,
-                      leaseToken,
-                      output: shapeWorkspaceCommandOutput(
-                        {
-                          exitCode: 0,
-                          stdout: "started after queue wait",
-                          stderr: "",
-                          durationMs: 17
-                        },
-                        claimed.limits
-                      ),
-                      completedAt: "2026-06-29T12:00:08.000Z"
-                    });
-                  };
+      const harness = await settleOnFakeClock(
+        createWorkspaceHarness({
+          execResultWaitMs: null,
+          execResultPollIntervalMs: 1000,
+          serviceStore(store) {
+            return {
+              ...store,
+              executionWorkspaces: new Proxy(store.executionWorkspaces, {
+                get(target, property, receiver) {
+                  if (property === "getWorkspaceCommand") {
+                    return async (
+                      input: Parameters<typeof store.executionWorkspaces.getWorkspaceCommand>[0]
+                    ) => {
+                      reads += 1;
+                      const current = await store.executionWorkspaces.getWorkspaceCommand(input);
+                      if (!current || reads < 8) {
+                        return current;
+                      }
+                      const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
+                        clientInstanceId: input.clientInstanceId,
+                        workerId: "queued-wait-worker",
+                        leaseToken,
+                        now: "2026-06-29T12:00:07.000Z",
+                        leaseExpiresAt: "2026-06-29T12:05:07.000Z"
+                      });
+                      if (!claimed) {
+                        throw new Error("Expected queued command to be claimable");
+                      }
+                      return store.executionWorkspaces.completeWorkspaceCommand({
+                        clientInstanceId: input.clientInstanceId,
+                        commandId: input.commandId,
+                        leaseToken,
+                        output: shapeWorkspaceCommandOutput(
+                          {
+                            exitCode: 0,
+                            stdout: "started after queue wait",
+                            stderr: "",
+                            durationMs: 17
+                          },
+                          claimed.limits
+                        ),
+                        completedAt: "2026-06-29T12:00:08.000Z"
+                      });
+                    };
+                  }
+                  const value = Reflect.get(target, property, receiver);
+                  return typeof value === "function" ? value.bind(target) : value;
                 }
-                const value = Reflect.get(target, property, receiver);
-                return typeof value === "function" ? value.bind(target) : value;
-              }
-            })
-          };
-        }
-      });
+              })
+            };
+          }
+        })
+      );
 
       const resultPromise = harness.runTool("workspace.exec", {
         command: "printf 'started after queue wait'",
         timeoutSeconds: 1
       });
-      await vi.advanceTimersByTimeAsync(8000);
-      const result = await resultPromise;
+      const result = await advanceFakeClockUntilSettled(resultPromise, 1000);
+      expect(reads).toBe(8);
 
       expect(result.status).toBe("success");
       if (result.status !== "success") {

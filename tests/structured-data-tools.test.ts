@@ -1,5 +1,6 @@
 import type { PlatformStores } from "@vivd-catalyst/core";
-import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
+import { claimAttachmentsForStoredMessage } from "./support/test-store";
+import { type TestStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -575,7 +576,7 @@ describe("structured_result.read", () => {
 
 async function createHarness(publicationReviewer?: StructuredDataPublicationReviewer) {
   const clientInstanceId = asClientInstanceId(`structured_data_${globalThis.crypto.randomUUID()}`);
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: "user-1",
@@ -654,7 +655,7 @@ async function createSentAttachment(
   store: PlatformStores,
   clientInstanceId: ReturnType<typeof asClientInstanceId>,
   conversationId: Parameters<
-    TestMemoryStore["files"]["createConversationAttachment"]
+    TestStore["files"]["createConversationAttachment"]
   >[0]["conversationId"]
 ) {
   const file = await store.files.createManagedFile({
@@ -677,7 +678,7 @@ async function createSentAttachment(
     status: "ready",
     format: "pdf"
   });
-  await store.files.claimReadyDraftAttachmentsForMessage({
+  await claimAttachmentsForStoredMessage(store, {
     clientInstanceId,
     conversationId,
     messageId: asMessageId(`msg_${globalThis.crypto.randomUUID()}`),

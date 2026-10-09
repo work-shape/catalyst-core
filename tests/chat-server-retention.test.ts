@@ -1,4 +1,7 @@
-import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
+import { orderedStoreCalls } from "./support/postgres-concurrency-harness";
+import { fileTestDatabaseUrl } from "./support/test-database";
+import postgres from "postgres";
+import { type TestStore, createTestInstance } from "./support/test-instance";
 import { createFailingTestLogger } from "./support/fixtures";
 
 import { describe, expect, it } from "vitest";
@@ -15,7 +18,6 @@ import {
   asExecutionWorkspaceId,
   asMessageId,
   asUserId,
-  asWorkspaceCommandId,
   isJsonObject,
   unknownToJsonValue,
   type ClientInstanceId,
@@ -38,7 +40,7 @@ import {
 describe("conversation retention expiration", () => {
   it("expires due conversations on startup and periodically with object cleanup and audit", async () => {
     const clientInstanceId = asClientInstanceId("retention-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const byteStore = new RecordingByteStore();
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
@@ -102,6 +104,7 @@ describe("conversation retention expiration", () => {
       ).rejects.toMatchObject({
         code: "NOT_FOUND"
       });
+      await waitForRetentionAudit(store, clientInstanceId, startupConversation.id);
       await expectDeletedManagedObjects(store.files, byteStore, clientInstanceId, startupObjects);
       await expectDeletedWorkspaceObjects(
         store,
@@ -123,6 +126,7 @@ describe("conversation retention expiration", () => {
           "retention_expired"
         );
       });
+      await waitForRetentionAudit(store, clientInstanceId, periodicConversation.id);
 
       const events = await store.audit.listAuditEvents({ clientInstanceId, limit: 10 });
       const startupAudit = events.find(
@@ -168,7 +172,7 @@ describe("conversation retention expiration", () => {
 
   it("expires abandoned draft conversations after the grace period", async () => {
     const clientInstanceId = asClientInstanceId("retention-abandoned-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
       files: store.files,
@@ -255,7 +259,7 @@ describe("conversation retention expiration", () => {
 
   it("keeps overdue conversations while expiry is turned off", async () => {
     const clientInstanceId = asClientInstanceId("retention-off-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const jobInput = {
       logger: createFailingTestLogger("Retention job failed"),
       jobOptions: { checkIntervalMs: 10, runOnStartup: true }
@@ -300,7 +304,7 @@ describe("conversation retention expiration", () => {
 
   it("expires only abandoned drafts while expiry is turned off", async () => {
     const clientInstanceId = asClientInstanceId("retention-off-abandoned-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
       files: store.files,
@@ -370,7 +374,7 @@ describe("conversation retention expiration", () => {
 
   it("leaves the conversation expired when object deletion fails and finishes the cleanup later", async () => {
     const clientInstanceId = asClientInstanceId("retention-retry-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const byteStore = new RecordingByteStore();
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
@@ -472,7 +476,7 @@ describe("conversation retention expiration", () => {
 
   it("sanitizes workspace object keys in direct retention cleanup failure audit", async () => {
     const clientInstanceId = asClientInstanceId("retention-workspace-failure-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const byteStore = new RecordingByteStore();
     const options = createRetentionOptions({
       clientInstanceId,
@@ -512,7 +516,7 @@ describe("conversation retention expiration", () => {
 
   it("sanitizes workspace object keys in periodic workspace cleanup failure audit", async () => {
     const clientInstanceId = asClientInstanceId("workspace-cleanup-failure-test");
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const byteStore = new RecordingByteStore();
     const options = createRetentionOptions({
       clientInstanceId,
@@ -562,7 +566,7 @@ describe("conversation retention expiration", () => {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-describe("conversation expiry claim in memory", () => {
+describe("conversation expiry claim in Postgres", () => {
   const clientInstanceId = asClientInstanceId("expiry-claim-test");
   const now = new Date();
   // Every Conversation without a message counts as an abandoned draft under these criteria.
@@ -571,7 +575,31 @@ describe("conversation expiry claim in memory", () => {
     abandonedBefore: new Date(now.getTime() + DAY_MS).toISOString()
   };
 
-  async function createDraftWithAcceptance(store: TestMemoryStore) {
+  async function raceInOrder<A, B>(
+    first: (stores: import("@vivd-catalyst/core").PlatformStores) => Promise<A>,
+    second: (stores: import("@vivd-catalyst/core").PlatformStores) => Promise<B>
+  ) {
+    const prefix = `expiry_${globalThis.crypto.randomUUID()}`;
+    const firstName = `${prefix}_first`;
+    const secondName = `${prefix}_second`;
+    const firstStore = (await createTestInstance({ postgres: { applicationName: firstName } }))
+      .stores;
+    const secondStore = (await createTestInstance({ postgres: { applicationName: secondName } }))
+      .stores;
+    const observer = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      return await orderedStoreCalls(
+        observer,
+        { first: firstStore, firstName, secondName },
+        first,
+        () => second(secondStore)
+      );
+    } finally {
+      await observer.end();
+    }
+  }
+
+  async function createDraftWithAcceptance(store: TestStore) {
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
       createdByUserId: "user-1",
@@ -617,16 +645,16 @@ describe("conversation expiry claim in memory", () => {
   }
 
   it("keeps a draft whose first message takes the conversation lock before expiry", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const { conversation, acceptance, expiry } = await createDraftWithAcceptance(store);
     await expect(
       store.conversations.listExpiredConversations({ clientInstanceId, ...criteria, limit: 10 })
     ).resolves.toEqual([expect.objectContaining({ id: conversation.id })]);
 
-    const [accepted, expired] = await Promise.allSettled([
-      store.agentRuns.prepareConversationRunStart(acceptance),
-      store.conversations.expireConversation(expiry)
-    ]);
+    const [accepted, expired] = await raceInOrder(
+      (tx) => tx.agentRuns.prepareConversationRunStart(acceptance),
+      (tx) => tx.conversations.expireConversation(expiry)
+    );
 
     expect(accepted).toMatchObject({ status: "fulfilled" });
     expect(expired).toEqual({ status: "fulfilled", value: { status: "not_expired" } });
@@ -637,13 +665,13 @@ describe("conversation expiry claim in memory", () => {
   });
 
   it("refuses a first message once expiry holds the conversation lock", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const { conversation, acceptance, expiry } = await createDraftWithAcceptance(store);
 
-    const [expired, accepted] = await Promise.allSettled([
-      store.conversations.expireConversation(expiry),
-      store.agentRuns.prepareConversationRunStart(acceptance)
-    ]);
+    const [expired, accepted] = await raceInOrder(
+      (tx) => tx.conversations.expireConversation(expiry),
+      (tx) => tx.agentRuns.prepareConversationRunStart(acceptance)
+    );
 
     expect(expired).toMatchObject({
       status: "fulfilled",
@@ -660,7 +688,7 @@ describe("conversation expiry claim in memory", () => {
   });
 
   it("keeps a workspace whose deleted conversation still waits for its cleanup", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     const byteStore = new RecordingByteStore();
     const managedObjects = createTestManagedObjectAccess({
       clientInstanceId,
@@ -719,7 +747,7 @@ describe("conversation expiry claim in memory", () => {
   });
 
   it("compares the retention date as an instant, whatever its spelling", async () => {
-    const store = createTestInstance().stores;
+    const store = (await createTestInstance()).stores;
     // The same instant as the `now` below, written with an offset. As text it sorts after it.
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
@@ -754,9 +782,9 @@ describe("conversation expiry claim in memory", () => {
   });
 });
 
-function createOrphanFixture(name: string, keyPrefix = "files") {
+async function createOrphanFixture(name: string, keyPrefix = "files") {
   const clientInstanceId = asClientInstanceId(name);
-  const store = createTestInstance().stores;
+  const store = (await createTestInstance()).stores;
   const byteStore = new RecordingByteStore();
   const managedObjects = createManagedObjectAccess({
     clientInstanceId,
@@ -827,7 +855,7 @@ function createOrphanFixture(name: string, keyPrefix = "files") {
 
 describe("orphaned managed file cleanup", () => {
   it("removes files without an active conversation and keeps every file that has one", async () => {
-    const fixture = createOrphanFixture("orphan-test");
+    const fixture = await createOrphanFixture("orphan-test");
     const { store, byteStore, clientInstanceId } = fixture;
     const active = await fixture.createConversation("active");
     const deleted = await fixture.createConversation("deleted without cleanup");
@@ -891,7 +919,7 @@ describe("orphaned managed file cleanup", () => {
   });
 
   it("keeps bytes that a file with an owner stores under the same object key", async () => {
-    const fixture = createOrphanFixture("orphan-shared-key-test");
+    const fixture = await createOrphanFixture("orphan-shared-key-test");
     const active = await fixture.createConversation("active");
     const attached = await fixture.createFile(active, "same.txt", "same bytes");
     await fixture.attach(active, attached);
@@ -909,7 +937,7 @@ describe("orphaned managed file cleanup", () => {
   });
 
   it("leaves a file whose object no handler stores and continues past it", async () => {
-    const fixture = createOrphanFixture("orphan-unclaimed-test");
+    const fixture = await createOrphanFixture("orphan-unclaimed-test");
     const conversation = await fixture.createConversation("active");
     const foreign = await fixture.createFile(conversation, "foreign.txt");
     const own = [
@@ -931,7 +959,7 @@ describe("orphaned managed file cleanup", () => {
   });
 
   it("keeps the file retryable and audits counts only when byte deletion fails", async () => {
-    const fixture = createOrphanFixture("orphan-failure-test");
+    const fixture = await createOrphanFixture("orphan-failure-test");
     const { store, byteStore, clientInstanceId } = fixture;
     const conversation = await fixture.createConversation("active");
     const orphan = await fixture.createFile(conversation, "orphan.txt");
@@ -954,7 +982,7 @@ describe("orphaned managed file cleanup", () => {
   });
 
   it("runs after conversation expiry in the retention job", async () => {
-    const fixture = createOrphanFixture("orphan-job-test");
+    const fixture = await createOrphanFixture("orphan-job-test");
     const conversation = await fixture.createConversation("active");
     const orphan = await fixture.createFile(conversation, "orphan.txt");
     const job = new ConversationRetentionJob({
@@ -972,7 +1000,7 @@ describe("orphaned managed file cleanup", () => {
 });
 
 async function createExpiredConversation(
-  store: TestMemoryStore,
+  store: TestStore,
   clientInstanceId: ClientInstanceId,
   title: string
 ): Promise<Conversation> {
@@ -993,7 +1021,7 @@ async function createExpiredConversation(
 }
 
 async function createWorkspaceObjects(input: {
-  store: TestMemoryStore;
+  store: TestStore;
   byteStore: RecordingByteStore;
   clientInstanceId: ClientInstanceId;
   conversation: Conversation;
@@ -1007,6 +1035,21 @@ async function createWorkspaceObjects(input: {
     conversationId: input.conversation.id,
     ownerUserId: input.conversation.createdByUserId,
     now: "2023-12-31T23:00:00.000Z"
+  });
+  // The files below name this command; it is the one stored command of the workspace.
+  const command = await input.store.executionWorkspaces.enqueueWorkspaceCommand({
+    clientInstanceId: input.clientInstanceId,
+    workspaceId: workspace.id,
+    ownerUserId: input.conversation.createdByUserId,
+    command: "python3 calculate.py",
+    limits: {
+      timeoutSeconds: 60,
+      idleTimeoutSeconds: 30,
+      maxStdoutBytes: 64 * 1024,
+      maxStderrBytes: 64 * 1024,
+      maxWorkspaceBytes: 100 * 1024 * 1024
+    },
+    queuedAt: "2023-12-31T23:02:00.000Z"
   });
   const files = [
     {
@@ -1060,7 +1103,7 @@ async function createWorkspaceObjects(input: {
       checksum: `sha256:${file.path}`,
       mimeType: file.mimeType,
       metadata,
-      lastCommandId: asWorkspaceCommandId("wcmd_retention_seed"),
+      lastCommandId: command.id,
       updatedAt: "2023-12-31T23:01:00.000Z"
     });
   }
@@ -1077,29 +1120,15 @@ async function createWorkspaceObjects(input: {
     checksum: "sha256:deleted-before-retention",
     mimeType: "text/plain",
     metadata: { source: "workspace.exec", role: "temporary" },
-    lastCommandId: asWorkspaceCommandId("wcmd_retention_seed"),
+    lastCommandId: command.id,
     updatedAt: "2023-12-31T23:01:30.000Z"
   });
   await input.store.executionWorkspaces.deleteWorkspaceFile({
     clientInstanceId: input.clientInstanceId,
     workspaceId: workspace.id,
     path: "tmp/deleted-before-retention.txt",
-    lastCommandId: asWorkspaceCommandId("wcmd_retention_delete"),
+    lastCommandId: command.id,
     deletedAt: "2023-12-31T23:01:45.000Z"
-  });
-  await input.store.executionWorkspaces.enqueueWorkspaceCommand({
-    clientInstanceId: input.clientInstanceId,
-    workspaceId: workspace.id,
-    ownerUserId: input.conversation.createdByUserId,
-    command: "python3 calculate.py",
-    limits: {
-      timeoutSeconds: 60,
-      idleTimeoutSeconds: 30,
-      maxStdoutBytes: 64 * 1024,
-      maxStderrBytes: 64 * 1024,
-      maxWorkspaceBytes: 100 * 1024 * 1024
-    },
-    queuedAt: "2023-12-31T23:02:00.000Z"
   });
   return {
     workspaceId: workspace.id,
@@ -1109,7 +1138,7 @@ async function createWorkspaceObjects(input: {
 }
 
 async function expectConversationStatus(
-  store: TestMemoryStore,
+  store: TestStore,
   clientInstanceId: ClientInstanceId,
   conversationId: ConversationId,
   status: Conversation["status"]
@@ -1157,7 +1186,7 @@ async function expectDeletedManagedObjects(
 }
 
 async function expectDeletedWorkspaceObjects(
-  store: TestMemoryStore,
+  store: TestStore,
   byteStore: RecordingByteStore,
   clientInstanceId: ClientInstanceId,
   objects: {
@@ -1182,6 +1211,26 @@ async function expectDeletedWorkspaceObjects(
     expect(byteStore.has(objectKey)).toBe(false);
   }
   expect(byteStore.deletedKeys).toEqual(expect.arrayContaining(objects.objectKeys));
+}
+
+/**
+ * The job commits a conversation's expiry first, deletes its data next and records the audit
+ * event last, so the event marks the moment a test may look for the data.
+ */
+async function waitForRetentionAudit(
+  store: TestStore,
+  clientInstanceId: ClientInstanceId,
+  conversationId: ConversationId
+): Promise<void> {
+  await waitFor(async () => {
+    const events = await store.audit.listAuditEvents({ clientInstanceId, limit: 10 });
+    expect(
+      events.some(
+        (event) =>
+          event.subject === conversationId && event.type === "conversation.retention_expired"
+      )
+    ).toBe(true);
+  });
 }
 
 async function waitFor(assertion: () => Promise<void>): Promise<void> {

@@ -1,3 +1,6 @@
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
+import { fileTestDatabaseUrl } from "./support/test-database";
+import {} from "vitest";
 import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
@@ -10,36 +13,12 @@ import {
   type ManagedFileRecord,
   type PlatformStores
 } from "@vivd-catalyst/core";
-const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
-const postgresIt = databaseUrl ? it : it.skip;
+
 describe("artifact preview store adapters", () => {
-  it("ensures one deterministic attachment preview source in memory", async () => {
-    await expectManagedArtifactEnsureContract(createTestInstance().stores);
-  });
-
-  it("keeps in-memory preview job idempotency scoped to renderer settings identity", async () => {
-    await expectPreviewJobIdentityContract(createTestInstance().stores);
-  });
-
-  it("claims preview jobs and guards terminal updates by lease in memory", async () => {
-    await expectPreviewJobLeaseContract(createTestInstance().stores);
-  });
-
-  it("creates preview artifacts inside lease-guarded completion in memory", async () => {
-    await expectPreviewArtifactCompletionContract(createTestInstance().stores);
-  });
-
-  it("recovers stale preview job leases in memory", async () => {
-    await expectPreviewJobStaleRecoveryContract(createTestInstance().stores);
-  });
-
-  postgresIt("ensures one deterministic attachment preview source in Postgres", async () => {
+  it("ensures one deterministic attachment preview source in Postgres", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
     try {
@@ -49,32 +28,23 @@ describe("artifact preview store adapters", () => {
     }
   });
 
-  postgresIt(
-    "keeps Postgres preview job idempotency scoped to renderer settings identity",
-    async () => {
-      const store = (
-        await createTestInstance({
-          postgres: {
-            databaseUrl: databaseUrl!,
-            runMigrations: true
-          }
-        })
-      ).stores;
-      try {
-        await expectPreviewJobIdentityContract(store);
-      } finally {
-        await store.close();
-      }
-    }
-  );
-
-  postgresIt("claims preview jobs and guards terminal updates by lease in Postgres", async () => {
+  it("keeps Postgres preview job idempotency scoped to renderer settings identity", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
+      })
+    ).stores;
+    try {
+      await expectPreviewJobIdentityContract(store);
+    } finally {
+      await store.close();
+    }
+  });
+
+  it("claims preview jobs and guards terminal updates by lease in Postgres", async () => {
+    const store = (
+      await createTestInstance({
+        postgres: {}
       })
     ).stores;
     try {
@@ -84,13 +54,10 @@ describe("artifact preview store adapters", () => {
     }
   });
 
-  postgresIt("creates preview artifacts inside lease-guarded completion in Postgres", async () => {
+  it("creates preview artifacts inside lease-guarded completion in Postgres", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
     try {
@@ -100,13 +67,10 @@ describe("artifact preview store adapters", () => {
     }
   });
 
-  postgresIt("recovers stale preview job leases in Postgres", async () => {
+  it("recovers stale preview job leases in Postgres", async () => {
     const store = (
       await createTestInstance({
-        postgres: {
-          databaseUrl: databaseUrl!,
-          runMigrations: true
-        }
+        postgres: {}
       })
     ).stores;
     try {
@@ -116,26 +80,20 @@ describe("artifact preview store adapters", () => {
     }
   });
 
-  postgresIt(
-    "does not clear a processing lease when retry replacement races with worker claim in Postgres",
-    async () => {
-      const store = (
-        await createTestInstance({
-          postgres: {
-            databaseUrl: databaseUrl!,
-            runMigrations: true
-          }
-        })
-      ).stores;
-      const rawSql = postgres(databaseUrl!, { max: 5 });
-      try {
-        await expectPreviewJobRetryReplacementRaceContract(store, rawSql);
-      } finally {
-        await rawSql.end();
-        await store.close();
-      }
+  it("does not clear a processing lease when retry replacement races with worker claim in Postgres", async () => {
+    const store = (
+      await createTestInstance({
+        postgres: {}
+      })
+    ).stores;
+    const rawSql = postgres(databaseUrl, { max: 5 });
+    try {
+      await expectPreviewJobRetryReplacementRaceContract(store, rawSql);
+    } finally {
+      await rawSql.end();
+      await store.close();
     }
-  );
+  });
 });
 
 async function expectManagedArtifactEnsureContract(
@@ -774,3 +732,8 @@ type PreviewJobIdentityStore = Pick<
   PlatformStores,
   "files" | "conversations" | "workspaces" | "users"
 >;
+
+let databaseUrl: string;
+beforeAll(async () => {
+  databaseUrl = await fileTestDatabaseUrl();
+});
