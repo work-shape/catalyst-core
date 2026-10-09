@@ -15,6 +15,7 @@ import {
 } from "@vivd-catalyst/core";
 import { auditActorFromUser, type AuditRecorder } from "@vivd-catalyst/core";
 import type { ToolRegistry } from "./tool-registry";
+import { toolFailureLogRecord } from "./tool-failure-log";
 import { failed, toPreview } from "./tool-results";
 
 export interface InProcessToolExecutionOptions {
@@ -168,7 +169,8 @@ export class InProcessToolExecution implements ToolExecution {
   /**
    * What a thrown error may tell the model, by the rule of `toErrorEnvelope`: the message of an
    * `AppError` that exposes it. Any other error, a database driver's included, can carry SQL,
-   * parameters or paths. It goes to the logger, and the model gets the correlation id to quote.
+   * parameters or paths. The logger gets a record of it without those, and the model gets the
+   * correlation id to quote.
    */
   private thrownHandlerFailure(
     error: unknown,
@@ -178,17 +180,7 @@ export class InProcessToolExecution implements ToolExecution {
     if (isAppError(error) && error.code !== "INTERNAL" && error.exposeMessage) {
       return failed("handler_failed", toErrorEnvelope(error, context.correlationId).error.message);
     }
-    this.logger?.error(
-      {
-        error,
-        correlationId: context.correlationId,
-        toolName: request.toolName,
-        toolCallId: request.toolCallId,
-        agentName: request.agentName,
-        conversationId: request.conversationId
-      },
-      "Tool handler failed"
-    );
+    this.logger?.error(toolFailureLogRecord(error, request, context), "Tool handler failed");
     return failed(
       "handler_failed",
       `The tool failed with an internal error. Reference: ${context.correlationId}`,

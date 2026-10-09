@@ -59,17 +59,30 @@ describe("tool handler error boundary on Postgres", () => {
       expect(serialized).not.toContain(leaked);
     }
 
-    expect(logged).toHaveLength(1);
-    expect(logged[0]).toMatchObject({
-      message: "Tool handler failed",
-      input: {
-        correlationId: "corr_workspace_tools",
-        toolName: "test.write",
-        toolCallId: request.toolCallId
+    expect(logged).toEqual([
+      {
+        message: "Tool handler failed",
+        input: {
+          correlationId: "corr_workspace_tools",
+          toolName: "test.write",
+          toolCallId: request.toolCallId,
+          agentName: request.agentName,
+          conversationId: request.conversationId,
+          errorName: expect.any(String),
+          stack: expect.stringMatching(/^\s+at /u),
+          database: {
+            sqlState: "23503",
+            message: expect.stringContaining("violates foreign key constraint"),
+            constraint: expect.stringContaining("execution_workspace_files_last_command_id"),
+            table: "execution_workspace_files"
+          }
+        }
       }
-    });
-    const loggedError = z.object({ error: z.instanceof(Error) }).parse(logged[0]?.input).error;
-    expect(describeError(loggedError)).toContain("execution_workspace_files");
+    ]);
+    const serializedLog = JSON.stringify(logged);
+    for (const leaked of [marker, "insert into", "wcmd_missing", "params"]) {
+      expect(serializedLog).not.toContain(leaked);
+    }
   });
 
   it("passes the message of an error written for the model", async () => {
@@ -121,10 +134,4 @@ function recordingLogger(logged: Array<{ input: unknown; message?: string }>): L
     }
   };
   return logger;
-}
-
-/** The error's own text and that of its causes, where a driver puts the statement. */
-function describeError(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
-  return `${error.message}\n${describeError(error.cause ?? "")}`;
 }
