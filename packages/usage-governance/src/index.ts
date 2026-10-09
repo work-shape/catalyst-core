@@ -130,7 +130,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   async runModelCall<T>(clientInstanceId: ClientInstanceId, execute: () => Promise<T>): Promise<T> {
     const reservation = await this.reserveModelCall(clientInstanceId);
     try {
-      return execute();
+      return await execute();
     } finally {
       await this.settleModelCall(reservation);
     }

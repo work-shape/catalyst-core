@@ -340,6 +340,36 @@ describe("model usage governance", () => {
     expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
   });
 
+  it.each(["complete", "reject"] as const)(
+    "holds admission until a call settles: %s",
+    async (outcome) => {
+      const { governance, clientInstanceId } = createGovernance({}, { modelCallsPerDay: 1 });
+      const started = Promise.withResolvers<void>();
+      const execution = Promise.withResolvers<string>();
+      const first = governance.runModelCall(clientInstanceId, () => {
+        started.resolve();
+        return execution.promise;
+      });
+      const settled = first.then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error })
+      );
+      await started.promise;
+      await expect(
+        governance.runModelCall(clientInstanceId, async () => "blocked")
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const failure = new Error("Provider rejected the call");
+      if (outcome === "complete") execution.resolve("done");
+      else execution.reject(failure);
+      expect(await settled).toEqual(
+        outcome === "complete" ? { value: "done" } : { error: failure }
+      );
+      await expect(governance.runModelCall(clientInstanceId, async () => "next")).resolves.toBe(
+        "next"
+      );
+    }
+  );
+
   it("does not hold the accounting lock across provider latency", async () => {
     const { governance, clientInstanceId } = createGovernance();
     let activeCalls = 0;
