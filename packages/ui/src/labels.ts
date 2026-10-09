@@ -4,6 +4,7 @@
  */
 export interface UiLabels {
   close: string;
+  cancel: string;
   dismiss: string;
   remove: string;
   clear: string;
@@ -22,6 +23,7 @@ export interface UiLabels {
 
 export const uiLabelsEn: UiLabels = {
   close: "Close",
+  cancel: "Cancel",
   dismiss: "Dismiss",
   remove: "Remove",
   clear: "Clear",
@@ -40,6 +42,7 @@ export const uiLabelsEn: UiLabels = {
 
 export const uiLabelsDe: UiLabels = {
   close: "Schließen",
+  cancel: "Abbrechen",
   dismiss: "Ausblenden",
   remove: "Entfernen",
   clear: "Leeren",

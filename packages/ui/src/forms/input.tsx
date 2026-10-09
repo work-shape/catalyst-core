@@ -5,6 +5,7 @@ import {
   type TextareaHTMLAttributes
 } from "react";
 import { cn } from "../cn";
+import { useFieldControl } from "./field-control";
 
 export type FieldSize = "sm" | "md";
 
@@ -26,13 +27,23 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, size = "md", invalid = false, leadingIcon, ...props },
+  {
+    className,
+    size = "md",
+    invalid,
+    leadingIcon,
+    id,
+    required,
+    "aria-describedby": describedBy,
+    ...props
+  },
   ref
 ) {
+  const control = useFieldControl({ id, invalid, required, "aria-describedby": describedBy });
   const input = (
     <input
       ref={ref}
-      aria-invalid={invalid || undefined}
+      {...control}
       className={cn(
         "flex px-3 placeholder:text-muted-foreground",
         fieldFrameClassName,
@@ -68,13 +79,22 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { className, variant = "plain", invalid = false, ...props },
+  {
+    className,
+    variant = "plain",
+    invalid,
+    id,
+    required,
+    "aria-describedby": describedBy,
+    ...props
+  },
   ref
 ) {
+  const control = useFieldControl({ id, invalid, required, "aria-describedby": describedBy });
   return (
     <textarea
       ref={ref}
-      aria-invalid={invalid || undefined}
+      {...control}
       className={cn(
         "flex min-h-16 px-3 py-2 placeholder:text-muted-foreground",
         fieldFrameClassName,
