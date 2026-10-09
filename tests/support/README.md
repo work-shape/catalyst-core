@@ -16,9 +16,12 @@ with `CREATEDB` and permission to terminate its own connections. Missing/unreach
 fails tests. Use `beforeAllWithPostgres` for database suite setup: it reports setup failures on
 each test, because Vitest otherwise counts tests behind a failed `beforeAll` as skipped.
 
-The template reads migrations from `CATALYST_TEST_MIGRATIONS_DIRECTORY`, defaulting to
+The template is migrated by `migrateDatabase`, the entry an operator's migration step runs. It
+reads migrations from `CATALYST_TEST_MIGRATIONS_DIRECTORY`, defaulting to
 `platform/packages/postgres-store/migrations` independently of the working directory.
-CB-3c compatibility jobs can set this variable to their selected migration directory.
+`pnpm test:compatibility` runs a release's suite from a checkout of its tag and sets this variable
+to the migrations of the commit under test. Stores never migrate: `createPostgresStores` stops on
+a database that lacks committed migrations.
 The lifecycle test creates a temporary alternate directory and proves its schema is cloned.
 Historical migration assertions use disposable empty clones through the same lifecycle owner,
 because applying older migrations to a head-migrated template would invalidate those assertions.

@@ -82,4 +82,4 @@ The deterministic model provider is kept for local tests and repeatable debuggin
 
 Storage code uses product-owned store interfaces at package boundaries. The Postgres-backed adapters use Drizzle internally for typed database interactions; Drizzle table/query types should not leak into public platform APIs.
 
-Database schema changes must go through committed migrations. Use `pnpm db:generate` after changing Drizzle schema files, review the generated SQL, and commit the schema and migration together. Do not use `drizzle-kit push` or any `db push` workflow.
+Database schema changes must go through committed migrations. Use `pnpm db:generate` after changing Drizzle schema files, review the generated SQL, and commit the schema and migration together. Do not use `drizzle-kit push` or any `db push` workflow. Committed migrations never change, and a new migration expands before a later one contracts: `pnpm check:migrations` checks both against `packages/postgres-store/migration-policy.json`.

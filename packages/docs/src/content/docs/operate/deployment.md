@@ -74,6 +74,8 @@ Migrations run as an explicit deploy step before the API and the workers start. 
 
 The API and the workers never migrate. When one starts, it reads the migration state: a database that lacks committed migrations stops it with their names, and a database ahead of the release starts, so the previous release keeps serving while a newer one is rolled out. There is no `RUN_MIGRATIONS` switch.
 
+Schema changes expand before they contract. A migration may add tables, nullable or defaulted columns and concurrent indexes. A drop, a rename and a new `NOT NULL` on an existing column are contract steps: they ship in a later migration under `-- contract-after: <tag>`, once the oldest supported release in `packages/postgres-store/migration-policy.json` has reached that tag. `pnpm check:migrations` enforces this and rejects any change to a committed migration; `pnpm test:compatibility` runs the database tests of the previous and the oldest supported release against the new schema, and `pnpm test:upgrade` migrates a database of the oldest supported release.
+
 ## Production Readiness Checklist
 
 Before a real deployment:

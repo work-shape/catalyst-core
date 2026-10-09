@@ -58,6 +58,13 @@ contain breaking changes; a patch version does not.
   migrating at startup must run the step first. `@vivd-catalyst/postgres-store` exports
   `migrateDatabase({ databaseUrl })`, which holds the advisory lock and returns the applied
   names; the `runMigrations` option and the store's `migrate()` are removed.
+- **Operations:** schema changes follow expand and contract. `pnpm check:migrations` rejects
+  a changed, removed or renamed committed migration and, after `historyThrough` in
+  `packages/postgres-store/migration-policy.json`, a drop, a rename, a required column and a
+  blocking index build; a contract step passes under `-- contract-after: <tag>` once the
+  oldest supported release reached that tag. `pnpm test:compatibility` runs the database
+  tests of the previous and the oldest supported release against the new schema, and
+  `pnpm test:upgrade` migrates a database of the oldest supported release.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
   `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is
   absent on the last page; pass it back as `cursor` with the same filters to read the next
