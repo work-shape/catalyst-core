@@ -1,21 +1,6 @@
-export type SuperadminRouteTab = "usage" | "users" | "api-access" | "audit" | "config";
-export type WorkspaceRouteView = "chat" | "settings" | "superadmin" | "approvals" | "ui-library";
+import { areaOfRoute, type WorkspaceRoute, type WorkspaceRouteView } from "../routes";
 
-/**
- * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
- * routes: the active Collaboration Workspace is not in the URL yet, so the chat
- * model resolves it and replaces the route with a canonical `/w/...` one.
- */
-export type WorkspaceRoute =
-  | { kind: "collaboration-workspace-root" }
-  | { kind: "legacy-conversation"; conversationId: string }
-  | { kind: "new-conversation"; collaborationWorkspaceId: string }
-  | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
-  | { kind: "settings" }
-  | { kind: "approvals" }
-  | { kind: "superadmin"; tab: SuperadminRouteTab }
-  /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
-  | { kind: "ui-library" };
+export type { SuperadminRouteTab, WorkspaceRoute, WorkspaceRouteView } from "../routes";
 
 export interface WorkspaceRouteChangeOptions {
   replace?: boolean;
@@ -45,18 +30,7 @@ export function isChatWorkspaceRoute(route: WorkspaceRoute): boolean {
   return workspaceRouteView(route) === "chat";
 }
 
+/** The view a route shows: its area in the area route table. */
 export function workspaceRouteView(route: WorkspaceRoute): WorkspaceRouteView {
-  if (route.kind === "settings") {
-    return "settings";
-  }
-  if (route.kind === "superadmin") {
-    return "superadmin";
-  }
-  if (route.kind === "approvals") {
-    return "approvals";
-  }
-  if (route.kind === "ui-library") {
-    return "ui-library";
-  }
-  return "chat";
+  return areaOfRoute(route);
 }

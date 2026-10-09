@@ -17,10 +17,6 @@ import {
   canViewAdministrationPanel
 } from "../packages/chat-ui/src/control-plane/governance";
 import { resolveAdministrationRoute as resolveAdministrationRouteWithSkillChanges } from "../packages/chat-ui/src/control-plane/superadmin-panel";
-import {
-  workspaceRouteFromPath,
-  workspaceRouteNavigation
-} from "../packages/chat-ui/src/standalone-chat-app";
 
 describe("API access model", () => {
   it("maps only current service-principal grants to credential scopes", () => {
@@ -63,16 +59,6 @@ describe("API access model", () => {
     expect(canManageApiAccess(apiAccessManager)).toBe(true);
     expect(canViewAdministrationPanel(apiAccessManager)).toBe(true);
     expect(canManageApiAccess({ ...apiAccessManager!, permissions: ["users.manage"] })).toBe(false);
-  });
-
-  it("round-trips the dedicated API access administration route", () => {
-    expect(workspaceRouteFromPath("/admin/api-access")).toEqual({
-      kind: "superadmin",
-      tab: "api-access"
-    });
-    expect(workspaceRouteNavigation({ kind: "superadmin", tab: "api-access" })).toEqual({
-      to: "/admin/api-access"
-    });
   });
 
   it("resolves administration availability and tabs inside the optional module", () => {

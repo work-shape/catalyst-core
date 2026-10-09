@@ -25,10 +25,7 @@ import {
   createVisibleFinalAssistantPartIndices
 } from "../packages/chat-ui/src/assistant/assistant-work-grouping";
 import { TranslationProvider, createTranslationContext } from "../packages/chat-ui/src/i18n";
-import {
-  workspaceRouteFromPath,
-  workspaceRouteNavigation
-} from "../packages/chat-ui/src/standalone-chat-app";
+import { workspaceRouteFromPath, workspaceRouteNavigation } from "../packages/chat-ui/src/routes";
 import { workspaceRouteView } from "../packages/chat-ui/src/workspace/workspace-route";
 
 const skillChangePreview = {

@@ -1,9 +1,6 @@
 import { ApiError, type Conversation } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
-import {
-  workspaceRouteFromPath,
-  workspaceRouteNavigation
-} from "../packages/chat-ui/src/standalone-chat-app";
+import { workspaceRouteFromPath, workspaceRouteNavigation } from "../packages/chat-ui/src/routes";
 import {
   routeCollaborationWorkspaceId,
   workspaceRouteView
