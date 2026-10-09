@@ -9,6 +9,7 @@ import {
   Wind
 } from "lucide-react";
 import { defineToolDisplayWidget, type ToolDisplayRenderInput } from "@vivd-catalyst/chat-ui/shell";
+import { Badge, Card, CardContent } from "@vivd-catalyst/ui";
 import {
   weatherForecastOutputSchema,
   type WeatherForecastDay,
@@ -59,10 +60,10 @@ function WeatherForecastPreview({
             <p className="truncate text-sm text-muted-foreground">{forecast.location}</p>
           </div>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-          <CalendarDays size={13} aria-hidden="true" />
+        <Badge>
+          <CalendarDays aria-hidden="true" />
           {t(locale, "dayForecast", { count: forecast.days.length })}
-        </span>
+        </Badge>
       </div>
       {forecast.advisory ? (
         <p className="mt-3 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
@@ -73,35 +74,37 @@ function WeatherForecastPreview({
         {forecast.days.map((day) => {
           const DayIcon = weatherIconFor(day.condition);
           return (
-            <div key={day.date} className="min-w-0 border-l-2 border-primary/30 pl-3">
-              <div className="flex items-center gap-2">
-                <DayIcon size={16} className="shrink-0 text-primary" aria-hidden="true" />
-                <p className="truncate text-sm font-medium">
-                  {formatForecastDate(day.date, locale)}
+            <Card key={day.date} padding="md" className="min-w-0">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <DayIcon size={16} className="shrink-0 text-primary" aria-hidden="true" />
+                  <p className="truncate text-sm font-medium">
+                    {formatForecastDate(day.date, locale)}
+                  </p>
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-sm">
+                  <ThermometerSun
+                    size={15}
+                    className="shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {day.low}-{day.high} {unitLabel}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <CloudRain size={14} className="shrink-0" aria-hidden="true" />
+                  <span>{t(locale, "precipitation", { chance: day.precipitationChance })}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Wind size={14} className="shrink-0" aria-hidden="true" />
+                  <span>{t(locale, "wind", { speed: day.windKph })}</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
+                  {day.summary}
                 </p>
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-sm">
-                <ThermometerSun
-                  size={15}
-                  className="shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <span>
-                  {day.low}-{day.high} {unitLabel}
-                </span>
-              </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                <CloudRain size={14} className="shrink-0" aria-hidden="true" />
-                <span>{t(locale, "precipitation", { chance: day.precipitationChance })}</span>
-              </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                <Wind size={14} className="shrink-0" aria-hidden="true" />
-                <span>{t(locale, "wind", { speed: day.windKph })}</span>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-                {day.summary}
-              </p>
-            </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
