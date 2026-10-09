@@ -1,17 +1,26 @@
 import {
   AppError,
+  REASONING_EFFORTS,
   type ModelProviderAuthModeConfig,
+  type ModelProviderConfig,
   type OpenAiCompatibleModelProviderApiConfig,
   type OpenAiCompatibleContextManagementConfig,
   type ReasoningEffortConfig,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import type {
-  ModelCompletion,
-  ModelCompletionRequest,
-  ModelCompletionStreamEvent,
-  ModelProvider
+import {
+  WEB_SEARCH_MODEL_TOOL_NAME,
+  type ModelCapabilities,
+  type ModelCompletion,
+  type ModelCompletionRequest,
+  type ModelCompletionStreamEvent,
+  type ModelTransportContext
 } from "./types";
+import {
+  ModelProviderError,
+  modelProviderErrorKindForStatus,
+  toModelTransportFailure
+} from "./model-provider-error";
 import {
   createProviderToolMetadata,
   createOpenAiResponsesContinuation,
@@ -30,7 +39,11 @@ import {
   toResponsesModelUsage,
   type OpenAiCompatibleProviderTool
 } from "./openai-compatible-mapping";
-import { isEncryptedContentAboveStringLimit, readProviderErrorMetadata } from "./provider-error";
+import {
+  isEncryptedContentAboveStringLimit,
+  readProviderErrorMessage,
+  readProviderErrorMetadata
+} from "./provider-error";
 import { parseToolInput } from "./tool-input";
 import {
   streamOpenAiCompatibleCompletion,
@@ -44,6 +57,9 @@ import type {
   OpenAiResponsesResponse
 } from "./openai-compatible-types";
 
+/** The transport reads the signal alone; a caller may hand it a whole runtime context. */
+type TransportCallContext = ModelTransportContext | RuntimeCallContext;
+
 export interface OpenAiCompatibleChatProviderOptions {
   id: string;
   api?: OpenAiCompatibleModelProviderApiConfig;
@@ -56,7 +72,26 @@ export interface OpenAiCompatibleChatProviderOptions {
   contextManagement?: OpenAiCompatibleContextManagementConfig;
 }
 
-export class OpenAiCompatibleChatProvider implements ModelProvider {
+/**
+ * What an entry can do follows from the wire format it speaks. Web search, continuations and
+ * server compaction exist on the responses format only.
+ */
+export function openAiCompatibleCapabilities(entry: ModelProviderConfig): ModelCapabilities {
+  const responses = entry.api === "responses";
+  return {
+    reasoningEfforts: REASONING_EFFORTS,
+    nativeTools: responses ? [WEB_SEARCH_MODEL_TOOL_NAME] : [],
+    serverCompaction: responses && entry.contextManagement?.compaction !== undefined,
+    continuation: responses,
+    fastTier: true,
+    imageInput: true,
+    documentInput: false,
+    structuredOutput: false,
+    streaming: true
+  };
+}
+
+export class OpenAiCompatibleChatProvider {
   readonly id: string;
   private readonly options: OpenAiCompatibleChatProviderOptions;
 
@@ -67,7 +102,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   async complete(
     request: ModelCompletionRequest,
-    context: RuntimeCallContext
+    context: TransportCallContext
   ): Promise<ModelCompletion> {
     if (this.options.api === "responses") {
       return this.completeResponses(request, context);
@@ -77,7 +112,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   async *stream(
     request: ModelCompletionRequest,
-    context: RuntimeCallContext
+    context: TransportCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
     if (this.options.api === "responses") {
       yield* this.streamResponses(request, context);
@@ -88,7 +123,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   private async completeChatCompletions(
     request: ModelCompletionRequest,
-    context: RuntimeCallContext
+    context: TransportCallContext
   ): Promise<ModelCompletion> {
     const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
       request.tools
@@ -125,7 +160,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   private async *streamChatCompletions(
     request: ModelCompletionRequest,
-    context: RuntimeCallContext
+    context: TransportCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
     const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
       request.tools
@@ -156,7 +191,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   private async completeResponses(
     request: ModelCompletionRequest,
-    context: RuntimeCallContext
+    context: TransportCallContext
   ): Promise<ModelCompletion> {
     const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
       request.tools
@@ -190,7 +225,7 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
 
   private async *streamResponses(
     request: ModelCompletionRequest,
-    context: RuntimeCallContext
+    context: TransportCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
     const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
       request.tools
@@ -230,24 +265,28 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
     };
     signal?: AbortSignal;
   }): Promise<Response> {
-    return fetch(`${this.options.baseUrl.replace(/\/$/u, "")}/chat/completions`, {
-      method: "POST",
-      headers: this.createHeaders(),
-      body: JSON.stringify(input.body),
-      signal: input.signal
-    });
+    return this.post("chat/completions", input.body, input.signal);
   }
 
   private postResponse(input: {
     body: OpenAiResponsesRequestBody;
     signal?: AbortSignal;
   }): Promise<Response> {
-    return fetch(`${this.options.baseUrl.replace(/\/$/u, "")}/responses`, {
-      method: "POST",
-      headers: this.createHeaders(),
-      body: JSON.stringify(input.body),
-      signal: input.signal
-    });
+    return this.post("responses", input.body, input.signal);
+  }
+
+  /** A request that never got an answer failed on the connection, unless the caller stopped it. */
+  private async post(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+    try {
+      return await fetch(`${this.options.baseUrl.replace(/\/$/u, "")}/${path}`, {
+        method: "POST",
+        headers: this.createHeaders(),
+        body: JSON.stringify(body),
+        signal
+      });
+    } catch (error) {
+      throw signal?.aborted ? error : toModelTransportFailure(error);
+    }
   }
 
   private createHeaders(): Record<string, string> {
@@ -302,9 +341,10 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
   ): OpenAiResponsesRequestBody {
     if (isOpenAiResponsesContinuationAboveStringLimit(this.id, request.continuation)) {
       // The provider would answer 400 to this request, every time. Refuse it before it is sent.
-      throw new AppError("INTERNAL", "Model provider continuation is above the string limit", {
-        providerId: this.id,
-        continuationRejected: true
+      throw new ModelProviderError({
+        kind: "continuation_rejected",
+        message: "Model provider continuation is above the string limit",
+        details: { providerId: this.id, continuationRejected: true }
       });
     }
     const model = request.model || this.options.model;
@@ -352,12 +392,16 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
       return await response.json();
     } catch (error) {
       if (!(error instanceof SyntaxError)) {
-        throw error;
+        // The body was cut while it was read.
+        throw toModelTransportFailure(error);
       }
-      throw new AppError("INTERNAL", "Model provider returned invalid JSON", {
-        providerId: this.id,
+      const metadata = readProviderErrorMetadata(undefined, response.headers);
+      throw new ModelProviderError({
+        kind: "invalid_response",
+        message: "Model provider returned invalid JSON",
         status: response.status,
-        ...readProviderErrorMetadata(undefined, response.headers)
+        providerRequestId: metadata.requestId,
+        details: { providerId: this.id, status: response.status, ...metadata }
       });
     }
   }
@@ -365,25 +409,40 @@ export class OpenAiCompatibleChatProvider implements ModelProvider {
   private async createProviderError(
     response: Response,
     request?: ModelCompletionRequest
-  ): Promise<AppError> {
+  ): Promise<ModelProviderError> {
     const payload: unknown = await response.json().catch(() => undefined);
     const metadata = readProviderErrorMetadata(payload, response.headers);
-    if (response.status === 400 && metadata.providerErrorCode === "context_length_exceeded") {
-      return new AppError(
-        "VALIDATION_FAILED",
-        "This conversation is too long for the model. Start a new conversation.",
-        { providerId: this.id, status: response.status, ...metadata }
-      );
-    }
-    return new AppError("INTERNAL", "Model provider request failed", {
-      providerId: this.id,
+    const typed = {
       status: response.status,
-      ...metadata,
-      ...(request?.continuation &&
+      providerCode: metadata.providerErrorCode,
+      providerRequestId: metadata.requestId,
+      retryAfterMs: metadata.retryAfterMs,
+      providerMessage: readProviderErrorMessage(payload)
+    };
+    if (response.status === 400 && metadata.providerErrorCode === "context_length_exceeded") {
+      return new ModelProviderError({
+        ...typed,
+        kind: "context_length_exceeded",
+        message: "This conversation is too long for the model. Start a new conversation.",
+        details: { providerId: this.id, status: response.status, ...metadata }
+      });
+    }
+    const continuationRejected =
+      request?.continuation !== undefined &&
       response.status === 400 &&
-      isEncryptedContentAboveStringLimit(payload)
-        ? { continuationRejected: true }
-        : {})
+      isEncryptedContentAboveStringLimit(payload);
+    return new ModelProviderError({
+      ...typed,
+      kind: continuationRejected
+        ? "continuation_rejected"
+        : modelProviderErrorKindForStatus(response.status),
+      message: "Model provider request failed",
+      details: {
+        providerId: this.id,
+        status: response.status,
+        ...metadata,
+        ...(continuationRejected ? { continuationRejected: true } : {})
+      }
     });
   }
 }

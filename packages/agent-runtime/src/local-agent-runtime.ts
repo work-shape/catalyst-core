@@ -14,14 +14,12 @@ import {
   type AgentRuntimeEvent,
   type AgentRuntimeObserveOptions,
   type ChatMessage,
-  type ClientInstanceId,
   type Clock,
   type ConversationHistoryStore,
   type LocaleCode,
   type ModelBindingConfig,
   type ModelProviderContinuationStore,
   type ModelProviderConfig,
-  type ModelUsageRecorder,
   type ReasoningEffortConfig,
   type RuntimeCallContext,
   type RunObservationStore,
@@ -42,15 +40,17 @@ import {
 } from "@vivd-catalyst/core";
 import {
   isModelProviderContinuationRejected,
+  type ModelBindingRef,
+  type ModelCall,
+  type ModelCapabilities,
   type ModelCompletion,
+  type ModelGateway,
   type ModelMessage,
-  type ModelProvider,
   type ModelToolCall
 } from "@vivd-catalyst/model-provider";
 import { RunState, toRunFailureError, type RunFailureError } from "./run-state";
 import { createSystemInstructions } from "./system-instructions";
 import { executeToolCall } from "./tool-call-execution";
-import { recordModelUsage } from "./usage-recording";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
@@ -74,10 +74,6 @@ import {
 } from "./model-input-image-budget";
 import { materializeModelTools, type ModelToolRegistryView } from "./model-tool-materialization";
 
-export interface ModelCallGovernance extends ModelUsageRecorder {
-  runModelCall<T>(clientInstanceId: ClientInstanceId, execute: () => Promise<T>): Promise<T>;
-}
-
 export interface LocalAgentRuntimeOptions {
   logger?: import("@vivd-catalyst/core").Logger;
   assetSource: ConfigAssetSource;
@@ -88,10 +84,10 @@ export interface LocalAgentRuntimeOptions {
   modelProviderContinuationStore?: ModelProviderContinuationStore;
   agentRunStore?: AgentRunStore;
   runObservationStore?: RunObservationStore;
-  modelProvider: ModelProvider;
+  /** The only way a run reaches a model. It admits, retries and records usage. */
+  modelGateway: ModelGateway;
   toolRegistry: ModelToolRegistryView;
   toolExecution: ToolExecution;
-  usageGovernance: ModelCallGovernance;
   webAccess?: WebAccessConfig;
   agentSkillChangesEnabled?: boolean;
   historyMessageLimit?: number;
@@ -121,21 +117,6 @@ export interface LocalAgentRunFailureReport {
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
 const DEFAULT_MAX_STEPS = 64;
 const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
-// Protects a run from a provider's server error or dropped connection: the wait before the
-// second and the third attempt. After the third attempt the run fails with the provider's error.
-const MODEL_PROVIDER_RETRY_WAITS_MS = [1_000, 4_000];
-// Protects a run from a provider's per-minute rate limit, which the short waits above cannot
-// outlast: all waits of one model call on a rate limit add up to at most this. Then the run
-// fails and the user reads that the model is receiving too many requests.
-const MODEL_PROVIDER_RATE_LIMIT_WAIT_TOTAL_MS = 60_000;
-// The first wait on a rate limit that names no pause in `Retry-After`; each later one doubles.
-const MODEL_PROVIDER_RATE_LIMIT_FIRST_WAIT_MS = 4_000;
-// Each wait varies by this share in both directions, so runs that failed together do not retry together.
-const MODEL_PROVIDER_RETRY_JITTER_RATIO = 0.2;
-// Protects a run from waiting on a provider that asks for a long pause in `Retry-After` on an
-// error other than a rate limit. A shorter pause replaces the fixed wait; a longer one fails the
-// run with the provider's error.
-const MODEL_PROVIDER_RETRY_AFTER_MAX_MS = 60_000;
 const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
   toolOutput: {
     maxTokens: 60000
@@ -152,7 +133,11 @@ export class LocalAgentRuntime implements AgentRuntime {
     if (
       !options.modelProviderContinuationStore &&
       options.modelProviders.some(
-        (provider) => getProviderCompactionThreshold(provider) !== undefined
+        (provider) =>
+          getProviderCompactionThreshold(
+            provider,
+            options.modelGateway.capabilities({ providerId: provider.id })
+          ) !== undefined
       )
     ) {
       throw new AppError(
@@ -354,13 +339,22 @@ export class LocalAgentRuntime implements AgentRuntime {
       input.modelBindingId,
       input.reasoningEffort
     );
+    const { capabilities } = modelSelection;
     const tools = materializeModelTools({
       agent,
       modelProvider: modelSelection.provider,
+      capabilities,
       toolRegistry: this.options.toolRegistry,
       webAccess: this.options.webAccess
     });
-    const history = await this.loadModelHistory(input, context, modelSelection.provider);
+    const compactThresholdTokens = getProviderCompactionThreshold(
+      modelSelection.provider,
+      capabilities
+    );
+    const compactionEnabled = compactThresholdTokens !== undefined;
+    const history = await this.loadModelHistory(input, context, modelSelection.provider, {
+      compactionEnabled
+    });
     const userContent = await createSubmittedUserMessageContent(
       input.message.text,
       input.message.attachmentManifest,
@@ -398,25 +392,35 @@ export class LocalAgentRuntime implements AgentRuntime {
           "Older images left out of the model request"
         );
       }
-      return this.withTransientModelRetry(context, state, (attempt) =>
-        this.beforeEffect("provider_request", runId).then(() =>
-          this.options.usageGovernance.runModelCall(context.clientInstanceId, () =>
-            this.completeWithProvider(
-              {
-                providerId: modelSelection.provider.id,
-                model: modelSelection.model,
-                reasoningEffort: modelSelection.reasoningEffort,
-                fastMode: modelSelection.fastMode,
-                continuation: providerContinuation,
-                messages: withinImageBudget.messages,
-                tools
-              },
-              context,
-              state,
-              true,
-              attempt
-            )
-          )
+      // What the model does not take is left out here, so the gateway refuses nothing a
+      // configuration of the agent asked for in passing.
+      const reasoningEffort =
+        modelSelection.reasoningEffort !== undefined &&
+        capabilities.reasoningEfforts.includes(modelSelection.reasoningEffort)
+          ? modelSelection.reasoningEffort
+          : undefined;
+      return this.beforeEffect("provider_request", runId).then(() =>
+        this.streamModelCall(
+          {
+            binding: modelSelection.binding,
+            messages: withinImageBudget.messages,
+            tools,
+            reasoningEffort,
+            fastTier: modelSelection.fastMode && capabilities.fastTier,
+            continuation: capabilities.continuation ? providerContinuation : undefined,
+            attribution: {
+              kind: "agent_run",
+              conversationId: input.conversationId,
+              runId,
+              agentName: input.agentName,
+              userId: getRuntimeSubjectUserId(context)
+            },
+            clientInstanceId: context.clientInstanceId,
+            correlationId: context.correlationId,
+            signal: context.signal,
+            deadline: context.deadline
+          },
+          state
         )
       );
     };
@@ -444,6 +448,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           "Model provider continuation dropped; request rebuilt from history"
         );
         const rebuilt = await this.loadModelHistory(input, context, modelSelection.provider, {
+          compactionEnabled,
           withoutCheckpoint: true
         });
         providerContinuation = undefined;
@@ -451,21 +456,10 @@ export class LocalAgentRuntime implements AgentRuntime {
         return callModel();
       });
       carriesEarlierContinuation = false;
-      await recordModelUsage({
-        usageStore: this.options.usageGovernance,
-        runId,
-        startInput: input,
-        context,
-        provider: modelSelection.provider,
-        model: modelSelection.model,
-        fastMode: modelSelection.fastMode,
-        completion: modelResult.completion
-      });
       const { completion, emittedDeltas, reasoning } = modelResult;
       providerContinuation = completion.continuation;
       const compactedThisCall = completion.contextManagement?.compacted === true;
       runCompacted ||= compactedThisCall;
-      const compactThresholdTokens = getProviderCompactionThreshold(modelSelection.provider);
       const modelContext =
         compactThresholdTokens === undefined
           ? undefined
@@ -667,8 +661,9 @@ export class LocalAgentRuntime implements AgentRuntime {
     userSelectedBindingId?: string,
     userSelectedReasoningEffort?: ReasoningEffortConfig
   ): {
+    binding: ModelBindingRef;
     provider: ModelProviderConfig;
-    model: string;
+    capabilities: ModelCapabilities;
     reasoningEffort?: ReasoningEffortConfig;
     fastMode: boolean;
   } {
@@ -692,12 +687,14 @@ export class LocalAgentRuntime implements AgentRuntime {
         );
       }
       const provider = this.getModelProvider(binding.providerId);
+      const capabilities = this.options.modelGateway.capabilities({ bindingId });
       const configuredEffort =
         defaultReasoningEffortForAgentBinding(agent, binding) ??
-        (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined);
+        (capabilities.reasoningEfforts.length > 0 ? provider.reasoningEffort : undefined);
       return {
+        binding: { bindingId },
         provider,
-        model: binding.model ?? provider.model,
+        capabilities,
         // An effort the user picked wins while the binding still offers it; a pick the binding
         // no longer offers falls back to the configured effort instead of failing the run.
         reasoningEffort:
@@ -715,12 +712,14 @@ export class LocalAgentRuntime implements AgentRuntime {
     const provider = this.getModelProvider(
       agent.modelProviderId ?? this.options.defaultModelProvider.id
     );
+    const capabilities = this.options.modelGateway.capabilities({ providerId: provider.id });
     return {
+      binding: { providerId: provider.id },
       provider,
-      model: provider.model,
+      capabilities,
       reasoningEffort:
         agent.reasoningEffort ??
-        (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined),
+        (capabilities.reasoningEfforts.length > 0 ? provider.reasoningEffort : undefined),
       fastMode: false
     };
   }
@@ -737,7 +736,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     input: StartAgentRunInput,
     context: RuntimeCallContext,
     provider: ModelProviderConfig,
-    options: { withoutCheckpoint?: boolean } = {}
+    options: { compactionEnabled: boolean; withoutCheckpoint?: boolean }
   ): Promise<{
     messages: ModelMessage[];
     providerContinuation?: ModelCompletion["continuation"];
@@ -749,7 +748,7 @@ export class LocalAgentRuntime implements AgentRuntime {
     const history = orderApprovalDecisionsForModel(
       dropCurrentSubmittedMessage(persistedMessages, input.message.text, input.inputMessageId)
     );
-    const compactionEnabled = getProviderCompactionThreshold(provider) !== undefined;
+    const { compactionEnabled } = options;
     if (options.withoutCheckpoint) {
       // What a conversation that never compacted sends: all of its history, no continuation.
       return {
@@ -858,35 +857,32 @@ export class LocalAgentRuntime implements AgentRuntime {
     };
   }
 
-  private async completeWithProvider(
-    request: Parameters<ModelProvider["complete"]>[0],
-    context: RuntimeCallContext,
-    state: RunState,
-    streamText: boolean,
-    attempt: ModelProviderAttempt
+  /**
+   * Sends one call through the gateway and turns what it yields into run events. The gateway
+   * retries and records usage; this only reports.
+   */
+  private async streamModelCall(
+    call: ModelCall,
+    state: RunState
   ): Promise<{
     completion: ModelCompletion;
     emittedDeltas: boolean;
     reasoning: StoredReasoningSummary[];
   }> {
-    if (!streamText || !this.options.modelProvider.stream) {
-      const completion = await this.options.modelProvider.complete(request, context);
-      attempt.retrySafe = false;
+    if (!this.options.modelGateway.capabilities(call.binding).streaming) {
       return {
-        completion,
+        completion: await this.options.modelGateway.complete(call),
         emittedDeltas: false,
         reasoning: []
       };
     }
-
     let completion: ModelCompletion | undefined;
     let emittedDeltas = false;
     let streamedText = "";
     const reasoningById = new Map<string, string>();
-    for await (const event of this.options.modelProvider.stream(request, context)) {
+    for await (const event of this.options.modelGateway.stream(call)) {
       if (event.type === "text_delta") {
         if (event.delta.length > 0) {
-          attempt.retrySafe = false;
           emittedDeltas = true;
           streamedText += event.delta;
           state.emit({
@@ -899,7 +895,6 @@ export class LocalAgentRuntime implements AgentRuntime {
       }
       if (event.type === "reasoning_delta") {
         if (event.delta.length > 0) {
-          attempt.retrySafe = false;
           reasoningById.set(event.id, `${reasoningById.get(event.id) ?? ""}${event.delta}`);
           state.emit({
             type: "reasoning_delta",
@@ -911,18 +906,23 @@ export class LocalAgentRuntime implements AgentRuntime {
         continue;
       }
       if (event.type === "tool_call_preparing") {
-        const toolCallId = asToolCallId(event.toolCallId);
-        attempt.preparingToolCallIds.push(toolCallId);
         state.emit({
           type: "tool_call_preparing",
           runId: state.runId,
-          toolCallId,
+          toolCallId: asToolCallId(event.toolCallId),
           toolName: event.toolName
         });
         continue;
       }
+      if (event.type === "tool_call_preparation_cancelled") {
+        state.emit({
+          type: "tool_call_preparation_cancelled",
+          runId: state.runId,
+          toolCallId: asToolCallId(event.toolCallId)
+        });
+        continue;
+      }
       if (event.type === "provider_tool_started") {
-        attempt.retrySafe = false;
         state.emit({
           type: "tool_call_started",
           runId: state.runId,
@@ -933,7 +933,6 @@ export class LocalAgentRuntime implements AgentRuntime {
         continue;
       }
       if (event.type === "provider_tool_completed") {
-        attempt.retrySafe = false;
         state.emit({
           type: "tool_call_completed",
           runId: state.runId,
@@ -947,27 +946,26 @@ export class LocalAgentRuntime implements AgentRuntime {
         });
         continue;
       }
-      attempt.retrySafe = false;
       completion = event.completion;
+      // Text the provider did not stream is shown as soon as the answer is here, before the
+      // gateway records the call's usage.
+      const unstreamedText = getUnstreamedCompletionText(
+        completion.text,
+        streamedText,
+        emittedDeltas
+      );
+      if (unstreamedText.length > 0) {
+        emittedDeltas = true;
+        state.emit({
+          type: "message_delta",
+          runId: state.runId,
+          delta: unstreamedText
+        });
+      }
     }
 
     if (!completion) {
       throw new AppError("INTERNAL", "Model provider stream ended without a completion");
-    }
-
-    const unstreamedText = getUnstreamedCompletionText(
-      completion.text,
-      streamedText,
-      emittedDeltas
-    );
-    if (unstreamedText.length > 0) {
-      attempt.retrySafe = false;
-      emittedDeltas = true;
-      state.emit({
-        type: "message_delta",
-        runId: state.runId,
-        delta: unstreamedText
-      });
     }
 
     return {
@@ -978,201 +976,17 @@ export class LocalAgentRuntime implements AgentRuntime {
         .filter((summary) => summary.text.length > 0)
     };
   }
-
-  private async withTransientModelRetry<T>(
-    context: RuntimeCallContext,
-    state: RunState,
-    execute: (attempt: ModelProviderAttempt) => Promise<T>
-  ): Promise<T> {
-    let transientFailures = 0;
-    let rateLimitFailures = 0;
-    let rateLimitWaitLeftMs = MODEL_PROVIDER_RATE_LIMIT_WAIT_TOTAL_MS;
-    for (;;) {
-      if (context.signal?.aborted) {
-        throw new AppError(
-          "CONFLICT",
-          "Agent run was stopped before the model provider was called"
-        );
-      }
-      if (context.deadline && Date.now() >= context.deadline.getTime()) {
-        throw new AppError(
-          "TIMEOUT",
-          "Agent run deadline passed before the model provider was called"
-        );
-      }
-      const progress: ModelProviderAttempt = { retrySafe: true, preparingToolCallIds: [] };
-      try {
-        return await execute(progress);
-      } catch (error) {
-        const failure = rateLimitFailureFor(error);
-        if (
-          !progress.retrySafe ||
-          context.signal?.aborted ||
-          !isTransientModelProviderError(error)
-        ) {
-          throw failure;
-        }
-        const retryAfterMs = readRetryAfterMs(error);
-        let waitMs: number;
-        if (failure !== error) {
-          rateLimitFailures += 1;
-          // Never sooner than the provider asks, and never past what is left of the minute.
-          waitMs = Math.min(
-            Math.max(retryAfterMs ?? 0, modelProviderRateLimitWaitMs(rateLimitFailures)),
-            rateLimitWaitLeftMs
-          );
-          if (waitMs <= 0 || (retryAfterMs ?? 0) > rateLimitWaitLeftMs) {
-            throw failure;
-          }
-          rateLimitWaitLeftMs -= waitMs;
-        } else {
-          transientFailures += 1;
-          if (transientFailures > MODEL_PROVIDER_RETRY_WAITS_MS.length) {
-            throw failure;
-          }
-          waitMs = retryAfterMs ?? modelProviderRetryWaitMs(transientFailures);
-          if (waitMs > MODEL_PROVIDER_RETRY_AFTER_MAX_MS) {
-            throw failure;
-          }
-        }
-        if (context.deadline && Date.now() + waitMs >= context.deadline.getTime()) {
-          throw failure;
-        }
-        for (const toolCallId of progress.preparingToolCallIds) {
-          state.emit({
-            type: "tool_call_preparation_cancelled",
-            runId: state.runId,
-            toolCallId
-          });
-        }
-        try {
-          await waitUnlessAborted(waitMs, context.signal);
-        } catch {
-          throw failure;
-        }
-      }
-    }
-  }
-}
-
-interface ModelProviderAttempt {
-  retrySafe: boolean;
-  preparingToolCallIds: ReturnType<typeof asToolCallId>[];
-}
-
-/** Rejects when the signal aborts first. Uses the global timer so a test clock can drive it. */
-function waitUnlessAborted(waitMs: number, signal: AbortSignal | undefined): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(new Error("Model provider retry wait was cancelled"));
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, waitMs);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-function modelProviderRetryWaitMs(failedAttempt: number): number {
-  return withRetryJitter(MODEL_PROVIDER_RETRY_WAITS_MS[failedAttempt - 1] ?? 0);
-}
-
-function modelProviderRateLimitWaitMs(failedAttempt: number): number {
-  return withRetryJitter(MODEL_PROVIDER_RATE_LIMIT_FIRST_WAIT_MS * 2 ** (failedAttempt - 1));
-}
-
-function withRetryJitter(waitMs: number): number {
-  return Math.round(waitMs * (1 + (Math.random() * 2 - 1) * MODEL_PROVIDER_RETRY_JITTER_RATIO));
-}
-
-/**
- * What a run fails with: the error itself, or for a provider's rate limit (HTTP 429, or the same
- * refusal inside a stream) an error whose message the user may read.
- */
-function rateLimitFailureFor(error: unknown): unknown {
-  let candidate = error;
-  for (let depth = 0; depth < 4 && candidate instanceof Error; depth += 1) {
-    const details =
-      candidate instanceof AppError && isRecord(candidate.details) ? candidate.details : undefined;
-    if (details?.status === 429) {
-      const failure = new AppError(
-        "RATE_LIMITED",
-        "The model is receiving too many requests. Try again in a minute."
-      );
-      failure.cause = error;
-      return failure;
-    }
-    candidate = candidate.cause;
-  }
-  return error;
-}
-
-/** The pause a provider asked for with its refusal, read from the error or what caused it. */
-function readRetryAfterMs(error: unknown): number | undefined {
-  let candidate = error;
-  for (let depth = 0; depth < 4 && candidate instanceof Error; depth += 1) {
-    const details =
-      candidate instanceof AppError && isRecord(candidate.details) ? candidate.details : undefined;
-    if (typeof details?.retryAfterMs === "number" && details.retryAfterMs >= 0) {
-      return details.retryAfterMs;
-    }
-    candidate = candidate.cause;
-  }
-  return undefined;
-}
-
-function isTransientModelProviderError(error: unknown): boolean {
-  let candidate = error;
-  for (let depth = 0; depth < 4 && candidate; depth += 1) {
-    if (candidate instanceof AppError) {
-      if (candidate.code === "TIMEOUT") {
-        return true;
-      }
-      const details = isRecord(candidate.details) ? candidate.details : undefined;
-      const status = typeof details?.status === "number" ? details.status : undefined;
-      if (status === 408 || status === 429 || (status !== undefined && status >= 500)) {
-        return true;
-      }
-    }
-    if (candidate instanceof Error) {
-      const code = readErrorCode(candidate);
-      if (
-        code === "ECONNRESET" ||
-        code === "ECONNREFUSED" ||
-        code === "EPIPE" ||
-        code === "ETIMEDOUT" ||
-        code === "UND_ERR_SOCKET"
-      ) {
-        return true;
-      }
-      if (/\b(?:fetch failed|socket hang up|terminated|timed out)\b/iu.test(candidate.message)) {
-        return true;
-      }
-      candidate = candidate.cause;
-      continue;
-    }
-    break;
-  }
-  return false;
-}
-
-function readErrorCode(error: Error): string | undefined {
-  const code = (error as Error & { code?: unknown }).code;
-  return typeof code === "string" ? code : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isCancellationRequested(status: AgentRunStatus): boolean {
   return status === "cancelling" || status === "cancelled";
 }
 
-function getProviderCompactionThreshold(provider: ModelProviderConfig): number | undefined {
-  return provider.type === "openai-compatible"
+function getProviderCompactionThreshold(
+  provider: ModelProviderConfig,
+  capabilities: Pick<ModelCapabilities, "serverCompaction">
+): number | undefined {
+  return capabilities.serverCompaction
     ? provider.contextManagement?.compaction?.compactThresholdTokens
     : undefined;
 }

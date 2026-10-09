@@ -1,6 +1,7 @@
 import {
   AppError,
   type ClientInstanceId,
+  type ModelAttribution,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventStore,
@@ -127,8 +128,13 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     this.costs = options.costs ?? {};
   }
 
-  async runModelCall<T>(clientInstanceId: ClientInstanceId, execute: () => Promise<T>): Promise<T> {
-    const reservation = await this.reserveModelCall(clientInstanceId);
+  /**
+   * Admits one model call and holds its place until `execute` settles. The attribution says who
+   * and what the call is for; admission decides on the instance alone until limits per user and
+   * workspace read it.
+   */
+  async runModelCall<T>(call: ModelCallAdmission, execute: () => Promise<T>): Promise<T> {
+    const reservation = await this.reserveModelCall(call.clientInstanceId);
     try {
       return await execute();
     } finally {
@@ -137,6 +143,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }
 
   recordModelUsage(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
+    const attribution = assertRecordableAttribution(input.attribution);
     const normalizedInput: ModelUsageEventInput = {
       ...input,
       inputTokens: normalizeCount(input.inputTokens),
@@ -153,10 +160,26 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       webSearchCallCount: normalizeCount(input.webSearchCallCount ?? 0)
     };
     return this.store.appendModelUsageEvent({
-      ...normalizedInput,
+      clientInstanceId: normalizedInput.clientInstanceId,
+      conversationId: attribution.conversationId,
+      agentRunId: attribution.runId,
+      agentName: attribution.agentName,
+      providerId: normalizedInput.providerId,
+      model: normalizedInput.model,
+      inputTokens: normalizedInput.inputTokens,
+      ...(normalizedInput.cachedInputTokens === undefined
+        ? {}
+        : { cachedInputTokens: normalizedInput.cachedInputTokens }),
+      outputTokens: normalizedInput.outputTokens,
+      totalTokens: normalizedInput.totalTokens,
+      source: normalizedInput.source,
       webSearchCallCount: normalizedInput.webSearchCallCount ?? 0,
       fastMode: normalizedInput.fastMode === true,
-      customerBillableCost: calculateUsageCost(normalizedInput, this.costs.customer)
+      ...(normalizedInput.providerServiceTier === undefined
+        ? {}
+        : { providerServiceTier: normalizedInput.providerServiceTier }),
+      customerBillableCost: calculateUsageCost(normalizedInput, this.costs.customer),
+      correlationId: normalizedInput.correlationId
     });
   }
 
@@ -371,8 +394,41 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }
 }
 
+/** What a model call is admitted with. */
+export interface ModelCallAdmission {
+  clientInstanceId: ClientInstanceId;
+  attribution: ModelAttribution;
+}
+
+/** The fields of a usage event that its cost is settled from. */
+export type UsageCostEvent = Pick<
+  ModelUsageEventInput,
+  | "providerId"
+  | "model"
+  | "inputTokens"
+  | "cachedInputTokens"
+  | "outputTokens"
+  | "source"
+  | "webSearchCallCount"
+  | "fastMode"
+  | "providerServiceTier"
+>;
+
+/** The usage event has columns for an agent run only, until a system call gets its own. */
+function assertRecordableAttribution(
+  attribution: ModelAttribution
+): Extract<ModelAttribution, { kind: "agent_run" }> {
+  if (attribution.kind !== "agent_run") {
+    throw new AppError(
+      "INTERNAL",
+      `Usage of a model call with attribution '${attribution.kind}' cannot be recorded yet`
+    );
+  }
+  return attribution;
+}
+
 export function calculateUsageCost(
-  event: ModelUsageEventInput,
+  event: UsageCostEvent,
   rateCard: UsageRateCardConfig | undefined,
   source: UsageCostRecord["source"] = "rate_card"
 ): UsageCostRecord {
@@ -441,7 +497,7 @@ export function calculateUsageCost(
 }
 
 function calculateKnownComponents(
-  event: ModelUsageEventInput,
+  event: UsageCostEvent,
   tokenRates: UsageRateCardTokenRatesConfig,
   webSearchRate: { pricePerCall: number } | undefined
 ): UsageCostComponents {
@@ -494,7 +550,7 @@ function incompleteCost(
 
 function findWebSearchRate(
   rateCard: UsageRateCardConfig,
-  event: ModelUsageEventInput
+  event: UsageCostEvent
 ): { pricePerCall: number } | undefined {
   const rates = rateCard.webSearch ?? [];
   return (

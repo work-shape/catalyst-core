@@ -20,7 +20,7 @@ import {
 } from "@vivd-catalyst/core";
 
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { ModelProvider } from "@vivd-catalyst/model-provider";
+import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 describe("conversation resource store queries", () => {

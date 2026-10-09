@@ -1,3 +1,4 @@
+import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
 import { createTestInstance } from "./support/test-instance";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { asClientInstanceId, asManagedFileId, type RuntimeCallContext } from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { modelContentText, type ModelProvider } from "@vivd-catalyst/model-provider";
+import { modelContentText } from "@vivd-catalyst/model-provider";
 import {
   createLocalWorkspaceFileByteStore,
   createWorkspaceToolDefinitions,
@@ -92,7 +93,7 @@ describe("agent workspace file e2e", () => {
       let modelStep = 0;
       let sawImportOutput = false;
       let sawExecStdout = false;
-      const modelProvider: ModelProvider = {
+      const modelProvider: FakeModelProvider = {
         id: "test-provider",
         async complete(request) {
           modelStep += 1;
@@ -158,45 +159,47 @@ describe("agent workspace file e2e", () => {
           throw new Error(`Unexpected model step ${modelStep}`);
         }
       };
-      const runtime = new LocalAgentRuntime({
-        assetSource: createStaticConfigAssetSource({
-          agents: [
+      const runtime = new LocalAgentRuntime(
+        withTestModelGateway({
+          assetSource: createStaticConfigAssetSource({
+            agents: [
+              {
+                skillNames: [],
+                name: "workspace_file_agent",
+                displayName: "Workspace File Agent",
+                instructions:
+                  "Import uploaded files with workspace.import_files, inspect them with workspace.exec, and answer from stdout.",
+                modelProviderId: "test-provider",
+                toolNames: tools.map((tool) => tool.name),
+                initialPrompts: []
+              }
+            ]
+          }),
+          modelProviders: [
             {
-              skillNames: [],
-              name: "workspace_file_agent",
-              displayName: "Workspace File Agent",
-              instructions:
-                "Import uploaded files with workspace.import_files, inspect them with workspace.exec, and answer from stdout.",
-              modelProviderId: "test-provider",
-              toolNames: tools.map((tool) => tool.name),
-              initialPrompts: []
+              id: "test-provider",
+              type: "deterministic",
+              model: "test-model"
             }
-          ]
-        }),
-        modelProviders: [
-          {
+          ],
+          defaultModelProvider: {
             id: "test-provider",
             type: "deterministic",
             model: "test-model"
-          }
-        ],
-        defaultModelProvider: {
-          id: "test-provider",
-          type: "deterministic",
-          model: "test-model"
-        },
-        conversationHistory: store.conversations,
-        agentRunStore: store.agentRuns,
-        runObservationStore: store.agentRuns,
-        modelProvider,
-        toolRegistry: new ToolRegistry({ tools }),
-        toolExecution,
-        usageGovernance: new ModelUsageGovernance({
-          store: store.usage,
-          budget: {},
-          safeguards: {}
+          },
+          conversationHistory: store.conversations,
+          agentRunStore: store.agentRuns,
+          runObservationStore: store.agentRuns,
+          modelProvider,
+          toolRegistry: new ToolRegistry({ tools }),
+          toolExecution,
+          usageGovernance: new ModelUsageGovernance({
+            store: store.usage,
+            budget: {},
+            safeguards: {}
+          })
         })
-      });
+      );
 
       const run = await runtime.start(
         {
@@ -229,7 +232,7 @@ describe("agent workspace file e2e", () => {
 });
 
 function toolOutputText(
-  messages: Parameters<ModelProvider["complete"]>[0]["messages"],
+  messages: Parameters<FakeModelProvider["complete"]>[0]["messages"],
   toolCallId: string
 ): string {
   const message = messages.find(

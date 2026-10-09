@@ -1,3 +1,4 @@
+import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
 import postgres from "postgres";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance } from "./support/test-instance";
@@ -20,7 +21,6 @@ import {
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
-import { type ModelProvider } from "@vivd-catalyst/model-provider";
 import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { messageSchema } from "@vivd-catalyst/api-contract";
@@ -312,8 +312,8 @@ describe("approval decision history", () => {
         providerId: providerConfig.id,
         state: { compactionItem: { type: "compaction", encrypted_content: "opaque" } }
       };
-      const calls: Parameters<ModelProvider["complete"]>[0][] = [];
-      const modelProvider: ModelProvider = {
+      const calls: Parameters<FakeModelProvider["complete"]>[0][] = [];
+      const modelProvider: FakeModelProvider = {
         id: providerConfig.id,
         async complete(input) {
           calls.push(structuredClone(input));
@@ -332,48 +332,50 @@ describe("approval decision history", () => {
           };
         }
       };
-      const runtime = new LocalAgentRuntime({
-        assetSource: createStaticConfigAssetSource({
-          agents: [
-            {
-              name: "agent",
-              displayName: "Agent",
-              instructions: "Help",
-              modelProviderId: providerConfig.id,
-              toolNames: [],
-              skillNames: [],
-              initialPrompts: []
+      const runtime = new LocalAgentRuntime(
+        withTestModelGateway({
+          assetSource: createStaticConfigAssetSource({
+            agents: [
+              {
+                name: "agent",
+                displayName: "Agent",
+                instructions: "Help",
+                modelProviderId: providerConfig.id,
+                toolNames: [],
+                skillNames: [],
+                initialPrompts: []
+              }
+            ]
+          }),
+          modelProviders: [providerConfig],
+          defaultModelProvider: providerConfig,
+          conversationHistory: f.store.conversations,
+          modelProviderContinuationStore: f.store.conversations,
+          agentRunStore: f.store.agentRuns,
+          runObservationStore: f.store.agentRuns,
+          modelProvider,
+          toolRegistry: new ToolRegistry({ tools: [] }),
+          toolExecution: {
+            authorize: async () => ({ status: "allowed" }),
+            execute: async () => {
+              expect((await f.messages()).at(-1)?.metadata?.agentRuntime).toMatchObject({
+                kind: "assistant_tool_calls"
+              });
+              await f.workflow.decideRequest(reviewer, context, {
+                requestId: request.id,
+                decision: "request_changes",
+                comment: "Include the appendix"
+              });
+              return { status: "success", output: { checked: true } };
             }
-          ]
-        }),
-        modelProviders: [providerConfig],
-        defaultModelProvider: providerConfig,
-        conversationHistory: f.store.conversations,
-        modelProviderContinuationStore: f.store.conversations,
-        agentRunStore: f.store.agentRuns,
-        runObservationStore: f.store.agentRuns,
-        modelProvider,
-        toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: {
-          authorize: async () => ({ status: "allowed" }),
-          execute: async () => {
-            expect((await f.messages()).at(-1)?.metadata?.agentRuntime).toMatchObject({
-              kind: "assistant_tool_calls"
-            });
-            await f.workflow.decideRequest(reviewer, context, {
-              requestId: request.id,
-              decision: "request_changes",
-              comment: "Include the appendix"
-            });
-            return { status: "success", output: { checked: true } };
-          }
-        },
-        usageGovernance: new ModelUsageGovernance({
-          store: f.store.usage,
-          budget: {},
-          safeguards: {}
+          },
+          usageGovernance: new ModelUsageGovernance({
+            store: f.store.usage,
+            budget: {},
+            safeguards: {}
+          })
         })
-      });
+      );
       const runTurn = async (text: string) => {
         const input = await f.store.conversations.appendMessage({
           clientInstanceId,

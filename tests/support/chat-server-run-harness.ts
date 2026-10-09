@@ -20,7 +20,7 @@ import {
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
-import type { ModelProvider } from "@vivd-catalyst/model-provider";
+import type { FakeModelProvider as ModelProvider } from "./model-gateway";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createTestConfig, createTestUser } from "./fixtures";
 

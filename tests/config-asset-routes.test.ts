@@ -1,3 +1,4 @@
+import { builtInModelCapabilities } from "./support/model-gateway";
 import type { TestOperationName, TestCallInput } from "./support/operations";
 
 import { createTestInstance, type TestInstance } from "./support/test-instance";
@@ -22,7 +23,7 @@ import {
 } from "@vivd-catalyst/core";
 
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { ModelProvider } from "@vivd-catalyst/model-provider";
+import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
 
@@ -1499,7 +1500,11 @@ async function createFixture(
         ...(input.webSearch
           ? {
               validateAgents: (agents: AgentConfig[]) =>
-                findConfigAssetAgentValidationIssues(config, agents)
+                findConfigAssetAgentValidationIssues(
+                  config,
+                  agents,
+                  builtInModelCapabilities(config)
+                )
             }
           : {})
       },

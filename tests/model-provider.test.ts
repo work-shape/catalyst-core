@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppError, asClientInstanceId } from "@vivd-catalyst/core";
 import {
   DeterministicModelProvider,
-  ModelProviderRegistry,
   OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
   type ModelCompletionStreamEvent
@@ -1788,9 +1787,9 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
-  it("delegates streaming through the provider registry", async () => {
+  it("streams the deterministic provider's answer in pieces", async () => {
     const clientInstanceId = asClientInstanceId("client-test");
-    const registry = new ModelProviderRegistry([new DeterministicModelProvider("local")]);
+    const registry = new DeterministicModelProvider("local");
 
     const events: ModelCompletionStreamEvent[] = [];
     for await (const event of registry.stream(

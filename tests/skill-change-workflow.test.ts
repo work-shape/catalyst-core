@@ -1,3 +1,4 @@
+import { builtInModelCapabilities } from "./support/model-gateway";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -608,9 +609,10 @@ describe("skill change tool and wiring policy", () => {
 
   it("rejects an agent tool reference with disabled policy", async () => {
     const f = await fixture();
-    expect(findConfigAssetAgentValidationIssues(f.config, [f.agent])).toEqual([]);
+    const capabilities = builtInModelCapabilities(f.config);
+    expect(findConfigAssetAgentValidationIssues(f.config, [f.agent], capabilities)).toEqual([]);
     f.config.administration.agentConfiguration.agentSkillChanges.enabled = false;
-    expect(findConfigAssetAgentValidationIssues(f.config, [f.agent])).toEqual([
+    expect(findConfigAssetAgentValidationIssues(f.config, [f.agent], capabilities)).toEqual([
       expect.stringContaining("skill changes are disabled")
     ]);
   });

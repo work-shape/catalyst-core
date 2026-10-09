@@ -23,7 +23,8 @@ import {
   createSkillChangeApprovalHandler
 } from "@vivd-catalyst/chat-server";
 import { createSkillChangePreview, type SkillChangeOperation } from "@vivd-catalyst/config-schema";
-import type { ModelCompletion, ModelProvider } from "@vivd-catalyst/model-provider";
+import type { ModelCompletion } from "@vivd-catalyst/model-provider";
+import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createProposeSkillChangeTool } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
@@ -113,7 +114,7 @@ async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
   const runner = new ApprovalCheckRunner({
     config,
     clientInstanceId,
-    modelProvider: { id: "fake-provider", complete },
+    modelProvider: { complete },
     usageGovernance
   });
   const workflow = new ApprovalRequestWorkflow({

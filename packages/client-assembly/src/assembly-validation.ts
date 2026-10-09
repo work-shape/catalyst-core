@@ -1,6 +1,10 @@
 import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
 import { type ApprovalRequestHandlerRegistry, AppError } from "@vivd-catalyst/core";
-import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
+import {
+  WEB_SEARCH_MODEL_TOOL_NAME,
+  type ModelBindingRef,
+  type ModelCapabilities
+} from "@vivd-catalyst/model-provider";
 import {
   getModelProviderConfigs,
   getModelSelectionForAgent,
@@ -36,7 +40,9 @@ export function assertClientAssemblyValid(input: {
 
 export function findConfigAssetAgentValidationIssues(
   config: ClientInstanceConfig,
-  agents: AgentConfig[]
+  agents: AgentConfig[],
+  /** What a model can do, as the instance's gateway reports it. */
+  capabilitiesOf: (binding: ModelBindingRef) => ModelCapabilities
 ): string[] {
   return agents.flatMap((agent) => {
     if (
@@ -55,6 +61,10 @@ export function findConfigAssetAgentValidationIssues(
       const materializationIssues = findModelToolMaterializationIssues({
         agent,
         modelProvider: selection.provider,
+        capabilities: capabilitiesOf({
+          providerId: selection.provider.id,
+          model: selection.model
+        }),
         webAccess: config.webAccess
       });
       if (materializationIssues.length > 0) {

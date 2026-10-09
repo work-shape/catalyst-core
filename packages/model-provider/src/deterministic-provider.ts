@@ -2,16 +2,29 @@ import { AppError, createPlatformId } from "@vivd-catalyst/core";
 import {
   isModelFunctionTool,
   modelContentText,
+  type ModelCapabilities,
   type ModelCompletion,
   type ModelCompletionRequest,
   type ModelCompletionStreamEvent,
-  type ModelProvider,
   type ModelTool,
   type ModelToolCall
 } from "./types";
 import { parseToolInput } from "./tool-input";
 
-export class DeterministicModelProvider implements ModelProvider {
+// Fixed rules read text only: no reasoning, no native tool, no continuation, no image.
+export const DETERMINISTIC_CAPABILITIES: ModelCapabilities = {
+  reasoningEfforts: [],
+  nativeTools: [],
+  serverCompaction: false,
+  continuation: false,
+  fastTier: false,
+  imageInput: false,
+  documentInput: false,
+  structuredOutput: false,
+  streaming: true
+};
+
+export class DeterministicModelProvider {
   readonly id: string;
 
   constructor(id = "local") {
@@ -68,7 +81,10 @@ export class DeterministicModelProvider implements ModelProvider {
     };
   }
 
-  async *stream(request: ModelCompletionRequest): AsyncIterable<ModelCompletionStreamEvent> {
+  async *stream(
+    request: ModelCompletionRequest,
+    _context?: unknown
+  ): AsyncIterable<ModelCompletionStreamEvent> {
     const completion = await this.complete(request);
     if (completion.toolCalls.length === 0 && completion.text.length > 0) {
       for (const delta of chunkText(completion.text)) {

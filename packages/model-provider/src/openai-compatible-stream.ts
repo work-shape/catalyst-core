@@ -12,7 +12,12 @@ import {
   toModelUsage,
   toResponsesModelUsage
 } from "./openai-compatible-mapping";
-import { readProviderErrorMetadata } from "./provider-error";
+import {
+  ModelProviderError,
+  modelProviderErrorKindForStatus,
+  toModelTransportFailure
+} from "./model-provider-error";
+import { readProviderErrorMessage, readProviderErrorMetadata } from "./provider-error";
 import { parseToolInput } from "./tool-input";
 import type { OpenAiCompatibleResponse, OpenAiResponsesResponse } from "./openai-compatible-types";
 
@@ -295,10 +300,15 @@ export async function* streamOpenAiResponsesCompletion(
           : providerErrorCode === "rate_limit_exceeded"
             ? 429
             : undefined;
-      throw new AppError("INTERNAL", "Model provider stream failed", {
-        providerId,
-        ...metadata,
-        ...(status ? { status } : {})
+      throw new ModelProviderError({
+        kind: status ? modelProviderErrorKindForStatus(status) : "invalid_request",
+        message: "Model provider stream failed",
+        status,
+        providerCode: providerErrorCode,
+        providerRequestId: metadata.requestId,
+        retryAfterMs: metadata.retryAfterMs,
+        providerMessage: readProviderErrorMessage(payload.response ?? payload),
+        details: { providerId, ...metadata, ...(status ? { status } : {}) }
       });
     }
   }
@@ -449,7 +459,8 @@ async function readWithinIdleLimit(
     return await Promise.race([reader.read(), idle]);
   } catch (error) {
     void reader.cancel().catch(() => undefined);
-    throw error;
+    // The stream was cut while it was read, or the caller stopped it.
+    throw toModelTransportFailure(error);
   } finally {
     clearTimeout(timer);
   }

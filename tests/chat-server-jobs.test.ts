@@ -223,7 +223,6 @@ describe("the title job and a rename by the user", () => {
       ...createChatServerJobs({
         ...options,
         modelProvider: {
-          id: "local",
           // The job has read the conversation and has not written the title yet.
           async complete() {
             if (renameDuringGeneration)

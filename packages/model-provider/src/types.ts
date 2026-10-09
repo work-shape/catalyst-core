@@ -1,11 +1,9 @@
-import { AppError } from "@vivd-catalyst/core";
 import type {
   JsonObject,
   MessageCitation,
   ModelProviderConfig,
   ModelTokenUsage,
   ReasoningEffortConfig,
-  RuntimeCallContext,
   SupportedImageMimeType,
   WebSource
 } from "@vivd-catalyst/core";
@@ -83,6 +81,11 @@ export type ModelMessage =
       toolCallId: string;
     };
 
+/**
+ * A request addressed to one provider entry by its id. The transports inside the adapters take
+ * it, and so does the narrow completion that titles and the approval check call until they get
+ * an attribution of their own.
+ */
 export interface ModelCompletionRequest {
   providerId: string;
   model: string;
@@ -97,20 +100,6 @@ export interface ModelCompletionRequest {
 export interface ModelProviderContinuation {
   providerId: string;
   state: unknown;
-}
-
-/**
- * Whether a provider error says the continuation sent with the request can never be used. The
- * caller drops that continuation and sends the request again from the conversation's history.
- */
-export function isModelProviderContinuationRejected(error: unknown): boolean {
-  return (
-    error instanceof AppError &&
-    typeof error.details === "object" &&
-    error.details !== null &&
-    "continuationRejected" in error.details &&
-    error.details.continuationRejected === true
-  );
 }
 
 export interface ModelCompletion {
@@ -161,13 +150,60 @@ export type ModelCompletionStreamEvent =
       completion: ModelCompletion;
     };
 
-export interface ModelProvider {
-  readonly id: string;
-  complete(request: ModelCompletionRequest, context: RuntimeCallContext): Promise<ModelCompletion>;
-  stream?(
-    request: ModelCompletionRequest,
-    context: RuntimeCallContext
-  ): AsyncIterable<ModelCompletionStreamEvent>;
+/** What a transport is told about the call besides the request. */
+export interface ModelTransportContext {
+  signal?: AbortSignal;
+  deadline?: Date;
+}
+
+/** A native tool of a provider, named by the product. Each adapter maps it to its own wire form. */
+export type ModelNativeToolId = typeof WEB_SEARCH_MODEL_TOOL_NAME;
+
+/**
+ * What one model of one provider entry can do, as its adapter declares it. The gateway refuses a
+ * call that asks for more; callers read it instead of asking which provider serves the model.
+ */
+export interface ModelCapabilities {
+  /** Reasoning efforts the model accepts. Empty when it takes none. */
+  reasoningEfforts: readonly ReasoningEffortConfig[];
+  nativeTools: readonly ModelNativeToolId[];
+  /** The provider compacts the context itself and hands back a checkpoint. */
+  serverCompaction: boolean;
+  /** The provider accepts the continuation an earlier answer returned. */
+  continuation: boolean;
+  fastTier: boolean;
+  imageInput: boolean;
+  documentInput: boolean;
+  structuredOutput: boolean;
+  streaming: boolean;
+}
+
+/** The answer format a call asks for instead of free text. */
+export interface ModelOutputFormat {
+  jsonSchema: JsonObject;
+}
+
+/** One request to one model, as the gateway hands it to an adapter. */
+export interface ModelAdapterRequest {
+  model: string;
+  messages: ModelMessage[];
+  tools: ModelTool[];
+  output?: ModelOutputFormat;
+  reasoningEffort?: ReasoningEffortConfig;
+  fastTier?: boolean;
+  continuation?: ModelProviderContinuation;
+  signal?: AbortSignal;
+  deadline?: Date;
+}
+
+/**
+ * One provider entry, ready to be called. It owns its wire format and throws
+ * `ModelProviderError`; it neither retries nor records usage, the gateway does both.
+ */
+export interface ModelAdapter {
+  capabilities(model: string): ModelCapabilities;
+  complete(request: ModelAdapterRequest): Promise<ModelCompletion>;
+  stream(request: ModelAdapterRequest): AsyncIterable<ModelCompletionStreamEvent>;
 }
 
 export function modelContentText(content: ModelContent): string {
@@ -192,14 +228,14 @@ export function modelContentImages(
 }
 
 /**
- * What a model adapter hands back once its secrets are resolved: it builds the provider for one
+ * What a model adapter hands back once its secrets are resolved: it builds the adapter for one
  * entry from the fields of the models port.
  */
-export type ModelProviderFactory = (provider: ModelProviderConfig) => ModelProvider;
+export type ModelAdapterFactory = (provider: ModelProviderConfig) => ModelAdapter;
 
 declare module "@vivd-catalyst/core" {
   /** What the `models` port creates. */
   interface ProviderInstances {
-    models: ModelProviderFactory;
+    models: ModelAdapterFactory;
   }
 }

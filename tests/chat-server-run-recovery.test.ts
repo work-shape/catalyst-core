@@ -1,3 +1,4 @@
+import { withTestModelGateway } from "./support/model-gateway";
 import { describe, expect, it } from "vitest";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { RunRecoveryWatchdog } from "@vivd-catalyst/chat-server";
@@ -272,44 +273,46 @@ describe("client instance app vertical slice", () => {
     const fixture = await createStaleRunRecoveryFixture({
       runtime: (store) => ({
         assetSource,
-        agentRuntime: new LocalAgentRuntime({
-          assetSource,
-          modelProviders: [provider],
-          defaultModelProvider: provider,
-          conversationHistory: store.conversations,
-          agentRunStore: store.agentRuns,
-          runObservationStore: store.agentRuns,
-          modelProvider: {
-            id: provider.id,
-            async complete() {
-              return {
-                text: "Done.",
-                toolCalls: [],
-                usage: {
-                  inputTokens: 0,
-                  outputTokens: 0,
-                  totalTokens: 0,
-                  source: "not_reported",
-                  webSearchCallCount: 0
-                }
-              };
-            }
-          },
-          toolRegistry: new ToolRegistry({ tools: [] }),
-          toolExecution: {
-            async authorize() {
-              throw new Error("No tool is configured");
+        agentRuntime: new LocalAgentRuntime(
+          withTestModelGateway({
+            assetSource,
+            modelProviders: [provider],
+            defaultModelProvider: provider,
+            conversationHistory: store.conversations,
+            agentRunStore: store.agentRuns,
+            runObservationStore: store.agentRuns,
+            modelProvider: {
+              id: provider.id,
+              async complete() {
+                return {
+                  text: "Done.",
+                  toolCalls: [],
+                  usage: {
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    totalTokens: 0,
+                    source: "not_reported",
+                    webSearchCallCount: 0
+                  }
+                };
+              }
             },
-            async execute() {
-              throw new Error("No tool is configured");
-            }
-          },
-          usageGovernance: new ModelUsageGovernance({
-            store: store.usage,
-            budget: {},
-            safeguards: {}
+            toolRegistry: new ToolRegistry({ tools: [] }),
+            toolExecution: {
+              async authorize() {
+                throw new Error("No tool is configured");
+              },
+              async execute() {
+                throw new Error("No tool is configured");
+              }
+            },
+            usageGovernance: new ModelUsageGovernance({
+              store: store.usage,
+              budget: {},
+              safeguards: {}
+            })
           })
-        })
+        )
       })
     });
     const { server, store, conversation, run } = fixture;

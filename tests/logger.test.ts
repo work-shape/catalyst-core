@@ -282,7 +282,7 @@ describe("process logger", () => {
         correlationId: expect.any(String),
         failure: { code: "INTERNAL", message: expect.any(String), category: expect.any(String) },
         error: {
-          name: "AppError",
+          name: "ModelProviderError",
           message: expect.any(String),
           code: "INTERNAL",
           statusCode: 500,

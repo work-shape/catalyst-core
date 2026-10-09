@@ -119,6 +119,22 @@ contain breaking changes; a patch version does not.
   `SuperadminPanel`; pass `administration` from that entry. The type `ChatShellAdminPanel` is
   `ChatShellAdministration`, and `canViewSuperadminPanel` is gone (use
   `canViewAdministrationPanel`).
+- **Model calls:** an agent run reaches its model through one model gateway. The gateway
+  resolves the model binding, checks what the provider's adapter declares it can do, admits the
+  call, retries it and records its usage. Three things change for an operator. Every admitted
+  call leaves one usage event, also one that failed, was stopped or timed out; that event has
+  no tokens and no cost and counts towards `modelCallsPerDay`. A provider's error is logged
+  once as `model_provider.error` with its kind, status, code, request id and the provider's
+  message cut to 300 characters on one line; the message is in no error a user or an API
+  caller receives. A call that asks an entry for something its adapter does not declare fails
+  with a validation error before the provider is called.
+- **Breaking, extension API:** a provider on the `models` port returns a `ModelAdapterFactory`
+  whose adapter has `capabilities(model)`, `complete` and `stream` and throws
+  `ModelProviderError`; `ModelProvider`, `ModelProviderFactory` and
+  `ModelProviderRegistry` are gone. `LocalAgentRuntime` takes `modelGateway` in place of
+  `modelProvider` and `usageGovernance`. `ModelUsageEventInput` carries an `attribution` in
+  place of `conversationId`, `agentRunId` and `agentName`, and `runModelCall` takes the call's
+  instance and attribution.
 - **Interface, default theme:** an instance that sets no `ui.theme` or `ui.darkTheme` now shows
   warm paper neutrals with one terracotta accent (light `#fdfbf7` page, `#f6f3ec` sidebar,
   `#b5573a` accent; dark `#1c1a17` page, `#131210` sidebar, `#d98c6c` accent). An instance

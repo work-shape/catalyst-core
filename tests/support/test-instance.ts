@@ -224,7 +224,6 @@ async function createDefaultInstance(
           }
         },
         modelProvider: {
-          id: "unused",
           async complete() {
             throw new Error("No provider configured");
           }

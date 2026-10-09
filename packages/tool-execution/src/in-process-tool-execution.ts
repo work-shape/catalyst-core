@@ -13,7 +13,11 @@ import {
   type ToolExecutionResult,
   type ToolHandlerFailureResult
 } from "@vivd-catalyst/core";
-import { auditActorFromUser, type AuditRecorder } from "@vivd-catalyst/core";
+import {
+  auditActorFromUser,
+  getRuntimeSubjectUserId,
+  type AuditRecorder
+} from "@vivd-catalyst/core";
 import type { ToolRegistry } from "./tool-registry";
 import { toolFailureLogRecord } from "./tool-failure-log";
 import { failed, toPreview } from "./tool-results";
@@ -205,9 +209,13 @@ export class InProcessToolExecution implements ToolExecution {
       modelUsage.map((usage) =>
         usageRecorder.recordModelUsage({
           clientInstanceId: context.clientInstanceId,
-          conversationId: request.conversationId,
-          agentRunId: request.agentRunId,
-          agentName: request.agentName,
+          attribution: {
+            kind: "agent_run",
+            conversationId: request.conversationId,
+            runId: request.agentRunId,
+            agentName: request.agentName,
+            userId: getRuntimeSubjectUserId(context)
+          },
           providerId: usage.providerId,
           model: usage.model,
           inputTokens: usage.inputTokens,

@@ -34,7 +34,7 @@ import {
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
-import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
+import { createInstanceModelGateway } from "@vivd-catalyst/model-provider";
 import { createDataSourceTools, createDataSourceRegistry } from "@vivd-catalyst/data-source";
 import { createWebFetchToolDefinitions } from "@vivd-catalyst/web-access";
 import {
@@ -110,7 +110,7 @@ export async function createClientInstanceApp(
     workspaceFileByteStore,
     auditRecorder,
     usageGovernance,
-    modelProvider,
+    modelGateway,
     localAgentRuntimeOptions
   } = execution;
   const agentRuntime =
@@ -164,7 +164,7 @@ export async function createClientInstanceApp(
           }
         }
       : undefined,
-    modelProvider,
+    modelProvider: modelGateway.unsettled,
     allowedOrigins,
     standaloneAuth,
     mail: await createClientInstanceMail({
@@ -307,7 +307,10 @@ export async function createClientInstanceExecutionAssembly(
       reasoningEfforts: [...REASONING_EFFORTS],
       enabledToolNames: [...getEnabledToolNames(config)]
     },
-    validateAgents: (agents) => findConfigAssetAgentValidationIssues(config, agents)
+    validateAgents: (agents) =>
+      findConfigAssetAgentValidationIssues(config, agents, (binding) =>
+        modelGateway.capabilities(binding)
+      )
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
   const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;
@@ -324,11 +327,13 @@ export async function createClientInstanceExecutionAssembly(
     safeguards: config.usage.safeguards,
     costs: config.usage.costs
   });
-  const modelProvider = await createModelProviderRegistry({
+  const modelGateway = await createInstanceModelGateway({
     registry: infrastructure.registry,
     providers: modelProviders,
     entries: config.infrastructure.models,
-    context: infrastructure.context
+    context: infrastructure.context,
+    bindings: config.modelBindings,
+    governance: usageGovernance
   });
   const approvalRequestCreator = new ApprovalRequestWorkflow({
     clientInstanceId,
@@ -337,7 +342,7 @@ export async function createClientInstanceExecutionAssembly(
     checkRunner: new ApprovalCheckRunner({
       clientInstanceId,
       config,
-      modelProvider,
+      modelProvider: modelGateway.unsettled,
       usageGovernance
     }),
     onDecided: (request) => store.approvals.appendApprovalDecision(request),
@@ -413,10 +418,9 @@ export async function createClientInstanceExecutionAssembly(
     modelBindings: config.modelBindings,
     defaultModelProvider,
     modelProviderContinuationStore: store.conversations,
-    modelProvider,
+    modelGateway,
     toolRegistry,
     toolExecution,
-    usageGovernance,
     webAccess: config.webAccess,
     agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,
@@ -446,7 +450,9 @@ export async function createClientInstanceExecutionAssembly(
     }
   });
 
-  const agentIssues = findConfigAssetAgentValidationIssues(config, assets.agents);
+  const agentIssues = findConfigAssetAgentValidationIssues(config, assets.agents, (binding) =>
+    modelGateway.capabilities(binding)
+  );
   if (agentIssues.length) {
     throw new AppError("VALIDATION_FAILED", "Client instance assembly is invalid", {
       issues: agentIssues.map((message) => ({ message }))
@@ -466,7 +472,7 @@ export async function createClientInstanceExecutionAssembly(
     auditRecorder,
     assetSource,
     usageGovernance,
-    modelProvider,
+    modelGateway,
     localAgentRuntimeOptions,
     configAssets,
     approvalRequestHandlers,

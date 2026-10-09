@@ -6,7 +6,6 @@ import { z } from "zod";
 import { createEnvironmentSecrets } from "@vivd-catalyst/client-assembly";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
-  asClientInstanceId,
   createProvider,
   defineProvider,
   ProviderRegistry,
@@ -16,15 +15,24 @@ import {
 } from "@vivd-catalyst/core";
 import { mailProviderDefinitions } from "@vivd-catalyst/mail";
 import {
-  createModelProviderRegistry,
-  DeterministicModelProvider,
+  createInstanceModelGateway,
   modelProviderDefinitions,
-  type ModelProviderFactory
+  type ModelAdapterFactory
 } from "@vivd-catalyst/model-provider";
-import { createFailingTestLogger, createFakeSecrets, createTestUser } from "./support/fixtures";
+import { adapterFromFakeProvider } from "./support/model-gateway";
+import { createFailingTestLogger, createFakeSecrets } from "./support/fixtures";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 
 const logger = createFailingTestLogger("A provider must not log an error in this test");
+// The unsettled completion these tests call admits and records nothing.
+const unusedGovernance = {
+  runModelCall(): never {
+    throw new Error("No model call is admitted in this test");
+  },
+  recordModelUsage(): never {
+    throw new Error("No usage is recorded in this test");
+  }
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -123,7 +131,9 @@ describe("instance startup on the secret resolver", () => {
         organizationSecret: "MODEL_ORGANIZATION"
       }
     };
-    const providers = await createModelProviderRegistry({
+    const providers = await createInstanceModelGateway({
+      bindings: [],
+      governance: unusedGovernance,
       registry: new ProviderRegistry(modelProviderDefinitions),
       providers: [{ id: "main", type: "openai-compatible", model: "test-model", region: "eu" }],
       entries,
@@ -136,19 +146,14 @@ describe("instance startup on the secret resolver", () => {
       }
     });
 
-    const clientInstanceId = asClientInstanceId("provider-registry-test");
-    await providers.complete(
+    await providers.unsettled.complete(
       {
         providerId: "main",
         model: "test-model",
         messages: [{ role: "user", content: "hello" }],
         tools: []
       },
-      {
-        clientInstanceId,
-        correlationId: "provider-registry-test",
-        user: createTestUser("user-1", clientInstanceId)
-      }
+      {}
     );
 
     const [url, init] = fetchMock.mock.calls[0] ?? [];
@@ -361,15 +366,33 @@ describe("provider registry", () => {
       type: "capability-model",
       configSchema: z.object({ keySecret: secretRef() }),
       external: true,
-      create: async (config, { secrets }): Promise<ModelProviderFactory> => {
+      create: async (config, { secrets }): Promise<ModelAdapterFactory> => {
         created.push(await secrets.resolve(config.keySecret));
-        return (provider) => new DeterministicModelProvider(provider.id);
+        return (entry) =>
+          adapterFromFakeProvider(entry, {
+            id: entry.id,
+            async complete() {
+              return {
+                text: "answered",
+                toolCalls: [],
+                usage: {
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  totalTokens: 0,
+                  source: "not_reported",
+                  webSearchCallCount: 0
+                }
+              };
+            }
+          });
       },
       describe: () => ({})
     });
     const registry = new ProviderRegistry([...modelProviderDefinitions, capabilityModel]);
 
-    const providers = await createModelProviderRegistry({
+    const providers = await createInstanceModelGateway({
+      bindings: [],
+      governance: unusedGovernance,
       registry,
       providers: [{ id: "main", type: "capability-model", model: "m", region: "eu" }],
       entries: {
@@ -384,20 +407,15 @@ describe("provider registry", () => {
     });
 
     expect(created).toEqual(["resolved"]);
-    const clientInstanceId = asClientInstanceId("provider-registry-test");
     await expect(
-      providers.complete(
+      providers.unsettled.complete(
         {
           providerId: "main",
           model: "m",
           messages: [{ role: "user", content: "hello" }],
           tools: []
         },
-        {
-          clientInstanceId,
-          correlationId: "provider-registry-test",
-          user: createTestUser("user-1", clientInstanceId)
-        }
+        {}
       )
     ).resolves.toBeDefined();
   });

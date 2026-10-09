@@ -257,7 +257,7 @@
       "target": "lint",
       "rule": "catalyst/fetch-boundary",
       "scope": "packages/model-provider",
-      "count": 2,
+      "count": 1,
       "owner": "CB-6a, CB-10a"
     },
     {

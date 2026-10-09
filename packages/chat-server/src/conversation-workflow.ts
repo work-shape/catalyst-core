@@ -904,8 +904,15 @@ export class ConversationWorkflow {
     const runId = createPlatformId<"AgentRunId">("run");
 
     try {
+      const attribution = {
+        kind: "agent_run" as const,
+        conversationId,
+        runId,
+        agentName: CONVERSATION_TITLE_AGENT_NAME,
+        userId: input.userId
+      };
       const completion = await this.options.usageGovernance.runModelCall(
-        this.options.clientInstanceId,
+        { clientInstanceId: this.options.clientInstanceId, attribution },
         async () => {
           const result = await this.options.modelProvider.complete(
             {
@@ -919,9 +926,7 @@ export class ConversationWorkflow {
           );
           await this.options.usageGovernance.recordModelUsage({
             clientInstanceId: this.options.clientInstanceId,
-            conversationId,
-            agentRunId: runId,
-            agentName: CONVERSATION_TITLE_AGENT_NAME,
+            attribution,
             providerId: modelSelection.provider.id,
             model: modelSelection.model,
             correlationId: context.correlationId,

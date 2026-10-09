@@ -76,8 +76,15 @@ describe("in-process tool execution", () => {
       usageRecorder: {
         async recordModelUsage(input) {
           modelUsageEvents.push(input);
+          const { attribution, ...usage } = input;
+          if (attribution.kind !== "agent_run") {
+            throw new Error("A tool reports usage for an agent run");
+          }
           return {
-            ...input,
+            ...usage,
+            conversationId: attribution.conversationId,
+            agentRunId: attribution.runId,
+            agentName: attribution.agentName,
             id: "usage_1",
             createdAt: new Date().toISOString(),
             webSearchCallCount: 0,
@@ -115,9 +122,13 @@ describe("in-process tool execution", () => {
     expect(modelUsageEvents).toEqual([
       expect.objectContaining({
         clientInstanceId: context.clientInstanceId,
-        conversationId: request.conversationId,
-        agentRunId: request.agentRunId,
-        agentName: request.agentName,
+        attribution: {
+          kind: "agent_run",
+          conversationId: request.conversationId,
+          runId: request.agentRunId,
+          agentName: request.agentName,
+          userId: context.user.id
+        },
         providerId: "document-provider",
         model: "document-model",
         inputTokens: 100,

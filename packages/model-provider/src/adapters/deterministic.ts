@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineProvider } from "@vivd-catalyst/core";
-import { DeterministicModelProvider } from "../deterministic-provider";
-import type { ModelProviderFactory } from "../types";
+import { DETERMINISTIC_CAPABILITIES, DeterministicModelProvider } from "../deterministic-provider";
+import type { ModelAdapterFactory, ModelAdapterRequest } from "../types";
 
 /** Answers from fixed rules inside the process. For development, tests and the demo. */
 export const deterministicModelProvider = defineProvider({
@@ -9,8 +9,21 @@ export const deterministicModelProvider = defineProvider({
   type: "deterministic",
   configSchema: z.object({}),
   external: false,
-  create(): ModelProviderFactory {
-    return (provider) => new DeterministicModelProvider(provider.id);
+  create(): ModelAdapterFactory {
+    return (entry) => {
+      const provider = new DeterministicModelProvider(entry.id);
+      const toRequest = (request: ModelAdapterRequest) => ({
+        providerId: entry.id,
+        model: request.model,
+        messages: request.messages,
+        tools: request.tools
+      });
+      return {
+        capabilities: () => DETERMINISTIC_CAPABILITIES,
+        complete: (request) => provider.complete(toRequest(request)),
+        stream: (request) => provider.stream(toRequest(request))
+      };
+    };
   },
   describe() {
     return {};

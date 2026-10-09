@@ -1,3 +1,5 @@
+import { boundProviderMessage } from "./model-provider-error";
+
 export function readProviderErrorMetadata(
   payload: unknown,
   headers?: Headers
@@ -20,6 +22,15 @@ export function readProviderErrorMetadata(
     requestId: identifier(headers?.get("x-request-id") ?? headers?.get("request-id")),
     ...retryAfter(headers?.get("retry-after"))
   };
+}
+
+/**
+ * What the provider wrote about its refusal, cut to the log limit. It can repeat what a user
+ * sent, so it goes into `ModelProviderError.providerMessage` and nowhere else.
+ */
+export function readProviderErrorMessage(payload: unknown): string | undefined {
+  const error = isRecord(payload) ? (isRecord(payload.error) ? payload.error : payload) : {};
+  return boundProviderMessage(error.message);
 }
 
 /**

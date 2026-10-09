@@ -1,6 +1,7 @@
 import type { StorePage } from "./paging";
 import type { AgentRunId, ClientInstanceId, ConversationId, ModelUsageEventId } from "./ids";
 import type { ISODateString } from "./time";
+import type { ProviderRegion } from "./providers";
 
 export type ModelUsageSource = "provider_reported" | "not_reported" | "estimated";
 
@@ -75,23 +76,57 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   createdAt: ISODateString;
 }
 
+/** What a model call that no agent run made was for. */
+export type ModelSystemPurpose = "conversation_title" | "guardrail_judge" | "document_extraction";
+
+/** A model call an agent run made. */
+export interface AgentRunModelAttribution {
+  kind: "agent_run";
+  conversationId: ConversationId;
+  runId: AgentRunId;
+  agentName: string;
+  userId: string;
+  workspaceId?: string;
+}
+
+/** A model call the product made for itself. */
+export interface SystemModelAttribution {
+  kind: "system";
+  purpose: ModelSystemPurpose;
+  userId?: string;
+  workspaceId?: string;
+  conversationId?: ConversationId;
+  operationRunId?: string;
+}
+
+/** Who and what caused a model call. Admission and the usage event both read it. */
+export type ModelAttribution = AgentRunModelAttribution | SystemModelAttribution;
+
 export interface ModelUsageEventInput extends ModelTokenUsage {
   clientInstanceId: ClientInstanceId;
-  conversationId: ConversationId;
-  agentRunId: AgentRunId;
-  agentName: string;
+  attribution: ModelAttribution;
   providerId: string;
   model: string;
+  /** Where the provider entry processes data. Carried for the usage columns LU-1 adds. */
+  region?: ProviderRegion;
   webSearchCallCount?: number;
   fastMode?: boolean;
   providerServiceTier?: string;
   correlationId: string;
 }
 
-export interface ModelUsageEventRecordInput extends ModelUsageEventInput {
+export interface ModelUsageEventRecordInput extends ModelTokenUsage {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  agentRunId: AgentRunId;
+  agentName: string;
+  providerId: string;
+  model: string;
   webSearchCallCount: number;
   fastMode: boolean;
+  providerServiceTier?: string;
   customerBillableCost: UsageCostRecord;
+  correlationId: string;
 }
 
 /**

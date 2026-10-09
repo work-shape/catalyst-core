@@ -268,7 +268,10 @@ describe("model usage governance", () => {
     await governance.recordModelUsage(usageInput(clientInstanceId));
 
     await expect(
-      governance.runModelCall(clientInstanceId, async () => "blocked")
+      governance.runModelCall(
+        { clientInstanceId, attribution: usageAttribution },
+        async () => "blocked"
+      )
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Daily customer billable cost is incomplete; spend budget cannot be evaluated safely"
@@ -294,7 +297,10 @@ describe("model usage governance", () => {
     expect(summary.today.cost.billableCostMicros).toBe(4_000_000);
     expect(summary).not.toHaveProperty("costSafetyMultiplier");
     await expect(
-      governance.runModelCall(clientInstanceId, async () => "blocked")
+      governance.runModelCall(
+        { clientInstanceId, attribution: usageAttribution },
+        async () => "blocked"
+      )
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Daily model spend budget has been reached"
@@ -320,7 +326,10 @@ describe("model usage governance", () => {
     expect(summary.today.cost.billableCostMicros).toBe(4_000_000);
     expect(summary).not.toHaveProperty("costSafetyMultiplier");
     await expect(
-      governance.runModelCall(clientInstanceId, async () => "blocked")
+      governance.runModelCall(
+        { clientInstanceId, attribution: usageAttribution },
+        async () => "blocked"
+      )
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Daily model spend budget has been reached"
@@ -331,11 +340,14 @@ describe("model usage governance", () => {
     const { governance, clientInstanceId } = await createGovernance({}, { modelCallsPerDay: 1 });
 
     const attempts = await Promise.allSettled([
-      governance.runModelCall(clientInstanceId, async () => {
+      governance.runModelCall({ clientInstanceId, attribution: usageAttribution }, async () => {
         await delay(20);
         return "first";
       }),
-      governance.runModelCall(clientInstanceId, async () => "second")
+      governance.runModelCall(
+        { clientInstanceId, attribution: usageAttribution },
+        async () => "second"
+      )
     ]);
 
     expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
@@ -348,17 +360,23 @@ describe("model usage governance", () => {
       const { governance, clientInstanceId } = await createGovernance({}, { modelCallsPerDay: 1 });
       const started = deferred<void>();
       const execution = deferred<string>();
-      const first = governance.runModelCall(clientInstanceId, () => {
-        started.resolve();
-        return execution.promise;
-      });
+      const first = governance.runModelCall(
+        { clientInstanceId, attribution: usageAttribution },
+        () => {
+          started.resolve();
+          return execution.promise;
+        }
+      );
       const settled = first.then(
         (value) => ({ value }),
         (error: unknown) => ({ error })
       );
       await started.promise;
       await expect(
-        governance.runModelCall(clientInstanceId, async () => "blocked")
+        governance.runModelCall(
+          { clientInstanceId, attribution: usageAttribution },
+          async () => "blocked"
+        )
       ).rejects.toMatchObject({ code: "FORBIDDEN" });
       const failure = new Error("Provider rejected the call");
       if (outcome === "complete") execution.resolve("done");
@@ -366,9 +384,12 @@ describe("model usage governance", () => {
       expect(await settled).toEqual(
         outcome === "complete" ? { value: "done" } : { error: failure }
       );
-      await expect(governance.runModelCall(clientInstanceId, async () => "next")).resolves.toBe(
-        "next"
-      );
+      await expect(
+        governance.runModelCall(
+          { clientInstanceId, attribution: usageAttribution },
+          async () => "next"
+        )
+      ).resolves.toBe("next");
     }
   );
 
@@ -378,13 +399,13 @@ describe("model usage governance", () => {
     let maxActiveCalls = 0;
 
     await Promise.all([
-      governance.runModelCall(clientInstanceId, async () => {
+      governance.runModelCall({ clientInstanceId, attribution: usageAttribution }, async () => {
         activeCalls += 1;
         maxActiveCalls = Math.max(maxActiveCalls, activeCalls);
         await delay(20);
         activeCalls -= 1;
       }),
-      governance.runModelCall(clientInstanceId, async () => {
+      governance.runModelCall({ clientInstanceId, attribution: usageAttribution }, async () => {
         activeCalls += 1;
         maxActiveCalls = Math.max(maxActiveCalls, activeCalls);
         await delay(20);
@@ -422,6 +443,14 @@ async function createGovernance(
   };
 }
 
+const usageAttribution = {
+  kind: "agent_run" as const,
+  conversationId: asConversationId("conv_usage"),
+  runId: asAgentRunId("run_usage"),
+  agentName: "agent",
+  userId: "user_usage"
+};
+
 function usageInput(
   clientInstanceId: ReturnType<typeof asClientInstanceId>,
   overrides: Partial<{
@@ -436,9 +465,7 @@ function usageInput(
 ) {
   return {
     clientInstanceId,
-    conversationId: asConversationId("conv_usage"),
-    agentRunId: asAgentRunId("run_usage"),
-    agentName: "agent",
+    attribution: usageAttribution,
     providerId: "azure-eu",
     model: "gpt-5.6-sol",
     inputTokens: 1_000,

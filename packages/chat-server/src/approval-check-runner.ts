@@ -6,11 +6,13 @@ import {
   type ApprovalRequest,
   type ApprovalRequestHandler,
   type ClientInstanceId,
+  type ModelAttribution,
   type ModelTokenUsage,
-  type RuntimeCallContext
+  type RuntimeCallContext,
+  getRuntimeSubjectUserId
 } from "@vivd-catalyst/core";
 import { resolveModelBinding, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { ModelCompletion, ModelProvider } from "@vivd-catalyst/model-provider";
+import type { ModelCompletion, UnsettledModelCompletion } from "@vivd-catalyst/model-provider";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 // Protects an agent run from a check model that never answers. Past it a blocking rule refuses
@@ -27,7 +29,7 @@ const verdictSchema = z
 export interface ApprovalCheckRunnerOptions {
   clientInstanceId: ClientInstanceId;
   config: ClientInstanceConfig;
-  modelProvider: ModelProvider;
+  modelProvider: UnsettledModelCompletion;
   usageGovernance: Pick<ModelUsageGovernance, "runModelCall" | "recordModelUsage">;
 }
 
@@ -63,8 +65,19 @@ export class ApprovalCheckRunner {
     let usageRecordingFailed = false;
     try {
       const selection = resolveModelBinding(this.options.config, check.modelBindingId);
+      // A proposal without an origin has no run to attribute the call to; it is admitted as
+      // the judge and, as before, records no usage.
+      const attribution: ModelAttribution = origin
+        ? {
+            kind: "agent_run",
+            conversationId: origin.conversationId,
+            runId: origin.agentRunId,
+            agentName: "approval_check",
+            userId: getRuntimeSubjectUserId(context)
+          }
+        : { kind: "system", purpose: "guardrail_judge" };
       const completion = await this.options.usageGovernance.runModelCall(
-        this.options.clientInstanceId,
+        { clientInstanceId: this.options.clientInstanceId, attribution },
         async () => {
           let usage: ModelTokenUsage & { webSearchCallCount: number } = {
             inputTokens: 0,
@@ -98,13 +111,11 @@ export class ApprovalCheckRunner {
             return result;
           } finally {
             // The usage contract requires a conversation/run and has no user-id field.
-            if (origin) {
+            if (attribution.kind === "agent_run") {
               try {
                 await this.options.usageGovernance.recordModelUsage({
                   clientInstanceId: this.options.clientInstanceId,
-                  conversationId: origin.conversationId,
-                  agentRunId: origin.agentRunId,
-                  agentName: "approval_check",
+                  attribution,
                   providerId: selection.provider.id,
                   model: selection.model,
                   correlationId: context.correlationId,
@@ -155,8 +166,8 @@ class ApprovalCheckTimeoutError extends AppError {
 }
 
 async function completeWithTimeout(
-  provider: ModelProvider,
-  request: Parameters<ModelProvider["complete"]>[0],
+  provider: UnsettledModelCompletion,
+  request: Parameters<UnsettledModelCompletion["complete"]>[0],
   context: RuntimeCallContext
 ): Promise<ModelCompletion> {
   const controller = new AbortController();

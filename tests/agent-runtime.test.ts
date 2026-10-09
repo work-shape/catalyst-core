@@ -1,3 +1,4 @@
+import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
 import { type TestStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -23,19 +24,16 @@ import {
 } from "@vivd-catalyst/core";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
-import {
-  LocalAgentRuntime,
-  type LocalAgentRunFailureReport,
-  type ModelCallGovernance
-} from "@vivd-catalyst/agent-runtime";
+import { LocalAgentRuntime, type LocalAgentRunFailureReport } from "@vivd-catalyst/agent-runtime";
 import {
   OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
+  ModelProviderError,
   modelContentImages,
   modelContentText,
+  type ModelCallGovernance,
   type ModelCompletionStreamEvent,
-  type ModelMessage,
-  type ModelProvider
+  type ModelMessage
 } from "@vivd-catalyst/model-provider";
 import { defineTool } from "@vivd-catalyst/tool-sdk";
 import { ToolRegistry } from "@vivd-catalyst/tool-execution";
@@ -123,50 +121,54 @@ describe("local agent runtime", () => {
     let assetVersion = 1;
     let instructions = "First asset instructions.";
     const seenSystemInstructions: string[] = [];
-    const runtime = new LocalAgentRuntime({
-      assetSource: {
-        async getSnapshot() {
-          return {
-            version: assetVersion,
-            defaultAgentName: "mutable_agent",
-            agents: [
-              {
-                name: "mutable_agent",
-                displayName: "Mutable Agent",
-                instructions,
-                modelProviderId: "test-provider",
-                toolNames: [],
-                skillNames: [],
-                initialPrompts: []
-              }
-            ],
-            skills: []
-          };
-        }
-      },
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider: {
-        id: "test-provider",
-        async complete(request) {
-          const systemMessage = request.messages.find((message) => message.role === "system");
-          seenSystemInstructions.push(systemMessage ? modelContentText(systemMessage.content) : "");
-          return {
-            text: "Done.",
-            toolCalls: [],
-            usage: noReportedUsage()
-          };
-        }
-      },
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: {
+          async getSnapshot() {
+            return {
+              version: assetVersion,
+              defaultAgentName: "mutable_agent",
+              agents: [
+                {
+                  name: "mutable_agent",
+                  displayName: "Mutable Agent",
+                  instructions,
+                  modelProviderId: "test-provider",
+                  toolNames: [],
+                  skillNames: [],
+                  initialPrompts: []
+                }
+              ],
+              skills: []
+            };
+          }
+        },
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider: {
+          id: "test-provider",
+          async complete(request) {
+            const systemMessage = request.messages.find((message) => message.role === "system");
+            seenSystemInstructions.push(
+              systemMessage ? modelContentText(systemMessage.content) : ""
+            );
+            return {
+              text: "Done.",
+              toolCalls: [],
+              usage: noReportedUsage()
+            };
+          }
+        },
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const firstRun = await runtime.start(
       {
@@ -223,41 +225,43 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "cursor_agent",
-            displayName: "Cursor Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "cursor_agent",
+              displayName: "Cursor Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider: {
+          id: "test-provider",
+          async complete() {
+            return {
+              text: "Cursor response.",
+              toolCalls: [],
+              usage: noReportedUsage()
+            };
           }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider: {
-        id: "test-provider",
-        async complete() {
-          return {
-            text: "Cursor response.",
-            toolCalls: [],
-            usage: noReportedUsage()
-          };
-        }
-      },
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+        },
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -321,61 +325,63 @@ describe("local agent runtime", () => {
     const providerCanContinue = new Promise<void>((resolve) => {
       releaseProvider = resolve;
     });
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "cancel_prefix_agent",
-            displayName: "Cancel Prefix Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider: {
-        id: "test-provider",
-        async complete() {
-          throw new Error("Expected the streaming provider path to be used");
-        },
-        async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
-          yield {
-            type: "reasoning_delta",
-            id: "reasoning_1",
-            delta: "Thinking before the visible prefix."
-          };
-          yield {
-            type: "text_delta",
-            delta: "Visible prefix"
-          };
-          await providerCanContinue;
-          yield {
-            type: "text_delta",
-            delta: " late token"
-          };
-          yield {
-            type: "completed",
-            completion: {
-              text: "Visible prefix late token final",
-              toolCalls: [],
-              usage: noReportedUsage()
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "cancel_prefix_agent",
+              displayName: "Cancel Prefix Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
             }
-          };
-        }
-      },
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider: {
+          id: "test-provider",
+          async complete() {
+            throw new Error("Expected the streaming provider path to be used");
+          },
+          async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+            yield {
+              type: "reasoning_delta",
+              id: "reasoning_1",
+              delta: "Thinking before the visible prefix."
+            };
+            yield {
+              type: "text_delta",
+              delta: "Visible prefix"
+            };
+            await providerCanContinue;
+            yield {
+              type: "text_delta",
+              delta: " late token"
+            };
+            yield {
+              type: "completed",
+              completion: {
+                text: "Visible prefix late token final",
+                toolCalls: [],
+                usage: noReportedUsage()
+              }
+            };
+          }
+        },
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -480,87 +486,89 @@ describe("local agent runtime", () => {
       markToolAborted = resolve;
     });
     let observedAbortReason: unknown;
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "cancel_tool_agent",
-            displayName: "Cancel Tool Agent",
-            instructions: "Use the tool.",
-            modelProviderId: "test-provider",
-            toolNames: ["test.wait"],
-            initialPrompts: []
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "cancel_tool_agent",
+              displayName: "Cancel Tool Agent",
+              instructions: "Use the tool.",
+              modelProviderId: "test-provider",
+              toolNames: ["test.wait"],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider: {
+          id: "test-provider",
+          async complete() {
+            throw new Error("Expected the streaming provider path to be used");
+          },
+          async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+            yield {
+              type: "completed",
+              completion: {
+                text: "",
+                toolCalls: [
+                  {
+                    toolCallId: "call_wait",
+                    toolName: "test.wait",
+                    input: {}
+                  }
+                ],
+                usage: noReportedUsage()
+              }
+            };
           }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider: {
-        id: "test-provider",
-        async complete() {
-          throw new Error("Expected the streaming provider path to be used");
         },
-        async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
-          yield {
-            type: "completed",
-            completion: {
-              text: "",
-              toolCalls: [
-                {
-                  toolCallId: "call_wait",
-                  toolName: "test.wait",
-                  input: {}
-                }
-              ],
-              usage: noReportedUsage()
-            }
-          };
-        }
-      },
-      toolRegistry: new ToolRegistry({
-        tools: [
-          defineTool({
-            name: "test.wait",
-            description: "Wait until cancelled.",
-            inputSchema: z.object({}),
-            async execute() {
-              throw new Error("Tool registry execution should not be used by this test");
-            }
-          })
-        ]
-      }),
-      toolExecution: {
-        async authorize() {
-          return { status: "allowed" };
+        toolRegistry: new ToolRegistry({
+          tools: [
+            defineTool({
+              name: "test.wait",
+              description: "Wait until cancelled.",
+              inputSchema: z.object({}),
+              async execute() {
+                throw new Error("Tool registry execution should not be used by this test");
+              }
+            })
+          ]
+        }),
+        toolExecution: {
+          async authorize() {
+            return { status: "allowed" };
+          },
+          async execute(_request, toolContext) {
+            markToolStarted();
+            await new Promise<void>((resolve) => {
+              if (toolContext.signal?.aborted) {
+                resolve();
+                return;
+              }
+              toolContext.signal?.addEventListener("abort", () => resolve(), { once: true });
+            });
+            observedAbortReason = toolContext.signal?.reason;
+            markToolAborted();
+            return {
+              status: "cancelled",
+              error: {
+                code: "cancelled",
+                message: "Tool was cancelled"
+              }
+            };
+          }
         },
-        async execute(_request, toolContext) {
-          markToolStarted();
-          await new Promise<void>((resolve) => {
-            if (toolContext.signal?.aborted) {
-              resolve();
-              return;
-            }
-            toolContext.signal?.addEventListener("abort", () => resolve(), { once: true });
-          });
-          observedAbortReason = toolContext.signal?.reason;
-          markToolAborted();
-          return {
-            status: "cancelled",
-            error: {
-              code: "cancelled",
-              message: "Tool was cancelled"
-            }
-          };
-        }
-      },
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -611,7 +619,7 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete(request) {
         providerMessages = request.messages;
@@ -633,32 +641,34 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "history_agent",
-            displayName: "History Agent",
-            instructions: "Use conversation history.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "history_agent",
+              displayName: "History Agent",
+              instructions: "Use conversation history.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -726,43 +736,45 @@ describe("local agent runtime", () => {
         return [];
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "observation_failure_agent",
-            displayName: "Observation Failure Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "observation_failure_agent",
+              displayName: "Observation Failure Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        agentRunStore: store.agentRuns,
+        runObservationStore: failingObservationStore,
+        modelProvider: {
+          id: "test-provider",
+          async complete() {
+            return {
+              text: "This response cannot be made durable.",
+              toolCalls: [],
+              usage: noReportedUsage()
+            };
           }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      agentRunStore: store.agentRuns,
-      runObservationStore: failingObservationStore,
-      modelProvider: {
-        id: "test-provider",
-        async complete() {
-          return {
-            text: "This response cannot be made durable.",
-            toolCalls: [],
-            usage: noReportedUsage()
-          };
-        }
-      },
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+        },
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -820,8 +832,8 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "provider-default"
     };
-    let providerRequest: Parameters<ModelProvider["complete"]>[0] | undefined;
-    const modelProvider: ModelProvider = {
+    let providerRequest: Parameters<FakeModelProvider["complete"]>[0] | undefined;
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete(request) {
         providerRequest = request;
@@ -832,62 +844,64 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "binding_agent",
+              displayName: "Binding Agent",
+              instructions: "Use the configured model binding.",
+              modelBindingId: "primaryReasoning",
+              reasoningEffort: "xhigh",
+              userSelectableModelBindingIds: ["alternate", "bindingEffort"],
+              modelReasoningEfforts: { alternate: "low" },
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        modelBindings: [
           {
-            skillNames: [],
-            name: "binding_agent",
-            displayName: "Binding Agent",
-            instructions: "Use the configured model binding.",
-            modelBindingId: "primaryReasoning",
-            reasoningEffort: "xhigh",
-            userSelectableModelBindingIds: ["alternate", "bindingEffort"],
-            modelReasoningEfforts: { alternate: "low" },
-            toolNames: [],
-            initialPrompts: []
+            id: "primaryReasoning",
+            providerId: "test-provider",
+            model: "bound-model",
+            reasoningEffort: "high",
+            userSelectableReasoningEfforts: ["low", "high"]
+          },
+          {
+            id: "unlisted",
+            providerId: "test-provider",
+            model: "unlisted-model",
+            userSelectable: true
+          },
+          {
+            id: "bindingEffort",
+            providerId: "test-provider",
+            model: "binding-effort-model",
+            reasoningEffort: "medium"
+          },
+          {
+            id: "alternate",
+            providerId: "test-provider",
+            model: "user-selected-model",
+            userSelectable: true
           }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      modelBindings: [
-        {
-          id: "primaryReasoning",
-          providerId: "test-provider",
-          model: "bound-model",
-          reasoningEffort: "high",
-          userSelectableReasoningEfforts: ["low", "high"]
-        },
-        {
-          id: "unlisted",
-          providerId: "test-provider",
-          model: "unlisted-model",
-          userSelectable: true
-        },
-        {
-          id: "bindingEffort",
-          providerId: "test-provider",
-          model: "binding-effort-model",
-          reasoningEffort: "medium"
-        },
-        {
-          id: "alternate",
-          providerId: "test-provider",
-          model: "user-selected-model",
-          userSelectable: true
-        }
-      ],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+        ],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const requestFor = async (
       modelBindingId: string | undefined,
@@ -992,8 +1006,8 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "provider-default"
     };
-    const providerRequests: Array<Parameters<ModelProvider["complete"]>[0]> = [];
-    const modelProvider: ModelProvider = {
+    const providerRequests: Array<Parameters<FakeModelProvider["complete"]>[0]> = [];
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete(request) {
         providerRequests.push(request);
@@ -1007,44 +1021,50 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              name: "fast_agent",
+              displayName: "Fast Agent",
+              instructions: "Answer quickly.",
+              modelBindingId: "fastBinding",
+              fastMode: true,
+              userSelectableModelBindingIds: ["plainBinding"],
+              toolNames: [],
+              skillNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        modelBindings: [
           {
-            name: "fast_agent",
-            displayName: "Fast Agent",
-            instructions: "Answer quickly.",
-            modelBindingId: "fastBinding",
-            fastMode: true,
-            userSelectableModelBindingIds: ["plainBinding"],
-            toolNames: [],
-            skillNames: [],
-            initialPrompts: []
+            id: "fastBinding",
+            providerId: "test-provider",
+            model: "fast-model",
+            supportsFastMode: true
+          },
+          {
+            id: "plainBinding",
+            providerId: "test-provider",
+            model: "plain-model",
+            userSelectable: true
           }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      modelBindings: [
-        {
-          id: "fastBinding",
-          providerId: "test-provider",
-          model: "fast-model",
-          supportsFastMode: true
-        },
-        {
-          id: "plainBinding",
-          providerId: "test-provider",
-          model: "plain-model",
-          userSelectable: true
-        }
-      ],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
-    });
+        ],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
+      })
+    );
 
     for (const modelBindingId of [undefined, "plainBinding"]) {
       const run = await runtime.start(
@@ -1137,7 +1157,7 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete(request) {
         providerMessages = request.messages;
@@ -1148,32 +1168,34 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "tool_history_agent",
-            displayName: "Tool History Agent",
-            instructions: "Use conversation history.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "tool_history_agent",
+              displayName: "Tool History Agent",
+              instructions: "Use conversation history.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -1231,7 +1253,7 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete(request) {
         providerMessages = request.messages;
@@ -1248,35 +1270,37 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "locale_agent",
-            displayName: "Locale Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
-      }),
-      clock: {
-        now: () => new Date("2026-06-19T12:00:00.000Z")
-      }
-    });
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "locale_agent",
+              displayName: "Locale Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        }),
+        clock: {
+          now: () => new Date("2026-06-19T12:00:00.000Z")
+        }
+      })
+    );
 
     const run = await runtime.start(
       {
@@ -1331,7 +1355,7 @@ describe("local agent runtime", () => {
       model: "test-model"
     };
     let modelStep = 0;
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         throw new Error("Expected the streaming provider path to be used");
@@ -1380,55 +1404,57 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "tool_stream_agent",
-            displayName: "Tool Stream Agent",
-            instructions: "Use tools when useful.",
-            modelProviderId: "test-provider",
-            toolNames: ["test.inspect"],
-            initialPrompts: []
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "tool_stream_agent",
+              displayName: "Tool Stream Agent",
+              instructions: "Use tools when useful.",
+              modelProviderId: "test-provider",
+              toolNames: ["test.inspect"],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({
+          tools: [
+            defineTool({
+              name: "test.inspect",
+              description: "Inspect a page.",
+              inputSchema: z.object({ page: z.number() }),
+              async execute() {
+                throw new Error("Tool registry execution should not be used by this test");
+              }
+            })
+          ]
+        }),
+        toolExecution: {
+          async authorize() {
+            return { status: "allowed" };
+          },
+          async execute(request) {
+            return {
+              status: "success",
+              output: {
+                inspectedPage: (request.input as { page?: number }).page
+              }
+            };
           }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({
-        tools: [
-          defineTool({
-            name: "test.inspect",
-            description: "Inspect a page.",
-            inputSchema: z.object({ page: z.number() }),
-            async execute() {
-              throw new Error("Tool registry execution should not be used by this test");
-            }
-          })
-        ]
-      }),
-      toolExecution: {
-        async authorize() {
-          return { status: "allowed" };
         },
-        async execute(request) {
-          return {
-            status: "success",
-            output: {
-              inspectedPage: (request.input as { page?: number }).page
-            }
-          };
-        }
-      },
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -1513,7 +1539,7 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         throw new Error("Expected the streaming provider path to be used");
@@ -1548,32 +1574,34 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "provider_tool_stream_agent",
-            displayName: "Provider Tool Stream Agent",
-            instructions: "Use provider tools when useful.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "provider_tool_stream_agent",
+              displayName: "Provider Tool Stream Agent",
+              instructions: "Use provider tools when useful.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -1685,32 +1713,34 @@ describe("local agent runtime", () => {
           )
         );
       try {
-        const runtime = new LocalAgentRuntime({
-          assetSource: createStaticConfigAssetSource({
-            agents: [
-              {
-                name: "retry_agent",
-                skillNames: [],
-                displayName: "Retry Agent",
-                instructions: "Help the user.",
-                modelProviderId: providerConfig.id,
-                toolNames: [],
-                initialPrompts: []
-              }
-            ]
-          }),
-          modelProviders: [providerConfig],
-          defaultModelProvider: providerConfig,
-          conversationHistory: store.conversations,
-          modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
-          toolRegistry: new ToolRegistry({ tools: [] }),
-          toolExecution: createUnusedToolExecution(),
-          usageGovernance: new ModelUsageGovernance({
-            store: store.usage,
-            budget: {},
-            safeguards: {}
+        const runtime = new LocalAgentRuntime(
+          withTestModelGateway({
+            assetSource: createStaticConfigAssetSource({
+              agents: [
+                {
+                  name: "retry_agent",
+                  skillNames: [],
+                  displayName: "Retry Agent",
+                  instructions: "Help the user.",
+                  modelProviderId: providerConfig.id,
+                  toolNames: [],
+                  initialPrompts: []
+                }
+              ]
+            }),
+            modelProviders: [providerConfig],
+            defaultModelProvider: providerConfig,
+            conversationHistory: store.conversations,
+            modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
+            toolRegistry: new ToolRegistry({ tools: [] }),
+            toolExecution: createUnusedToolExecution(),
+            usageGovernance: new ModelUsageGovernance({
+              store: store.usage,
+              budget: {},
+              safeguards: {}
+            })
           })
-        });
+        );
         const run = await runtime.start(
           { agentName: "retry_agent", conversationId, message: { text: "hello" } },
           context
@@ -1754,7 +1784,7 @@ describe("local agent runtime", () => {
       model: "test-model"
     };
     let attempts = 0;
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         throw new Error("Expected the streaming provider path to be used");
@@ -1786,32 +1816,34 @@ describe("local agent runtime", () => {
         throw new TypeError("terminated");
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "provider_stream_retry_agent",
-            displayName: "Provider Stream Retry Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "provider_stream_retry_agent",
+              displayName: "Provider Stream Retry Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -2019,7 +2051,7 @@ describe("local agent runtime", () => {
       model: "test-model"
     };
     let providerCalls = 0;
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         throw new Error("Expected the streaming provider path to be used");
@@ -2044,28 +2076,30 @@ describe("local agent runtime", () => {
         throw Object.assign(new Error("usage persistence timed out"), { code: "ETIMEDOUT" });
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "usage_persistence_failure_agent",
-            displayName: "Usage Persistence Failure Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance
-    });
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "usage_persistence_failure_agent",
+              displayName: "Usage Persistence Failure Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance
+      })
+    );
 
     const run = await runtime.start(
       {
@@ -2128,7 +2162,7 @@ describe("local agent runtime", () => {
         source: "test"
       }
     };
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         modelStep += 1;
@@ -2152,59 +2186,61 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "artifact_agent",
-            displayName: "Artifact Agent",
-            instructions: "Use tools when useful.",
-            modelProviderId: "test-provider",
-            toolNames: ["test.promote_artifact"],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      agentRunStore: store.agentRuns,
-      runObservationStore: store.agentRuns,
-      modelProvider,
-      toolRegistry: new ToolRegistry({
-        tools: [
-          defineTool({
-            name: "test.promote_artifact",
-            description: "Promote an artifact.",
-            inputSchema: z.object({ path: z.string() }),
-            async execute() {
-              throw new Error("Tool registry execution should not be used by this test");
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "artifact_agent",
+              displayName: "Artifact Agent",
+              instructions: "Use tools when useful.",
+              modelProviderId: "test-provider",
+              toolNames: ["test.promote_artifact"],
+              initialPrompts: []
             }
-          })
-        ]
-      }),
-      toolExecution: {
-        async authorize() {
-          return { status: "allowed" };
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        agentRunStore: store.agentRuns,
+        runObservationStore: store.agentRuns,
+        modelProvider,
+        toolRegistry: new ToolRegistry({
+          tools: [
+            defineTool({
+              name: "test.promote_artifact",
+              description: "Promote an artifact.",
+              inputSchema: z.object({ path: z.string() }),
+              async execute() {
+                throw new Error("Tool registry execution should not be used by this test");
+              }
+            })
+          ]
+        }),
+        toolExecution: {
+          async authorize() {
+            return { status: "allowed" };
+          },
+          async execute() {
+            return {
+              status: "success",
+              output: {
+                artifactId: artifact.artifactId,
+                path: "result.pdf"
+              },
+              artifacts: [artifact]
+            };
+          }
         },
-        async execute() {
-          return {
-            status: "success",
-            output: {
-              artifactId: artifact.artifactId,
-              path: "result.pdf"
-            },
-            artifacts: [artifact]
-          };
-        }
-      },
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -2282,7 +2318,7 @@ describe("local agent runtime", () => {
       state: { encrypted: "opaque-provider-state" }
     };
     let receivedProviderContinuation: unknown;
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         throw new Error("Expected the streaming provider path to be used");
@@ -2346,56 +2382,58 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "invalid_tool_json_agent",
-            displayName: "Invalid Tool JSON Agent",
-            instructions: "Use tools when useful.",
-            modelProviderId: "test-provider",
-            toolNames: ["test.inspect"],
-            initialPrompts: []
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "invalid_tool_json_agent",
+              displayName: "Invalid Tool JSON Agent",
+              instructions: "Use tools when useful.",
+              modelProviderId: "test-provider",
+              toolNames: ["test.inspect"],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({
+          tools: [
+            defineTool({
+              name: "test.inspect",
+              description: "Inspect a page.",
+              inputSchema: z.object({ page: z.number() }),
+              async execute() {
+                throw new Error("Tool registry execution should not be used by this test");
+              }
+            })
+          ]
+        }),
+        toolExecution: {
+          async authorize() {
+            return { status: "allowed" };
+          },
+          async execute() {
+            validToolExecutions += 1;
+            return {
+              status: "success",
+              output: {
+                inspected: true
+              }
+            };
           }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({
-        tools: [
-          defineTool({
-            name: "test.inspect",
-            description: "Inspect a page.",
-            inputSchema: z.object({ page: z.number() }),
-            async execute() {
-              throw new Error("Tool registry execution should not be used by this test");
-            }
-          })
-        ]
-      }),
-      toolExecution: {
-        async authorize() {
-          return { status: "allowed" };
         },
-        async execute() {
-          validToolExecutions += 1;
-          return {
-            status: "success",
-            output: {
-              inspected: true
-            }
-          };
-        }
-      },
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -2484,8 +2522,8 @@ describe("local agent runtime", () => {
         }
       }
     };
-    const requests: Parameters<ModelProvider["complete"]>[0][] = [];
-    const modelProvider: ModelProvider = {
+    const requests: Parameters<FakeModelProvider["complete"]>[0][] = [];
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete(request) {
         requests.push(request);
@@ -2514,35 +2552,37 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "compaction_agent",
-            displayName: "Compaction Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProviderContinuationStore: store.conversations,
-      agentRunStore: store.agentRuns,
-      runObservationStore: store.agentRuns,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "compaction_agent",
+              displayName: "Compaction Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProviderContinuationStore: store.conversations,
+        agentRunStore: store.agentRuns,
+        runObservationStore: store.agentRuns,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const firstUserMessage = await store.conversations.appendMessage({
       clientInstanceId,
@@ -2802,41 +2842,43 @@ describe("local agent runtime", () => {
       "Failed query: insert into messages params: secret document text"
     );
     let reportedFailure: LocalAgentRunFailureReport | undefined;
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         throw thrownError;
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "error_agent",
-            displayName: "Error Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
-      }),
-      runFailureReporter(report) {
-        reportedFailure = report;
-      }
-    });
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "error_agent",
+              displayName: "Error Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        }),
+        runFailureReporter(report) {
+          reportedFailure = report;
+        }
+      })
+    );
 
     const run = await runtime.start(
       {
@@ -2886,38 +2928,40 @@ describe("local agent runtime", () => {
       type: "deterministic",
       model: "test-model"
     };
-    const modelProvider: ModelProvider = {
+    const modelProvider: FakeModelProvider = {
       id: "test-provider",
       async complete() {
         throw new AppError("CONFLICT", "Daily model call safeguard has been reached");
       }
     };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "app_error_agent",
-            displayName: "App Error Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: {},
-        safeguards: {}
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "app_error_agent",
+              displayName: "App Error Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
 
     const run = await runtime.start(
       {
@@ -3226,29 +3270,31 @@ async function storedContinuationFixture(name: string, encryptedContent: string)
     }
     return answer;
   });
-  const runtime = new LocalAgentRuntime({
-    assetSource: createStaticConfigAssetSource({
-      agents: [
-        {
-          skillNames: [],
-          name: "stored_continuation_agent",
-          displayName: "Stored Continuation Agent",
-          instructions: "Help the user.",
-          modelProviderId: providerConfig.id,
-          toolNames: [],
-          initialPrompts: []
-        }
-      ]
-    }),
-    modelProviders: [providerConfig],
-    defaultModelProvider: providerConfig,
-    conversationHistory: store.conversations,
-    modelProviderContinuationStore: store.conversations,
-    modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
-    toolRegistry: new ToolRegistry({ tools: [] }),
-    toolExecution: createUnusedToolExecution(),
-    usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
-  });
+  const runtime = new LocalAgentRuntime(
+    withTestModelGateway({
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            skillNames: [],
+            name: "stored_continuation_agent",
+            displayName: "Stored Continuation Agent",
+            instructions: "Help the user.",
+            modelProviderId: providerConfig.id,
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store.conversations,
+      modelProviderContinuationStore: store.conversations,
+      modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
+    })
+  );
   async function runEventsToEnd(text: string) {
     const userMessage = await store.conversations.appendMessage({
       clientInstanceId,
@@ -3340,7 +3386,7 @@ async function rateLimitFixture(name: string) {
       return types;
     }
   };
-  const modelProvider: ModelProvider = {
+  const modelProvider: FakeModelProvider = {
     id: "test-provider",
     async complete() {
       throw new Error("Expected the streaming provider path to be used");
@@ -3349,9 +3395,11 @@ async function rateLimitFixture(name: string) {
       fixture.attemptTimes.push(Date.now());
       fixture.onAttempt?.();
       if (fixture.attemptTimes.length <= fixture.rateLimitedAnswers) {
-        throw new AppError("INTERNAL", "Model provider request failed", {
+        throw new ModelProviderError({
+          kind: "rate_limit",
+          message: "Model provider request failed",
           status: 429,
-          ...(fixture.retryAfterMs === undefined ? {} : { retryAfterMs: fixture.retryAfterMs })
+          retryAfterMs: fixture.retryAfterMs
         });
       }
       yield {
@@ -3364,28 +3412,30 @@ async function rateLimitFixture(name: string) {
       };
     }
   };
-  const runtime = new LocalAgentRuntime({
-    assetSource: createStaticConfigAssetSource({
-      agents: [
-        {
-          skillNames: [],
-          name: "rate_limit_retry_agent",
-          displayName: "Rate Limit Retry Agent",
-          instructions: "Help the user.",
-          modelProviderId: "test-provider",
-          toolNames: [],
-          initialPrompts: []
-        }
-      ]
-    }),
-    modelProviders: [providerConfig],
-    defaultModelProvider: providerConfig,
-    conversationHistory: store.conversations,
-    modelProvider,
-    toolRegistry: new ToolRegistry({ tools: [] }),
-    toolExecution: createUnusedToolExecution(),
-    usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
-  });
+  const runtime = new LocalAgentRuntime(
+    withTestModelGateway({
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            skillNames: [],
+            name: "rate_limit_retry_agent",
+            displayName: "Rate Limit Retry Agent",
+            instructions: "Help the user.",
+            modelProviderId: "test-provider",
+            toolNames: [],
+            initialPrompts: []
+          }
+        ]
+      }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store.conversations,
+      modelProvider,
+      toolRegistry: new ToolRegistry({ tools: [] }),
+      toolExecution: createUnusedToolExecution(),
+      usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
+    })
+  );
   return fixture;
 }
 
@@ -3427,97 +3477,99 @@ async function pageImageFixture(
     providerId: providerConfig.id,
     state: { compaction: { type: "compaction", encrypted_content: "opaque-checkpoint" } }
   };
-  const requests: Parameters<ModelProvider["complete"]>[0][] = [];
+  const requests: Parameters<FakeModelProvider["complete"]>[0][] = [];
   let pagesToView: number[] = [];
   let artifactReads = 0;
-  const runtime = new LocalAgentRuntime({
-    assetSource: createStaticConfigAssetSource({
-      agents: [
-        {
-          skillNames: [],
-          name: "page_agent",
-          displayName: "Page Agent",
-          instructions: "Help the user.",
-          modelProviderId: providerConfig.id,
-          toolNames: ["view_document_page"],
-          initialPrompts: []
-        }
-      ]
-    }),
-    modelProviders: [providerConfig],
-    defaultModelProvider: providerConfig,
-    conversationHistory: store.conversations,
-    modelProviderContinuationStore: store.conversations,
-    modelProvider: {
-      id: providerConfig.id,
-      async complete(request) {
-        // The runtime goes on appending to the list it passed, so keep what this request held.
-        requests.push({ ...request, messages: [...request.messages] });
-        const pages = pagesToView;
-        pagesToView = [];
-        if (pages.length === 0) {
-          return { text: "Done.", toolCalls: [], usage: noReportedUsage() };
-        }
-        return {
-          text: "",
-          toolCalls: pages.map((pageNumber) => ({
-            toolCallId: `call_${requests.length}_${pageNumber}`,
-            toolName: "view_document_page",
-            input: { fileId: "file_contract", pageNumber }
-          })),
-          ...(options.compactOnToolCalls
-            ? { continuation, contextManagement: { compacted: true } }
-            : {}),
-          usage: noReportedUsage()
-        };
-      }
-    },
-    toolRegistry: new ToolRegistry({
-      tools: [
-        defineTool({
-          name: "view_document_page",
-          description: "View a document page.",
-          inputSchema: z.object({ fileId: z.string(), pageNumber: z.number() }),
-          async execute() {
-            throw new Error("Tool registry execution should not be used by this test");
+  const runtime = new LocalAgentRuntime(
+    withTestModelGateway({
+      assetSource: createStaticConfigAssetSource({
+        agents: [
+          {
+            skillNames: [],
+            name: "page_agent",
+            displayName: "Page Agent",
+            instructions: "Help the user.",
+            modelProviderId: providerConfig.id,
+            toolNames: ["view_document_page"],
+            initialPrompts: []
           }
-        })
-      ]
-    }),
-    toolExecution: {
-      async authorize() {
-        return { status: "allowed" };
+        ]
+      }),
+      modelProviders: [providerConfig],
+      defaultModelProvider: providerConfig,
+      conversationHistory: store.conversations,
+      modelProviderContinuationStore: store.conversations,
+      modelProvider: {
+        id: providerConfig.id,
+        async complete(request) {
+          // The runtime goes on appending to the list it passed, so keep what this request held.
+          requests.push({ ...request, messages: [...request.messages] });
+          const pages = pagesToView;
+          pagesToView = [];
+          if (pages.length === 0) {
+            return { text: "Done.", toolCalls: [], usage: noReportedUsage() };
+          }
+          return {
+            text: "",
+            toolCalls: pages.map((pageNumber) => ({
+              toolCallId: `call_${requests.length}_${pageNumber}`,
+              toolName: "view_document_page",
+              input: { fileId: "file_contract", pageNumber }
+            })),
+            ...(options.compactOnToolCalls
+              ? { continuation, contextManagement: { compacted: true } }
+              : {}),
+            usage: noReportedUsage()
+          };
+        }
       },
-      async execute(request) {
-        const pageNumber = z.object({ pageNumber: z.number() }).parse(request.input).pageNumber;
-        return {
-          status: "success",
-          output: { fileId: "file_contract", pageNumber },
-          artifacts: [
-            {
-              artifactId: asManagedArtifactId(`art_page_${pageNumber}`),
-              kind: "document.page_image",
-              mimeType: "image/png",
-              modelVisibility: { type: "image", mimeType: "image/png" },
-              metadata: { fileId: "file_contract", pageNumber }
+      toolRegistry: new ToolRegistry({
+        tools: [
+          defineTool({
+            name: "view_document_page",
+            description: "View a document page.",
+            inputSchema: z.object({ fileId: z.string(), pageNumber: z.number() }),
+            async execute() {
+              throw new Error("Tool registry execution should not be used by this test");
             }
-          ]
-        };
-      }
-    },
-    artifactReader: {
-      async readArtifact() {
-        artifactReads += 1;
-        return { bytes: new Uint8Array(options.imageBytes ?? 8), mimeType: "image/png" };
-      }
-    },
-    fileReader: {
-      async readFile() {
-        return { bytes: new Uint8Array(options.imageBytes ?? 8), mimeType: "image/png" };
-      }
-    },
-    usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
-  });
+          })
+        ]
+      }),
+      toolExecution: {
+        async authorize() {
+          return { status: "allowed" };
+        },
+        async execute(request) {
+          const pageNumber = z.object({ pageNumber: z.number() }).parse(request.input).pageNumber;
+          return {
+            status: "success",
+            output: { fileId: "file_contract", pageNumber },
+            artifacts: [
+              {
+                artifactId: asManagedArtifactId(`art_page_${pageNumber}`),
+                kind: "document.page_image",
+                mimeType: "image/png",
+                modelVisibility: { type: "image", mimeType: "image/png" },
+                metadata: { fileId: "file_contract", pageNumber }
+              }
+            ]
+          };
+        }
+      },
+      artifactReader: {
+        async readArtifact() {
+          artifactReads += 1;
+          return { bytes: new Uint8Array(options.imageBytes ?? 8), mimeType: "image/png" };
+        }
+      },
+      fileReader: {
+        async readFile() {
+          return { bytes: new Uint8Array(options.imageBytes ?? 8), mimeType: "image/png" };
+        }
+      },
+      usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
+    })
+  );
   const requestMessages = (index: number) => requests[index]?.messages ?? [];
   return {
     requests,

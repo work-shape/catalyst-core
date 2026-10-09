@@ -7,6 +7,7 @@ import type {
 import {
   OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID,
   WEB_SEARCH_MODEL_TOOL_NAME,
+  type ModelCapabilities,
   type ModelProviderNativeTool,
   type ModelTool
 } from "@vivd-catalyst/model-provider";
@@ -17,7 +18,9 @@ export interface ModelToolRegistryView {
 
 export interface ModelToolMaterializationInput {
   agent: AgentConfig;
-  modelProvider: ModelProviderConfig;
+  modelProvider: Pick<ModelProviderConfig, "id">;
+  /** What the agent's model can do, as the gateway reports it. */
+  capabilities: Pick<ModelCapabilities, "nativeTools">;
   toolRegistry: ModelToolRegistryView;
   webAccess?: WebAccessConfig;
 }
@@ -45,10 +48,6 @@ export function findModelToolMaterializationIssues(
   return webSearch.kind === "issue" ? [webSearch.message] : [];
 }
 
-export function supportsProviderNativeWebSearch(provider: ModelProviderConfig): boolean {
-  return provider.type === "openai-compatible" && provider.api === "responses";
-}
-
 type WebSearchResolution =
   | {
       kind: "none";
@@ -62,11 +61,9 @@ type WebSearchResolution =
       message: string;
     };
 
-function resolveWebSearchModelTool(input: {
-  agent: AgentConfig;
-  modelProvider: ModelProviderConfig;
-  webAccess?: WebAccessConfig;
-}): WebSearchResolution {
+function resolveWebSearchModelTool(
+  input: Omit<ModelToolMaterializationInput, "toolRegistry">
+): WebSearchResolution {
   if (!input.agent.toolNames.includes(WEB_SEARCH_MODEL_TOOL_NAME)) {
     return { kind: "none" };
   }
@@ -93,7 +90,7 @@ function resolveWebSearchModelTool(input: {
     };
   }
 
-  const nativeSupported = supportsProviderNativeWebSearch(input.modelProvider);
+  const nativeSupported = input.capabilities.nativeTools.includes(WEB_SEARCH_MODEL_TOOL_NAME);
   if (search.mode === "native_only") {
     return nativeSupported
       ? createOpenAiWebSearchTool()

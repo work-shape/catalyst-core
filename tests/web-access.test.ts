@@ -1,3 +1,4 @@
+import { builtInModelCapabilities } from "./support/model-gateway";
 import { required } from "./support/assertions";
 import { setTestAgent } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
@@ -500,6 +501,9 @@ describe("web search model tool materialization", () => {
     const tools = materializeModelTools({
       agent,
       modelProvider: required(getModelProviderConfigs(config)[0]),
+      capabilities: builtInModelCapabilities(config)({
+        providerId: required(getModelProviderConfigs(config)[0]).id
+      }),
       webAccess: config.webAccess,
       toolRegistry: {
         listDescriptorsForAgent(toolNames) {
@@ -667,6 +671,9 @@ function expectModelToolInvalid(
     findModelToolMaterializationIssues({
       agent,
       modelProvider: required(getModelProviderConfigs(config)[0]),
+      capabilities: builtInModelCapabilities(config)({
+        providerId: required(getModelProviderConfigs(config)[0]).id
+      }),
       webAccess: config.webAccess
     })
   ).toContain(message);

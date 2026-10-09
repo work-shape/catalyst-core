@@ -1,3 +1,4 @@
+import { withTestModelGateway } from "./support/model-gateway";
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
@@ -498,54 +499,56 @@ describe("agent run worker", () => {
       type: "deterministic",
       model: "worker-model"
     };
-    const execute = createWorkerLocalAgentRunExecutor({
-      assetSource: createStaticConfigAssetSource({
-        defaultAgentName: "test-agent",
-        agents: [
-          {
-            name: "test-agent",
-            displayName: "Test agent",
-            instructions: "Answer briefly.",
-            modelProviderId: provider.id,
-            toolNames: [],
-            skillNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [provider],
-      defaultModelProvider: provider,
-      modelProvider: {
-        id: provider.id,
-        async complete() {
-          return {
-            text: "Done.",
-            toolCalls: [],
-            usage: {
-              inputTokens: 0,
-              outputTokens: 0,
-              totalTokens: 0,
-              source: "not_reported",
-              webSearchCallCount: 0
+    const execute = createWorkerLocalAgentRunExecutor(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          defaultAgentName: "test-agent",
+          agents: [
+            {
+              name: "test-agent",
+              displayName: "Test agent",
+              instructions: "Answer briefly.",
+              modelProviderId: provider.id,
+              toolNames: [],
+              skillNames: [],
+              initialPrompts: []
             }
-          };
-        }
-      },
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: {
-        async authorize() {
-          throw new Error("No tools expected");
+          ]
+        }),
+        modelProviders: [provider],
+        defaultModelProvider: provider,
+        modelProvider: {
+          id: provider.id,
+          async complete() {
+            return {
+              text: "Done.",
+              toolCalls: [],
+              usage: {
+                inputTokens: 0,
+                outputTokens: 0,
+                totalTokens: 0,
+                source: "not_reported",
+                webSearchCallCount: 0
+              }
+            };
+          }
         },
-        async execute() {
-          throw new Error("No tools expected");
-        }
-      },
-      usageGovernance: new ModelUsageGovernance({
-        store: fixture.store.usage,
-        budget: {},
-        safeguards: {}
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: {
+          async authorize() {
+            throw new Error("No tools expected");
+          },
+          async execute() {
+            throw new Error("No tools expected");
+          }
+        },
+        usageGovernance: new ModelUsageGovernance({
+          store: fixture.store.usage,
+          budget: {},
+          safeguards: {}
+        })
       })
-    });
+    );
     const worker = createWorker(fixture, execute);
     const result = await worker.runOnce();
 
