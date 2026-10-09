@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { apiOperations, type Operation } from "@vivd-catalyst/api-contract";
 import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, type Logger } from "@vivd-catalyst/core";
 import type { Route } from "@vivd-catalyst/chat-server";
+import { createTestConfig } from "./support/fixtures";
 import { routeTestOperations as operations } from "./support/operations";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { createTestInstanceWith } from "./support/test-instance";
@@ -15,14 +16,33 @@ const serverCredential = "route-contract-server-credential";
 const allowedOrigin = "https://ui.example.test";
 const secret = "payload-that-must-not-leave";
 
-function createServer(input: { sessionToken: boolean } = { sessionToken: true }) {
+function createServer(
+  input: { sessionToken?: boolean; environment?: "development" | "staging" | "production" } = {}
+) {
   const authAdapter = createCallerAuthAdapter();
   const handled: string[] = [];
+  const errors: { input: unknown; message?: string }[] = [];
+  const logger: Logger = {
+    debug: () => undefined,
+    info: () => undefined,
+    warn: () => undefined,
+    error: (logged, message) => void errors.push({ input: logged, message }),
+    child: () => logger
+  };
+  const config = createTestConfig();
   const server = createTestInstanceWith(
     () => ({
       authAdapter,
+      logger,
+      config: {
+        ...config,
+        clientInstance: {
+          ...config.clientInstance,
+          environment: input.environment ?? "development"
+        }
+      },
       allowedOrigins: [allowedOrigin],
-      ...(input.sessionToken
+      ...((input.sessionToken ?? true)
         ? {
             sessionToken: {
               serverCredential,
@@ -38,7 +58,7 @@ function createServer(input: { sessionToken: boolean } = { sessionToken: true })
     }),
     (route) => registerFixtures(route, handled)
   );
-  return { server, authAdapter, handled };
+  return { server, authAdapter, handled, errors };
 }
 
 function registerFixtures(route: Route, handled: string[]): void {
@@ -290,10 +310,17 @@ describe("route helper: scope and rights", () => {
 });
 
 describe("route helper: what leaves", () => {
-  const read = async (result: string) => {
-    const { server } = createServer();
-    return server.call("testResponse", { query: { result } }, asCaller());
+  const read = async (result: string, environment?: "staging" | "production") => {
+    const { server, errors } = createServer({ environment });
+    const response = await server.call("testResponse", { query: { result } }, asCaller());
+    return Object.assign(response, { errors });
   };
+  const mismatch = (path: string, code: string) => [
+    {
+      input: { operationId: "testResponse", issues: [{ path, code }] },
+      message: "Operation response does not match its schema"
+    }
+  ];
 
   it("sends a response that matches the operation's schema", async () => {
     const response = await read("valid");
@@ -301,15 +328,35 @@ describe("route helper: what leaves", () => {
     expect(response.json()).toEqual({ value: "ok", count: 1 });
   });
 
-  it.each(["wrong-value", "wrong-shape"])(
-    "rejects a response that does not match the schema without sending it: %s",
-    async (result) => {
+  it.each([
+    ["wrong-value", "value", "invalid_value"],
+    ["wrong-shape", "count", "invalid_type"]
+  ])(
+    "in development, rejects a response outside the schema without sending it: %s",
+    async (result, path, code) => {
       const response = await read(result);
       expect(response.statusCode).toBe(500);
       expect(response.json()).toEqual({
         error: { code: "INTERNAL", message: "Internal server error" }
       });
       expect(response.body).not.toContain(secret);
+      expect(response.errors).toEqual(mismatch(path, code));
+    }
+  );
+
+  it.each(["staging", "production"] as const)(
+    "in %s, sends a response outside the schema as the handler returned it and logs the mismatch",
+    async (environment) => {
+      const response = await read("wrong-value", environment);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ value: secret });
+      // The log names the operation and where the mismatch is, never the value.
+      expect(response.errors).toEqual(mismatch("value", "invalid_value"));
+      expect(JSON.stringify(response.errors)).not.toContain(secret);
+
+      const valid = await read("valid", environment);
+      expect(valid.statusCode).toBe(200);
+      expect(valid.errors).toEqual([]);
     }
   );
 

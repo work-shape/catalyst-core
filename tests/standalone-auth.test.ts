@@ -15,10 +15,15 @@ import {
 } from "@vivd-catalyst/auth";
 import { createRoute } from "../packages/chat-server/src/http/route";
 import { routeTestOperations } from "./support/operations";
+import { createTestConfig } from "./support/fixtures";
+import { createLogger } from "@vivd-catalyst/client-assembly";
 import Fastify from "../packages/chat-server/node_modules/fastify/fastify.js";
 import { installErrorHandler } from "../packages/chat-server/src/errors";
 import { registerBetterAuthRoutes } from "../packages/chat-server/src/routes/better-auth-routes";
 import { hashPassword } from "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs";
+
+// What the route helper needs besides the sign-in under test.
+const routeDefaults = { config: createTestConfig(), logger: createLogger() };
 
 const { authDatabase, closeDatabase } = vi.hoisted(() => ({
   authDatabase: {
@@ -197,7 +202,7 @@ describe("standalone auth email routes", () => {
     const httpServer = Fastify();
     const server = bindTestTransport(httpServer, () => httpServer.close());
     installErrorHandler(httpServer);
-    createRoute(httpServer, { clientInstanceId, authAdapter: composite })(
+    createRoute(httpServer, { ...routeDefaults, clientInstanceId, authAdapter: composite })(
       routeTestOperations.testIdentityWrite,
       ({ user }) => ({ externalUserId: user.externalUserId })
     );
@@ -237,7 +242,7 @@ describe("standalone auth email routes", () => {
       const httpServer = Fastify();
       const server = bindTestTransport(httpServer, () => httpServer.close());
       installErrorHandler(httpServer);
-      createRoute(httpServer, { clientInstanceId, authAdapter })(
+      createRoute(httpServer, { ...routeDefaults, clientInstanceId, authAdapter })(
         routeTestOperations.testIdentity,
         ({ user }) => ({ externalUserId: user.externalUserId })
       );

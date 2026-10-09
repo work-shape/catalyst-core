@@ -172,6 +172,28 @@ describe("every operation of the catalog", () => {
     });
   });
 
+  // A descriptor carries one scope. Starting a run needs a second one, checked by the handler.
+  it.each(["startConversationRun", "createConversationRun"] as const)(
+    "%s refuses a token that may write conversations but not start runs",
+    async (name) => {
+      const response = await instance.call(
+        name,
+        {
+          ...(name === "startConversationRun" ? { params: { conversationId: "missing" } } : {}),
+          payload: { idempotencyKey: "run-start-refusal", message: { text: "Hello" } }
+        },
+        asCaller({
+          ...everyRight,
+          scopes: FIRST_PARTY_AUTH_SCOPES.filter((scope) => scope !== "*" && scope !== "run:start")
+        })
+      );
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({
+        error: { code: "FORBIDDEN", message: "Missing auth scope 'run:start'" }
+      });
+    }
+  );
+
   it("guards the reading operations that are served by POST", () => {
     const readingByPost = guarded.filter(({ operation }) => operation.effect === "reading");
     expect(readingByPost.map(({ name }) => name)).toContain("validateConfigAssets");

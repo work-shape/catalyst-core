@@ -21,7 +21,7 @@ import type { ChatServerOptions } from "../types";
 
 type RouteServerOptions = Pick<
   ChatServerOptions,
-  "clientInstanceId" | "authAdapter" | "allowedOrigins" | "sessionToken"
+  "clientInstanceId" | "authAdapter" | "allowedOrigins" | "sessionToken" | "config" | "logger"
 >;
 
 /** What a handler knows about a call whose caller is not a signed-in user. */
@@ -133,7 +133,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           reply
         });
         if (operation.response.kind === "json") {
-          requireValidResponse(operation, operation.response.schema, result, request);
+          checkResponse(options, operation, operation.response.schema, result);
         }
         return result;
       }
@@ -269,18 +269,23 @@ function readPathParams(operation: Operation, params: unknown): Record<string, s
   );
 }
 
-function requireValidResponse(
+/**
+ * A response outside its contract is always logged. Only a development instance refuses it:
+ * the handler has already committed its work by now, and one stored value outside an enum
+ * would otherwise fail a whole list for the people using an operated instance.
+ */
+function checkResponse(
+  options: RouteServerOptions,
   operation: Operation,
   schema: z.ZodType,
-  result: unknown,
-  request: FastifyRequest
+  result: unknown
 ): void {
   const validated = schema.safeParse(result);
   if (validated.success) {
     return;
   }
   // Paths and codes only: the values are the payload the schema refused.
-  request.log.error(
+  options.logger.error(
     {
       operationId: operation.id,
       issues: validated.error.issues.map((issue) => ({
@@ -290,5 +295,7 @@ function requireValidResponse(
     },
     "Operation response does not match its schema"
   );
-  throw new AppError("INTERNAL", `Operation '${operation.id}' returned an invalid response`);
+  if (options.config.clientInstance.environment === "development") {
+    throw new AppError("INTERNAL", `Operation '${operation.id}' returned an invalid response`);
+  }
 }
