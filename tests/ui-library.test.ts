@@ -4,7 +4,7 @@ import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import * as library from "@vivd-catalyst/ui";
-import { galleryGroups, UiGallery } from "@vivd-catalyst/ui/gallery";
+import { galleryGroups, UiGallery, type GallerySectionId } from "@vivd-catalyst/ui/gallery";
 import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 
 const { Dialog, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, UiRoot } = library;
@@ -334,21 +334,34 @@ describe("UI gallery", () => {
   });
 
   it.each(["de", "en"])("renders every entry in %s", (language) => {
-    const markup = renderToStaticMarkup(
-      createElement(
-        UiRoot,
-        { mode: "light", labels: uiLabelsEn },
-        createElement(UiGallery, { initialMode: "dark", initialLanguage: language })
-      )
-    );
+    const render = (initialSection: GallerySectionId) =>
+      renderToStaticMarkup(
+        createElement(
+          UiRoot,
+          { mode: "light", labels: uiLabelsEn },
+          createElement(UiGallery, {
+            initialMode: "dark",
+            initialLanguage: language,
+            initialSection
+          })
+        )
+      );
 
-    expect(markup).toContain(language === "de" ? "UI-Bibliothek" : "UI library");
-    expect(markup).toContain('data-gallery-mode="dark"');
     for (const group of galleryGroups) {
+      const markup = render(group.id);
+      expect(markup).toContain(language === "de" ? "UI-Bibliothek" : "UI library");
+      expect(markup).toContain('data-gallery-mode="dark"');
       for (const entry of group.entries) {
         expect(markup).toContain(`data-gallery-entry="${entry.name}"`);
       }
     }
+    // The three sample pages show once each, under the one base theme.
+    const samples = render("samples");
+    for (const sample of ["build-list", "asset-page", "settings-form"]) {
+      expect(samples).toContain(`data-gallery-sample="${sample}"`);
+    }
+    expect(samples.split('data-gallery-mode="dark"')).toHaveLength(4);
+    expect(samples).not.toContain("data-gallery-theme");
   });
 });
 

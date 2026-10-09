@@ -7,7 +7,7 @@ const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-passwo
 test("tabs and the segmented control follow the keyboard, and route tabs are links", async ({
   page
 }) => {
-  const root = await openGallery(page);
+  const root = await openGallery(page, "Navigation");
 
   const tabs = root.locator('[data-gallery-entry="Tabs"]');
   const tabList = tabs.getByRole("tablist");
@@ -56,7 +56,7 @@ test("tabs and the segmented control follow the keyboard, and route tabs are lin
 test("navigation items, list rows, sections and the save bar keep their measures", async ({
   page
 }) => {
-  const root = await openGallery(page);
+  const root = await openGallery(page, "Navigation");
 
   const navItems = root.locator('[data-gallery-entry="NavItem"]');
   const resting = navItems.getByRole("button", { name: "Chat" });
@@ -74,6 +74,7 @@ test("navigation items, list rows, sections and the save bar keep their measures
   expect(await style(groupLabel, "font-weight")).toBe("500");
   expect(await style(groupLabel, "text-transform")).toBe("none");
 
+  await openSection(page, "Data");
   const rows = root.locator('[data-gallery-entry="ListRow"] li');
   const heights = await rows.evaluateAll((elements) =>
     elements.map((element) => element.firstElementChild?.getBoundingClientRect().height ?? 0)
@@ -81,18 +82,6 @@ test("navigation items, list rows, sections and the save bar keep their measures
   expect(heights).toContain(44);
   expect(heights).toContain(36);
   expect(await style(rows.first(), "box-shadow")).toBe("none");
-
-  const section = root.locator('[data-gallery-entry="Section"] section').first();
-  expect(await style(section, "box-shadow")).toBe("none");
-  expect(await style(section, "border-top-width")).toBe("0px");
-  expect(await style(section, "border-bottom-width")).toBe("1px");
-  expect(await style(section, "background-color")).toBe("rgba(0, 0, 0, 0)");
-
-  const stickyBar = root.locator('[data-gallery-sample="save-bar-sticky"] [data-mode="sticky"]');
-  expect(await style(stickyBar, "position")).toBe("sticky");
-  expect(await style(stickyBar, "box-shadow")).not.toBe("none");
-  const inlineBar = root.locator('[data-gallery-entry="SaveBar"] [data-mode="inline"]').first();
-  expect(await style(inlineBar, "box-shadow")).toBe("none");
 
   // A table has no outer box and no header fill; its heads are caption text at weight 500.
   const table = root.locator('[data-gallery-entry="Table"] table').first();
@@ -104,13 +93,34 @@ test("navigation items, list rows, sections and the save bar keep their measures
   expect(await style(head, "font-weight")).toBe("500");
   expect(await style(head, "text-transform")).toBe("none");
 
+  await openSection(page, "Page structure");
+  const section = root.locator('[data-gallery-entry="Section"] section').first();
+  expect(await style(section, "box-shadow")).toBe("none");
+  expect(await style(section, "border-top-width")).toBe("0px");
+  expect(await style(section, "border-bottom-width")).toBe("1px");
+  expect(await style(section, "background-color")).toBe("rgba(0, 0, 0, 0)");
+  // A detail header's rule runs to both edges of its frame.
+  const detail = root.locator('[data-gallery-entry="PageHeader"] header').last();
+  const frame = detail.locator("xpath=..");
+  expect((await detail.boundingBox())?.width).toBe(
+    await frame.evaluate((element) => element.clientWidth)
+  );
+
+  await openSection(page, "Forms");
+  const stickyBar = root.locator('[data-gallery-sample="save-bar-sticky"] [data-mode="sticky"]');
+  expect(await style(stickyBar, "position")).toBe("sticky");
+  expect(await style(stickyBar, "box-shadow")).not.toBe("none");
+  const inlineBar = root.locator('[data-gallery-entry="SaveBar"] [data-mode="inline"]').first();
+  expect(await style(inlineBar, "box-shadow")).toBe("none");
+
+  await openSection(page, "Status");
   expect(await root.locator('[data-gallery-entry="CountBadge"]').innerText()).toContain("99+");
 });
 
 test("the sidebar is 280 px wide, collapses to icons and is a drawer under 768 px", async ({
   page
 }) => {
-  const root = await openGallery(page);
+  const root = await openGallery(page, "Navigation");
   const entry = root.locator('[data-gallery-entry="Sidebar"]');
   const sidebar = entry.locator("aside");
 
@@ -139,7 +149,10 @@ test("the sidebar is 280 px wide, collapses to icons and is a drawer under 768 p
   await expect(drawer).toBeVisible();
   expect((await drawer.boundingBox())?.width).toBe(280);
   await expect(drawer.getByRole("link", { name: "Apps" })).toBeVisible();
-  // A press outside closes it. Escape does too, but the gallery's tooltip that is held open takes it first.
+  // Escape closes it, and so does a press outside.
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await entry.getByRole("button", { name: "Open navigation" }).click();
   await page.mouse.click(600, 400);
   await expect(drawer).toBeHidden();
   await entry.getByRole("button", { name: "Open navigation" }).click();
@@ -150,7 +163,7 @@ test("the sidebar is 280 px wide, collapses to icons and is a drawer under 768 p
 test("the sub-rail navigates routes, scrolls to anchors and follows the scroll", async ({
   page
 }) => {
-  const root = await openGallery(page);
+  const root = await openGallery(page, "Navigation");
   const routes = root.locator('[data-gallery-sample="subrail-routes"]');
   const anchors = root.locator('[data-gallery-sample="subrail-anchors"]');
   const openRoute = routes.locator('[data-gallery-sample="subrail-route"]');
@@ -197,15 +210,25 @@ test("the sub-rail navigates routes, scrolls to anchors and follows the scroll",
   await expect.poll(() => selectedLabel(anchorSelect)).toBe("Overview");
 });
 
-async function openGallery(page: Page): Promise<Locator> {
+async function openGallery(page: Page, section: string): Promise<Locator> {
   const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: { email: adminUser.email, password: adminUser.password, rememberMe: true }
   });
   expect(response.ok()).toBe(true);
   await page.goto("/ui-library");
+  await openSection(page, section);
   const root = page.locator("[data-gallery-mode]").first();
   await expect(root).toBeVisible();
   return root;
+}
+
+/** Opens one section of the gallery by its entry in the section rail. */
+async function openSection(page: Page, name: string): Promise<void> {
+  await page
+    .getByRole("navigation", { name: "Sections of the UI library" })
+    .getByRole("button", { name, exact: true })
+    .click();
+  await expect(page.locator("[data-gallery-section] h2").first()).toHaveText(name);
 }
 
 function style(locator: Locator, property: string): Promise<string> {

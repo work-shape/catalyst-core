@@ -1,9 +1,10 @@
-import { Bot, Check, LayoutGrid, Shield, Users } from "lucide-react";
+import { Bot, Check, Inbox, LayoutGrid, Shield, Users } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { Avatar, type AvatarKind, type AvatarSize } from "../status/avatar";
 import { Badge, type BadgeAppearance, type BadgeTone } from "../status/badge";
 import { Chip, ScopeChip, type ChipSize } from "../status/chip";
+import { CountBadge, type CountBadgeTone } from "../status/count-badge";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -32,6 +33,7 @@ function toneLabel(tone: BadgeTone, text: GalleryText): string {
 const avatarSizes: readonly AvatarSize[] = ["xs", "sm", "md", "lg"];
 const avatarKinds: readonly AvatarKind[] = ["person", "workspace", "agent", "app"];
 const chipSizes: readonly ChipSize[] = ["sm", "md"];
+const countTones: readonly CountBadgeTone[] = ["primary", "muted"];
 
 // A workspace's own colour pair, as a user picks one. Chart colours stand in for it here.
 const sampleAccent = { background: "var(--chart-4)", foreground: "var(--background)" };
@@ -195,6 +197,32 @@ export const statusGallery: GalleryGroup = {
               readOnlyLabel={text.readOnly}
             />
             <ScopeChip scope="workspace" name={text.workspaceMarketing} href="#scope" />
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "CountBadge",
+      components: ["CountBadge"],
+      render: (text) => (
+        <>
+          {countTones.map((tone) => (
+            <Samples key={tone} label={tone === "primary" ? text.countPrimary : text.countMuted}>
+              <CountBadge tone={tone} count={3} />
+              <CountBadge tone={tone} count={42} />
+              <CountBadge tone={tone} count={99} />
+              <CountBadge tone={tone} count={100} />
+            </Samples>
+          ))}
+          <Samples label={text.countDot}>
+            <CountBadge dot role="img" aria-label={text.countPending} />
+            <CountBadge dot tone="muted" role="img" aria-label={text.countPending} />
+            <span className="relative inline-flex">
+              <Button variant="outline" size="icon" aria-label={text.navInbox}>
+                <Inbox aria-hidden="true" />
+              </Button>
+              <CountBadge count={3} className="absolute -top-1 -right-1" />
+            </span>
           </Samples>
         </>
       )

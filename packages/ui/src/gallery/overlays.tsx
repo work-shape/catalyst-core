@@ -9,7 +9,8 @@ import {
   Play,
   Trash2
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { Field } from "../forms/field";
@@ -313,6 +314,40 @@ function PickerSamples({ text }: { text: GalleryText }) {
   );
 }
 
+/**
+ * A tooltip that shows from the start, so its look is judged in every panel without hovering.
+ * Escape lets go of it before anything else hears the key: held on, it would be the topmost
+ * layer of the page and take the Escape meant for a dialog opened later. After that it opens
+ * and closes as every tooltip does.
+ */
+function HeldTooltipSample({ text }: { text: GalleryText }) {
+  const [held, setHeld] = useState(true);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!held) {
+      return;
+    }
+    const release = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        // At once, so the tooltip's layer is gone when the key reaches the document.
+        flushSync(() => setHeld(false));
+      }
+    };
+    window.addEventListener("keydown", release, { capture: true });
+    return () => window.removeEventListener("keydown", release, { capture: true });
+  }, [held]);
+
+  return (
+    <Tooltip open={held || open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>
+        <Button variant="ghost">{text.learnMore}</Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{text.tooltipText}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export const overlaysGallery: GalleryGroup = {
   id: "overlays",
   entries: [
@@ -360,12 +395,7 @@ export const overlaysGallery: GalleryGroup = {
             </TooltipTrigger>
             <TooltipContent shortcut="⌘C">{text.tooltipText}</TooltipContent>
           </Tooltip>
-          <Tooltip open>
-            <TooltipTrigger asChild>
-              <Button variant="ghost">{text.learnMore}</Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{text.tooltipText}</TooltipContent>
-          </Tooltip>
+          <HeldTooltipSample text={text} />
         </Samples>
       )
     },

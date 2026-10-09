@@ -1,19 +1,16 @@
 import { layoutGalleryText, type LayoutGalleryText } from "./text-layout";
+import { sampleGalleryText, type SampleGalleryText } from "./text-samples";
 
 export type GalleryLanguage = "en" | "de";
 
 /** Every text the gallery shows, in both interface languages. Component names are not translated. */
-export interface GalleryText extends LayoutGalleryText {
+export interface GalleryText extends LayoutGalleryText, SampleGalleryText {
   title: string;
   mode: string;
   modeLight: string;
   modeDark: string;
   modeBoth: string;
   language: string;
-  theme: string;
-  themeDefault: string;
-  themeTeal: string;
-  themePrevious: string;
   groups: string;
   groupFoundations: string;
   groupActions: string;
@@ -177,10 +174,6 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     modeDark: "Dark",
     modeBoth: "Both",
     language: "Language",
-    theme: "Theme",
-    themeDefault: "Default",
-    themeTeal: "Teal accent",
-    themePrevious: "Previous default",
     groups: "Component groups",
     groupFoundations: "Foundations",
     groupActions: "Actions",
@@ -327,6 +320,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     rowWorkflow: "Invoice check",
     rowKnowledge: "Product handbook",
     ...layoutGalleryText.en,
+    ...sampleGalleryText.en,
     countPending: "3 requests wait",
     today: "Today",
     yesterday: "Yesterday",
@@ -345,10 +339,6 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     modeDark: "Dunkel",
     modeBoth: "Beide",
     language: "Sprache",
-    theme: "Design",
-    themeDefault: "Standard",
-    themeTeal: "Akzent Petrol",
-    themePrevious: "Bisheriger Standard",
     groups: "Komponentengruppen",
     groupFoundations: "Grundlagen",
     groupActions: "Aktionen",
@@ -495,6 +485,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     rowWorkflow: "Rechnungsprüfung",
     rowKnowledge: "Produkthandbuch",
     ...layoutGalleryText.de,
+    ...sampleGalleryText.de,
     countPending: "3 Anfragen warten",
     today: "Heute",
     yesterday: "Gestern",

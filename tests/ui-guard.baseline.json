@@ -1,7 +1,5 @@
 {
-  "kept": [
-    {"file":"packages/ui/src/gallery/sample-themes.ts","category":"hex","count":18,"reason":"The gallery's sample themes are theme inputs shown for comparison: Teal accent and Previous default. G-5d deletes the two that were not picked."}
-  ],
+  "kept": [],
   "counts": {
     "packages/chat-ui/src/approvals/approvals-view.tsx": {"elements":1},
     "packages/chat-ui/src/approvals/skill-change-body.tsx": {"font-size":1},
@@ -48,7 +46,7 @@
     "packages/chat-ui/src/workspace/agent-selector.tsx": {"elements":2,"roles":1},
     "packages/chat-ui/src/workspace/user-menu.tsx": {"elements":1,"palette":1},
     "packages/chat-ui/src/workspace/workspace-chrome.tsx": {"elements":1,"palette":3,"font-size":1},
-    "packages/chat-ui/src/workspace/workspace-rail.tsx": {"elements":2,"font-size":1},
+    "packages/chat-ui/src/workspace/workspace-rail.tsx": {"elements":1},
     "packages/config-schema/src/schemas.ts": {"hex":14},
     "packages/tool-execution/src/built-in-tools.ts": {"palette":1,"hex":3}
   }

@@ -1,11 +1,14 @@
 import { Search } from "lucide-react";
 import { useState } from "react";
+import { Button } from "../actions/button";
 import { Checkbox } from "../forms/checkbox";
 import { Field } from "../forms/field";
 import { Input, Textarea } from "../forms/input";
 import { RadioGroup } from "../forms/radio-group";
+import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
 import { Switch } from "../forms/switch";
+import { Page } from "../structure/page";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -78,6 +81,54 @@ function FieldSamples({ text }: { text: GalleryText }) {
       </Field>
     </div>
   );
+}
+
+function SaveBarSamples({ text }: { text: GalleryText }) {
+  const [saved, setSaved] = useState(false);
+  return (
+    <>
+      <Samples label={text.saveInline}>
+        <div className="grid w-full">
+          <SaveBar
+            label={text.saveChanges}
+            hint={text.saveHint}
+            saved={saved}
+            savedLabel={text.saveSaved}
+            onSave={() => setSaved((value) => !value)}
+          />
+          <SaveBar label={text.saveChanges} saved savedLabel={text.saveSaved} onSave={noop} />
+          <SaveBar label={text.saveChanges} hint={text.saveHint} saving onSave={noop} />
+          <SaveBar label={text.saveChanges} hint={text.saveHint} disabled onSave={noop} />
+        </div>
+      </Samples>
+      <Samples label={text.saveSticky}>
+        <div
+          className="h-56 w-full overflow-y-auto rounded-lg border [scrollbar-width:thin]"
+          data-gallery-sample="save-bar-sticky"
+        >
+          <Page width="narrow">
+            <p className="text-body text-muted-foreground">{text.saveStickyBody}</p>
+            <Textarea
+              className="mt-4 min-h-64"
+              aria-label={text.instructions}
+              defaultValue={text.instructionsSample}
+            />
+          </Page>
+          <SaveBar
+            mode="sticky"
+            label={text.saveChanges}
+            hint={text.saveHint}
+            secondaryAction={<Button variant="ghost">{text.saveDiscard}</Button>}
+            onSave={noop}
+          />
+        </div>
+      </Samples>
+    </>
+  );
+}
+
+function noop(): void {
+  // The static samples save nothing.
 }
 
 export const formsGallery: GalleryGroup = {
@@ -223,6 +274,11 @@ export const formsGallery: GalleryGroup = {
       name: "Field",
       components: ["Field"],
       render: (text) => <FieldSamples text={text} />
+    },
+    {
+      name: "SaveBar",
+      components: ["SaveBar"],
+      render: (text) => <SaveBarSamples text={text} />
     }
   ]
 };

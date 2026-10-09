@@ -8,12 +8,10 @@ import {
   Plus,
   X
 } from "lucide-react";
-import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { EmptyState } from "../feedback/empty-state";
-import { SaveBar } from "../forms/save-bar";
-import { Input, Textarea } from "../forms/input";
+import { Input } from "../forms/input";
 import { Badge } from "../status/badge";
 import { Card, CardContent, CardHeader, CardTitle, type CardPadding } from "../structure/card";
 import {
@@ -94,7 +92,7 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
         </div>
       </Samples>
       <Samples label={text.headerDetailBreadcrumb}>
-        <div className="w-full rounded-lg border">
+        <div className="w-full overflow-hidden rounded-lg border">
           <PageHeader
             variant="detail"
             headingLevel={2}
@@ -146,50 +144,6 @@ function SectionSamples({ text }: { text: GalleryText }) {
           </div>
         </Samples>
       ))}
-    </>
-  );
-}
-
-function SaveBarSamples({ text }: { text: GalleryText }) {
-  const [saved, setSaved] = useState(false);
-  return (
-    <>
-      <Samples label={text.saveInline}>
-        <div className="grid w-full">
-          <SaveBar
-            label={text.saveChanges}
-            hint={text.saveHint}
-            saved={saved}
-            savedLabel={text.saveSaved}
-            onSave={() => setSaved((value) => !value)}
-          />
-          <SaveBar label={text.saveChanges} saved savedLabel={text.saveSaved} onSave={noop} />
-          <SaveBar label={text.saveChanges} hint={text.saveHint} saving onSave={noop} />
-          <SaveBar label={text.saveChanges} hint={text.saveHint} disabled onSave={noop} />
-        </div>
-      </Samples>
-      <Samples label={text.saveSticky}>
-        <div
-          className="h-56 w-full overflow-y-auto rounded-lg border [scrollbar-width:thin]"
-          data-gallery-sample="save-bar-sticky"
-        >
-          <Page width="narrow">
-            <p className="text-body text-muted-foreground">{text.saveStickyBody}</p>
-            <Textarea
-              className="mt-4 min-h-64"
-              aria-label={text.instructions}
-              defaultValue={text.instructionsSample}
-            />
-          </Page>
-          <SaveBar
-            mode="sticky"
-            label={text.saveChanges}
-            hint={text.saveHint}
-            secondaryAction={<Button variant="ghost">{text.saveDiscard}</Button>}
-            onSave={noop}
-          />
-        </div>
-      </Samples>
     </>
   );
 }
@@ -256,10 +210,6 @@ function SurfaceFrameSamples({ text }: { text: GalleryText }) {
       </Samples>
     </>
   );
-}
-
-function noop(): void {
-  // The static samples save nothing.
 }
 
 export const structureGallery: GalleryGroup = {
@@ -345,11 +295,6 @@ export const structureGallery: GalleryGroup = {
           ))}
         </>
       )
-    },
-    {
-      name: "SaveBar",
-      components: ["SaveBar"],
-      render: (text) => <SaveBarSamples text={text} />
     }
   ]
 };

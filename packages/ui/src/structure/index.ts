@@ -10,6 +10,3 @@ export { Page, type PageProps, type PageWidth } from "./page";
 export { PageHeader, type PageHeaderProps, type PageHeaderVariant } from "./page-header";
 export { Section, type SectionLayout, type SectionProps } from "./section";
 export { SurfaceFrame, type SurfaceFrameProps } from "./surface-frame";
-// SaveBar is a form component. Its file is in ../forms; its export and gallery entry sit here
-// until the forms index, which G-5b owns, can take them.
-export { SaveBar, type SaveBarMode, type SaveBarProps } from "../forms/save-bar";

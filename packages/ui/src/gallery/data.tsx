@@ -1,4 +1,4 @@
-import { Ellipsis, Inbox, Search, SearchX } from "lucide-react";
+import { Ellipsis, Search, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Input } from "../forms/input";
 import { Select } from "../forms/select";
 import { Badge } from "../status/badge";
-import { CountBadge, type CountBadgeTone } from "../status/count-badge";
 import { Samples, type GalleryGroup } from "./entry";
 import { EmptyState } from "../feedback/empty-state";
 import { Avatar } from "../status/avatar";
@@ -17,7 +16,6 @@ import type { GalleryText } from "./text";
 
 const rowSizes: readonly ListRowSize[] = ["default", "compact"];
 const keyValueLayouts: readonly KeyValueLayout[] = ["inline", "stacked"];
-const countTones: readonly CountBadgeTone[] = ["primary", "muted"];
 
 function rowSizeLabel(size: ListRowSize, text: GalleryText): string {
   return size === "default" ? text.rowModeDefault : text.rowModeCompact;
@@ -290,7 +288,7 @@ export const dataGallery: GalleryGroup = {
             <Samples key={layout} label={layout === "inline" ? text.keyInline : text.keyStacked}>
               <KeyValueList layout={layout} className="w-full">
                 <KeyValue label={text.keyUserId} copyValue={text.keyUserIdValue}>
-                  <code className="font-mono text-code">{text.keyUserIdValue}</code>
+                  <code className="font-mono">{text.keyUserIdValue}</code>
                 </KeyValue>
                 <KeyValue label={text.keyCreated}>{text.keyCreatedValue}</KeyValue>
                 <KeyValue label={text.keyLastActive}>{text.today}</KeyValue>
@@ -301,32 +299,6 @@ export const dataGallery: GalleryGroup = {
             </Samples>
           ))}
         </div>
-      )
-    },
-    {
-      name: "CountBadge",
-      components: ["CountBadge"],
-      render: (text) => (
-        <>
-          {countTones.map((tone) => (
-            <Samples key={tone} label={tone === "primary" ? text.countPrimary : text.countMuted}>
-              <CountBadge tone={tone} count={3} />
-              <CountBadge tone={tone} count={42} />
-              <CountBadge tone={tone} count={99} />
-              <CountBadge tone={tone} count={100} />
-            </Samples>
-          ))}
-          <Samples label={text.countDot}>
-            <CountBadge dot role="img" aria-label={text.countPending} />
-            <CountBadge dot tone="muted" role="img" aria-label={text.countPending} />
-            <span className="relative inline-flex">
-              <Button variant="outline" size="icon" aria-label={text.navInbox}>
-                <Inbox aria-hidden="true" />
-              </Button>
-              <CountBadge count={3} className="absolute -top-1 -right-1" />
-            </span>
-          </Samples>
-        </>
       )
     }
   ]

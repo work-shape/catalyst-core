@@ -13,3 +13,4 @@ export {
   type BadgeTone
 } from "./badge";
 export { Chip, ScopeChip, type ChipProps, type ChipSize, type ScopeChipProps } from "./chip";
+export { CountBadge, type CountBadgeProps, type CountBadgeTone } from "./count-badge";
