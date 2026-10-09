@@ -1,31 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { isAppError } from "@vivd-catalyst/core";
+import { isAppError, toErrorEnvelope } from "@vivd-catalyst/core";
 
 export function installErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, _request, reply) => {
-    if (isAppError(error)) {
-      void reply
-        .status(error.statusCode)
-        .type("application/json; charset=utf-8")
-        .send({
-          error: {
-            code: error.code,
-            message: error.exposeMessage ? error.message : "Internal server error",
-            ...(error.statusCode < 500 ? { details: error.details } : {})
-          }
-        });
-      return;
+    if (!isAppError(error)) {
+      app.log.error(error);
     }
-
-    app.log.error(error);
+    const envelope = toErrorEnvelope(error);
     void reply
-      .status(500)
+      .status(envelope.statusCode)
       .type("application/json; charset=utf-8")
-      .send({
-        error: {
-          code: "INTERNAL",
-          message: "Internal server error"
-        }
-      });
+      .send({ error: envelope.error });
   });
 }
