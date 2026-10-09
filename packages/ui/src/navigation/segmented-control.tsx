@@ -38,7 +38,7 @@ export function SegmentedControl({
       orientation="horizontal"
       data-size={size}
       className={cn(
-        "group/segmented inline-flex w-fit shrink-0 items-stretch gap-0.5 rounded-md border border-input bg-background p-0.5",
+        "group/segmented inline-flex w-fit shrink-0 items-stretch gap-0.5 rounded-full border border-input bg-secondary p-0.5",
         traySizes[size],
         className
       )}
@@ -58,7 +58,7 @@ export function SegmentedControlItem({ className, ...props }: SegmentedControlIt
   return (
     <RadioGroup.Item
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-sm px-3 whitespace-nowrap text-muted-foreground group-data-[size=sm]/segmented:px-2 transition-colors hover:text-foreground focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:bg-state-pressed data-[state=checked]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0",
+        "inline-flex items-center justify-center gap-1.5 rounded-full border border-transparent px-3 whitespace-nowrap text-muted-foreground group-data-[size=sm]/segmented:px-2 transition-colors hover:text-foreground active:bg-state-pressed focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:border-primary-border data-[state=checked]:bg-primary-soft data-[state=checked]:text-primary-soft-foreground [&_svg]:size-4 [&_svg]:shrink-0",
         className
       )}
       {...props}
