@@ -15,6 +15,7 @@ import type {
   WorkspaceCommandStore
 } from "./execution-workspace";
 import type { PlatformFileStore } from "./files";
+import type { JobsStore } from "./jobs";
 import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
@@ -48,6 +49,7 @@ export interface PlatformStores {
   approvals: ApprovalsStore;
   executionWorkspaces: ExecutionWorkspacesStore;
   structuredData: StructuredDataStore;
+  jobs: JobsStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;

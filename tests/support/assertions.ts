@@ -29,3 +29,19 @@ export function array(value: unknown): unknown[] {
   if (!Array.isArray(value)) throw new Error("Expected an array");
   return value;
 }
+
+/**
+ * Resolves once `condition` holds and fails when it does not within the deadline. Tests wait on
+ * conditions with this, never with a fixed sleep.
+ */
+export async function waitUntil(
+  condition: () => boolean | Promise<boolean>,
+  description: string,
+  timeoutMs = 15_000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await condition())) {
+    if (Date.now() > deadline) throw new Error(`Timed out waiting until ${description}`);
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  }
+}

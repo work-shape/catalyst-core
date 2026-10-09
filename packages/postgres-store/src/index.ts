@@ -16,6 +16,7 @@ import { createPostgresConfigAssetsStore } from "./stores/configAssets";
 import { createPostgresApprovalsStore } from "./stores/approvals";
 import { createPostgresExecutionWorkspacesStore } from "./stores/executionWorkspaces";
 import { createPostgresStructuredDataStore } from "./stores/structuredData";
+import { createPostgresJobsStore } from "./jobs/store";
 
 export interface PostgresStoresOptions {
   databaseUrl: string;
@@ -26,6 +27,7 @@ export interface PostgresStores extends PlatformStores {
   close(): Promise<void>;
 }
 
+export { createPostgresJobWorker, type CreatePostgresJobWorkerInput } from "./jobs/worker";
 export { DatabaseBehindError, migrateDatabase, type MigrateDatabaseInput } from "./migrations";
 
 function handlePostgresNotice(notice: Notice, logger?: Logger): void {
@@ -51,6 +53,7 @@ function bindStores(db: PostgresConnection): PlatformStores {
     approvals: createPostgresApprovalsStore(db),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),
+    jobs: createPostgresJobsStore(db),
     transaction: (fn) => db.transaction((tx) => fn(bindStores(tx)))
   };
 }

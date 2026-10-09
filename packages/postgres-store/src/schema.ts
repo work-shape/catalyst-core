@@ -10,6 +10,7 @@ export * from "./schema/audit";
 export * from "./schema/usage";
 export * from "./schema/configAssets";
 export * from "./schema/approvals";
+export * from "./schema/jobs";
 import { productUsers, userIdentities } from "./schema/users";
 import { servicePrincipals, apiCredentials } from "./schema/apiAccess";
 import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
@@ -31,6 +32,7 @@ import { auditEvents } from "./schema/audit";
 import { modelUsageEvents } from "./schema/usage";
 import { configAssetState, configAssets, configAssetRevisions } from "./schema/configAssets";
 import { approvalRequests } from "./schema/approvals";
+import { platformJobs } from "./schema/jobs";
 
 export const schema = {
   approvalRequests,
@@ -57,5 +59,6 @@ export const schema = {
   modelUsageEvents,
   configAssetState,
   configAssets,
-  configAssetRevisions
+  configAssetRevisions,
+  platformJobs
 };

@@ -12,6 +12,8 @@ export * from "./agent-runtime";
 export * from "./audit";
 export * from "./audit-projection";
 export * from "./usage";
+export * from "./jobs";
+export * from "./job-handlers";
 export * from "./platform-store";
 export * from "./config";
 export * from "./config-assets";
