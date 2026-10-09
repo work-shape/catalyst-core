@@ -3,7 +3,7 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
-## 0.6.4 — unreleased
+## 0.6.4 — 2026-10-09
 
 ### Fixed
 
