@@ -1,4 +1,5 @@
 export * from "./schemas";
+export * from "./infrastructure";
 export * from "./validation";
 export * from "./asset-validation";
 export * from "./reference-validation";

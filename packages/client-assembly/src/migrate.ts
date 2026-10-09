@@ -1,6 +1,6 @@
-import { AppError } from "@vivd-catalyst/core";
 import { migrateDatabase } from "@vivd-catalyst/postgres-store";
 import type { ClientInstanceEnv } from "./env";
+import { createEnvironmentSecrets, PLATFORM_SECRET_NAMES } from "./infrastructure";
 
 /**
  * The explicit migration step of a client instance. It applies the committed platform migrations
@@ -10,9 +10,8 @@ import type { ClientInstanceEnv } from "./env";
 export async function migrateClientInstanceDatabase(input: {
   env: ClientInstanceEnv;
 }): Promise<string[]> {
-  const databaseUrl = input.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new AppError("VALIDATION_FAILED", "DATABASE_URL is required to migrate the database");
-  }
+  const databaseUrl = await createEnvironmentSecrets(input.env).resolve(
+    PLATFORM_SECRET_NAMES.databaseUrl
+  );
   return migrateDatabase({ databaseUrl });
 }

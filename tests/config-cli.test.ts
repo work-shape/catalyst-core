@@ -1481,7 +1481,7 @@ async function createFixture() {
       environment: "development"
     },
     auth: {},
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
     tools: [{ name: "known.tool", enabled: true }]
   });
   const authOptions = {

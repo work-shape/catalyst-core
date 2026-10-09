@@ -36,13 +36,6 @@ auth:
   sessionToken:
     issuer: demo-client-instance
     ttlSeconds: 900
-mail:
-  enabled: true
-  # Mails are kept in memory and listed at /api/v1/dev/captured-mail instead of being delivered.
-  provider: capture
-  appUrl: http://127.0.0.1:5173
-  sender:
-    fromAddress: noreply@example.test
 retention:
   conversationDays: 30
   auditDays: 365
@@ -68,17 +61,35 @@ administration:
     agentSkillChanges:
       enabled: true
       allowSkillCreation: true
-modelProviders:
-  - id: openai
-    type: openai-compatible
-    api: responses
-    model: gpt-5.5
-    reasoningEffort: high
-    baseUrl: https://api.openai.com/v1
-    apiKeyEnvName: OPENAI_API_KEY
-    contextManagement:
-      compaction:
-        compactThresholdTokens: 270000
+# What this instance runs on: one provider per port. Secrets are named here and read from the
+# environment, never written into this file.
+infrastructure:
+  secrets:
+    provider: environment
+  models:
+    openai:
+      provider: openai-compatible
+      # OpenAI's direct endpoint processes data outside the EU.
+      region: global
+      api: responses
+      model: gpt-5.5
+      reasoningEffort: high
+      baseUrl: https://api.openai.com/v1
+      credentialSecret: OPENAI_API_KEY
+      contextManagement:
+        compaction:
+          compactThresholdTokens: 270000
+  mail:
+    # Mails are kept in memory and listed at /api/v1/dev/captured-mail instead of being delivered.
+    provider: capture
+    appUrl: http://127.0.0.1:5173
+    sender:
+      fromAddress: noreply@example.test
+  objectStorage:
+    # Shared by the API and the artifact preview worker; the Compose files mount this directory.
+    workspaces:
+      provider: filesystem
+      root: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
 modelBindings:
   - id: primary
     providerId: openai

@@ -61,7 +61,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "tests",
-      "count": 147,
+      "count": 145,
       "owner": "CB-2"
     },
     {
@@ -252,13 +252,6 @@
       "scope": "packages/config-cli",
       "count": 5,
       "owner": "PA-3"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/fetch-boundary",
-      "scope": "packages/mail",
-      "count": 3,
-      "owner": "CB-6a, CB-10a"
     },
     {
       "target": "lint",

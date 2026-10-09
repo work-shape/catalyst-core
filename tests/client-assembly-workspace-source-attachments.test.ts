@@ -1,4 +1,5 @@
 import { required } from "./support/assertions";
+import { workspaceInfrastructure } from "./support/fixtures";
 
 import { uploadContent } from "./support/chat-server-attachment-harness";
 import { type TestInstance, createTestInstance } from "./support/test-instance";
@@ -26,6 +27,7 @@ import {
   type ClientInstanceCapability,
   WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES
 } from "@vivd-catalyst/client-assembly";
+import { createLocalWorkspaceObjectStorage } from "@vivd-catalyst/tool-execution";
 
 describe("execution workspace source attachments", () => {
   it("accepts source artifact formats used by workspace skills", () => {
@@ -197,10 +199,7 @@ describe("execution workspace source attachments", () => {
   it("advertises and uploads workspace source, PDF, and image formats through the chat attachment API", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-app-"));
     const app = await createTestInstance({
-      config: createWorkspaceAttachmentConfig(),
-      env: {
-        EXECUTION_WORKSPACE_OBJECT_ROOT: root
-      },
+      config: createWorkspaceAttachmentConfig({ root }),
       capabilities: [createStrictUploadCapability()],
       tools: []
     });
@@ -273,10 +272,7 @@ describe("execution workspace source attachments", () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-cleanup-app-"));
     const expectedDeletedObjectKeys: string[] = [];
     const app = await createTestInstance({
-      config: createWorkspaceAttachmentConfig(),
-      env: {
-        EXECUTION_WORKSPACE_OBJECT_ROOT: root
-      },
+      config: createWorkspaceAttachmentConfig({ root }),
       capabilities: [
         createWorkspaceArtifactSeedingCapability(root),
         createBroadCleanupMarkerCapability(root, expectedDeletedObjectKeys)
@@ -341,10 +337,7 @@ describe("execution workspace source attachments", () => {
   it("serves promoted workspace artifacts before broad managed-object readers", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-app-"));
     const app = await createTestInstance({
-      config: createWorkspaceAttachmentConfig(),
-      env: {
-        EXECUTION_WORKSPACE_OBJECT_ROOT: root
-      },
+      config: createWorkspaceAttachmentConfig({ root }),
       capabilities: [
         createWorkspaceArtifactSeedingCapability(root),
         createBroadManagedObjectReaderCapability()
@@ -383,10 +376,7 @@ describe("execution workspace source attachments", () => {
   it("serves managed artifact-preview image artifacts before broad managed-object readers", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-preview-app-"));
     const app = await createTestInstance({
-      config: createWorkspaceAttachmentConfig(),
-      env: {
-        EXECUTION_WORKSPACE_OBJECT_ROOT: root
-      },
+      config: createWorkspaceAttachmentConfig({ root }),
       capabilities: [
         createWorkspacePreviewArtifactSeedingCapability(root),
         createBroadManagedObjectReaderCapability()
@@ -445,7 +435,7 @@ async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = 
     handler: createExecutionWorkspaceSourceAttachmentHandler({
       clientInstanceId,
       files: store.files,
-      objectRootDirectory: root,
+      objectStore: createLocalWorkspaceObjectStorage({ rootDirectory: root }),
       markDeletedOnDelete: true,
       ...input
     }),
@@ -455,7 +445,7 @@ async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = 
   };
 }
 
-function createWorkspaceAttachmentConfig(input: { toolNames?: string[] } = {}) {
+function createWorkspaceAttachmentConfig(input: { toolNames?: string[]; root?: string } = {}) {
   return parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -468,7 +458,10 @@ function createWorkspaceAttachmentConfig(input: { toolNames?: string[] } = {}) {
         enabled: true
       }
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: {
+      models: { local: { provider: "deterministic", model: "local" } },
+      ...workspaceInfrastructure(input.root)
+    },
     executionWorkspaces: {
       enabled: true
     },

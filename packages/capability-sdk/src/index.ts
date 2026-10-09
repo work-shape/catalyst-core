@@ -7,13 +7,16 @@ import {
   type ConversationId,
   type DraftAttachment,
   type JsonObject,
+  type Logger,
   type ManagedArtifactId,
   type ManagedArtifactKind,
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
-  type PlatformFileStore
+  type PlatformFileStore,
+  type ProviderDefinition,
+  type SecretResolver
 } from "@vivd-catalyst/core";
 import type {
   DataSourceDescribeInput,
@@ -52,11 +55,18 @@ export type {
 export type ClientInstanceEnv = Record<string, string | undefined>;
 
 export interface ClientInstanceCapabilityContext {
-  logger?: import("@vivd-catalyst/core").Logger;
+  logger: Logger;
   clientInstanceId: ClientInstanceId;
   capabilitiesConfig: Record<string, unknown>;
   dataSources: DataSourceRegistry;
+  /** Settings only. A capability takes every secret from `secrets`. */
   env: ClientInstanceEnv;
+  secrets: SecretResolver;
+  /**
+   * The instance's object store entries as the config states them. A capability that brings the
+   * provider of a store creates it from its own definition.
+   */
+  objectStorage: { files?: unknown; workspaces?: unknown };
   files: ClientInstanceCapabilityFiles;
   managedObjectAccess: ManagedObjectAccessFactory;
 }
@@ -174,6 +184,8 @@ export interface ClientInstanceManagedObjectReaderContribution extends ClientIns
 export interface ClientInstanceCapability {
   name: string;
   configKey?: string;
+  /** Providers the capability brings. They register beside the platform's own at startup. */
+  providers?: readonly ProviderDefinition[];
   create(
     context: ClientInstanceCapabilityContext
   ): ClientInstanceCapabilityContribution | Promise<ClientInstanceCapabilityContribution>;

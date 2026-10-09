@@ -68,10 +68,10 @@ administration:
     allowAgentDeletion: true
     allowDefaultAgentChange: true
     allowSkillEditing: true
-modelProviders:
-  - id: local
-    type: deterministic
-    model: deterministic-local
+infrastructure:
+  models:
+    local:
+      provider: deterministic
 modelBindings:
   - id: primary
     providerId: local

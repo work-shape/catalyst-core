@@ -282,7 +282,7 @@ async function createFixture() {
       environment: "development"
     },
     auth: {},
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
     tools: []
   });
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });

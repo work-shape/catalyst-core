@@ -5,6 +5,7 @@ import type {
   ModelBindingConfig,
   ModelProviderConfig
 } from "./schemas";
+import { getModelProviderConfigs } from "./infrastructure";
 
 export function getClientInstanceId(config: ClientInstanceConfig) {
   return asClientInstanceId(config.clientInstance.id);
@@ -43,14 +44,12 @@ export function getModelSelectionForAgent(
   }
   const provider = resolveModelProvider(
     config,
-    agent.modelProviderId ?? config.modelProviders[0]?.id
+    agent.modelProviderId ?? getModelProviderConfigs(config)[0]?.id
   );
   return {
     provider,
     model: provider.model,
-    reasoningEffort:
-      agent.reasoningEffort ??
-      (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
+    reasoningEffort: agent.reasoningEffort ?? provider.reasoningEffort
   };
 }
 
@@ -62,12 +61,12 @@ export function getModelSelectionForConversationTitles(
   }
   const provider = resolveModelProvider(
     config,
-    config.conversationTitles.modelProviderId ?? config.modelProviders[0]?.id
+    config.conversationTitles.modelProviderId ?? getModelProviderConfigs(config)[0]?.id
   );
   return {
     provider,
     model: config.conversationTitles.model ?? provider.model,
-    reasoningEffort: provider.type === "openai-compatible" ? provider.reasoningEffort : undefined
+    reasoningEffort: provider.reasoningEffort
   };
 }
 
@@ -84,9 +83,7 @@ export function resolveModelBinding(
     provider,
     binding,
     model: binding.model ?? provider.model,
-    reasoningEffort:
-      binding.reasoningEffort ??
-      (provider.type === "openai-compatible" ? provider.reasoningEffort : undefined)
+    reasoningEffort: binding.reasoningEffort ?? provider.reasoningEffort
   };
 }
 
@@ -94,7 +91,7 @@ function resolveModelProvider(
   config: ClientInstanceConfig,
   providerId: string | undefined
 ): ModelProviderConfig {
-  const provider = config.modelProviders.find((candidate) => candidate.id === providerId);
+  const provider = getModelProviderConfigs(config).find((candidate) => candidate.id === providerId);
   if (!provider) {
     throw new AppError("NOT_FOUND", `Model provider '${providerId}' is not defined`);
   }

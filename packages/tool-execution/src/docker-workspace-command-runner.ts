@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { ExecutionWorkspaceRunnerConfig } from "@vivd-catalyst/core";
 import {
   DEFAULT_WORKSPACE_COMMAND_SHELL,
   DEFAULT_WORKSPACE_COMMAND_PATH,
@@ -15,6 +14,8 @@ const DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
 export interface DockerWorkspaceCommandProcessExecutorOptions {
   image: string;
   dockerPath?: string;
+  /** The Docker endpoint, such as `tcp://host:2376`. Absent means the Docker client's default. */
+  endpoint?: string;
   networkMode?: "none";
   readOnlyRootFilesystem?: boolean;
   cpuCount?: number;
@@ -74,7 +75,8 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
       commandClient:
         options.commandClient ??
         new DockerCliCommandClient({
-          dockerPath: options.dockerPath ?? "docker"
+          dockerPath: options.dockerPath ?? "docker",
+          endpoint: options.endpoint
         }),
       createContainerName: options.createContainerName
     };
@@ -93,19 +95,6 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
     }
     return result;
   }
-}
-
-export function createDockerProcessExecutorFromConfig(
-  config: ExecutionWorkspaceRunnerConfig
-): DockerWorkspaceCommandProcessExecutor {
-  return new DockerWorkspaceCommandProcessExecutor({
-    image: config.image,
-    networkMode: config.networkMode,
-    readOnlyRootFilesystem: config.readOnlyRootFilesystem,
-    cpuCount: config.cpuCount,
-    memoryBytes: config.memoryBytes,
-    pidsLimit: config.pidsLimit
-  });
 }
 
 export function createDockerRunInvocation(
@@ -191,12 +180,17 @@ export function filterDockerSandboxEnvironment(
 }
 
 class DockerCliCommandClient implements DockerCommandClient {
-  constructor(private readonly options: { dockerPath: string }) {}
+  constructor(private readonly options: { dockerPath: string; endpoint?: string }) {}
+
+  /** Arguments that address the configured endpoint, before the Docker command itself. */
+  private get endpointArgs(): string[] {
+    return this.options.endpoint ? ["--host", this.options.endpoint] : [];
+  }
 
   async run(input: DockerCommandRunInput): Promise<ProcessResult> {
     return runSpawnedProcess({
       executable: this.options.dockerPath,
-      args: input.args,
+      args: [...this.endpointArgs, ...input.args],
       timeoutSeconds: input.command.limits.timeoutSeconds,
       idleTimeoutSeconds: input.command.limits.idleTimeoutSeconds,
       maxStdoutBytes: input.command.limits.maxStdoutBytes,
@@ -209,7 +203,7 @@ class DockerCliCommandClient implements DockerCommandClient {
   async removeContainer(name: string): Promise<void> {
     await runSpawnedProcess({
       executable: this.options.dockerPath,
-      args: ["rm", "-f", name],
+      args: [...this.endpointArgs, "rm", "-f", name],
       timeoutSeconds: 10,
       maxStdoutBytes: 1024,
       maxStderrBytes: 1024

@@ -12,6 +12,7 @@ import {
 } from "@vivd-catalyst/core";
 import { createLocalWorkspaceObjectStorage } from "@vivd-catalyst/tool-execution";
 import { jsonObject, required, text } from "./support/assertions";
+import { workspaceInfrastructure } from "./support/fixtures";
 import {
   createManagedObjectTestAttachmentCapability,
   createMultipartFilePayload
@@ -42,11 +43,14 @@ describe("Postgres conversation cleanup through a client assembly", () => {
           environment: "development"
         },
         auth: { development: { enabled: true } },
-        modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+        infrastructure: {
+          models: { local: { provider: "deterministic", model: "local" } },
+          ...workspaceInfrastructure(root)
+        },
         executionWorkspaces: { enabled: true },
         tools: []
       }),
-      env: { DATABASE_URL: db.databaseUrl, EXECUTION_WORKSPACE_OBJECT_ROOT: root },
+      env: { DATABASE_URL: db.databaseUrl },
       capabilities: withCapability ? [acceptingOnly(capability.capability, ".note")] : [],
       tools: [],
       seedAssets: false

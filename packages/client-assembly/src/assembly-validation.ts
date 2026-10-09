@@ -2,6 +2,7 @@ import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime
 import { type ApprovalRequestHandlerRegistry, AppError } from "@vivd-catalyst/core";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "@vivd-catalyst/model-provider";
 import {
+  getModelProviderConfigs,
   getModelSelectionForAgent,
   type AgentConfig,
   type ClientInstanceConfig
@@ -91,7 +92,9 @@ function findDuplicateToolImplementations(tools: AnyToolDefinition[]): string[] 
 
 function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[] {
   const issues: string[] = [];
-  const configuredProviderIds = new Set(config.modelProviders.map((provider) => provider.id));
+  const configuredProviderIds = new Set(
+    getModelProviderConfigs(config).map((provider) => provider.id)
+  );
   const configuredModelBindingIds = new Set(config.modelBindings.map((binding) => binding.id));
 
   for (const binding of config.modelBindings) {

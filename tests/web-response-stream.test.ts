@@ -222,7 +222,9 @@ function createTestConfig(
         }
       }
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "deterministic-local" }],
+    infrastructure: {
+      models: { local: { provider: "deterministic", model: "deterministic-local" } }
+    },
     tools: input.tools ?? []
   });
   setTestAgent(config, {

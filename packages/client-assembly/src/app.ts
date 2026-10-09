@@ -18,25 +18,26 @@ import {
 } from "@vivd-catalyst/chat-server";
 import type { ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
-import { AppError, type HttpRuntime, type PlatformStores } from "@vivd-catalyst/core";
+import {
+  AppError,
+  type HttpRuntime,
+  type PlatformStores,
+  type SecretResolver
+} from "@vivd-catalyst/core";
 import {
   type ClientInstanceConfig,
   getClientInstanceId,
   getEnabledToolNames,
+  getModelProviderConfigs,
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
 import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
-import {
-  createDataSourceTools,
-  createDataSourceRegistry,
-  createEnvSecretResolver
-} from "@vivd-catalyst/data-source";
+import { createDataSourceTools, createDataSourceRegistry } from "@vivd-catalyst/data-source";
 import { createWebFetchToolDefinitions } from "@vivd-catalyst/web-access";
 import {
   createBuiltInToolDefinitions,
   createConsoleWorkspaceCommandTelemetry,
-  createLocalWorkspaceFileByteStore,
   createReadSkillTool,
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
@@ -60,6 +61,7 @@ import type {
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
 import type { ClientInstanceEnv } from "./env";
+import { createInstanceInfrastructure, createWorkspaceObjectStore } from "./infrastructure";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
 import { createToolDefinitions } from "./tools";
@@ -72,6 +74,8 @@ export interface CreateClientInstanceAppInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
+  /** Replaces the configured secret provider. For tests. */
+  secrets?: SecretResolver;
   tools: ToolAssemblyDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
@@ -117,6 +121,7 @@ export async function createClientInstanceApp(
     await createClientInstanceAuth({
       config,
       env,
+      secrets: execution.infrastructure.secrets,
       clientInstanceId,
       userStore: store,
       allowedOrigins: input.allowedOrigins
@@ -157,7 +162,7 @@ export async function createClientInstanceApp(
     modelProvider,
     allowedOrigins,
     standaloneAuth,
-    mail: createClientInstanceMail({ config, env }),
+    mail: await createClientInstanceMail({ config, context: execution.infrastructure.context }),
     sessionToken,
     serviceAccessToken
   });
@@ -188,23 +193,31 @@ export async function createClientInstanceExecutionAssembly(
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
-  const store = await createPlatformStore({ env, logger });
-  const dataSources = createDataSourceRegistry({
-    configs: config.dataSources,
-    secretResolver: createEnvSecretResolver(env)
+  const capabilities = input.capabilities ?? [];
+  // The resolver comes first: the store, the sign-in code and every provider take from it.
+  const infrastructure = await createInstanceInfrastructure({
+    config,
+    env,
+    logger,
+    secrets: input.secrets,
+    providers: capabilities.flatMap((capability) => capability.providers ?? [])
   });
-  const executionWorkspaceObjectRoot = config.executionWorkspaces.enabled
-    ? requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
+  const { secrets } = infrastructure;
+  const store = await createPlatformStore({ secrets, logger });
+  const dataSources = await createDataSourceRegistry({ configs: config.dataSources, secrets });
+  const workspaceObjectStore = config.executionWorkspaces.enabled
+    ? await createWorkspaceObjectStore(config, infrastructure.context)
     : undefined;
-  const workspaceFileByteStore = executionWorkspaceObjectRoot
-    ? createLocalWorkspaceFileByteStore({ rootDirectory: executionWorkspaceObjectRoot })
-    : undefined;
-  const capabilityContributions = await createCapabilityContributions(input.capabilities ?? [], {
+  const workspaceFileByteStore = workspaceObjectStore?.fileBytes;
+  const modelProviders = getModelProviderConfigs(config);
+  const capabilityContributions = await createCapabilityContributions(capabilities, {
     logger,
     capabilitiesConfig: config.capabilities,
     clientInstanceId,
     dataSources,
     env,
+    secrets,
+    objectStorage: config.infrastructure.objectStorage,
     files: store.files,
     managedObjectAccess: {
       createAccess(accessInput) {
@@ -220,11 +233,11 @@ export async function createClientInstanceExecutionAssembly(
   const capabilityAttachmentHandlers = capabilityContributions.flatMap(
     (contribution) => contribution.attachments ?? []
   );
-  const workspaceSourceAttachment = executionWorkspaceObjectRoot
+  const workspaceSourceAttachment = workspaceObjectStore
     ? createExecutionWorkspaceSourceAttachmentHandler({
         clientInstanceId,
         files: store.files,
-        objectRootDirectory: executionWorkspaceObjectRoot,
+        objectStore: workspaceObjectStore.objects,
         maxFileBytes: config.executionWorkspaces.sourceFiles.maxFileBytes,
         markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
       })
@@ -250,7 +263,7 @@ export async function createClientInstanceExecutionAssembly(
     store: store.configAssets,
     source: assetSource,
     validationRefs: {
-      modelProviderIds: config.modelProviders.map((provider) => provider.id),
+      modelProviderIds: modelProviders.map((provider) => provider.id),
       modelBindingIds: config.modelBindings
         .filter((binding) => binding.agentSelectable !== false)
         .map((binding) => binding.id),
@@ -259,7 +272,7 @@ export async function createClientInstanceExecutionAssembly(
         .map((binding) => {
           const model =
             binding.model ??
-            config.modelProviders.find((provider) => provider.id === binding.providerId)?.model;
+            modelProviders.find((provider) => provider.id === binding.providerId)?.model;
           if (model === undefined) throw new Error(`Model binding ${binding.id} has no model`);
           return { id: binding.id, model };
         }),
@@ -284,7 +297,11 @@ export async function createClientInstanceExecutionAssembly(
     safeguards: config.usage.safeguards,
     costs: config.usage.costs
   });
-  const modelProvider = createModelProviderRegistry({ configs: config.modelProviders, env });
+  const modelProvider = await createModelProviderRegistry({
+    providers: modelProviders,
+    entries: config.infrastructure.models,
+    context: infrastructure.context
+  });
   const approvalRequestCreator = new ApprovalRequestWorkflow({
     clientInstanceId,
     store: store.approvals,
@@ -357,14 +374,14 @@ export async function createClientInstanceExecutionAssembly(
     usageRecorder: usageGovernance,
     logger
   });
-  const defaultModelProvider = config.modelProviders[0];
+  const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
   }
   const localAgentRuntimeOptions = {
     logger,
     assetSource,
-    modelProviders: config.modelProviders,
+    modelProviders,
     modelBindings: config.modelBindings,
     defaultModelProvider,
     modelProviderContinuationStore: store.conversations,
@@ -392,7 +409,7 @@ export async function createClientInstanceExecutionAssembly(
     skills: assets.skills,
     defaultAgentName: assets.defaultAgentName,
     refs: {
-      modelProviderIds: config.modelProviders.map((provider) => provider.id),
+      modelProviderIds: modelProviders.map((provider) => provider.id),
       modelBindingIds: config.modelBindings
         .filter((binding) => binding.agentSelectable !== false)
         .map((binding) => binding.id),
@@ -411,6 +428,7 @@ export async function createClientInstanceExecutionAssembly(
   return {
     logger,
     env,
+    infrastructure,
     config,
     clientInstanceId,
     store,
@@ -611,14 +629,6 @@ function createCompositeManagedObjectReader(
       return tryManagedObjectReaders(readers, (reader) => reader.readFile(input), input.fileId);
     }
   };
-}
-
-function requiredEnv(env: ClientInstanceEnv, name: string): string {
-  const value = env[name];
-  if (!value) {
-    throw new AppError("VALIDATION_FAILED", `${name} is required`);
-  }
-  return value;
 }
 
 async function tryAttachmentHandlers<T>(

@@ -3,11 +3,13 @@ import {
   asClientInstanceId,
   asConversationId,
   isJsonObject,
+  SecretNotResolvedError,
   unknownToJsonValue,
   type AuthenticatedUser,
   type ConversationStore,
   type JsonObject,
-  type Logger
+  type Logger,
+  type SecretResolver
 } from "@vivd-catalyst/core";
 import {
   parseClientInstanceConfig,
@@ -65,7 +67,8 @@ export function createTestConfig(
           type: "openai-compatible";
           model: string;
           baseUrl: string;
-          apiKeyEnvName: string;
+          credentialSecret: string;
+          region?: "eu" | "global";
         }
     >;
     modelBindings?: Array<{
@@ -84,6 +87,8 @@ export function createTestConfig(
     };
     usageSafeguards?: UsageSafeguardsConfig;
     executionWorkspaces?: unknown;
+    /** Where workspace bytes go when execution workspaces are enabled. */
+    workspaceObjectRoot?: string;
     usagePricing?: {
       currency: string;
       models: Array<{
@@ -123,9 +128,23 @@ export function createTestConfig(
       },
       ...(input.sessionToken ? { sessionToken: input.sessionToken } : {})
     },
-    modelProviders: input.modelProviders ?? [
-      { id: "local", type: "deterministic", model: "local" }
-    ],
+    infrastructure: {
+      models: Object.fromEntries(
+        (input.modelProviders ?? [{ id: "local", type: "deterministic", model: "local" }]).map(
+          ({ id, type, ...settings }) => [
+            id,
+            {
+              provider: type,
+              ...(type === "openai-compatible" ? { region: "global" } : {}),
+              ...settings
+            }
+          ]
+        )
+      ),
+      ...(enablesExecutionWorkspaces(input.executionWorkspaces)
+        ? workspaceInfrastructure(input.workspaceObjectRoot)
+        : {})
+    },
     modelBindings: input.modelBindings,
     usage: {
       budget: input.usageBudget ?? {},
@@ -239,4 +258,36 @@ export async function personalConversationListInput(
 
 export function setTestAgent(config: object, agent: JsonObject): void {
   testAssetsByConfig.set(config, { defaultAgentName: String(agent.name), agent });
+}
+
+/** A secret resolver over a fixed map, for tests that must not read the environment. */
+export function createFakeSecrets(values: Record<string, string> = {}): SecretResolver {
+  return {
+    async resolve(name) {
+      const value = values[name];
+      if (value === undefined) {
+        throw new SecretNotResolvedError(name, "is not set in the fake resolver");
+      }
+      return value;
+    }
+  };
+}
+
+/**
+ * The store and sandbox an instance with enabled execution workspaces must name. The local
+ * sandbox and the filesystem store keep everything on this machine.
+ */
+export function workspaceInfrastructure(
+  root = "/tmp/vivd-catalyst-test-workspace-objects"
+): JsonObject {
+  return {
+    objectStorage: { workspaces: { provider: "filesystem", root } },
+    sandbox: { provider: "local" }
+  };
+}
+
+function enablesExecutionWorkspaces(value: unknown): boolean {
+  return (
+    typeof value === "object" && value !== null && "enabled" in value && value.enabled === true
+  );
 }

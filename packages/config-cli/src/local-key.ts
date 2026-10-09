@@ -7,6 +7,7 @@ import {
   type ApiClientOptions
 } from "@vivd-catalyst/api-client";
 import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
+import { createEnvironmentSecretResolver, resolveOptionalSecret } from "@vivd-catalyst/core";
 
 /** The variable `catalyst config` reads its key from. */
 export const API_KEY_ENV_NAME = "CATALYST_API_KEY";
@@ -48,7 +49,13 @@ export async function createLocalApiKey(options: LocalApiKeyOptions): Promise<st
       `${options.configPath} is not a development config with a seeded superadmin. Create the key under Administration, API Access instead.`
     );
   }
-  const password = env[superadmin.passwordEnvName] ?? superadmin.developmentPassword;
+  const secrets = createEnvironmentSecretResolver({
+    env,
+    readSecretFile: (path) => readFile(path, "utf8")
+  });
+  const password =
+    (await resolveOptionalSecret(secrets, superadmin.passwordEnvName)) ??
+    superadmin.developmentPassword;
   const origin = env.CHAT_UI_ORIGIN ?? standalone.trustedOrigins[0];
   if (!password || !origin) {
     throw new Error(

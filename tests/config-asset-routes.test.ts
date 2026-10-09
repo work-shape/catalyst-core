@@ -1327,7 +1327,18 @@ async function createFixture(
         ...input.agentConfiguration
       }
     },
-    modelProviders,
+    infrastructure: {
+      models: Object.fromEntries(
+        modelProviders.map(({ id, type, ...settings }) => [
+          id,
+          {
+            provider: type,
+            ...(type === "openai-compatible" ? { region: "global" } : {}),
+            ...settings
+          }
+        ])
+      )
+    },
     ...(input.modelBindings
       ? {
           modelBindings: [

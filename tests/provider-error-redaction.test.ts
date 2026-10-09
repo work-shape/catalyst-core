@@ -235,7 +235,7 @@ describe("provider error boundary", () => {
             type: "openai-compatible",
             model: "test",
             baseUrl: "https://provider.test/v1",
-            apiKeyEnvName: "TEST_PROVIDER_KEY"
+            credentialSecret: "TEST_PROVIDER_KEY"
           }
         ]
       }),

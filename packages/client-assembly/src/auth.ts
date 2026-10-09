@@ -10,9 +10,16 @@ import {
   createStandaloneAuthRuntime,
   type AuthAdapter
 } from "@vivd-catalyst/auth";
-import { AppError, normalizeAllowedOrigins, type ClientInstanceId } from "@vivd-catalyst/core";
+import {
+  AppError,
+  normalizeAllowedOrigins,
+  resolveOptionalSecret,
+  type ClientInstanceId,
+  type SecretResolver
+} from "@vivd-catalyst/core";
 import { getDevelopmentAuthUsers, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceEnv } from "./env";
+import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 
 export interface ClientInstanceAuth {
   allowedOrigins: string[];
@@ -29,7 +36,9 @@ export interface ClientInstanceAuth {
 
 export interface CreateClientInstanceAuthInput {
   config: ClientInstanceConfig;
+  /** Settings only. Every secret comes from `secrets`. */
   env: ClientInstanceEnv;
+  secrets: SecretResolver;
   clientInstanceId: ClientInstanceId;
   userStore: Pick<PlatformStores, "users" | "apiAccess">;
   allowedOrigins?: string | string[];
@@ -44,7 +53,10 @@ export async function createClientInstanceAuth(
   let sessionToken: ClientInstanceAuth["sessionToken"];
   let serviceAccessToken: ClientInstanceAuth["serviceAccessToken"];
 
-  const serviceAccessTokenSecret = input.env.SERVICE_ACCESS_TOKEN_SECRET;
+  const serviceAccessTokenSecret = await resolveOptionalSecret(
+    input.secrets,
+    PLATFORM_SECRET_NAMES.serviceAccessTokenSecret
+  );
   if (serviceAccessTokenSecret) {
     const serviceAccessOptions = {
       secret: serviceAccessTokenSecret,
@@ -65,8 +77,12 @@ export async function createClientInstanceAuth(
     adapters.push(standaloneAuth.authAdapter);
   }
 
-  const tokenSecret = input.env.CHAT_SESSION_TOKEN_SECRET;
-  const serverCredential = input.env.CHAT_SERVER_CREDENTIAL;
+  const tokenSecret = input.config.auth.sessionToken
+    ? await resolveOptionalSecret(input.secrets, PLATFORM_SECRET_NAMES.chatSessionTokenSecret)
+    : undefined;
+  const serverCredential = tokenSecret
+    ? await resolveOptionalSecret(input.secrets, PLATFORM_SECRET_NAMES.chatServerCredential)
+    : undefined;
   if (tokenSecret && serverCredential && input.config.auth.sessionToken) {
     const tokenOptions = {
       secret: tokenSecret,
@@ -115,6 +131,7 @@ export async function createClientInstanceAuth(
 export async function createStandaloneAuthRuntimeForClientInstance(input: {
   config: ClientInstanceConfig;
   env: ClientInstanceEnv;
+  secrets: SecretResolver;
   clientInstanceId: ClientInstanceId;
   allowedOrigins: string[];
 }): Promise<NonNullable<ClientInstanceAuth["standaloneAuth"]>> {
@@ -125,19 +142,24 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
     );
   }
 
-  const databaseUrl = input.env.DATABASE_URL;
-  const secret = input.env.BETTER_AUTH_SECRET;
-  if (!databaseUrl) {
+  const databaseUrl = await input.secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl);
+  const secret = await input.secrets.resolve(PLATFORM_SECRET_NAMES.standaloneAuthSecret);
+  if (secret.length < 32) {
     throw new AppError(
       "VALIDATION_FAILED",
-      "Standalone Better Auth requires DATABASE_URL; start Postgres or set DATABASE_URL"
+      `Standalone Better Auth requires the secret '${PLATFORM_SECRET_NAMES.standaloneAuthSecret}' with at least 32 characters`
     );
   }
-  if (!secret || secret.length < 32) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "Standalone Better Auth requires BETTER_AUTH_SECRET with at least 32 characters"
-    );
+  const seedUsers = [];
+  for (const seedUser of input.config.auth.standalone.seedUsers) {
+    seedUsers.push({
+      email: resolveSeedEmail(seedUser, input),
+      displayLabel: seedUser.displayLabel,
+      password: await resolveSeedPassword(seedUser, input),
+      roles: seedUser.roles,
+      permissionRefs: seedUser.permissionRefs,
+      permissions: seedUser.permissions
+    });
   }
 
   return createStandaloneAuthRuntime({
@@ -146,14 +168,7 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
     secret,
     baseUrl: resolveBetterAuthUrl(input),
     trustedOrigins: input.allowedOrigins,
-    seedUsers: input.config.auth.standalone.seedUsers.map((seedUser) => ({
-      email: resolveSeedEmail(seedUser, input),
-      displayLabel: seedUser.displayLabel,
-      password: resolveSeedPassword(seedUser, input),
-      roles: seedUser.roles,
-      permissionRefs: seedUser.permissionRefs,
-      permissions: seedUser.permissions
-    }))
+    seedUsers
   });
 }
 
@@ -216,22 +231,22 @@ function resolveSeedEmail(
     : seedUser.email;
 }
 
-function resolveSeedPassword(
+async function resolveSeedPassword(
   seedUser: NonNullable<ClientInstanceConfig["auth"]["standalone"]>["seedUsers"][number],
   input: {
     config: ClientInstanceConfig;
-    env: ClientInstanceEnv;
+    secrets: SecretResolver;
   }
-): string {
+): Promise<string> {
   const password =
-    input.env[seedUser.passwordEnvName] ??
+    (await resolveOptionalSecret(input.secrets, seedUser.passwordEnvName)) ??
     (input.config.clientInstance.environment === "development"
       ? seedUser.developmentPassword
       : undefined);
   if (!password) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `Missing password environment variable '${seedUser.passwordEnvName}' for standalone auth seed user '${seedUser.email}'`
+      `Missing password secret '${seedUser.passwordEnvName}' for standalone auth seed user '${seedUser.email}'`
     );
   }
   return password;

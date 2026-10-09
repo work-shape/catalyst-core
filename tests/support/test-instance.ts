@@ -11,6 +11,7 @@ import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contra
 import {
   asClientInstanceId,
   NoopAuditRecorder,
+  SecretNotResolvedError,
   type HttpRuntime,
   type PlatformStores
 } from "@vivd-catalyst/core";
@@ -583,6 +584,43 @@ export function getTestExecution(
   const assembly = metadata.get(instance)?.execution;
   if (!assembly) throw new Error("No execution assembly fixture");
   return assembly;
+}
+
+/**
+ * Starts the app with an empty environment. Everything it takes from outside comes from the
+ * resolver over `values`, and `resolved` records every name the app asked for.
+ */
+export async function createTestInstanceOnSecrets(
+  input: Omit<TestAppInput, "env" | "secrets">,
+  values: Record<string, string> = {}
+): Promise<{ instance: TestInstance; resolved: Set<string> }> {
+  if (!testActive) preserveSuiteState = true;
+  const known: Record<string, string> = {
+    ...values,
+    DATABASE_URL: await fileTestDatabaseUrl(input.fixtureFile)
+  };
+  const resolved = new Set<string>();
+  const app = await createClientInstanceApp({
+    ...input,
+    env: {},
+    secrets: {
+      async resolve(name) {
+        resolved.add(name);
+        const value = known[name];
+        if (value === undefined) {
+          throw new SecretNotResolvedError(name, "is not set in the test resolver");
+        }
+        return value;
+      }
+    }
+  });
+  const instance = bindInstance(app.store, {
+    server: app.server,
+    config: app.config,
+    closed: false,
+    cleanup: () => app.close()
+  });
+  return { instance, resolved };
 }
 
 /** Exercises the production missing-configuration guard before any persistence is created. */

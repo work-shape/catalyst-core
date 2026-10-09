@@ -160,7 +160,7 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
       defaultLocale: "en",
       supportedLocales: ["en"]
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
     ...overrides
   };
 }

@@ -1,41 +1,30 @@
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
+import type { ProviderRegion } from "./providers";
 
 export interface AgentInitialPromptConfig {
   title: LocalizedStringConfig;
   prompt: LocalizedStringConfig;
 }
 
-export interface DeterministicModelProviderConfig {
-  id: string;
-  type: "deterministic";
-  model: string;
-}
-
 export type ModelProviderAuthModeConfig = "bearer" | "api-key";
-export type ModelProviderResidencyConfig = "global" | "eu" | "unknown";
 
-export interface ModelProviderComplianceConfig {
-  residency?: ModelProviderResidencyConfig;
-  productionApproved?: boolean;
-  notes?: string;
-}
-
-export interface OpenAiCompatibleModelProviderConfig {
+/**
+ * What the product reads of one entry under `infrastructure.models`: its name, the registered
+ * provider type and the fields of the models port. Connection settings and secret names belong
+ * to the adapter and are not here.
+ */
+export interface ModelProviderConfig {
+  /** The entry's name under `infrastructure.models`. */
   id: string;
-  type: "openai-compatible";
-  api?: OpenAiCompatibleModelProviderApiConfig;
+  /** The registered provider type, such as `openai-compatible`. */
+  type: string;
   model: string;
-  baseUrl: string;
-  apiKeyEnvName: string;
-  authMode?: ModelProviderAuthModeConfig;
-  organizationEnvName?: string;
+  /** Present when the provider sends data outside the instance. */
+  region?: ProviderRegion;
+  api?: OpenAiCompatibleModelProviderApiConfig;
   reasoningEffort?: ReasoningEffortConfig;
   contextManagement?: OpenAiCompatibleContextManagementConfig;
-  compliance?: ModelProviderComplianceConfig;
 }
-
-export type ModelProviderConfig =
-  DeterministicModelProviderConfig | OpenAiCompatibleModelProviderConfig;
 
 export type OpenAiCompatibleModelProviderApiConfig = "chat_completions" | "responses";
 export interface OpenAiCompatibleContextManagementConfig {
@@ -348,19 +337,6 @@ export interface WebAccessConfig {
   fetch: WebAccessFetchConfig;
 }
 
-export type ExecutionWorkspaceRunnerModeConfig = "local" | "docker";
-export type ExecutionWorkspaceNetworkModeConfig = "none";
-
-export interface ExecutionWorkspaceRunnerConfig {
-  mode: ExecutionWorkspaceRunnerModeConfig;
-  image: string;
-  networkMode: ExecutionWorkspaceNetworkModeConfig;
-  readOnlyRootFilesystem: boolean;
-  cpuCount: number;
-  memoryBytes: number;
-  pidsLimit: number;
-}
-
 export interface ExecutionWorkspaceCommandConfig {
   defaultTimeoutSeconds: number;
   maxTimeoutSeconds: number;
@@ -389,7 +365,6 @@ export interface ExecutionWorkspaceCleanupConfig {
 
 export interface ExecutionWorkspacesConfig {
   enabled: boolean;
-  runner: ExecutionWorkspaceRunnerConfig;
   command: ExecutionWorkspaceCommandConfig;
   worker: ExecutionWorkspaceWorkerConfig;
   cleanup: ExecutionWorkspaceCleanupConfig;

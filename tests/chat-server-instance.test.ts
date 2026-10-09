@@ -670,9 +670,6 @@ describe("client instance app vertical slice", () => {
           enabled: true
         }
       }),
-      env: {
-        EXECUTION_WORKSPACE_OBJECT_ROOT: "/tmp/vivd-catalyst-test-workspace-objects"
-      },
       tools: []
     });
 
@@ -687,7 +684,8 @@ describe("client instance app vertical slice", () => {
       })
     ).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
-      message: "DATABASE_URL is required for the platform store"
+      message:
+        "Secret 'DATABASE_URL' is not set: neither the variable 'DATABASE_URL' nor 'DATABASE_URL_FILE' is present"
     });
   });
 
@@ -729,7 +727,7 @@ describe("client instance app vertical slice", () => {
             type: "openai-compatible",
             model: "gpt-4.1",
             baseUrl: "https://api.openai.com/v1",
-            apiKeyEnvName: "OPENAI_API_KEY"
+            credentialSecret: "OPENAI_API_KEY"
           }
         ],
         usageBudget: {

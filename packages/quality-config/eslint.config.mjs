@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import { importX } from "eslint-plugin-import-x";
 import tseslint from "typescript-eslint";
@@ -378,6 +378,46 @@ const plugin = {
           ImportDeclaration: check,
           ImportExpression: check,
           CallExpression: check
+        };
+      }
+    ),
+    // A provider enters the product through its package's registration and nowhere else, so
+    // no other file can construct an adapter or read a vendor type from one.
+    "adapter-import": rule(
+      "Files under src/adapters are loaded only by the package's src/registration.ts",
+      (filename) => {
+        const pkg = packageAt(filename);
+        return (
+          pkg !== undefined &&
+          !isPackageFile(filename, "src/registration.ts") &&
+          !filename.startsWith(`${resolve(root, pkg.directory, "src/adapters")}${sep}`)
+        );
+      },
+      (context, report) => {
+        const adapters = resolve(
+          root,
+          packageAt(context.filename)?.directory ?? "",
+          "src/adapters"
+        );
+        /**
+         * @param {AnyNode} node
+         * @param {unknown} specifier
+         */
+        const check = (node, specifier) => {
+          if (typeof specifier !== "string" || !specifier.startsWith(".")) return;
+          const target = resolve(dirname(context.filename), specifier);
+          if (target === adapters || target.startsWith(`${adapters}${sep}`)) report(node);
+        };
+        /** @param {AnyNode} node */
+        const checkLoad = (node) => check(node, loadedModule(node));
+        return {
+          ImportDeclaration: checkLoad,
+          ImportExpression: checkLoad,
+          CallExpression: checkLoad,
+          ExportNamedDeclaration: (node) => check(node, node.source?.value),
+          ExportAllDeclaration: (node) => check(node, node.source.value),
+          /** @param {AnyNode & { source: { value?: unknown } }} node */
+          TSImportType: (node) => check(node, node.source.value)
         };
       }
     ),

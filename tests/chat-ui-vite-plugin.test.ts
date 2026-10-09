@@ -98,6 +98,10 @@ async function createClientFixture(): Promise<string> {
       "  id: test-client",
       "  displayName: Test Client",
       "  environment: development",
+      "infrastructure:",
+      "  models:",
+      "    local:",
+      "      provider: deterministic",
       "uiFile: ./ui.yaml",
       ""
     ].join("\n"),

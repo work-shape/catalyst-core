@@ -115,7 +115,7 @@ function createTestConfig(input: {
         enabled: true
       }
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
     capabilities: input.capabilities,
     tools: input.tools
   });

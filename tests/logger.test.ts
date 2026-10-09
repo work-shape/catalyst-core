@@ -258,7 +258,7 @@ describe("process logger", () => {
             type: "openai-compatible",
             model: "test",
             baseUrl: "https://provider.test/v1",
-            apiKeyEnvName: "TEST_PROVIDER_KEY"
+            credentialSecret: "TEST_PROVIDER_KEY"
           }
         ]
       }),

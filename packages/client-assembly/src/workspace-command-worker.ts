@@ -1,26 +1,32 @@
 import { createLogger } from "./logger";
 import { tmpdir } from "node:os";
-import { AppError, StoreBackedAuditRecorder } from "@vivd-catalyst/core";
+import { AppError, StoreBackedAuditRecorder, type SecretResolver } from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import {
-  createDockerProcessExecutorFromConfig,
   createConsoleWorkspaceCommandTelemetry,
-  createLocalWorkspaceFileByteStore,
-  LocalWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandRunner,
   WorkspaceCommandWorker
 } from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceEnv } from "./env";
+import {
+  createInstanceInfrastructure,
+  createSandbox,
+  createWorkspaceObjectStore,
+  SANDBOX_PATH,
+  WORKSPACE_STORE_PATH
+} from "./infrastructure";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
+  /** Replaces the configured secret provider. For tests. */
+  secrets?: SecretResolver;
 }
 
 export interface ClientInstanceWorkspaceCommandWorker {
@@ -44,20 +50,22 @@ export async function createClientInstanceWorkspaceCommandWorker(
     throw new AppError("VALIDATION_FAILED", "Execution workspaces are disabled in release config");
   }
 
-  const store = await createPlatformStore({ env, logger });
-  const clientInstanceId = getClientInstanceId(config);
-  const byteStore = createLocalWorkspaceFileByteStore({
-    rootDirectory: requiredEnv(env, "EXECUTION_WORKSPACE_OBJECT_ROOT")
+  const infrastructure = await createInstanceInfrastructure({
+    config,
+    env,
+    logger,
+    secrets: input.secrets,
+    uses: [WORKSPACE_STORE_PATH, SANDBOX_PATH]
   });
+  const store = await createPlatformStore({ secrets: infrastructure.secrets, logger });
+  const clientInstanceId = getClientInstanceId(config);
+  const byteStore = (await createWorkspaceObjectStore(config, infrastructure.context)).fileBytes;
   const auditRecorder = new StoreBackedAuditRecorder({
     clientInstanceId,
     store: store.audit
   });
   const telemetry = createConsoleWorkspaceCommandTelemetry(logger);
-  const processExecutor =
-    config.executionWorkspaces.runner.mode === "docker"
-      ? createDockerProcessExecutorFromConfig(config.executionWorkspaces.runner)
-      : new LocalWorkspaceCommandProcessExecutor();
+  const processExecutor = await createSandbox(config, infrastructure.context);
   const runner = new LocalWorkspaceCommandRunner({
     store,
     byteStore,
@@ -95,23 +103,23 @@ export async function createClientInstanceWorkspaceCommandWorker(
   };
 }
 
+/**
+ * A release builds its own sandbox image, so a deployment names it per release in the variable
+ * `EXECUTION_WORKSPACE_RUNNER_IMAGE`. It replaces `infrastructure.sandbox.image`; a setting, not
+ * a secret, so it stays an environment read.
+ */
 export function applyWorkspaceRunnerImageEnvOverride(
   config: ClientInstanceConfig,
   env: ClientInstanceEnv
 ): ClientInstanceConfig {
   const image = env.EXECUTION_WORKSPACE_RUNNER_IMAGE?.trim();
-  if (!image) {
+  const { sandbox } = config.infrastructure;
+  if (!image || !sandbox) {
     return config;
   }
   return {
     ...config,
-    executionWorkspaces: {
-      ...config.executionWorkspaces,
-      runner: {
-        ...config.executionWorkspaces.runner,
-        image
-      }
-    }
+    infrastructure: { ...config.infrastructure, sandbox: { ...sandbox, image } }
   };
 }
 
@@ -158,12 +166,4 @@ async function loadWorkspaceWorkerConfig(
     );
   }
   return loadClientInstanceConfigFromFile(resolvedPath);
-}
-
-function requiredEnv(env: ClientInstanceEnv, name: string): string {
-  const value = env[name];
-  if (!value) {
-    throw new AppError("VALIDATION_FAILED", `${name} is required for workspace command workers`);
-  }
-  return value;
 }

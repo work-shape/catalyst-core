@@ -17,21 +17,23 @@ describe("user-selectable model config", () => {
         displayName: "Selectable Model Test",
         environment: "development"
       },
-      modelProviders: [
-        {
-          id: "openai",
-          type: "openai-compatible",
-          api: "responses",
-          model: "gpt-5.6-sol",
-          baseUrl: "https://api.openai.com/v1",
-          apiKeyEnvName: "OPENAI_API_KEY",
-          contextManagement: {
-            compaction: {
-              compactThresholdTokens: 270_000
+      infrastructure: {
+        models: {
+          openai: {
+            provider: "openai-compatible",
+            region: "global",
+            api: "responses",
+            model: "gpt-5.6-sol",
+            baseUrl: "https://api.openai.com/v1",
+            credentialSecret: "OPENAI_API_KEY",
+            contextManagement: {
+              compaction: {
+                compactThresholdTokens: 270_000
+              }
             }
           }
         }
-      ],
+      },
       modelBindings: [
         {
           id: "sol",
@@ -112,12 +114,14 @@ describe("user-selectable model config", () => {
       {
         bindingId: "conversationTitle",
         model: "gpt-5.6-luna",
+        region: "global",
         compactThresholdTokens: 270_000,
         ...defaultChoice
       },
       {
         bindingId: "terra",
         model: "gpt-5.6-terra",
+        region: "global",
         compactThresholdTokens: 270_000,
         ...defaultChoice
       }
@@ -125,8 +129,14 @@ describe("user-selectable model config", () => {
     // An agent on the provider default has no binding for its own model: no id, and no choice
     // of effort.
     expect(safeConfig.agents[2]?.selectableModels).toEqual([
-      { model: "gpt-5.6-sol", compactThresholdTokens: 270_000, ...noChoice },
-      { bindingId: "sol", model: "gpt-5.6-sol", compactThresholdTokens: 270_000, ...defaultChoice }
+      { model: "gpt-5.6-sol", region: "global", compactThresholdTokens: 270_000, ...noChoice },
+      {
+        bindingId: "sol",
+        model: "gpt-5.6-sol",
+        region: "global",
+        compactThresholdTokens: 270_000,
+        ...defaultChoice
+      }
     ]);
   });
 
@@ -139,16 +149,17 @@ describe("user-selectable model config", () => {
         environment: "development"
       },
       localization: { defaultLocale: "en", supportedLocales: ["en", "de"] },
-      modelProviders: [
-        {
-          id: "azure-eu",
-          type: "openai-compatible",
-          api: "responses",
-          model: "gpt-5.6-sol",
-          compliance: { residency: "eu" }
-        },
-        { id: "global", type: "openai-compatible", model: "claude-opus" }
-      ],
+      infrastructure: {
+        models: {
+          "azure-eu": {
+            provider: "openai-compatible",
+            region: "eu",
+            api: "responses",
+            model: "gpt-5.6-sol"
+          },
+          global: { provider: "openai-compatible", region: "global", model: "claude-opus" }
+        }
+      },
       modelBindings: [
         {
           id: "sol",
@@ -231,7 +242,7 @@ describe("user-selectable model config", () => {
         bindingId: "sol",
         model: "gpt-5.6-sol",
         description: "Für komplexe Aufgaben.",
-        residency: "eu",
+        region: "eu",
         // (3 × 5 + 30) / 4 = 11.25 per million tokens.
         usageTier: "high",
         // The agent's own effort for its own model joins the efforts the binding lists, weakest
@@ -242,7 +253,7 @@ describe("user-selectable model config", () => {
       {
         bindingId: "luna",
         model: "gpt-5.6-luna",
-        residency: "eu",
+        region: "eu",
         usageTier: "low",
         // The effort the agent sets for this model, among the efforts offered by default.
         reasoningEffort: "medium",
@@ -253,12 +264,13 @@ describe("user-selectable model config", () => {
       {
         bindingId: "opus",
         model: "claude-opus",
+        region: "global",
         vendor: "anthropic",
         usageTier: "very_high",
         ...noChoice
       },
       // No rate card entry and no override: the picker shows no tier.
-      { bindingId: "unpriced", model: "gpt-unpriced", residency: "eu", ...defaultChoice }
+      { bindingId: "unpriced", model: "gpt-unpriced", region: "eu", ...defaultChoice }
     ]);
   });
 
@@ -271,19 +283,21 @@ describe("user-selectable model config", () => {
           displayName: "Invalid Compaction Test",
           environment: "development"
         },
-        modelProviders: [
-          {
-            id: "openai",
-            type: "openai-compatible",
-            api: "chat_completions",
-            model: "gpt-test",
-            contextManagement: {
-              compaction: {
-                compactThresholdTokens: 270_000
+        infrastructure: {
+          models: {
+            openai: {
+              provider: "openai-compatible",
+              region: "global",
+              api: "chat_completions",
+              model: "gpt-test",
+              contextManagement: {
+                compaction: {
+                  compactThresholdTokens: 270_000
+                }
               }
             }
           }
-        ]
+        }
       })
     ).toThrow(/requires api: responses/u);
   });

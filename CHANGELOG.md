@@ -25,7 +25,7 @@ contain breaking changes; a patch version does not.
 
 - **Chat:** the composer's model selector is a model picker. It opens as a short menu with the
   model and its reasoning effort; the model list shows each model's provider logo and an EU
-  mark for providers with `compliance.residency: eu`, and a model under the pointer brings up a
+  mark for providers with `region: eu`, and a model under the pointer brings up a
   card with its description and usage consumption. A model binding can carry `description`,
   `vendor` and `usageTier` for it. The usage tier comes from the Customer Rate Card unless the
   binding sets one.
@@ -105,6 +105,53 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   URL. `createRoute` and `Route` are no longer exported from `@vivd-catalyst/chat-server`.
   The object `createStandaloneAuthRuntime` returns has `routeKind(pathname)`, which the server
   uses to count calls to the sign-in routes.
+- **Infrastructure (breaking):** every provider an instance runs on is named in the new
+  `infrastructure` section of the instance config, one provider per port: `secrets`, `models`,
+  `mail`, `objectStorage.files`, `objectStorage.workspaces` and `sandbox`. The keys
+  `modelProviders`, `mail`, `executionWorkspaces.runner` and
+  `capabilities.documentProcessing.objectStorage` moved there. Config that still carries one of
+  them does not load: startup stops with a message that names the key and its new place. There
+  is no transition release, so deploy the config change together with this version. What to
+  change:
+  - `modelProviders` (a list) becomes `infrastructure.models` (a map): `id` is the map key,
+    `type` becomes `provider`, the key's `…EnvName` field becomes `credentialSecret`, the
+    organization's becomes `organizationSecret` and `compliance.residency` becomes `region`.
+    Maps merge key by key across `extends` files, so delete an entry of a base file that an
+    overlay used to replace. At least one entry is required; the implicit `deterministic`
+    default is gone.
+  - `mail` becomes `infrastructure.mail`: the two `…EnvName` fields become `apiKeySecret` and
+    `apiSecretSecret`, and an instance without mail leaves the key out instead of
+    `enabled: false`.
+  - `executionWorkspaces.runner` becomes `infrastructure.sandbox`: `mode` becomes `provider`
+    (`docker` or `local`). `networkMode` and `readOnlyRootFilesystem` are fixed and no longer
+    settings. `EXECUTION_WORKSPACE_RUNNER_IMAGE` still replaces the image.
+  - `capabilities.documentProcessing.objectStorage` becomes `infrastructure.objectStorage.files`:
+    `kind` becomes `provider`, the vendor's `region` becomes `bucketRegion`.
+    `DOCUMENT_OBJECT_STORE_BUCKET`, `DOCUMENT_OBJECT_STORE_REGION` and
+    `DOCUMENT_OBJECT_STORE_ENDPOINT` still replace the entry's values.
+  - The variables `EXECUTION_WORKSPACE_OBJECT_ROOT` and `ARTIFACT_PREVIEW_OBJECT_ROOT` are no
+    longer read. Name the directory in `infrastructure.objectStorage.workspaces`
+    (`provider: filesystem`, `root`), and mount the same directory into the API and its workers.
+    Enabled execution workspaces need this entry and `infrastructure.sandbox`.
+  - A provider that sends data outside the instance (`openai-compatible`, `mailjet`, `s3`) must
+    state `region: eu` or `region: global`; one that keeps data inside must not.
+- **Secrets (breaking for integrators):** every secret is taken from one secret resolver, by
+  name. The `environment` provider reads the variable of that name and otherwise the file named
+  by `<NAME>_FILE`, so a mounted secret works for every secret, including `DATABASE_URL`. Config
+  fields that take a secret end in `Secret` and hold its name, never its value. The S3 store
+  always takes its credentials by name (default `AWS_ACCESS_KEY_ID` and
+  `AWS_SECRET_ACCESS_KEY`); the AWS credential chain and the built-in S3Mock credentials are no
+  longer used, so a local S3Mock needs both variables set to any value.
+  `createClientInstanceApp`, the worker factories and `seedStandaloneAuthUsers` accept a
+  `secrets` resolver. `@vivd-catalyst/data-source` no longer exports `createEnvSecretResolver`,
+  and `createDataSourceRegistry` and `createModelProviderRegistry` are asynchronous and take
+  `secrets`. A capability receives `secrets`, `logger` and `objectStorage` in its context and
+  may bring provider definitions in `providers`. An artifact preview `sourceReaderFactory`
+  receives `context` (the resolver and the logger) for the store it creates.
+- **Config API:** a selectable model in the safe config view carries `region` (`eu` or
+  `global`) in place of `residency`.
+- **Startup messages:** an invalid instance config names the first failing key in the error
+  message, not only in its details.
 - **Platform store (breaking):** Postgres is the only platform store. The `STORE` environment
   variable is no longer read, so `STORE=memory` no longer starts an instance without a
   database; every process needs `DATABASE_URL`. Remove `STORE` from environment files. The

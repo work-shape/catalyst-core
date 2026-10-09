@@ -44,7 +44,8 @@
   "@vivd-catalyst/config-cli": [
     "@vivd-catalyst/api-client",
     "@vivd-catalyst/api-contract",
-    "@vivd-catalyst/config-schema"
+    "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/core"
   ],
   "@vivd-catalyst/config-schema": ["@vivd-catalyst/core"],
   "@vivd-catalyst/core": [],

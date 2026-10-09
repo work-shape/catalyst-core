@@ -153,36 +153,42 @@ describe("Mailjet transport", () => {
 });
 
 describe("mail release config", () => {
+  const models = { local: { provider: "deterministic" } };
   const base = {
     version: 1,
     clientInstance: { id: "mail-test", displayName: "Mail Test" },
-    auth: { standalone: { enabled: true } }
+    auth: { standalone: { enabled: true } },
+    infrastructure: { models }
   };
-  const enabledMail = {
-    enabled: true,
+  const captureMail = {
     provider: "capture",
     appUrl: "https://chat.example.test",
     sender: { fromAddress: "noreply@mail.example.test" }
   };
+  const withMail = { ...base, infrastructure: { models, mail: captureMail } };
 
-  it("is disabled by default and hides password reset", () => {
+  it("has no mail without a mail entry and hides password reset", () => {
     const config = parseClientInstanceConfig(base);
-    expect(config.mail.enabled).toBe(false);
+    expect(config.infrastructure.mail).toBeUndefined();
     expect(createClientBranding(config).passwordResetEnabled).toBe(false);
   });
 
-  it("requires a sender and app URL once enabled", () => {
-    expect(() => parseClientInstanceConfig({ ...base, mail: { enabled: true } })).toThrow();
-    const config = parseClientInstanceConfig({ ...base, mail: enabledMail });
+  it("requires a sender and app URL on the mail entry", () => {
+    expect(() =>
+      parseClientInstanceConfig({
+        ...base,
+        infrastructure: { models, mail: { provider: "capture" } }
+      })
+    ).toThrow(/infrastructure\.mail\.appUrl/u);
+    const config = parseClientInstanceConfig(withMail);
     expect(createClientBranding(config).passwordResetEnabled).toBe(true);
   });
 
   it("refuses the capture provider in production", () => {
     expect(() =>
       parseClientInstanceConfig({
-        ...base,
-        clientInstance: { ...base.clientInstance, environment: "production" },
-        mail: enabledMail
+        ...withMail,
+        clientInstance: { ...base.clientInstance, environment: "production" }
       })
     ).toThrow(/capture mail provider/u);
   });
@@ -190,9 +196,8 @@ describe("mail release config", () => {
   it("refuses the capture provider in staging", () => {
     expect(() =>
       parseClientInstanceConfig({
-        ...base,
-        clientInstance: { ...base.clientInstance, environment: "staging" },
-        mail: enabledMail
+        ...withMail,
+        clientInstance: { ...base.clientInstance, environment: "staging" }
       })
     ).toThrow(/capture mail provider/u);
   });

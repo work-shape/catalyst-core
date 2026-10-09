@@ -21,7 +21,8 @@ export const userModelPreferenceSchema = z.object({
   reasoningEfforts: z.record(z.string().min(1), reasoningEffortSchema)
 });
 export const modelUsageTierSchema = z.enum(["low", "moderate", "high", "very_high"]);
-export const modelResidencySchema = z.enum(["global", "eu", "unknown"]);
+/** Where a model's provider processes data. Absent for a provider inside the instance. */
+export const modelRegionSchema = z.enum(["eu", "global"]);
 
 export const agentEditableFieldSchema = z.enum([
   "displayName",
@@ -145,7 +146,7 @@ export const safeConfigSchema = z.object({
           /** Who makes the model, when release config names it; otherwise read from the model id. */
           vendor: z.string().optional(),
           description: z.string().optional(),
-          residency: modelResidencySchema.optional(),
+          region: modelRegionSchema.optional(),
           usageTier: modelUsageTierSchema.optional(),
           /** The effort a run uses when the user picks none. */
           reasoningEffort: reasoningEffortSchema.optional(),

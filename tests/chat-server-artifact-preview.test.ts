@@ -729,7 +729,7 @@ function createPreviewConfig(clientInstanceId: ClientInstanceId) {
         enabled: true
       }
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
     usage: {
       budget: {},
       safeguards: {}

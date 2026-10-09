@@ -44,6 +44,7 @@
     "@vivd-catalyst/api-client": "workspace:*",
     "@vivd-catalyst/api-contract": "workspace:*",
     "@vivd-catalyst/config-schema": "workspace:*",
+    "@vivd-catalyst/core": "workspace:*",
     "js-yaml": "^4.2.0"
   },
   "devDependencies": {

@@ -19,7 +19,7 @@ Commands wait in the durable Postgres queue until worker capacity is available. 
 
 ## Runner Image
 
-The platform Dockerfile exposes a `workspace-command-runner` target for the `executionWorkspaces.runner.image` container. It includes `/bin/bash`, Node, Python artifact libraries, LibreOffice, Poppler, fonts, ImageMagick, and common shell utilities so `workspace.exec` can run ordinary script-first DOCX, XLSX, PPTX, PDF, and image workflows without package installs at command time.
+The platform Dockerfile exposes a `workspace-command-runner` target for the `infrastructure.sandbox.image` container. It includes `/bin/bash`, Node, Python artifact libraries, LibreOffice, Poppler, fonts, ImageMagick, and common shell utilities so `workspace.exec` can run ordinary script-first DOCX, XLSX, PPTX, PDF, and image workflows without package installs at command time.
 
 The image target intentionally does not copy the chat API build or deployment secrets. The `workspace-command-worker` target remains the trusted control process image with Docker CLI access; it starts short-lived runner containers from the configured runner image.
 

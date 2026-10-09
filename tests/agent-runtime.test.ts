@@ -1642,9 +1642,7 @@ describe("local agent runtime", () => {
       const providerConfig: ModelProviderConfig = {
         id: "test-provider",
         type: "openai-compatible",
-        model: "test-model",
-        baseUrl: "https://provider.test/v1",
-        apiKeyEnvName: "TEST_KEY"
+        model: "test-model"
       };
       const provider = new OpenAiCompatibleChatProvider({
         id: providerConfig.id,
@@ -2429,8 +2427,6 @@ describe("local agent runtime", () => {
       id: "test-provider",
       type: "openai-compatible",
       api: "responses",
-      baseUrl: "https://example.test/openai/v1",
-      apiKeyEnvName: "TEST_API_KEY",
       model: "test-model",
       contextManagement: {
         compaction: {

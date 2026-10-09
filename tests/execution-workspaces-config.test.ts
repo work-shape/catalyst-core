@@ -3,21 +3,13 @@ import { applyWorkspaceRunnerImageEnvOverride } from "@vivd-catalyst/client-asse
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 describe("execution workspaces config", () => {
-  it("defaults to disabled execution workspaces with no-network Docker sandbox settings", () => {
+  it("defaults to disabled execution workspaces", () => {
     const config = parseClientInstanceConfig(baseConfig());
 
     expect(config.executionWorkspaces).toMatchObject({
       enabled: false,
       sourceFiles: {
         maxFileBytes: 25 * 1024 * 1024
-      },
-      runner: {
-        mode: "docker",
-        networkMode: "none",
-        readOnlyRootFilesystem: true,
-        cpuCount: 1,
-        memoryBytes: 4 * 1024 * 1024 * 1024,
-        pidsLimit: 128
       },
       command: {
         defaultTimeoutSeconds: 60,
@@ -41,21 +33,20 @@ describe("execution workspaces config", () => {
     });
   });
 
-  it("accepts explicit Docker runner and concurrency settings", () => {
+  it("accepts explicit command, worker and cleanup settings", () => {
     const config = parseClientInstanceConfig(
       baseConfig({
+        infrastructure: workspaceInfrastructure({
+          provider: "docker",
+          image: "ghcr.io/example/catalyst-runner-base:v1",
+          cpuCount: 2,
+          memoryBytes: 1024 * 1024 * 1024,
+          pidsLimit: 256
+        }),
         executionWorkspaces: {
           enabled: true,
           sourceFiles: {
             maxFileBytes: 128 * 1024 * 1024
-          },
-          runner: {
-            mode: "docker",
-            image: "ghcr.io/example/catalyst-runner-base:v1",
-            networkMode: "none",
-            cpuCount: 2,
-            memoryBytes: 1024 * 1024 * 1024,
-            pidsLimit: 256
           },
           command: {
             defaultTimeoutSeconds: 600,
@@ -84,13 +75,6 @@ describe("execution workspaces config", () => {
       sourceFiles: {
         maxFileBytes: 128 * 1024 * 1024
       },
-      runner: {
-        image: "ghcr.io/example/catalyst-runner-base:v1",
-        networkMode: "none",
-        cpuCount: 2,
-        memoryBytes: 1024 * 1024 * 1024,
-        pidsLimit: 256
-      },
       command: {
         defaultTimeoutSeconds: 600,
         maxTimeoutSeconds: 900,
@@ -112,19 +96,34 @@ describe("execution workspaces config", () => {
     });
   });
 
-  it("keeps local workspace runner mode development-only when execution workspaces are enabled", () => {
+  it("requires a workspace store and a sandbox when execution workspaces are enabled", () => {
+    expect(() =>
+      parseClientInstanceConfig(baseConfig({ executionWorkspaces: { enabled: true } }))
+    ).toThrow(
+      "'infrastructure.objectStorage.workspaces' is required when execution workspaces are enabled"
+    );
+    expect(() =>
+      parseClientInstanceConfig(
+        baseConfig({
+          infrastructure: {
+            models,
+            objectStorage: { workspaces: { provider: "filesystem", root: "/tmp/objects" } }
+          },
+          executionWorkspaces: { enabled: true }
+        })
+      )
+    ).toThrow("'infrastructure.sandbox' is required when execution workspaces are enabled");
+  });
+
+  it("keeps the local sandbox development-only when execution workspaces are enabled", () => {
     const development = parseClientInstanceConfig(
       baseConfig({
-        executionWorkspaces: {
-          enabled: true,
-          runner: {
-            mode: "local"
-          }
-        }
+        infrastructure: workspaceInfrastructure({ provider: "local" }),
+        executionWorkspaces: { enabled: true }
       })
     );
 
-    expect(development.executionWorkspaces.runner.mode).toBe("local");
+    expect(development.infrastructure.sandbox?.provider).toBe("local");
 
     expect(() =>
       parseClientInstanceConfig(
@@ -134,15 +133,13 @@ describe("execution workspaces config", () => {
             displayName: "Config Test",
             environment: "staging"
           },
-          executionWorkspaces: {
-            enabled: true,
-            runner: {
-              mode: "local"
-            }
-          }
+          infrastructure: workspaceInfrastructure({ provider: "local" }),
+          executionWorkspaces: { enabled: true }
         })
       )
-    ).toThrow(/Local execution workspace runner mode is only allowed for development/u);
+    ).toThrow(
+      "'infrastructure.sandbox.provider': the local sandbox is only allowed for development client instances"
+    );
   });
 
   it("rejects unsafe timeout and heartbeat settings", () => {
@@ -180,12 +177,11 @@ describe("execution workspaces config", () => {
   it("lets the workspace command worker use the deployment-built runner image tag", () => {
     const config = parseClientInstanceConfig(
       baseConfig({
-        executionWorkspaces: {
-          enabled: true,
-          runner: {
-            image: "ghcr.io/example/catalyst-runner-base:placeholder"
-          }
-        }
+        infrastructure: workspaceInfrastructure({
+          provider: "docker",
+          image: "ghcr.io/example/catalyst-runner-base:placeholder"
+        }),
+        executionWorkspaces: { enabled: true }
       })
     );
 
@@ -194,14 +190,24 @@ describe("execution workspaces config", () => {
         "ghcr.io/example/vivd-catalyst-musterbau-catalyst-runner-base:staging-20260629"
     });
 
-    expect(resolved.executionWorkspaces.runner.image).toBe(
+    expect(resolved.infrastructure.sandbox?.image).toBe(
       "ghcr.io/example/vivd-catalyst-musterbau-catalyst-runner-base:staging-20260629"
     );
-    expect(config.executionWorkspaces.runner.image).toBe(
+    expect(config.infrastructure.sandbox?.image).toBe(
       "ghcr.io/example/catalyst-runner-base:placeholder"
     );
   });
 });
+
+const models = { local: { provider: "deterministic", model: "local" } };
+
+function workspaceInfrastructure(sandbox: Record<string, unknown>) {
+  return {
+    models,
+    objectStorage: { workspaces: { provider: "filesystem", root: "/tmp/objects" } },
+    sandbox
+  };
+}
 
 function baseConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -220,7 +226,7 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
       defaultLocale: "en",
       supportedLocales: ["en"]
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: { models },
     ...overrides
   };
 }

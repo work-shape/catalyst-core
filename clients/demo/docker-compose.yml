@@ -49,7 +49,6 @@ x-backend-package-watch-ignore: &backend-package-watch-ignore
 x-app-environment: &app-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
-  EXECUTION_WORKSPACE_OBJECT_ROOT: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
   CHAT_SESSION_TOKEN_SECRET: ${CHAT_SESSION_TOKEN_SECRET:-replace-with-at-least-24-random-characters}
   CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}
   SERVICE_ACCESS_TOKEN_SECRET: ${SERVICE_ACCESS_TOKEN_SECRET:-replace-with-at-least-32-random-characters}
@@ -57,7 +56,6 @@ x-app-environment: &app-environment
 x-artifact-preview-worker-environment: &artifact-preview-worker-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
-  EXECUTION_WORKSPACE_OBJECT_ROOT: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
   ARTIFACT_PREVIEW_TEMP_ROOT: /var/lib/vivd-catalyst/demo/artifact-preview-tmp
   ARTIFACT_PREVIEW_WORKER_ID: demo-artifact-preview-worker
   ARTIFACT_PREVIEW_CONCURRENCY: ${ARTIFACT_PREVIEW_CONCURRENCY:-1}

@@ -2247,9 +2247,9 @@ async function createWorkspaceApp() {
           testIdentity("instance-admin", "instance-admin@example.test", ["user", "admin"])
         ]
       },
-      executionWorkspaces: { enabled: true }
+      executionWorkspaces: { enabled: true },
+      workspaceObjectRoot: WORKSPACE_OBJECT_ROOT
     }),
-    env: { EXECUTION_WORKSPACE_OBJECT_ROOT: WORKSPACE_OBJECT_ROOT },
     tools: []
   });
 }

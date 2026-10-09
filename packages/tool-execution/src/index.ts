@@ -22,3 +22,4 @@ export * from "./structured-data-tool-schemas";
 
 export * from "./propose-skill-change-tool";
 export * from "./skill-source-version";
+export * from "./registration";

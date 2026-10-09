@@ -16,6 +16,7 @@ import {
 import {
   agentConfigSchema,
   createSkillChangePreview,
+  getModelProviderConfigs,
   type SkillChangeOperation
 } from "@vivd-catalyst/config-schema";
 import {
@@ -104,7 +105,7 @@ async function fixture() {
       store: store.configAssets,
       source,
       validationRefs: {
-        modelProviderIds: config.modelProviders.map((provider) => provider.id),
+        modelProviderIds: getModelProviderConfigs(config).map((provider) => provider.id),
         modelBindingIds: [],
         modelBindings: [],
         fastModeModelBindingIds: [],

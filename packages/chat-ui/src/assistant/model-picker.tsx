@@ -274,7 +274,7 @@ export function ModelPicker({
                     >
                       <ModelVendorIcon model={model} />
                       <span className="truncate font-medium">{formatModelLabel(model.model)}</span>
-                      {model.residency === "eu" ? (
+                      {model.region === "eu" ? (
                         <EuResidencyBadge size={14} label={t("modelPickerResidencyEu")} />
                       ) : (
                         <span />
@@ -446,9 +446,9 @@ function ModelCard({ model, className }: { model: AgentSelectableModel; classNam
           </div>
         </div>
       ) : null}
-      {model.residency === "eu" || model.residency === "global" ? (
+      {model.region === "eu" || model.region === "global" ? (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          {model.residency === "eu" ? (
+          {model.region === "eu" ? (
             <>
               <EuResidencyBadge size={14} label={t("modelPickerResidencyEu")} />
               {t("modelPickerResidencyEu")}

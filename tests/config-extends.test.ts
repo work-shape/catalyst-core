@@ -24,6 +24,10 @@ const baseConfig = [
   "  conversationDays: 30",
   "  auditDays: 365",
   "  allowUserDelete: true",
+  "infrastructure:",
+  "  models:",
+  "    local:",
+  "      provider: deterministic",
   ""
 ].join("\n");
 

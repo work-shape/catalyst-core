@@ -2,6 +2,8 @@ import { AppError } from "@vivd-catalyst/core";
 import { clientInstanceConfigSchema, type AgentConfig, type ClientInstanceConfig } from "./schemas";
 import { findDuplicates } from "./reference-validation";
 import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
+import { getModelProviderConfigs } from "./infrastructure";
+import { refuseMovedInfrastructureKeys } from "./moved-infrastructure-keys";
 import {
   getModelSelectionForAgent,
   getModelSelectionForConversationTitles,
@@ -9,17 +11,15 @@ import {
 } from "./selectors";
 
 export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig {
+  refuseMovedInfrastructureKeys(input);
   const parsed = clientInstanceConfigSchema.safeParse(withoutRemovedUiSwitch(input));
   if (!parsed.success) {
-    throw new AppError("VALIDATION_FAILED", "Client instance config is invalid", {
-      issues: parsed.error.issues
-    });
+    throw invalidConfigError("Client instance config is invalid", parsed.error.issues);
   }
 
-  assertModelProviderContextManagement(parsed.data);
   assertProductionSafeAuthConfig(parsed.data);
   assertCaptureMailIsDevelopmentOnly(parsed.data);
-  assertExecutionWorkspaceRunnerBoundary(parsed.data);
+  assertExecutionWorkspaceInfrastructure(parsed.data);
   assertConfigReferences(parsed.data);
   assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
@@ -33,19 +33,17 @@ function withoutRemovedUiSwitch(input: unknown): unknown {
   return { ...input, ui: withoutRemovedWorkspaceSwitch(input.ui) };
 }
 
-function assertModelProviderContextManagement(config: ClientInstanceConfig): void {
-  for (const provider of config.modelProviders) {
-    if (
-      provider.type === "openai-compatible" &&
-      provider.contextManagement?.compaction &&
-      provider.api !== "responses"
-    ) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `Model provider '${provider.id}' configures compaction, but provider compaction requires api: responses`
-      );
-    }
-  }
+/**
+ * The message carries the first issue, so a log line or a terminal names the key that stopped
+ * startup. Issue messages come from the schemas and quote no config value.
+ */
+export function invalidConfigError(
+  summary: string,
+  issues: readonly { path: PropertyKey[]; message: string }[]
+): AppError {
+  const first = issues[0];
+  const detail = first ? `: ${first.path.map(String).join(".")}: ${first.message}` : "";
+  return new AppError("VALIDATION_FAILED", `${summary}${detail}`, { issues });
 }
 
 function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
@@ -75,8 +73,7 @@ function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
 
 function assertCaptureMailIsDevelopmentOnly(config: ClientInstanceConfig): void {
   if (
-    !config.mail.enabled ||
-    config.mail.provider !== "capture" ||
+    config.infrastructure.mail?.provider !== "capture" ||
     config.clientInstance.environment === "development"
   ) {
     return;
@@ -89,33 +86,37 @@ function assertCaptureMailIsDevelopmentOnly(config: ClientInstanceConfig): void 
   );
 }
 
-function assertExecutionWorkspaceRunnerBoundary(config: ClientInstanceConfig): void {
-  if (
-    !config.executionWorkspaces.enabled ||
-    config.executionWorkspaces.runner.mode !== "local" ||
-    config.clientInstance.environment === "development"
-  ) {
+function assertExecutionWorkspaceInfrastructure(config: ClientInstanceConfig): void {
+  if (!config.executionWorkspaces.enabled) {
+    return;
+  }
+  const { sandbox, objectStorage } = config.infrastructure;
+  if (!objectStorage.workspaces) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "'infrastructure.objectStorage.workspaces' is required when execution workspaces are enabled; the variables EXECUTION_WORKSPACE_OBJECT_ROOT and ARTIFACT_PREVIEW_OBJECT_ROOT are no longer read"
+    );
+  }
+  if (!sandbox) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "'infrastructure.sandbox' is required when execution workspaces are enabled"
+    );
+  }
+  if (sandbox.provider !== "local" || config.clientInstance.environment === "development") {
     return;
   }
 
-  // The local runner executes in host temp directories for development and unit tests.
-  // Customer-facing enabled workspaces need the Docker runner's mounted /workspace contract.
+  // The local sandbox executes in host temp directories for development and unit tests.
+  // Customer-facing enabled workspaces need the Docker sandbox's mounted /workspace contract.
   throw new AppError(
     "VALIDATION_FAILED",
-    "Local execution workspace runner mode is only allowed for development client instances"
+    "'infrastructure.sandbox.provider': the local sandbox is only allowed for development client instances"
   );
 }
 
 function assertConfigReferences(config: ClientInstanceConfig): void {
-  const providerIds = new Set(config.modelProviders.map((provider) => provider.id));
-  const duplicateProviderIds = findDuplicates(config.modelProviders.map((provider) => provider.id));
-  if (duplicateProviderIds.length > 0) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Duplicate model provider definitions: ${duplicateProviderIds.join(", ")}`
-    );
-  }
-
+  const providerIds = new Set(getModelProviderConfigs(config).map((provider) => provider.id));
   const duplicateModelBindingIds = findDuplicates(
     config.modelBindings.map((binding) => binding.id)
   );

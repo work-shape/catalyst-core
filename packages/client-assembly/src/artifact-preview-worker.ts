@@ -1,5 +1,10 @@
 import { createLogger } from "./logger";
-import { AppError, type PlatformStores } from "@vivd-catalyst/core";
+import {
+  AppError,
+  type PlatformStores,
+  type ProviderCreateContext,
+  type SecretResolver
+} from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
@@ -7,17 +12,23 @@ import {
 } from "@vivd-catalyst/config-schema";
 import {
   ArtifactPreviewWorker,
-  createLocalWorkspaceObjectStorage,
   LibreOfficeArtifactPreviewRenderer
 } from "@vivd-catalyst/tool-execution";
 import type { ArtifactPreviewSourceReader } from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceEnv } from "./env";
+import {
+  createInstanceInfrastructure,
+  createWorkspaceObjectStore,
+  WORKSPACE_STORE_PATH
+} from "./infrastructure";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceArtifactPreviewWorkerInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
+  /** Replaces the configured secret provider. For tests. */
+  secrets?: SecretResolver;
   sourceReaderFactory?: ArtifactPreviewSourceReaderFactory;
 }
 
@@ -25,6 +36,8 @@ export type ArtifactPreviewSourceReaderFactory = (input: {
   config: ClientInstanceConfig;
   clientInstanceId: ReturnType<typeof getClientInstanceId>;
   env: ClientInstanceEnv;
+  /** What a reader creates its own provider with, such as a capability's object store. */
+  context: ProviderCreateContext;
   store: PlatformStores;
 }) => ArtifactPreviewSourceReader | Promise<ArtifactPreviewSourceReader>;
 
@@ -42,14 +55,26 @@ export async function createClientInstanceArtifactPreviewWorker(
   const logger = createLogger();
   const env = input.env ?? process.env;
   const config = input.config ?? (await loadArtifactPreviewWorkerConfig(input.configPath, env));
-  const store = await createPlatformStore({ env, logger });
+  const infrastructure = await createInstanceInfrastructure({
+    config,
+    env,
+    logger,
+    secrets: input.secrets,
+    uses: [WORKSPACE_STORE_PATH]
+  });
+  const { secrets } = infrastructure;
+  const store = await createPlatformStore({ secrets, logger });
   const clientInstanceId = getClientInstanceId(config);
   const sourceReader = input.sourceReaderFactory
-    ? await input.sourceReaderFactory({ config, clientInstanceId, env, store })
+    ? await input.sourceReaderFactory({
+        config,
+        clientInstanceId,
+        env,
+        context: infrastructure.context,
+        store
+      })
     : undefined;
-  const objectStore = createLocalWorkspaceObjectStorage({
-    rootDirectory: objectRoot(env)
-  });
+  const objectStore = (await createWorkspaceObjectStore(config, infrastructure.context)).objects;
   const worker = new ArtifactPreviewWorker({
     clientInstanceId,
     store: store.files,
@@ -138,17 +163,6 @@ async function loadArtifactPreviewWorkerConfig(
     );
   }
   return loadClientInstanceConfigFromFile(resolvedPath);
-}
-
-function objectRoot(env: ClientInstanceEnv): string {
-  const value = env.ARTIFACT_PREVIEW_OBJECT_ROOT ?? env.EXECUTION_WORKSPACE_OBJECT_ROOT;
-  if (!value) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "ARTIFACT_PREVIEW_OBJECT_ROOT or EXECUTION_WORKSPACE_OBJECT_ROOT is required for artifact preview workers"
-    );
-  }
-  return value;
 }
 
 function readPositiveIntegerEnv(env: ClientInstanceEnv, name: string): number | undefined {

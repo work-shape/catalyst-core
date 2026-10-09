@@ -59,3 +59,16 @@ export interface RenderedMail {
 export interface MailTransport {
   deliver(mail: RenderedMail, identity: MailSenderIdentity): Promise<MailSendResult>;
 }
+
+/** A mail that a provider kept instead of delivering it. */
+export interface CapturedMail extends RenderedMail {
+  id: string;
+  sentAt: string;
+}
+
+/** What a mail adapter hands back. */
+export interface MailProviderInstance {
+  transport: MailTransport;
+  /** Present when the provider keeps mails instead of delivering them. */
+  listCaptured?: () => CapturedMail[];
+}

@@ -83,9 +83,9 @@ async function runQuery(databaseUrl: string, query: string, statementTimeoutMs =
     tools: { query: { enabled: true } }
   };
   const tools = createDataSourceTools({
-    dataSources: createDataSourceRegistry({
+    dataSources: await createDataSourceRegistry({
       configs: { reporting: config },
-      secretResolver: { resolveConnectionRef: () => databaseUrl }
+      secrets: { resolve: async () => databaseUrl }
     })
   });
   const logged: unknown[] = [];

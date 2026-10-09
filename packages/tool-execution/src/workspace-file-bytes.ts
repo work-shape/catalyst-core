@@ -264,3 +264,12 @@ function normalizeObjectKey(key: string): string {
 function encodeObjectKeySegment(value: string): string {
   return encodeURIComponent(value);
 }
+
+/**
+ * The `workspaces` store as its readers take it today. One `ObjectStorage` port replaces the
+ * two shapes.
+ */
+export interface ConfiguredWorkspaceStore {
+  fileBytes: WorkspaceFileByteStore;
+  objects: DeletableWorkspaceObjectStorage;
+}

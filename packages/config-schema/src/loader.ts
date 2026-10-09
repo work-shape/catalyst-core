@@ -10,18 +10,18 @@ import {
   type ClientInstanceConfig
 } from "./schemas";
 import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
-import { parseClientInstanceConfig } from "./validation";
+import { refuseMovedInfrastructureKeys } from "./moved-infrastructure-keys";
+import { invalidConfigError, parseClientInstanceConfig } from "./validation";
 
 export async function loadClientInstanceConfigFromFile(
   path: string
 ): Promise<ClientInstanceConfig> {
   const raw = await readConfigFileWithExtends(resolve(path), new Set());
+  refuseMovedInfrastructureKeys(raw);
   const hasInlineUi = hasOwnProperty(raw, "ui");
   const parsed = clientInstanceConfigFileSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new AppError("VALIDATION_FAILED", "Client instance config is invalid", {
-      issues: parsed.error.issues
-    });
+    throw invalidConfigError("Client instance config is invalid", parsed.error.issues);
   }
 
   const baseDir = dirname(path);

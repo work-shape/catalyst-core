@@ -46,7 +46,7 @@ export interface ClientBranding {
 
 /** Emailed password setup links need both a mail sender and standalone password sign-in. */
 export function isPasswordMailEnabled(config: ClientInstanceConfig): boolean {
-  return config.mail.enabled && Boolean(config.auth.standalone?.enabled);
+  return config.infrastructure.mail !== undefined && Boolean(config.auth.standalone?.enabled);
 }
 
 export function createClientBranding(

@@ -1,4 +1,4 @@
-import type { MailSendResult, MailSenderIdentity, MailTransport, RenderedMail } from "./types";
+import type { MailSendResult, MailSenderIdentity, MailTransport, RenderedMail } from "../types";
 
 const MAILJET_SEND_URL = "https://api.mailjet.com/v3.1/send";
 // Protects the sender from a mail provider that never answers. Past it the send fails as

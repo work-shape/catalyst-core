@@ -22,7 +22,6 @@ import type {
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
 import {
-  createLocalWorkspaceObjectStorage,
   EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
   type DeletableWorkspaceObjectStorage,
   type WorkspaceFileByteStore
@@ -101,7 +100,8 @@ export const WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES = [
 export interface CreateExecutionWorkspaceSourceAttachmentHandlerInput {
   clientInstanceId: ClientInstanceId;
   files: PlatformFileStore;
-  objectRootDirectory: string;
+  /** The `workspaces` object store of the instance. */
+  objectStore: DeletableWorkspaceObjectStorage;
   maxFileBytes?: number;
   markDeletedOnDelete: boolean;
 }
@@ -109,13 +109,10 @@ export interface CreateExecutionWorkspaceSourceAttachmentHandlerInput {
 export function createExecutionWorkspaceSourceAttachmentHandler(
   input: CreateExecutionWorkspaceSourceAttachmentHandlerInput
 ): ClientInstanceAttachmentHandler {
-  const objectStore = createLocalWorkspaceObjectStorage({
-    rootDirectory: input.objectRootDirectory
-  });
+  const { objectStore } = input;
   const maxFileBytes = input.maxFileBytes ?? DEFAULT_WORKSPACE_SOURCE_MAX_FILE_BYTES;
   const service = new ExecutionWorkspaceSourceAttachmentService({
     ...input,
-    objectStore,
     maxFileBytes
   });
 

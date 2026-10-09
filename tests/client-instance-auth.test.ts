@@ -74,7 +74,7 @@ describe("client instance standalone auth trusted origins", () => {
             enabled: true
           }
         },
-        modelProviders: [{ id: "local", type: "deterministic", model: "local" }]
+        infrastructure: { models: { local: { provider: "deterministic", model: "local" } } }
       })
     ).toThrow(/Development auth must not be enabled in production/u);
   });
@@ -127,6 +127,6 @@ function createTestConfig(input: {
         seedUsers: input.seedUsers ?? []
       }
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }]
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } }
   });
 }

@@ -258,17 +258,19 @@ OpenAI-compatible providers keep API-specific request shapes behind the model-pr
 Use `api: responses` for OpenAI reasoning models that combine reasoning, tool calling, or multi-turn workflows. Leave the field unset, or set `api: chat_completions`, for legacy OpenAI-compatible endpoints that still expect `/chat/completions`.
 
 ```yaml
-modelProviders:
-  - id: openai
-    type: openai-compatible
-    api: responses
-    model: gpt-5.5
-    reasoningEffort: high
-    baseUrl: https://api.openai.com/v1
-    apiKeyEnvName: OPENAI_API_KEY
-    contextManagement:
-      compaction:
-        compactThresholdTokens: 270000
+infrastructure:
+  models:
+    openai:
+      provider: openai-compatible
+      region: global
+      api: responses
+      model: gpt-5.5
+      reasoningEffort: high
+      baseUrl: https://api.openai.com/v1
+      credentialSecret: OPENAI_API_KEY
+      contextManagement:
+        compaction:
+          compactThresholdTokens: 270000
 modelBindings:
   - id: primary
     providerId: openai
@@ -340,7 +342,7 @@ modelBindings:
   below 5 `moderate`, below 15 `high`, anything above `very_high`. The bounds are fixed, so
   adding a model never moves another one. A model without a rate card entry shows no tier.
 
-The EU mark is shown for models whose provider declares `compliance.residency: eu`.
+The EU mark is shown for models whose provider entry states `region: eu`.
 
 A model or effort a user picks becomes their own default for new conversations and is stored
 with their account, so it follows them across devices. A conversation that already ran stays on
@@ -349,28 +351,29 @@ and effort, so a change to those defaults still reaches them.
 
 ## Mail
 
-Mail is off by default. Enabling it adds a forgot-password link to the login panel and lets user
-administrators email a set-password link instead of sharing an initial password. Both need
-standalone auth.
+An instance has no mail until `infrastructure.mail` names a provider. With mail, the login panel
+shows a forgot-password link and user administrators can email a set-password link instead of
+sharing an initial password. Both need standalone auth.
 
 ```yaml
-mail:
-  enabled: true
-  provider: mailjet
-  apiKeyEnvName: MAILJET_API_KEY
-  apiSecretEnvName: MAILJET_API_SECRET
-  appUrl: https://chat.example.com
-  sender:
-    fromAddress: noreply@mail.example.com
-    fromName: Example Chat # defaults to the client instance display name
-    replyTo: support@example.com # optional
+infrastructure:
+  mail:
+    provider: mailjet
+    region: eu
+    apiKeySecret: MAILJET_API_KEY
+    apiSecretSecret: MAILJET_API_SECRET
+    appUrl: https://chat.example.com
+    sender:
+      fromAddress: noreply@mail.example.com
+      fromName: Example Chat # defaults to the client instance display name
+      replyTo: support@example.com # optional
 ```
 
 - `appUrl` is the public URL of the chat UI. Emailed links point there and carry a single-use
   token in the URL fragment.
 - The sender domain must be validated with SPF and DKIM in the Mailjet account that owns the
   API key. Use a separate Mailjet sub-account and key per client instance.
-- Startup fails when mail is enabled and either named environment variable is missing.
+- Startup fails when either named secret does not resolve.
 - `provider: capture` keeps mails in memory and lists them at `GET /api/v1/dev/captured-mail`.
   That route needs no sign-in, so only `environment: development` config accepts it; staging
   and production config reject it.
@@ -411,6 +414,89 @@ client address at 60 a minute, which is not a setting. A caller over a limit rec
 the code `RATE_LIMITED`, the seconds to wait in `details.retryAfterSeconds` and in the
 `Retry-After` header. Behind a second proxy the client address needs
 [`trusted_proxies`](/operate/deployment/).
+
+## Infrastructure
+
+The `infrastructure` section states what an instance runs on: one provider per port. It is
+startup config, so a change needs a deploy.
+
+```yaml
+infrastructure:
+  secrets:
+    provider: environment # the default
+  models:
+    azure-eu:
+      provider: openai-compatible
+      region: eu
+      api: responses
+      model: gpt-5.5
+      baseUrl: https://example.openai.azure.com/openai/v1
+      credentialSecret: AZURE_OPENAI_API_KEY
+      authMode: api-key
+  mail:
+    provider: mailjet
+    region: eu
+    appUrl: https://chat.example.com
+    sender:
+      fromAddress: noreply@mail.example.com
+  objectStorage:
+    files:
+      provider: s3
+      region: eu
+      bucket: example-documents
+      bucketRegion: fsn1
+      endpoint: https://fsn1.your-objectstorage.com
+    workspaces:
+      provider: filesystem
+      root: /var/lib/vivd-catalyst/example/execution-workspaces/objects
+  sandbox:
+    provider: docker
+    image: ghcr.io/example/catalyst-runner-base:v1
+```
+
+- `models` is a map from a provider's name to its entry. The name is what `modelBindings[].providerId`
+  and an agent's `modelProviderId` refer to. At least one entry is required; there is no default.
+  Config files merge maps key by key, so an entry of a base file stays unless the overlay
+  replaces it under the same name.
+- `mail`, `objectStorage.files`, `objectStorage.workspaces` and `sandbox` are left out when the
+  instance does not use them. Enabled execution workspaces need `objectStorage.workspaces` and
+  `sandbox`.
+- `provider` picks the adapter. An unknown provider, an unknown setting or a missing setting
+  stops startup, and the message names the field.
+- `region` is `eu` or `global` and says where the provider processes the data it is sent. A
+  provider that sends data outside the instance (`openai-compatible`, `mailjet`, `s3`) must
+  state it. A provider that keeps data inside the instance (`deterministic`, `capture`,
+  `filesystem`, `docker`, `local`) must not. A vendor's own region name is a separate setting,
+  such as `bucketRegion`.
+- A setting whose name ends in `Secret` holds the name of a secret, never its value. The
+  `environment` secret provider reads the variable of that name and, when it is not set, the
+  file named by the variable `<NAME>_FILE`, which is how a mounted Docker or Kubernetes secret
+  is read. A name that does not resolve stops startup; the message names the field and the
+  secret name.
+
+Providers and their settings:
+
+| Port            | Provider                    | Settings                                                                                                                                                                                                     |
+| --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `models`        | `openai-compatible`         | `model`, `api`, `reasoningEffort`, `contextManagement`, `baseUrl`, `credentialSecret` (default `OPENAI_API_KEY`), `authMode`, `organizationSecret`                                                           |
+| `models`        | `deterministic`             | `model`. Answers without a model; for tests and local runs.                                                                                                                                                  |
+| `mail`          | `mailjet`                   | `appUrl`, `sender`, `apiKeySecret` (default `MAILJET_API_KEY`), `apiSecretSecret` (default `MAILJET_API_SECRET`)                                                                                             |
+| `mail`          | `capture`                   | `appUrl`, `sender`. Development only.                                                                                                                                                                        |
+| `objectStorage` | `s3` (`files`)              | `bucket`, `bucketRegion`, `endpoint`, `forcePathStyle`, `accessKeySecret` (default `AWS_ACCESS_KEY_ID`), `secretKeySecret` (default `AWS_SECRET_ACCESS_KEY`). Comes with the document-processing capability. |
+| `objectStorage` | `filesystem` (`workspaces`) | `root`: a directory that the API and its workers share.                                                                                                                                                      |
+| `sandbox`       | `docker`                    | `image`, `cpuCount`, `memoryBytes`, `pidsLimit`, `endpoint` (a `tcp://` or `ssh://` Docker endpoint). The container has no network and a read-only root file system.                                         |
+| `sandbox`       | `local`                     | None. Development only.                                                                                                                                                                                      |
+
+The platform takes its own secrets from the same provider by fixed names: `DATABASE_URL`,
+`BETTER_AUTH_SECRET`, `SERVICE_ACCESS_TOKEN_SECRET`, `CHAT_SESSION_TOKEN_SECRET` and
+`CHAT_SERVER_CREDENTIAL`. A data source's `connectionRef: env:NAME` and a seed user's
+`passwordEnvName` name secrets too.
+
+The keys `modelProviders`, `mail`, `executionWorkspaces.runner` and
+`capabilities.documentProcessing.objectStorage` moved into this section. Config that still
+carries one of them does not load: startup stops and names the key and its new place. The
+variables `EXECUTION_WORKSPACE_OBJECT_ROOT` and `ARTIFACT_PREVIEW_OBJECT_ROOT` are no longer
+read; the directory is `infrastructure.objectStorage.workspaces.root`.
 
 ## Config Is Not A Secret Store
 

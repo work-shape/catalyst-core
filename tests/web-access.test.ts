@@ -1,3 +1,4 @@
+import { required } from "./support/assertions";
 import { setTestAgent } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 import { Buffer } from "node:buffer";
@@ -15,7 +16,11 @@ import {
   type AgentConfig,
   type JsonObject
 } from "@vivd-catalyst/core";
-import { agentConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  agentConfigSchema,
+  getModelProviderConfigs,
+  parseClientInstanceConfig
+} from "@vivd-catalyst/config-schema";
 import {
   createWebFetchTool,
   DirectWebFetcher,
@@ -418,7 +423,7 @@ describe("web access app assembly", () => {
           api: "responses",
           model: "gpt-test",
           baseUrl: "https://api.openai.com/v1",
-          apiKeyEnvName: "OPENAI_API_KEY"
+          credentialSecret: "OPENAI_API_KEY"
         }
       ],
       modelProviderId: "openai",
@@ -448,7 +453,7 @@ describe("web access app assembly", () => {
             api: "responses",
             model: "gpt-test",
             baseUrl: "https://api.openai.com/v1",
-            apiKeyEnvName: "OPENAI_API_KEY"
+            credentialSecret: "OPENAI_API_KEY"
           }
         ],
         modelProviderId: "openai",
@@ -479,7 +484,7 @@ describe("web search model tool materialization", () => {
           api: "responses",
           model: "gpt-test",
           baseUrl: "https://api.openai.com/v1",
-          apiKeyEnvName: "OPENAI_API_KEY"
+          credentialSecret: "OPENAI_API_KEY"
         }
       ],
       modelProviderId: "openai",
@@ -494,7 +499,7 @@ describe("web search model tool materialization", () => {
 
     const tools = materializeModelTools({
       agent,
-      modelProvider: config.modelProviders[0]!,
+      modelProvider: required(getModelProviderConfigs(config)[0]),
       webAccess: config.webAccess,
       toolRegistry: {
         listDescriptorsForAgent(toolNames) {
@@ -579,7 +584,7 @@ function close(server: ReturnType<typeof createServer>): Promise<void> {
 function createTestConfig(
   input: {
     webAccess?: Record<string, unknown>;
-    modelProviders?: Array<Record<string, unknown>>;
+    modelProviders?: Array<{ id: string; type: string } & Record<string, unknown>>;
     modelProviderId?: string;
     toolNames?: string[];
     tools?: Array<{ name: string; enabled?: boolean }>;
@@ -605,9 +610,22 @@ function createTestConfig(
       }
     },
     ...(input.webAccess ? { webAccess: input.webAccess } : {}),
-    modelProviders: input.modelProviders ?? [
-      { id: "local", type: "deterministic", model: "deterministic-local" }
-    ],
+    infrastructure: {
+      models: Object.fromEntries(
+        (
+          input.modelProviders ?? [
+            { id: "local", type: "deterministic", model: "deterministic-local" }
+          ]
+        ).map(({ id, type, ...settings }) => [
+          id,
+          {
+            provider: type,
+            ...(type === "openai-compatible" ? { region: "global" } : {}),
+            ...settings
+          }
+        ])
+      )
+    },
     tools: input.tools ?? []
   });
   setTestAgent(
@@ -648,7 +666,7 @@ function expectModelToolInvalid(
   expect(
     findModelToolMaterializationIssues({
       agent,
-      modelProvider: config.modelProviders[0]!,
+      modelProvider: required(getModelProviderConfigs(config)[0]),
       webAccess: config.webAccess
     })
   ).toContain(message);

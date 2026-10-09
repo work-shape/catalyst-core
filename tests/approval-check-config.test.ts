@@ -16,6 +16,7 @@ const rule: ApprovalCheckConfig = {
 };
 const baseConfig = {
   clientInstance: { id: "approval-config", displayName: "Approval config" },
+  infrastructure: { models: { local: { provider: "deterministic" } } },
   modelBindings: [{ id: "guardrailCheck", providerId: "local", agentSelectable: false }]
 };
 const handler: ApprovalRequestHandler = {
@@ -103,15 +104,17 @@ describe("approval check configuration", () => {
     expect(() =>
       parseClientInstanceConfig({
         ...baseConfig,
-        modelProviders: [
-          {
-            id: "remote",
-            type: "openai-compatible",
-            model: "cheap-check",
-            baseUrl: "https://provider.example.test/v1",
-            apiKeyEnvName: "TEST_KEY"
+        infrastructure: {
+          models: {
+            remote: {
+              provider: "openai-compatible",
+              region: "global",
+              model: "cheap-check",
+              baseUrl: "https://provider.example.test/v1",
+              credentialSecret: "TEST_KEY"
+            }
           }
-        ],
+        },
         modelBindings: [{ id: "guardrailCheck", providerId: "remote" }],
         conversationTitles: { enabled: false },
         approvalChecks: [rule],

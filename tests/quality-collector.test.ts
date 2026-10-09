@@ -100,6 +100,14 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
   "packages/config-cli/src/cli.ts": `console.log("started");\n`,
   [`${source}/env.ts`]: `export const mode = process.env.MODE;\n`,
   [`${source}/adapters/http.ts`]: `export const load = () => fetch("https://example.test");\n`,
+  // An adapter is loaded by the package's registration and by a sibling adapter, and by no
+  // other file, however it is loaded.
+  [`${source}/registration.ts`]: `export { load } from "./adapters/http";\n`,
+  [`${source}/adapters/sibling.ts`]: `export { load as reload } from "./http";\n`,
+  [`${source}/adapter-import.ts`]: `import { load } from "./adapters/http"; export const loaded = load;\n`,
+  [`${source}/adapter-export.ts`]: `export * from "./adapters/http";\n`,
+  [`${source}/adapter-dynamic.ts`]: `export const loading = import("./adapters/http");\n`,
+  [`${source}/lib/adapter-type.ts`]: `export type Load = typeof import("../adapters/http").load;\n`,
   "tests/setup.test.ts": `console.log(process.env.MODE);\n`,
   // Also allowed: named members other than console, process, env and fetch, a `typeof` test
   // and a name in a type.
@@ -449,6 +457,10 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/fetch-boundary ${source}/fetch-alias.ts`,
         `catalyst/fetch-boundary ${source}/fetch-member.ts`,
         `catalyst/fetch-boundary ${source}/fetch-destructured.ts`,
+        `catalyst/adapter-import ${source}/adapter-import.ts`,
+        `catalyst/adapter-import ${source}/adapter-export.ts`,
+        `catalyst/adapter-import ${source}/adapter-dynamic.ts`,
+        `catalyst/adapter-import ${source}/lib/adapter-type.ts`,
         `catalyst/host-object-boundary ${source}/host-alias.ts`,
         `catalyst/host-object-boundary ${source}/host-nested.ts`,
         `catalyst/host-object-boundary ${source}/host-computed.ts`,

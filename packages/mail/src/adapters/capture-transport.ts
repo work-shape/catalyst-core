@@ -1,12 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { MailSendResult, MailTransport, RenderedMail } from "./types";
+import type { CapturedMail, MailSendResult, MailTransport, RenderedMail } from "../types";
 
 const MAX_CAPTURED_MAILS = 50;
-
-export interface CapturedMail extends RenderedMail {
-  id: string;
-  sentAt: string;
-}
 
 /**
  * Keeps rendered mails in memory instead of delivering them. Used for local development and

@@ -3,15 +3,18 @@ import {
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, type SecretResolver } from "@vivd-catalyst/core";
 import { createStandaloneAuthRuntimeForClientInstance, resolveTrustedOrigins } from "./auth";
 import type { ClientInstanceEnv } from "./env";
+import { createEnvironmentSecrets } from "./infrastructure";
 import { createPlatformStore } from "./store";
 
 export interface SeedStandaloneAuthInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
+  /** Replaces the `environment` secret provider. For tests. */
+  secrets?: SecretResolver;
   allowedOrigins?: string | string[];
 }
 
@@ -31,12 +34,14 @@ export async function seedStandaloneAuth(
     );
   }
 
-  const store = await createPlatformStore({ env });
+  const secrets = input.secrets ?? createEnvironmentSecrets(env);
+  const store = await createPlatformStore({ secrets });
 
   try {
     const authRuntime = await createStandaloneAuthRuntimeForClientInstance({
       config,
       env,
+      secrets,
       clientInstanceId: getClientInstanceId(config),
       allowedOrigins: resolveTrustedOrigins({ config, env, allowedOrigins: input.allowedOrigins })
     });

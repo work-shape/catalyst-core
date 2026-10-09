@@ -1,6 +1,7 @@
 import type {
   JsonObject,
   MessageCitation,
+  ModelProviderConfig,
   ModelTokenUsage,
   ReasoningEffortConfig,
   RuntimeCallContext,
@@ -169,3 +170,9 @@ export function modelContentImages(
     (part): part is Extract<ModelContentPart, { type: "image" }> => part.type === "image"
   );
 }
+
+/**
+ * What a model adapter hands back once its secrets are resolved: it builds the provider for one
+ * entry from the fields of the models port.
+ */
+export type ModelProviderFactory = (provider: ModelProviderConfig) => ModelProvider;

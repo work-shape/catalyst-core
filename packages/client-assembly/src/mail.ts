@@ -1,20 +1,20 @@
-import { AppError } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { createProvider, type ProviderCreateContext } from "@vivd-catalyst/core";
 import {
-  CaptureMailTransport,
-  MailjetTransport,
+  mailProviderDefinitions,
   TemplateMailSender,
   type MailSenderIdentity
 } from "@vivd-catalyst/mail";
-import type { ClientInstanceEnv } from "./env";
 
-export function createClientInstanceMail(input: {
+/** The mail sender of an instance, or nothing when `infrastructure.mail` is absent. */
+export async function createClientInstanceMail(input: {
   config: ClientInstanceConfig;
-  env: ClientInstanceEnv;
-}): ChatServerOptions["mail"] {
-  const { mail, clientInstance } = input.config;
-  if (!mail.enabled || !mail.sender || !mail.appUrl) {
+  context: ProviderCreateContext;
+}): Promise<ChatServerOptions["mail"]> {
+  const { infrastructure, clientInstance } = input.config;
+  const { mail } = infrastructure;
+  if (!mail) {
     return undefined;
   }
   const identity: MailSenderIdentity = {
@@ -23,26 +23,15 @@ export function createClientInstanceMail(input: {
     replyTo: mail.sender.replyTo,
     productName: clientInstance.displayName
   };
-
-  if (mail.provider === "capture") {
-    const transport = new CaptureMailTransport();
-    return {
-      sender: new TemplateMailSender(transport, identity),
-      appUrl: mail.appUrl,
-      listCaptured: () => transport.list()
-    };
-  }
-
-  const apiKey = input.env[mail.apiKeyEnvName];
-  const apiSecret = input.env[mail.apiSecretEnvName];
-  if (!apiKey || !apiSecret) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Mail is enabled but '${mail.apiKeyEnvName}' or '${mail.apiSecretEnvName}' is not set`
-    );
-  }
+  const provider = await createProvider(
+    mailProviderDefinitions,
+    "mail",
+    { path: "infrastructure.mail", entry: mail },
+    input.context
+  );
   return {
-    sender: new TemplateMailSender(new MailjetTransport({ apiKey, apiSecret }), identity),
-    appUrl: mail.appUrl
+    sender: new TemplateMailSender(provider.transport, identity),
+    appUrl: mail.appUrl,
+    ...(provider.listCaptured ? { listCaptured: provider.listCaptured } : {})
   };
 }

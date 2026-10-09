@@ -306,8 +306,6 @@ describe("approval decision history", () => {
         type: "openai-compatible",
         api: "responses",
         model: "test-model",
-        baseUrl: "https://example.test/v1",
-        apiKeyEnvName: "UNUSED_TEST_API_KEY",
         ...(compact ? { contextManagement: { compaction: { compactThresholdTokens: 1000 } } } : {})
       };
       const continuation = {

@@ -75,7 +75,7 @@ export function createRetentionOptions(input: {
       auditDays: 365,
       allowUserDelete: true
     },
-    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
     tools: []
   });
   return completeServerOptions(

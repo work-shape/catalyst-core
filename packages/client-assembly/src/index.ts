@@ -33,6 +33,13 @@ export {
 } from "./seed-auth";
 export { migrateClientInstanceDatabase } from "./migrate";
 export { createPlatformStore } from "./store";
+export {
+  createEnvironmentSecrets,
+  createInstanceInfrastructure,
+  infrastructureEntries,
+  PLATFORM_SECRET_NAMES,
+  type InstanceInfrastructure
+} from "./infrastructure";
 export { createToolDefinitions } from "./tools";
 export {
   applyWorkspaceRunnerImageEnvOverride,

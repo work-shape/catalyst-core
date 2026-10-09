@@ -25,9 +25,8 @@ import {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES
 } from "@vivd-catalyst/core";
+import { infrastructureConfigSchema } from "./infrastructure";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
-
-const DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
 
 export const userIdentitySchema = z.object({
   id: z.string().min(1).default("dev-user"),
@@ -74,40 +73,6 @@ const standaloneAuthConfigSchema = z.object({
   baseUrl: z.string().url().optional(),
   trustedOrigins: z.array(z.string().url()).default([]),
   seedUsers: z.array(standaloneSeedUserSchema).default([])
-});
-
-const deterministicModelProviderSchema = z.object({
-  id: z.string().min(1),
-  type: z.literal("deterministic"),
-  model: z.string().min(1).default("deterministic-local")
-});
-
-const modelProviderComplianceSchema = z.object({
-  residency: z.enum(["global", "eu", "unknown"]).optional(),
-  productionApproved: z.boolean().optional(),
-  notes: z.string().min(1).optional()
-});
-
-const openAiCompatibleModelProviderSchema = z.object({
-  id: z.string().min(1),
-  type: z.literal("openai-compatible"),
-  api: z.enum(["chat_completions", "responses"]).default("chat_completions"),
-  model: z.string().min(1),
-  baseUrl: z.string().url().default("https://api.openai.com/v1"),
-  apiKeyEnvName: z.string().min(1).default("OPENAI_API_KEY"),
-  authMode: z.enum(["bearer", "api-key"]).default("bearer"),
-  organizationEnvName: z.string().min(1).optional(),
-  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
-  contextManagement: z
-    .object({
-      compaction: z
-        .object({
-          compactThresholdTokens: z.number().int().positive()
-        })
-        .optional()
-    })
-    .optional(),
-  compliance: modelProviderComplianceSchema.optional()
 });
 
 const toolInstanceConfigSchema = z
@@ -321,11 +286,6 @@ export const skillFileFrontmatterSchema = skillConfigObjectSchema
   .extend({
     name: skillNameSchema.optional()
   });
-
-export const modelProviderConfigSchema = z.discriminatedUnion("type", [
-  deterministicModelProviderSchema,
-  openAiCompatibleModelProviderSchema
-]);
 
 export const modelBindingConfigSchema = z.object({
   id: z.string().min(1),
@@ -565,25 +525,6 @@ export const executionWorkspacesConfigSchema = z
       .default({
         maxFileBytes: 25 * 1024 * 1024
       }),
-    runner: z
-      .object({
-        mode: z.enum(["local", "docker"]).default("docker"),
-        image: z.string().min(1).default("ghcr.io/vivd-solutions/catalyst-runner-base:placeholder"),
-        networkMode: z.literal("none").default("none"),
-        readOnlyRootFilesystem: z.boolean().default(true),
-        cpuCount: z.number().positive().default(1),
-        memoryBytes: z.number().int().positive().default(DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES),
-        pidsLimit: z.number().int().positive().default(128)
-      })
-      .default({
-        mode: "docker",
-        image: "ghcr.io/vivd-solutions/catalyst-runner-base:placeholder",
-        networkMode: "none",
-        readOnlyRootFilesystem: true,
-        cpuCount: 1,
-        memoryBytes: DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES,
-        pidsLimit: 128
-      }),
     command: z
       .object({
         defaultTimeoutSeconds: z.number().int().positive().default(60),
@@ -682,15 +623,6 @@ export const executionWorkspacesConfigSchema = z
     enabled: false,
     sourceFiles: {
       maxFileBytes: 25 * 1024 * 1024
-    },
-    runner: {
-      mode: "docker",
-      image: "ghcr.io/vivd-solutions/catalyst-runner-base:placeholder",
-      networkMode: "none",
-      readOnlyRootFilesystem: true,
-      cpuCount: 1,
-      memoryBytes: DEFAULT_EXECUTION_WORKSPACE_MEMORY_BYTES,
-      pidsLimit: 128
     },
     command: {
       defaultTimeoutSeconds: 60,
@@ -837,48 +769,6 @@ export const administrationConfigSchema = z
     }
   });
 
-export const mailConfigSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    provider: z.enum(["mailjet", "capture"]).default("mailjet"),
-    apiKeyEnvName: z.string().min(1).default("MAILJET_API_KEY"),
-    apiSecretEnvName: z.string().min(1).default("MAILJET_API_SECRET"),
-    /** Public URL of the chat UI; emailed links point here. */
-    appUrl: z.string().url().optional(),
-    sender: z
-      .object({
-        fromAddress: z.string().email(),
-        fromName: z.string().min(1).optional(),
-        replyTo: z.string().email().optional()
-      })
-      .optional()
-  })
-  .default({
-    enabled: false,
-    provider: "mailjet",
-    apiKeyEnvName: "MAILJET_API_KEY",
-    apiSecretEnvName: "MAILJET_API_SECRET"
-  })
-  .superRefine((mail, context) => {
-    if (!mail.enabled) {
-      return;
-    }
-    if (!mail.appUrl) {
-      context.addIssue({
-        code: "custom",
-        path: ["appUrl"],
-        message: "mail.appUrl is required when mail is enabled"
-      });
-    }
-    if (!mail.sender) {
-      context.addIssue({
-        code: "custom",
-        path: ["sender"],
-        message: "mail.sender is required when mail is enabled"
-      });
-    }
-  });
-
 const perMinuteSchema = z.number().int().positive();
 /**
  * How often one caller may call one operation, per minute. The defaults stop spamming and
@@ -947,10 +837,7 @@ export const clientInstanceConfigSchema = z.object({
       auditDays: 365,
       allowUserDelete: true
     }),
-  modelProviders: z
-    .array(modelProviderConfigSchema)
-    .min(1)
-    .default([{ id: "local", type: "deterministic", model: "deterministic-local" }]),
+  infrastructure: infrastructureConfigSchema,
   modelBindings: z.array(modelBindingConfigSchema).default([]),
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
@@ -960,7 +847,6 @@ export const clientInstanceConfigSchema = z.object({
   webAccess: webAccessConfigSchema,
   executionWorkspaces: executionWorkspacesConfigSchema,
   administration: administrationConfigSchema,
-  mail: mailConfigSchema,
   rateLimits: rateLimitsConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
@@ -1036,6 +922,5 @@ export type {
   UsageSafeguardsConfig,
   WebAccessConfig
 };
-export type MailConfig = z.infer<typeof mailConfigSchema>;
 export type RateLimitsConfig = z.infer<typeof rateLimitsConfigSchema>;
 export type ClientInstanceConfig = z.infer<typeof clientInstanceConfigSchema>;

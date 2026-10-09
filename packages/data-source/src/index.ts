@@ -1,7 +1,11 @@
 import postgres from "postgres";
 import { z } from "zod";
-import type { DataSourceConfig, PostgresDataSourceConfig } from "@vivd-catalyst/core";
-import { AppError } from "@vivd-catalyst/core";
+import type {
+  DataSourceConfig,
+  PostgresDataSourceConfig,
+  SecretResolver
+} from "@vivd-catalyst/core";
+import { AppError, SecretNotResolvedError } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 export interface DataSourceRegistration {
@@ -64,13 +68,9 @@ export interface DataSourceRegistry {
   describe(input: DataSourceDescribeInput): Promise<DataSourceDescribeResult>;
 }
 
-export interface SecretResolver {
-  resolveConnectionRef(ref: string): string;
-}
-
 export interface CreateDataSourceRegistryInput {
   configs: Record<string, DataSourceConfig>;
-  secretResolver: SecretResolver;
+  secrets: SecretResolver;
 }
 
 export interface CreateDataSourceToolsInput {
@@ -152,37 +152,50 @@ interface DataSourceAdapter {
   describe(relation?: string): Promise<DataSourceDescribeResult>;
 }
 
-export function createDataSourceRegistry(input: CreateDataSourceRegistryInput): DataSourceRegistry {
-  return new DefaultDataSourceRegistry(
-    Object.entries(input.configs).map(([name, config]) => ({
+/** Creates every data source of an instance. Each connection secret is resolved here, once. */
+export async function createDataSourceRegistry(
+  input: CreateDataSourceRegistryInput
+): Promise<DataSourceRegistry> {
+  const registrations = [];
+  for (const [name, config] of Object.entries(input.configs)) {
+    registrations.push({
       name,
       config,
-      adapter: createDataSourceAdapter(config, input.secretResolver)
-    }))
-  );
+      adapter: createDataSourceAdapter(
+        config,
+        await resolveConnectionRef(input.secrets, name, config.connectionRef)
+      )
+    });
+  }
+  return new DefaultDataSourceRegistry(registrations);
 }
 
-export function createEnvSecretResolver(env: Record<string, string | undefined>): SecretResolver {
-  return {
-    resolveConnectionRef(ref) {
-      const envPrefix = "env:";
-      if (!ref.startsWith(envPrefix)) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          "Only env: data source connection references are supported"
-        );
-      }
-      const envName = ref.slice(envPrefix.length);
-      const value = env[envName];
-      if (!value) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Missing data source connection secret '${envName}'`
-        );
-      }
-      return value;
+const CONNECTION_REF_PREFIX = "env:";
+
+/** A `connectionRef` is `env:NAME`: the name of a secret, never a connection string. */
+async function resolveConnectionRef(
+  secrets: SecretResolver,
+  sourceName: string,
+  ref: string
+): Promise<string> {
+  if (!ref.startsWith(CONNECTION_REF_PREFIX)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'dataSources.${sourceName}.connectionRef' must be 'env:' followed by the name of a secret`
+    );
+  }
+  const secretName = ref.slice(CONNECTION_REF_PREFIX.length);
+  try {
+    return await secrets.resolve(secretName);
+  } catch (error) {
+    if (error instanceof SecretNotResolvedError) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `'dataSources.${sourceName}.connectionRef' names the secret '${error.secretName}', which does not resolve`
+      );
     }
-  };
+    throw error;
+  }
 }
 
 export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToolDefinition[] {
@@ -340,15 +353,12 @@ function toQueryFeedback(error: unknown): AppError | undefined {
   return new AppError("VALIDATION_FAILED", `Query failed: ${error.message}${position}`);
 }
 
-function createDataSourceAdapter(
-  config: DataSourceConfig,
-  secretResolver: SecretResolver
-): DataSourceAdapter {
+function createDataSourceAdapter(config: DataSourceConfig, databaseUrl: string): DataSourceAdapter {
   switch (config.kind) {
     case "postgres":
       return new PostgresDataSourceAdapter({
         config,
-        databaseUrl: secretResolver.resolveConnectionRef(config.connectionRef)
+        databaseUrl
       });
   }
 }

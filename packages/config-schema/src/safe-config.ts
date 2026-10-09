@@ -150,8 +150,6 @@ function modelView(
   const description = binding?.description
     ? resolveLocalizedString(binding.description, locale, config.localization.defaultLocale)
     : undefined;
-  const residency =
-    provider.type === "openai-compatible" ? provider.compliance?.residency : undefined;
   const rates = config.usage.costs.customer?.models.find(
     (candidate) => candidate.providerId === provider.id && candidate.model === model
   );
@@ -163,7 +161,7 @@ function modelView(
     ...compactionThresholdView(provider),
     ...(binding?.vendor ? { vendor: binding.vendor } : {}),
     ...(description ? { description } : {}),
-    ...(residency ? { residency } : {}),
+    ...(provider.region ? { region: provider.region } : {}),
     ...(usageTier ? { usageTier } : {}),
     ...(reasoning.defaultEffort ? { reasoningEffort: reasoning.defaultEffort } : {}),
     selectableReasoningEfforts: reasoning.selectable
@@ -173,9 +171,6 @@ function modelView(
 function compactionThresholdView(provider: ModelProviderConfig): {
   compactThresholdTokens?: number;
 } {
-  const compactThresholdTokens =
-    provider.type === "openai-compatible"
-      ? provider.contextManagement?.compaction?.compactThresholdTokens
-      : undefined;
+  const compactThresholdTokens = provider.contextManagement?.compaction?.compactThresholdTokens;
   return compactThresholdTokens === undefined ? {} : { compactThresholdTokens };
 }

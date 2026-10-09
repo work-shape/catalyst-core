@@ -1,39 +1,29 @@
-import { AppError, type ModelProviderConfig } from "@vivd-catalyst/core";
-import { DeterministicModelProvider } from "./deterministic-provider";
-import { OpenAiCompatibleChatProvider } from "./openai-compatible-provider";
+import {
+  createProvider,
+  type ModelProviderConfig,
+  type ProviderCreateContext
+} from "@vivd-catalyst/core";
+import { modelProviderDefinitions } from "./registration";
 import { ModelProviderRegistry } from "./registry";
 
-export function createModelProviderRegistry(input: {
-  configs: ModelProviderConfig[];
-  env: Record<string, string | undefined>;
-}): ModelProviderRegistry {
-  return new ModelProviderRegistry(
-    input.configs.map((config) => {
-      if (config.type === "deterministic") {
-        return new DeterministicModelProvider(config.id);
-      }
-
-      const apiKey = input.env[config.apiKeyEnvName];
-      if (!apiKey) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Missing API key environment variable '${config.apiKeyEnvName}' for model provider '${config.id}'`
-        );
-      }
-
-      return new OpenAiCompatibleChatProvider({
-        id: config.id,
-        api: config.api,
-        model: config.model,
-        baseUrl: config.baseUrl,
-        apiKey,
-        authMode: config.authMode,
-        organization: config.organizationEnvName
-          ? input.env[config.organizationEnvName]
-          : undefined,
-        reasoningEffort: config.reasoningEffort,
-        contextManagement: config.contextManagement
-      });
-    })
-  );
+/**
+ * Creates every model provider of an instance from its entries under `infrastructure.models`.
+ * Each adapter resolves its secrets here, once, at startup.
+ */
+export async function createModelProviderRegistry(input: {
+  providers: readonly ModelProviderConfig[];
+  entries: Record<string, unknown>;
+  context: ProviderCreateContext;
+}): Promise<ModelProviderRegistry> {
+  const providers = [];
+  for (const provider of input.providers) {
+    const build = await createProvider(
+      modelProviderDefinitions,
+      "models",
+      { path: `infrastructure.models.${provider.id}`, entry: input.entries[provider.id] },
+      input.context
+    );
+    providers.push(build(provider));
+  }
+  return new ModelProviderRegistry(providers);
 }

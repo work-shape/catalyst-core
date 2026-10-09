@@ -3,28 +3,44 @@ import type { DataSourceConfig } from "@vivd-catalyst/core";
 import {
   assertReadOnlyQuery,
   createDataSourceRegistry,
-  createDataSourceTools,
-  createEnvSecretResolver
+  createDataSourceTools
 } from "@vivd-catalyst/data-source";
+import { createFakeSecrets } from "./support/fixtures";
 
 describe("data source registry", () => {
-  it("resolves env connection refs at registry creation", () => {
-    expect(() =>
+  it("resolves env connection refs at registry creation", async () => {
+    await expect(
       createDataSourceRegistry({
         configs: {
           reporting: createDataSource()
         },
-        secretResolver: createEnvSecretResolver({})
+        secrets: createFakeSecrets()
       })
-    ).toThrow(/Missing data source connection secret 'REPORTING_DATABASE_URL'/u);
+    ).rejects.toThrow(
+      "'dataSources.reporting.connectionRef' names the secret 'REPORTING_DATABASE_URL', which does not resolve"
+    );
   });
 
-  it("lists configured data sources without exposing connection secrets", () => {
-    const registry = createDataSourceRegistry({
+  it("refuses a connection ref that is not the name of a secret", async () => {
+    const connectionString = "postgres://readonly:hunter2@example.test/reporting";
+    const refused = createDataSourceRegistry({
+      configs: {
+        reporting: { ...createDataSource(), connectionRef: connectionString }
+      },
+      secrets: createFakeSecrets()
+    });
+    await expect(refused).rejects.toThrow(
+      "'dataSources.reporting.connectionRef' must be 'env:' followed by the name of a secret"
+    );
+    await expect(refused).rejects.not.toThrow(/hunter2/u);
+  });
+
+  it("lists configured data sources without exposing connection secrets", async () => {
+    const registry = await createDataSourceRegistry({
       configs: {
         reporting: createDataSource()
       },
-      secretResolver: createEnvSecretResolver({
+      secrets: createFakeSecrets({
         REPORTING_DATABASE_URL: "postgres://readonly@example.test/reporting"
       })
     });
