@@ -314,6 +314,32 @@ class DefaultDataSourceRegistry implements DataSourceRegistry {
   }
 }
 
+/**
+ * The mistakes in a query its author can correct, as an error the model may read: a syntax
+ * error, an unknown or forbidden table, column or function (SQLSTATE class 42), a data
+ * exception such as an invalid cast or a division by zero (class 22), and a statement that
+ * ran into the timeout or was cancelled (57014). The text is the database's short message
+ * and the position in the query. Every other failure, a connection error included, returns
+ * undefined and stays internal.
+ */
+function toQueryFeedback(error: unknown): AppError | undefined {
+  if (!(error instanceof postgres.PostgresError)) {
+    return undefined;
+  }
+  if (error.code === "57014") {
+    return new AppError("TIMEOUT", `Query was cancelled: ${error.message}`, undefined, {
+      exposeMessage: true
+    });
+  }
+  if (!error.code.startsWith("42") && !error.code.startsWith("22")) {
+    return undefined;
+  }
+  const position = /^\d+$/u.test(error.position ?? "")
+    ? ` (at character ${error.position} of the query)`
+    : "";
+  return new AppError("VALIDATION_FAILED", `Query failed: ${error.message}${position}`);
+}
+
 function createDataSourceAdapter(
   config: DataSourceConfig,
   secretResolver: SecretResolver
@@ -366,7 +392,7 @@ class PostgresDataSourceAdapter implements DataSourceAdapter {
       } catch {
         // The connection may already be closed or outside a transaction after a failed begin/commit.
       }
-      throw error;
+      throw toQueryFeedback(error) ?? error;
     } finally {
       await sql.end({ timeout: 1 });
     }
