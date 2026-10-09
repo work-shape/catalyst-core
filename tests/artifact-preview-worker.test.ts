@@ -100,7 +100,7 @@ describe("ArtifactPreviewWorker", () => {
         sourceArtifactId: fixture.source.id,
         previewRole: "page",
         pageNumber: 1,
-        rendererVersion: "preview-contract-v1"
+        rendererVersion: "preview-contract-v2"
       }
     });
     expect(fixture.objectStore.keys().some((key) => key.startsWith("artifact-previews/"))).toBe(
@@ -388,7 +388,7 @@ describe("ArtifactPreviewWorker", () => {
         sourceArtifactId: fixture.source.id,
         previewRole: "page",
         pageNumber: 2,
-        rendererVersion: "preview-contract-v1"
+        rendererVersion: "preview-contract-v2"
       }
     });
   });
@@ -471,7 +471,7 @@ describe("ArtifactPreviewWorker", () => {
         previewRole: "range",
         sheet: "Summary",
         range: "Summary!A1:H10",
-        rendererVersion: "preview-contract-v1"
+        rendererVersion: "preview-contract-v2"
       }
     });
   });

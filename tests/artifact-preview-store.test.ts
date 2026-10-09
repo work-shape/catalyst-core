@@ -41,6 +41,41 @@ describe("artifact preview store adapters", () => {
     }
   });
 
+  it("does not reuse a failure recorded under the cell limit of the previous renderer version", async () => {
+    const store = (await createTestInstance({ postgres: {} })).stores;
+    try {
+      const fixture = await createPreviewFixture(store);
+      const source = {
+        clientInstanceId: fixture.clientInstanceId,
+        conversationId: fixture.conversation.id,
+        sourceArtifactId: fixture.artifact.id
+      };
+      const job = {
+        ...source,
+        sourceChecksum: fixture.artifact.checksum,
+        sourceMimeType: fixture.artifact.mimeType
+      };
+      // What a sheet above 5,000 cells left behind before the limit was raised.
+      const previous = { rendererVersion: "preview-contract-v1" };
+      const failedJob = await store.files.enqueueArtifactPreviewJob({ ...job, ...previous });
+      await store.files.writeArtifactPreviewManifest({
+        ...source,
+        ...previous,
+        status: "failed",
+        errorCode: "page_limit_exceeded",
+        writtenAt: "2026-10-01T10:00:00.000Z"
+      });
+
+      const reopened = await store.files.enqueueArtifactPreviewJob(job);
+
+      expect(reopened.id).not.toBe(failedJob.id);
+      expect(reopened).toMatchObject({ status: "pending", attempts: 0 });
+      await expect(store.files.getArtifactPreviewManifest(source)).resolves.toBeUndefined();
+    } finally {
+      await store.close();
+    }
+  });
+
   it("claims preview jobs and guards terminal updates by lease in Postgres", async () => {
     const store = (
       await createTestInstance({
@@ -260,7 +295,7 @@ async function expectPreviewJobIdentityContract(store: PreviewJobIdentityStore):
   ).resolves.toMatchObject({
     status: "failed",
     renderer: "artifact-preview-worker",
-    rendererVersion: "preview-contract-v1",
+    rendererVersion: "preview-contract-v2",
     settingsHash: "default-image-pages-v1"
   });
   await expect(

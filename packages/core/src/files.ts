@@ -50,7 +50,9 @@ export type ArtifactPreviewFailureCode =
 // preview of a longer document shows its first 500 pages.
 export const ARTIFACT_PREVIEW_MAX_PAGES = 500;
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER = "artifact-preview-worker";
-export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v1";
+// Names the rules a stored preview or failure was produced under. Raise it when a change makes
+// earlier results wrong, so they are rendered again: v2 raised the spreadsheet cell limit.
+export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v2";
 export const DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH = "default-image-pages-v1";
 export const ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF = "preview.source_artifact";
 export const ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_KIND = "preview.source_attachment";
