@@ -425,7 +425,7 @@
       "target": "lint",
       "rule": "knip/types",
       "scope": "packages/chat-ui",
-      "count": 26,
+      "count": 25,
       "owner": "G-5c"
     },
     {

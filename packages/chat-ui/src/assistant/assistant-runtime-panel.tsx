@@ -26,6 +26,7 @@ import {
 } from "./product-run-transport";
 import {
   createQueuedSendSettler,
+  draftAttachmentsKey,
   resolveSendBlock,
   type QueuedSend,
   type SendBlock
@@ -76,6 +77,7 @@ function AssistantRuntimePane({
     newConversationPrivate,
     selectedConversationId,
     messagesLoaded,
+    snapshotStatus,
     notice,
     draft,
     composerFocusRequestId,
@@ -122,17 +124,21 @@ function AssistantRuntimePane({
         sending: rootSubmitPending,
         conversationRunning,
         workspaceBlock,
-        messagesLoaded,
+        snapshotStatus,
         noAgentsMessage,
         t
       }),
-    [conversationRunning, messagesLoaded, noAgentsMessage, rootSubmitPending, t, workspaceBlock]
+    [conversationRunning, noAgentsMessage, rootSubmitPending, snapshotStatus, t, workspaceBlock]
   );
   const sendDisabledReason = sendBlock?.reason;
   const [queuedSend, setQueuedSend] = useState<QueuedSend | undefined>(undefined);
+  const attachmentsKey = useMemo(
+    () => draftAttachmentsKey([...localUploadingAttachments, ...draftAttachments]),
+    [draftAttachments, localUploadingAttachments]
+  );
   const queueSend = useCallback(
-    (text: string) => setQueuedSend({ text, collaborationWorkspaceId }),
-    [collaborationWorkspaceId]
+    (text: string) => setQueuedSend({ text, collaborationWorkspaceId, attachmentsKey }),
+    [attachmentsKey, collaborationWorkspaceId]
   );
   const settleQueuedSend = useCallback(() => setQueuedSend(undefined), []);
   const visibleNotice = rootSubmitError ?? notice;
@@ -331,6 +337,7 @@ function AssistantRuntimePane({
         <QueuedSendBridge
           queuedSend={queuedSend}
           sendBlock={sendBlock}
+          attachmentsKey={attachmentsKey}
           collaborationWorkspaceId={collaborationWorkspaceId}
           onSettled={settleQueuedSend}
           onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
@@ -488,18 +495,20 @@ function DraftBridge({
 
 /**
  * Sends a queued message once its loading block lifts, or forgets it when the user edits the
- * text, the block turns into a refusal or the workspace changes. A pane lives for one
+ * text or the attachments, the block turns into a refusal or the workspace changes. A pane lives for one
  * conversation, so a change of conversation drops the queued send with the pane.
  */
 function QueuedSendBridge({
   queuedSend,
   sendBlock,
+  attachmentsKey,
   collaborationWorkspaceId,
   onSettled,
   onSubmitMessage
 }: {
   queuedSend: QueuedSend | undefined;
   sendBlock: SendBlock | undefined;
+  attachmentsKey: string;
   collaborationWorkspaceId: string | undefined;
   onSettled: () => void;
   /** The first-message path; an open conversation sends through the thread runtime instead. */
@@ -518,6 +527,7 @@ function QueuedSendBridge({
       queued: queuedSend,
       block: sendBlock,
       composerText,
+      attachmentsKey,
       collaborationWorkspaceId,
       runtimeReady: Boolean(onSubmitMessage) || composerCanSend
     });
@@ -534,6 +544,7 @@ function QueuedSendBridge({
       composer.send();
     }
   }, [
+    attachmentsKey,
     collaborationWorkspaceId,
     composer,
     composerCanSend,

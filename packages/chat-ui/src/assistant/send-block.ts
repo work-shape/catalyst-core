@@ -1,3 +1,4 @@
+import type { ConversationSnapshotStatus } from "../conversation/conversation-controller-state";
 import type { TranslationContextValue } from "../i18n";
 
 /** Why the composer may not send right now. */
@@ -16,7 +17,7 @@ export function resolveSendBlock(input: {
   sending: boolean;
   conversationRunning: boolean;
   workspaceBlock: SendBlock | undefined;
-  messagesLoaded: boolean;
+  snapshotStatus: ConversationSnapshotStatus;
   noAgentsMessage: string | undefined;
   t: TranslationContextValue["t"];
 }): SendBlock | undefined {
@@ -30,8 +31,12 @@ export function resolveSendBlock(input: {
   if (input.workspaceBlock) {
     return input.workspaceBlock;
   }
-  if (!input.messagesLoaded) {
+  if (input.snapshotStatus === "loading") {
     return { reason: input.t("loadingConversation"), loading: true };
+  }
+  if (input.snapshotStatus !== "ready") {
+    // A failed load does not lift by itself; a later refetch must not send what waited.
+    return { reason: input.t("conversationLoadFailed"), loading: false };
   }
   return input.noAgentsMessage === undefined
     ? undefined
@@ -43,6 +48,13 @@ export interface QueuedSend {
   text: string;
   /** The workspace the message was written for; undefined while the first one still loads. */
   collaborationWorkspaceId: string | undefined;
+  /** The draft's attachments when the send was asked for, as `draftAttachmentsKey` names them. */
+  attachmentsKey: string;
+}
+
+/** Names the draft's attachments, so that adding or removing one reads as an edit. */
+export function draftAttachmentsKey(attachments: readonly { id: string }[]): string {
+  return attachments.map((attachment) => attachment.id).join("\n");
 }
 
 export type QueuedSendStep = "wait" | "send" | "drop";
@@ -51,18 +63,19 @@ export interface QueuedSendState {
   queued: QueuedSend;
   block: SendBlock | undefined;
   composerText: string;
+  attachmentsKey: string;
   collaborationWorkspaceId: string | undefined;
   /** False while the thread runtime has not taken up the lifted block yet. */
   runtimeReady: boolean;
 }
 
 /**
- * What happens to a queued send now. It goes out only as the text the user confirmed, into the
- * workspace it was written for, and only when the block lifted without turning into a refusal.
+ * What happens to a queued send now. It goes out only as the draft the user confirmed, text and
+ * attachments unchanged, into the workspace it was written for, and only when the block lifted without turning into a refusal.
  */
 function queuedSendStep(input: QueuedSendState): QueuedSendStep {
   const { queued, block } = input;
-  if (input.composerText !== queued.text) {
+  if (input.composerText !== queued.text || input.attachmentsKey !== queued.attachmentsKey) {
     return "drop";
   }
   if (

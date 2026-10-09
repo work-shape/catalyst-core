@@ -8,6 +8,7 @@ import {
 } from "../packages/chat-ui/src/assistant/assistant-composer";
 import {
   createQueuedSendSettler,
+  draftAttachmentsKey,
   resolveSendBlock,
   type QueuedSendState,
   type SendBlock
@@ -89,7 +90,7 @@ describe("send block", () => {
     sending: false,
     conversationRunning: false,
     workspaceBlock: undefined,
-    messagesLoaded: true,
+    snapshotStatus: "ready",
     noAgentsMessage: undefined,
     t
   };
@@ -106,8 +107,18 @@ describe("send block", () => {
     },
     {
       name: "the conversation still loads",
-      input: { messagesLoaded: false },
+      input: { snapshotStatus: "loading" },
       expected: { reason: "Loading conversation", loading: true }
+    },
+    {
+      name: "the conversation failed to load",
+      input: { snapshotStatus: "error" },
+      expected: { reason: "The conversation could not be loaded.", loading: false }
+    },
+    {
+      name: "the conversation is gone",
+      input: { snapshotStatus: "not_found" },
+      expected: { reason: "The conversation could not be loaded.", loading: false }
     },
     {
       name: "the workspace refuses",
@@ -116,7 +127,7 @@ describe("send block", () => {
     },
     {
       name: "a run is active",
-      input: { conversationRunning: true, messagesLoaded: false },
+      input: { conversationRunning: true, snapshotStatus: "loading" },
       expected: { reason: t("conversationStillRunning"), loading: false }
     },
     {
@@ -135,7 +146,11 @@ describe("send block", () => {
 
   it("reports loading before the missing agents, which only show once loading ends", () => {
     expect(
-      resolveSendBlock({ ...unblocked, messagesLoaded: false, noAgentsMessage: "No agents here." })
+      resolveSendBlock({
+        ...unblocked,
+        snapshotStatus: "loading",
+        noAgentsMessage: "No agents here."
+      })
     ).toMatchObject({ loading: true });
   });
 });
@@ -144,6 +159,7 @@ describe("composer send during a block", () => {
   const loading: SendBlock = { reason: "Loading workspaces…", loading: true };
   const refusals: SendBlock[] = [
     { reason: "Workspaces could not be loaded.", loading: false },
+    { reason: "The conversation could not be loaded.", loading: false },
     { reason: "No agents here.", loading: false },
     { reason: "The conversation is still running.", loading: false },
     { reason: "Wait for file upload to finish before sending.", loading: false }
@@ -165,9 +181,10 @@ describe("composer send during a block", () => {
 
   function waiting(overrides: Partial<QueuedSendState> = {}): QueuedSendState {
     return {
-      queued: { text: "Hello", collaborationWorkspaceId: undefined },
+      queued: { text: "Hello", collaborationWorkspaceId: undefined, attachmentsKey: "" },
       block: loading,
       composerText: "Hello",
+      attachmentsKey: "",
       collaborationWorkspaceId: undefined,
       runtimeReady: true,
       ...overrides
@@ -213,10 +230,44 @@ describe("composer send during a block", () => {
     expect(settle({ ...state, block: undefined })).toBe("wait");
   });
 
+  it("drops the queued message, not the text, when an attachment is added or removed", () => {
+    const withFile = draftAttachmentsKey([{ id: "attachment_a" }]);
+    const added = createQueuedSendSettler();
+    const state = waiting();
+
+    expect(added(state)).toBe("wait");
+    expect(added({ ...state, attachmentsKey: withFile })).toBe("drop");
+    expect(added({ ...state, block: undefined })).toBe("wait");
+
+    const removed = createQueuedSendSettler();
+    const queuedWithFile = waiting({
+      queued: { text: "Hello", collaborationWorkspaceId: undefined, attachmentsKey: withFile },
+      attachmentsKey: withFile
+    });
+
+    expect(removed(queuedWithFile)).toBe("wait");
+    expect(removed({ ...queuedWithFile, block: undefined, attachmentsKey: "" })).toBe("drop");
+  });
+
+  it("sends a queued message whose attachments stayed as they were", () => {
+    const key = draftAttachmentsKey([{ id: "attachment_a" }, { id: "attachment_b" }]);
+    const settle = createQueuedSendSettler();
+
+    expect(
+      settle(
+        waiting({
+          queued: { text: "Hello", collaborationWorkspaceId: undefined, attachmentsKey: key },
+          attachmentsKey: draftAttachmentsKey([{ id: "attachment_a" }, { id: "attachment_b" }]),
+          block: undefined
+        })
+      )
+    ).toBe("send");
+  });
+
   it("drops the queued message when the workspace it was written for changes", () => {
     const settle = createQueuedSendSettler();
     const state = waiting({
-      queued: { text: "Hello", collaborationWorkspaceId: "workspace_a" },
+      queued: { text: "Hello", collaborationWorkspaceId: "workspace_a", attachmentsKey: "" },
       collaborationWorkspaceId: "workspace_a"
     });
 
@@ -231,12 +282,16 @@ describe("composer send during a block", () => {
 
     expect(settle(waiting({ composerText: "Edited" }))).toBe("drop");
     expect(
-      settle(waiting({ queued: { text: "Edited", collaborationWorkspaceId: undefined } }))
+      settle(
+        waiting({
+          queued: { text: "Edited", collaborationWorkspaceId: undefined, attachmentsKey: "" }
+        })
+      )
     ).toBe("drop");
     expect(
       settle(
         waiting({
-          queued: { text: "Edited", collaborationWorkspaceId: undefined },
+          queued: { text: "Edited", collaborationWorkspaceId: undefined, attachmentsKey: "" },
           composerText: "Edited",
           block: undefined
         })

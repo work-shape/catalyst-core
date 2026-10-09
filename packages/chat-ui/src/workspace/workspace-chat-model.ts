@@ -260,6 +260,8 @@ export interface SelectedChatModel {
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
   messagesLoaded: boolean;
+  /** How far the selected conversation's thread is; "ready" while no conversation is selected. */
+  snapshotStatus: ConversationControllerState["snapshotStatus"];
   notice: string | undefined;
   draft: string;
   composerFocusRequestId: number;
@@ -918,6 +920,7 @@ export function useWorkspaceChatModel({
       messages,
       completedRunProjections: controller.completedRunProjections,
       messagesLoaded,
+      snapshotStatus: selectedConversationId ? controller.snapshotStatus : "ready",
       notice: visibleNotice,
       draft: activeDraft.draft,
       composerFocusRequestId: chrome.composerFocusRequestId,

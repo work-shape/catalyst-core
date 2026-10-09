@@ -14,6 +14,7 @@ export const assistant = defineTranslations({
     contextTokensUsed: "{used} / {limit} tokens used",
     contextUsageAccessible: "Context window: {percent}% full, {used} of {limit} tokens used",
     contextWindow: "Context window",
+    conversationLoadFailed: "The conversation could not be loaded.",
     conversationStillRunning: "Wait for the current response to finish",
     editMessage: "Edit message",
     genericWelcome: "How can I help?",
@@ -77,6 +78,7 @@ export const assistant = defineTranslations({
     contextUsageAccessible: "Kontextfenster: {percent} % voll, {used} von {limit} Tokens verwendet",
     contextWindow: "Kontextfenster",
     conversationStillRunning: "Warte, bis die aktuelle Antwort fertig ist",
+    conversationLoadFailed: "Die Unterhaltung konnte nicht geladen werden.",
     editMessage: "Nachricht bearbeiten",
     genericWelcome: "Wie kann ich helfen?",
     instanceNotConfigured:
