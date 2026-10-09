@@ -255,15 +255,15 @@ describe("provider error boundary", () => {
           message: "Internal server error"
         }
       });
-      const created = await app.call("createConversation", { payload: { title: "hello" } });
+      const created = await app.call("conversations.create", { payload: { title: "hello" } });
       expect(created.statusCode).toBe(200);
       const { id } = created.json() as { id: string };
       const started = await injectStartConversationRun(app, id, "hello", {
         idempotencyKey: "redaction-test"
       });
       await drainRunEvents(app, id, started.run.id);
-      await app.call("generateConversationTitle", { params: { conversationId: id } });
-      const audit = await app.call("listAuditEvents", {});
+      await app.call("conversations.title.generate", { params: { conversationId: id } });
+      const audit = await app.call("audit_events.list", {});
       const events = audit.json<{
         items: Array<{ type: string; metadata: Record<string, unknown> }>;
       }>().items;

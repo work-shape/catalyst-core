@@ -94,18 +94,18 @@ describe("browser origin policy", () => {
             : {}),
           ...(fetchSite ? { "sec-fetch-site": fetchSite } : {})
         };
-        const created = await app.call("createConversation", {
+        const created = await app.call("conversations.create", {
           headers: { cookie: "test-session=present", origin: allowedOrigin },
           payload: { title: "Origin checks" }
         });
         expect(created.statusCode).toBe(200);
         const { id } = created.json() as { id: string };
-        const json = await app.call("createConversation", {
+        const json = await app.call("conversations.create", {
           headers,
           remoteAddress: "127.0.0.1",
           payload: { title: "New conversation" }
         });
-        const bodyless = await app.call("generateConversationTitle", {
+        const bodyless = await app.call("conversations.title.generate", {
           params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers
@@ -116,19 +116,19 @@ describe("browser origin policy", () => {
           contentType: "text/plain",
           content: "Upload content"
         });
-        const multipart = await app.call("uploadDraftAttachment", {
+        const multipart = await app.call("conversations.draft_attachments.upload", {
           params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers: { ...headers, ...upload.headers },
           payload: upload.payload
         });
-        const patch = await app.call("renameConversation", {
+        const patch = await app.call("conversations.rename", {
           params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers,
           payload: { title: "Renamed conversation" }
         });
-        const deleted = await app.call("deleteConversation", {
+        const deleted = await app.call("conversations.delete", {
           params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers
@@ -154,7 +154,7 @@ describe("browser origin policy", () => {
   it("refuses invalid explicit credentials on the config-asset identity path", async () => {
     const app = await createCookieApp();
     try {
-      const response = await app.call("validateConfigAssets", {
+      const response = await app.call("config_assets.validate", {
         headers: {
           cookie: "test-session=present",
           origin: foreignOrigin,
@@ -175,19 +175,19 @@ describe("browser origin policy", () => {
     const app = await createCookieApp();
     try {
       for (const origin of [allowedOrigin, foreignOrigin, siblingOrigin, undefined]) {
-        const response = await app.call("getCurrentUser", {
+        const response = await app.call("me.get", {
           headers: { ...(origin ? { origin } : {}), cookie: "test-session=present" }
         });
         expect(response.statusCode).toBe(200);
         expect(response.headers["access-control-allow-origin"]).toBe(
           origin === allowedOrigin ? origin : undefined
         );
-        const head = await app.call("getCurrentUser", {
+        const head = await app.call("me.get", {
           headers: { ...(origin ? { origin } : {}), cookie: "test-session=present" },
           method: "HEAD"
         });
         expect(head.statusCode).toBe(200);
-        const preflight = await app.call("listConversations", {
+        const preflight = await app.call("conversations.list", {
           headers: {
             ...(origin ? { origin } : {}),
             "access-control-request-method": "POST",
@@ -207,14 +207,14 @@ describe("browser origin policy", () => {
   it("accepts widget bearer requests and server-credential exchange independently of origin", async () => {
     const app = await createCookieApp();
     try {
-      const issued = await app.call("issueSessionToken", {
+      const issued = await app.call("session_tokens.issue", {
         headers: { origin: foreignOrigin, "x-server-credential": "test-server-credential" },
         payload: { externalUserId: "widget-user", displayLabel: "Widget User" }
       });
       expect(issued.statusCode).toBe(200);
       const { chatSessionToken } = issued.json() as { chatSessionToken: string };
       for (const origin of [foreignOrigin, allowedOrigin]) {
-        const response = await app.call("createConversation", {
+        const response = await app.call("conversations.create", {
           headers: {
             cookie: "test-session=present",
             origin,
@@ -247,7 +247,7 @@ describe("browser origin policy", () => {
         tools: []
       });
       try {
-        const response = await app.call("getHealth", { headers: { origin: foreignOrigin } });
+        const response = await app.call("health.get", { headers: { origin: foreignOrigin } });
         expect(response.headers["access-control-allow-origin"]).toBeUndefined();
       } finally {
         await app.close();
@@ -258,7 +258,7 @@ describe("browser origin policy", () => {
   it("allows same-origin cookie writes without any configured CORS origins", async () => {
     const app = await createCookieApp(false);
     try {
-      const response = await app.call("createConversation", {
+      const response = await app.call("conversations.create", {
         headers: { origin: "http://localhost", cookie: "test-session=present" },
         payload: { title: "Same origin" }
       });
@@ -281,7 +281,7 @@ describe("browser origin policy", () => {
         "http://127.0.0.1:5173",
         "http://[::1]:5173"
       ]) {
-        const response = await app.call("getCurrentUser", { headers: { origin } });
+        const response = await app.call("me.get", { headers: { origin } });
         expect(response.statusCode).toBe(200);
         expect(response.headers["access-control-allow-origin"]).toBe(origin);
       }

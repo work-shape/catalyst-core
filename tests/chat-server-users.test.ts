@@ -64,7 +64,7 @@ describe("client instance app vertical slice", () => {
     const developmentUsersRoute = await app.call("legacyDevelopmentUsers");
     expect(developmentUsersRoute.statusCode).toBe(404);
 
-    const defaultMe = await app.call("getCurrentUser", {});
+    const defaultMe = await app.call("me.get", {});
     expect(defaultMe.statusCode).toBe(200);
     const defaultMeBody = defaultMe.json() as {
       displayLabel: string;
@@ -81,7 +81,7 @@ describe("client instance app vertical slice", () => {
       PERMISSIONS.filter((permission) => permission !== "config_assets.release").sort()
     );
 
-    const normalMe = await app.call("getCurrentUser", {
+    const normalMe = await app.call("me.get", {
       headers: {
         "x-dev-user-id": "user-1"
       }
@@ -94,21 +94,21 @@ describe("client instance app vertical slice", () => {
       permissions: []
     });
 
-    const normalUsage = await app.call("getUsageSummary", {
+    const normalUsage = await app.call("usage.get_summary", {
       headers: {
         "x-dev-user-id": "user-1"
       }
     });
     expect(normalUsage.statusCode).toBe(403);
 
-    const grantedUsage = await app.call("getUsageSummary", {
+    const grantedUsage = await app.call("usage.get_summary", {
       headers: {
         "x-dev-user-id": "usage-viewer-1"
       }
     });
     expect(grantedUsage.statusCode).toBe(200);
 
-    const unknownUser = await app.call("getCurrentUser", {
+    const unknownUser = await app.call("me.get", {
       headers: {
         "x-dev-user-id": "missing-user"
       }
@@ -146,7 +146,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const updated = await app.call("updateCurrentUser", {
+    const updated = await app.call("me.update", {
       headers: {
         "x-dev-user-id": "user-1"
       },
@@ -164,7 +164,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(updatedBody.email).not.toBe("escalation@example.test");
 
-    const audit = await app.call("listAuditEvents", {
+    const audit = await app.call("audit_events.list", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -184,7 +184,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const changed = await app.call("changeCurrentUserPassword", {
+    const changed = await app.call("me.password.change", {
       payload: {
         currentPassword: "old-password",
         newPassword: "new-password"
@@ -339,14 +339,14 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const delegatedDelete = await server.call("deleteCurrentUser", {
+    const delegatedDelete = await server.call("me.delete", {
       headers: {
         "x-service-principal": "1"
       }
     });
     expect(delegatedDelete.statusCode).toBe(403);
 
-    const failed = await server.call("deleteCurrentUser", {});
+    const failed = await server.call("me.delete", {});
     expect(failed.statusCode).toBe(500);
     await expect(
       store.workspaces.listWorkspacesForUser({ clientInstanceId, userId: asUserId(user.id) })
@@ -355,7 +355,7 @@ describe("client instance app vertical slice", () => {
       expect.objectContaining({ id: user.id })
     );
 
-    const deleted = await server.call("deleteCurrentUser", {});
+    const deleted = await server.call("me.delete", {});
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toEqual({ ok: true });
     expect(deleteUserAttempts).toBe(2);
@@ -427,9 +427,9 @@ describe("client instance app vertical slice", () => {
       env: {},
       tools: []
     });
-    await app.call("getCurrentUser", {});
+    await app.call("me.get", {});
     const [superadmin] = await app.stores.users.listUsers({ clientInstanceId });
-    const created = await app.call("createAdministeredUser", {
+    const created = await app.call("users.create", {
       payload: { displayLabel: "Delete by admin", roles: ["user"] }
     });
     expect(created.statusCode).toBe(200);
@@ -514,7 +514,7 @@ describe("client instance app vertical slice", () => {
       userId: deletedUserId
     });
 
-    const response = await app.call("deleteAdministeredUser", {
+    const response = await app.call("users.delete", {
       params: { userId: deletedUserId }
     });
     expect(response.statusCode).toBe(200);
@@ -587,12 +587,15 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
     const asUser = { "x-dev-user-id": "user-1" };
-    const me = await app.call("getCurrentUser", { headers: asUser });
+    const me = await app.call("me.get", { headers: asUser });
     const userId = asUserId((me.json() as { id: string }).id);
 
     const fileIds: string[] = [];
     for (const title of ["Personal", "Second personal"]) {
-      const created = await app.call("createConversation", { headers: asUser, payload: { title } });
+      const created = await app.call("conversations.create", {
+        headers: asUser,
+        payload: { title }
+      });
       expect(created.statusCode).toBe(200);
       const upload = createMultipartFilePayload({
         fieldName: "file",
@@ -600,7 +603,7 @@ describe("client instance app vertical slice", () => {
         contentType: "text/plain",
         content: `bytes of ${title}`
       });
-      const uploaded = await app.call("uploadDraftAttachment", {
+      const uploaded = await app.call("conversations.draft_attachments.upload", {
         params: { conversationId: (created.json() as { id: string }).id },
         headers: { ...asUser, ...upload.headers },
         payload: upload.payload
@@ -611,7 +614,7 @@ describe("client instance app vertical slice", () => {
     const objectKeys = [...fixture.objects.keys()];
     expect(objectKeys).toHaveLength(2);
 
-    const response = await app.call("deleteAdministeredUser", { params: { userId: userId } });
+    const response = await app.call("users.delete", { params: { userId: userId } });
     expect(response.statusCode).toBe(200);
 
     expect(fixture.objects.size).toBe(0);
@@ -667,7 +670,7 @@ describe("client instance app vertical slice", () => {
           permissions: [restrictedEntry]
         });
         const updatePermissions = (permissions: string[]) =>
-          app.call("updateAdministeredUser", {
+          app.call("users.update", {
             params: { userId: managedUser.id },
             payload: { permissions }
           });
@@ -692,7 +695,7 @@ describe("client instance app vertical slice", () => {
         expect(unchanged.statusCode).toBe(200);
       }
       for (const permission of ["api_access.manage", "agent_models.manage"]) {
-        const newGrant = await app.call("createAdministeredUser", {
+        const newGrant = await app.call("users.create", {
           payload: { displayLabel: "New user", roles: ["user"], permissions: [permission] }
         });
         expect(newGrant.statusCode).toBe(403);
@@ -730,14 +733,14 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const seededSuperadmin = await app.call("getCurrentUser", {
+    const seededSuperadmin = await app.call("me.get", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
     });
     expect(seededSuperadmin.statusCode).toBe(200);
 
-    const usersBefore = await app.call("listAdministeredUsers", {
+    const usersBefore = await app.call("users.list", {
       headers: {
         "x-dev-user-id": "admin-1"
       }
@@ -748,7 +751,7 @@ describe("client instance app vertical slice", () => {
     const superadminUser = usersBeforeBody.find((user) => user.roles.includes("superadmin"));
     expect(superadminUser).toBeUndefined();
 
-    const superadminVisibleUsers = await app.call("listAdministeredUsers", {
+    const superadminVisibleUsers = await app.call("users.list", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -765,7 +768,7 @@ describe("client instance app vertical slice", () => {
     );
     expect(superadminManagedUser).toBeDefined();
 
-    const created = await app.call("createAdministeredUser", {
+    const created = await app.call("users.create", {
       headers: {
         "x-dev-user-id": "admin-1"
       },
@@ -781,7 +784,7 @@ describe("client instance app vertical slice", () => {
     expect(created.json()).toMatchObject({ permissions: ["config_assets.write"] });
     const createdUser = created.json() as { id: string };
 
-    const releasePermissionCreate = await app.call("createAdministeredUser", {
+    const releasePermissionCreate = await app.call("users.create", {
       headers: {
         "x-dev-user-id": "admin-1"
       },
@@ -799,7 +802,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const releasePermissionUpdate = await app.call("updateAdministeredUser", {
+    const releasePermissionUpdate = await app.call("users.update", {
       params: { userId: createdUser.id },
       headers: {
         "x-dev-user-id": "superadmin-1"
@@ -813,7 +816,7 @@ describe("client instance app vertical slice", () => {
       error: { code: "VALIDATION_FAILED" }
     });
 
-    const escalatedCreate = await app.call("createAdministeredUser", {
+    const escalatedCreate = await app.call("users.create", {
       headers: {
         "x-dev-user-id": "admin-1"
       },
@@ -827,7 +830,7 @@ describe("client instance app vertical slice", () => {
       "Only superadmins can assign superadmin access"
     );
 
-    const escalatedUpdate = await app.call("updateAdministeredUser", {
+    const escalatedUpdate = await app.call("users.update", {
       params: { userId: createdUser.id },
       headers: {
         "x-dev-user-id": "admin-1"
@@ -838,7 +841,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(escalatedUpdate.statusCode).toBe(403);
 
-    const superadminUpdate = await app.call("updateAdministeredUser", {
+    const superadminUpdate = await app.call("users.update", {
       params: { userId: required(superadminManagedUser?.id) },
       headers: {
         "x-dev-user-id": "admin-1"
@@ -852,7 +855,7 @@ describe("client instance app vertical slice", () => {
       "Only superadmins can manage superadmin users"
     );
 
-    const adminDelete = await app.call("deleteAdministeredUser", {
+    const adminDelete = await app.call("users.delete", {
       params: { userId: createdUser.id },
       headers: {
         "x-dev-user-id": "admin-1"
@@ -863,7 +866,7 @@ describe("client instance app vertical slice", () => {
       "superadmin role"
     );
 
-    const selfDelete = await app.call("deleteAdministeredUser", {
+    const selfDelete = await app.call("users.delete", {
       params: { userId: required(superadminManagedUser?.id) },
       headers: {
         "x-dev-user-id": "superadmin-1"
@@ -914,7 +917,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const usersBefore = await app.call("listAdministeredUsers", {
+    const usersBefore = await app.call("users.list", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -934,7 +937,7 @@ describe("client instance app vertical slice", () => {
       ])
     );
 
-    const created = await app.call("createAdministeredUser", {
+    const created = await app.call("users.create", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       },
@@ -964,7 +967,7 @@ describe("client instance app vertical slice", () => {
         emailVerified: true
       }
     ]) {
-      const linked = await app.call("upsertAdministeredUserIdentity", {
+      const linked = await app.call("users.identities.upsert", {
         params: { userId: administeredUser.id },
         headers: {
           "x-dev-user-id": "superadmin-1"
@@ -974,7 +977,7 @@ describe("client instance app vertical slice", () => {
       expect(linked.statusCode).toBe(200);
     }
 
-    const issued = await app.call("issueSessionToken", {
+    const issued = await app.call("session_tokens.issue", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -990,7 +993,7 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const createdConversation = await app.call("createConversation", {
+    const createdConversation = await app.call("conversations.create", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -1004,7 +1007,7 @@ describe("client instance app vertical slice", () => {
     await seedConversationMessage(app.stores.conversations, conversation.id);
 
     const standaloneConversations = await app.call(
-      "listConversations",
+      "conversations.list",
       await personalConversationListInput(app, {
         "x-dev-user-id": "jane-dev-source"
       })
@@ -1017,7 +1020,7 @@ describe("client instance app vertical slice", () => {
       })
     ]);
 
-    const audit = await app.call("listAuditEvents", {
+    const audit = await app.call("audit_events.list", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -1067,7 +1070,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createAdministeredUser", {
+    const created = await app.call("users.create", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       },
@@ -1081,7 +1084,7 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const administeredUser = created.json() as { id: string };
 
-    const issued = await app.call("issueSessionToken", {
+    const issued = await app.call("session_tokens.issue", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -1097,7 +1100,7 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const createdConversation = await app.call("createConversation", {
+    const createdConversation = await app.call("conversations.create", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -1111,7 +1114,7 @@ describe("client instance app vertical slice", () => {
     await seedConversationMessage(app.stores.conversations, conversation.id);
 
     const standaloneConversations = await app.call(
-      "listConversations",
+      "conversations.list",
       await personalConversationListInput(app, {
         "x-dev-user-id": "jane-dev-source"
       })
@@ -1124,7 +1127,7 @@ describe("client instance app vertical slice", () => {
       })
     ]);
 
-    const audit = await app.call("listAuditEvents", {
+    const audit = await app.call("audit_events.list", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -1134,7 +1137,7 @@ describe("client instance app vertical slice", () => {
       audit.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
     ).toEqual(expect.arrayContaining(["user.identity_linked"]));
 
-    const duplicate = await app.call("createAdministeredUser", {
+    const duplicate = await app.call("users.create", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       },
@@ -1147,7 +1150,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(duplicate.statusCode).toBe(200);
 
-    const ambiguousIssued = await app.call("issueSessionToken", {
+    const ambiguousIssued = await app.call("session_tokens.issue", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -1164,7 +1167,7 @@ describe("client instance app vertical slice", () => {
     const ambiguousToken = (ambiguousIssued.json() as { chatSessionToken: string })
       .chatSessionToken;
 
-    const ambiguousConversation = await app.call("createConversation", {
+    const ambiguousConversation = await app.call("conversations.create", {
       headers: {
         authorization: `Bearer ${ambiguousToken}`
       },

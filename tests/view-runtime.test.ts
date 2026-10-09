@@ -94,7 +94,7 @@ describe("view runtime", () => {
     const manifest = await readManifest(VIEW_RUNTIME.version);
 
     for (const file of manifest.files) {
-      const response = await instance.call("getViewRuntimeFile", {
+      const response = await instance.call("view_runtime.files.get", {
         params: { version: VIEW_RUNTIME.version, file: file.file }
       });
 
@@ -107,7 +107,7 @@ describe("view runtime", () => {
         "cross-origin-resource-policy": "cross-origin"
       });
 
-      const licence = await instance.call("getViewRuntimeFile", {
+      const licence = await instance.call("view_runtime.files.get", {
         params: { version: VIEW_RUNTIME.version, file: file.licenceFile }
       });
       expect(licence.statusCode).toBe(200);
@@ -124,7 +124,7 @@ describe("view runtime", () => {
       { version: VIEW_RUNTIME.version, file: "missing.js" },
       { version: "0", file: VIEW_RUNTIME.tailwindFile }
     ]) {
-      const response = await instance.call("getViewRuntimeFile", { params });
+      const response = await instance.call("view_runtime.files.get", { params });
 
       expect(response.statusCode).toBe(404);
       expect(response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });

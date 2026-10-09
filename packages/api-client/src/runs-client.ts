@@ -20,49 +20,49 @@ export function createRunsClient(transport: ApiClientTransport) {
   return {
     start: (
       conversationId: string,
-      input: OperationRequestInput<typeof apiOperations.startConversationRun>
+      input: OperationRequestInput<(typeof apiOperations)["conversations.runs.start"]>
     ) =>
       transport.unwrapJson(
-        generatedSdk.startConversationRun({
+        generatedSdk.conversationsRunsStart({
           client: transport.generatedClient,
           path: { conversationId },
-          body: apiOperations.startConversationRun.body.parse(input)
+          body: apiOperations["conversations.runs.start"].body.parse(input)
         }),
-        apiOperations.startConversationRun.response.schema
+        apiOperations["conversations.runs.start"].response.schema
       ),
-    create: (input: OperationRequestInput<typeof apiOperations.createConversationRun>) =>
+    create: (input: OperationRequestInput<(typeof apiOperations)["conversations.runs.create"]>) =>
       transport.unwrapJson(
-        generatedSdk.createConversationRun({
+        generatedSdk.conversationsRunsCreate({
           client: transport.generatedClient,
-          body: apiOperations.createConversationRun.body.parse(input)
+          body: apiOperations["conversations.runs.create"].body.parse(input)
         }),
-        apiOperations.createConversationRun.response.schema
+        apiOperations["conversations.runs.create"].response.schema
       ),
     cancel: (
       conversationId: string,
       runId: string,
-      input: OperationRequestInput<typeof apiOperations.cancelConversationRun> = {}
+      input: OperationRequestInput<(typeof apiOperations)["conversations.runs.cancel"]> = {}
     ) =>
       transport.unwrapJson(
-        generatedSdk.cancelConversationRun({
+        generatedSdk.conversationsRunsCancel({
           client: transport.generatedClient,
           path: { conversationId, runId },
-          body: apiOperations.cancelConversationRun.body.parse(input)
+          body: apiOperations["conversations.runs.cancel"].body.parse(input)
         }),
-        apiOperations.cancelConversationRun.response.schema
+        apiOperations["conversations.runs.cancel"].response.schema
       ),
     command: (
       conversationId: string,
       runId: string,
-      input: OperationRequestInput<typeof apiOperations.commandConversationRun>
+      input: OperationRequestInput<(typeof apiOperations)["conversations.runs.command"]>
     ) =>
       transport.unwrapJson(
-        generatedSdk.commandConversationRun({
+        generatedSdk.conversationsRunsCommand({
           client: transport.generatedClient,
           path: { conversationId, runId },
-          body: apiOperations.commandConversationRun.body.parse(input)
+          body: apiOperations["conversations.runs.command"].body.parse(input)
         }),
-        apiOperations.commandConversationRun.response.schema
+        apiOperations["conversations.runs.command"].response.schema
       ),
     observe: (conversationId: string, runId: string, options: ObserveRunEventsOptions = {}) =>
       observeRunEvents(transport, conversationId, runId, options)
@@ -76,7 +76,7 @@ async function* observeRunEvents(
   options: ObserveRunEventsOptions
 ): AsyncIterable<RunObservation> {
   const result = await transport.generatedClient.get<ReadableStream<Uint8Array>, unknown>({
-    url: "/api/conversations/{conversationId}/runs/{runId}/events",
+    url: "/api/v1/conversations/{conversationId}/runs/{runId}/events",
     path: { conversationId, runId },
     query:
       options.afterSequence === undefined ? undefined : { after: String(options.afterSequence) },

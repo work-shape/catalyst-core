@@ -11,6 +11,7 @@ import {
   type ChatServerOptions,
   type Route
 } from "@vivd-catalyst/chat-server";
+import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contract";
 import { asClientInstanceId, NoopAuditRecorder, type PlatformStores } from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource } from "./static-config-asset-source";
 import { createPostgresStores, type PostgresStores } from "@vivd-catalyst/postgres-store";
@@ -401,7 +402,7 @@ export async function listTestRoutes(
   instance: TestInstance
 ): Promise<{ method: string; path: string }[]> {
   // The default instance starts its server on the first call.
-  await instance.call("getHealth");
+  await instance.call("health.get");
   const server = getTestServer(instance);
   const prefixes: string[] = [];
   const routes: { method: string; path: string }[] = [];
@@ -422,6 +423,28 @@ export async function listTestRoutes(
     }
   }
   return routes;
+}
+
+/**
+ * Calls a path that is deliberately not an operation, such as one the API retired. Operations
+ * are called by name through `instance.call`.
+ */
+export async function callTestPath(
+  instance: TestInstance,
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+  path: string,
+  headers: Record<string, string> = {}
+): Promise<TestResponse> {
+  // The default instance starts its server on the first call.
+  await instance.call("health.get");
+  return getTestServer(instance).inject({
+    method,
+    url: buildApiPath(path, {
+      params: Object.fromEntries(operationPathParamNames(path).map((name) => [name, "any"]))
+    }),
+    headers,
+    ...(method === "GET" || method === "DELETE" ? {} : { payload: {} })
+  });
 }
 
 export function addTestRoute(

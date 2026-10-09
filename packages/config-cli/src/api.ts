@@ -1,10 +1,6 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 
-interface SchemaParser<Output> {
-  parse(input: unknown): Output;
-}
-
 export class ConfigApiError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -40,20 +36,15 @@ export class ApiKeyExchangeError extends Error {
 
 export interface ConfigApiOptions {
   baseUrl: string;
-  apiKey?: string;
-  serverCredential?: string;
+  apiKey: string;
   fetchImpl?: typeof fetch;
 }
 
 export async function createConfigApi(options: ConfigApiOptions) {
   const baseUrl = options.baseUrl.replace(/\/+$/u, "");
   const fetchImpl = options.fetchImpl ?? fetch;
-  if (options.apiKey) {
-    assertSafeApiKeyExchangeUrl(baseUrl);
-  }
-  const accessToken = options.apiKey
-    ? await exchangeApiKey(fetchImpl, baseUrl, options.apiKey)
-    : await issueLegacySessionToken(fetchImpl, baseUrl, requireServerCredential(options));
+  assertSafeApiKeyExchangeUrl(baseUrl);
+  const accessToken = await exchangeApiKey(fetchImpl, baseUrl, options.apiKey);
   const client = createApiClient({
     baseUrl,
     getToken: () => accessToken,
@@ -64,11 +55,11 @@ export async function createConfigApi(options: ConfigApiOptions) {
     exportAssets: () => asConfigApiRequest(() => client.configAssets.export()),
     replaceAssets: (input: unknown) =>
       asConfigApiRequest(() =>
-        client.configAssets.replace(apiOperations.replaceConfigAssets.body.parse(input))
+        client.configAssets.replace(apiOperations["config_assets.replace"].body.parse(input))
       ),
     validateAssets: (input: unknown) =>
       asConfigApiRequest(() =>
-        client.configAssets.validate(apiOperations.validateConfigAssets.body.parse(input))
+        client.configAssets.validate(apiOperations["config_assets.validate"].body.parse(input))
       )
   };
 }
@@ -136,71 +127,6 @@ function toConfigApiError(error: unknown): unknown {
     return new Error(`Catalyst API returned invalid JSON (HTTP ${error.status})`);
   }
   return new ConfigApiError(error.status, error.payload);
-}
-
-async function issueLegacySessionToken(
-  fetchImpl: typeof fetch,
-  baseUrl: string,
-  serverCredential: string
-): Promise<string> {
-  const sessionRequest = apiOperations.issueSessionToken.body.parse({
-    externalUserId: "catalyst-cli",
-    displayLabel: "Catalyst CLI",
-    scopes: ["config_assets:read", "config_assets:release"],
-    permissions: ["config_assets.read", "config_assets.release"],
-    delegatedActor: {
-      kind: "service_principal",
-      id: "catalyst-cli",
-      authSource: "catalyst-cli"
-    }
-  });
-  const issued = await requestJson(
-    fetchImpl,
-    `${baseUrl}${apiOperations.issueSessionToken.buildPath()}`,
-    apiOperations.issueSessionToken.response.schema,
-    {
-      method: apiOperations.issueSessionToken.method,
-      headers: {
-        "content-type": "application/json",
-        "x-server-credential": serverCredential
-      },
-      body: JSON.stringify(sessionRequest)
-    }
-  );
-  return issued.chatSessionToken;
-}
-
-function requireServerCredential(options: ConfigApiOptions): string {
-  if (!options.serverCredential) {
-    throw new Error("Config API authentication was not configured");
-  }
-  return options.serverCredential;
-}
-
-async function requestJson<Output>(
-  fetchImpl: typeof fetch,
-  url: string,
-  schema: SchemaParser<Output>,
-  init: RequestInit = {}
-): Promise<Output> {
-  const response = await fetchImpl(url, init);
-  const payload = await readJsonPayload(response);
-  if (!response.ok) {
-    throw new ConfigApiError(response.status, payload);
-  }
-  return schema.parse(payload);
-}
-
-async function readJsonPayload(response: Response): Promise<unknown> {
-  const contents = await response.text();
-  if (!contents) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(contents) as unknown;
-  } catch {
-    throw new Error(`Catalyst API returned invalid JSON (HTTP ${response.status})`);
-  }
 }
 
 function readApiError(payload: unknown): {

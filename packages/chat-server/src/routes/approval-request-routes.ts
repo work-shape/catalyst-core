@@ -14,20 +14,22 @@ export function registerApprovalRequestRoutes(route: Route, options: ChatServerO
 
   // A card in a thread reads and withdraws with chat scopes; the review queue and every
   // decision are governance actions, which chat session tokens cannot carry.
-  route(apiOperations.getApprovalRequest, ({ user, context, params }) =>
+  route(apiOperations["approval_requests.get"], ({ user, context, params }) =>
     workflow.getRequest(user, context, requestId(params))
   );
-  route(apiOperations.listApprovalRequests, ({ user, context, query, paging }) =>
+  route(apiOperations["approval_requests.list"], ({ user, context, query, paging }) =>
     workflow.listRequests(user, context, { status: query.status, page: paging })
   );
-  route(apiOperations.countPendingApprovalRequests, ({ user }) => workflow.pendingCount(user));
-  route(apiOperations.decideApprovalRequest, ({ user, context, params, body }) =>
+  route(apiOperations["approval_requests.count_pending"], ({ user }) =>
+    workflow.pendingCount(user)
+  );
+  route(apiOperations["approval_requests.decide"], ({ user, context, params, body }) =>
     workflow.decideRequest(user, context, { ...body, requestId: requestId(params) })
   );
-  route(apiOperations.withdrawApprovalRequest, ({ user, context, params }) =>
+  route(apiOperations["approval_requests.withdraw"], ({ user, context, params }) =>
     workflow.withdrawRequest(user, context, requestId(params))
   );
-  route(apiOperations.revertApprovalRequest, ({ user, context, params }) =>
+  route(apiOperations["approval_requests.revert"], ({ user, context, params }) =>
     workflow.revertRequest(user, context, requestId(params))
   );
 }

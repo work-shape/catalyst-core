@@ -378,7 +378,7 @@ describe("Resources panel rendering", () => {
     );
 
     expect(markup).toContain(
-      'src="https://example.test/api/conversations/conversation%2F1/files/file%201/content"'
+      'src="https://example.test/api/v1/conversations/conversation%2F1/files/file%201/content"'
     );
     expect(markup).toContain('alt="Screenshot.png"');
     expect(markup).not.toContain("Inhalte konnten nicht geladen werden.");
@@ -403,7 +403,7 @@ describe("Resources panel rendering", () => {
 
     expect(markup).toContain('<iframe title="Input.pdf"');
     expect(markup).toContain(
-      'src="https://example.test/api/conversations/conversation%2F1/files/file%201/content"'
+      'src="https://example.test/api/v1/conversations/conversation%2F1/files/file%201/content"'
     );
     expect(markup).toContain("-m-4");
   });

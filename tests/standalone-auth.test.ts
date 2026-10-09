@@ -1,10 +1,15 @@
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import postgres, { type Sql } from "postgres";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import { bindTestTransport, createTestInstance } from "./support/test-instance";
+import {
+  bindTestTransport,
+  createTestInstance,
+  createTestInstanceWith
+} from "./support/test-instance";
 import { testOperations } from "./support/operations";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { API_VERSION_PREFIX, issueSessionTokenResponseSchema } from "@vivd-catalyst/api-contract";
 import { asClientInstanceId } from "@vivd-catalyst/core";
 
 import {
@@ -85,6 +90,65 @@ describe("standalone auth email routes", () => {
     await expect(response.json()).resolves.toMatchObject({
       user: { email }
     });
+  });
+
+  it("issues a session token for an embedding host at the canonical path beside the sign-in library", async () => {
+    const clientInstanceId = asClientInstanceId("standalone_auth_test");
+    const tokenOptions = {
+      clientInstanceId,
+      secret: "test-session-token-secret-long-enough",
+      issuer: "embedding-host",
+      ttlSeconds: 900
+    };
+    const server = await createTestInstanceWith((stores) => ({
+      clientInstanceId,
+      standaloneAuth: auth,
+      authAdapter: new IdentityResolvingAuthAdapter(
+        new CompositeAuthAdapter([auth.authAdapter, new HmacSessionTokenAuthAdapter(tokenOptions)]),
+        stores.users
+      ),
+      sessionToken: {
+        serverCredential: "embedding-host-credential",
+        issuer: new HmacSessionTokenIssuer(tokenOptions)
+      }
+    }));
+    try {
+      expect(testOperations["session_tokens.issue"].path).toBe(
+        `${API_VERSION_PREFIX}/instance/session-tokens`
+      );
+      const payload = { externalUserId: "embedded-user", displayLabel: "Embedded User" };
+
+      const refused = await server.call("session_tokens.issue", {
+        headers: { "x-server-credential": "not-the-credential" },
+        payload
+      });
+      expect(refused.statusCode).toBe(403);
+
+      const issued = await server.call("session_tokens.issue", {
+        headers: { "x-server-credential": "embedding-host-credential" },
+        payload
+      });
+      expect(issued.statusCode).toBe(200);
+      const { chatSessionToken } = issueSessionTokenResponseSchema.parse(issued.json());
+
+      const me = await server.call("me.get", {
+        headers: { authorization: `Bearer ${chatSessionToken}` }
+      });
+      expect(me.statusCode).toBe(200);
+      expect(me.json()).toMatchObject({
+        authSource: "session-token",
+        externalUserId: "embedded-user",
+        displayLabel: "Embedded User"
+      });
+
+      // The sign-in library's mount never takes the server credential.
+      const mount = await server.call("authSession", {
+        headers: { "x-server-credential": "embedding-host-credential" }
+      });
+      expect(mount.statusCode).toBe(401);
+    } finally {
+      await server.close();
+    }
   });
 
   it("marks successful session-cookie authentication on the adapter result", async () => {

@@ -1,6 +1,6 @@
 import type {
-  StartConversationArtifactPreviewResponse,
-  StartConversationAttachmentPreviewResponse
+  ConversationsArtifactsStartPreviewResponse,
+  ConversationsAttachmentsStartPreviewResponse
 } from "./generated/types.gen";
 import { apiOperations, type ConversationVisibility } from "@vivd-catalyst/api-contract";
 import * as generatedSdk from "./generated/sdk.gen";
@@ -8,18 +8,18 @@ import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
 export function createConversationsClient(transport: ApiClientTransport) {
   const artifactContentPath = (conversationId: string, artifactId: string) =>
-    apiOperations.getConversationArtifactContent.buildPath({
+    apiOperations["conversations.artifacts.get_content"].buildPath({
       params: { conversationId, artifactId }
     });
 
   const listForWorkspace = (collaborationWorkspaceId?: string) =>
     transport.unwrapList(
       (paging) =>
-        generatedSdk.listConversations({
+        generatedSdk.conversationsList({
           client: transport.generatedClient,
           query: { collaborationWorkspaceId, ...paging }
         }),
-      apiOperations.listConversations.response.schema
+      apiOperations["conversations.list"].response.schema
     );
 
   return {
@@ -27,48 +27,48 @@ export function createConversationsClient(transport: ApiClientTransport) {
       listForWorkspace(
         typeof collaborationWorkspaceId === "string" ? collaborationWorkspaceId : undefined
       ),
-    create: (input: OperationRequestInput<typeof apiOperations.createConversation> = {}) =>
+    create: (input: OperationRequestInput<(typeof apiOperations)["conversations.create"]> = {}) =>
       transport.unwrapJson(
-        generatedSdk.createConversation({
+        generatedSdk.conversationsCreate({
           client: transport.generatedClient,
-          body: apiOperations.createConversation.body.parse(input)
+          body: apiOperations["conversations.create"].body.parse(input)
         }),
-        apiOperations.createConversation.response.schema
+        apiOperations["conversations.create"].response.schema
       ),
     getThread: (conversationId: string) =>
       transport.unwrapJson(
-        generatedSdk.getConversationThread({
+        generatedSdk.conversationsThreadGet({
           client: transport.generatedClient,
           path: { conversationId }
         }),
-        apiOperations.getConversationThread.response.schema
+        apiOperations["conversations.thread.get"].response.schema
       ),
     listMessages: (conversationId: string) =>
       transport.unwrapList(
         (paging) =>
-          generatedSdk.listConversationMessages({
+          generatedSdk.conversationsMessagesList({
             client: transport.generatedClient,
             path: { conversationId },
             query: paging
           }),
-        apiOperations.listConversationMessages.response.schema
+        apiOperations["conversations.messages.list"].response.schema
       ),
     generateTitle: (conversationId: string) =>
       transport.unwrapJson(
-        generatedSdk.generateConversationTitle({
+        generatedSdk.conversationsTitleGenerate({
           client: transport.generatedClient,
           path: { conversationId }
         }),
-        apiOperations.generateConversationTitle.response.schema
+        apiOperations["conversations.title.generate"].response.schema
       ),
     rename: (conversationId: string, title: string) =>
       transport.unwrapJson(
-        generatedSdk.renameConversation({
+        generatedSdk.conversationsRename({
           client: transport.generatedClient,
           path: { conversationId },
-          body: apiOperations.renameConversation.body.parse({ title })
+          body: apiOperations["conversations.rename"].body.parse({ title })
         }),
-        apiOperations.renameConversation.response.schema
+        apiOperations["conversations.rename"].response.schema
       ),
     move: (
       conversationId: string,
@@ -76,85 +76,85 @@ export function createConversationsClient(transport: ApiClientTransport) {
       visibility?: ConversationVisibility
     ) =>
       transport.unwrapJson(
-        generatedSdk.moveConversation({
+        generatedSdk.conversationsMove({
           client: transport.generatedClient,
           path: { conversationId },
-          body: apiOperations.moveConversation.body.parse({
+          body: apiOperations["conversations.move"].body.parse({
             collaborationWorkspaceId,
             visibility
           })
         }),
-        apiOperations.moveConversation.response.schema
+        apiOperations["conversations.move"].response.schema
       ),
     delete: (conversationId: string) =>
       transport.unwrapJson(
-        generatedSdk.deleteConversation({
+        generatedSdk.conversationsDelete({
           client: transport.generatedClient,
           path: { conversationId }
         }),
-        apiOperations.deleteConversation.response.schema
+        apiOperations["conversations.delete"].response.schema
       ),
     resources: {
       list: (conversationId: string) =>
         transport.unwrapList(
           (paging) =>
-            generatedSdk.listConversationResources({
+            generatedSdk.conversationsResourcesList({
               client: transport.generatedClient,
               path: { conversationId },
               query: paging
             }),
-          apiOperations.listConversationResources.response.schema
+          apiOperations["conversations.resources.list"].response.schema
         ),
       getStructuredData: (conversationId: string, structuredDataResourceId: string) =>
         transport.unwrapJson(
-          generatedSdk.getStructuredDataResource({
+          generatedSdk.conversationsStructuredDataGet({
             client: transport.generatedClient,
             path: { conversationId, structuredDataResourceId }
           }),
-          apiOperations.getStructuredDataResource.response.schema
+          apiOperations["conversations.structured_data.get"].response.schema
         )
     },
     draftAttachments: {
       list: (conversationId: string) =>
         transport.unwrapList(
           (paging) =>
-            generatedSdk.listDraftAttachments({
+            generatedSdk.conversationsDraftAttachmentsList({
               client: transport.generatedClient,
               path: { conversationId },
               query: paging
             }),
-          apiOperations.listDraftAttachments.response.schema
+          apiOperations["conversations.draft_attachments.list"].response.schema
         ),
       upload: (conversationId: string, file: File) =>
         transport.unwrapJson(
-          generatedSdk.uploadDraftAttachment({
+          generatedSdk.conversationsDraftAttachmentsUpload({
             client: transport.generatedClient,
             path: { conversationId },
             body: { file }
           }),
-          apiOperations.uploadDraftAttachment.response.schema
+          apiOperations["conversations.draft_attachments.upload"].response.schema
         ),
       retry: (conversationId: string, attachmentId: string) =>
         transport.unwrapJson(
-          generatedSdk.retryDraftAttachment({
+          generatedSdk.conversationsDraftAttachmentsRetry({
             client: transport.generatedClient,
             path: { conversationId, attachmentId }
           }),
-          apiOperations.retryDraftAttachment.response.schema
+          apiOperations["conversations.draft_attachments.retry"].response.schema
         ),
       delete: (conversationId: string, attachmentId: string) =>
         transport.unwrapJson(
-          generatedSdk.deleteDraftAttachment({
+          generatedSdk.conversationsDraftAttachmentsDelete({
             client: transport.generatedClient,
             path: { conversationId, attachmentId }
           }),
-          apiOperations.deleteDraftAttachment.response.schema
+          apiOperations["conversations.draft_attachments.delete"].response.schema
         )
     },
     files: {
       getContent: (conversationId: string, fileId: string, download = false) =>
         transport.unwrapBlob(
-          generatedSdk.getConversationFileContent({
+          generatedSdk.conversationsFilesGetContent({
             client: transport.generatedClient,
             path: { conversationId, fileId },
             query: download ? { download: "true" } : {},
@@ -163,7 +163,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
         ),
       contentUrl: (conversationId: string, fileId: string) =>
         transport.buildUrl(
-          apiOperations.getConversationFileContent.buildPath({
+          apiOperations["conversations.files.get_content"].buildPath({
             params: { conversationId, fileId }
           })
         )
@@ -172,29 +172,29 @@ export function createConversationsClient(transport: ApiClientTransport) {
       startPreview: (
         conversationId: string,
         artifactId: string
-      ): Promise<StartConversationArtifactPreviewResponse> =>
+      ): Promise<ConversationsArtifactsStartPreviewResponse> =>
         transport.unwrapJson(
-          generatedSdk.startConversationArtifactPreview({
+          generatedSdk.conversationsArtifactsStartPreview({
             client: transport.generatedClient,
             path: { conversationId, artifactId }
           }),
-          apiOperations.startConversationArtifactPreview.response.schema
+          apiOperations["conversations.artifacts.start_preview"].response.schema
         ),
       startAttachmentPreview: (
         conversationId: string,
         attachmentId: string
-      ): Promise<StartConversationAttachmentPreviewResponse> =>
+      ): Promise<ConversationsAttachmentsStartPreviewResponse> =>
         transport.unwrapJson(
-          generatedSdk.startConversationAttachmentPreview({
+          generatedSdk.conversationsAttachmentsStartPreview({
             client: transport.generatedClient,
             path: { conversationId, attachmentId }
           }),
-          apiOperations.startConversationAttachmentPreview.response.schema
+          apiOperations["conversations.attachments.start_preview"].response.schema
         ),
 
       getContent: (conversationId: string, artifactId: string) =>
         transport.unwrapBlob(
-          generatedSdk.getConversationArtifactContent({
+          generatedSdk.conversationsArtifactsGetContent({
             client: transport.generatedClient,
             path: { conversationId, artifactId },
             parseAs: "blob"
@@ -206,27 +206,27 @@ export function createConversationsClient(transport: ApiClientTransport) {
         ),
       getPreview: (conversationId: string, artifactId: string) =>
         transport.unwrapJson(
-          generatedSdk.getConversationArtifactPreview({
+          generatedSdk.conversationsArtifactsGetPreview({
             client: transport.generatedClient,
             path: { conversationId, artifactId }
           }),
-          apiOperations.getConversationArtifactPreview.response.schema
+          apiOperations["conversations.artifacts.get_preview"].response.schema
         ),
       getAttachmentPreview: (conversationId: string, attachmentId: string) =>
         transport.unwrapJson(
-          generatedSdk.getConversationAttachmentPreview({
+          generatedSdk.conversationsAttachmentsGetPreview({
             client: transport.generatedClient,
             path: { conversationId, attachmentId }
           }),
-          apiOperations.getConversationAttachmentPreview.response.schema
+          apiOperations["conversations.attachments.get_preview"].response.schema
         ),
       retryPreview: (conversationId: string, artifactId: string) =>
         transport.unwrapJson(
-          generatedSdk.retryConversationArtifactPreview({
+          generatedSdk.conversationsArtifactsRetryPreview({
             client: transport.generatedClient,
             path: { conversationId, artifactId }
           }),
-          apiOperations.retryConversationArtifactPreview.response.schema
+          apiOperations["conversations.artifacts.retry_preview"].response.schema
         )
     }
   };

@@ -39,7 +39,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
     const firstMessage = "Please summarize the release notes";
-    const created = await app.call("createConversation", { payload: { title: firstMessage } });
+    const created = await app.call("conversations.create", { payload: { title: firstMessage } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
@@ -48,7 +48,7 @@ describe("client instance app vertical slice", () => {
     });
     await drainRunEvents(app, conversation.id, sent.run.id);
 
-    const generatedTitle = await app.call("generateConversationTitle", {
+    const generatedTitle = await app.call("conversations.title.generate", {
       params: { conversationId: conversation.id }
     });
     expect(generatedTitle.statusCode).toBe(200);
@@ -57,7 +57,7 @@ describe("client instance app vertical slice", () => {
       title: "Please Summarize The Release Notes"
     });
 
-    const listed = await app.call("listConversations", await personalConversationListInput(app));
+    const listed = await app.call("conversations.list", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
     expect(listed.json().items).toContainEqual(
       expect.objectContaining({
@@ -66,7 +66,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     expect(
       audit
@@ -83,10 +83,12 @@ describe("client instance app vertical slice", () => {
       env: {},
       tools: []
     });
-    const created = await app.call("createConversation", { payload: { title: "Temporary title" } });
+    const created = await app.call("conversations.create", {
+      payload: { title: "Temporary title" }
+    });
     const conversation = created.json() as { id: string };
 
-    const renamed = await app.call("renameConversation", {
+    const renamed = await app.call("conversations.rename", {
       params: { conversationId: conversation.id },
       payload: { title: "  Lars Schmitt – Finanzierung  " }
     });
@@ -97,13 +99,13 @@ describe("client instance app vertical slice", () => {
       title: "Lars Schmitt – Finanzierung"
     });
 
-    const invalid = await app.call("renameConversation", {
+    const invalid = await app.call("conversations.rename", {
       params: { conversationId: conversation.id },
       payload: { title: "   " }
     });
     expect(invalid.statusCode).toBe(422);
 
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.renamed",
@@ -126,7 +128,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
     const filenameTitle = "Theo - Boardingpass - Y123.txt";
-    const created = await app.call("createConversation", { payload: { title: filenameTitle } });
+    const created = await app.call("conversations.create", { payload: { title: filenameTitle } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
@@ -138,7 +140,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(
       (
-        await app.call("uploadDraftAttachment", {
+        await app.call("conversations.draft_attachments.upload", {
           params: { conversationId: conversation.id },
           headers: upload.headers,
           payload: upload.payload
@@ -157,7 +159,7 @@ describe("client instance app vertical slice", () => {
     );
     await drainRunEvents(app, conversation.id, sent.run.id);
 
-    const listed = await app.call("listConversations", await personalConversationListInput(app));
+    const listed = await app.call("conversations.list", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
     expect(listed.json().items).toContainEqual(
       expect.objectContaining({
@@ -176,7 +178,7 @@ describe("client instance app vertical slice", () => {
       capabilities: [createTestAttachmentCapability()],
       tools: []
     });
-    const created = await app.call("createConversation", { payload: { title: "Image upload" } });
+    const created = await app.call("conversations.create", { payload: { title: "Image upload" } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
     const upload = createMultipartFilePayload({
@@ -186,7 +188,7 @@ describe("client instance app vertical slice", () => {
       content: "GIF89a"
     });
 
-    const uploaded = await app.call("uploadDraftAttachment", {
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
       params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
@@ -200,7 +202,7 @@ describe("client instance app vertical slice", () => {
       format: "gif"
     });
 
-    const content = await app.call("getConversationFileContent", {
+    const content = await app.call("conversations.files.get_content", {
       params: { conversationId: conversation.id, fileId: body.attachment.fileId }
     });
 
@@ -279,7 +281,7 @@ describe("client instance app vertical slice", () => {
         }
       });
 
-      const content = await server.call("getConversationArtifactContent", {
+      const content = await server.call("conversations.artifacts.get_content", {
         params: { conversationId: conversation.id, artifactId: artifact.id }
       });
 
@@ -297,7 +299,7 @@ describe("client instance app vertical slice", () => {
         }
       ]);
 
-      const wrongConversation = await server.call("getConversationArtifactContent", {
+      const wrongConversation = await server.call("conversations.artifacts.get_content", {
         params: { conversationId: otherConversation.id, artifactId: artifact.id }
       });
       expect(wrongConversation.statusCode).toBe(404);
@@ -321,7 +323,7 @@ describe("client instance app vertical slice", () => {
       ],
       tools: []
     });
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Attachment retention" }
     });
     expect(created.statusCode).toBe(200);
@@ -340,19 +342,19 @@ describe("client instance app vertical slice", () => {
       content: "GIF89a"
     });
 
-    const uploaded = await app.call("uploadDraftAttachment", {
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
       params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
     });
     expect(uploaded.statusCode).toBe(200);
     const body = uploaded.json() as { attachment: { fileId: string } };
-    const contentBeforeDelete = await app.call("getConversationFileContent", {
+    const contentBeforeDelete = await app.call("conversations.files.get_content", {
       params: { conversationId: conversation.id, fileId: body.attachment.fileId }
     });
     expect(contentBeforeDelete.statusCode).toBe(200);
 
-    const deleted = await app.call("deleteConversation", {
+    const deleted = await app.call("conversations.delete", {
       params: { conversationId: conversation.id }
     });
     expect(deleted.statusCode).toBe(200);
@@ -363,7 +365,7 @@ describe("client instance app vertical slice", () => {
         structuredDataResourceId: structuredData.id
       })
     ).resolves.toBeUndefined();
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     expect(audit.json().items).toContainEqual(
       expect.objectContaining({
@@ -376,7 +378,7 @@ describe("client instance app vertical slice", () => {
     );
     expect(deletedFileObjectKeys).toEqual([body.attachment.fileId]);
 
-    const contentAfterDelete = await app.call("getConversationFileContent", {
+    const contentAfterDelete = await app.call("conversations.files.get_content", {
       params: { conversationId: conversation.id, fileId: body.attachment.fileId }
     });
     expect(contentAfterDelete.statusCode).toBe(404);
@@ -392,7 +394,7 @@ describe("client instance app vertical slice", () => {
       capabilities: [fixture.capability],
       tools: []
     });
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Removed attachment retention" }
     });
     const conversation = created.json() as { id: string };
@@ -402,7 +404,7 @@ describe("client instance app vertical slice", () => {
       contentType: "text/plain",
       content: "delete these bytes"
     });
-    const uploaded = await app.call("uploadDraftAttachment", {
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
       params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
@@ -413,13 +415,13 @@ describe("client instance app vertical slice", () => {
     const [objectKey] = [...fixture.objects.keys()];
     expect(objectKey).toBeDefined();
 
-    const removed = await app.call("deleteDraftAttachment", {
+    const removed = await app.call("conversations.draft_attachments.delete", {
       params: { conversationId: conversation.id, attachmentId: attachment.id }
     });
     expect(removed.statusCode).toBe(200);
     expect(fixture.objects.has(objectKey!)).toBe(true);
 
-    const deleted = await app.call("deleteConversation", {
+    const deleted = await app.call("conversations.delete", {
       params: { conversationId: conversation.id }
     });
     expect(deleted.statusCode).toBe(200);
@@ -432,7 +434,7 @@ describe("client instance app vertical slice", () => {
       })
     ).resolves.toBeUndefined();
 
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.deleted",
@@ -453,7 +455,7 @@ describe("client instance app vertical slice", () => {
       capabilities: [fixture.capability],
       tools: []
     });
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Deleted during upload" }
     });
     const conversation = created.json() as { id: string };
@@ -482,13 +484,13 @@ describe("client instance app vertical slice", () => {
       })()
     );
 
-    const uploading = app.call("uploadDraftAttachment", {
+    const uploading = app.call("conversations.draft_attachments.upload", {
       params: { conversationId: conversation.id },
       headers: { "content-type": upload.headers["content-type"]! },
       payload: slowBody
     });
     await bodyRead;
-    const deleted = await app.call("deleteConversation", {
+    const deleted = await app.call("conversations.delete", {
       params: { conversationId: conversation.id }
     });
     expect(deleted.statusCode).toBe(200);
@@ -519,7 +521,7 @@ describe("client instance app vertical slice", () => {
       tools: [tool]
     });
     const firstMessage = '/tool demo.echo {"text":"boarding pass"}';
-    const created = await app.call("createConversation", { payload: { title: firstMessage } });
+    const created = await app.call("conversations.create", { payload: { title: firstMessage } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
@@ -528,7 +530,7 @@ describe("client instance app vertical slice", () => {
     });
     await drainRunEvents(app, conversation.id, sent.run.id);
 
-    const listed = await app.call("listConversations", await personalConversationListInput(app));
+    const listed = await app.call("conversations.list", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
     expect(listed.json().items).toContainEqual(
       expect.objectContaining({

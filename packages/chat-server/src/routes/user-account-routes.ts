@@ -11,7 +11,7 @@ export function registerUserAccountRoutes(route: Route, options: ChatServerOptio
   const passwordSetup = new PasswordSetupWorkflow(options);
 
   // Unauthenticated by design: these are the routes a locked-out user can still reach.
-  route(apiOperations.requestPasswordReset, async ({ context, body, request }) => {
+  route(apiOperations["password_reset.request"], async ({ context, body, request }) => {
     return passwordSetup.requestPasswordReset(
       {
         email: body.email,
@@ -24,14 +24,14 @@ export function registerUserAccountRoutes(route: Route, options: ChatServerOptio
     );
   });
 
-  route(apiOperations.completePasswordSetup, async ({ context, body }) => {
+  route(apiOperations["password_setup.complete"], async ({ context, body }) => {
     return passwordSetup.completePasswordSetup(
       { token: body.token, password: body.password },
       { correlationId: context.correlationId }
     );
   });
 
-  route(apiOperations.updateCurrentUser, async ({ user, context, body }) => {
+  route(apiOperations["me.update"], async ({ user, context, body }) => {
     const updated = await userAccount.updateCurrentUser(user, context, {
       displayLabel: body.displayLabel
     });
@@ -41,7 +41,7 @@ export function registerUserAccountRoutes(route: Route, options: ChatServerOptio
     };
   });
 
-  route(apiOperations.getCurrentUserModelPreference, async ({ user }) => {
+  route(apiOperations["me.model_preference.get"], async ({ user }) => {
     const preference = await options.stores.users.getUserModelPreference({
       clientInstanceId: options.clientInstanceId,
       userId: asUserId(getSubjectUserId(user))
@@ -49,7 +49,7 @@ export function registerUserAccountRoutes(route: Route, options: ChatServerOptio
     return preference ?? { reasoningEfforts: {} };
   });
 
-  route(apiOperations.setCurrentUserModelPreference, async ({ user, body }) => {
+  route(apiOperations["me.model_preference.set"], async ({ user, body }) => {
     await options.stores.users.setUserModelPreference({
       clientInstanceId: options.clientInstanceId,
       userId: asUserId(getSubjectUserId(user)),
@@ -58,14 +58,14 @@ export function registerUserAccountRoutes(route: Route, options: ChatServerOptio
     return body;
   });
 
-  route(apiOperations.changeCurrentUserPassword, async ({ user, context, body }) => {
+  route(apiOperations["me.password.change"], async ({ user, context, body }) => {
     return userAccount.changeCurrentUserPassword(user, context, {
       currentPassword: body.currentPassword,
       newPassword: body.newPassword
     });
   });
 
-  route(apiOperations.deleteCurrentUser, async ({ user, context }) => {
+  route(apiOperations["me.delete"], async ({ user, context }) => {
     return userAccount.deleteCurrentUser(user, context);
   });
 }

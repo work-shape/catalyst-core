@@ -22,7 +22,7 @@ contain breaking changes; a patch version does not.
 - **Chat:** a model or reasoning effort the user picks becomes their default for new
   conversations, on every device. A conversation that already ran stays on what its latest run
   used, and a user who never picked anything follows the configured defaults. The pick is
-  stored per user (`/api/me/model-preference`); a migration adds `product_users.model_preference`.
+  stored per user (`/api/v1/me/model-preference`); a migration adds `product_users.model_preference`.
 - **Workspaces:** a superadmin is Owner of every Shared Workspace without being a member. The
   workspace selector lists them under "Other workspaces"; the superadmin can open their
   settings, manage members and access requests, and read and start conversations there.
@@ -68,6 +68,40 @@ contain breaking changes; a patch version does not.
   migration of its own and runs outside a transaction. `pnpm test:compatibility` runs the
   database tests of the previous and the oldest supported release against the new schema, and
   `pnpm test:upgrade` migrates a database of the oldest supported release.
+- **API (breaking):** every product operation is under `/api/v1`, and no old path answers any
+  more: each returns 404. A caller changes the path of every request. `/api/conversations…`
+  becomes `/api/v1/conversations…`, `/api/collaboration-workspaces…` becomes
+  `/api/v1/workspaces…`, `/api/approval-requests…` becomes `/api/v1/approval-requests…`,
+  `/api/me…` becomes `/api/v1/me…`, and `/api/password-reset` and `/api/password-setup` gain the
+  prefix. Paths carry no role name: `/api/admin/config/…` becomes `/api/v1/instance/config/…`,
+  `/api/admin/collaboration-workspaces` becomes `/api/v1/instance/workspaces`,
+  `/api/superadmin/users…` becomes `/api/v1/instance/users…`, `/api/superadmin/usage` becomes
+  `/api/v1/instance/usage`, `/api/superadmin/api-access/service-principals…` becomes
+  `/api/v1/instance/service-principals…`, `/api/superadmin/api-access/credentials/:id/revoke`
+  becomes `/api/v1/instance/api-credentials/:id/revoke`, `/api/audit-events` and
+  `/api/audit-activities` move to `/api/v1/instance/…`, and `/api/config` and `/api/branding`
+  become `/api/v1/instance/config` and `/api/v1/instance/branding`. Rights are unchanged.
+  `/health` stays public and unversioned, and `/api/auth/*` stays the sign-in library's mount.
+  A reverse proxy that forwards `/api/*` needs no change.
+- **API (breaking):** the API-key exchange moved from `POST /api/auth/access-token` to
+  `POST /api/v1/auth/access-token`. Session-token issuance for embedding hosts moved from
+  `POST /api/superadmin/session-tokens` to `POST /api/v1/instance/session-tokens`, and its
+  alias `POST /auth/session-token` is removed. A backend that issues chat session tokens
+  changes its URL; the `x-server-credential` header and the payload are unchanged. Before this
+  release is deployed, search the production access log for both old token paths and move any
+  caller found.
+- **API (breaking):** operation ids are `<resource>.<verb>`, for example `conversations.list`,
+  `workspaces.members.add` and `me.get`, in the OpenAPI document and in `apiOperations`. Code
+  that read `apiOperations.listConversations` reads `apiOperations["conversations.list"]`.
+  The development mail listing moved to `GET /api/v1/dev/captured-mail` and stays out of the
+  document, as does `/health`.
+- **CLI (breaking):** `catalyst config` signs in with `CATALYST_API_KEY` only. The fallback to
+  `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` and its deprecation warning are
+  removed; without a key the CLI stops before it sends a request. Create a service principal
+  and a key under Administration → API Access and set `CATALYST_API_KEY` wherever the CLI runs.
+  CLI and server ship together: this CLI needs a server that answers under `/api/v1`.
+- **Client:** `getAuthSession`, `signInWithEmail` and `signOut` are exported from
+  `@vivd-catalyst/api-client`; the interface no longer fetches `/api/auth/*` itself.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
   `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is
   absent on the last page; pass it back as `cursor` with the same filters to read the next
@@ -84,9 +118,9 @@ contain breaking changes; a patch version does not.
   credential is created.
 - **API (breaking):** reading no longer creates anything. A list of workspaces or
   conversations does not create the caller's Personal Workspace; call
-  `POST /api/collaboration-workspaces/personal` once instead. A preview read does not start
-  the preview; call `POST /api/conversations/{conversationId}/artifacts/{artifactId}/preview`
-  or `POST /api/conversations/{conversationId}/attachments/{attachmentId}/preview`, and read
+  `POST /api/v1/workspaces/personal` once instead. A preview read does not start
+  the preview; call `POST /api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview`
+  or `POST /api/v1/conversations/{conversationId}/attachments/{attachmentId}/preview`, and read
   the preview until it is ready. A preview that was never started reads as `pending` without
   `queuedAt`. The three operations need the scope of the read they replace.
 - **API (breaking):** every error answers with

@@ -45,7 +45,7 @@ describe("chat UI artifact preview state", () => {
     expect(markup).toContain("<img");
     expect(markup).toContain('alt="IMG_0851.jpeg"');
     expect(markup).toContain(
-      'src="https://example.test/api/conversations/conversation%2F1/artifacts/art_image/content?inline=true"'
+      'src="https://example.test/api/v1/conversations/conversation%2F1/artifacts/art_image/content?inline=true"'
     );
     expect(markup).not.toContain("Vorschau nicht verfügbar");
   });

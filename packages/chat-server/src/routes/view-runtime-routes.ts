@@ -6,7 +6,7 @@ import { loadViewRuntimeFiles } from "../view-runtime";
 export function registerViewRuntimeRoutes(route: Route): void {
   const files = loadViewRuntimeFiles();
 
-  route(apiOperations.getViewRuntimeFile, ({ params, reply }) => {
+  route(apiOperations["view_runtime.files.get"], ({ params, reply }) => {
     const file = files.get(params.version)?.get(params.file);
     if (!file) {
       throw new AppError("NOT_FOUND", "View runtime file not found");

@@ -33,7 +33,7 @@ administration). The `no_personal_data` approval check uses `guardrailCheck`
 failed check warns the approver. Approved changes live in the database; pull
 before editing the working copy to preserve them.
 
-For one compatibility release, the CLI falls back to `CATALYST_SERVER_CREDENTIAL` and then `CHAT_SERVER_CREDENTIAL` when no API key is set, and prints a deprecation warning. The config script no longer supplies a placeholder credential. `CHAT_SERVER_CREDENTIAL` remains a separate API-side setting for embedded chat session issuance.
+The CLI signs in with `CATALYST_API_KEY` only. `CHAT_SERVER_CREDENTIAL` is a separate API-side setting for embedded chat session issuance and the CLI does not read it.
 
 For the production-style Compose stack, copy `.env.prod.example` to `.env.prod`, replace every placeholder secret, then run:
 

@@ -20,10 +20,10 @@ import { collaborationWorkspaceAgentsSchema } from "../configuration";
 import { defineOperation, json, page } from "./define-operation";
 
 export const collaborationWorkspaceOperations = {
-  ensurePersonalCollaborationWorkspace: defineOperation({
-    id: "ensurePersonalCollaborationWorkspace",
+  "workspaces.ensure_personal": defineOperation({
+    id: "workspaces.ensure_personal",
     method: "POST",
-    path: "/api/collaboration-workspaces/personal",
+    path: "/api/v1/workspaces/personal",
     summary: "Create the caller's personal workspace if missing",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -34,10 +34,10 @@ export const collaborationWorkspaceOperations = {
     errors: [],
     rateClass: "write"
   }),
-  listCollaborationWorkspaces: defineOperation({
-    id: "listCollaborationWorkspaces",
+  "workspaces.list": defineOperation({
+    id: "workspaces.list",
     method: "GET",
-    path: "/api/collaboration-workspaces",
+    path: "/api/v1/workspaces",
     summary: "List the workspaces the caller belongs to",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -49,10 +49,10 @@ export const collaborationWorkspaceOperations = {
     errors: [],
     rateClass: "read"
   }),
-  createCollaborationWorkspace: defineOperation({
-    id: "createCollaborationWorkspace",
+  "workspaces.create": defineOperation({
+    id: "workspaces.create",
     method: "POST",
-    path: "/api/collaboration-workspaces",
+    path: "/api/v1/workspaces",
     summary: "Create a Shared Workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -64,10 +64,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["CONFLICT"],
     rateClass: "write"
   }),
-  listCollaborationWorkspaceDirectory: defineOperation({
-    id: "listCollaborationWorkspaceDirectory",
+  "workspaces.directory.list": defineOperation({
+    id: "workspaces.directory.list",
     method: "GET",
-    path: "/api/collaboration-workspaces/directory",
+    path: "/api/v1/workspaces/directory",
     summary: "List the Shared Workspaces a member can find",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -79,10 +79,10 @@ export const collaborationWorkspaceOperations = {
     errors: [],
     rateClass: "read"
   }),
-  getCollaborationWorkspace: defineOperation({
-    id: "getCollaborationWorkspace",
+  "workspaces.get": defineOperation({
+    id: "workspaces.get",
     method: "GET",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId",
     summary: "Read one workspace with the caller's role",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -93,10 +93,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  listCollaborationWorkspaceAgents: defineOperation({
-    id: "listCollaborationWorkspaceAgents",
+  "workspaces.agents.list": defineOperation({
+    id: "workspaces.agents.list",
     method: "GET",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/agents",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/agents",
     summary: "List the agents available in a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -108,10 +108,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  updateCollaborationWorkspace: defineOperation({
-    id: "updateCollaborationWorkspace",
+  "workspaces.update": defineOperation({
+    id: "workspaces.update",
     method: "PATCH",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId",
     summary: "Change a workspace's settings",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -123,10 +123,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  getCollaborationWorkspaceDeletionImpact: defineOperation({
-    id: "getCollaborationWorkspaceDeletionImpact",
+  "workspaces.deletion_impact.get": defineOperation({
+    id: "workspaces.deletion_impact.get",
     method: "GET",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/deletion-impact",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/deletion-impact",
     summary: "Read what deleting a Shared Workspace would remove",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -137,10 +137,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  deleteCollaborationWorkspace: defineOperation({
-    id: "deleteCollaborationWorkspace",
+  "workspaces.delete": defineOperation({
+    id: "workspaces.delete",
     method: "DELETE",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId",
     summary: "Delete a Shared Workspace and its conversations",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -152,10 +152,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  listCollaborationWorkspaceMembers: defineOperation({
-    id: "listCollaborationWorkspaceMembers",
+  "workspaces.members.list": defineOperation({
+    id: "workspaces.members.list",
     method: "GET",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/members",
     summary: "List the members of a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -167,10 +167,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  listCollaborationWorkspaceMemberCandidates: defineOperation({
-    id: "listCollaborationWorkspaceMemberCandidates",
+  "workspaces.member_candidates.list": defineOperation({
+    id: "workspaces.member_candidates.list",
     method: "GET",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/member-candidates",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/member-candidates",
     summary: "Search users who can be added to a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -182,10 +182,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  addCollaborationWorkspaceMember: defineOperation({
-    id: "addCollaborationWorkspaceMember",
+  "workspaces.members.add": defineOperation({
+    id: "workspaces.members.add",
     method: "POST",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/members",
     summary: "Add a user to a workspace by email",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -197,10 +197,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  updateCollaborationWorkspaceMemberRole: defineOperation({
-    id: "updateCollaborationWorkspaceMemberRole",
+  "workspaces.members.update_role": defineOperation({
+    id: "workspaces.members.update_role",
     method: "PATCH",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members/:userId",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/members/:userId",
     summary: "Change a member's role in a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -212,10 +212,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  removeCollaborationWorkspaceMember: defineOperation({
-    id: "removeCollaborationWorkspaceMember",
+  "workspaces.members.remove": defineOperation({
+    id: "workspaces.members.remove",
     method: "DELETE",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members/:userId",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/members/:userId",
     summary: "Remove a member from a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -226,10 +226,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  leaveCollaborationWorkspace: defineOperation({
-    id: "leaveCollaborationWorkspace",
+  "workspaces.members.leave": defineOperation({
+    id: "workspaces.members.leave",
     method: "DELETE",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/members/me",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/members/me",
     summary: "Leave a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -240,10 +240,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  requestCollaborationWorkspaceAccess: defineOperation({
-    id: "requestCollaborationWorkspaceAccess",
+  "workspaces.access_requests.create": defineOperation({
+    id: "workspaces.access_requests.create",
     method: "POST",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/access-requests",
     summary: "Ask to join a Shared Workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -254,10 +254,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  listCollaborationWorkspaceAccessRequests: defineOperation({
-    id: "listCollaborationWorkspaceAccessRequests",
+  "workspaces.access_requests.list": defineOperation({
+    id: "workspaces.access_requests.list",
     method: "GET",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/access-requests",
     summary: "List the open requests to join a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -269,10 +269,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  approveCollaborationWorkspaceAccessRequest: defineOperation({
-    id: "approveCollaborationWorkspaceAccessRequest",
+  "workspaces.access_requests.approve": defineOperation({
+    id: "workspaces.access_requests.approve",
     method: "POST",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests/:userId/approve",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId/approve",
     summary: "Approve a request to join a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",
@@ -283,10 +283,10 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  declineCollaborationWorkspaceAccessRequest: defineOperation({
-    id: "declineCollaborationWorkspaceAccessRequest",
+  "workspaces.access_requests.decline": defineOperation({
+    id: "workspaces.access_requests.decline",
     method: "DELETE",
-    path: "/api/collaboration-workspaces/:collaborationWorkspaceId/access-requests/:userId",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId",
     summary: "Decline a request to join a workspace",
     tag: "Collaboration Workspaces",
     auth: "user",

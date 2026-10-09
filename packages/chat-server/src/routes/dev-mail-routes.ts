@@ -12,5 +12,5 @@ export function registerDevMailRoutes(route: Route, options: ChatServerOptions):
   if (!listCaptured) {
     return;
   }
-  route(apiOperations.listCapturedMail, () => listCaptured());
+  route(apiOperations["captured_mail.list"], () => listCaptured());
 }

@@ -19,7 +19,7 @@ import type {
   UpsertAdministeredUserIdentityRequest,
   WorkspaceMembershipRole
 } from "@vivd-catalyst/api-client";
-import { signOut } from "./auth-client";
+import { signOut } from "@vivd-catalyst/api-client";
 import { apiErrorMessage } from "../workspace-utils";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 import {

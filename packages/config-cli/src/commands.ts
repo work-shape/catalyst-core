@@ -728,21 +728,12 @@ function formatPushPlan(plan: PushPlan, prune: boolean): string {
 async function connectApi(url: string, options: ConfigCommandOptions) {
   const env = options.env ?? process.env;
   const apiKey = env.CATALYST_API_KEY;
-  const serverCredential = env.CATALYST_SERVER_CREDENTIAL ?? env.CHAT_SERVER_CREDENTIAL;
-  if (!apiKey && !serverCredential) {
-    throw new Error(
-      "Missing CLI credentials. Set CATALYST_API_KEY. For one-release legacy compatibility, CATALYST_SERVER_CREDENTIAL or CHAT_SERVER_CREDENTIAL is also accepted."
-    );
-  }
   if (!apiKey) {
-    writeError(
-      options,
-      "Deprecation warning: CLI authentication with CATALYST_SERVER_CREDENTIAL or CHAT_SERVER_CREDENTIAL will be removed after one compatibility release. Create a key in API Access and set CATALYST_API_KEY."
-    );
+    throw new Error("Missing CLI credentials. Set CATALYST_API_KEY.");
   }
   return createConfigApi({
     baseUrl: url,
-    ...(apiKey ? { apiKey } : { serverCredential }),
+    apiKey,
     ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
   });
 }

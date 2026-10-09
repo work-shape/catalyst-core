@@ -6,7 +6,7 @@ import type { ISODateString } from "./time";
  * a curated activity timeline for the admin UI.
  *
  * The raw events stay the source of truth (and are still served verbatim from
- * `/api/audit-events`). This layer groups the events of one request together,
+ * `/api/v1/instance/audit-events`). This layer groups the events of one request together,
  * gives them domain labels, resolves who really acted, and hides runtime
  * lifecycle noise unless something failed. It is a pure function so it can be
  * unit tested and run either on the server or the client.

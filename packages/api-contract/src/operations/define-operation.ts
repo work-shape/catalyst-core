@@ -3,6 +3,9 @@ import { listEnvelopeSchema } from "../shared";
 import type { z } from "zod";
 import type { ApiErrorCode } from "../errors";
 
+/** Every product operation's path starts here; `/health` is the one unversioned operation. */
+export const API_VERSION_PREFIX = "/api/v1";
+
 export type OperationMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 /**

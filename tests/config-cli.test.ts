@@ -424,6 +424,7 @@ skills:
       cwd: directory,
       env: {
         CATALYST_API_KEY: fixture.apiKey,
+        // A server credential in the environment is ignored: the CLI signs in with a key only.
         CATALYST_SERVER_CREDENTIAL: "server-credential"
       },
       fetchImpl: recordFetch(createTestFetch(fixture.server), requests),
@@ -432,19 +433,18 @@ skills:
     };
 
     expect(await runConfigCommand("pull", commandOptions)).toBe(0);
-    expect(requests[0]?.url).toBe(`${url}${testOperations.exchangeApiKey.path}`);
+    expect(requests[0]?.url).toBe(`${url}${testOperations["access_tokens.exchange"].path}`);
     expect(requests[0]?.init?.method).toBe("POST");
     expect(new Headers(requests[0]?.init?.headers).get("authorization")).toBe(
       `Bearer ${fixture.apiKey}`
     );
     expect(requests[0]?.init?.body).toBeUndefined();
-    expect(requests[1]?.url).toBe(`${url}${testOperations.exportConfigAssets.path}`);
+    expect(requests[1]?.url).toBe(`${url}${testOperations["config_assets.export"].path}`);
     expect(new Headers(requests[1]?.init?.headers).get("authorization")).toMatch(/^Bearer /u);
     expect(new Headers(requests[1]?.init?.headers).get("authorization")).not.toBe(
       `Bearer ${fixture.apiKey}`
     );
     expect(requests.some((request) => request.url.includes("session-tokens"))).toBe(false);
-    expect(stderr.join("")).not.toContain("Deprecation warning");
     const agentPath = resolve(directory, "agents", "assistant.agent.yaml");
     const pulledAgent = parseAgentYaml(await readFile(agentPath, "utf8"));
     expect(pulledAgent.instructions).toBe("Remote instructions");
@@ -527,7 +527,7 @@ skills:
       resolve(directory, "catalyst.yaml"),
       `instances:
   local:
-    url: http://catalyst.test
+    url: https://catalyst.test
 defaultInstance: local
 defaultAgentName: unchanged
 agents:
@@ -545,13 +545,11 @@ skills:
     expect(
       await runConfigCommand("pull", {
         cwd: directory,
-        env: { CATALYST_SERVER_CREDENTIAL: "server-credential" },
+        env: { CATALYST_API_KEY: fixture.apiKey },
         fetchImpl: createTestFetch(fixture.server),
         stderr: (text: string) => stderr.push(text)
       })
     ).toBe(1);
-    expect(stderr.join("")).toContain("Deprecation warning");
-    expect(stderr.join("")).toContain("CATALYST_API_KEY");
     expect(stderr.join("")).toContain("canonical layout");
     expect(stderr.join("")).toContain("adjust the manifest globs");
     await expect(readFile(existingPath, "utf8")).resolves.toBe("existing contents\n");
@@ -714,7 +712,7 @@ skills:
         fetchImpl: async (input, init) => {
           const url = new URL(input instanceof Request ? input.url : String(input));
           return hiddenAgentNames &&
-            url.pathname.endsWith(testOperations.replaceConfigAssets.buildPath({}))
+            url.pathname.endsWith(testOperations["config_assets.replace"].buildPath({}))
             ? jsonResponse(200, { version: 4, hiddenAgentNames })
             : fallback(input, init);
         }
@@ -806,7 +804,7 @@ skills:
       })
     ).toBe(1);
     expect(errors.join("")).toContain("Upgrade the server before pushing");
-    expect(requests).not.toContain(testOperations.replaceConfigAssets.buildPath({}));
+    expect(requests).not.toContain(testOperations["config_assets.replace"].buildPath({}));
   });
 
   it("prints all conflicts and an exact scoped pull command with the selected instance and directory", async () => {
@@ -1239,6 +1237,27 @@ skills:
     expect(missingStderr.join("")).toContain("Missing CLI credentials");
     expect(missingStderr.join("")).toContain("CATALYST_API_KEY");
 
+    // The server credential no longer signs the CLI in, and no request leaves the process.
+    const serverCredentialStderr: string[] = [];
+    const serverCredentialRequests: string[] = [];
+    expect(
+      await runConfigCommand("pull", {
+        cwd: directory,
+        env: {
+          CATALYST_SERVER_CREDENTIAL: "server-credential",
+          CHAT_SERVER_CREDENTIAL: "server-credential"
+        },
+        fetchImpl: async (input) => {
+          serverCredentialRequests.push(input instanceof Request ? input.url : String(input));
+          return jsonResponse(500, {});
+        },
+        stderr: (text) => serverCredentialStderr.push(text)
+      })
+    ).toBe(1);
+    expect(serverCredentialStderr.join("")).toContain("Missing CLI credentials");
+    expect(serverCredentialStderr.join("")).not.toContain("SERVER_CREDENTIAL");
+    expect(serverCredentialRequests).toEqual([]);
+
     const apiKey = "cat_test_secret-never-print-this";
     const exchangeStderr: string[] = [];
     const exchangeRequests: string[] = [];
@@ -1260,7 +1279,7 @@ skills:
     ).toBe(1);
     expect(exchangeStderr.join("")).toContain("API key exchange failed (HTTP 401)");
     expect(exchangeStderr.join("")).not.toContain(apiKey);
-    expect(exchangeRequests).toEqual(["https://catalyst.test/api/auth/access-token"]);
+    expect(exchangeRequests).toEqual(["https://catalyst.test/api/v1/auth/access-token"]);
 
     const apiStderr: string[] = [];
     let requestCount = 0;
@@ -1294,7 +1313,7 @@ skills:
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = input instanceof Request ? input.url : String(input);
       requests.push({ url, ...(init === undefined ? {} : { init }) });
-      return url.endsWith(testOperations.exchangeApiKey.buildPath({}))
+      return url.endsWith(testOperations["access_tokens.exchange"].buildPath({}))
         ? jsonResponse(200, {
             accessToken: "direct-url-access-token",
             expiresAt: "2030-01-01T00:00:00.000Z"
@@ -1311,8 +1330,8 @@ skills:
       })
     ).toBe(0);
     expect(requests.map((request) => request.url)).toEqual([
-      "https://direct-instance.example.test/base/api/auth/access-token",
-      "https://direct-instance.example.test/base/api/admin/config/export"
+      "https://direct-instance.example.test/base/api/v1/auth/access-token",
+      "https://direct-instance.example.test/base/api/v1/instance/config/export"
     ]);
   });
 
@@ -1355,7 +1374,7 @@ skills:
           fetchImpl: async (input) => {
             const url = input instanceof Request ? input.url : String(input);
             requests.push(url);
-            return url.endsWith(testOperations.exchangeApiKey.buildPath({}))
+            return url.endsWith(testOperations["access_tokens.exchange"].buildPath({}))
               ? jsonResponse(200, {
                   accessToken: "loopback-access-token",
                   expiresAt: "2030-01-01T00:00:00.000Z"
@@ -1366,8 +1385,8 @@ skills:
       ).toBe(0);
       const baseUrl = instance.replace(/\/$/u, "");
       expect(requests).toEqual([
-        `${baseUrl}${testOperations.exchangeApiKey.path}`,
-        `${baseUrl}${testOperations.exportConfigAssets.path}`
+        `${baseUrl}${testOperations["access_tokens.exchange"].path}`,
+        `${baseUrl}${testOperations["config_assets.export"].path}`
       ]);
     }
   );
@@ -1431,14 +1450,12 @@ describe("config CLI API transport", () => {
 });
 
 describe("config CLI help", () => {
-  it("documents API-key preference and the legacy environment fallback", async () => {
+  it("documents the API key as the only sign-in", async () => {
     const stdout: string[] = [];
     expect(await runCli(["--help"], { stdout: (text) => stdout.push(text) })).toBe(0);
     const help = stdout.join("");
     expect(help).toContain("CATALYST_API_KEY");
-    expect(help).toContain("preferred");
-    expect(help).toContain("CATALYST_SERVER_CREDENTIAL");
-    expect(help).toContain("deprecated compatibility fallback");
+    expect(help).not.toContain("SERVER_CREDENTIAL");
     expect(help).toContain("list");
     expect(help).toContain("show <agent|skill> <name>");
     expect(help).toContain("--prune");
@@ -1589,13 +1606,13 @@ function configApiFetch(
   return async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
-    if (url.pathname.endsWith(testOperations.exchangeApiKey.buildPath({}))) {
+    if (url.pathname.endsWith(testOperations["access_tokens.exchange"].buildPath({}))) {
       return jsonResponse(200, {
         accessToken: "short-lived-access-token",
         expiresAt: "2030-01-01T00:00:00.000Z"
       });
     }
-    if (url.pathname.endsWith(testOperations.exportConfigAssets.buildPath({}))) {
+    if (url.pathname.endsWith(testOperations["config_assets.export"].buildPath({}))) {
       return jsonResponse(200, {
         ...remote,
         perAssetConcurrency: true,
@@ -1605,7 +1622,7 @@ function configApiFetch(
         ])
       });
     }
-    if (url.pathname.endsWith(testOperations.replaceConfigAssets.buildPath({}))) {
+    if (url.pathname.endsWith(testOperations["config_assets.replace"].buildPath({}))) {
       requests.push(JSON.parse(await request.clone().text()));
       return jsonResponse(200, { version: pushedVersion });
     }

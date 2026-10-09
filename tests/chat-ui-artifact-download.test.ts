@@ -538,7 +538,7 @@ describe("chat UI artifact download cards", () => {
     expect(markup).toContain("Cosmic_Cafe_Surprise.xlsx");
     expect(markup).toContain("Download Cosmic_Cafe_Surprise.xlsx");
     expect(markup).toContain(
-      'href="https://catalyst.example/api/conversations/conv_test/artifacts/art_workbook/content"'
+      'href="https://catalyst.example/api/v1/conversations/conv_test/artifacts/art_workbook/content"'
     );
     expect(markup).toContain(">Download</span>");
   });

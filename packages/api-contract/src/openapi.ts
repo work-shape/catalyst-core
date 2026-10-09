@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { operationPathParamNames, type Operation } from "./operations/define-operation";
+import {
+  API_VERSION_PREFIX,
+  operationPathParamNames,
+  type Operation
+} from "./operations/define-operation";
 
 export interface OpenApiDocumentOptions {
   title?: string;
@@ -17,18 +21,6 @@ type OpenApiParameter = {
 };
 type OpenApiPathItem = Record<string, unknown>;
 
-/**
- * Operations the server registers that the released document has never listed: the health
- * probe and the retired session-token path. CB-4a adds them to the catalog without changing
- * the document; CB-4b decides whether either is published. The view runtime files are script
- * addresses for a frame, not calls of the API.
- */
-const UNDOCUMENTED_OPERATION_IDS: ReadonlySet<string> = new Set([
-  "getHealth",
-  "getViewRuntimeFile",
-  "issueSessionTokenLegacyAlias"
-]);
-
 export function createOpenApiDocumentFromOperations(
   operations: ApiOperationCatalog,
   options: OpenApiDocumentOptions = {}
@@ -36,7 +28,9 @@ export function createOpenApiDocumentFromOperations(
   const paths: Record<string, OpenApiPathItem> = {};
 
   for (const operation of Object.values(operations)) {
-    if (operation.devOnly || UNDOCUMENTED_OPERATION_IDS.has(operation.id)) {
+    // The document describes the versioned API. The unversioned health probe and operations
+    // of development instances are registered without being part of it.
+    if (operation.devOnly || !operation.path.startsWith(`${API_VERSION_PREFIX}/`)) {
       continue;
     }
     const path = toOpenApiPath(operation.path);

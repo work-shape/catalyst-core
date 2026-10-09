@@ -7,7 +7,7 @@ import type { ChatServerOptions } from "../types";
 export function registerServiceAccessTokenRoutes(route: Route, options: ChatServerOptions): void {
   // Public to the route helper: the API key in the request is the credential, and the
   // exchange below is what authenticates it.
-  route(apiOperations.exchangeApiKey, async ({ request, context }) => {
+  route(apiOperations["access_tokens.exchange"], async ({ request, context }) => {
     if (!options.serviceAccessToken) {
       throw new AppError("NOT_FOUND", "API access is not configured");
     }

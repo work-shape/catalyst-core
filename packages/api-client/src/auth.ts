@@ -1,15 +1,24 @@
-export interface AuthSession {
-  session: {
-    id: string;
-    userId: string;
-    expiresAt: string;
-  };
-  user: {
-    id: string;
-    email: string;
-    name: string;
-  };
-}
+import { z } from "zod";
+
+/**
+ * The sign-in library's mount. It is not a product operation: the library owns its paths and
+ * payloads, and a session cookie is the only credential it accepts.
+ */
+export const AUTH_MOUNT_PATH = "/api/auth";
+
+const authSessionSchema = z
+  .object({
+    session: z.object({ id: z.string(), userId: z.string(), expiresAt: z.string() }),
+    user: z.object({ id: z.string(), email: z.string(), name: z.string() })
+  })
+  .nullable();
+
+export type AuthSession = NonNullable<z.infer<typeof authSessionSchema>>;
+
+const authFailureSchema = z.object({
+  message: z.string().optional(),
+  error: z.object({ message: z.string().optional() }).optional()
+});
 
 export interface AuthResult {
   ok: boolean;
@@ -23,7 +32,7 @@ export async function getAuthSession(apiBaseUrl: string): Promise<AuthSession | 
   if (!response.ok) {
     return null;
   }
-  return (await response.json()) as AuthSession | null;
+  return authSessionSchema.parse(await response.json());
 }
 
 export async function signInWithEmail(input: {
@@ -46,10 +55,10 @@ export async function signInWithEmail(input: {
   if (response.ok) {
     return { ok: true };
   }
-  const payload = await response.json().catch(() => undefined);
+  const failure = authFailureSchema.safeParse(await response.json().catch(() => undefined));
   return {
     ok: false,
-    message: payload?.message ?? payload?.error?.message ?? "Sign in failed"
+    message: failure.data?.message ?? failure.data?.error?.message ?? "Sign in failed"
   };
 }
 
@@ -61,5 +70,5 @@ export async function signOut(apiBaseUrl: string): Promise<void> {
 }
 
 function authUrl(apiBaseUrl: string, path: string): string {
-  return `${apiBaseUrl.replace(/\/$/u, "")}/api/auth${path}`;
+  return `${apiBaseUrl.replace(/\/$/u, "")}${AUTH_MOUNT_PATH}${path}`;
 }

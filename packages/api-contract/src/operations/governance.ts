@@ -4,10 +4,10 @@ import { auditActivitySchema, auditEventSchema, usageSummarySchema } from "../go
 import { defineOperation, json, page } from "./define-operation";
 
 export const governanceOperations = {
-  listAuditEvents: defineOperation({
-    id: "listAuditEvents",
+  "audit_events.list": defineOperation({
+    id: "audit_events.list",
     method: "GET",
-    path: "/api/audit-events",
+    path: "/api/v1/instance/audit-events",
     summary: "List the latest audit events",
     tag: "Governance",
     auth: "user",
@@ -19,10 +19,10 @@ export const governanceOperations = {
     errors: [],
     rateClass: "read"
   }),
-  listAuditActivities: defineOperation({
-    id: "listAuditActivities",
+  "audit_activities.list": defineOperation({
+    id: "audit_activities.list",
     method: "GET",
-    path: "/api/audit-activities",
+    path: "/api/v1/instance/audit-activities",
     summary: "List the latest audit activities",
     tag: "Governance",
     auth: "user",
@@ -34,10 +34,10 @@ export const governanceOperations = {
     errors: [],
     rateClass: "read"
   }),
-  getUsageSummary: defineOperation({
-    id: "getUsageSummary",
+  "usage.get_summary": defineOperation({
+    id: "usage.get_summary",
     method: "GET",
-    path: "/api/superadmin/usage",
+    path: "/api/v1/instance/usage",
     summary: "Read model usage and budget of the instance",
     tag: "Governance",
     auth: "user",

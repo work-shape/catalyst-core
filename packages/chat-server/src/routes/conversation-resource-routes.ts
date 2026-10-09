@@ -9,7 +9,7 @@ import type { ChatServerOptions } from "../types";
 export function registerConversationResourceRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  route(apiOperations.listConversationResources, async ({ user, params }) => {
+  route(apiOperations["conversations.resources.list"], async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     return (
@@ -21,7 +21,7 @@ export function registerConversationResourceRoutes(route: Route, options: ChatSe
     ).items;
   });
 
-  route(apiOperations.getStructuredDataResource, async ({ user, params }) => {
+  route(apiOperations["conversations.structured_data.get"], async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const resource = await options.stores.structuredData.getStructuredDataResource({

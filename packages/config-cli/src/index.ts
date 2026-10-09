@@ -39,9 +39,7 @@ Options:
   --help                    Show this help
 
 Environment:
-  CATALYST_API_KEY           API key exchanged for a short-lived access token (preferred)
-  CATALYST_SERVER_CREDENTIAL Legacy server credential (deprecated compatibility fallback)
-  CHAT_SERVER_CREDENTIAL     Legacy fallback when CATALYST_SERVER_CREDENTIAL is unset
+  CATALYST_API_KEY  API key exchanged for a short-lived access token
 `;
 
 export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): Promise<number> {

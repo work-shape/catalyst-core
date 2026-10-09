@@ -213,13 +213,13 @@ describe("password setup by email", () => {
     expect(mail!.to.email).toBe("ada@example.test");
     const token = readToken(mail!.text);
 
-    const completed = await harness.server.call("completePasswordSetup", {
+    const completed = await harness.server.call("password_setup.complete", {
       payload: { token, password: "a-new-password" }
     });
     expect(completed.statusCode).toBe(200);
     expect(harness.passwords.get(known.externalUserId)).toBe("a-new-password");
 
-    const replayed = await harness.server.call("completePasswordSetup", {
+    const replayed = await harness.server.call("password_setup.complete", {
       payload: { token, password: "another-password" }
     });
     expect(replayed.statusCode).toBe(422);
@@ -248,7 +248,7 @@ describe("password setup by email", () => {
     const harness = await createMailHarness();
     await harness.addPasswordUser("ada@example.test", "Ada");
     const reset = (remoteAddress: string, forwardedFor: string, email: string) =>
-      harness.server.call("requestPasswordReset", {
+      harness.server.call("password_reset.request", {
         remoteAddress,
         headers: { "x-forwarded-for": forwardedFor },
         payload: { email }
@@ -298,8 +298,8 @@ describe("password setup by email", () => {
     const capturing = await createMailHarness({ listCaptured: true });
     const delivering = await createMailHarness();
 
-    expect((await capturing.server.call("listCapturedMail", {})).statusCode).toBe(200);
-    expect((await delivering.server.call("listCapturedMail", {})).statusCode).toBe(404);
+    expect((await capturing.server.call("captured_mail.list", {})).statusCode).toBe(200);
+    expect((await delivering.server.call("captured_mail.list", {})).statusCode).toBe(404);
   });
 
   it("pages identical captured mails with tied timestamps without losing rows", async () => {
@@ -318,7 +318,7 @@ describe("password setup by email", () => {
       const ids: string[] = [];
       let cursor: string | undefined;
       for (let index = 0; index < 3; index++) {
-        const response = await harness.server.call("listCapturedMail", {
+        const response = await harness.server.call("captured_mail.list", {
           query: { limit: 1, cursor }
         });
         expect(response.statusCode).toBe(200);
@@ -356,22 +356,22 @@ describe("password setup by email", () => {
 
   it("refuses to re-invite a user whose email no longer matches their password sign-in", async () => {
     const harness = await createMailHarness();
-    const created = await harness.server.call("createAdministeredUser", {
+    const created = await harness.server.call("users.create", {
       payload: { displayLabel: "Grace", email: "grace@example.test" }
     });
     const user = created.json<{ id: string }>();
     expect(
-      (await harness.server.call("sendAdministeredUserInvitation", { params: { userId: user.id } }))
+      (await harness.server.call("users.invitation.send", { params: { userId: user.id } }))
         .statusCode
     ).toBe(200);
 
-    const updated = await harness.server.call("updateAdministeredUser", {
+    const updated = await harness.server.call("users.update", {
       params: { userId: user.id },
       payload: { email: "grace.hopper@example.test" }
     });
     expect(updated.statusCode).toBe(200);
 
-    const reinvited = await harness.server.call("sendAdministeredUserInvitation", {
+    const reinvited = await harness.server.call("users.invitation.send", {
       params: { userId: user.id }
     });
     expect(reinvited.statusCode).toBe(409);
@@ -388,11 +388,11 @@ describe("password setup by email", () => {
       reason: "private transport failure"
     });
     try {
-      const created = await harness.server.call("createAdministeredUser", {
+      const created = await harness.server.call("users.create", {
         payload: { displayLabel: "Grace", email: "grace@example.test" }
       });
       expect(created.statusCode).toBe(200);
-      const invited = await harness.server.call("sendAdministeredUserInvitation", {
+      const invited = await harness.server.call("users.invitation.send", {
         params: { userId: created.json<{ id: string }>().id }
       });
       expect(invited.statusCode).toBe(500);
@@ -410,13 +410,13 @@ describe("password setup by email", () => {
 
   it("lets a superadmin invite a user who then sets their own password", async () => {
     const harness = await createMailHarness();
-    const created = await harness.server.call("createAdministeredUser", {
+    const created = await harness.server.call("users.create", {
       payload: { displayLabel: "Grace", email: "grace@example.test" }
     });
     expect(created.statusCode).toBe(200);
     const userId = created.json<{ id: string }>().id;
 
-    const invited = await harness.server.call("sendAdministeredUserInvitation", {
+    const invited = await harness.server.call("users.invitation.send", {
       params: { userId: userId }
     });
     expect(invited.statusCode).toBe(200);
@@ -424,7 +424,7 @@ describe("password setup by email", () => {
     const [mail] = harness.transport.list();
     expect(mail!.to.email).toBe("grace@example.test");
     expect(mail!.text).toContain("Admin has invited you to Demo");
-    const completed = await harness.server.call("completePasswordSetup", {
+    const completed = await harness.server.call("password_setup.complete", {
       payload: { token: readToken(mail!.text), password: "graces-password" }
     });
     expect(completed.statusCode).toBe(200);
@@ -540,7 +540,7 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
     server,
     transport,
     passwords,
-    requestReset: (email: string) => server.call("requestPasswordReset", { payload: { email } }),
+    requestReset: (email: string) => server.call("password_reset.request", { payload: { email } }),
     listAuditEvents: () => store.audit.listAuditEvents({ clientInstanceId }),
     async addPasswordUser(email: string, displayLabel: string) {
       const externalUserId = `auth-${email}`;

@@ -1,7 +1,11 @@
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ApiClient } from "@vivd-catalyst/api-client";
-import { getAuthSession, signInWithEmail, signOut } from "../packages/chat-ui/src/api/auth-client";
+import {
+  getAuthSession,
+  signInWithEmail,
+  signOut,
+  type ApiClient
+} from "@vivd-catalyst/api-client";
 import {
   WorkspaceApiClientProvider,
   useWorkspaceApiClient

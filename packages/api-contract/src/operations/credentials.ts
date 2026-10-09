@@ -6,10 +6,10 @@ import {
 import { defineOperation, json } from "./define-operation";
 
 export const credentialOperations = {
-  issueSessionToken: defineOperation({
-    id: "issueSessionToken",
+  "session_tokens.issue": defineOperation({
+    id: "session_tokens.issue",
     method: "POST",
-    path: "/api/superadmin/session-tokens",
+    path: "/api/v1/instance/session-tokens",
     summary: "Issue a session token for a user of a trusted backend",
     tag: "Credentials",
     auth: "serverCredential",
@@ -19,28 +19,15 @@ export const credentialOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "auth"
   }),
-  exchangeApiKey: defineOperation({
-    id: "exchangeApiKey",
+  "access_tokens.exchange": defineOperation({
+    id: "access_tokens.exchange",
     method: "POST",
-    path: "/api/auth/access-token",
+    path: "/api/v1/auth/access-token",
     summary: "Exchange an API key for a short-lived access token",
     tag: "Credentials",
     auth: "public",
     effect: "changing",
     response: json(exchangeApiKeyResponseSchema),
-    errors: ["NOT_FOUND"],
-    rateClass: "auth"
-  }),
-  issueSessionTokenLegacyAlias: defineOperation({
-    id: "issueSessionTokenLegacyAlias",
-    method: "POST",
-    path: "/auth/session-token",
-    summary: "Issue a session token at the path deployed integrations still call",
-    tag: "Credentials",
-    auth: "serverCredential",
-    effect: "changing",
-    body: issueSessionTokenRequestSchema,
-    response: json(issueSessionTokenResponseSchema),
     errors: ["NOT_FOUND"],
     rateClass: "auth"
   })

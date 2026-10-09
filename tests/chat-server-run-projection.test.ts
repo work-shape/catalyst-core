@@ -33,7 +33,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Thread snapshot test" }
     });
     expect(created.statusCode).toBe(200);
@@ -48,7 +48,7 @@ describe("client instance app vertical slice", () => {
     );
     const runId = started.run.id;
 
-    const snapshot = await fetchTestOperation(baseUrl, "getConversationThread", {
+    const snapshot = await fetchTestOperation(baseUrl, "conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
     expect(snapshot.status).toBe(200);
@@ -77,7 +77,7 @@ describe("client instance app vertical slice", () => {
 
     await fetchRunEvents(baseUrl, conversation.id, runId);
 
-    const completedSnapshot = await fetchTestOperation(baseUrl, "getConversationThread", {
+    const completedSnapshot = await fetchTestOperation(baseUrl, "conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
     expect(completedSnapshot.status).toBe(200);
@@ -204,7 +204,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const snapshot = await server.call("getConversationThread", {
+    const snapshot = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
 
@@ -535,7 +535,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const snapshot = await server.call("getConversationThread", {
+    const snapshot = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
 
@@ -685,7 +685,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const snapshot = await server.call("getConversationThread", {
+    const snapshot = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
 
@@ -714,7 +714,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Product event stream test" }
     });
     expect(created.statusCode).toBe(200);
@@ -730,7 +730,7 @@ describe("client instance app vertical slice", () => {
     const runId = started.run.id;
     await fetchRunEvents(baseUrl, conversation.id, runId);
 
-    const events = await fetchTestOperation(baseUrl, "observeConversationRun", {
+    const events = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: runId },
       query: { after: "1" }
     });

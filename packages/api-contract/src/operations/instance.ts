@@ -3,10 +3,10 @@ import { clientBrandingSchema, safeConfigSchema } from "../configuration";
 import { defineOperation, json } from "./define-operation";
 
 export const instanceOperations = {
-  getBranding: defineOperation({
-    id: "getBranding",
+  "branding.get": defineOperation({
+    id: "branding.get",
     method: "GET",
-    path: "/api/branding",
+    path: "/api/v1/instance/branding",
     summary: "Read the instance branding shown before sign-in",
     tag: "Instance",
     auth: "public",
@@ -16,10 +16,10 @@ export const instanceOperations = {
     errors: [],
     rateClass: "read"
   }),
-  getConfig: defineOperation({
-    id: "getConfig",
+  "config.get": defineOperation({
+    id: "config.get",
     method: "GET",
-    path: "/api/config",
+    path: "/api/v1/instance/config",
     summary: "Read the instance configuration a member may see",
     tag: "Instance",
     auth: "user",

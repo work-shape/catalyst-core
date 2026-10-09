@@ -205,7 +205,7 @@ describe("execution workspace source attachments", () => {
       tools: []
     });
     try {
-      const config = await app.call("getConfig", {});
+      const config = await app.call("config.get", {});
       expect(config.statusCode).toBe(200);
       const accept = (config.json() as { features: { attachments: { accept: string } } }).features
         .attachments.accept;
@@ -213,7 +213,7 @@ describe("execution workspace source attachments", () => {
       expect(accept).toContain("application/pdf");
       expect(accept).toContain("image/png");
 
-      const created = await app.call("createConversation", {
+      const created = await app.call("conversations.create", {
         payload: { title: "Dropzone source artifact test" }
       });
       expect(created.statusCode).toBe(200);
@@ -284,7 +284,7 @@ describe("execution workspace source attachments", () => {
       tools: []
     });
     try {
-      const created = await app.call("createConversation", {
+      const created = await app.call("conversations.create", {
         payload: { title: "Workspace cleanup ordering test" }
       });
       expect(created.statusCode).toBe(200);
@@ -322,7 +322,7 @@ describe("execution workspace source attachments", () => {
       await expect(access(objectPath(root, sourceObjectKey))).resolves.toBeUndefined();
       await expect(access(objectPath(root, artifactObjectKey))).resolves.toBeUndefined();
 
-      const deleted = await app.call("deleteConversation", {
+      const deleted = await app.call("conversations.delete", {
         params: { conversationId: conversation.id }
       });
       expect(deleted.statusCode).toBe(200);
@@ -352,7 +352,7 @@ describe("execution workspace source attachments", () => {
       tools: []
     });
     try {
-      const created = await app.call("createConversation", {
+      const created = await app.call("conversations.create", {
         payload: { title: "Workspace artifact dispatch test" }
       });
       expect(created.statusCode).toBe(200);
@@ -368,7 +368,7 @@ describe("execution workspace source attachments", () => {
         .attachment.artifactRefs.final;
       expect(artifactId).toEqual(expect.any(String));
 
-      const downloaded = await app.call("getConversationArtifactContent", {
+      const downloaded = await app.call("conversations.artifacts.get_content", {
         params: { conversationId: conversation.id, artifactId: required(artifactId) }
       });
       expect(downloaded.statusCode).toBe(200);
@@ -394,7 +394,7 @@ describe("execution workspace source attachments", () => {
       tools: []
     });
     try {
-      const created = await app.call("createConversation", {
+      const created = await app.call("conversations.create", {
         payload: { title: "Workspace preview artifact dispatch test" }
       });
       expect(created.statusCode).toBe(200);
@@ -411,7 +411,7 @@ describe("execution workspace source attachments", () => {
       ).attachment.artifactRefs.preview;
       expect(previewArtifactId).toEqual(expect.any(String));
 
-      const downloaded = await app.call("getConversationArtifactContent", {
+      const downloaded = await app.call("conversations.artifacts.get_content", {
         params: { conversationId: conversation.id, artifactId: required(previewArtifactId) }
       });
       expect(downloaded.statusCode).toBe(200);
@@ -1114,7 +1114,7 @@ async function uploadFile(
     fieldName: "file",
     ...input
   });
-  return server.call("uploadDraftAttachment", {
+  return server.call("conversations.draft_attachments.upload", {
     params: { conversationId: conversationId },
     headers: multipart.headers,
     payload: multipart.payload

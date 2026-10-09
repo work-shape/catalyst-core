@@ -43,7 +43,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const issued = await app.call("issueSessionToken", {
+    const issued = await app.call("session_tokens.issue", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -57,7 +57,7 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const workspaceListing = await app.call("listCollaborationWorkspaces", {
+    const workspaceListing = await app.call("workspaces.list", {
       headers: {
         authorization: `Bearer ${token}`
       }
@@ -67,7 +67,7 @@ describe("client instance app vertical slice", () => {
       "Missing auth scope 'collaboration_workspace:read'"
     );
 
-    const workspaceCreation = await app.call("createCollaborationWorkspace", {
+    const workspaceCreation = await app.call("workspaces.create", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -78,7 +78,7 @@ describe("client instance app vertical slice", () => {
       "Missing auth scope 'collaboration_workspace:manage'"
     );
 
-    const createdConversation = await app.call("createConversation", {
+    const createdConversation = await app.call("conversations.create", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -92,11 +92,11 @@ describe("client instance app vertical slice", () => {
     };
     await seedConversationMessage(app.stores.conversations, personalConversation.id);
 
-    const firstPartyListing = await app.call("listCollaborationWorkspaces", {
+    const firstPartyListing = await app.call("workspaces.list", {
       headers: { "x-dev-user-id": "superadmin-1" }
     });
     expect(firstPartyListing.statusCode).toBe(200);
-    const firstPartyCreation = await app.call("createCollaborationWorkspace", {
+    const firstPartyCreation = await app.call("workspaces.create", {
       headers: { "x-dev-user-id": "superadmin-1" },
       payload: { name: "First-party workspace" }
     });
@@ -108,7 +108,7 @@ describe("client instance app vertical slice", () => {
       userId: asUserId(personalConversation.createdByUserId),
       role: "member"
     });
-    const sharedConversation = await app.call("createConversation", {
+    const sharedConversation = await app.call("conversations.create", {
       headers: { "x-dev-user-id": "superadmin-1" },
       payload: { title: "Shared conversation", collaborationWorkspaceId: sharedWorkspaceId }
     });
@@ -116,7 +116,7 @@ describe("client instance app vertical slice", () => {
     const sharedConversationId = (sharedConversation.json() as { id: string }).id;
     await seedConversationMessage(app.stores.conversations, sharedConversationId);
 
-    const personalConversations = await app.call("listConversations", {
+    const personalConversations = await app.call("conversations.list", {
       headers: { authorization: `Bearer ${token}` }
     });
     expect(personalConversations.statusCode).toBe(200);
@@ -124,7 +124,7 @@ describe("client instance app vertical slice", () => {
       personalConversations.json<{ items: Array<{ id: string }> }>().items.map(({ id }) => id)
     ).toEqual([personalConversation.id]);
 
-    const sharedConversations = await app.call("listConversations", {
+    const sharedConversations = await app.call("conversations.list", {
       query: { collaborationWorkspaceId: sharedWorkspaceId },
       headers: { authorization: `Bearer ${token}` }
     });
@@ -133,7 +133,7 @@ describe("client instance app vertical slice", () => {
       sharedConversations.json<{ items: Array<{ id: string }> }>().items.map(({ id }) => id)
     ).toEqual([sharedConversationId]);
 
-    const usage = await app.call("getUsageSummary", {
+    const usage = await app.call("usage.get_summary", {
       headers: {
         authorization: `Bearer ${token}`
       }
@@ -143,7 +143,7 @@ describe("client instance app vertical slice", () => {
       "Missing auth scope 'governance:read'"
     );
 
-    const audit = await app.call("listAuditEvents", {
+    const audit = await app.call("audit_events.list", {
       headers: {
         authorization: `Bearer ${token}`
       }
@@ -203,9 +203,9 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const listed = await server.call("listCollaborationWorkspaces", {});
+    const listed = await server.call("workspaces.list", {});
     expect(listed.statusCode).toBe(200);
-    const created = await server.call("createCollaborationWorkspace", {
+    const created = await server.call("workspaces.create", {
       payload: { name: "Standalone workspace" }
     });
     expect(created.statusCode).toBe(200);
@@ -228,7 +228,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const issued = await app.call("issueSessionToken", {
+    const issued = await app.call("session_tokens.issue", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -243,14 +243,14 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const conversations = await app.call("listConversations", {
+    const conversations = await app.call("conversations.list", {
       headers: {
         authorization: `Bearer ${token}`
       }
     });
     expect(conversations.statusCode).toBe(200);
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -294,7 +294,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const issued = await app.call("issueSessionToken", {
+    const issued = await app.call("session_tokens.issue", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -314,7 +314,7 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const createdConversation = await app.call("createConversation", {
+    const createdConversation = await app.call("conversations.create", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -331,7 +331,7 @@ describe("client instance app vertical slice", () => {
     expect(conversation.createdByExternalUserId).toBe("customer-jane");
     expect(conversation.createdByUserId).not.toBe("svc-customer-api");
 
-    const audit = await app.call("listAuditEvents", {
+    const audit = await app.call("audit_events.list", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -375,7 +375,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
     const issueFor = async (externalUserId: string) => {
-      const issued = await app.call("issueSessionToken", {
+      const issued = await app.call("session_tokens.issue", {
         headers: { "x-server-credential": "server-credential" },
         payload: {
           externalUserId,
@@ -392,7 +392,7 @@ describe("client instance app vertical slice", () => {
       });
       expect(issued.statusCode).toBe(200);
       const authorization = `Bearer ${(issued.json() as { chatSessionToken: string }).chatSessionToken}`;
-      const me = await app.call("getCurrentUser", { headers: { authorization } });
+      const me = await app.call("me.get", { headers: { authorization } });
       expect(me.statusCode).toBe(200);
       return { authorization, userId: asUserId((me.json() as { id: string }).id) };
     };
@@ -412,7 +412,7 @@ describe("client instance app vertical slice", () => {
       role: "member"
     });
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       headers: { authorization: jane.authorization },
       payload: { title: "Jane only", collaborationWorkspaceId: workspace.id }
     });
@@ -421,7 +421,7 @@ describe("client instance app vertical slice", () => {
     const conversationId = (created.json() as { id: string }).id;
 
     const thread = (authorization: string) =>
-      app.call("getConversationThread", {
+      app.call("conversations.thread.get", {
         params: { conversationId: conversationId },
         headers: { authorization }
       });
@@ -435,7 +435,7 @@ describe("client instance app vertical slice", () => {
         message: "Conversation is not available"
       }
     });
-    const listed = await app.call("listConversations", {
+    const listed = await app.call("conversations.list", {
       query: { collaborationWorkspaceId: workspace.id },
       headers: { authorization: john.authorization }
     });
@@ -515,7 +515,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const created = await server.call("createAdministeredUser", {
+    const created = await server.call("users.create", {
       payload: {
         displayLabel: "Jane Reviewer",
         email: "Jane@Example.Test",
@@ -546,7 +546,7 @@ describe("client instance app vertical slice", () => {
       })
     ]);
 
-    const reset = await server.call("resetAdministeredUserPassword", {
+    const reset = await server.call("users.password.reset", {
       params: { userId: createdUser.id },
       payload: {
         password: "replacement-password"
@@ -560,7 +560,7 @@ describe("client instance app vertical slice", () => {
       }
     ]);
 
-    const profileOnly = await server.call("createAdministeredUser", {
+    const profileOnly = await server.call("users.create", {
       payload: {
         displayLabel: "Sam Reviewer",
         email: "sam@example.test",
@@ -570,7 +570,7 @@ describe("client instance app vertical slice", () => {
     expect(profileOnly.statusCode).toBe(200);
     const profileOnlyUser = profileOnly.json() as { id: string };
 
-    const setFirstPassword = await server.call("resetAdministeredUserPassword", {
+    const setFirstPassword = await server.call("users.password.reset", {
       params: { userId: profileOnlyUser.id },
       payload: {
         password: "first-password"
@@ -583,7 +583,7 @@ describe("client instance app vertical slice", () => {
       password: "first-password"
     });
 
-    const listed = await server.call("listAdministeredUsers", {});
+    const listed = await server.call("users.list", {});
     expect(listed.statusCode).toBe(200);
     expect(listed.json().items).toEqual(
       expect.arrayContaining([
@@ -599,19 +599,19 @@ describe("client instance app vertical slice", () => {
       ])
     );
 
-    const audit = await server.call("listAuditEvents", {});
+    const audit = await server.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     expect(
       audit.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
     ).toEqual(expect.arrayContaining(["user.password_sign_in_created", "user.password_reset"]));
 
-    const deleted = await server.call("deleteAdministeredUser", {
+    const deleted = await server.call("users.delete", {
       params: { userId: createdUser.id }
     });
     expect(deleted.statusCode).toBe(200);
     expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-Jane@Example.Test" }]);
 
-    const listedAfterDelete = await server.call("listAdministeredUsers", {});
+    const listedAfterDelete = await server.call("users.list", {});
     expect(listedAfterDelete.statusCode).toBe(200);
     expect(listedAfterDelete.json().items).not.toContainEqual(
       expect.objectContaining({
@@ -619,7 +619,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const auditAfterDelete = await server.call("listAuditEvents", {});
+    const auditAfterDelete = await server.call("audit_events.list", {});
     expect(auditAfterDelete.statusCode).toBe(200);
     expect(
       auditAfterDelete.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
@@ -635,7 +635,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createAdministeredUser", {
+    const created = await app.call("users.create", {
       payload: {
         displayLabel: "Jane Reviewer",
         roles: ["user"]
@@ -644,7 +644,7 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const administeredUser = created.json() as { id: string };
 
-    const reset = await app.call("resetAdministeredUserPassword", {
+    const reset = await app.call("users.password.reset", {
       params: { userId: administeredUser.id },
       payload: {
         password: "replacement-password"

@@ -131,7 +131,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/chat-ui",
-      "count": 33,
+      "count": 32,
       "owner": "G-5c"
     },
     {
@@ -249,15 +249,8 @@
     {
       "target": "lint",
       "rule": "catalyst/fetch-boundary",
-      "scope": "packages/chat-ui",
-      "count": 3,
-      "owner": "CB-6a, CB-10a"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/fetch-boundary",
       "scope": "packages/config-cli",
-      "count": 7,
+      "count": 5,
       "owner": "PA-3"
     },
     {
@@ -306,7 +299,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 168,
+      "count": 167,
       "owner": "CB-2"
     },
     {

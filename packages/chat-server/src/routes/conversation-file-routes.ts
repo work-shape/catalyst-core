@@ -23,84 +23,93 @@ import type { ChatServerOptions } from "../types";
 export function registerConversationFileRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  route(apiOperations.getConversationFileContent, async ({ user, params, query, reply }) => {
-    const conversationId = conversationIdParam(params);
-    await conversations.requireConversationAccess(conversationId, user);
-    const service = attachments(options);
-    const download = query.download === "true";
-    const sentAttachment = download
-      ? (
-          await options.stores.files.listSentConversationAttachments({
-            clientInstanceId: options.clientInstanceId,
-            conversationId
-          })
-        ).find((attachment) => attachment.fileId === fileIdParam(params))
-      : undefined;
-    if (download && !sentAttachment) {
-      throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
-    }
-    const file = await service.readConversationFile({
-      conversationId,
-      fileId: fileIdParam(params)
-    });
-    const inlineCapability = resolveFilePreviewCapability({
-      filename: file.filename,
-      mimeType: file.mimeType
-    });
-    if (
-      !download &&
-      inlineCapability !== "native_pdf" &&
-      (!file.mimeType || !service.isInlineDisplayMimeType(file.mimeType))
-    ) {
-      throw new AppError("VALIDATION_FAILED", "This attachment cannot be displayed inline");
-    }
-    return reply
-      .header("content-type", file.mimeType ?? "application/octet-stream")
-      .header("content-length", String(file.bytes.byteLength))
-      .header("cache-control", "private, max-age=60")
-      .header(
-        "content-disposition",
-        contentDisposition(
-          download ? "attachment" : "inline",
-          sentAttachment?.filename ?? file.filename
+  route(
+    apiOperations["conversations.files.get_content"],
+    async ({ user, params, query, reply }) => {
+      const conversationId = conversationIdParam(params);
+      await conversations.requireConversationAccess(conversationId, user);
+      const service = attachments(options);
+      const download = query.download === "true";
+      const sentAttachment = download
+        ? (
+            await options.stores.files.listSentConversationAttachments({
+              clientInstanceId: options.clientInstanceId,
+              conversationId
+            })
+          ).find((attachment) => attachment.fileId === fileIdParam(params))
+        : undefined;
+      if (download && !sentAttachment) {
+        throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
+      }
+      const file = await service.readConversationFile({
+        conversationId,
+        fileId: fileIdParam(params)
+      });
+      const inlineCapability = resolveFilePreviewCapability({
+        filename: file.filename,
+        mimeType: file.mimeType
+      });
+      if (
+        !download &&
+        inlineCapability !== "native_pdf" &&
+        (!file.mimeType || !service.isInlineDisplayMimeType(file.mimeType))
+      ) {
+        throw new AppError("VALIDATION_FAILED", "This attachment cannot be displayed inline");
+      }
+      return reply
+        .header("content-type", file.mimeType ?? "application/octet-stream")
+        .header("content-length", String(file.bytes.byteLength))
+        .header("cache-control", "private, max-age=60")
+        .header(
+          "content-disposition",
+          contentDisposition(
+            download ? "attachment" : "inline",
+            sentAttachment?.filename ?? file.filename
+          )
         )
-      )
-      .send(Buffer.from(file.bytes));
-  });
+        .send(Buffer.from(file.bytes));
+    }
+  );
 
-  route(apiOperations.getConversationArtifactContent, async ({ user, params, query, reply }) => {
-    const conversationId = conversationIdParam(params);
-    await conversations.requireConversationAccess(conversationId, user);
-    const artifactId = asManagedArtifactId(artifactIdParam(params));
-    const artifactRecord = await options.stores.files.getManagedArtifact({
-      clientInstanceId: options.clientInstanceId,
-      artifactId
-    });
-    if (!artifactRecord || artifactRecord.conversationId !== conversationId) {
-      throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
+  route(
+    apiOperations["conversations.artifacts.get_content"],
+    async ({ user, params, query, reply }) => {
+      const conversationId = conversationIdParam(params);
+      await conversations.requireConversationAccess(conversationId, user);
+      const artifactId = asManagedArtifactId(artifactIdParam(params));
+      const artifactRecord = await options.stores.files.getManagedArtifact({
+        clientInstanceId: options.clientInstanceId,
+        artifactId
+      });
+      if (!artifactRecord || artifactRecord.conversationId !== conversationId) {
+        throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
+      }
+      if (!options.managedObjects) {
+        throw new AppError("VALIDATION_FAILED", "Managed artifact downloads are not configured");
+      }
+      const artifact = await options.managedObjects.readArtifact({
+        clientInstanceId: options.clientInstanceId,
+        artifactId
+      });
+      const filename = artifactRecord.filename ?? `${artifactRecord.id}`;
+      const inline = query.inline === "true";
+      const previewCapability = resolveFilePreviewCapability(artifactRecord);
+      if (inline && previewCapability !== "native_image" && previewCapability !== "native_pdf") {
+        throw new AppError("VALIDATION_FAILED", "This artifact cannot be displayed inline");
+      }
+      return reply
+        .header("content-type", artifact.mimeType)
+        .header("content-length", String(artifact.bytes.byteLength))
+        .header("cache-control", "private, max-age=60")
+        .header(
+          "content-disposition",
+          contentDisposition(inline ? "inline" : "attachment", filename)
+        )
+        .send(Buffer.from(artifact.bytes));
     }
-    if (!options.managedObjects) {
-      throw new AppError("VALIDATION_FAILED", "Managed artifact downloads are not configured");
-    }
-    const artifact = await options.managedObjects.readArtifact({
-      clientInstanceId: options.clientInstanceId,
-      artifactId
-    });
-    const filename = artifactRecord.filename ?? `${artifactRecord.id}`;
-    const inline = query.inline === "true";
-    const previewCapability = resolveFilePreviewCapability(artifactRecord);
-    if (inline && previewCapability !== "native_image" && previewCapability !== "native_pdf") {
-      throw new AppError("VALIDATION_FAILED", "This artifact cannot be displayed inline");
-    }
-    return reply
-      .header("content-type", artifact.mimeType)
-      .header("content-length", String(artifact.bytes.byteLength))
-      .header("cache-control", "private, max-age=60")
-      .header("content-disposition", contentDisposition(inline ? "inline" : "attachment", filename))
-      .send(Buffer.from(artifact.bytes));
-  });
+  );
 
-  route(apiOperations.getConversationArtifactPreview, async ({ user, params, reply }) => {
+  route(apiOperations["conversations.artifacts.get_preview"], async ({ user, params, reply }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const artifactId = asManagedArtifactId(artifactIdParam(params));
@@ -116,7 +125,7 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     return preview;
   });
 
-  route(apiOperations.startConversationArtifactPreview, async ({ user, params, reply }) => {
+  route(apiOperations["conversations.artifacts.start_preview"], async ({ user, params, reply }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const artifactId = asManagedArtifactId(artifactIdParam(params));
@@ -132,7 +141,7 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     return preview;
   });
 
-  route(apiOperations.getConversationAttachmentPreview, async ({ user, params, reply }) => {
+  route(apiOperations["conversations.attachments.get_preview"], async ({ user, params, reply }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const attachment = await options.stores.files.getConversationAttachment({
@@ -162,32 +171,35 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     return preview;
   });
 
-  route(apiOperations.startConversationAttachmentPreview, async ({ user, params, reply }) => {
-    const conversationId = conversationIdParam(params);
-    await conversations.requireConversationAccess(conversationId, user);
-    const attachment = await options.stores.files.getConversationAttachment({
-      clientInstanceId: options.clientInstanceId,
-      attachmentId: asConversationAttachmentId(attachmentIdParam(params))
-    });
-    if (
-      !attachment ||
-      attachment.conversationId !== conversationId ||
-      !attachment.messageId ||
-      attachment.status === "deleted"
-    ) {
-      throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
+  route(
+    apiOperations["conversations.attachments.start_preview"],
+    async ({ user, params, reply }) => {
+      const conversationId = conversationIdParam(params);
+      await conversations.requireConversationAccess(conversationId, user);
+      const attachment = await options.stores.files.getConversationAttachment({
+        clientInstanceId: options.clientInstanceId,
+        attachmentId: asConversationAttachmentId(attachmentIdParam(params))
+      });
+      if (
+        !attachment ||
+        attachment.conversationId !== conversationId ||
+        !attachment.messageId ||
+        attachment.status === "deleted"
+      ) {
+        throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
+      }
+      if (!isOfficePagePreviewCapability(resolveFilePreviewCapability(attachment))) {
+        throw new AppError("VALIDATION_FAILED", "This attachment uses its native preview path");
+      }
+      const source = await ensureAttachmentPreviewSource(options, attachment, true);
+      if (!source) throw new AppError("INTERNAL", "Preview source was not created");
+      const preview = await startArtifactPreviewState(options.stores.files, source);
+      void reply.header("cache-control", "private, no-store, max-age=0");
+      return preview;
     }
-    if (!isOfficePagePreviewCapability(resolveFilePreviewCapability(attachment))) {
-      throw new AppError("VALIDATION_FAILED", "This attachment uses its native preview path");
-    }
-    const source = await ensureAttachmentPreviewSource(options, attachment, true);
-    if (!source) throw new AppError("INTERNAL", "Preview source was not created");
-    const preview = await startArtifactPreviewState(options.stores.files, source);
-    void reply.header("cache-control", "private, no-store, max-age=0");
-    return preview;
-  });
+  );
 
-  route(apiOperations.retryConversationArtifactPreview, async ({ user, params, reply }) => {
+  route(apiOperations["conversations.artifacts.retry_preview"], async ({ user, params, reply }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const artifactId = asManagedArtifactId(artifactIdParam(params));

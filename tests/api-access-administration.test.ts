@@ -104,12 +104,12 @@ describe("API Access administration", () => {
   it("denies default admin and user access and still requires superadmin for key lifecycle", async () => {
     const fixture = await createFixture();
     for (const token of ["admin", "user"]) {
-      const response = await fixture.server.call("listServicePrincipals", {
+      const response = await fixture.server.call("service_principals.list", {
         headers: { authorization: `Bearer ${token}` }
       });
       expect(response.statusCode).toBe(403);
     }
-    const selfGrant = await fixture.server.call("updateAdministeredUser", {
+    const selfGrant = await fixture.server.call("users.update", {
       params: { userId: fixture.users.admin.id },
       headers: { authorization: "Bearer admin" },
       payload: { permissions: ["api_access.manage"] }
@@ -168,7 +168,7 @@ describe("API Access administration", () => {
     ["unknown permission", ["unknown.permission"]]
   ])("rejects %s grants", async (_label, permissions) => {
     const fixture = await createFixture();
-    const response = await fixture.server.call("createServicePrincipal", {
+    const response = await fixture.server.call("service_principals.create", {
       headers: { authorization: "Bearer superadmin" },
       payload: { displayLabel: "Invalid", permissions }
     });
@@ -183,14 +183,14 @@ describe("API Access administration", () => {
       permissions: ["config_assets.read"]
     });
 
-    const invalidScope = await fixture.server.call("createApiCredential", {
+    const invalidScope = await fixture.server.call("api_credentials.create", {
       params: { servicePrincipalId: principal.principal.id },
       headers: { authorization: "Bearer superadmin" },
       payload: { name: "Invalid", scopes: ["governance:read"] }
     });
     expect(invalidScope.statusCode).toBe(422);
 
-    const expired = await fixture.server.call("createApiCredential", {
+    const expired = await fixture.server.call("api_credentials.create", {
       params: { servicePrincipalId: principal.principal.id },
       headers: { authorization: "Bearer superadmin" },
       payload: { name: "Expired", expiresAt: "2020-01-01T00:00:00.000Z" }

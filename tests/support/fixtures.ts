@@ -218,7 +218,7 @@ export async function seedConversationMessage(
 
 type TestServer = {
   call(
-    operation: "listCollaborationWorkspaces" | "ensurePersonalCollaborationWorkspace",
+    operation: "workspaces.list" | "workspaces.ensure_personal",
     input: { headers: Record<string, string> }
   ): Promise<{ statusCode: number; json<T>(): T }>;
 };
@@ -227,10 +227,10 @@ export async function personalConversationListInput(
   server: TestServer,
   headers: Record<string, string> = {}
 ): Promise<import("./operations").TestCallInput> {
-  const initialized = await server.call("ensurePersonalCollaborationWorkspace", { headers });
+  const initialized = await server.call("workspaces.ensure_personal", { headers });
   if (initialized.statusCode !== 200)
     throw new Error(`Could not initialize Personal Workspace: ${initialized.statusCode}`);
-  const response = await server.call("listCollaborationWorkspaces", { headers });
+  const response = await server.call("workspaces.list", { headers });
   if (response.statusCode !== 200) {
     throw new Error(`Could not resolve Personal Workspace: ${response.statusCode}`);
   }

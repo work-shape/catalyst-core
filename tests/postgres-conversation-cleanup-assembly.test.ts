@@ -52,7 +52,7 @@ describe("Postgres conversation cleanup through a client assembly", () => {
       seedAssets: false
     });
     try {
-      const created = await app.call("createConversation", {
+      const created = await app.call("conversations.create", {
         payload: { title: "Cleanup through the assembly" }
       });
       expect(created.statusCode).toBe(200);
@@ -67,7 +67,7 @@ describe("Postgres conversation cleanup through a client assembly", () => {
           ...upload,
           content: `bytes of ${upload.filename}`
         });
-        const uploaded = await app.call("uploadDraftAttachment", {
+        const uploaded = await app.call("conversations.draft_attachments.upload", {
           params: { conversationId },
           headers: payload.headers,
           payload: payload.payload
@@ -91,7 +91,7 @@ describe("Postgres conversation cleanup through a client assembly", () => {
           });
       expect(await storedKeys(root)).toEqual(expect.arrayContaining(previewKeys));
 
-      const deleted = await app.call("deleteConversation", { params: { conversationId } });
+      const deleted = await app.call("conversations.delete", { params: { conversationId } });
       expect(deleted.statusCode).toBe(200);
 
       const [deletion] = (

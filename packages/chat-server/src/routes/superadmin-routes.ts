@@ -9,7 +9,7 @@ import { UserAdministrationWorkflow } from "../user-administration-workflow";
 export function registerSuperadminRoutes(route: Route, options: ChatServerOptions): void {
   const userAdministration = new UserAdministrationWorkflow(options);
 
-  route(apiOperations.getUsageSummary, async ({ user, context }) => {
+  route(apiOperations["usage.get_summary"], async ({ user, context }) => {
     await recordGovernanceAccess({
       options,
       user,
@@ -23,11 +23,11 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     });
   });
 
-  route(apiOperations.listAdministeredUsers, async ({ user, context, paging }) => {
+  route(apiOperations["users.list"], async ({ user, context, paging }) => {
     return userAdministration.listUsers(user, context, paging);
   });
 
-  route(apiOperations.createAdministeredUser, async ({ user, context, body }) => {
+  route(apiOperations["users.create"], async ({ user, context, body }) => {
     return userAdministration.createUser(user, context, {
       displayLabel: body.displayLabel,
       email: body.email,
@@ -39,7 +39,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     });
   });
 
-  route(apiOperations.updateAdministeredUser, async ({ user, context, params, body }) => {
+  route(apiOperations["users.update"], async ({ user, context, params, body }) => {
     const userId = userIdParam(params);
     return userAdministration.updateUser(user, context, {
       userId,
@@ -52,14 +52,14 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     });
   });
 
-  route(apiOperations.deleteAdministeredUser, async ({ user, context, params }) => {
+  route(apiOperations["users.delete"], async ({ user, context, params }) => {
     const userId = userIdParam(params);
     return userAdministration.deleteUser(user, context, {
       userId
     });
   });
 
-  route(apiOperations.upsertAdministeredUserIdentity, async ({ user, context, params, body }) => {
+  route(apiOperations["users.identities.upsert"], async ({ user, context, params, body }) => {
     const userId = userIdParam(params);
     return userAdministration.upsertIdentity(user, context, {
       userId,
@@ -71,7 +71,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     });
   });
 
-  route(apiOperations.resetAdministeredUserPassword, async ({ user, context, params, body }) => {
+  route(apiOperations["users.password.reset"], async ({ user, context, params, body }) => {
     const userId = userIdParam(params);
     return userAdministration.resetPassword(user, context, {
       userId,
@@ -79,13 +79,13 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     });
   });
 
-  route(apiOperations.sendAdministeredUserInvitation, async ({ user, context, params }) => {
+  route(apiOperations["users.invitation.send"], async ({ user, context, params }) => {
     return userAdministration.sendInvitation(user, context, {
       userId: userIdParam(params)
     });
   });
 
-  route(apiOperations.deleteAdministeredUserIdentity, async ({ user, context, params }) => {
+  route(apiOperations["users.identities.delete"], async ({ user, context, params }) => {
     return userAdministration.deleteIdentity(user, context, identityParams(params));
   });
 }

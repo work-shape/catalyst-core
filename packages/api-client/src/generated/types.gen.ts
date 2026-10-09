@@ -4,16 +4,16 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
-export type GetApprovalRequestData = {
+export type ApprovalRequestsGetData = {
     body?: never;
     path: {
         requestId: string;
     };
     query?: never;
-    url: '/api/approval-requests/{requestId}';
+    url: '/api/v1/approval-requests/{requestId}';
 };
 
-export type GetApprovalRequestResponses = {
+export type ApprovalRequestsGetResponses = {
     /**
      * Successful response
      */
@@ -68,9 +68,9 @@ export type GetApprovalRequestResponses = {
     };
 };
 
-export type GetApprovalRequestResponse = GetApprovalRequestResponses[keyof GetApprovalRequestResponses];
+export type ApprovalRequestsGetResponse = ApprovalRequestsGetResponses[keyof ApprovalRequestsGetResponses];
 
-export type ListApprovalRequestsData = {
+export type ApprovalRequestsListData = {
     body?: never;
     path?: never;
     query?: {
@@ -78,10 +78,10 @@ export type ListApprovalRequestsData = {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/approval-requests';
+    url: '/api/v1/approval-requests';
 };
 
-export type ListApprovalRequestsResponses = {
+export type ApprovalRequestsListResponses = {
     /**
      * Successful response
      */
@@ -139,16 +139,16 @@ export type ListApprovalRequestsResponses = {
     };
 };
 
-export type ListApprovalRequestsResponse = ListApprovalRequestsResponses[keyof ListApprovalRequestsResponses];
+export type ApprovalRequestsListResponse = ApprovalRequestsListResponses[keyof ApprovalRequestsListResponses];
 
-export type CountPendingApprovalRequestsData = {
+export type ApprovalRequestsCountPendingData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/approval-requests/pending-count';
+    url: '/api/v1/approval-requests/pending-count';
 };
 
-export type CountPendingApprovalRequestsResponses = {
+export type ApprovalRequestsCountPendingResponses = {
     /**
      * Successful response
      */
@@ -158,9 +158,9 @@ export type CountPendingApprovalRequestsResponses = {
     };
 };
 
-export type CountPendingApprovalRequestsResponse = CountPendingApprovalRequestsResponses[keyof CountPendingApprovalRequestsResponses];
+export type ApprovalRequestsCountPendingResponse = ApprovalRequestsCountPendingResponses[keyof ApprovalRequestsCountPendingResponses];
 
-export type DecideApprovalRequestData = {
+export type ApprovalRequestsDecideData = {
     body: {
         decision: 'approve';
         comment?: string;
@@ -175,10 +175,10 @@ export type DecideApprovalRequestData = {
         requestId: string;
     };
     query?: never;
-    url: '/api/approval-requests/{requestId}/decide';
+    url: '/api/v1/approval-requests/{requestId}/decide';
 };
 
-export type DecideApprovalRequestResponses = {
+export type ApprovalRequestsDecideResponses = {
     /**
      * Successful response
      */
@@ -227,18 +227,18 @@ export type DecideApprovalRequestResponses = {
     };
 };
 
-export type DecideApprovalRequestResponse = DecideApprovalRequestResponses[keyof DecideApprovalRequestResponses];
+export type ApprovalRequestsDecideResponse = ApprovalRequestsDecideResponses[keyof ApprovalRequestsDecideResponses];
 
-export type WithdrawApprovalRequestData = {
+export type ApprovalRequestsWithdrawData = {
     body?: never;
     path: {
         requestId: string;
     };
     query?: never;
-    url: '/api/approval-requests/{requestId}/withdraw';
+    url: '/api/v1/approval-requests/{requestId}/withdraw';
 };
 
-export type WithdrawApprovalRequestResponses = {
+export type ApprovalRequestsWithdrawResponses = {
     /**
      * Successful response
      */
@@ -287,18 +287,18 @@ export type WithdrawApprovalRequestResponses = {
     };
 };
 
-export type WithdrawApprovalRequestResponse = WithdrawApprovalRequestResponses[keyof WithdrawApprovalRequestResponses];
+export type ApprovalRequestsWithdrawResponse = ApprovalRequestsWithdrawResponses[keyof ApprovalRequestsWithdrawResponses];
 
-export type RevertApprovalRequestData = {
+export type ApprovalRequestsRevertData = {
     body?: never;
     path: {
         requestId: string;
     };
     query?: never;
-    url: '/api/approval-requests/{requestId}/revert';
+    url: '/api/v1/approval-requests/{requestId}/revert';
 };
 
-export type RevertApprovalRequestResponses = {
+export type ApprovalRequestsRevertResponses = {
     /**
      * Successful response
      */
@@ -347,16 +347,16 @@ export type RevertApprovalRequestResponses = {
     };
 };
 
-export type RevertApprovalRequestResponse = RevertApprovalRequestResponses[keyof RevertApprovalRequestResponses];
+export type ApprovalRequestsRevertResponse = ApprovalRequestsRevertResponses[keyof ApprovalRequestsRevertResponses];
 
-export type DeleteCurrentUserData = {
+export type MeDeleteData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/me';
+    url: '/api/v1/me';
 };
 
-export type DeleteCurrentUserResponses = {
+export type MeDeleteResponses = {
     /**
      * Successful response
      */
@@ -365,16 +365,16 @@ export type DeleteCurrentUserResponses = {
     };
 };
 
-export type DeleteCurrentUserResponse = DeleteCurrentUserResponses[keyof DeleteCurrentUserResponses];
+export type MeDeleteResponse = MeDeleteResponses[keyof MeDeleteResponses];
 
-export type GetCurrentUserData = {
+export type MeGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/me';
+    url: '/api/v1/me';
 };
 
-export type GetCurrentUserResponses = {
+export type MeGetResponses = {
     /**
      * Successful response
      */
@@ -408,18 +408,18 @@ export type GetCurrentUserResponses = {
     };
 };
 
-export type GetCurrentUserResponse = GetCurrentUserResponses[keyof GetCurrentUserResponses];
+export type MeGetResponse = MeGetResponses[keyof MeGetResponses];
 
-export type UpdateCurrentUserData = {
+export type MeUpdateData = {
     body: {
         displayLabel: string;
     };
     path?: never;
     query?: never;
-    url: '/api/me';
+    url: '/api/v1/me';
 };
 
-export type UpdateCurrentUserResponses = {
+export type MeUpdateResponses = {
     /**
      * Successful response
      */
@@ -453,16 +453,16 @@ export type UpdateCurrentUserResponses = {
     };
 };
 
-export type UpdateCurrentUserResponse = UpdateCurrentUserResponses[keyof UpdateCurrentUserResponses];
+export type MeUpdateResponse = MeUpdateResponses[keyof MeUpdateResponses];
 
-export type GetCurrentUserModelPreferenceData = {
+export type MeModelPreferenceGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/me/model-preference';
+    url: '/api/v1/me/model-preference';
 };
 
-export type GetCurrentUserModelPreferenceResponses = {
+export type MeModelPreferenceGetResponses = {
     /**
      * Successful response
      */
@@ -474,9 +474,9 @@ export type GetCurrentUserModelPreferenceResponses = {
     };
 };
 
-export type GetCurrentUserModelPreferenceResponse = GetCurrentUserModelPreferenceResponses[keyof GetCurrentUserModelPreferenceResponses];
+export type MeModelPreferenceGetResponse = MeModelPreferenceGetResponses[keyof MeModelPreferenceGetResponses];
 
-export type SetCurrentUserModelPreferenceData = {
+export type MeModelPreferenceSetData = {
     body: {
         modelBindingId?: string;
         reasoningEfforts: {
@@ -485,10 +485,10 @@ export type SetCurrentUserModelPreferenceData = {
     };
     path?: never;
     query?: never;
-    url: '/api/me/model-preference';
+    url: '/api/v1/me/model-preference';
 };
 
-export type SetCurrentUserModelPreferenceResponses = {
+export type MeModelPreferenceSetResponses = {
     /**
      * Successful response
      */
@@ -500,19 +500,19 @@ export type SetCurrentUserModelPreferenceResponses = {
     };
 };
 
-export type SetCurrentUserModelPreferenceResponse = SetCurrentUserModelPreferenceResponses[keyof SetCurrentUserModelPreferenceResponses];
+export type MeModelPreferenceSetResponse = MeModelPreferenceSetResponses[keyof MeModelPreferenceSetResponses];
 
-export type ChangeCurrentUserPasswordData = {
+export type MePasswordChangeData = {
     body: {
         currentPassword: string;
         newPassword: string;
     };
     path?: never;
     query?: never;
-    url: '/api/me/password';
+    url: '/api/v1/me/password';
 };
 
-export type ChangeCurrentUserPasswordResponses = {
+export type MePasswordChangeResponses = {
     /**
      * Successful response
      */
@@ -521,9 +521,9 @@ export type ChangeCurrentUserPasswordResponses = {
     };
 };
 
-export type ChangeCurrentUserPasswordResponse = ChangeCurrentUserPasswordResponses[keyof ChangeCurrentUserPasswordResponses];
+export type MePasswordChangeResponse = MePasswordChangeResponses[keyof MePasswordChangeResponses];
 
-export type RequestPasswordResetData = {
+export type PasswordResetRequestData = {
     body: {
         email: string;
     };
@@ -531,10 +531,10 @@ export type RequestPasswordResetData = {
     query?: {
         locale?: string;
     };
-    url: '/api/password-reset';
+    url: '/api/v1/password-reset';
 };
 
-export type RequestPasswordResetResponses = {
+export type PasswordResetRequestResponses = {
     /**
      * Successful response
      */
@@ -543,19 +543,19 @@ export type RequestPasswordResetResponses = {
     };
 };
 
-export type RequestPasswordResetResponse = RequestPasswordResetResponses[keyof RequestPasswordResetResponses];
+export type PasswordResetRequestResponse = PasswordResetRequestResponses[keyof PasswordResetRequestResponses];
 
-export type CompletePasswordSetupData = {
+export type PasswordSetupCompleteData = {
     body: {
         token: string;
         password: string;
     };
     path?: never;
     query?: never;
-    url: '/api/password-setup';
+    url: '/api/v1/password-setup';
 };
 
-export type CompletePasswordSetupResponses = {
+export type PasswordSetupCompleteResponses = {
     /**
      * Successful response
      */
@@ -564,18 +564,18 @@ export type CompletePasswordSetupResponses = {
     };
 };
 
-export type CompletePasswordSetupResponse = CompletePasswordSetupResponses[keyof CompletePasswordSetupResponses];
+export type PasswordSetupCompleteResponse = PasswordSetupCompleteResponses[keyof PasswordSetupCompleteResponses];
 
-export type GetBrandingData = {
+export type BrandingGetData = {
     body?: never;
     path?: never;
     query?: {
         locale?: string;
     };
-    url: '/api/branding';
+    url: '/api/v1/instance/branding';
 };
 
-export type GetBrandingResponses = {
+export type BrandingGetResponses = {
     /**
      * Successful response
      */
@@ -619,18 +619,18 @@ export type GetBrandingResponses = {
     };
 };
 
-export type GetBrandingResponse = GetBrandingResponses[keyof GetBrandingResponses];
+export type BrandingGetResponse = BrandingGetResponses[keyof BrandingGetResponses];
 
-export type GetConfigData = {
+export type ConfigGetData = {
     body?: never;
     path?: never;
     query?: {
         locale?: string;
     };
-    url: '/api/config';
+    url: '/api/v1/instance/config';
 };
 
-export type GetConfigResponses = {
+export type ConfigGetResponses = {
     /**
      * Successful response
      */
@@ -752,16 +752,16 @@ export type GetConfigResponses = {
     };
 };
 
-export type GetConfigResponse = GetConfigResponses[keyof GetConfigResponses];
+export type ConfigGetResponse = ConfigGetResponses[keyof ConfigGetResponses];
 
-export type EnsurePersonalCollaborationWorkspaceData = {
+export type WorkspacesEnsurePersonalData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/collaboration-workspaces/personal';
+    url: '/api/v1/workspaces/personal';
 };
 
-export type EnsurePersonalCollaborationWorkspaceResponses = {
+export type WorkspacesEnsurePersonalResponses = {
     /**
      * Successful response
      */
@@ -784,19 +784,19 @@ export type EnsurePersonalCollaborationWorkspaceResponses = {
     };
 };
 
-export type EnsurePersonalCollaborationWorkspaceResponse = EnsurePersonalCollaborationWorkspaceResponses[keyof EnsurePersonalCollaborationWorkspaceResponses];
+export type WorkspacesEnsurePersonalResponse = WorkspacesEnsurePersonalResponses[keyof WorkspacesEnsurePersonalResponses];
 
-export type ListCollaborationWorkspacesData = {
+export type WorkspacesListData = {
     body?: never;
     path?: never;
     query?: {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/collaboration-workspaces';
+    url: '/api/v1/workspaces';
 };
 
-export type ListCollaborationWorkspacesResponses = {
+export type WorkspacesListResponses = {
     /**
      * Successful response
      */
@@ -822,9 +822,9 @@ export type ListCollaborationWorkspacesResponses = {
     };
 };
 
-export type ListCollaborationWorkspacesResponse = ListCollaborationWorkspacesResponses[keyof ListCollaborationWorkspacesResponses];
+export type WorkspacesListResponse = WorkspacesListResponses[keyof WorkspacesListResponses];
 
-export type CreateCollaborationWorkspaceData = {
+export type WorkspacesCreateData = {
     body: {
         name: string;
         description?: string | null;
@@ -835,10 +835,10 @@ export type CreateCollaborationWorkspaceData = {
     };
     path?: never;
     query?: never;
-    url: '/api/collaboration-workspaces';
+    url: '/api/v1/workspaces';
 };
 
-export type CreateCollaborationWorkspaceResponses = {
+export type WorkspacesCreateResponses = {
     /**
      * Successful response
      */
@@ -861,19 +861,19 @@ export type CreateCollaborationWorkspaceResponses = {
     };
 };
 
-export type CreateCollaborationWorkspaceResponse = CreateCollaborationWorkspaceResponses[keyof CreateCollaborationWorkspaceResponses];
+export type WorkspacesCreateResponse = WorkspacesCreateResponses[keyof WorkspacesCreateResponses];
 
-export type ListCollaborationWorkspaceDirectoryData = {
+export type WorkspacesDirectoryListData = {
     body?: never;
     path?: never;
     query?: {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/collaboration-workspaces/directory';
+    url: '/api/v1/workspaces/directory';
 };
 
-export type ListCollaborationWorkspaceDirectoryResponses = {
+export type WorkspacesDirectoryListResponses = {
     /**
      * Successful response
      */
@@ -891,9 +891,9 @@ export type ListCollaborationWorkspaceDirectoryResponses = {
     };
 };
 
-export type ListCollaborationWorkspaceDirectoryResponse = ListCollaborationWorkspaceDirectoryResponses[keyof ListCollaborationWorkspaceDirectoryResponses];
+export type WorkspacesDirectoryListResponse = WorkspacesDirectoryListResponses[keyof WorkspacesDirectoryListResponses];
 
-export type DeleteCollaborationWorkspaceData = {
+export type WorkspacesDeleteData = {
     body: {
         confirmName: string;
     };
@@ -901,10 +901,10 @@ export type DeleteCollaborationWorkspaceData = {
         collaborationWorkspaceId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}';
 };
 
-export type DeleteCollaborationWorkspaceResponses = {
+export type WorkspacesDeleteResponses = {
     /**
      * Successful response
      */
@@ -916,18 +916,18 @@ export type DeleteCollaborationWorkspaceResponses = {
     };
 };
 
-export type DeleteCollaborationWorkspaceResponse = DeleteCollaborationWorkspaceResponses[keyof DeleteCollaborationWorkspaceResponses];
+export type WorkspacesDeleteResponse = WorkspacesDeleteResponses[keyof WorkspacesDeleteResponses];
 
-export type GetCollaborationWorkspaceData = {
+export type WorkspacesGetData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}';
 };
 
-export type GetCollaborationWorkspaceResponses = {
+export type WorkspacesGetResponses = {
     /**
      * Successful response
      */
@@ -950,9 +950,9 @@ export type GetCollaborationWorkspaceResponses = {
     };
 };
 
-export type GetCollaborationWorkspaceResponse = GetCollaborationWorkspaceResponses[keyof GetCollaborationWorkspaceResponses];
+export type WorkspacesGetResponse = WorkspacesGetResponses[keyof WorkspacesGetResponses];
 
-export type UpdateCollaborationWorkspaceData = {
+export type WorkspacesUpdateData = {
     body: {
         name?: string;
         description?: string | null;
@@ -965,10 +965,10 @@ export type UpdateCollaborationWorkspaceData = {
         collaborationWorkspaceId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}';
 };
 
-export type UpdateCollaborationWorkspaceResponses = {
+export type WorkspacesUpdateResponses = {
     /**
      * Successful response
      */
@@ -991,9 +991,9 @@ export type UpdateCollaborationWorkspaceResponses = {
     };
 };
 
-export type UpdateCollaborationWorkspaceResponse = UpdateCollaborationWorkspaceResponses[keyof UpdateCollaborationWorkspaceResponses];
+export type WorkspacesUpdateResponse = WorkspacesUpdateResponses[keyof WorkspacesUpdateResponses];
 
-export type ListCollaborationWorkspaceAgentsData = {
+export type WorkspacesAgentsListData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
@@ -1003,10 +1003,10 @@ export type ListCollaborationWorkspaceAgentsData = {
         cursor?: string;
         locale?: string;
     };
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/agents';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/agents';
 };
 
-export type ListCollaborationWorkspaceAgentsResponses = {
+export type WorkspacesAgentsListResponses = {
     /**
      * Successful response
      */
@@ -1040,18 +1040,18 @@ export type ListCollaborationWorkspaceAgentsResponses = {
     };
 };
 
-export type ListCollaborationWorkspaceAgentsResponse = ListCollaborationWorkspaceAgentsResponses[keyof ListCollaborationWorkspaceAgentsResponses];
+export type WorkspacesAgentsListResponse = WorkspacesAgentsListResponses[keyof WorkspacesAgentsListResponses];
 
-export type GetCollaborationWorkspaceDeletionImpactData = {
+export type WorkspacesDeletionImpactGetData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/deletion-impact';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/deletion-impact';
 };
 
-export type GetCollaborationWorkspaceDeletionImpactResponses = {
+export type WorkspacesDeletionImpactGetResponses = {
     /**
      * Successful response
      */
@@ -1062,9 +1062,9 @@ export type GetCollaborationWorkspaceDeletionImpactResponses = {
     };
 };
 
-export type GetCollaborationWorkspaceDeletionImpactResponse = GetCollaborationWorkspaceDeletionImpactResponses[keyof GetCollaborationWorkspaceDeletionImpactResponses];
+export type WorkspacesDeletionImpactGetResponse = WorkspacesDeletionImpactGetResponses[keyof WorkspacesDeletionImpactGetResponses];
 
-export type ListCollaborationWorkspaceMembersData = {
+export type WorkspacesMembersListData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
@@ -1073,10 +1073,10 @@ export type ListCollaborationWorkspaceMembersData = {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/members';
 };
 
-export type ListCollaborationWorkspaceMembersResponses = {
+export type WorkspacesMembersListResponses = {
     /**
      * Successful response
      */
@@ -1091,9 +1091,9 @@ export type ListCollaborationWorkspaceMembersResponses = {
     };
 };
 
-export type ListCollaborationWorkspaceMembersResponse = ListCollaborationWorkspaceMembersResponses[keyof ListCollaborationWorkspaceMembersResponses];
+export type WorkspacesMembersListResponse = WorkspacesMembersListResponses[keyof WorkspacesMembersListResponses];
 
-export type AddCollaborationWorkspaceMemberData = {
+export type WorkspacesMembersAddData = {
     body: {
         email: string;
     };
@@ -1101,10 +1101,10 @@ export type AddCollaborationWorkspaceMemberData = {
         collaborationWorkspaceId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/members';
 };
 
-export type AddCollaborationWorkspaceMemberResponses = {
+export type WorkspacesMembersAddResponses = {
     /**
      * Successful response
      */
@@ -1116,9 +1116,9 @@ export type AddCollaborationWorkspaceMemberResponses = {
     };
 };
 
-export type AddCollaborationWorkspaceMemberResponse = AddCollaborationWorkspaceMemberResponses[keyof AddCollaborationWorkspaceMemberResponses];
+export type WorkspacesMembersAddResponse = WorkspacesMembersAddResponses[keyof WorkspacesMembersAddResponses];
 
-export type ListCollaborationWorkspaceMemberCandidatesData = {
+export type WorkspacesMemberCandidatesListData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
@@ -1128,10 +1128,10 @@ export type ListCollaborationWorkspaceMemberCandidatesData = {
         cursor?: string;
         q?: string;
     };
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/member-candidates';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/member-candidates';
 };
 
-export type ListCollaborationWorkspaceMemberCandidatesResponses = {
+export type WorkspacesMemberCandidatesListResponses = {
     /**
      * Successful response
      */
@@ -1146,19 +1146,19 @@ export type ListCollaborationWorkspaceMemberCandidatesResponses = {
     };
 };
 
-export type ListCollaborationWorkspaceMemberCandidatesResponse = ListCollaborationWorkspaceMemberCandidatesResponses[keyof ListCollaborationWorkspaceMemberCandidatesResponses];
+export type WorkspacesMemberCandidatesListResponse = WorkspacesMemberCandidatesListResponses[keyof WorkspacesMemberCandidatesListResponses];
 
-export type RemoveCollaborationWorkspaceMemberData = {
+export type WorkspacesMembersRemoveData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
         userId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/members/{userId}';
 };
 
-export type RemoveCollaborationWorkspaceMemberResponses = {
+export type WorkspacesMembersRemoveResponses = {
     /**
      * Successful response
      */
@@ -1172,9 +1172,9 @@ export type RemoveCollaborationWorkspaceMemberResponses = {
     };
 };
 
-export type RemoveCollaborationWorkspaceMemberResponse = RemoveCollaborationWorkspaceMemberResponses[keyof RemoveCollaborationWorkspaceMemberResponses];
+export type WorkspacesMembersRemoveResponse = WorkspacesMembersRemoveResponses[keyof WorkspacesMembersRemoveResponses];
 
-export type UpdateCollaborationWorkspaceMemberRoleData = {
+export type WorkspacesMembersUpdateRoleData = {
     body: {
         role: 'owner' | 'admin' | 'member';
     };
@@ -1183,10 +1183,10 @@ export type UpdateCollaborationWorkspaceMemberRoleData = {
         userId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/members/{userId}';
 };
 
-export type UpdateCollaborationWorkspaceMemberRoleResponses = {
+export type WorkspacesMembersUpdateRoleResponses = {
     /**
      * Successful response
      */
@@ -1200,18 +1200,18 @@ export type UpdateCollaborationWorkspaceMemberRoleResponses = {
     };
 };
 
-export type UpdateCollaborationWorkspaceMemberRoleResponse = UpdateCollaborationWorkspaceMemberRoleResponses[keyof UpdateCollaborationWorkspaceMemberRoleResponses];
+export type WorkspacesMembersUpdateRoleResponse = WorkspacesMembersUpdateRoleResponses[keyof WorkspacesMembersUpdateRoleResponses];
 
-export type LeaveCollaborationWorkspaceData = {
+export type WorkspacesMembersLeaveData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/me';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/members/me';
 };
 
-export type LeaveCollaborationWorkspaceResponses = {
+export type WorkspacesMembersLeaveResponses = {
     /**
      * Successful response
      */
@@ -1225,9 +1225,9 @@ export type LeaveCollaborationWorkspaceResponses = {
     };
 };
 
-export type LeaveCollaborationWorkspaceResponse = LeaveCollaborationWorkspaceResponses[keyof LeaveCollaborationWorkspaceResponses];
+export type WorkspacesMembersLeaveResponse = WorkspacesMembersLeaveResponses[keyof WorkspacesMembersLeaveResponses];
 
-export type ListCollaborationWorkspaceAccessRequestsData = {
+export type WorkspacesAccessRequestsListData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
@@ -1236,10 +1236,10 @@ export type ListCollaborationWorkspaceAccessRequestsData = {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests';
 };
 
-export type ListCollaborationWorkspaceAccessRequestsResponses = {
+export type WorkspacesAccessRequestsListResponses = {
     /**
      * Successful response
      */
@@ -1254,18 +1254,18 @@ export type ListCollaborationWorkspaceAccessRequestsResponses = {
     };
 };
 
-export type ListCollaborationWorkspaceAccessRequestsResponse = ListCollaborationWorkspaceAccessRequestsResponses[keyof ListCollaborationWorkspaceAccessRequestsResponses];
+export type WorkspacesAccessRequestsListResponse = WorkspacesAccessRequestsListResponses[keyof WorkspacesAccessRequestsListResponses];
 
-export type RequestCollaborationWorkspaceAccessData = {
+export type WorkspacesAccessRequestsCreateData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests';
 };
 
-export type RequestCollaborationWorkspaceAccessResponses = {
+export type WorkspacesAccessRequestsCreateResponses = {
     /**
      * Successful response
      */
@@ -1278,19 +1278,19 @@ export type RequestCollaborationWorkspaceAccessResponses = {
     };
 };
 
-export type RequestCollaborationWorkspaceAccessResponse = RequestCollaborationWorkspaceAccessResponses[keyof RequestCollaborationWorkspaceAccessResponses];
+export type WorkspacesAccessRequestsCreateResponse = WorkspacesAccessRequestsCreateResponses[keyof WorkspacesAccessRequestsCreateResponses];
 
-export type ApproveCollaborationWorkspaceAccessRequestData = {
+export type WorkspacesAccessRequestsApproveData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
         userId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve';
 };
 
-export type ApproveCollaborationWorkspaceAccessRequestResponses = {
+export type WorkspacesAccessRequestsApproveResponses = {
     /**
      * Successful response
      */
@@ -1304,19 +1304,19 @@ export type ApproveCollaborationWorkspaceAccessRequestResponses = {
     };
 };
 
-export type ApproveCollaborationWorkspaceAccessRequestResponse = ApproveCollaborationWorkspaceAccessRequestResponses[keyof ApproveCollaborationWorkspaceAccessRequestResponses];
+export type WorkspacesAccessRequestsApproveResponse = WorkspacesAccessRequestsApproveResponses[keyof WorkspacesAccessRequestsApproveResponses];
 
-export type DeclineCollaborationWorkspaceAccessRequestData = {
+export type WorkspacesAccessRequestsDeclineData = {
     body?: never;
     path: {
         collaborationWorkspaceId: string;
         userId: string;
     };
     query?: never;
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}';
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}';
 };
 
-export type DeclineCollaborationWorkspaceAccessRequestResponses = {
+export type WorkspacesAccessRequestsDeclineResponses = {
     /**
      * Successful response
      */
@@ -1329,9 +1329,9 @@ export type DeclineCollaborationWorkspaceAccessRequestResponses = {
     };
 };
 
-export type DeclineCollaborationWorkspaceAccessRequestResponse = DeclineCollaborationWorkspaceAccessRequestResponses[keyof DeclineCollaborationWorkspaceAccessRequestResponses];
+export type WorkspacesAccessRequestsDeclineResponse = WorkspacesAccessRequestsDeclineResponses[keyof WorkspacesAccessRequestsDeclineResponses];
 
-export type ListConversationsData = {
+export type ConversationsListData = {
     body?: never;
     path?: never;
     query?: {
@@ -1339,10 +1339,10 @@ export type ListConversationsData = {
         cursor?: string;
         collaborationWorkspaceId?: string;
     };
-    url: '/api/conversations';
+    url: '/api/v1/conversations';
 };
 
-export type ListConversationsResponses = {
+export type ConversationsListResponses = {
     /**
      * Successful response
      */
@@ -1377,9 +1377,9 @@ export type ListConversationsResponses = {
     };
 };
 
-export type ListConversationsResponse = ListConversationsResponses[keyof ListConversationsResponses];
+export type ConversationsListResponse = ConversationsListResponses[keyof ConversationsListResponses];
 
-export type CreateConversationData = {
+export type ConversationsCreateData = {
     body: {
         title?: string;
         collaborationWorkspaceId?: string;
@@ -1387,10 +1387,10 @@ export type CreateConversationData = {
     };
     path?: never;
     query?: never;
-    url: '/api/conversations';
+    url: '/api/v1/conversations';
 };
 
-export type CreateConversationResponses = {
+export type ConversationsCreateResponses = {
     /**
      * Successful response
      */
@@ -1410,9 +1410,9 @@ export type CreateConversationResponses = {
     };
 };
 
-export type CreateConversationResponse = CreateConversationResponses[keyof CreateConversationResponses];
+export type ConversationsCreateResponse = ConversationsCreateResponses[keyof ConversationsCreateResponses];
 
-export type RenameConversationData = {
+export type ConversationsRenameData = {
     body: {
         title: string;
     };
@@ -1420,10 +1420,10 @@ export type RenameConversationData = {
         conversationId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/title';
+    url: '/api/v1/conversations/{conversationId}/title';
 };
 
-export type RenameConversationResponses = {
+export type ConversationsRenameResponses = {
     /**
      * Successful response
      */
@@ -1443,18 +1443,18 @@ export type RenameConversationResponses = {
     };
 };
 
-export type RenameConversationResponse = RenameConversationResponses[keyof RenameConversationResponses];
+export type ConversationsRenameResponse = ConversationsRenameResponses[keyof ConversationsRenameResponses];
 
-export type GenerateConversationTitleData = {
+export type ConversationsTitleGenerateData = {
     body?: never;
     path: {
         conversationId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/title';
+    url: '/api/v1/conversations/{conversationId}/title';
 };
 
-export type GenerateConversationTitleResponses = {
+export type ConversationsTitleGenerateResponses = {
     /**
      * Successful response
      */
@@ -1474,9 +1474,9 @@ export type GenerateConversationTitleResponses = {
     };
 };
 
-export type GenerateConversationTitleResponse = GenerateConversationTitleResponses[keyof GenerateConversationTitleResponses];
+export type ConversationsTitleGenerateResponse = ConversationsTitleGenerateResponses[keyof ConversationsTitleGenerateResponses];
 
-export type MoveConversationData = {
+export type ConversationsMoveData = {
     body: {
         collaborationWorkspaceId: string;
         visibility?: 'workspace' | 'private';
@@ -1485,10 +1485,10 @@ export type MoveConversationData = {
         conversationId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/move';
+    url: '/api/v1/conversations/{conversationId}/move';
 };
 
-export type MoveConversationResponses = {
+export type ConversationsMoveResponses = {
     /**
      * Successful response
      */
@@ -1508,18 +1508,18 @@ export type MoveConversationResponses = {
     };
 };
 
-export type MoveConversationResponse = MoveConversationResponses[keyof MoveConversationResponses];
+export type ConversationsMoveResponse = ConversationsMoveResponses[keyof ConversationsMoveResponses];
 
-export type GetConversationThreadData = {
+export type ConversationsThreadGetData = {
     body?: never;
     path: {
         conversationId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/thread';
+    url: '/api/v1/conversations/{conversationId}/thread';
 };
 
-export type GetConversationThreadResponses = {
+export type ConversationsThreadGetResponses = {
     /**
      * Successful response
      */
@@ -1757,9 +1757,9 @@ export type GetConversationThreadResponses = {
     };
 };
 
-export type GetConversationThreadResponse = GetConversationThreadResponses[keyof GetConversationThreadResponses];
+export type ConversationsThreadGetResponse = ConversationsThreadGetResponses[keyof ConversationsThreadGetResponses];
 
-export type ListConversationMessagesData = {
+export type ConversationsMessagesListData = {
     body?: never;
     path: {
         conversationId: string;
@@ -1768,10 +1768,10 @@ export type ListConversationMessagesData = {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/conversations/{conversationId}/messages';
+    url: '/api/v1/conversations/{conversationId}/messages';
 };
 
-export type ListConversationMessagesResponses = {
+export type ConversationsMessagesListResponses = {
     /**
      * Successful response
      */
@@ -1876,9 +1876,9 @@ export type ListConversationMessagesResponses = {
     };
 };
 
-export type ListConversationMessagesResponse = ListConversationMessagesResponses[keyof ListConversationMessagesResponses];
+export type ConversationsMessagesListResponse = ConversationsMessagesListResponses[keyof ConversationsMessagesListResponses];
 
-export type ListConversationResourcesData = {
+export type ConversationsResourcesListData = {
     body?: never;
     path: {
         conversationId: string;
@@ -1887,10 +1887,10 @@ export type ListConversationResourcesData = {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/conversations/{conversationId}/resources';
+    url: '/api/v1/conversations/{conversationId}/resources';
 };
 
-export type ListConversationResourcesResponses = {
+export type ConversationsResourcesListResponses = {
     /**
      * Successful response
      */
@@ -1979,19 +1979,19 @@ export type ListConversationResourcesResponses = {
     };
 };
 
-export type ListConversationResourcesResponse = ListConversationResourcesResponses[keyof ListConversationResourcesResponses];
+export type ConversationsResourcesListResponse = ConversationsResourcesListResponses[keyof ConversationsResourcesListResponses];
 
-export type GetStructuredDataResourceData = {
+export type ConversationsStructuredDataGetData = {
     body?: never;
     path: {
         conversationId: string;
         structuredDataResourceId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/structured-data/{structuredDataResourceId}';
+    url: '/api/v1/conversations/{conversationId}/structured-data/{structuredDataResourceId}';
 };
 
-export type GetStructuredDataResourceResponses = {
+export type ConversationsStructuredDataGetResponses = {
     /**
      * Successful response
      */
@@ -2023,9 +2023,9 @@ export type GetStructuredDataResourceResponses = {
     };
 };
 
-export type GetStructuredDataResourceResponse = GetStructuredDataResourceResponses[keyof GetStructuredDataResourceResponses];
+export type ConversationsStructuredDataGetResponse = ConversationsStructuredDataGetResponses[keyof ConversationsStructuredDataGetResponses];
 
-export type CancelConversationRunData = {
+export type ConversationsRunsCancelData = {
     body: {
         reason?: string;
     };
@@ -2034,10 +2034,10 @@ export type CancelConversationRunData = {
         runId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/runs/{runId}/cancel';
+    url: '/api/v1/conversations/{conversationId}/runs/{runId}/cancel';
 };
 
-export type CancelConversationRunResponses = {
+export type ConversationsRunsCancelResponses = {
     /**
      * Successful response
      */
@@ -2070,9 +2070,9 @@ export type CancelConversationRunResponses = {
     };
 };
 
-export type CancelConversationRunResponse = CancelConversationRunResponses[keyof CancelConversationRunResponses];
+export type ConversationsRunsCancelResponse = ConversationsRunsCancelResponses[keyof ConversationsRunsCancelResponses];
 
-export type StartConversationRunData = {
+export type ConversationsRunsStartData = {
     body: {
         idempotencyKey: string;
         agentName?: string;
@@ -2087,10 +2087,10 @@ export type StartConversationRunData = {
         conversationId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/runs';
+    url: '/api/v1/conversations/{conversationId}/runs';
 };
 
-export type StartConversationRunResponses = {
+export type ConversationsRunsStartResponses = {
     /**
      * Successful response
      */
@@ -2466,9 +2466,9 @@ export type StartConversationRunResponses = {
     };
 };
 
-export type StartConversationRunResponse = StartConversationRunResponses[keyof StartConversationRunResponses];
+export type ConversationsRunsStartResponse = ConversationsRunsStartResponses[keyof ConversationsRunsStartResponses];
 
-export type CreateConversationRunData = {
+export type ConversationsRunsCreateData = {
     body: {
         idempotencyKey: string;
         agentName?: string;
@@ -2486,10 +2486,10 @@ export type CreateConversationRunData = {
     };
     path?: never;
     query?: never;
-    url: '/api/conversations/runs';
+    url: '/api/v1/conversations/runs';
 };
 
-export type CreateConversationRunResponses = {
+export type ConversationsRunsCreateResponses = {
     /**
      * Successful response
      */
@@ -2865,9 +2865,9 @@ export type CreateConversationRunResponses = {
     };
 };
 
-export type CreateConversationRunResponse = CreateConversationRunResponses[keyof CreateConversationRunResponses];
+export type ConversationsRunsCreateResponse = ConversationsRunsCreateResponses[keyof ConversationsRunsCreateResponses];
 
-export type ObserveConversationRunData = {
+export type ConversationsRunsObserveData = {
     body?: never;
     path: {
         conversationId: string;
@@ -2876,10 +2876,10 @@ export type ObserveConversationRunData = {
     query?: {
         after?: string;
     };
-    url: '/api/conversations/{conversationId}/runs/{runId}/events';
+    url: '/api/v1/conversations/{conversationId}/runs/{runId}/events';
 };
 
-export type ObserveConversationRunResponses = {
+export type ConversationsRunsObserveResponses = {
     /**
      * Successful response
      */
@@ -2998,9 +2998,9 @@ export type ObserveConversationRunResponses = {
     };
 };
 
-export type ObserveConversationRunResponse = ObserveConversationRunResponses[keyof ObserveConversationRunResponses];
+export type ConversationsRunsObserveResponse = ConversationsRunsObserveResponses[keyof ConversationsRunsObserveResponses];
 
-export type CommandConversationRunData = {
+export type ConversationsRunsCommandData = {
     body: {
         command: {
             type: 'tool_permission_decision';
@@ -3016,10 +3016,10 @@ export type CommandConversationRunData = {
         runId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/runs/{runId}/commands';
+    url: '/api/v1/conversations/{conversationId}/runs/{runId}/commands';
 };
 
-export type CommandConversationRunResponses = {
+export type ConversationsRunsCommandResponses = {
     /**
      * Successful response
      */
@@ -3052,18 +3052,18 @@ export type CommandConversationRunResponses = {
     };
 };
 
-export type CommandConversationRunResponse = CommandConversationRunResponses[keyof CommandConversationRunResponses];
+export type ConversationsRunsCommandResponse = ConversationsRunsCommandResponses[keyof ConversationsRunsCommandResponses];
 
-export type DeleteConversationData = {
+export type ConversationsDeleteData = {
     body?: never;
     path: {
         conversationId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}';
+    url: '/api/v1/conversations/{conversationId}';
 };
 
-export type DeleteConversationResponses = {
+export type ConversationsDeleteResponses = {
     /**
      * Successful response
      */
@@ -3083,19 +3083,19 @@ export type DeleteConversationResponses = {
     };
 };
 
-export type DeleteConversationResponse = DeleteConversationResponses[keyof DeleteConversationResponses];
+export type ConversationsDeleteResponse = ConversationsDeleteResponses[keyof ConversationsDeleteResponses];
 
-export type GetConversationArtifactPreviewData = {
+export type ConversationsArtifactsGetPreviewData = {
     body?: never;
     path: {
         conversationId: string;
         artifactId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview';
+    url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview';
 };
 
-export type GetConversationArtifactPreviewResponses = {
+export type ConversationsArtifactsGetPreviewResponses = {
     /**
      * Successful response
      */
@@ -3131,19 +3131,19 @@ export type GetConversationArtifactPreviewResponses = {
     };
 };
 
-export type GetConversationArtifactPreviewResponse = GetConversationArtifactPreviewResponses[keyof GetConversationArtifactPreviewResponses];
+export type ConversationsArtifactsGetPreviewResponse = ConversationsArtifactsGetPreviewResponses[keyof ConversationsArtifactsGetPreviewResponses];
 
-export type StartConversationArtifactPreviewData = {
+export type ConversationsArtifactsStartPreviewData = {
     body?: never;
     path: {
         conversationId: string;
         artifactId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview';
+    url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview';
 };
 
-export type StartConversationArtifactPreviewResponses = {
+export type ConversationsArtifactsStartPreviewResponses = {
     /**
      * Successful response
      */
@@ -3179,67 +3179,19 @@ export type StartConversationArtifactPreviewResponses = {
     };
 };
 
-export type StartConversationArtifactPreviewResponse = StartConversationArtifactPreviewResponses[keyof StartConversationArtifactPreviewResponses];
+export type ConversationsArtifactsStartPreviewResponse = ConversationsArtifactsStartPreviewResponses[keyof ConversationsArtifactsStartPreviewResponses];
 
-export type GetConversationAttachmentPreviewData = {
-    body?: never;
-    path: {
-        conversationId: string;
-        attachmentId: string;
-    };
-    query?: never;
-    url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview';
-};
-
-export type GetConversationAttachmentPreviewResponses = {
-    /**
-     * Successful response
-     */
-    200: {
-        status: 'pending';
-        artifactId: string;
-        queuedAt?: string;
-    } | {
-        status: 'ready';
-        artifactId: string;
-        type: 'image_pages';
-        format: 'png' | 'webp' | 'jpeg';
-        pageCount?: number;
-        truncated?: boolean;
-        pages: Array<{
-            artifactId: string;
-            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
-            filename?: string;
-            pageNumber?: number;
-            slideNumber?: number;
-            width?: number;
-            height?: number;
-        }>;
-    } | {
-        status: 'failed';
-        artifactId: string;
-        errorCode?: string;
-        retryable?: boolean;
-    } | {
-        status: 'unsupported';
-        artifactId: string;
-        errorCode?: string;
-    };
-};
-
-export type GetConversationAttachmentPreviewResponse = GetConversationAttachmentPreviewResponses[keyof GetConversationAttachmentPreviewResponses];
-
-export type StartConversationAttachmentPreviewData = {
+export type ConversationsAttachmentsGetPreviewData = {
     body?: never;
     path: {
         conversationId: string;
         attachmentId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview';
+    url: '/api/v1/conversations/{conversationId}/attachments/{attachmentId}/preview';
 };
 
-export type StartConversationAttachmentPreviewResponses = {
+export type ConversationsAttachmentsGetPreviewResponses = {
     /**
      * Successful response
      */
@@ -3275,9 +3227,57 @@ export type StartConversationAttachmentPreviewResponses = {
     };
 };
 
-export type StartConversationAttachmentPreviewResponse = StartConversationAttachmentPreviewResponses[keyof StartConversationAttachmentPreviewResponses];
+export type ConversationsAttachmentsGetPreviewResponse = ConversationsAttachmentsGetPreviewResponses[keyof ConversationsAttachmentsGetPreviewResponses];
 
-export type ListDraftAttachmentsData = {
+export type ConversationsAttachmentsStartPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/conversations/{conversationId}/attachments/{attachmentId}/preview';
+};
+
+export type ConversationsAttachmentsStartPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+        retryable?: boolean;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type ConversationsAttachmentsStartPreviewResponse = ConversationsAttachmentsStartPreviewResponses[keyof ConversationsAttachmentsStartPreviewResponses];
+
+export type ConversationsDraftAttachmentsListData = {
     body?: never;
     path: {
         conversationId: string;
@@ -3286,10 +3286,10 @@ export type ListDraftAttachmentsData = {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/conversations/{conversationId}/draft-attachments';
+    url: '/api/v1/conversations/{conversationId}/draft-attachments';
 };
 
-export type ListDraftAttachmentsResponses = {
+export type ConversationsDraftAttachmentsListResponses = {
     /**
      * Successful response
      */
@@ -3323,9 +3323,9 @@ export type ListDraftAttachmentsResponses = {
     };
 };
 
-export type ListDraftAttachmentsResponse = ListDraftAttachmentsResponses[keyof ListDraftAttachmentsResponses];
+export type ConversationsDraftAttachmentsListResponse = ConversationsDraftAttachmentsListResponses[keyof ConversationsDraftAttachmentsListResponses];
 
-export type UploadDraftAttachmentData = {
+export type ConversationsDraftAttachmentsUploadData = {
     body: {
         file: Blob | File;
     };
@@ -3333,10 +3333,10 @@ export type UploadDraftAttachmentData = {
         conversationId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/draft-attachments';
+    url: '/api/v1/conversations/{conversationId}/draft-attachments';
 };
 
-export type UploadDraftAttachmentResponses = {
+export type ConversationsDraftAttachmentsUploadResponses = {
     /**
      * Successful response
      */
@@ -3395,19 +3395,19 @@ export type UploadDraftAttachmentResponses = {
     };
 };
 
-export type UploadDraftAttachmentResponse = UploadDraftAttachmentResponses[keyof UploadDraftAttachmentResponses];
+export type ConversationsDraftAttachmentsUploadResponse = ConversationsDraftAttachmentsUploadResponses[keyof ConversationsDraftAttachmentsUploadResponses];
 
-export type RetryDraftAttachmentData = {
+export type ConversationsDraftAttachmentsRetryData = {
     body?: never;
     path: {
         conversationId: string;
         attachmentId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/draft-attachments/{attachmentId}/retry';
+    url: '/api/v1/conversations/{conversationId}/draft-attachments/{attachmentId}/retry';
 };
 
-export type RetryDraftAttachmentResponses = {
+export type ConversationsDraftAttachmentsRetryResponses = {
     /**
      * Successful response
      */
@@ -3466,19 +3466,19 @@ export type RetryDraftAttachmentResponses = {
     };
 };
 
-export type RetryDraftAttachmentResponse = RetryDraftAttachmentResponses[keyof RetryDraftAttachmentResponses];
+export type ConversationsDraftAttachmentsRetryResponse = ConversationsDraftAttachmentsRetryResponses[keyof ConversationsDraftAttachmentsRetryResponses];
 
-export type DeleteDraftAttachmentData = {
+export type ConversationsDraftAttachmentsDeleteData = {
     body?: never;
     path: {
         conversationId: string;
         attachmentId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/draft-attachments/{attachmentId}';
+    url: '/api/v1/conversations/{conversationId}/draft-attachments/{attachmentId}';
 };
 
-export type DeleteDraftAttachmentResponses = {
+export type ConversationsDraftAttachmentsDeleteResponses = {
     /**
      * Successful response
      */
@@ -3509,9 +3509,9 @@ export type DeleteDraftAttachmentResponses = {
     };
 };
 
-export type DeleteDraftAttachmentResponse = DeleteDraftAttachmentResponses[keyof DeleteDraftAttachmentResponses];
+export type ConversationsDraftAttachmentsDeleteResponse = ConversationsDraftAttachmentsDeleteResponses[keyof ConversationsDraftAttachmentsDeleteResponses];
 
-export type GetConversationFileContentData = {
+export type ConversationsFilesGetContentData = {
     body?: never;
     path: {
         conversationId: string;
@@ -3520,19 +3520,19 @@ export type GetConversationFileContentData = {
     query?: {
         download?: string;
     };
-    url: '/api/conversations/{conversationId}/files/{fileId}/content';
+    url: '/api/v1/conversations/{conversationId}/files/{fileId}/content';
 };
 
-export type GetConversationFileContentResponses = {
+export type ConversationsFilesGetContentResponses = {
     /**
      * Binary response
      */
     200: Blob | File;
 };
 
-export type GetConversationFileContentResponse = GetConversationFileContentResponses[keyof GetConversationFileContentResponses];
+export type ConversationsFilesGetContentResponse = ConversationsFilesGetContentResponses[keyof ConversationsFilesGetContentResponses];
 
-export type GetConversationArtifactContentData = {
+export type ConversationsArtifactsGetContentData = {
     body?: never;
     path: {
         conversationId: string;
@@ -3541,29 +3541,29 @@ export type GetConversationArtifactContentData = {
     query?: {
         inline?: string;
     };
-    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/content';
+    url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/content';
 };
 
-export type GetConversationArtifactContentResponses = {
+export type ConversationsArtifactsGetContentResponses = {
     /**
      * Binary response
      */
     200: Blob | File;
 };
 
-export type GetConversationArtifactContentResponse = GetConversationArtifactContentResponses[keyof GetConversationArtifactContentResponses];
+export type ConversationsArtifactsGetContentResponse = ConversationsArtifactsGetContentResponses[keyof ConversationsArtifactsGetContentResponses];
 
-export type RetryConversationArtifactPreviewData = {
+export type ConversationsArtifactsRetryPreviewData = {
     body?: never;
     path: {
         conversationId: string;
         artifactId: string;
     };
     query?: never;
-    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview/retry';
+    url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview/retry';
 };
 
-export type RetryConversationArtifactPreviewResponses = {
+export type ConversationsArtifactsRetryPreviewResponses = {
     /**
      * Successful response
      */
@@ -3599,19 +3599,19 @@ export type RetryConversationArtifactPreviewResponses = {
     };
 };
 
-export type RetryConversationArtifactPreviewResponse = RetryConversationArtifactPreviewResponses[keyof RetryConversationArtifactPreviewResponses];
+export type ConversationsArtifactsRetryPreviewResponse = ConversationsArtifactsRetryPreviewResponses[keyof ConversationsArtifactsRetryPreviewResponses];
 
-export type ListAuditEventsData = {
+export type AuditEventsListData = {
     body?: never;
     path?: never;
     query?: {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/audit-events';
+    url: '/api/v1/instance/audit-events';
 };
 
-export type ListAuditEventsResponses = {
+export type AuditEventsListResponses = {
     /**
      * Successful response
      */
@@ -3650,16 +3650,16 @@ export type ListAuditEventsResponses = {
     };
 };
 
-export type ListAuditEventsResponse = ListAuditEventsResponses[keyof ListAuditEventsResponses];
+export type AuditEventsListResponse = AuditEventsListResponses[keyof AuditEventsListResponses];
 
-export type ListAuditActivitiesData = {
+export type AuditActivitiesListData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/audit-activities';
+    url: '/api/v1/instance/audit-activities';
 };
 
-export type ListAuditActivitiesResponses = {
+export type AuditActivitiesListResponses = {
     /**
      * Successful response
      */
@@ -3718,16 +3718,16 @@ export type ListAuditActivitiesResponses = {
     };
 };
 
-export type ListAuditActivitiesResponse = ListAuditActivitiesResponses[keyof ListAuditActivitiesResponses];
+export type AuditActivitiesListResponse = AuditActivitiesListResponses[keyof AuditActivitiesListResponses];
 
-export type GetUsageSummaryData = {
+export type UsageGetSummaryData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/superadmin/usage';
+    url: '/api/v1/instance/usage';
 };
 
-export type GetUsageSummaryResponses = {
+export type UsageGetSummaryResponses = {
     /**
      * Successful response
      */
@@ -3902,16 +3902,16 @@ export type GetUsageSummaryResponses = {
     };
 };
 
-export type GetUsageSummaryResponse = GetUsageSummaryResponses[keyof GetUsageSummaryResponses];
+export type UsageGetSummaryResponse = UsageGetSummaryResponses[keyof UsageGetSummaryResponses];
 
-export type GetConfigAssetsOverviewData = {
+export type ConfigAssetsGetOverviewData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/admin/config/assets';
+    url: '/api/v1/instance/config/assets';
 };
 
-export type GetConfigAssetsOverviewResponses = {
+export type ConfigAssetsGetOverviewResponses = {
     /**
      * Successful response
      */
@@ -3943,19 +3943,19 @@ export type GetConfigAssetsOverviewResponses = {
     };
 };
 
-export type GetConfigAssetsOverviewResponse = GetConfigAssetsOverviewResponses[keyof GetConfigAssetsOverviewResponses];
+export type ConfigAssetsGetOverviewResponse = ConfigAssetsGetOverviewResponses[keyof ConfigAssetsGetOverviewResponses];
 
-export type GetConfigAssetData = {
+export type ConfigAssetsGetData = {
     body?: never;
     path: {
         kind: string;
         name: string;
     };
     query?: never;
-    url: '/api/admin/config/assets/{kind}/{name}';
+    url: '/api/v1/instance/config/assets/{kind}/{name}';
 };
 
-export type GetConfigAssetResponses = {
+export type ConfigAssetsGetResponses = {
     /**
      * Successful response
      */
@@ -3970,9 +3970,9 @@ export type GetConfigAssetResponses = {
     };
 };
 
-export type GetConfigAssetResponse = GetConfigAssetResponses[keyof GetConfigAssetResponses];
+export type ConfigAssetsGetResponse = ConfigAssetsGetResponses[keyof ConfigAssetsGetResponses];
 
-export type PutConfigAssetData = {
+export type ConfigAssetsPutData = {
     body: {
         config: {
             [key: string]: unknown;
@@ -3984,10 +3984,10 @@ export type PutConfigAssetData = {
         name: string;
     };
     query?: never;
-    url: '/api/admin/config/assets/{kind}/{name}';
+    url: '/api/v1/instance/config/assets/{kind}/{name}';
 };
 
-export type PutConfigAssetResponses = {
+export type ConfigAssetsPutResponses = {
     /**
      * Successful response
      */
@@ -3997,9 +3997,9 @@ export type PutConfigAssetResponses = {
     };
 };
 
-export type PutConfigAssetResponse = PutConfigAssetResponses[keyof PutConfigAssetResponses];
+export type ConfigAssetsPutResponse = ConfigAssetsPutResponses[keyof ConfigAssetsPutResponses];
 
-export type DeleteConfigAssetData = {
+export type ConfigAssetsDeleteData = {
     body: {
         baseVersion?: number;
     };
@@ -4008,10 +4008,10 @@ export type DeleteConfigAssetData = {
         name: string;
     };
     query?: never;
-    url: '/api/admin/config/assets/{kind}/{name}/delete';
+    url: '/api/v1/instance/config/assets/{kind}/{name}/delete';
 };
 
-export type DeleteConfigAssetResponses = {
+export type ConfigAssetsDeleteResponses = {
     /**
      * Successful response
      */
@@ -4020,19 +4020,19 @@ export type DeleteConfigAssetResponses = {
     };
 };
 
-export type DeleteConfigAssetResponse = DeleteConfigAssetResponses[keyof DeleteConfigAssetResponses];
+export type ConfigAssetsDeleteResponse = ConfigAssetsDeleteResponses[keyof ConfigAssetsDeleteResponses];
 
-export type SetDefaultConfigAgentData = {
+export type ConfigAgentsSetDefaultData = {
     body: {
         agentName?: string;
         baseVersion?: number;
     };
     path?: never;
     query?: never;
-    url: '/api/admin/config/default-agent';
+    url: '/api/v1/instance/config/default-agent';
 };
 
-export type SetDefaultConfigAgentResponses = {
+export type ConfigAgentsSetDefaultResponses = {
     /**
      * Successful response
      */
@@ -4041,9 +4041,9 @@ export type SetDefaultConfigAgentResponses = {
     };
 };
 
-export type SetDefaultConfigAgentResponse = SetDefaultConfigAgentResponses[keyof SetDefaultConfigAgentResponses];
+export type ConfigAgentsSetDefaultResponse = ConfigAgentsSetDefaultResponses[keyof ConfigAgentsSetDefaultResponses];
 
-export type SetConfigAgentAvailabilityData = {
+export type ConfigAgentsSetAvailabilityData = {
     body: {
         mode: 'all' | 'selected';
         personalWorkspaces?: boolean;
@@ -4053,10 +4053,10 @@ export type SetConfigAgentAvailabilityData = {
         name: string;
     };
     query?: never;
-    url: '/api/admin/config/agents/{name}/availability';
+    url: '/api/v1/instance/config/agents/{name}/availability';
 };
 
-export type SetConfigAgentAvailabilityResponses = {
+export type ConfigAgentsSetAvailabilityResponses = {
     /**
      * Successful response
      */
@@ -4067,19 +4067,19 @@ export type SetConfigAgentAvailabilityResponses = {
     };
 };
 
-export type SetConfigAgentAvailabilityResponse = SetConfigAgentAvailabilityResponses[keyof SetConfigAgentAvailabilityResponses];
+export type ConfigAgentsSetAvailabilityResponse = ConfigAgentsSetAvailabilityResponses[keyof ConfigAgentsSetAvailabilityResponses];
 
-export type ListAdministeredCollaborationWorkspacesData = {
+export type InstanceWorkspacesListData = {
     body?: never;
     path?: never;
     query?: {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/admin/collaboration-workspaces';
+    url: '/api/v1/instance/workspaces';
 };
 
-export type ListAdministeredCollaborationWorkspacesResponses = {
+export type InstanceWorkspacesListResponses = {
     /**
      * Successful response
      */
@@ -4093,9 +4093,9 @@ export type ListAdministeredCollaborationWorkspacesResponses = {
     };
 };
 
-export type ListAdministeredCollaborationWorkspacesResponse = ListAdministeredCollaborationWorkspacesResponses[keyof ListAdministeredCollaborationWorkspacesResponses];
+export type InstanceWorkspacesListResponse = InstanceWorkspacesListResponses[keyof InstanceWorkspacesListResponses];
 
-export type ListConfigAssetRevisionsData = {
+export type ConfigAssetsRevisionsListData = {
     body?: never;
     path: {
         kind: string;
@@ -4105,10 +4105,10 @@ export type ListConfigAssetRevisionsData = {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/admin/config/assets/{kind}/{name}/revisions';
+    url: '/api/v1/instance/config/assets/{kind}/{name}/revisions';
 };
 
-export type ListConfigAssetRevisionsResponses = {
+export type ConfigAssetsRevisionsListResponses = {
     /**
      * Successful response
      */
@@ -4148,9 +4148,9 @@ export type ListConfigAssetRevisionsResponses = {
     };
 };
 
-export type ListConfigAssetRevisionsResponse = ListConfigAssetRevisionsResponses[keyof ListConfigAssetRevisionsResponses];
+export type ConfigAssetsRevisionsListResponse = ConfigAssetsRevisionsListResponses[keyof ConfigAssetsRevisionsListResponses];
 
-export type RevertConfigAssetData = {
+export type ConfigAssetsRevertData = {
     body: {
         revision: number;
         baseVersion?: number;
@@ -4160,10 +4160,10 @@ export type RevertConfigAssetData = {
         name: string;
     };
     query?: never;
-    url: '/api/admin/config/assets/{kind}/{name}/revert';
+    url: '/api/v1/instance/config/assets/{kind}/{name}/revert';
 };
 
-export type RevertConfigAssetResponses = {
+export type ConfigAssetsRevertResponses = {
     /**
      * Successful response
      */
@@ -4173,16 +4173,16 @@ export type RevertConfigAssetResponses = {
     };
 };
 
-export type RevertConfigAssetResponse = RevertConfigAssetResponses[keyof RevertConfigAssetResponses];
+export type ConfigAssetsRevertResponse = ConfigAssetsRevertResponses[keyof ConfigAssetsRevertResponses];
 
-export type ExportConfigAssetsData = {
+export type ConfigAssetsExportData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/admin/config/export';
+    url: '/api/v1/instance/config/export';
 };
 
-export type ExportConfigAssetsResponses = {
+export type ConfigAssetsExportResponses = {
     /**
      * Successful response
      */
@@ -4202,9 +4202,9 @@ export type ExportConfigAssetsResponses = {
     };
 };
 
-export type ExportConfigAssetsResponse = ExportConfigAssetsResponses[keyof ExportConfigAssetsResponses];
+export type ConfigAssetsExportResponse = ConfigAssetsExportResponses[keyof ConfigAssetsExportResponses];
 
-export type ReplaceConfigAssetsData = {
+export type ConfigAssetsReplaceData = {
     body: {
         defaultAgentName?: string;
         agents: Array<{
@@ -4226,10 +4226,10 @@ export type ReplaceConfigAssetsData = {
     };
     path?: never;
     query?: never;
-    url: '/api/admin/config/import';
+    url: '/api/v1/instance/config/import';
 };
 
-export type ReplaceConfigAssetsResponses = {
+export type ConfigAssetsReplaceResponses = {
     /**
      * Successful response
      */
@@ -4239,9 +4239,9 @@ export type ReplaceConfigAssetsResponses = {
     };
 };
 
-export type ReplaceConfigAssetsResponse = ReplaceConfigAssetsResponses[keyof ReplaceConfigAssetsResponses];
+export type ConfigAssetsReplaceResponse = ConfigAssetsReplaceResponses[keyof ConfigAssetsReplaceResponses];
 
-export type ValidateConfigAssetsData = {
+export type ConfigAssetsValidateData = {
     body: {
         defaultAgentName?: string;
         agents: Array<{
@@ -4253,10 +4253,10 @@ export type ValidateConfigAssetsData = {
     };
     path?: never;
     query?: never;
-    url: '/api/admin/config/validate';
+    url: '/api/v1/instance/config/validate';
 };
 
-export type ValidateConfigAssetsResponses = {
+export type ConfigAssetsValidateResponses = {
     /**
      * Successful response
      */
@@ -4265,19 +4265,19 @@ export type ValidateConfigAssetsResponses = {
     };
 };
 
-export type ValidateConfigAssetsResponse = ValidateConfigAssetsResponses[keyof ValidateConfigAssetsResponses];
+export type ConfigAssetsValidateResponse = ConfigAssetsValidateResponses[keyof ConfigAssetsValidateResponses];
 
-export type ListAdministeredUsersData = {
+export type UsersListData = {
     body?: never;
     path?: never;
     query?: {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/superadmin/users';
+    url: '/api/v1/instance/users';
 };
 
-export type ListAdministeredUsersResponses = {
+export type UsersListResponses = {
     /**
      * Successful response
      */
@@ -4311,9 +4311,9 @@ export type ListAdministeredUsersResponses = {
     };
 };
 
-export type ListAdministeredUsersResponse = ListAdministeredUsersResponses[keyof ListAdministeredUsersResponses];
+export type UsersListResponse = UsersListResponses[keyof UsersListResponses];
 
-export type CreateAdministeredUserData = {
+export type UsersCreateData = {
     body: {
         displayLabel: string;
         email?: string;
@@ -4327,10 +4327,10 @@ export type CreateAdministeredUserData = {
     };
     path?: never;
     query?: never;
-    url: '/api/superadmin/users';
+    url: '/api/v1/instance/users';
 };
 
-export type CreateAdministeredUserResponses = {
+export type UsersCreateResponses = {
     /**
      * Successful response
      */
@@ -4361,18 +4361,18 @@ export type CreateAdministeredUserResponses = {
     };
 };
 
-export type CreateAdministeredUserResponse = CreateAdministeredUserResponses[keyof CreateAdministeredUserResponses];
+export type UsersCreateResponse = UsersCreateResponses[keyof UsersCreateResponses];
 
-export type DeleteAdministeredUserData = {
+export type UsersDeleteData = {
     body?: never;
     path: {
         userId: string;
     };
     query?: never;
-    url: '/api/superadmin/users/{userId}';
+    url: '/api/v1/instance/users/{userId}';
 };
 
-export type DeleteAdministeredUserResponses = {
+export type UsersDeleteResponses = {
     /**
      * Successful response
      */
@@ -4403,9 +4403,9 @@ export type DeleteAdministeredUserResponses = {
     };
 };
 
-export type DeleteAdministeredUserResponse = DeleteAdministeredUserResponses[keyof DeleteAdministeredUserResponses];
+export type UsersDeleteResponse = UsersDeleteResponses[keyof UsersDeleteResponses];
 
-export type UpdateAdministeredUserData = {
+export type UsersUpdateData = {
     body: {
         displayLabel?: string;
         email?: string | null;
@@ -4418,10 +4418,10 @@ export type UpdateAdministeredUserData = {
         userId: string;
     };
     query?: never;
-    url: '/api/superadmin/users/{userId}';
+    url: '/api/v1/instance/users/{userId}';
 };
 
-export type UpdateAdministeredUserResponses = {
+export type UsersUpdateResponses = {
     /**
      * Successful response
      */
@@ -4452,9 +4452,9 @@ export type UpdateAdministeredUserResponses = {
     };
 };
 
-export type UpdateAdministeredUserResponse = UpdateAdministeredUserResponses[keyof UpdateAdministeredUserResponses];
+export type UsersUpdateResponse = UsersUpdateResponses[keyof UsersUpdateResponses];
 
-export type UpsertAdministeredUserIdentityData = {
+export type UsersIdentitiesUpsertData = {
     body: {
         authSource: string;
         externalUserId: string;
@@ -4466,10 +4466,10 @@ export type UpsertAdministeredUserIdentityData = {
         userId: string;
     };
     query?: never;
-    url: '/api/superadmin/users/{userId}/identities';
+    url: '/api/v1/instance/users/{userId}/identities';
 };
 
-export type UpsertAdministeredUserIdentityResponses = {
+export type UsersIdentitiesUpsertResponses = {
     /**
      * Successful response
      */
@@ -4500,9 +4500,9 @@ export type UpsertAdministeredUserIdentityResponses = {
     };
 };
 
-export type UpsertAdministeredUserIdentityResponse = UpsertAdministeredUserIdentityResponses[keyof UpsertAdministeredUserIdentityResponses];
+export type UsersIdentitiesUpsertResponse = UsersIdentitiesUpsertResponses[keyof UsersIdentitiesUpsertResponses];
 
-export type ResetAdministeredUserPasswordData = {
+export type UsersPasswordResetData = {
     body: {
         password: string;
     };
@@ -4510,10 +4510,10 @@ export type ResetAdministeredUserPasswordData = {
         userId: string;
     };
     query?: never;
-    url: '/api/superadmin/users/{userId}/password';
+    url: '/api/v1/instance/users/{userId}/password';
 };
 
-export type ResetAdministeredUserPasswordResponses = {
+export type UsersPasswordResetResponses = {
     /**
      * Successful response
      */
@@ -4522,18 +4522,18 @@ export type ResetAdministeredUserPasswordResponses = {
     };
 };
 
-export type ResetAdministeredUserPasswordResponse = ResetAdministeredUserPasswordResponses[keyof ResetAdministeredUserPasswordResponses];
+export type UsersPasswordResetResponse = UsersPasswordResetResponses[keyof UsersPasswordResetResponses];
 
-export type SendAdministeredUserInvitationData = {
+export type UsersInvitationSendData = {
     body?: never;
     path: {
         userId: string;
     };
     query?: never;
-    url: '/api/superadmin/users/{userId}/invitation';
+    url: '/api/v1/instance/users/{userId}/invitation';
 };
 
-export type SendAdministeredUserInvitationResponses = {
+export type UsersInvitationSendResponses = {
     /**
      * Successful response
      */
@@ -4542,9 +4542,9 @@ export type SendAdministeredUserInvitationResponses = {
     };
 };
 
-export type SendAdministeredUserInvitationResponse = SendAdministeredUserInvitationResponses[keyof SendAdministeredUserInvitationResponses];
+export type UsersInvitationSendResponse = UsersInvitationSendResponses[keyof UsersInvitationSendResponses];
 
-export type DeleteAdministeredUserIdentityData = {
+export type UsersIdentitiesDeleteData = {
     body?: never;
     path: {
         userId: string;
@@ -4552,10 +4552,10 @@ export type DeleteAdministeredUserIdentityData = {
         externalUserId: string;
     };
     query?: never;
-    url: '/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}';
+    url: '/api/v1/instance/users/{userId}/identities/{authSource}/{externalUserId}';
 };
 
-export type DeleteAdministeredUserIdentityResponses = {
+export type UsersIdentitiesDeleteResponses = {
     /**
      * Successful response
      */
@@ -4586,19 +4586,19 @@ export type DeleteAdministeredUserIdentityResponses = {
     };
 };
 
-export type DeleteAdministeredUserIdentityResponse = DeleteAdministeredUserIdentityResponses[keyof DeleteAdministeredUserIdentityResponses];
+export type UsersIdentitiesDeleteResponse = UsersIdentitiesDeleteResponses[keyof UsersIdentitiesDeleteResponses];
 
-export type ListServicePrincipalsData = {
+export type ServicePrincipalsListData = {
     body?: never;
     path?: never;
     query?: {
         limit?: number;
         cursor?: string;
     };
-    url: '/api/superadmin/api-access/service-principals';
+    url: '/api/v1/instance/service-principals';
 };
 
-export type ListServicePrincipalsResponses = {
+export type ServicePrincipalsListResponses = {
     /**
      * Successful response
      */
@@ -4634,9 +4634,9 @@ export type ListServicePrincipalsResponses = {
     };
 };
 
-export type ListServicePrincipalsResponse = ListServicePrincipalsResponses[keyof ListServicePrincipalsResponses];
+export type ServicePrincipalsListResponse = ServicePrincipalsListResponses[keyof ServicePrincipalsListResponses];
 
-export type CreateServicePrincipalData = {
+export type ServicePrincipalsCreateData = {
     body: {
         displayLabel: string;
         description?: string;
@@ -4645,10 +4645,10 @@ export type CreateServicePrincipalData = {
     };
     path?: never;
     query?: never;
-    url: '/api/superadmin/api-access/service-principals';
+    url: '/api/v1/instance/service-principals';
 };
 
-export type CreateServicePrincipalResponses = {
+export type ServicePrincipalsCreateResponses = {
     /**
      * Successful response
      */
@@ -4681,9 +4681,9 @@ export type CreateServicePrincipalResponses = {
     };
 };
 
-export type CreateServicePrincipalResponse = CreateServicePrincipalResponses[keyof CreateServicePrincipalResponses];
+export type ServicePrincipalsCreateResponse = ServicePrincipalsCreateResponses[keyof ServicePrincipalsCreateResponses];
 
-export type UpdateServicePrincipalData = {
+export type ServicePrincipalsUpdateData = {
     body: {
         displayLabel?: string;
         description?: string | null;
@@ -4694,10 +4694,10 @@ export type UpdateServicePrincipalData = {
         servicePrincipalId: string;
     };
     query?: never;
-    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}';
+    url: '/api/v1/instance/service-principals/{servicePrincipalId}';
 };
 
-export type UpdateServicePrincipalResponses = {
+export type ServicePrincipalsUpdateResponses = {
     /**
      * Successful response
      */
@@ -4730,9 +4730,9 @@ export type UpdateServicePrincipalResponses = {
     };
 };
 
-export type UpdateServicePrincipalResponse = UpdateServicePrincipalResponses[keyof UpdateServicePrincipalResponses];
+export type ServicePrincipalsUpdateResponse = ServicePrincipalsUpdateResponses[keyof ServicePrincipalsUpdateResponses];
 
-export type CreateApiCredentialData = {
+export type ApiCredentialsCreateData = {
     body: {
         name: string;
         scopes?: Array<'config_assets:read' | 'config_assets:release'>;
@@ -4742,10 +4742,10 @@ export type CreateApiCredentialData = {
         servicePrincipalId: string;
     };
     query?: never;
-    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}/credentials';
+    url: '/api/v1/instance/service-principals/{servicePrincipalId}/credentials';
 };
 
-export type CreateApiCredentialResponses = {
+export type ApiCredentialsCreateResponses = {
     /**
      * Successful response
      */
@@ -4766,18 +4766,18 @@ export type CreateApiCredentialResponses = {
     };
 };
 
-export type CreateApiCredentialResponse = CreateApiCredentialResponses[keyof CreateApiCredentialResponses];
+export type ApiCredentialsCreateResponse = ApiCredentialsCreateResponses[keyof ApiCredentialsCreateResponses];
 
-export type RevokeApiCredentialData = {
+export type ApiCredentialsRevokeData = {
     body?: never;
     path: {
         credentialId: string;
     };
     query?: never;
-    url: '/api/superadmin/api-access/credentials/{credentialId}/revoke';
+    url: '/api/v1/instance/api-credentials/{credentialId}/revoke';
 };
 
-export type RevokeApiCredentialResponses = {
+export type ApiCredentialsRevokeResponses = {
     /**
      * Successful response
      */
@@ -4795,9 +4795,9 @@ export type RevokeApiCredentialResponses = {
     };
 };
 
-export type RevokeApiCredentialResponse = RevokeApiCredentialResponses[keyof RevokeApiCredentialResponses];
+export type ApiCredentialsRevokeResponse = ApiCredentialsRevokeResponses[keyof ApiCredentialsRevokeResponses];
 
-export type IssueSessionTokenData = {
+export type SessionTokensIssueData = {
     body: {
         externalUserId: string;
         displayLabel: string;
@@ -4817,10 +4817,10 @@ export type IssueSessionTokenData = {
     };
     path?: never;
     query?: never;
-    url: '/api/superadmin/session-tokens';
+    url: '/api/v1/instance/session-tokens';
 };
 
-export type IssueSessionTokenResponses = {
+export type SessionTokensIssueResponses = {
     /**
      * Successful response
      */
@@ -4830,16 +4830,16 @@ export type IssueSessionTokenResponses = {
     };
 };
 
-export type IssueSessionTokenResponse = IssueSessionTokenResponses[keyof IssueSessionTokenResponses];
+export type SessionTokensIssueResponse = SessionTokensIssueResponses[keyof SessionTokensIssueResponses];
 
-export type ExchangeApiKeyData = {
+export type AccessTokensExchangeData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/auth/access-token';
+    url: '/api/v1/auth/access-token';
 };
 
-export type ExchangeApiKeyResponses = {
+export type AccessTokensExchangeResponses = {
     /**
      * Successful response
      */
@@ -4849,4 +4849,4 @@ export type ExchangeApiKeyResponses = {
     };
 };
 
-export type ExchangeApiKeyResponse = ExchangeApiKeyResponses[keyof ExchangeApiKeyResponses];
+export type AccessTokensExchangeResponse = AccessTokensExchangeResponses[keyof AccessTokensExchangeResponses];

@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddCollaborationWorkspaceMemberData, AddCollaborationWorkspaceMemberResponses, ApproveCollaborationWorkspaceAccessRequestData, ApproveCollaborationWorkspaceAccessRequestResponses, CancelConversationRunData, CancelConversationRunResponses, ChangeCurrentUserPasswordData, ChangeCurrentUserPasswordResponses, CommandConversationRunData, CommandConversationRunResponses, CompletePasswordSetupData, CompletePasswordSetupResponses, CountPendingApprovalRequestsData, CountPendingApprovalRequestsResponses, CreateAdministeredUserData, CreateAdministeredUserResponses, CreateApiCredentialData, CreateApiCredentialResponses, CreateCollaborationWorkspaceData, CreateCollaborationWorkspaceResponses, CreateConversationData, CreateConversationResponses, CreateConversationRunData, CreateConversationRunResponses, CreateServicePrincipalData, CreateServicePrincipalResponses, DecideApprovalRequestData, DecideApprovalRequestResponses, DeclineCollaborationWorkspaceAccessRequestData, DeclineCollaborationWorkspaceAccessRequestResponses, DeleteAdministeredUserData, DeleteAdministeredUserIdentityData, DeleteAdministeredUserIdentityResponses, DeleteAdministeredUserResponses, DeleteCollaborationWorkspaceData, DeleteCollaborationWorkspaceResponses, DeleteConfigAssetData, DeleteConfigAssetResponses, DeleteConversationData, DeleteConversationResponses, DeleteCurrentUserData, DeleteCurrentUserResponses, DeleteDraftAttachmentData, DeleteDraftAttachmentResponses, EnsurePersonalCollaborationWorkspaceData, EnsurePersonalCollaborationWorkspaceResponses, ExchangeApiKeyData, ExchangeApiKeyResponses, ExportConfigAssetsData, ExportConfigAssetsResponses, GenerateConversationTitleData, GenerateConversationTitleResponses, GetApprovalRequestData, GetApprovalRequestResponses, GetBrandingData, GetBrandingResponses, GetCollaborationWorkspaceData, GetCollaborationWorkspaceDeletionImpactData, GetCollaborationWorkspaceDeletionImpactResponses, GetCollaborationWorkspaceResponses, GetConfigAssetData, GetConfigAssetResponses, GetConfigAssetsOverviewData, GetConfigAssetsOverviewResponses, GetConfigData, GetConfigResponses, GetConversationArtifactContentData, GetConversationArtifactContentResponses, GetConversationArtifactPreviewData, GetConversationArtifactPreviewResponses, GetConversationAttachmentPreviewData, GetConversationAttachmentPreviewResponses, GetConversationFileContentData, GetConversationFileContentResponses, GetConversationThreadData, GetConversationThreadResponses, GetCurrentUserData, GetCurrentUserModelPreferenceData, GetCurrentUserModelPreferenceResponses, GetCurrentUserResponses, GetStructuredDataResourceData, GetStructuredDataResourceResponses, GetUsageSummaryData, GetUsageSummaryResponses, IssueSessionTokenData, IssueSessionTokenResponses, LeaveCollaborationWorkspaceData, LeaveCollaborationWorkspaceResponses, ListAdministeredCollaborationWorkspacesData, ListAdministeredCollaborationWorkspacesResponses, ListAdministeredUsersData, ListAdministeredUsersResponses, ListApprovalRequestsData, ListApprovalRequestsResponses, ListAuditActivitiesData, ListAuditActivitiesResponses, ListAuditEventsData, ListAuditEventsResponses, ListCollaborationWorkspaceAccessRequestsData, ListCollaborationWorkspaceAccessRequestsResponses, ListCollaborationWorkspaceAgentsData, ListCollaborationWorkspaceAgentsResponses, ListCollaborationWorkspaceDirectoryData, ListCollaborationWorkspaceDirectoryResponses, ListCollaborationWorkspaceMemberCandidatesData, ListCollaborationWorkspaceMemberCandidatesResponses, ListCollaborationWorkspaceMembersData, ListCollaborationWorkspaceMembersResponses, ListCollaborationWorkspacesData, ListCollaborationWorkspacesResponses, ListConfigAssetRevisionsData, ListConfigAssetRevisionsResponses, ListConversationMessagesData, ListConversationMessagesResponses, ListConversationResourcesData, ListConversationResourcesResponses, ListConversationsData, ListConversationsResponses, ListDraftAttachmentsData, ListDraftAttachmentsResponses, ListServicePrincipalsData, ListServicePrincipalsResponses, MoveConversationData, MoveConversationResponses, ObserveConversationRunData, ObserveConversationRunResponses, PutConfigAssetData, PutConfigAssetResponses, RemoveCollaborationWorkspaceMemberData, RemoveCollaborationWorkspaceMemberResponses, RenameConversationData, RenameConversationResponses, ReplaceConfigAssetsData, ReplaceConfigAssetsResponses, RequestCollaborationWorkspaceAccessData, RequestCollaborationWorkspaceAccessResponses, RequestPasswordResetData, RequestPasswordResetResponses, ResetAdministeredUserPasswordData, ResetAdministeredUserPasswordResponses, RetryConversationArtifactPreviewData, RetryConversationArtifactPreviewResponses, RetryDraftAttachmentData, RetryDraftAttachmentResponses, RevertApprovalRequestData, RevertApprovalRequestResponses, RevertConfigAssetData, RevertConfigAssetResponses, RevokeApiCredentialData, RevokeApiCredentialResponses, SendAdministeredUserInvitationData, SendAdministeredUserInvitationResponses, SetConfigAgentAvailabilityData, SetConfigAgentAvailabilityResponses, SetCurrentUserModelPreferenceData, SetCurrentUserModelPreferenceResponses, SetDefaultConfigAgentData, SetDefaultConfigAgentResponses, StartConversationArtifactPreviewData, StartConversationArtifactPreviewResponses, StartConversationAttachmentPreviewData, StartConversationAttachmentPreviewResponses, StartConversationRunData, StartConversationRunResponses, UpdateAdministeredUserData, UpdateAdministeredUserResponses, UpdateCollaborationWorkspaceData, UpdateCollaborationWorkspaceMemberRoleData, UpdateCollaborationWorkspaceMemberRoleResponses, UpdateCollaborationWorkspaceResponses, UpdateCurrentUserData, UpdateCurrentUserResponses, UpdateServicePrincipalData, UpdateServicePrincipalResponses, UploadDraftAttachmentData, UploadDraftAttachmentResponses, UpsertAdministeredUserIdentityData, UpsertAdministeredUserIdentityResponses, ValidateConfigAssetsData, ValidateConfigAssetsResponses, WithdrawApprovalRequestData, WithdrawApprovalRequestResponses } from './types.gen';
+import type { AccessTokensExchangeData, AccessTokensExchangeResponses, ApiCredentialsCreateData, ApiCredentialsCreateResponses, ApiCredentialsRevokeData, ApiCredentialsRevokeResponses, ApprovalRequestsCountPendingData, ApprovalRequestsCountPendingResponses, ApprovalRequestsDecideData, ApprovalRequestsDecideResponses, ApprovalRequestsGetData, ApprovalRequestsGetResponses, ApprovalRequestsListData, ApprovalRequestsListResponses, ApprovalRequestsRevertData, ApprovalRequestsRevertResponses, ApprovalRequestsWithdrawData, ApprovalRequestsWithdrawResponses, AuditActivitiesListData, AuditActivitiesListResponses, AuditEventsListData, AuditEventsListResponses, BrandingGetData, BrandingGetResponses, ConfigAgentsSetAvailabilityData, ConfigAgentsSetAvailabilityResponses, ConfigAgentsSetDefaultData, ConfigAgentsSetDefaultResponses, ConfigAssetsDeleteData, ConfigAssetsDeleteResponses, ConfigAssetsExportData, ConfigAssetsExportResponses, ConfigAssetsGetData, ConfigAssetsGetOverviewData, ConfigAssetsGetOverviewResponses, ConfigAssetsGetResponses, ConfigAssetsPutData, ConfigAssetsPutResponses, ConfigAssetsReplaceData, ConfigAssetsReplaceResponses, ConfigAssetsRevertData, ConfigAssetsRevertResponses, ConfigAssetsRevisionsListData, ConfigAssetsRevisionsListResponses, ConfigAssetsValidateData, ConfigAssetsValidateResponses, ConfigGetData, ConfigGetResponses, ConversationsArtifactsGetContentData, ConversationsArtifactsGetContentResponses, ConversationsArtifactsGetPreviewData, ConversationsArtifactsGetPreviewResponses, ConversationsArtifactsRetryPreviewData, ConversationsArtifactsRetryPreviewResponses, ConversationsArtifactsStartPreviewData, ConversationsArtifactsStartPreviewResponses, ConversationsAttachmentsGetPreviewData, ConversationsAttachmentsGetPreviewResponses, ConversationsAttachmentsStartPreviewData, ConversationsAttachmentsStartPreviewResponses, ConversationsCreateData, ConversationsCreateResponses, ConversationsDeleteData, ConversationsDeleteResponses, ConversationsDraftAttachmentsDeleteData, ConversationsDraftAttachmentsDeleteResponses, ConversationsDraftAttachmentsListData, ConversationsDraftAttachmentsListResponses, ConversationsDraftAttachmentsRetryData, ConversationsDraftAttachmentsRetryResponses, ConversationsDraftAttachmentsUploadData, ConversationsDraftAttachmentsUploadResponses, ConversationsFilesGetContentData, ConversationsFilesGetContentResponses, ConversationsListData, ConversationsListResponses, ConversationsMessagesListData, ConversationsMessagesListResponses, ConversationsMoveData, ConversationsMoveResponses, ConversationsRenameData, ConversationsRenameResponses, ConversationsResourcesListData, ConversationsResourcesListResponses, ConversationsRunsCancelData, ConversationsRunsCancelResponses, ConversationsRunsCommandData, ConversationsRunsCommandResponses, ConversationsRunsCreateData, ConversationsRunsCreateResponses, ConversationsRunsObserveData, ConversationsRunsObserveResponses, ConversationsRunsStartData, ConversationsRunsStartResponses, ConversationsStructuredDataGetData, ConversationsStructuredDataGetResponses, ConversationsThreadGetData, ConversationsThreadGetResponses, ConversationsTitleGenerateData, ConversationsTitleGenerateResponses, InstanceWorkspacesListData, InstanceWorkspacesListResponses, MeDeleteData, MeDeleteResponses, MeGetData, MeGetResponses, MeModelPreferenceGetData, MeModelPreferenceGetResponses, MeModelPreferenceSetData, MeModelPreferenceSetResponses, MePasswordChangeData, MePasswordChangeResponses, MeUpdateData, MeUpdateResponses, PasswordResetRequestData, PasswordResetRequestResponses, PasswordSetupCompleteData, PasswordSetupCompleteResponses, ServicePrincipalsCreateData, ServicePrincipalsCreateResponses, ServicePrincipalsListData, ServicePrincipalsListResponses, ServicePrincipalsUpdateData, ServicePrincipalsUpdateResponses, SessionTokensIssueData, SessionTokensIssueResponses, UsageGetSummaryData, UsageGetSummaryResponses, UsersCreateData, UsersCreateResponses, UsersDeleteData, UsersDeleteResponses, UsersIdentitiesDeleteData, UsersIdentitiesDeleteResponses, UsersIdentitiesUpsertData, UsersIdentitiesUpsertResponses, UsersInvitationSendData, UsersInvitationSendResponses, UsersListData, UsersListResponses, UsersPasswordResetData, UsersPasswordResetResponses, UsersUpdateData, UsersUpdateResponses, WorkspacesAccessRequestsApproveData, WorkspacesAccessRequestsApproveResponses, WorkspacesAccessRequestsCreateData, WorkspacesAccessRequestsCreateResponses, WorkspacesAccessRequestsDeclineData, WorkspacesAccessRequestsDeclineResponses, WorkspacesAccessRequestsListData, WorkspacesAccessRequestsListResponses, WorkspacesAgentsListData, WorkspacesAgentsListResponses, WorkspacesCreateData, WorkspacesCreateResponses, WorkspacesDeleteData, WorkspacesDeleteResponses, WorkspacesDeletionImpactGetData, WorkspacesDeletionImpactGetResponses, WorkspacesDirectoryListData, WorkspacesDirectoryListResponses, WorkspacesEnsurePersonalData, WorkspacesEnsurePersonalResponses, WorkspacesGetData, WorkspacesGetResponses, WorkspacesListData, WorkspacesListResponses, WorkspacesMemberCandidatesListData, WorkspacesMemberCandidatesListResponses, WorkspacesMembersAddData, WorkspacesMembersAddResponses, WorkspacesMembersLeaveData, WorkspacesMembersLeaveResponses, WorkspacesMembersListData, WorkspacesMembersListResponses, WorkspacesMembersRemoveData, WorkspacesMembersRemoveResponses, WorkspacesMembersUpdateRoleData, WorkspacesMembersUpdateRoleResponses, WorkspacesUpdateData, WorkspacesUpdateResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -18,14 +18,14 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
     meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
 
-export const getApprovalRequest = <ThrowOnError extends boolean = false>(options: Options<GetApprovalRequestData, ThrowOnError>): RequestResult<GetApprovalRequestResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApprovalRequestResponses, unknown, ThrowOnError>({ url: '/api/approval-requests/{requestId}', ...options });
+export const approvalRequestsGet = <ThrowOnError extends boolean = false>(options: Options<ApprovalRequestsGetData, ThrowOnError>): RequestResult<ApprovalRequestsGetResponses, unknown, ThrowOnError> => (options.client ?? client).get<ApprovalRequestsGetResponses, unknown, ThrowOnError>({ url: '/api/v1/approval-requests/{requestId}', ...options });
 
-export const listApprovalRequests = <ThrowOnError extends boolean = false>(options?: Options<ListApprovalRequestsData, ThrowOnError>): RequestResult<ListApprovalRequestsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListApprovalRequestsResponses, unknown, ThrowOnError>({ url: '/api/approval-requests', ...options });
+export const approvalRequestsList = <ThrowOnError extends boolean = false>(options?: Options<ApprovalRequestsListData, ThrowOnError>): RequestResult<ApprovalRequestsListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ApprovalRequestsListResponses, unknown, ThrowOnError>({ url: '/api/v1/approval-requests', ...options });
 
-export const countPendingApprovalRequests = <ThrowOnError extends boolean = false>(options?: Options<CountPendingApprovalRequestsData, ThrowOnError>): RequestResult<CountPendingApprovalRequestsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<CountPendingApprovalRequestsResponses, unknown, ThrowOnError>({ url: '/api/approval-requests/pending-count', ...options });
+export const approvalRequestsCountPending = <ThrowOnError extends boolean = false>(options?: Options<ApprovalRequestsCountPendingData, ThrowOnError>): RequestResult<ApprovalRequestsCountPendingResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ApprovalRequestsCountPendingResponses, unknown, ThrowOnError>({ url: '/api/v1/approval-requests/pending-count', ...options });
 
-export const decideApprovalRequest = <ThrowOnError extends boolean = false>(options: Options<DecideApprovalRequestData, ThrowOnError>): RequestResult<DecideApprovalRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<DecideApprovalRequestResponses, unknown, ThrowOnError>({
-    url: '/api/approval-requests/{requestId}/decide',
+export const approvalRequestsDecide = <ThrowOnError extends boolean = false>(options: Options<ApprovalRequestsDecideData, ThrowOnError>): RequestResult<ApprovalRequestsDecideResponses, unknown, ThrowOnError> => (options.client ?? client).post<ApprovalRequestsDecideResponses, unknown, ThrowOnError>({
+    url: '/api/v1/approval-requests/{requestId}/decide',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -33,16 +33,16 @@ export const decideApprovalRequest = <ThrowOnError extends boolean = false>(opti
     }
 });
 
-export const withdrawApprovalRequest = <ThrowOnError extends boolean = false>(options: Options<WithdrawApprovalRequestData, ThrowOnError>): RequestResult<WithdrawApprovalRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<WithdrawApprovalRequestResponses, unknown, ThrowOnError>({ url: '/api/approval-requests/{requestId}/withdraw', ...options });
+export const approvalRequestsWithdraw = <ThrowOnError extends boolean = false>(options: Options<ApprovalRequestsWithdrawData, ThrowOnError>): RequestResult<ApprovalRequestsWithdrawResponses, unknown, ThrowOnError> => (options.client ?? client).post<ApprovalRequestsWithdrawResponses, unknown, ThrowOnError>({ url: '/api/v1/approval-requests/{requestId}/withdraw', ...options });
 
-export const revertApprovalRequest = <ThrowOnError extends boolean = false>(options: Options<RevertApprovalRequestData, ThrowOnError>): RequestResult<RevertApprovalRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<RevertApprovalRequestResponses, unknown, ThrowOnError>({ url: '/api/approval-requests/{requestId}/revert', ...options });
+export const approvalRequestsRevert = <ThrowOnError extends boolean = false>(options: Options<ApprovalRequestsRevertData, ThrowOnError>): RequestResult<ApprovalRequestsRevertResponses, unknown, ThrowOnError> => (options.client ?? client).post<ApprovalRequestsRevertResponses, unknown, ThrowOnError>({ url: '/api/v1/approval-requests/{requestId}/revert', ...options });
 
-export const deleteCurrentUser = <ThrowOnError extends boolean = false>(options?: Options<DeleteCurrentUserData, ThrowOnError>): RequestResult<DeleteCurrentUserResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<DeleteCurrentUserResponses, unknown, ThrowOnError>({ url: '/api/me', ...options });
+export const meDelete = <ThrowOnError extends boolean = false>(options?: Options<MeDeleteData, ThrowOnError>): RequestResult<MeDeleteResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<MeDeleteResponses, unknown, ThrowOnError>({ url: '/api/v1/me', ...options });
 
-export const getCurrentUser = <ThrowOnError extends boolean = false>(options?: Options<GetCurrentUserData, ThrowOnError>): RequestResult<GetCurrentUserResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetCurrentUserResponses, unknown, ThrowOnError>({ url: '/api/me', ...options });
+export const meGet = <ThrowOnError extends boolean = false>(options?: Options<MeGetData, ThrowOnError>): RequestResult<MeGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<MeGetResponses, unknown, ThrowOnError>({ url: '/api/v1/me', ...options });
 
-export const updateCurrentUser = <ThrowOnError extends boolean = false>(options: Options<UpdateCurrentUserData, ThrowOnError>): RequestResult<UpdateCurrentUserResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateCurrentUserResponses, unknown, ThrowOnError>({
-    url: '/api/me',
+export const meUpdate = <ThrowOnError extends boolean = false>(options: Options<MeUpdateData, ThrowOnError>): RequestResult<MeUpdateResponses, unknown, ThrowOnError> => (options.client ?? client).patch<MeUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/me',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -50,10 +50,10 @@ export const updateCurrentUser = <ThrowOnError extends boolean = false>(options:
     }
 });
 
-export const getCurrentUserModelPreference = <ThrowOnError extends boolean = false>(options?: Options<GetCurrentUserModelPreferenceData, ThrowOnError>): RequestResult<GetCurrentUserModelPreferenceResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetCurrentUserModelPreferenceResponses, unknown, ThrowOnError>({ url: '/api/me/model-preference', ...options });
+export const meModelPreferenceGet = <ThrowOnError extends boolean = false>(options?: Options<MeModelPreferenceGetData, ThrowOnError>): RequestResult<MeModelPreferenceGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<MeModelPreferenceGetResponses, unknown, ThrowOnError>({ url: '/api/v1/me/model-preference', ...options });
 
-export const setCurrentUserModelPreference = <ThrowOnError extends boolean = false>(options: Options<SetCurrentUserModelPreferenceData, ThrowOnError>): RequestResult<SetCurrentUserModelPreferenceResponses, unknown, ThrowOnError> => (options.client ?? client).put<SetCurrentUserModelPreferenceResponses, unknown, ThrowOnError>({
-    url: '/api/me/model-preference',
+export const meModelPreferenceSet = <ThrowOnError extends boolean = false>(options: Options<MeModelPreferenceSetData, ThrowOnError>): RequestResult<MeModelPreferenceSetResponses, unknown, ThrowOnError> => (options.client ?? client).put<MeModelPreferenceSetResponses, unknown, ThrowOnError>({
+    url: '/api/v1/me/model-preference',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -61,8 +61,8 @@ export const setCurrentUserModelPreference = <ThrowOnError extends boolean = fal
     }
 });
 
-export const changeCurrentUserPassword = <ThrowOnError extends boolean = false>(options: Options<ChangeCurrentUserPasswordData, ThrowOnError>): RequestResult<ChangeCurrentUserPasswordResponses, unknown, ThrowOnError> => (options.client ?? client).post<ChangeCurrentUserPasswordResponses, unknown, ThrowOnError>({
-    url: '/api/me/password',
+export const mePasswordChange = <ThrowOnError extends boolean = false>(options: Options<MePasswordChangeData, ThrowOnError>): RequestResult<MePasswordChangeResponses, unknown, ThrowOnError> => (options.client ?? client).post<MePasswordChangeResponses, unknown, ThrowOnError>({
+    url: '/api/v1/me/password',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -70,8 +70,8 @@ export const changeCurrentUserPassword = <ThrowOnError extends boolean = false>(
     }
 });
 
-export const requestPasswordReset = <ThrowOnError extends boolean = false>(options: Options<RequestPasswordResetData, ThrowOnError>): RequestResult<RequestPasswordResetResponses, unknown, ThrowOnError> => (options.client ?? client).post<RequestPasswordResetResponses, unknown, ThrowOnError>({
-    url: '/api/password-reset',
+export const passwordResetRequest = <ThrowOnError extends boolean = false>(options: Options<PasswordResetRequestData, ThrowOnError>): RequestResult<PasswordResetRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<PasswordResetRequestResponses, unknown, ThrowOnError>({
+    url: '/api/v1/password-reset',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -79,8 +79,8 @@ export const requestPasswordReset = <ThrowOnError extends boolean = false>(optio
     }
 });
 
-export const completePasswordSetup = <ThrowOnError extends boolean = false>(options: Options<CompletePasswordSetupData, ThrowOnError>): RequestResult<CompletePasswordSetupResponses, unknown, ThrowOnError> => (options.client ?? client).post<CompletePasswordSetupResponses, unknown, ThrowOnError>({
-    url: '/api/password-setup',
+export const passwordSetupComplete = <ThrowOnError extends boolean = false>(options: Options<PasswordSetupCompleteData, ThrowOnError>): RequestResult<PasswordSetupCompleteResponses, unknown, ThrowOnError> => (options.client ?? client).post<PasswordSetupCompleteResponses, unknown, ThrowOnError>({
+    url: '/api/v1/password-setup',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -88,16 +88,16 @@ export const completePasswordSetup = <ThrowOnError extends boolean = false>(opti
     }
 });
 
-export const getBranding = <ThrowOnError extends boolean = false>(options?: Options<GetBrandingData, ThrowOnError>): RequestResult<GetBrandingResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetBrandingResponses, unknown, ThrowOnError>({ url: '/api/branding', ...options });
+export const brandingGet = <ThrowOnError extends boolean = false>(options?: Options<BrandingGetData, ThrowOnError>): RequestResult<BrandingGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<BrandingGetResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/branding', ...options });
 
-export const getConfig = <ThrowOnError extends boolean = false>(options?: Options<GetConfigData, ThrowOnError>): RequestResult<GetConfigResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetConfigResponses, unknown, ThrowOnError>({ url: '/api/config', ...options });
+export const configGet = <ThrowOnError extends boolean = false>(options?: Options<ConfigGetData, ThrowOnError>): RequestResult<ConfigGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ConfigGetResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/config', ...options });
 
-export const ensurePersonalCollaborationWorkspace = <ThrowOnError extends boolean = false>(options?: Options<EnsurePersonalCollaborationWorkspaceData, ThrowOnError>): RequestResult<EnsurePersonalCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options?.client ?? client).post<EnsurePersonalCollaborationWorkspaceResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/personal', ...options });
+export const workspacesEnsurePersonal = <ThrowOnError extends boolean = false>(options?: Options<WorkspacesEnsurePersonalData, ThrowOnError>): RequestResult<WorkspacesEnsurePersonalResponses, unknown, ThrowOnError> => (options?.client ?? client).post<WorkspacesEnsurePersonalResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/personal', ...options });
 
-export const listCollaborationWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListCollaborationWorkspacesData, ThrowOnError>): RequestResult<ListCollaborationWorkspacesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListCollaborationWorkspacesResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces', ...options });
+export const workspacesList = <ThrowOnError extends boolean = false>(options?: Options<WorkspacesListData, ThrowOnError>): RequestResult<WorkspacesListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<WorkspacesListResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces', ...options });
 
-export const createCollaborationWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateCollaborationWorkspaceData, ThrowOnError>): RequestResult<CreateCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateCollaborationWorkspaceResponses, unknown, ThrowOnError>({
-    url: '/api/collaboration-workspaces',
+export const workspacesCreate = <ThrowOnError extends boolean = false>(options: Options<WorkspacesCreateData, ThrowOnError>): RequestResult<WorkspacesCreateResponses, unknown, ThrowOnError> => (options.client ?? client).post<WorkspacesCreateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -105,10 +105,10 @@ export const createCollaborationWorkspace = <ThrowOnError extends boolean = fals
     }
 });
 
-export const listCollaborationWorkspaceDirectory = <ThrowOnError extends boolean = false>(options?: Options<ListCollaborationWorkspaceDirectoryData, ThrowOnError>): RequestResult<ListCollaborationWorkspaceDirectoryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListCollaborationWorkspaceDirectoryResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/directory', ...options });
+export const workspacesDirectoryList = <ThrowOnError extends boolean = false>(options?: Options<WorkspacesDirectoryListData, ThrowOnError>): RequestResult<WorkspacesDirectoryListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<WorkspacesDirectoryListResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/directory', ...options });
 
-export const deleteCollaborationWorkspace = <ThrowOnError extends boolean = false>(options: Options<DeleteCollaborationWorkspaceData, ThrowOnError>): RequestResult<DeleteCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteCollaborationWorkspaceResponses, unknown, ThrowOnError>({
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}',
+export const workspacesDelete = <ThrowOnError extends boolean = false>(options: Options<WorkspacesDeleteData, ThrowOnError>): RequestResult<WorkspacesDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).delete<WorkspacesDeleteResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -116,10 +116,10 @@ export const deleteCollaborationWorkspace = <ThrowOnError extends boolean = fals
     }
 });
 
-export const getCollaborationWorkspace = <ThrowOnError extends boolean = false>(options: Options<GetCollaborationWorkspaceData, ThrowOnError>): RequestResult<GetCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetCollaborationWorkspaceResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}', ...options });
+export const workspacesGet = <ThrowOnError extends boolean = false>(options: Options<WorkspacesGetData, ThrowOnError>): RequestResult<WorkspacesGetResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspacesGetResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}', ...options });
 
-export const updateCollaborationWorkspace = <ThrowOnError extends boolean = false>(options: Options<UpdateCollaborationWorkspaceData, ThrowOnError>): RequestResult<UpdateCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateCollaborationWorkspaceResponses, unknown, ThrowOnError>({
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}',
+export const workspacesUpdate = <ThrowOnError extends boolean = false>(options: Options<WorkspacesUpdateData, ThrowOnError>): RequestResult<WorkspacesUpdateResponses, unknown, ThrowOnError> => (options.client ?? client).patch<WorkspacesUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -127,14 +127,14 @@ export const updateCollaborationWorkspace = <ThrowOnError extends boolean = fals
     }
 });
 
-export const listCollaborationWorkspaceAgents = <ThrowOnError extends boolean = false>(options: Options<ListCollaborationWorkspaceAgentsData, ThrowOnError>): RequestResult<ListCollaborationWorkspaceAgentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListCollaborationWorkspaceAgentsResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/agents', ...options });
+export const workspacesAgentsList = <ThrowOnError extends boolean = false>(options: Options<WorkspacesAgentsListData, ThrowOnError>): RequestResult<WorkspacesAgentsListResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspacesAgentsListResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/agents', ...options });
 
-export const getCollaborationWorkspaceDeletionImpact = <ThrowOnError extends boolean = false>(options: Options<GetCollaborationWorkspaceDeletionImpactData, ThrowOnError>): RequestResult<GetCollaborationWorkspaceDeletionImpactResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetCollaborationWorkspaceDeletionImpactResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/deletion-impact', ...options });
+export const workspacesDeletionImpactGet = <ThrowOnError extends boolean = false>(options: Options<WorkspacesDeletionImpactGetData, ThrowOnError>): RequestResult<WorkspacesDeletionImpactGetResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspacesDeletionImpactGetResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/deletion-impact', ...options });
 
-export const listCollaborationWorkspaceMembers = <ThrowOnError extends boolean = false>(options: Options<ListCollaborationWorkspaceMembersData, ThrowOnError>): RequestResult<ListCollaborationWorkspaceMembersResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListCollaborationWorkspaceMembersResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members', ...options });
+export const workspacesMembersList = <ThrowOnError extends boolean = false>(options: Options<WorkspacesMembersListData, ThrowOnError>): RequestResult<WorkspacesMembersListResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspacesMembersListResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/members', ...options });
 
-export const addCollaborationWorkspaceMember = <ThrowOnError extends boolean = false>(options: Options<AddCollaborationWorkspaceMemberData, ThrowOnError>): RequestResult<AddCollaborationWorkspaceMemberResponses, unknown, ThrowOnError> => (options.client ?? client).post<AddCollaborationWorkspaceMemberResponses, unknown, ThrowOnError>({
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members',
+export const workspacesMembersAdd = <ThrowOnError extends boolean = false>(options: Options<WorkspacesMembersAddData, ThrowOnError>): RequestResult<WorkspacesMembersAddResponses, unknown, ThrowOnError> => (options.client ?? client).post<WorkspacesMembersAddResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/members',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -142,12 +142,12 @@ export const addCollaborationWorkspaceMember = <ThrowOnError extends boolean = f
     }
 });
 
-export const listCollaborationWorkspaceMemberCandidates = <ThrowOnError extends boolean = false>(options: Options<ListCollaborationWorkspaceMemberCandidatesData, ThrowOnError>): RequestResult<ListCollaborationWorkspaceMemberCandidatesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListCollaborationWorkspaceMemberCandidatesResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/member-candidates', ...options });
+export const workspacesMemberCandidatesList = <ThrowOnError extends boolean = false>(options: Options<WorkspacesMemberCandidatesListData, ThrowOnError>): RequestResult<WorkspacesMemberCandidatesListResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspacesMemberCandidatesListResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/member-candidates', ...options });
 
-export const removeCollaborationWorkspaceMember = <ThrowOnError extends boolean = false>(options: Options<RemoveCollaborationWorkspaceMemberData, ThrowOnError>): RequestResult<RemoveCollaborationWorkspaceMemberResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RemoveCollaborationWorkspaceMemberResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}', ...options });
+export const workspacesMembersRemove = <ThrowOnError extends boolean = false>(options: Options<WorkspacesMembersRemoveData, ThrowOnError>): RequestResult<WorkspacesMembersRemoveResponses, unknown, ThrowOnError> => (options.client ?? client).delete<WorkspacesMembersRemoveResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/members/{userId}', ...options });
 
-export const updateCollaborationWorkspaceMemberRole = <ThrowOnError extends boolean = false>(options: Options<UpdateCollaborationWorkspaceMemberRoleData, ThrowOnError>): RequestResult<UpdateCollaborationWorkspaceMemberRoleResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateCollaborationWorkspaceMemberRoleResponses, unknown, ThrowOnError>({
-    url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}',
+export const workspacesMembersUpdateRole = <ThrowOnError extends boolean = false>(options: Options<WorkspacesMembersUpdateRoleData, ThrowOnError>): RequestResult<WorkspacesMembersUpdateRoleResponses, unknown, ThrowOnError> => (options.client ?? client).patch<WorkspacesMembersUpdateRoleResponses, unknown, ThrowOnError>({
+    url: '/api/v1/workspaces/{collaborationWorkspaceId}/members/{userId}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -155,20 +155,20 @@ export const updateCollaborationWorkspaceMemberRole = <ThrowOnError extends bool
     }
 });
 
-export const leaveCollaborationWorkspace = <ThrowOnError extends boolean = false>(options: Options<LeaveCollaborationWorkspaceData, ThrowOnError>): RequestResult<LeaveCollaborationWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).delete<LeaveCollaborationWorkspaceResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members/me', ...options });
+export const workspacesMembersLeave = <ThrowOnError extends boolean = false>(options: Options<WorkspacesMembersLeaveData, ThrowOnError>): RequestResult<WorkspacesMembersLeaveResponses, unknown, ThrowOnError> => (options.client ?? client).delete<WorkspacesMembersLeaveResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/members/me', ...options });
 
-export const listCollaborationWorkspaceAccessRequests = <ThrowOnError extends boolean = false>(options: Options<ListCollaborationWorkspaceAccessRequestsData, ThrowOnError>): RequestResult<ListCollaborationWorkspaceAccessRequestsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListCollaborationWorkspaceAccessRequestsResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests', ...options });
+export const workspacesAccessRequestsList = <ThrowOnError extends boolean = false>(options: Options<WorkspacesAccessRequestsListData, ThrowOnError>): RequestResult<WorkspacesAccessRequestsListResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspacesAccessRequestsListResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests', ...options });
 
-export const requestCollaborationWorkspaceAccess = <ThrowOnError extends boolean = false>(options: Options<RequestCollaborationWorkspaceAccessData, ThrowOnError>): RequestResult<RequestCollaborationWorkspaceAccessResponses, unknown, ThrowOnError> => (options.client ?? client).post<RequestCollaborationWorkspaceAccessResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests', ...options });
+export const workspacesAccessRequestsCreate = <ThrowOnError extends boolean = false>(options: Options<WorkspacesAccessRequestsCreateData, ThrowOnError>): RequestResult<WorkspacesAccessRequestsCreateResponses, unknown, ThrowOnError> => (options.client ?? client).post<WorkspacesAccessRequestsCreateResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests', ...options });
 
-export const approveCollaborationWorkspaceAccessRequest = <ThrowOnError extends boolean = false>(options: Options<ApproveCollaborationWorkspaceAccessRequestData, ThrowOnError>): RequestResult<ApproveCollaborationWorkspaceAccessRequestResponses, unknown, ThrowOnError> => (options.client ?? client).post<ApproveCollaborationWorkspaceAccessRequestResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve', ...options });
+export const workspacesAccessRequestsApprove = <ThrowOnError extends boolean = false>(options: Options<WorkspacesAccessRequestsApproveData, ThrowOnError>): RequestResult<WorkspacesAccessRequestsApproveResponses, unknown, ThrowOnError> => (options.client ?? client).post<WorkspacesAccessRequestsApproveResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve', ...options });
 
-export const declineCollaborationWorkspaceAccessRequest = <ThrowOnError extends boolean = false>(options: Options<DeclineCollaborationWorkspaceAccessRequestData, ThrowOnError>): RequestResult<DeclineCollaborationWorkspaceAccessRequestResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeclineCollaborationWorkspaceAccessRequestResponses, unknown, ThrowOnError>({ url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}', ...options });
+export const workspacesAccessRequestsDecline = <ThrowOnError extends boolean = false>(options: Options<WorkspacesAccessRequestsDeclineData, ThrowOnError>): RequestResult<WorkspacesAccessRequestsDeclineResponses, unknown, ThrowOnError> => (options.client ?? client).delete<WorkspacesAccessRequestsDeclineResponses, unknown, ThrowOnError>({ url: '/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}', ...options });
 
-export const listConversations = <ThrowOnError extends boolean = false>(options?: Options<ListConversationsData, ThrowOnError>): RequestResult<ListConversationsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListConversationsResponses, unknown, ThrowOnError>({ url: '/api/conversations', ...options });
+export const conversationsList = <ThrowOnError extends boolean = false>(options?: Options<ConversationsListData, ThrowOnError>): RequestResult<ConversationsListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ConversationsListResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations', ...options });
 
-export const createConversation = <ThrowOnError extends boolean = false>(options: Options<CreateConversationData, ThrowOnError>): RequestResult<CreateConversationResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateConversationResponses, unknown, ThrowOnError>({
-    url: '/api/conversations',
+export const conversationsCreate = <ThrowOnError extends boolean = false>(options: Options<ConversationsCreateData, ThrowOnError>): RequestResult<ConversationsCreateResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsCreateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/conversations',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -176,8 +176,8 @@ export const createConversation = <ThrowOnError extends boolean = false>(options
     }
 });
 
-export const renameConversation = <ThrowOnError extends boolean = false>(options: Options<RenameConversationData, ThrowOnError>): RequestResult<RenameConversationResponses, unknown, ThrowOnError> => (options.client ?? client).patch<RenameConversationResponses, unknown, ThrowOnError>({
-    url: '/api/conversations/{conversationId}/title',
+export const conversationsRename = <ThrowOnError extends boolean = false>(options: Options<ConversationsRenameData, ThrowOnError>): RequestResult<ConversationsRenameResponses, unknown, ThrowOnError> => (options.client ?? client).patch<ConversationsRenameResponses, unknown, ThrowOnError>({
+    url: '/api/v1/conversations/{conversationId}/title',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -185,10 +185,10 @@ export const renameConversation = <ThrowOnError extends boolean = false>(options
     }
 });
 
-export const generateConversationTitle = <ThrowOnError extends boolean = false>(options: Options<GenerateConversationTitleData, ThrowOnError>): RequestResult<GenerateConversationTitleResponses, unknown, ThrowOnError> => (options.client ?? client).post<GenerateConversationTitleResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/title', ...options });
+export const conversationsTitleGenerate = <ThrowOnError extends boolean = false>(options: Options<ConversationsTitleGenerateData, ThrowOnError>): RequestResult<ConversationsTitleGenerateResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsTitleGenerateResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/title', ...options });
 
-export const moveConversation = <ThrowOnError extends boolean = false>(options: Options<MoveConversationData, ThrowOnError>): RequestResult<MoveConversationResponses, unknown, ThrowOnError> => (options.client ?? client).post<MoveConversationResponses, unknown, ThrowOnError>({
-    url: '/api/conversations/{conversationId}/move',
+export const conversationsMove = <ThrowOnError extends boolean = false>(options: Options<ConversationsMoveData, ThrowOnError>): RequestResult<ConversationsMoveResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsMoveResponses, unknown, ThrowOnError>({
+    url: '/api/v1/conversations/{conversationId}/move',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -196,16 +196,16 @@ export const moveConversation = <ThrowOnError extends boolean = false>(options: 
     }
 });
 
-export const getConversationThread = <ThrowOnError extends boolean = false>(options: Options<GetConversationThreadData, ThrowOnError>): RequestResult<GetConversationThreadResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetConversationThreadResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/thread', ...options });
+export const conversationsThreadGet = <ThrowOnError extends boolean = false>(options: Options<ConversationsThreadGetData, ThrowOnError>): RequestResult<ConversationsThreadGetResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsThreadGetResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/thread', ...options });
 
-export const listConversationMessages = <ThrowOnError extends boolean = false>(options: Options<ListConversationMessagesData, ThrowOnError>): RequestResult<ListConversationMessagesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListConversationMessagesResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/messages', ...options });
+export const conversationsMessagesList = <ThrowOnError extends boolean = false>(options: Options<ConversationsMessagesListData, ThrowOnError>): RequestResult<ConversationsMessagesListResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsMessagesListResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/messages', ...options });
 
-export const listConversationResources = <ThrowOnError extends boolean = false>(options: Options<ListConversationResourcesData, ThrowOnError>): RequestResult<ListConversationResourcesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListConversationResourcesResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/resources', ...options });
+export const conversationsResourcesList = <ThrowOnError extends boolean = false>(options: Options<ConversationsResourcesListData, ThrowOnError>): RequestResult<ConversationsResourcesListResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsResourcesListResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/resources', ...options });
 
-export const getStructuredDataResource = <ThrowOnError extends boolean = false>(options: Options<GetStructuredDataResourceData, ThrowOnError>): RequestResult<GetStructuredDataResourceResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetStructuredDataResourceResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/structured-data/{structuredDataResourceId}', ...options });
+export const conversationsStructuredDataGet = <ThrowOnError extends boolean = false>(options: Options<ConversationsStructuredDataGetData, ThrowOnError>): RequestResult<ConversationsStructuredDataGetResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsStructuredDataGetResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/structured-data/{structuredDataResourceId}', ...options });
 
-export const cancelConversationRun = <ThrowOnError extends boolean = false>(options: Options<CancelConversationRunData, ThrowOnError>): RequestResult<CancelConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<CancelConversationRunResponses, unknown, ThrowOnError>({
-    url: '/api/conversations/{conversationId}/runs/{runId}/cancel',
+export const conversationsRunsCancel = <ThrowOnError extends boolean = false>(options: Options<ConversationsRunsCancelData, ThrowOnError>): RequestResult<ConversationsRunsCancelResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsRunsCancelResponses, unknown, ThrowOnError>({
+    url: '/api/v1/conversations/{conversationId}/runs/{runId}/cancel',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -213,8 +213,8 @@ export const cancelConversationRun = <ThrowOnError extends boolean = false>(opti
     }
 });
 
-export const startConversationRun = <ThrowOnError extends boolean = false>(options: Options<StartConversationRunData, ThrowOnError>): RequestResult<StartConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<StartConversationRunResponses, unknown, ThrowOnError>({
-    url: '/api/conversations/{conversationId}/runs',
+export const conversationsRunsStart = <ThrowOnError extends boolean = false>(options: Options<ConversationsRunsStartData, ThrowOnError>): RequestResult<ConversationsRunsStartResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsRunsStartResponses, unknown, ThrowOnError>({
+    url: '/api/v1/conversations/{conversationId}/runs',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -222,8 +222,8 @@ export const startConversationRun = <ThrowOnError extends boolean = false>(optio
     }
 });
 
-export const createConversationRun = <ThrowOnError extends boolean = false>(options: Options<CreateConversationRunData, ThrowOnError>): RequestResult<CreateConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateConversationRunResponses, unknown, ThrowOnError>({
-    url: '/api/conversations/runs',
+export const conversationsRunsCreate = <ThrowOnError extends boolean = false>(options: Options<ConversationsRunsCreateData, ThrowOnError>): RequestResult<ConversationsRunsCreateResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsRunsCreateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/conversations/runs',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -231,10 +231,10 @@ export const createConversationRun = <ThrowOnError extends boolean = false>(opti
     }
 });
 
-export const observeConversationRun = <ThrowOnError extends boolean = false>(options: Options<ObserveConversationRunData, ThrowOnError>): RequestResult<ObserveConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).get<ObserveConversationRunResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/runs/{runId}/events', ...options });
+export const conversationsRunsObserve = <ThrowOnError extends boolean = false>(options: Options<ConversationsRunsObserveData, ThrowOnError>): RequestResult<ConversationsRunsObserveResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsRunsObserveResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/runs/{runId}/events', ...options });
 
-export const commandConversationRun = <ThrowOnError extends boolean = false>(options: Options<CommandConversationRunData, ThrowOnError>): RequestResult<CommandConversationRunResponses, unknown, ThrowOnError> => (options.client ?? client).post<CommandConversationRunResponses, unknown, ThrowOnError>({
-    url: '/api/conversations/{conversationId}/runs/{runId}/commands',
+export const conversationsRunsCommand = <ThrowOnError extends boolean = false>(options: Options<ConversationsRunsCommandData, ThrowOnError>): RequestResult<ConversationsRunsCommandResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsRunsCommandResponses, unknown, ThrowOnError>({
+    url: '/api/v1/conversations/{conversationId}/runs/{runId}/commands',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -242,21 +242,21 @@ export const commandConversationRun = <ThrowOnError extends boolean = false>(opt
     }
 });
 
-export const deleteConversation = <ThrowOnError extends boolean = false>(options: Options<DeleteConversationData, ThrowOnError>): RequestResult<DeleteConversationResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteConversationResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}', ...options });
+export const conversationsDelete = <ThrowOnError extends boolean = false>(options: Options<ConversationsDeleteData, ThrowOnError>): RequestResult<ConversationsDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).delete<ConversationsDeleteResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}', ...options });
 
-export const getConversationArtifactPreview = <ThrowOnError extends boolean = false>(options: Options<GetConversationArtifactPreviewData, ThrowOnError>): RequestResult<GetConversationArtifactPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetConversationArtifactPreviewResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview', ...options });
+export const conversationsArtifactsGetPreview = <ThrowOnError extends boolean = false>(options: Options<ConversationsArtifactsGetPreviewData, ThrowOnError>): RequestResult<ConversationsArtifactsGetPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsArtifactsGetPreviewResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview', ...options });
 
-export const startConversationArtifactPreview = <ThrowOnError extends boolean = false>(options: Options<StartConversationArtifactPreviewData, ThrowOnError>): RequestResult<StartConversationArtifactPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).post<StartConversationArtifactPreviewResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview', ...options });
+export const conversationsArtifactsStartPreview = <ThrowOnError extends boolean = false>(options: Options<ConversationsArtifactsStartPreviewData, ThrowOnError>): RequestResult<ConversationsArtifactsStartPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsArtifactsStartPreviewResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview', ...options });
 
-export const getConversationAttachmentPreview = <ThrowOnError extends boolean = false>(options: Options<GetConversationAttachmentPreviewData, ThrowOnError>): RequestResult<GetConversationAttachmentPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetConversationAttachmentPreviewResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview', ...options });
+export const conversationsAttachmentsGetPreview = <ThrowOnError extends boolean = false>(options: Options<ConversationsAttachmentsGetPreviewData, ThrowOnError>): RequestResult<ConversationsAttachmentsGetPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsAttachmentsGetPreviewResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/attachments/{attachmentId}/preview', ...options });
 
-export const startConversationAttachmentPreview = <ThrowOnError extends boolean = false>(options: Options<StartConversationAttachmentPreviewData, ThrowOnError>): RequestResult<StartConversationAttachmentPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).post<StartConversationAttachmentPreviewResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview', ...options });
+export const conversationsAttachmentsStartPreview = <ThrowOnError extends boolean = false>(options: Options<ConversationsAttachmentsStartPreviewData, ThrowOnError>): RequestResult<ConversationsAttachmentsStartPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsAttachmentsStartPreviewResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/attachments/{attachmentId}/preview', ...options });
 
-export const listDraftAttachments = <ThrowOnError extends boolean = false>(options: Options<ListDraftAttachmentsData, ThrowOnError>): RequestResult<ListDraftAttachmentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListDraftAttachmentsResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/draft-attachments', ...options });
+export const conversationsDraftAttachmentsList = <ThrowOnError extends boolean = false>(options: Options<ConversationsDraftAttachmentsListData, ThrowOnError>): RequestResult<ConversationsDraftAttachmentsListResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsDraftAttachmentsListResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/draft-attachments', ...options });
 
-export const uploadDraftAttachment = <ThrowOnError extends boolean = false>(options: Options<UploadDraftAttachmentData, ThrowOnError>): RequestResult<UploadDraftAttachmentResponses, unknown, ThrowOnError> => (options.client ?? client).post<UploadDraftAttachmentResponses, unknown, ThrowOnError>({
+export const conversationsDraftAttachmentsUpload = <ThrowOnError extends boolean = false>(options: Options<ConversationsDraftAttachmentsUploadData, ThrowOnError>): RequestResult<ConversationsDraftAttachmentsUploadResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsDraftAttachmentsUploadResponses, unknown, ThrowOnError>({
     ...formDataBodySerializer,
-    url: '/api/conversations/{conversationId}/draft-attachments',
+    url: '/api/v1/conversations/{conversationId}/draft-attachments',
     ...options,
     headers: {
         'Content-Type': null,
@@ -264,28 +264,28 @@ export const uploadDraftAttachment = <ThrowOnError extends boolean = false>(opti
     }
 });
 
-export const retryDraftAttachment = <ThrowOnError extends boolean = false>(options: Options<RetryDraftAttachmentData, ThrowOnError>): RequestResult<RetryDraftAttachmentResponses, unknown, ThrowOnError> => (options.client ?? client).post<RetryDraftAttachmentResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/draft-attachments/{attachmentId}/retry', ...options });
+export const conversationsDraftAttachmentsRetry = <ThrowOnError extends boolean = false>(options: Options<ConversationsDraftAttachmentsRetryData, ThrowOnError>): RequestResult<ConversationsDraftAttachmentsRetryResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsDraftAttachmentsRetryResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/draft-attachments/{attachmentId}/retry', ...options });
 
-export const deleteDraftAttachment = <ThrowOnError extends boolean = false>(options: Options<DeleteDraftAttachmentData, ThrowOnError>): RequestResult<DeleteDraftAttachmentResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteDraftAttachmentResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/draft-attachments/{attachmentId}', ...options });
+export const conversationsDraftAttachmentsDelete = <ThrowOnError extends boolean = false>(options: Options<ConversationsDraftAttachmentsDeleteData, ThrowOnError>): RequestResult<ConversationsDraftAttachmentsDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).delete<ConversationsDraftAttachmentsDeleteResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/draft-attachments/{attachmentId}', ...options });
 
-export const getConversationFileContent = <ThrowOnError extends boolean = false>(options: Options<GetConversationFileContentData, ThrowOnError>): RequestResult<GetConversationFileContentResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetConversationFileContentResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/files/{fileId}/content', ...options });
+export const conversationsFilesGetContent = <ThrowOnError extends boolean = false>(options: Options<ConversationsFilesGetContentData, ThrowOnError>): RequestResult<ConversationsFilesGetContentResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsFilesGetContentResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/files/{fileId}/content', ...options });
 
-export const getConversationArtifactContent = <ThrowOnError extends boolean = false>(options: Options<GetConversationArtifactContentData, ThrowOnError>): RequestResult<GetConversationArtifactContentResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetConversationArtifactContentResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/artifacts/{artifactId}/content', ...options });
+export const conversationsArtifactsGetContent = <ThrowOnError extends boolean = false>(options: Options<ConversationsArtifactsGetContentData, ThrowOnError>): RequestResult<ConversationsArtifactsGetContentResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConversationsArtifactsGetContentResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/content', ...options });
 
-export const retryConversationArtifactPreview = <ThrowOnError extends boolean = false>(options: Options<RetryConversationArtifactPreviewData, ThrowOnError>): RequestResult<RetryConversationArtifactPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).post<RetryConversationArtifactPreviewResponses, unknown, ThrowOnError>({ url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview/retry', ...options });
+export const conversationsArtifactsRetryPreview = <ThrowOnError extends boolean = false>(options: Options<ConversationsArtifactsRetryPreviewData, ThrowOnError>): RequestResult<ConversationsArtifactsRetryPreviewResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConversationsArtifactsRetryPreviewResponses, unknown, ThrowOnError>({ url: '/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview/retry', ...options });
 
-export const listAuditEvents = <ThrowOnError extends boolean = false>(options?: Options<ListAuditEventsData, ThrowOnError>): RequestResult<ListAuditEventsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListAuditEventsResponses, unknown, ThrowOnError>({ url: '/api/audit-events', ...options });
+export const auditEventsList = <ThrowOnError extends boolean = false>(options?: Options<AuditEventsListData, ThrowOnError>): RequestResult<AuditEventsListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AuditEventsListResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/audit-events', ...options });
 
-export const listAuditActivities = <ThrowOnError extends boolean = false>(options?: Options<ListAuditActivitiesData, ThrowOnError>): RequestResult<ListAuditActivitiesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListAuditActivitiesResponses, unknown, ThrowOnError>({ url: '/api/audit-activities', ...options });
+export const auditActivitiesList = <ThrowOnError extends boolean = false>(options?: Options<AuditActivitiesListData, ThrowOnError>): RequestResult<AuditActivitiesListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AuditActivitiesListResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/audit-activities', ...options });
 
-export const getUsageSummary = <ThrowOnError extends boolean = false>(options?: Options<GetUsageSummaryData, ThrowOnError>): RequestResult<GetUsageSummaryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetUsageSummaryResponses, unknown, ThrowOnError>({ url: '/api/superadmin/usage', ...options });
+export const usageGetSummary = <ThrowOnError extends boolean = false>(options?: Options<UsageGetSummaryData, ThrowOnError>): RequestResult<UsageGetSummaryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<UsageGetSummaryResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/usage', ...options });
 
-export const getConfigAssetsOverview = <ThrowOnError extends boolean = false>(options?: Options<GetConfigAssetsOverviewData, ThrowOnError>): RequestResult<GetConfigAssetsOverviewResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetConfigAssetsOverviewResponses, unknown, ThrowOnError>({ url: '/api/admin/config/assets', ...options });
+export const configAssetsGetOverview = <ThrowOnError extends boolean = false>(options?: Options<ConfigAssetsGetOverviewData, ThrowOnError>): RequestResult<ConfigAssetsGetOverviewResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ConfigAssetsGetOverviewResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/config/assets', ...options });
 
-export const getConfigAsset = <ThrowOnError extends boolean = false>(options: Options<GetConfigAssetData, ThrowOnError>): RequestResult<GetConfigAssetResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetConfigAssetResponses, unknown, ThrowOnError>({ url: '/api/admin/config/assets/{kind}/{name}', ...options });
+export const configAssetsGet = <ThrowOnError extends boolean = false>(options: Options<ConfigAssetsGetData, ThrowOnError>): RequestResult<ConfigAssetsGetResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConfigAssetsGetResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/config/assets/{kind}/{name}', ...options });
 
-export const putConfigAsset = <ThrowOnError extends boolean = false>(options: Options<PutConfigAssetData, ThrowOnError>): RequestResult<PutConfigAssetResponses, unknown, ThrowOnError> => (options.client ?? client).put<PutConfigAssetResponses, unknown, ThrowOnError>({
-    url: '/api/admin/config/assets/{kind}/{name}',
+export const configAssetsPut = <ThrowOnError extends boolean = false>(options: Options<ConfigAssetsPutData, ThrowOnError>): RequestResult<ConfigAssetsPutResponses, unknown, ThrowOnError> => (options.client ?? client).put<ConfigAssetsPutResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/config/assets/{kind}/{name}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -293,8 +293,8 @@ export const putConfigAsset = <ThrowOnError extends boolean = false>(options: Op
     }
 });
 
-export const deleteConfigAsset = <ThrowOnError extends boolean = false>(options: Options<DeleteConfigAssetData, ThrowOnError>): RequestResult<DeleteConfigAssetResponses, unknown, ThrowOnError> => (options.client ?? client).post<DeleteConfigAssetResponses, unknown, ThrowOnError>({
-    url: '/api/admin/config/assets/{kind}/{name}/delete',
+export const configAssetsDelete = <ThrowOnError extends boolean = false>(options: Options<ConfigAssetsDeleteData, ThrowOnError>): RequestResult<ConfigAssetsDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConfigAssetsDeleteResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/config/assets/{kind}/{name}/delete',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -302,8 +302,8 @@ export const deleteConfigAsset = <ThrowOnError extends boolean = false>(options:
     }
 });
 
-export const setDefaultConfigAgent = <ThrowOnError extends boolean = false>(options: Options<SetDefaultConfigAgentData, ThrowOnError>): RequestResult<SetDefaultConfigAgentResponses, unknown, ThrowOnError> => (options.client ?? client).put<SetDefaultConfigAgentResponses, unknown, ThrowOnError>({
-    url: '/api/admin/config/default-agent',
+export const configAgentsSetDefault = <ThrowOnError extends boolean = false>(options: Options<ConfigAgentsSetDefaultData, ThrowOnError>): RequestResult<ConfigAgentsSetDefaultResponses, unknown, ThrowOnError> => (options.client ?? client).put<ConfigAgentsSetDefaultResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/config/default-agent',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -311,8 +311,8 @@ export const setDefaultConfigAgent = <ThrowOnError extends boolean = false>(opti
     }
 });
 
-export const setConfigAgentAvailability = <ThrowOnError extends boolean = false>(options: Options<SetConfigAgentAvailabilityData, ThrowOnError>): RequestResult<SetConfigAgentAvailabilityResponses, unknown, ThrowOnError> => (options.client ?? client).put<SetConfigAgentAvailabilityResponses, unknown, ThrowOnError>({
-    url: '/api/admin/config/agents/{name}/availability',
+export const configAgentsSetAvailability = <ThrowOnError extends boolean = false>(options: Options<ConfigAgentsSetAvailabilityData, ThrowOnError>): RequestResult<ConfigAgentsSetAvailabilityResponses, unknown, ThrowOnError> => (options.client ?? client).put<ConfigAgentsSetAvailabilityResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/config/agents/{name}/availability',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -320,12 +320,12 @@ export const setConfigAgentAvailability = <ThrowOnError extends boolean = false>
     }
 });
 
-export const listAdministeredCollaborationWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListAdministeredCollaborationWorkspacesData, ThrowOnError>): RequestResult<ListAdministeredCollaborationWorkspacesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListAdministeredCollaborationWorkspacesResponses, unknown, ThrowOnError>({ url: '/api/admin/collaboration-workspaces', ...options });
+export const instanceWorkspacesList = <ThrowOnError extends boolean = false>(options?: Options<InstanceWorkspacesListData, ThrowOnError>): RequestResult<InstanceWorkspacesListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<InstanceWorkspacesListResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/workspaces', ...options });
 
-export const listConfigAssetRevisions = <ThrowOnError extends boolean = false>(options: Options<ListConfigAssetRevisionsData, ThrowOnError>): RequestResult<ListConfigAssetRevisionsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListConfigAssetRevisionsResponses, unknown, ThrowOnError>({ url: '/api/admin/config/assets/{kind}/{name}/revisions', ...options });
+export const configAssetsRevisionsList = <ThrowOnError extends boolean = false>(options: Options<ConfigAssetsRevisionsListData, ThrowOnError>): RequestResult<ConfigAssetsRevisionsListResponses, unknown, ThrowOnError> => (options.client ?? client).get<ConfigAssetsRevisionsListResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/config/assets/{kind}/{name}/revisions', ...options });
 
-export const revertConfigAsset = <ThrowOnError extends boolean = false>(options: Options<RevertConfigAssetData, ThrowOnError>): RequestResult<RevertConfigAssetResponses, unknown, ThrowOnError> => (options.client ?? client).post<RevertConfigAssetResponses, unknown, ThrowOnError>({
-    url: '/api/admin/config/assets/{kind}/{name}/revert',
+export const configAssetsRevert = <ThrowOnError extends boolean = false>(options: Options<ConfigAssetsRevertData, ThrowOnError>): RequestResult<ConfigAssetsRevertResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConfigAssetsRevertResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/config/assets/{kind}/{name}/revert',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -333,10 +333,10 @@ export const revertConfigAsset = <ThrowOnError extends boolean = false>(options:
     }
 });
 
-export const exportConfigAssets = <ThrowOnError extends boolean = false>(options?: Options<ExportConfigAssetsData, ThrowOnError>): RequestResult<ExportConfigAssetsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ExportConfigAssetsResponses, unknown, ThrowOnError>({ url: '/api/admin/config/export', ...options });
+export const configAssetsExport = <ThrowOnError extends boolean = false>(options?: Options<ConfigAssetsExportData, ThrowOnError>): RequestResult<ConfigAssetsExportResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ConfigAssetsExportResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/config/export', ...options });
 
-export const replaceConfigAssets = <ThrowOnError extends boolean = false>(options: Options<ReplaceConfigAssetsData, ThrowOnError>): RequestResult<ReplaceConfigAssetsResponses, unknown, ThrowOnError> => (options.client ?? client).post<ReplaceConfigAssetsResponses, unknown, ThrowOnError>({
-    url: '/api/admin/config/import',
+export const configAssetsReplace = <ThrowOnError extends boolean = false>(options: Options<ConfigAssetsReplaceData, ThrowOnError>): RequestResult<ConfigAssetsReplaceResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConfigAssetsReplaceResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/config/import',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -344,8 +344,8 @@ export const replaceConfigAssets = <ThrowOnError extends boolean = false>(option
     }
 });
 
-export const validateConfigAssets = <ThrowOnError extends boolean = false>(options: Options<ValidateConfigAssetsData, ThrowOnError>): RequestResult<ValidateConfigAssetsResponses, unknown, ThrowOnError> => (options.client ?? client).post<ValidateConfigAssetsResponses, unknown, ThrowOnError>({
-    url: '/api/admin/config/validate',
+export const configAssetsValidate = <ThrowOnError extends boolean = false>(options: Options<ConfigAssetsValidateData, ThrowOnError>): RequestResult<ConfigAssetsValidateResponses, unknown, ThrowOnError> => (options.client ?? client).post<ConfigAssetsValidateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/config/validate',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -353,10 +353,10 @@ export const validateConfigAssets = <ThrowOnError extends boolean = false>(optio
     }
 });
 
-export const listAdministeredUsers = <ThrowOnError extends boolean = false>(options?: Options<ListAdministeredUsersData, ThrowOnError>): RequestResult<ListAdministeredUsersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListAdministeredUsersResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users', ...options });
+export const usersList = <ThrowOnError extends boolean = false>(options?: Options<UsersListData, ThrowOnError>): RequestResult<UsersListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<UsersListResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/users', ...options });
 
-export const createAdministeredUser = <ThrowOnError extends boolean = false>(options: Options<CreateAdministeredUserData, ThrowOnError>): RequestResult<CreateAdministeredUserResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateAdministeredUserResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/users',
+export const usersCreate = <ThrowOnError extends boolean = false>(options: Options<UsersCreateData, ThrowOnError>): RequestResult<UsersCreateResponses, unknown, ThrowOnError> => (options.client ?? client).post<UsersCreateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/users',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -364,10 +364,10 @@ export const createAdministeredUser = <ThrowOnError extends boolean = false>(opt
     }
 });
 
-export const deleteAdministeredUser = <ThrowOnError extends boolean = false>(options: Options<DeleteAdministeredUserData, ThrowOnError>): RequestResult<DeleteAdministeredUserResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteAdministeredUserResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}', ...options });
+export const usersDelete = <ThrowOnError extends boolean = false>(options: Options<UsersDeleteData, ThrowOnError>): RequestResult<UsersDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).delete<UsersDeleteResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/users/{userId}', ...options });
 
-export const updateAdministeredUser = <ThrowOnError extends boolean = false>(options: Options<UpdateAdministeredUserData, ThrowOnError>): RequestResult<UpdateAdministeredUserResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateAdministeredUserResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/users/{userId}',
+export const usersUpdate = <ThrowOnError extends boolean = false>(options: Options<UsersUpdateData, ThrowOnError>): RequestResult<UsersUpdateResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UsersUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/users/{userId}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -375,8 +375,8 @@ export const updateAdministeredUser = <ThrowOnError extends boolean = false>(opt
     }
 });
 
-export const upsertAdministeredUserIdentity = <ThrowOnError extends boolean = false>(options: Options<UpsertAdministeredUserIdentityData, ThrowOnError>): RequestResult<UpsertAdministeredUserIdentityResponses, unknown, ThrowOnError> => (options.client ?? client).put<UpsertAdministeredUserIdentityResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/users/{userId}/identities',
+export const usersIdentitiesUpsert = <ThrowOnError extends boolean = false>(options: Options<UsersIdentitiesUpsertData, ThrowOnError>): RequestResult<UsersIdentitiesUpsertResponses, unknown, ThrowOnError> => (options.client ?? client).put<UsersIdentitiesUpsertResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/users/{userId}/identities',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -384,8 +384,8 @@ export const upsertAdministeredUserIdentity = <ThrowOnError extends boolean = fa
     }
 });
 
-export const resetAdministeredUserPassword = <ThrowOnError extends boolean = false>(options: Options<ResetAdministeredUserPasswordData, ThrowOnError>): RequestResult<ResetAdministeredUserPasswordResponses, unknown, ThrowOnError> => (options.client ?? client).post<ResetAdministeredUserPasswordResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/users/{userId}/password',
+export const usersPasswordReset = <ThrowOnError extends boolean = false>(options: Options<UsersPasswordResetData, ThrowOnError>): RequestResult<UsersPasswordResetResponses, unknown, ThrowOnError> => (options.client ?? client).post<UsersPasswordResetResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/users/{userId}/password',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -393,14 +393,14 @@ export const resetAdministeredUserPassword = <ThrowOnError extends boolean = fal
     }
 });
 
-export const sendAdministeredUserInvitation = <ThrowOnError extends boolean = false>(options: Options<SendAdministeredUserInvitationData, ThrowOnError>): RequestResult<SendAdministeredUserInvitationResponses, unknown, ThrowOnError> => (options.client ?? client).post<SendAdministeredUserInvitationResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/invitation', ...options });
+export const usersInvitationSend = <ThrowOnError extends boolean = false>(options: Options<UsersInvitationSendData, ThrowOnError>): RequestResult<UsersInvitationSendResponses, unknown, ThrowOnError> => (options.client ?? client).post<UsersInvitationSendResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/users/{userId}/invitation', ...options });
 
-export const deleteAdministeredUserIdentity = <ThrowOnError extends boolean = false>(options: Options<DeleteAdministeredUserIdentityData, ThrowOnError>): RequestResult<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}', ...options });
+export const usersIdentitiesDelete = <ThrowOnError extends boolean = false>(options: Options<UsersIdentitiesDeleteData, ThrowOnError>): RequestResult<UsersIdentitiesDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).delete<UsersIdentitiesDeleteResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/users/{userId}/identities/{authSource}/{externalUserId}', ...options });
 
-export const listServicePrincipals = <ThrowOnError extends boolean = false>(options?: Options<ListServicePrincipalsData, ThrowOnError>): RequestResult<ListServicePrincipalsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListServicePrincipalsResponses, unknown, ThrowOnError>({ url: '/api/superadmin/api-access/service-principals', ...options });
+export const servicePrincipalsList = <ThrowOnError extends boolean = false>(options?: Options<ServicePrincipalsListData, ThrowOnError>): RequestResult<ServicePrincipalsListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ServicePrincipalsListResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/service-principals', ...options });
 
-export const createServicePrincipal = <ThrowOnError extends boolean = false>(options: Options<CreateServicePrincipalData, ThrowOnError>): RequestResult<CreateServicePrincipalResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateServicePrincipalResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/api-access/service-principals',
+export const servicePrincipalsCreate = <ThrowOnError extends boolean = false>(options: Options<ServicePrincipalsCreateData, ThrowOnError>): RequestResult<ServicePrincipalsCreateResponses, unknown, ThrowOnError> => (options.client ?? client).post<ServicePrincipalsCreateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/service-principals',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -408,8 +408,8 @@ export const createServicePrincipal = <ThrowOnError extends boolean = false>(opt
     }
 });
 
-export const updateServicePrincipal = <ThrowOnError extends boolean = false>(options: Options<UpdateServicePrincipalData, ThrowOnError>): RequestResult<UpdateServicePrincipalResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateServicePrincipalResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}',
+export const servicePrincipalsUpdate = <ThrowOnError extends boolean = false>(options: Options<ServicePrincipalsUpdateData, ThrowOnError>): RequestResult<ServicePrincipalsUpdateResponses, unknown, ThrowOnError> => (options.client ?? client).patch<ServicePrincipalsUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/service-principals/{servicePrincipalId}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -417,8 +417,8 @@ export const updateServicePrincipal = <ThrowOnError extends boolean = false>(opt
     }
 });
 
-export const createApiCredential = <ThrowOnError extends boolean = false>(options: Options<CreateApiCredentialData, ThrowOnError>): RequestResult<CreateApiCredentialResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateApiCredentialResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/api-access/service-principals/{servicePrincipalId}/credentials',
+export const apiCredentialsCreate = <ThrowOnError extends boolean = false>(options: Options<ApiCredentialsCreateData, ThrowOnError>): RequestResult<ApiCredentialsCreateResponses, unknown, ThrowOnError> => (options.client ?? client).post<ApiCredentialsCreateResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/service-principals/{servicePrincipalId}/credentials',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -426,10 +426,10 @@ export const createApiCredential = <ThrowOnError extends boolean = false>(option
     }
 });
 
-export const revokeApiCredential = <ThrowOnError extends boolean = false>(options: Options<RevokeApiCredentialData, ThrowOnError>): RequestResult<RevokeApiCredentialResponses, unknown, ThrowOnError> => (options.client ?? client).post<RevokeApiCredentialResponses, unknown, ThrowOnError>({ url: '/api/superadmin/api-access/credentials/{credentialId}/revoke', ...options });
+export const apiCredentialsRevoke = <ThrowOnError extends boolean = false>(options: Options<ApiCredentialsRevokeData, ThrowOnError>): RequestResult<ApiCredentialsRevokeResponses, unknown, ThrowOnError> => (options.client ?? client).post<ApiCredentialsRevokeResponses, unknown, ThrowOnError>({ url: '/api/v1/instance/api-credentials/{credentialId}/revoke', ...options });
 
-export const issueSessionToken = <ThrowOnError extends boolean = false>(options: Options<IssueSessionTokenData, ThrowOnError>): RequestResult<IssueSessionTokenResponses, unknown, ThrowOnError> => (options.client ?? client).post<IssueSessionTokenResponses, unknown, ThrowOnError>({
-    url: '/api/superadmin/session-tokens',
+export const sessionTokensIssue = <ThrowOnError extends boolean = false>(options: Options<SessionTokensIssueData, ThrowOnError>): RequestResult<SessionTokensIssueResponses, unknown, ThrowOnError> => (options.client ?? client).post<SessionTokensIssueResponses, unknown, ThrowOnError>({
+    url: '/api/v1/instance/session-tokens',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -437,4 +437,4 @@ export const issueSessionToken = <ThrowOnError extends boolean = false>(options:
     }
 });
 
-export const exchangeApiKey = <ThrowOnError extends boolean = false>(options?: Options<ExchangeApiKeyData, ThrowOnError>): RequestResult<ExchangeApiKeyResponses, unknown, ThrowOnError> => (options?.client ?? client).post<ExchangeApiKeyResponses, unknown, ThrowOnError>({ url: '/api/auth/access-token', ...options });
+export const accessTokensExchange = <ThrowOnError extends boolean = false>(options?: Options<AccessTokensExchangeData, ThrowOnError>): RequestResult<AccessTokensExchangeResponses, unknown, ThrowOnError> => (options?.client ?? client).post<AccessTokensExchangeResponses, unknown, ThrowOnError>({ url: '/api/v1/auth/access-token', ...options });

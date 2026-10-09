@@ -22,7 +22,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     const api = await fixture.api();
     const deleteWorkspace = () =>
       api.call(
-        "deleteCollaborationWorkspace",
+        "workspaces.delete",
         {
           params: { collaborationWorkspaceId: workspace.id },
           payload: { confirmName: workspace.name }
@@ -112,12 +112,8 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     };
     const api = await fixture.api();
     const deleteAccounts = async () => [
-      await api.call(
-        "deleteAdministeredUser",
-        { params: { userId: removedUser.id } },
-        superadmin.id
-      ),
-      await api.call("deleteCurrentUser", {}, leavingUser.id)
+      await api.call("users.delete", { params: { userId: removedUser.id } }, superadmin.id),
+      await api.call("me.delete", {}, leavingUser.id)
     ];
     const memberIds = async () =>
       (
@@ -270,7 +266,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     // The Conversation has no file or artifact, so only the workspace cleanup can fail.
     fixture.byteStore.failNextDeleteFor(workspaceData.objectKey);
     const deletion = await api.call(
-      "deleteConversation",
+      "conversations.delete",
       { params: { conversationId: conversation.id } },
       author.id
     );
@@ -326,7 +322,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     });
     const api = await fixture.api();
 
-    const deletion = await api.call("deleteCurrentUser", {}, leavingUser.id);
+    const deletion = await api.call("me.delete", {}, leavingUser.id);
     expect(deletion.statusCode).toBe(200);
 
     await expect(fixture.eventsOfType("user.delete_failed")).resolves.toEqual([]);

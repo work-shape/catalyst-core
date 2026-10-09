@@ -10,10 +10,10 @@ import {
 import { defineOperation, json, page } from "./define-operation";
 
 export const apiAccessOperations = {
-  listServicePrincipals: defineOperation({
-    id: "listServicePrincipals",
+  "service_principals.list": defineOperation({
+    id: "service_principals.list",
     method: "GET",
-    path: "/api/superadmin/api-access/service-principals",
+    path: "/api/v1/instance/service-principals",
     summary: "List service principals with their credentials",
     tag: "API Access",
     auth: "user",
@@ -25,10 +25,10 @@ export const apiAccessOperations = {
     errors: [],
     rateClass: "read"
   }),
-  createServicePrincipal: defineOperation({
-    id: "createServicePrincipal",
+  "service_principals.create": defineOperation({
+    id: "service_principals.create",
     method: "POST",
-    path: "/api/superadmin/api-access/service-principals",
+    path: "/api/v1/instance/service-principals",
     summary: "Create a service principal",
     tag: "API Access",
     auth: "user",
@@ -40,10 +40,10 @@ export const apiAccessOperations = {
     errors: [],
     rateClass: "write"
   }),
-  updateServicePrincipal: defineOperation({
-    id: "updateServicePrincipal",
+  "service_principals.update": defineOperation({
+    id: "service_principals.update",
     method: "PATCH",
-    path: "/api/superadmin/api-access/service-principals/:servicePrincipalId",
+    path: "/api/v1/instance/service-principals/:servicePrincipalId",
     summary: "Change a service principal",
     tag: "API Access",
     auth: "user",
@@ -55,10 +55,10 @@ export const apiAccessOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  createApiCredential: defineOperation({
-    id: "createApiCredential",
+  "api_credentials.create": defineOperation({
+    id: "api_credentials.create",
     method: "POST",
-    path: "/api/superadmin/api-access/service-principals/:servicePrincipalId/credentials",
+    path: "/api/v1/instance/service-principals/:servicePrincipalId/credentials",
     summary: "Issue an API key for a service principal",
     tag: "API Access",
     auth: "user",
@@ -70,10 +70,10 @@ export const apiAccessOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  revokeApiCredential: defineOperation({
-    id: "revokeApiCredential",
+  "api_credentials.revoke": defineOperation({
+    id: "api_credentials.revoke",
     method: "POST",
-    path: "/api/superadmin/api-access/credentials/:credentialId/revoke",
+    path: "/api/v1/instance/api-credentials/:credentialId/revoke",
     summary: "Revoke an API key",
     tag: "API Access",
     auth: "user",

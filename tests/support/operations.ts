@@ -204,15 +204,15 @@ const openApiJsonOperationSchema = z.object({
 
 // Fixed expectations remain independent of the path builder under test.
 export const contractPathFixtures = {
-  workspaces: "/api/collaboration-workspaces",
-  agentAvailability: "/api/admin/config/agents/kai/availability",
-  adminWorkspaces: "/api/admin/collaboration-workspaces",
-  workspaceAgents: "/api/collaboration-workspaces/cws_1/agents?locale=de",
-  moveConversation: "/api/conversations/{conversationId}/move",
-  encodedMessages: "/api/conversations/conversation%201%2F2/messages",
-  localizedConfig: "/api/config?locale=de",
-  encodedWorkspaceConversations: "/api/conversations?collaborationWorkspaceId=workspace%2Fone",
-  conversations: "/api/conversations",
+  workspaces: "/api/v1/workspaces",
+  agentAvailability: "/api/v1/instance/config/agents/kai/availability",
+  adminWorkspaces: "/api/v1/instance/workspaces",
+  workspaceAgents: "/api/v1/workspaces/cws_1/agents?locale=de",
+  moveConversation: "/api/v1/conversations/{conversationId}/move",
+  encodedMessages: "/api/v1/conversations/conversation%201%2F2/messages",
+  localizedConfig: "/api/v1/instance/config?locale=de",
+  encodedWorkspaceConversations: "/api/v1/conversations?collaborationWorkspaceId=workspace%2Fone",
+  conversations: "/api/v1/conversations",
   exampleTemplate: "/api/example/:exampleId",
   exampleValue: "/api/example/value%2Fwith%20spaces?view=full",
   retiredChat: "/api/chat"

@@ -11,10 +11,10 @@ import {
 import { defineOperation, json, page } from "./define-operation";
 
 export const userOperations = {
-  listAdministeredUsers: defineOperation({
-    id: "listAdministeredUsers",
+  "users.list": defineOperation({
+    id: "users.list",
     method: "GET",
-    path: "/api/superadmin/users",
+    path: "/api/v1/instance/users",
     summary: "List the users of the instance",
     tag: "Users",
     auth: "user",
@@ -26,10 +26,10 @@ export const userOperations = {
     errors: [],
     rateClass: "read"
   }),
-  createAdministeredUser: defineOperation({
-    id: "createAdministeredUser",
+  "users.create": defineOperation({
+    id: "users.create",
     method: "POST",
-    path: "/api/superadmin/users",
+    path: "/api/v1/instance/users",
     summary: "Create a user",
     tag: "Users",
     auth: "user",
@@ -41,10 +41,10 @@ export const userOperations = {
     errors: ["CONFLICT"],
     rateClass: "write"
   }),
-  updateAdministeredUser: defineOperation({
-    id: "updateAdministeredUser",
+  "users.update": defineOperation({
+    id: "users.update",
     method: "PATCH",
-    path: "/api/superadmin/users/:userId",
+    path: "/api/v1/instance/users/:userId",
     summary: "Change a user's profile, roles or status",
     tag: "Users",
     auth: "user",
@@ -56,10 +56,10 @@ export const userOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  deleteAdministeredUser: defineOperation({
-    id: "deleteAdministeredUser",
+  "users.delete": defineOperation({
+    id: "users.delete",
     method: "DELETE",
-    path: "/api/superadmin/users/:userId",
+    path: "/api/v1/instance/users/:userId",
     summary: "Delete a user and their data",
     tag: "Users",
     auth: "user",
@@ -70,10 +70,10 @@ export const userOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  upsertAdministeredUserIdentity: defineOperation({
-    id: "upsertAdministeredUserIdentity",
+  "users.identities.upsert": defineOperation({
+    id: "users.identities.upsert",
     method: "PUT",
-    path: "/api/superadmin/users/:userId/identities",
+    path: "/api/v1/instance/users/:userId/identities",
     summary: "Link a sign-in identity to a user",
     tag: "Users",
     auth: "user",
@@ -85,10 +85,10 @@ export const userOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  resetAdministeredUserPassword: defineOperation({
-    id: "resetAdministeredUserPassword",
+  "users.password.reset": defineOperation({
+    id: "users.password.reset",
     method: "POST",
-    path: "/api/superadmin/users/:userId/password",
+    path: "/api/v1/instance/users/:userId/password",
     summary: "Set a user's password",
     tag: "Users",
     auth: "user",
@@ -100,10 +100,10 @@ export const userOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  sendAdministeredUserInvitation: defineOperation({
-    id: "sendAdministeredUserInvitation",
+  "users.invitation.send": defineOperation({
+    id: "users.invitation.send",
     method: "POST",
-    path: "/api/superadmin/users/:userId/invitation",
+    path: "/api/v1/instance/users/:userId/invitation",
     summary: "Mail a user a link to set their password",
     tag: "Users",
     auth: "user",
@@ -114,10 +114,10 @@ export const userOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  deleteAdministeredUserIdentity: defineOperation({
-    id: "deleteAdministeredUserIdentity",
+  "users.identities.delete": defineOperation({
+    id: "users.identities.delete",
     method: "DELETE",
-    path: "/api/superadmin/users/:userId/identities/:authSource/:externalUserId",
+    path: "/api/v1/instance/users/:userId/identities/:authSource/:externalUserId",
     summary: "Unlink a sign-in identity from a user",
     tag: "Users",
     auth: "user",

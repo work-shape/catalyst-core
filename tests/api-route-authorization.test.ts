@@ -53,17 +53,17 @@ const authenticated = names.flatMap((name) => {
  * holder's rights are checked after the input, so a refusal for a missing right needs one.
  */
 const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
-  setDefaultConfigAgent: { agentName: "agent" },
-  setConfigAgentAvailability: { mode: "all" },
-  replaceConfigAssets: { agents: [], skills: [], baseVersion: null },
-  validateConfigAssets: { agents: [], skills: [] },
-  createServicePrincipal: { displayLabel: "Service" },
-  updateServicePrincipal: { displayLabel: "Service" },
-  createApiCredential: { name: "Credential" },
-  createAdministeredUser: { displayLabel: "Person" },
-  updateAdministeredUser: { displayLabel: "Person" },
-  upsertAdministeredUserIdentity: { authSource: "test", externalUserId: "person" },
-  resetAdministeredUserPassword: { password: "long-enough-password" }
+  "config_agents.set_default": { agentName: "agent" },
+  "config_agents.set_availability": { mode: "all" },
+  "config_assets.replace": { agents: [], skills: [], baseVersion: null },
+  "config_assets.validate": { agents: [], skills: [] },
+  "service_principals.create": { displayLabel: "Service" },
+  "service_principals.update": { displayLabel: "Service" },
+  "api_credentials.create": { name: "Credential" },
+  "users.create": { displayLabel: "Person" },
+  "users.update": { displayLabel: "Person" },
+  "users.identities.upsert": { authSource: "test", externalUserId: "person" },
+  "users.password.reset": { password: "long-enough-password" }
 };
 
 function call(name: ApiOperationName, as: ReturnType<typeof asCaller>, headers = {}) {
@@ -96,8 +96,8 @@ describe("every operation of the catalog", () => {
     expect(catalog).toEqual(
       expect.arrayContaining([
         "GET /health",
-        "GET /api/dev/captured-mail",
-        "POST /auth/session-token"
+        "GET /api/v1/dev/captured-mail",
+        "POST /api/v1/instance/session-tokens"
       ])
     );
   });
@@ -191,13 +191,13 @@ describe("every operation of the catalog", () => {
   });
 
   // A descriptor carries one scope. Starting a run needs a second one, checked by the handler.
-  it.each(["startConversationRun", "createConversationRun"] as const)(
+  it.each(["conversations.runs.start", "conversations.runs.create"] as const)(
     "%s refuses a token that may write conversations but not start runs",
     async (name) => {
       const response = await instance.call(
         name,
         {
-          ...(name === "startConversationRun" ? { params: { conversationId: "missing" } } : {}),
+          ...(name === "conversations.runs.start" ? { params: { conversationId: "missing" } } : {}),
           payload: { idempotencyKey: "run-start-refusal", message: { text: "Hello" } }
         },
         asCaller({
@@ -218,7 +218,7 @@ describe("every operation of the catalog", () => {
 
   it("guards the reading operations that are served by POST", () => {
     const readingByPost = guarded.filter(({ operation }) => operation.effect === "reading");
-    expect(readingByPost.map(({ name }) => name)).toContain("validateConfigAssets");
+    expect(readingByPost.map(({ name }) => name)).toContain("config_assets.validate");
   });
 
   it.each(names.filter((name) => descriptor(name).auth === "serverCredential"))(

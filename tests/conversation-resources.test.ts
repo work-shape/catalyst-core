@@ -149,7 +149,7 @@ describe("conversation resource routes", () => {
       const resources = await request(
         fixture.server,
         fixture.ownerToken,
-        "listConversationResources",
+        "conversations.resources.list",
         { params: { conversationId: conversation.id } }
       );
       expect(resources.statusCode).toBe(200);
@@ -176,7 +176,7 @@ describe("conversation resource routes", () => {
       const detail = await request(
         fixture.server,
         fixture.ownerToken,
-        "getStructuredDataResource",
+        "conversations.structured_data.get",
         { params: { conversationId: conversation.id, structuredDataResourceId: resource.id } }
       );
       expect(detail.statusCode).toBe(200);
@@ -213,7 +213,7 @@ describe("conversation resource routes", () => {
       const otherUser = await request(
         fixture.server,
         fixture.otherToken,
-        "getStructuredDataResource",
+        "conversations.structured_data.get",
         { params: { conversationId: conversation.id, structuredDataResourceId: resource.id } }
       );
       expect(otherUser.statusCode).toBe(404);
@@ -276,7 +276,7 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        "listConversationResources",
+        "conversations.resources.list",
         { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
@@ -364,7 +364,7 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        "listConversationResources",
+        "conversations.resources.list",
         { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
@@ -420,7 +420,7 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        "listConversationResources",
+        "conversations.resources.list",
         { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
@@ -509,7 +509,7 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        "listConversationResources",
+        "conversations.resources.list",
         { params: { conversationId: conversation.id } }
       );
 
@@ -525,7 +525,7 @@ describe("conversation resource routes", () => {
       const inline = await request(
         fixture.server,
         fixture.ownerToken,
-        "getConversationFileContent",
+        "conversations.files.get_content",
         { params: { conversationId: conversation.id, fileId: file.id } }
       );
       expect(inline.statusCode).toBe(200);
@@ -626,7 +626,7 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        "listConversationResources",
+        "conversations.resources.list",
         { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
@@ -675,7 +675,7 @@ describe("conversation resource routes", () => {
       const download = await request(
         fixture.server,
         fixture.ownerToken,
-        "getConversationFileContent",
+        "conversations.files.get_content",
         {
           params: { conversationId: conversation.id, fileId: file.id },
           query: { download: "true" }
@@ -690,7 +690,7 @@ describe("conversation resource routes", () => {
       const otherUser = await request(
         fixture.server,
         fixture.otherToken,
-        "listConversationResources",
+        "conversations.resources.list",
         { params: { conversationId: conversation.id } }
       );
       expect(otherUser.statusCode).toBe(404);

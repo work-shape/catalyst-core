@@ -32,7 +32,7 @@ describe("Collaboration Workspace API", () => {
     const app = await createWorkspaceApp(false);
     await currentUser(app, "owner");
 
-    const workspaces = await app.call("listCollaborationWorkspaces", {}, "owner");
+    const workspaces = await app.call("workspaces.list", {}, "owner");
     expect(workspaces.statusCode).toBe(200);
     const personalWorkspace = workspaces
       .json<{ items: Array<{ id: string; kind: string }> }>()
@@ -40,7 +40,7 @@ describe("Collaboration Workspace API", () => {
     expect(personalWorkspace).toBeDefined();
 
     const conversation = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Personal while shared workspaces are disabled" } },
       "owner"
     );
@@ -50,7 +50,7 @@ describe("Collaboration Workspace API", () => {
     });
     const conversationId = conversation.json<{ id: string }>().id;
     await seedConversationMessage(app.stores.conversations, conversationId);
-    const listedConversations = await app.call("listConversations", {}, "owner");
+    const listedConversations = await app.call("conversations.list", {}, "owner");
     expect(listedConversations.statusCode).toBe(200);
     expect(listedConversations.json().items).toContainEqual(
       expect.objectContaining({ id: conversationId })
@@ -58,7 +58,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "getConversationThread",
+          "conversations.thread.get",
           { params: { conversationId: conversationId } },
           "owner"
         )
@@ -66,21 +66,21 @@ describe("Collaboration Workspace API", () => {
     ).toBe(200);
 
     for (const request of [
-      testRequest("createCollaborationWorkspace", {
+      testRequest("workspaces.create", {
         method: "POST" as const,
         payload: { name: "Blocked" }
       }),
-      testRequest("listCollaborationWorkspaceDirectory", { method: "GET" as const }),
-      testRequest("requestCollaborationWorkspaceAccess", {
+      testRequest("workspaces.directory.list", { method: "GET" as const }),
+      testRequest("workspaces.access_requests.create", {
         params: { collaborationWorkspaceId: "missing" },
         method: "POST" as const
       }),
-      testRequest("addCollaborationWorkspaceMember", {
+      testRequest("workspaces.members.add", {
         params: { collaborationWorkspaceId: "missing" },
         method: "POST" as const,
         payload: { email: "member@example.test" }
       }),
-      testRequest("listCollaborationWorkspaceMemberCandidates", {
+      testRequest("workspaces.member_candidates.list", {
         params: { collaborationWorkspaceId: "missing" },
         query: { q: "owner" },
         method: "GET" as const
@@ -118,7 +118,7 @@ describe("Collaboration Workspace API", () => {
       let cursor: string | undefined;
       for (let index = 0; index < 3; index++) {
         const response = await app.call(
-          "listCollaborationWorkspaceMemberCandidates",
+          "workspaces.member_candidates.list",
           {
             params: { collaborationWorkspaceId: workspaceId },
             query: { q: "same", limit: 1, cursor }
@@ -148,7 +148,7 @@ describe("Collaboration Workspace API", () => {
     const workspaceId = await createSharedWorkspace(app, "owner", "Candidate search");
     await addWorkspaceMember(app, "owner", workspaceId, "admin@example.test");
     await app.call(
-      "updateCollaborationWorkspaceMemberRole",
+      "workspaces.members.update_role",
       {
         params: { collaborationWorkspaceId: workspaceId, userId: admin.id },
         payload: { role: "admin" }
@@ -180,13 +180,13 @@ describe("Collaboration Workspace API", () => {
       emailVerified: true
     });
     await app.call(
-      "requestCollaborationWorkspaceAccess",
+      "workspaces.access_requests.create",
       { params: { collaborationWorkspaceId: workspaceId } },
       "outsider"
     );
 
     const ownerLabelMatch = await app.call(
-      "listCollaborationWorkspaceMemberCandidates",
+      "workspaces.member_candidates.list",
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "SEARCH PERSON" } },
       "owner"
     );
@@ -201,7 +201,7 @@ describe("Collaboration Workspace API", () => {
     ]);
 
     const adminEmailMatch = await app.call(
-      "listCollaborationWorkspaceMemberCandidates",
+      "workspaces.member_candidates.list",
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "MIXED.EMAIL" } },
       "admin"
     );
@@ -216,7 +216,7 @@ describe("Collaboration Workspace API", () => {
     ]);
 
     const verifiedIdentityMatch = await app.call(
-      "listCollaborationWorkspaceMemberCandidates",
+      "workspaces.member_candidates.list",
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "VERIFIED.ALIAS" } },
       "owner"
     );
@@ -230,7 +230,7 @@ describe("Collaboration Workspace API", () => {
     ]);
 
     const pendingRequester = await app.call(
-      "listCollaborationWorkspaceMemberCandidates",
+      "workspaces.member_candidates.list",
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "OUTSIDER@" } },
       "owner"
     );
@@ -246,7 +246,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "listCollaborationWorkspaceMemberCandidates",
+          "workspaces.member_candidates.list",
           { params: { collaborationWorkspaceId: workspaceId }, query: { q: "MEMBER@EXAMPLE" } },
           "owner"
         )
@@ -255,7 +255,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "listCollaborationWorkspaceMemberCandidates",
+          "workspaces.member_candidates.list",
           { params: { collaborationWorkspaceId: workspaceId }, query: { q: " a " } },
           "owner"
         )
@@ -264,7 +264,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "listCollaborationWorkspaceMemberCandidates",
+          "workspaces.member_candidates.list",
           { params: { collaborationWorkspaceId: workspaceId }, query: { q: "search" } },
           "member"
         )
@@ -273,7 +273,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "listCollaborationWorkspaceMemberCandidates",
+          "workspaces.member_candidates.list",
           { params: { collaborationWorkspaceId: workspaceId }, query: { q: "search" } },
           "outsider"
         )
@@ -288,7 +288,7 @@ describe("Collaboration Workspace API", () => {
       });
     }
     const limited = await app.call(
-      "listCollaborationWorkspaceMemberCandidates",
+      "workspaces.member_candidates.list",
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "limit candidate" } },
       "admin"
     );
@@ -306,7 +306,7 @@ describe("Collaboration Workspace API", () => {
 
     const auditBefore = await app.stores.audit.listAuditEvents({ clientInstanceId });
     await app.call(
-      "listCollaborationWorkspaceMemberCandidates",
+      "workspaces.member_candidates.list",
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "email" } },
       "owner"
     );
@@ -326,12 +326,12 @@ describe("Collaboration Workspace API", () => {
     getTestConfig(app).ui.collaborationWorkspaces.enabled = false;
 
     for (const actor of ["owner", "member"]) {
-      const listed = await app.call("listCollaborationWorkspaces", {}, actor);
+      const listed = await app.call("workspaces.list", {}, actor);
       expect(listed.statusCode).toBe(200);
       expect(listed.json().items).toContainEqual(expect.objectContaining({ id: workspaceId }));
 
       const read = await app.call(
-        "getCollaborationWorkspace",
+        "workspaces.get",
         { params: { collaborationWorkspaceId: workspaceId } },
         actor
       );
@@ -340,14 +340,14 @@ describe("Collaboration Workspace API", () => {
     }
 
     const left = await app.call(
-      "removeCollaborationWorkspaceMember",
+      "workspaces.members.remove",
       { params: { collaborationWorkspaceId: workspaceId, userId: "me" } },
       "member"
     );
     expect(left.statusCode).toBe(200);
 
     const deleted = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { confirmName: "Existing workspace" }
@@ -372,7 +372,7 @@ describe("Collaboration Workspace API", () => {
     const direct = await currentUser(app, "direct");
 
     const created = await app.call(
-      "createCollaborationWorkspace",
+      "workspaces.create",
       {
         payload: {
           name: "  Product Lab  ",
@@ -393,7 +393,7 @@ describe("Collaboration Workspace API", () => {
     const collaborationWorkspaceId = created.json<{ id: string }>().id;
 
     const addedAdmin = await app.call(
-      "addCollaborationWorkspaceMember",
+      "workspaces.members.add",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { email: "ADMIN@EXAMPLE.TEST" }
@@ -405,7 +405,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "updateCollaborationWorkspaceMemberRole",
+          "workspaces.members.update_role",
           {
             params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: admin.id },
             payload: { role: "admin" }
@@ -416,7 +416,7 @@ describe("Collaboration Workspace API", () => {
     ).toBe(200);
 
     const addedMember = await app.call(
-      "addCollaborationWorkspaceMember",
+      "workspaces.members.add",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { email: "member@example.test" }
@@ -427,7 +427,7 @@ describe("Collaboration Workspace API", () => {
     expect(addedMember.json()).toMatchObject({ userId: member.id, role: "member" });
 
     const memberRoleProbe = await app.call(
-      "updateCollaborationWorkspaceMemberRole",
+      "workspaces.members.update_role",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: "missing-user" },
         payload: { role: "member" }
@@ -436,20 +436,20 @@ describe("Collaboration Workspace API", () => {
     );
     expect(memberRoleProbe.statusCode).toBe(403);
     const memberRemovalProbe = await app.call(
-      "removeCollaborationWorkspaceMember",
+      "workspaces.members.remove",
       { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: "missing-user" } },
       "member"
     );
     expect(memberRemovalProbe.statusCode).toBe(403);
 
     const memberSettings = await app.call(
-      "updateCollaborationWorkspace",
+      "workspaces.update",
       { params: { collaborationWorkspaceId: collaborationWorkspaceId }, payload: { name: "Nope" } },
       "member"
     );
     expect(memberSettings.statusCode).toBe(403);
     const adminSettings = await app.call(
-      "updateCollaborationWorkspace",
+      "workspaces.update",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { visibility: "private", accentColor: "teal" }
@@ -460,7 +460,7 @@ describe("Collaboration Workspace API", () => {
     expect(adminSettings.json()).toMatchObject({ visibility: "private", accentColor: "teal" });
 
     const adminPromotion = await app.call(
-      "updateCollaborationWorkspaceMemberRole",
+      "workspaces.members.update_role",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: member.id },
         payload: { role: "owner" }
@@ -470,7 +470,7 @@ describe("Collaboration Workspace API", () => {
     expect(adminPromotion.statusCode).toBe(403);
 
     const alreadyMember = await app.call(
-      "addCollaborationWorkspaceMember",
+      "workspaces.members.add",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { email: "member@example.test" }
@@ -493,7 +493,7 @@ describe("Collaboration Workspace API", () => {
       emailVerified: true
     });
     const addedByIdentity = await app.call(
-      "addCollaborationWorkspaceMember",
+      "workspaces.members.add",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { email: "verified-identity@example.test" }
@@ -505,7 +505,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "removeCollaborationWorkspaceMember",
+          "workspaces.members.remove",
           {
             params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: identityMatch.id }
           },
@@ -516,7 +516,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "removeCollaborationWorkspaceMember",
+          "workspaces.members.remove",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: owner.id } },
           "admin"
         )
@@ -539,7 +539,7 @@ describe("Collaboration Workspace API", () => {
       "ambiguous@example.test"
     ]) {
       const response = await app.call(
-        "addCollaborationWorkspaceMember",
+        "workspaces.members.add",
         { params: { collaborationWorkspaceId: collaborationWorkspaceId }, payload: { email } },
         "owner"
       );
@@ -550,13 +550,13 @@ describe("Collaboration Workspace API", () => {
     }
 
     const privateRequest = await app.call(
-      "requestCollaborationWorkspaceAccess",
+      "workspaces.access_requests.create",
       { params: { collaborationWorkspaceId: collaborationWorkspaceId } },
       "outsider"
     );
     expect(privateRequest.statusCode).toBe(404);
     await app.call(
-      "updateCollaborationWorkspace",
+      "workspaces.update",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { visibility: "discoverable" }
@@ -564,7 +564,7 @@ describe("Collaboration Workspace API", () => {
       "admin"
     );
     const request = await app.call(
-      "requestCollaborationWorkspaceAccess",
+      "workspaces.access_requests.create",
       { params: { collaborationWorkspaceId: collaborationWorkspaceId } },
       "outsider"
     );
@@ -572,7 +572,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "requestCollaborationWorkspaceAccess",
+          "workspaces.access_requests.create",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId } },
           "outsider"
         )
@@ -582,14 +582,14 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "requestCollaborationWorkspaceAccess",
+          "workspaces.access_requests.create",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId } },
           "direct"
         )
       ).statusCode
     ).toBe(200);
     const directlyAdded = await app.call(
-      "addCollaborationWorkspaceMember",
+      "workspaces.members.add",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { email: "direct@example.test" }
@@ -599,31 +599,31 @@ describe("Collaboration Workspace API", () => {
     expect(directlyAdded.statusCode).toBe(200);
     expect(directlyAdded.json()).toMatchObject({ userId: direct.id, role: "member" });
     const clearedRequestApproval = await app.call(
-      "approveCollaborationWorkspaceAccessRequest",
+      "workspaces.access_requests.approve",
       { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: direct.id } },
       "admin"
     );
     expect(clearedRequestApproval.statusCode).toBe(404);
-    const pendingDirectory = await app.call("listCollaborationWorkspaceDirectory", {}, "outsider");
+    const pendingDirectory = await app.call("workspaces.directory.list", {}, "outsider");
     expect(pendingDirectory.json().items).toContainEqual(
       expect.objectContaining({ id: collaborationWorkspaceId, accessState: "request_pending" })
     );
     const requests = await app.call(
-      "listCollaborationWorkspaceAccessRequests",
+      "workspaces.access_requests.list",
       { params: { collaborationWorkspaceId: collaborationWorkspaceId } },
       "admin"
     );
     expect(requests.statusCode).toBe(200);
     expect(requests.json().items).toContainEqual(expect.objectContaining({ userId: outsider.id }));
 
-    const ownerRows = await app.call("listCollaborationWorkspaces", {}, "owner");
+    const ownerRows = await app.call("workspaces.list", {}, "owner");
     expect(ownerRows.json().items).toContainEqual(
       expect.objectContaining({ id: collaborationWorkspaceId, pendingAccessRequestCount: 1 })
     );
     expect(
       (
         await app.call(
-          "approveCollaborationWorkspaceAccessRequest",
+          "workspaces.access_requests.approve",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: outsider.id } },
           "admin"
         )
@@ -632,7 +632,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "requestCollaborationWorkspaceAccess",
+          "workspaces.access_requests.create",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId } },
           "declined"
         )
@@ -641,20 +641,20 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "declineCollaborationWorkspaceAccessRequest",
+          "workspaces.access_requests.decline",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: declined.id } },
           "admin"
         )
       ).statusCode
     ).toBe(200);
-    const declinedDirectory = await app.call("listCollaborationWorkspaceDirectory", {}, "declined");
+    const declinedDirectory = await app.call("workspaces.directory.list", {}, "declined");
     expect(declinedDirectory.json().items).toContainEqual(
       expect.objectContaining({ id: collaborationWorkspaceId, accessState: "can_request" })
     );
     expect(
       (
         await app.call(
-          "getCollaborationWorkspace",
+          "workspaces.get",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId } },
           "outsider"
         )
@@ -662,7 +662,7 @@ describe("Collaboration Workspace API", () => {
     ).toBe(200);
 
     const soleOwnerLeave = await app.call(
-      "removeCollaborationWorkspaceMember",
+      "workspaces.members.remove",
       { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: "me" } },
       "owner"
     );
@@ -670,7 +670,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "updateCollaborationWorkspaceMemberRole",
+          "workspaces.members.update_role",
           {
             params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: owner.id },
             payload: { role: "member" }
@@ -682,13 +682,13 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "removeCollaborationWorkspaceMember",
+          "workspaces.members.remove",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: owner.id } },
           "owner"
         )
       ).statusCode
     ).toBe(409);
-    const deleteOwner = await app.call("deleteCurrentUser", {}, "owner");
+    const deleteOwner = await app.call("me.delete", {}, "owner");
     expect(deleteOwner.statusCode).toBe(409);
     expect(deleteOwner.json()).toMatchObject({
       error: { message: expect.stringContaining("1 Shared Workspace") }
@@ -697,7 +697,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "updateCollaborationWorkspaceMemberRole",
+          "workspaces.members.update_role",
           {
             params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: member.id },
             payload: { role: "owner" }
@@ -709,7 +709,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "removeCollaborationWorkspaceMember",
+          "workspaces.members.remove",
           { params: { collaborationWorkspaceId: collaborationWorkspaceId, userId: "me" } },
           "owner"
         )
@@ -717,13 +717,13 @@ describe("Collaboration Workspace API", () => {
     ).toBe(200);
 
     const deletionBlockWorkspace = await app.call(
-      "createCollaborationWorkspace",
+      "workspaces.create",
       { payload: { name: "Deletion block" } },
       "declined"
     );
     expect(deletionBlockWorkspace.statusCode).toBe(200);
     const superadminDelete = await app.call(
-      "deleteAdministeredUser",
+      "users.delete",
       { params: { userId: declined.id } },
       "owner"
     );
@@ -732,7 +732,7 @@ describe("Collaboration Workspace API", () => {
       error: { message: expect.stringContaining("1 Shared Workspace") }
     });
 
-    const audit = await app.call("listAuditEvents", {}, "owner");
+    const audit = await app.call("audit_events.list", {}, "owner");
     expect(audit.statusCode).toBe(200);
     const auditEvents = audit.json<{
       items: Array<{
@@ -764,13 +764,13 @@ describe("Collaboration Workspace API", () => {
     const member = await currentUser(app, "member");
     await currentUser(app, "outsider");
     const created = await app.call(
-      "createCollaborationWorkspace",
+      "workspaces.create",
       { payload: { name: "Discoverable", description: "Limited metadata", accentColor: "ruby" } },
       "owner"
     );
     const collaborationWorkspaceId = created.json<{ id: string }>().id;
 
-    const directory = await app.call("listCollaborationWorkspaceDirectory", {}, "outsider");
+    const directory = await app.call("workspaces.directory.list", {}, "outsider");
     expect(directory.statusCode).toBe(200);
     const directoryRow = directory
       .json<{ items: Array<Record<string, unknown>> }>()
@@ -790,7 +790,7 @@ describe("Collaboration Workspace API", () => {
     }
 
     const explicit = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Shared thread", collaborationWorkspaceId } },
       "owner"
     );
@@ -800,7 +800,7 @@ describe("Collaboration Workspace API", () => {
     await seedConversationMessage(app.stores.conversations, conversationId);
 
     const defaulted = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Private thread" } },
       "owner"
     );
@@ -810,13 +810,13 @@ describe("Collaboration Workspace API", () => {
     ).not.toBe(collaborationWorkspaceId);
 
     const unauthorized = await app.call(
-      "getConversationThread",
+      "conversations.thread.get",
       { params: { conversationId: conversationId } },
       "member"
     );
     expect(unauthorized.statusCode).toBe(404);
     const missing = await app.call(
-      "getConversationThread",
+      "conversations.thread.get",
       { params: { conversationId: "missing-conversation" } },
       "member"
     );
@@ -829,7 +829,7 @@ describe("Collaboration Workspace API", () => {
     });
 
     const sharedCreateAndRun = await app.call(
-      "createConversationRun",
+      "conversations.runs.create",
       {
         payload: {
           idempotencyKey: "shared-create-and-run",
@@ -845,7 +845,7 @@ describe("Collaboration Workspace API", () => {
     });
 
     const unauthorizedCreateAndRun = await app.call(
-      "createConversationRun",
+      "conversations.runs.create",
       {
         payload: {
           idempotencyKey: "unauthorized-create-and-run",
@@ -858,7 +858,7 @@ describe("Collaboration Workspace API", () => {
     expect(unauthorizedCreateAndRun.statusCode).toBe(404);
 
     const personalCreateAndRun = await app.call(
-      "createConversationRun",
+      "conversations.runs.create",
       {
         payload: {
           idempotencyKey: "personal-create-and-run",
@@ -875,7 +875,7 @@ describe("Collaboration Workspace API", () => {
     ).not.toBe(collaborationWorkspaceId);
 
     await app.call(
-      "addCollaborationWorkspaceMember",
+      "workspaces.members.add",
       {
         params: { collaborationWorkspaceId: collaborationWorkspaceId },
         payload: { email: "member@example.test" }
@@ -883,7 +883,7 @@ describe("Collaboration Workspace API", () => {
       "owner"
     );
     const listed = await app.call(
-      "listConversations",
+      "conversations.list",
       { query: { collaborationWorkspaceId: collaborationWorkspaceId } },
       "member"
     );
@@ -892,7 +892,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "renameConversation",
+          "conversations.rename",
           {
             params: { conversationId: conversationId },
             payload: { title: "Renamed by collaborator" }
@@ -903,7 +903,7 @@ describe("Collaboration Workspace API", () => {
     ).toBe(200);
 
     const sent = await app.call(
-      "startConversationRun",
+      "conversations.runs.start",
       {
         params: { conversationId: conversationId },
         payload: { idempotencyKey: "collaborator-run", message: { text: "Hello" } }
@@ -917,7 +917,7 @@ describe("Collaboration Workspace API", () => {
     });
     const runId = sent.json<{ run: { id: string } }>().run.id;
     const observedByOwner = await app.call(
-      "observeConversationRun",
+      "conversations.runs.observe",
       { params: { conversationId: conversationId, runId: runId } },
       "owner"
     );
@@ -925,7 +925,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "observeConversationRun",
+          "conversations.runs.observe",
           { params: { conversationId: conversationId, runId: runId } },
           "outsider"
         )
@@ -938,7 +938,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "updateCollaborationWorkspace",
+          "workspaces.update",
           {
             params: { collaborationWorkspaceId: privateWorkspaceId },
             payload: { name: "Cannot rename personal" }
@@ -949,7 +949,7 @@ describe("Collaboration Workspace API", () => {
     ).toBe(422);
 
     const privateRun = await app.call(
-      "startConversationRun",
+      "conversations.runs.start",
       {
         params: { conversationId: privateConversationId },
         payload: { idempotencyKey: "private-run", message: { text: "Private" } }
@@ -961,7 +961,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "observeConversationRun",
+          "conversations.runs.observe",
           { params: { conversationId: conversationId, runId: privateRunId } },
           "member"
         )
@@ -989,7 +989,7 @@ describe("Collaboration Workspace API", () => {
       processingMetadata: { source: "execution_workspace_source" }
     });
     const crossWorkspaceFile = await app.call(
-      "getConversationFileContent",
+      "conversations.files.get_content",
       {
         params: { conversationId: conversationId, fileId: privateFile.id },
         query: { download: "true" }
@@ -1011,14 +1011,14 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "getConversationArtifactPreview",
+          "conversations.artifacts.get_preview",
           { params: { conversationId: conversationId, artifactId: privateArtifact.id } },
           "member"
         )
       ).statusCode
     ).toBe(404);
     const crossWorkspaceList = await app.call(
-      "listConversations",
+      "conversations.list",
       { query: { collaborationWorkspaceId: privateWorkspaceId } },
       "member"
     );
@@ -1035,25 +1035,25 @@ describe("Collaboration Workspace API", () => {
     const outsider = await currentUser(app, "outsider");
     const workspaceId = await createSharedWorkspace(app, "member", "Team space");
     await app.call(
-      "requestCollaborationWorkspaceAccess",
+      "workspaces.access_requests.create",
       { params: { collaborationWorkspaceId: workspaceId } },
       "outsider"
     );
     // Not discoverable from here on: the superadmin's access does not depend on visibility.
     await app.call(
-      "updateCollaborationWorkspace",
+      "workspaces.update",
       { params: { collaborationWorkspaceId: workspaceId }, payload: { visibility: "private" } },
       "member"
     );
     const conversationId = await createConversation(app, "member", workspaceId, "Team");
     await seedConversationMessage(app.stores.conversations, conversationId);
 
-    const workspaceUrl = testRequest("getCollaborationWorkspace", {
+    const workspaceUrl = testRequest("workspaces.get", {
       params: { collaborationWorkspaceId: workspaceId }
     });
     const workspaceRows = z.array(z.looseObject({ id: z.string(), kind: z.string() }));
     const listWorkspaces = async (actor: string) =>
-      workspaceRows.parse((await app.call("listCollaborationWorkspaces", {}, actor)).json().items);
+      workspaceRows.parse((await app.call("workspaces.list", {}, actor)).json().items);
     const listed = (await listWorkspaces("superadmin")).find((row) => row.id === workspaceId);
     // Pending requests stay a to-do for the workspace's own Owners and Admins.
     expect(listed).toMatchObject({
@@ -1072,14 +1072,14 @@ describe("Collaboration Workspace API", () => {
       expect((await listWorkspaces(actor)).map((row) => row.id)).not.toContain(workspaceId);
       for (const url of [
         workspaceUrl,
-        testRequest("listCollaborationWorkspaceMembers", {
+        testRequest("workspaces.members.list", {
           params: { collaborationWorkspaceId: workspaceId }
         }),
-        testRequest("listCollaborationWorkspaceAgents", {
+        testRequest("workspaces.agents.list", {
           params: { collaborationWorkspaceId: workspaceId }
         }),
-        testRequest("listConversations", { query: { collaborationWorkspaceId: workspaceId } }),
-        testRequest("getConversationThread", { params: { conversationId: conversationId } })
+        testRequest("conversations.list", { query: { collaborationWorkspaceId: workspaceId } }),
+        testRequest("conversations.thread.get", { params: { conversationId: conversationId } })
       ]) {
         expect(
           (await callAs(app, actor, { ...url, input: { ...url.input, method: "GET" } })).statusCode,
@@ -1090,19 +1090,19 @@ describe("Collaboration Workspace API", () => {
 
     for (const url of [
       workspaceUrl,
-      testRequest("listCollaborationWorkspaceMembers", {
+      testRequest("workspaces.members.list", {
         params: { collaborationWorkspaceId: workspaceId }
       }),
-      testRequest("listCollaborationWorkspaceAgents", {
+      testRequest("workspaces.agents.list", {
         params: { collaborationWorkspaceId: workspaceId }
       }),
-      testRequest("listCollaborationWorkspaceAccessRequests", {
+      testRequest("workspaces.access_requests.list", {
         params: { collaborationWorkspaceId: workspaceId }
       }),
-      testRequest("getCollaborationWorkspaceDeletionImpact", {
+      testRequest("workspaces.deletion_impact.get", {
         params: { collaborationWorkspaceId: workspaceId }
       }),
-      testRequest("getConversationThread", { params: { conversationId: conversationId } })
+      testRequest("conversations.thread.get", { params: { conversationId: conversationId } })
     ]) {
       expect(
         (await callAs(app, "superadmin", { ...url, input: { ...url.input, method: "GET" } }))
@@ -1111,7 +1111,7 @@ describe("Collaboration Workspace API", () => {
       ).toBe(200);
     }
     const conversations = await app.call(
-      "listConversations",
+      "conversations.list",
       { query: { collaborationWorkspaceId: workspaceId } },
       "superadmin"
     );
@@ -1140,7 +1140,7 @@ describe("Collaboration Workspace API", () => {
     const approved = await callAs(
       app,
       "superadmin",
-      testRequest("approveCollaborationWorkspaceAccessRequest", {
+      testRequest("workspaces.access_requests.approve", {
         params: { collaborationWorkspaceId: workspaceId, userId: outsider.id }
       })
     );
@@ -1148,13 +1148,13 @@ describe("Collaboration Workspace API", () => {
     const promoted = await callAs(
       app,
       "superadmin",
-      testRequest("updateCollaborationWorkspaceMemberRole", {
+      testRequest("workspaces.members.update_role", {
         params: { collaborationWorkspaceId: workspaceId, userId: outsider.id },
         payload: { role: "owner" }
       })
     );
     expect(promoted.statusCode).toBe(200);
-    const audit = await app.call("listAuditEvents", {}, "superadmin");
+    const audit = await app.call("audit_events.list", {}, "superadmin");
     expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "collaboration_workspace.updated",
@@ -1167,7 +1167,7 @@ describe("Collaboration Workspace API", () => {
     const leaveWithoutMembership = await callAs(
       app,
       "superadmin",
-      testRequest("leaveCollaborationWorkspace", {
+      testRequest("workspaces.members.leave", {
         params: { collaborationWorkspaceId: workspaceId }
       })
     );
@@ -1176,11 +1176,11 @@ describe("Collaboration Workspace API", () => {
       error: { code: "CONFLICT", message: "User is not a workspace member" }
     });
     const members = await callAs(app, "superadmin", {
-      ...testRequest("listCollaborationWorkspaceMembers", {
+      ...testRequest("workspaces.members.list", {
         params: { collaborationWorkspaceId: workspaceId }
       }),
       input: {
-        ...testRequest("listCollaborationWorkspaceMembers", {
+        ...testRequest("workspaces.members.list", {
           params: { collaborationWorkspaceId: workspaceId }
         }).input,
         method: "GET"
@@ -1216,7 +1216,7 @@ describe("Collaboration Workspace API", () => {
         await callAs(
           app,
           "superadmin",
-          testRequest("leaveCollaborationWorkspace", {
+          testRequest("workspaces.members.leave", {
             params: { collaborationWorkspaceId: workspaceId }
           })
         )
@@ -1242,16 +1242,18 @@ describe("Collaboration Workspace API", () => {
       personalWorkspaceId
     );
     for (const url of [
-      testRequest("getCollaborationWorkspace", {
+      testRequest("workspaces.get", {
         params: { collaborationWorkspaceId: personalWorkspaceId }
       }),
-      testRequest("listCollaborationWorkspaceAgents", {
+      testRequest("workspaces.agents.list", {
         params: { collaborationWorkspaceId: personalWorkspaceId }
       }),
-      testRequest("listConversations", {
+      testRequest("conversations.list", {
         query: { collaborationWorkspaceId: personalWorkspaceId }
       }),
-      testRequest("getConversationThread", { params: { conversationId: personalConversationId } })
+      testRequest("conversations.thread.get", {
+        params: { conversationId: personalConversationId }
+      })
     ]) {
       expect(
         (await callAs(app, "superadmin", { ...url, input: { ...url.input, method: "GET" } }))
@@ -1277,7 +1279,7 @@ describe("Collaboration Workspace API", () => {
     await addWorkspaceMember(app, "owner", destinationId, "direct@example.test");
 
     const created = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Movable", collaborationWorkspaceId: sourceId } },
       "owner"
     );
@@ -1288,7 +1290,7 @@ describe("Collaboration Workspace API", () => {
       contentType: "text/csv",
       content: "value\n42\n"
     });
-    const uploaded = await app.call("uploadDraftAttachment", {
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
       params: { conversationId: conversationId },
       headers: { ...upload.headers, "x-dev-user-id": "owner" },
       payload: upload.payload
@@ -1298,7 +1300,7 @@ describe("Collaboration Workspace API", () => {
     const runId = await createCompletedRun(app, conversationId, owner.id);
 
     const missingDestinationMembership = await app.call(
-      "moveConversation",
+      "conversations.move",
       {
         params: { conversationId: conversationId },
         payload: { collaborationWorkspaceId: destinationId }
@@ -1308,7 +1310,7 @@ describe("Collaboration Workspace API", () => {
     expect(missingDestinationMembership.statusCode).toBe(404);
     expect(missingDestinationMembership.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
     const missingSourceMembership = await app.call(
-      "moveConversation",
+      "conversations.move",
       {
         params: { conversationId: conversationId },
         payload: { collaborationWorkspaceId: destinationId }
@@ -1318,7 +1320,7 @@ describe("Collaboration Workspace API", () => {
     expect(missingSourceMembership.statusCode).toBe(404);
     expect(missingSourceMembership.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
     const sameWorkspace = await app.call(
-      "moveConversation",
+      "conversations.move",
       {
         params: { conversationId: conversationId },
         payload: { collaborationWorkspaceId: sourceId }
@@ -1331,14 +1333,14 @@ describe("Collaboration Workspace API", () => {
     });
 
     const busyConversation = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Busy", collaborationWorkspaceId: sourceId } },
       "owner"
     );
     const busyConversationId = busyConversation.json<{ id: string }>().id;
     await createActiveRun(app, busyConversationId, owner.id);
     const busyMove = await app.call(
-      "moveConversation",
+      "conversations.move",
       {
         params: { conversationId: busyConversationId },
         payload: { collaborationWorkspaceId: destinationId }
@@ -1349,7 +1351,7 @@ describe("Collaboration Workspace API", () => {
     expect(busyMove.json()).toMatchObject({ error: { code: "CONFLICT" } });
 
     const moved = await app.call(
-      "moveConversation",
+      "conversations.move",
       {
         params: { conversationId: conversationId },
         payload: { collaborationWorkspaceId: destinationId }
@@ -1360,9 +1362,11 @@ describe("Collaboration Workspace API", () => {
     expect(moved.json()).toMatchObject({ collaborationWorkspaceId: destinationId });
 
     for (const url of [
-      testRequest("getConversationThread", { params: { conversationId: conversationId } }),
-      testRequest("listDraftAttachments", { params: { conversationId: conversationId } }),
-      testRequest("observeConversationRun", {
+      testRequest("conversations.thread.get", { params: { conversationId: conversationId } }),
+      testRequest("conversations.draft_attachments.list", {
+        params: { conversationId: conversationId }
+      }),
+      testRequest("conversations.runs.observe", {
         params: { conversationId: conversationId, runId: runId }
       })
     ]) {
@@ -1374,14 +1378,14 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "getConversationThread",
+          "conversations.thread.get",
           { params: { conversationId: conversationId } },
           "direct"
         )
       ).statusCode
     ).toBe(200);
     const destinationFiles = await app.call(
-      "listDraftAttachments",
+      "conversations.draft_attachments.list",
       { params: { conversationId: conversationId } },
       "direct"
     );
@@ -1390,14 +1394,14 @@ describe("Collaboration Workspace API", () => {
     expect(
       (
         await app.call(
-          "observeConversationRun",
+          "conversations.runs.observe",
           { params: { conversationId: conversationId, runId: runId } },
           "direct"
         )
       ).statusCode
     ).toBe(200);
 
-    const audit = await app.call("listAuditEvents", {}, "owner");
+    const audit = await app.call("audit_events.list", {}, "owner");
     expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.moved",
@@ -1423,7 +1427,7 @@ describe("Collaboration Workspace API", () => {
     const workspaceId = await createSharedWorkspace(app, "owner", "Delete me exactly");
     await addWorkspaceMember(app, "owner", workspaceId, "admin@example.test");
     await app.call(
-      "updateCollaborationWorkspaceMemberRole",
+      "workspaces.members.update_role",
       {
         params: { collaborationWorkspaceId: workspaceId, userId: admin.id },
         payload: { role: "admin" }
@@ -1432,7 +1436,7 @@ describe("Collaboration Workspace API", () => {
     );
     await addWorkspaceMember(app, "owner", workspaceId, "member@example.test");
     await app.call(
-      "requestCollaborationWorkspaceAccess",
+      "workspaces.access_requests.create",
       { params: { collaborationWorkspaceId: workspaceId } },
       "outsider"
     );
@@ -1440,7 +1444,7 @@ describe("Collaboration Workspace API", () => {
     const second = await createConversation(app, "owner", workspaceId, "Second deletion");
 
     const impact = await app.call(
-      "getCollaborationWorkspaceDeletionImpact",
+      "workspaces.deletion_impact.get",
       { params: { collaborationWorkspaceId: workspaceId } },
       "owner"
     );
@@ -1451,14 +1455,14 @@ describe("Collaboration Workspace API", () => {
       pendingAccessRequestCount: 1
     });
     const adminImpact = await app.call(
-      "getCollaborationWorkspaceDeletionImpact",
+      "workspaces.deletion_impact.get",
       { params: { collaborationWorkspaceId: workspaceId } },
       "admin"
     );
     expect(adminImpact.statusCode).toBe(403);
     expect(adminImpact.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
     const adminDelete = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { confirmName: "Delete me exactly" }
@@ -1467,7 +1471,7 @@ describe("Collaboration Workspace API", () => {
     );
     expect(adminDelete.statusCode).toBe(403);
     const mismatch = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { confirmName: "delete me exactly" }
@@ -1477,12 +1481,12 @@ describe("Collaboration Workspace API", () => {
     expect(mismatch.statusCode).toBe(422);
     expect(mismatch.json()).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
 
-    const ownerWorkspaces = (await app.call("listCollaborationWorkspaces", {}, "owner")).json<{
+    const ownerWorkspaces = (await app.call("workspaces.list", {}, "owner")).json<{
       items: Array<{ id: string; kind: string; name: string }>;
     }>().items;
     const personal = ownerWorkspaces.find((workspace) => workspace.kind === "personal")!;
     const personalDelete = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: personal.id },
         payload: { confirmName: personal.name }
@@ -1494,7 +1498,7 @@ describe("Collaboration Workspace API", () => {
 
     const activeRunId = await createActiveRun(app, second, owner.id);
     const busyDelete = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { confirmName: "Delete me exactly" }
@@ -1517,7 +1521,7 @@ describe("Collaboration Workspace API", () => {
       contentType: "text/csv",
       content: "delete,me\n"
     });
-    const uploaded = await app.call("uploadDraftAttachment", {
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
       params: { conversationId: first },
       headers: { ...upload.headers, "x-dev-user-id": "owner" },
       payload: upload.payload
@@ -1543,7 +1547,7 @@ describe("Collaboration Workspace API", () => {
     });
 
     const deleted = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { confirmName: "Delete me exactly" }
@@ -1585,14 +1589,14 @@ describe("Collaboration Workspace API", () => {
       })
     ).resolves.toBeUndefined();
     for (const url of [
-      testRequest("getCollaborationWorkspace", {
+      testRequest("workspaces.get", {
         params: { collaborationWorkspaceId: workspaceId }
       }),
-      testRequest("getConversationThread", { params: { conversationId: first } }),
-      testRequest("getConversationFileContent", {
+      testRequest("conversations.thread.get", { params: { conversationId: first } }),
+      testRequest("conversations.files.get_content", {
         params: { conversationId: first, fileId: fileId }
       }),
-      testRequest("observeConversationRun", {
+      testRequest("conversations.runs.observe", {
         params: { conversationId: second, runId: activeRunId }
       })
     ]) {
@@ -1601,7 +1605,7 @@ describe("Collaboration Workspace API", () => {
       ).toBe(404);
     }
 
-    const audit = (await app.call("listAuditEvents", {}, "owner")).json<{
+    const audit = (await app.call("audit_events.list", {}, "owner")).json<{
       items: Array<{ type: string; subject: string; metadata?: Record<string, unknown> }>;
     }>().items;
     expect(audit).toContainEqual(
@@ -1629,12 +1633,12 @@ describe("Collaboration Workspace API", () => {
     const first = await createConversation(app, "owner", workspaceId, "Already deleted");
     const second = await createConversation(app, "owner", workspaceId, "Still present");
     expect(
-      (await app.call("deleteConversation", { params: { conversationId: first } }, "owner"))
+      (await app.call("conversations.delete", { params: { conversationId: first } }, "owner"))
         .statusCode
     ).toBe(200);
 
     const deleted = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { confirmName: "Retry cleanup" }
@@ -1691,7 +1695,7 @@ describe("Collaboration Workspace API", () => {
     };
 
     const deleted = await app.call(
-      "deleteCollaborationWorkspace",
+      "workspaces.delete",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { confirmName: "Delete source" }
@@ -1731,7 +1735,7 @@ describe("Conversation visibility", () => {
     await addWorkspaceMember(app, "owner", workspaceId, "member@example.test");
     const listedIds = async (actor: string) => {
       const listed = await app.call(
-        "listConversations",
+        "conversations.list",
         { query: { collaborationWorkspaceId: workspaceId } },
         actor
       );
@@ -1755,7 +1759,7 @@ describe("Conversation visibility", () => {
         contentType: "text/csv",
         content: `value\n${filename}\n`
       });
-      const uploaded = await app.call("uploadDraftAttachment", {
+      const uploaded = await app.call("conversations.draft_attachments.upload", {
         params: { conversationId: conversationId },
         headers: { ...upload.headers, "x-dev-user-id": "owner" },
         payload: upload.payload
@@ -1767,7 +1771,7 @@ describe("Conversation visibility", () => {
     await expect(listedIds("member")).resolves.toEqual([]);
     // Listing is narrower than access: the workspace-visible conversation stays reachable.
     const memberThread = await app.call(
-      "getConversationThread",
+      "conversations.thread.get",
       { params: { conversationId: conversationId } },
       "member"
     );
@@ -1776,7 +1780,7 @@ describe("Conversation visibility", () => {
     const [firstAttachmentId, secondAttachmentId] = attachmentIds;
     const removeDraft = (attachmentId: string | undefined) =>
       app.call(
-        "deleteDraftAttachment",
+        "conversations.draft_attachments.delete",
         { params: { conversationId: conversationId, attachmentId: required(attachmentId) } },
         "owner"
       );
@@ -1827,7 +1831,7 @@ describe("Conversation visibility", () => {
 
     for (const actor of ["owner", "admin", "member", "superadmin"]) {
       const listed = await app.call(
-        "listConversations",
+        "conversations.list",
         { query: { collaborationWorkspaceId: workspaceId } },
         actor
       );
@@ -1837,7 +1841,7 @@ describe("Conversation visibility", () => {
       ]);
     }
     const listedByAuthor = await app.call(
-      "listConversations",
+      "conversations.list",
       { query: { collaborationWorkspaceId: workspaceId } },
       "direct"
     );
@@ -1873,7 +1877,7 @@ describe("Conversation visibility", () => {
 
     // The deletion impact keeps counting every conversation, private ones included.
     const impact = await app.call(
-      "getCollaborationWorkspaceDeletionImpact",
+      "workspaces.deletion_impact.get",
       { params: { collaborationWorkspaceId: workspaceId } },
       "owner"
     );
@@ -1895,13 +1899,13 @@ describe("Conversation visibility", () => {
 
   it("keeps a private conversation closed while its author is not a member", async () => {
     const { app, workspaceId, conversationId, author } = await createPrivateConversationFixture();
-    const thread = testRequest("getConversationThread", {
+    const thread = testRequest("conversations.thread.get", {
       params: { conversationId: conversationId },
       method: "GET" as const
     });
 
     const removed = await app.call(
-      "removeCollaborationWorkspaceMember",
+      "workspaces.members.remove",
       { params: { collaborationWorkspaceId: workspaceId, userId: author.id } },
       "owner"
     );
@@ -1926,7 +1930,7 @@ describe("Conversation visibility", () => {
     for (const actor of ["owner", "admin", "member"]) await currentUser(app, actor);
     const admin = await currentUser(app, "admin");
     const created = await app.call(
-      "createCollaborationWorkspace",
+      "workspaces.create",
       { payload: { name: "Private by default", defaultConversationVisibility: "private" } },
       "owner"
     );
@@ -1936,7 +1940,7 @@ describe("Conversation visibility", () => {
     await addWorkspaceMember(app, "owner", workspaceId, "admin@example.test");
     await addWorkspaceMember(app, "owner", workspaceId, "member@example.test");
     await app.call(
-      "updateCollaborationWorkspaceMemberRole",
+      "workspaces.members.update_role",
       {
         params: { collaborationWorkspaceId: workspaceId, userId: admin.id },
         payload: { role: "admin" }
@@ -1945,7 +1949,7 @@ describe("Conversation visibility", () => {
     );
 
     const defaultWorkspaceId = await createSharedWorkspace(app, "owner", "Open by default");
-    const workspaces = await app.call("listCollaborationWorkspaces", {}, "owner");
+    const workspaces = await app.call("workspaces.list", {}, "owner");
     expect(workspaces.json().items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1957,14 +1961,14 @@ describe("Conversation visibility", () => {
     );
 
     const privateConversation = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Stamped private", collaborationWorkspaceId: workspaceId } },
       "member"
     );
     expect(privateConversation.json()).toMatchObject({ visibility: "private" });
     const privateConversationId = privateConversation.json<{ id: string }>().id;
     const createdWithRun = await app.call(
-      "createConversationRun",
+      "conversations.runs.create",
       {
         payload: {
           idempotencyKey: "stamped-create-and-run",
@@ -1983,14 +1987,14 @@ describe("Conversation visibility", () => {
       thread: { conversation: { visibility: "private" } }
     });
     const personalConversation = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Personal" } },
       "member"
     );
     expect(personalConversation.json()).toMatchObject({ visibility: "workspace" });
 
     const byMember = await app.call(
-      "updateCollaborationWorkspace",
+      "workspaces.update",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { defaultConversationVisibility: "workspace" }
@@ -1999,7 +2003,7 @@ describe("Conversation visibility", () => {
     );
     expect(byMember.statusCode).toBe(403);
     const byAdmin = await app.call(
-      "updateCollaborationWorkspace",
+      "workspaces.update",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { defaultConversationVisibility: "workspace" }
@@ -2010,7 +2014,7 @@ describe("Conversation visibility", () => {
     expect(byAdmin.json()).toMatchObject({ defaultConversationVisibility: "workspace" });
 
     const openConversation = await app.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Stamped open", collaborationWorkspaceId: workspaceId } },
       "member"
     );
@@ -2025,7 +2029,7 @@ describe("Conversation visibility", () => {
     expect(
       (
         await app.call(
-          "getConversationThread",
+          "conversations.thread.get",
           { params: { conversationId: privateConversationId } },
           "owner"
         )
@@ -2033,7 +2037,7 @@ describe("Conversation visibility", () => {
     ).toBe(404);
 
     await app.call(
-      "updateCollaborationWorkspace",
+      "workspaces.update",
       {
         params: { collaborationWorkspaceId: workspaceId },
         payload: { defaultConversationVisibility: "private" }
@@ -2049,7 +2053,7 @@ describe("Conversation visibility", () => {
     expect(
       (
         await app.call(
-          "getConversationThread",
+          "conversations.thread.get",
           { params: { conversationId: openConversationId } },
           "owner"
         )
@@ -2074,7 +2078,7 @@ describe("Conversation visibility", () => {
     const openId = await createSharedWorkspace(app, "owner", "Open");
     const otherOpenId = await createSharedWorkspace(app, "owner", "Other open");
     const privateDefault = await app.call(
-      "createCollaborationWorkspace",
+      "workspaces.create",
       { payload: { name: "Private default", defaultConversationVisibility: "private" } },
       "owner"
     );
@@ -2082,7 +2086,7 @@ describe("Conversation visibility", () => {
     for (const workspaceId of [openId, otherOpenId, privateDefaultId]) {
       await addWorkspaceMember(app, "owner", workspaceId, "member@example.test");
     }
-    const personalWorkspaceId = (await app.call("listCollaborationWorkspaces", {}, "member"))
+    const personalWorkspaceId = (await app.call("workspaces.list", {}, "member"))
       .json<{ items: Array<{ id: string; kind: string }> }>()
       .items.find((workspace) => workspace.kind === "personal")!.id;
     const move = (
@@ -2092,7 +2096,7 @@ describe("Conversation visibility", () => {
       visibility?: "workspace" | "private"
     ) =>
       app.call(
-        "moveConversation",
+        "conversations.move",
         {
           params: { conversationId: conversationId },
           payload: { collaborationWorkspaceId, ...(visibility ? { visibility } : {}) }
@@ -2162,7 +2166,7 @@ async function createPrivateConversationFixture() {
   await currentUser(app, "superadmin");
   const author = await currentUser(app, "direct");
   const created = await app.call(
-    "createCollaborationWorkspace",
+    "workspaces.create",
     { payload: { name: "Visibility matrix", defaultConversationVisibility: "private" } },
     "owner"
   );
@@ -2171,7 +2175,7 @@ async function createPrivateConversationFixture() {
     await addWorkspaceMember(app, "owner", workspaceId, email);
   }
   const promoted = await app.call(
-    "updateCollaborationWorkspaceMemberRole",
+    "workspaces.members.update_role",
     {
       params: { collaborationWorkspaceId: workspaceId, userId: admin.id },
       payload: { role: "admin" }
@@ -2193,7 +2197,7 @@ async function createPrivateConversationFixture() {
     contentType: "text/csv",
     content: "value\n42\n"
   });
-  const uploaded = await app.call("uploadDraftAttachment", {
+  const uploaded = await app.call("conversations.draft_attachments.upload", {
     params: { conversationId: conversationId },
     headers: { ...upload.headers, "x-dev-user-id": "direct" },
     payload: upload.payload
@@ -2214,7 +2218,7 @@ async function createPrivateConversationFixture() {
 
   // A workspace-visible neighbour proves the list filter is per conversation, not per workspace.
   await app.call(
-    "updateCollaborationWorkspace",
+    "workspaces.update",
     {
       params: { collaborationWorkspaceId: workspaceId },
       payload: { defaultConversationVisibility: "workspace" }
@@ -2250,24 +2254,24 @@ function conversationRoutes(
     (actor, conversationId) =>
       app.call(operation, { ...input, params: { ...input.params, conversationId } }, actor);
   return [
-    { name: "thread", send: json("getConversationThread") },
-    { name: "messages", send: json("listConversationMessages") },
-    { name: "resources", send: json("listConversationResources") },
+    { name: "thread", send: json("conversations.thread.get") },
+    { name: "messages", send: json("conversations.messages.list") },
+    { name: "resources", send: json("conversations.resources.list") },
     {
       name: "structured data",
-      send: json("getStructuredDataResource", {
+      send: json("conversations.structured_data.get", {
         params: { structuredDataResourceId: "sdr_missing" }
       })
     },
-    { name: "generate title", send: json("generateConversationTitle") },
+    { name: "generate title", send: json("conversations.title.generate") },
     {
       name: "rename",
-      send: json("renameConversation", { payload: { title: "Renamed by someone else" } })
+      send: json("conversations.rename", { payload: { title: "Renamed by someone else" } })
     },
     {
       name: "start run",
       // The unknown model binding stops the author's positive control after the access check.
-      send: json("startConversationRun", {
+      send: json("conversations.runs.start", {
         payload: {
           idempotencyKey: "visibility-matrix",
           message: { text: "Hello" },
@@ -2275,16 +2279,19 @@ function conversationRoutes(
         }
       })
     },
-    { name: "run events", send: json("observeConversationRun", { params: { runId } }) },
-    { name: "cancel run", send: json("cancelConversationRun", { params: { runId }, payload: {} }) },
+    { name: "run events", send: json("conversations.runs.observe", { params: { runId } }) },
+    {
+      name: "cancel run",
+      send: json("conversations.runs.cancel", { params: { runId }, payload: {} })
+    },
     {
       name: "command run",
-      send: json("commandConversationRun", {
+      send: json("conversations.runs.command", {
         params: { runId },
         payload: { command: { type: "continue" } }
       })
     },
-    { name: "list draft attachments", send: json("listDraftAttachments") },
+    { name: "list draft attachments", send: json("conversations.draft_attachments.list") },
     {
       name: "upload draft attachment",
       send: (actor, conversationId) => {
@@ -2294,7 +2301,7 @@ function conversationRoutes(
           contentType: "text/csv",
           content: "value\n1\n"
         });
-        return app.call("uploadDraftAttachment", {
+        return app.call("conversations.draft_attachments.upload", {
           params: { conversationId: conversationId },
           headers: { ...upload.headers, "x-dev-user-id": actor },
           payload: upload.payload
@@ -2303,39 +2310,42 @@ function conversationRoutes(
     },
     {
       name: "retry draft attachment",
-      send: json("retryDraftAttachment", { params: { attachmentId } })
+      send: json("conversations.draft_attachments.retry", { params: { attachmentId } })
     },
-    { name: "file content", send: json("getConversationFileContent", { params: { fileId } }) },
+    { name: "file content", send: json("conversations.files.get_content", { params: { fileId } }) },
     {
       name: "file download",
-      send: json("getConversationFileContent", { params: { fileId }, query: { download: true } })
+      send: json("conversations.files.get_content", {
+        params: { fileId },
+        query: { download: true }
+      })
     },
     {
       name: "artifact content",
-      send: json("getConversationArtifactContent", { params: { artifactId } })
+      send: json("conversations.artifacts.get_content", { params: { artifactId } })
     },
     {
       name: "artifact preview",
-      send: json("getConversationArtifactPreview", { params: { artifactId } })
+      send: json("conversations.artifacts.get_preview", { params: { artifactId } })
     },
     {
       name: "attachment preview",
-      send: json("getConversationAttachmentPreview", { params: { attachmentId } })
+      send: json("conversations.attachments.get_preview", { params: { attachmentId } })
     },
     {
       name: "retry artifact preview",
-      send: json("retryConversationArtifactPreview", { params: { artifactId } })
+      send: json("conversations.artifacts.retry_preview", { params: { artifactId } })
     },
     {
       name: "delete draft attachment",
-      send: json("deleteDraftAttachment", { params: { attachmentId } })
+      send: json("conversations.draft_attachments.delete", { params: { attachmentId } })
     },
     // Same-workspace move: denied for non-authors, a validation error for the author.
     {
       name: "move",
-      send: json("moveConversation", { payload: { collaborationWorkspaceId: workspaceId } })
+      send: json("conversations.move", { payload: { collaborationWorkspaceId: workspaceId } })
     },
-    { name: "delete", send: json("deleteConversation") }
+    { name: "delete", send: json("conversations.delete") }
   ];
 }
 
@@ -2367,7 +2377,7 @@ async function createWorkspaceApp(collaborationWorkspacesEnabled = true) {
 }
 
 async function createSharedWorkspace(server: TestServer, actor: string, name: string) {
-  const response = await server.call("createCollaborationWorkspace", { payload: { name } }, actor);
+  const response = await server.call("workspaces.create", { payload: { name } }, actor);
   expect(response.statusCode).toBe(200);
   return response.json<{ id: string }>().id;
 }
@@ -2379,7 +2389,7 @@ async function addWorkspaceMember(
   email: string
 ) {
   const response = await server.call(
-    "addCollaborationWorkspaceMember",
+    "workspaces.members.add",
     { params: { collaborationWorkspaceId: collaborationWorkspaceId }, payload: { email } },
     actor
   );
@@ -2393,7 +2403,7 @@ async function createConversation(
   title: string
 ) {
   const response = await server.call(
-    "createConversation",
+    "conversations.create",
     { payload: { title, collaborationWorkspaceId } },
     actor
   );
@@ -2466,11 +2476,11 @@ async function currentUser(
   server: TestServer,
   externalUserId: string
 ): Promise<{ id: ReturnType<typeof asUserId> }> {
-  const response = await server.call("getCurrentUser", {}, externalUserId);
+  const response = await server.call("me.get", {}, externalUserId);
   expect(response.statusCode).toBe(200);
-  expect(
-    (await server.call("ensurePersonalCollaborationWorkspace", {}, externalUserId)).statusCode
-  ).toBe(200);
+  expect((await server.call("workspaces.ensure_personal", {}, externalUserId)).statusCode).toBe(
+    200
+  );
   return { id: asUserId(response.json<{ id: string }>().id) };
 }
 

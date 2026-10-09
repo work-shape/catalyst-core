@@ -7,7 +7,7 @@ export function registerSessionTokenRoutes(route: Route, options: ChatServerOpti
   const issueSessionToken = async ({
     body,
     context
-  }: Pick<RouteCall<typeof apiOperations.issueSessionToken>, "body" | "context">) => {
+  }: Pick<RouteCall<(typeof apiOperations)["session_tokens.issue"]>, "body" | "context">) => {
     if (!options.sessionToken) {
       throw new AppError("NOT_FOUND", "Session token issuing is not configured");
     }
@@ -37,7 +37,5 @@ export function registerSessionTokenRoutes(route: Route, options: ChatServerOpti
     return issued;
   };
 
-  route(apiOperations.issueSessionToken, issueSessionToken);
-  // CB-4b removes the alias together with the path cutover.
-  route(apiOperations.issueSessionTokenLegacyAlias, issueSessionToken);
+  route(apiOperations["session_tokens.issue"], issueSessionToken);
 }

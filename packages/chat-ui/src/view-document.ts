@@ -37,7 +37,7 @@ export interface ViewDocumentInput {
 export function viewRuntimeAddress(apiBaseUrl: string, pageUrl: string): ViewRuntimeAddress {
   const fileUrl = (file: string) =>
     new URL(
-      `${apiBaseUrl.replace(/\/$/u, "")}${apiOperations.getViewRuntimeFile.buildPath({
+      `${apiBaseUrl.replace(/\/$/u, "")}${apiOperations["view_runtime.files.get"].buildPath({
         params: { version: VIEW_RUNTIME.version, file }
       })}`,
       pageUrl

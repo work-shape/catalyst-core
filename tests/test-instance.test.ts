@@ -39,7 +39,7 @@ describe("test instance", () => {
     const owner = first.signIn("owner");
     const other = first.signIn("other");
     const created = await first.call(
-      "createConversation",
+      "conversations.create",
       { payload: { title: "Owner's conversation" } },
       owner
     );
@@ -47,26 +47,26 @@ describe("test instance", () => {
     const { id } = created.json<{ id: string }>();
     await seedConversationMessage(first.stores.conversations, id);
     expect(
-      (await first.call("getConversationThread", { params: { conversationId: id } }, other))
+      (await first.call("conversations.thread.get", { params: { conversationId: id } }, other))
         .statusCode
     ).toBe(404);
     expect(
-      (await first.call("getConversationThread", { params: { conversationId: id } }, owner))
+      (await first.call("conversations.thread.get", { params: { conversationId: id } }, owner))
         .statusCode
     ).toBe(200);
     expect(
       (
         await second.call(
-          "getConversationThread",
+          "conversations.thread.get",
           { params: { conversationId: id } },
           second.signIn("owner")
         )
       ).statusCode
     ).toBe(404);
-    expect((await first.call("listConversations", {}, owner)).json().items).toHaveLength(1);
-    expect((await first.call("listConversations", {}, other)).json().items).toHaveLength(0);
+    expect((await first.call("conversations.list", {}, owner)).json().items).toHaveLength(1);
+    expect((await first.call("conversations.list", {}, other)).json().items).toHaveLength(0);
     await first.close();
-    expect((await second.call("getCurrentUser")).statusCode).toBe(200);
+    expect((await second.call("me.get")).statusCode).toBe(200);
     await second.close();
   });
 
@@ -76,19 +76,19 @@ describe("test instance", () => {
       tools: [],
       allowedOrigins: "https://ui.example.test"
     });
-    const malformed = await instance.call("createConversation", {
+    const malformed = await instance.call("conversations.create", {
       payload: "{",
       headers: { "content-type": "application/json" }
     });
     expect(malformed.statusCode).toBe(500);
     expect(malformed.json()).toMatchObject({ error: { code: "INTERNAL" } });
-    const response = await instance.call("getCurrentUser", {
+    const response = await instance.call("me.get", {
       headers: { origin: "https://ui.example.test" }
     });
     expect(response.statusCode).toBe(200);
     expect(response.headers["access-control-allow-origin"]).toBe("https://ui.example.test");
     expect(response.rawPayload.toString()).toBe(response.body);
-    const head = await instance.call("getCurrentUser", { method: "HEAD" });
+    const head = await instance.call("me.get", { method: "HEAD" });
     expect(head.statusCode).toBe(200);
     expect(head.body).toBe("");
     await instance.close();
@@ -112,16 +112,16 @@ describe("test instance", () => {
       });
       try {
         if (failure)
-          await expect(instance.call("getConversationThread")).rejects.toThrow(
+          await expect(instance.call("conversations.thread.get")).rejects.toThrow(
             "Missing path parameter"
           );
-        else expect((await instance.call("getCurrentUser")).statusCode).toBe(200);
+        else expect((await instance.call("me.get")).statusCode).toBe(200);
       } finally {
         await instance.close();
       }
       await instance.close();
       expect(cleanup).toHaveBeenCalledTimes(1);
-      await expect(instance.call("getCurrentUser")).rejects.toThrow("Test instance is closed");
+      await expect(instance.call("me.get")).rejects.toThrow("Test instance is closed");
       expect(() => instance.signIn("owner")).toThrow("Test instance is closed");
     }
   );

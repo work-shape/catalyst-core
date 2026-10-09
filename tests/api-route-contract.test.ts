@@ -591,12 +591,12 @@ describe("list and timestamp conventions", () => {
     const admin = asCaller({ permissions: ["audit.view"] });
     const read = async (query?: Record<string, string>) => {
       vi.advanceTimersByTime(1000);
-      return server.call("listAuditActivities", query ? { query } : {}, admin);
+      return server.call("audit_activities.list", query ? { query } : {}, admin);
     };
 
     const response = await read();
     expect(response.statusCode).toBe(200);
-    const body = apiOperations.listAuditActivities.response.schema.parse(response.json());
+    const body = apiOperations["audit_activities.list"].response.schema.parse(response.json());
     expect(response.json()).not.toHaveProperty("nextCursor");
     expect(body.items).toHaveLength(100);
     expect(body.items.slice(0, 2).map((activity) => activity.correlationId)).toEqual([
@@ -606,7 +606,7 @@ describe("list and timestamp conventions", () => {
     expect(list.mock.calls).toEqual([[{ clientInstanceId, limit: 500 }]]);
 
     // The operation declares no paging, so the contract has no cursor to send.
-    expect(apiOperations.listAuditActivities).not.toHaveProperty("query");
+    expect(apiOperations["audit_activities.list"]).not.toHaveProperty("query");
     await expect(read({ cursor: "unknown" })).rejects.toThrow('Unknown query parameter "cursor"');
 
     list.mockRestore();
@@ -621,15 +621,15 @@ describe("list and timestamp conventions", () => {
   it("keeps the order people see: by name, by upload and by creation, each ending in the id", () => {
     const order = (operation: Operation) =>
       operation.response.kind === "page" ? operation.response.order : undefined;
-    expect(order(apiOperations.listServicePrincipals)).toEqual([
+    expect(order(apiOperations["service_principals.list"])).toEqual([
       "principal.displayLabel",
       "principal.id"
     ]);
     for (const operation of [
-      apiOperations.listDraftAttachments,
-      apiOperations.listCollaborationWorkspaces,
-      apiOperations.listCollaborationWorkspaceDirectory,
-      apiOperations.listAdministeredCollaborationWorkspaces
+      apiOperations["conversations.draft_attachments.list"],
+      apiOperations["workspaces.list"],
+      apiOperations["workspaces.directory.list"],
+      apiOperations["instance.workspaces.list"]
     ]) {
       expect(order(operation), operation.id).toEqual(["createdAt", "id"]);
       expect(operation.response.kind === "page" && operation.response.descending).toBe(false);
@@ -661,12 +661,10 @@ describe("list and timestamp conventions", () => {
     });
     vi.spyOn(authAdapter, "authenticate").mockResolvedValue(user);
     const create = vi.spyOn(server.stores.workspaces, "ensurePersonalWorkspace");
-    expect((await server.call("listConversations", {}, asCaller())).statusCode).toBe(200);
-    expect((await server.call("listCollaborationWorkspaces", {}, asCaller())).statusCode).toBe(200);
+    expect((await server.call("conversations.list", {}, asCaller())).statusCode).toBe(200);
+    expect((await server.call("workspaces.list", {}, asCaller())).statusCode).toBe(200);
     expect(create).not.toHaveBeenCalled();
-    expect(
-      (await server.call("ensurePersonalCollaborationWorkspace", {}, asCaller())).statusCode
-    ).toBe(200);
+    expect((await server.call("workspaces.ensure_personal", {}, asCaller())).statusCode).toBe(200);
     expect(create).toHaveBeenCalledTimes(1);
   });
 });

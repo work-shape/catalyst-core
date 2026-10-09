@@ -158,7 +158,7 @@ describe("Postgres conversation cleanup after the claim", () => {
 
     fixture.byteStore.failDeletes = true;
     const deletion = await api.call(
-      "deleteConversation",
+      "conversations.delete",
       { params: { conversationId: conversation.id } },
       author.id
     );
@@ -197,7 +197,7 @@ describe("Postgres conversation cleanup after the claim", () => {
     const artifact = { params: { conversationId, artifactId: data.artifact.id } };
     const attachment = { params: { conversationId, attachmentId: data.attachment.id } };
 
-    const before = await api.call("getConversationArtifactPreview", artifact, author.id);
+    const before = await api.call("conversations.artifacts.get_preview", artifact, author.id);
     expect(before.statusCode).toBe(200);
 
     fixture.byteStore.failDeletes = true;
@@ -207,12 +207,18 @@ describe("Postgres conversation cleanup after the claim", () => {
     await fixture.expectDataLeft(conversation, data);
 
     const reads = [
-      testRequest("getConversationFileContent", fileContent),
-      testRequest("getConversationFileContent", { ...fileContent, query: { download: "true" } }),
-      testRequest("getConversationArtifactContent", artifact),
-      testRequest("getConversationArtifactContent", { ...artifact, query: { inline: "true" } }),
-      testRequest("getConversationArtifactPreview", artifact),
-      testRequest("getConversationAttachmentPreview", attachment)
+      testRequest("conversations.files.get_content", fileContent),
+      testRequest("conversations.files.get_content", {
+        ...fileContent,
+        query: { download: "true" }
+      }),
+      testRequest("conversations.artifacts.get_content", artifact),
+      testRequest("conversations.artifacts.get_content", {
+        ...artifact,
+        query: { inline: "true" }
+      }),
+      testRequest("conversations.artifacts.get_preview", artifact),
+      testRequest("conversations.attachments.get_preview", attachment)
     ];
     for (const read of reads) {
       const response = await api.call(read.operation, read.input, author.id);

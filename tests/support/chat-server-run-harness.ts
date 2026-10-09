@@ -256,7 +256,7 @@ export async function injectStartConversationRun(
     idempotencyKey?: string;
   } = {}
 ): Promise<StartedRunBody> {
-  const response = await server.call("startConversationRun", {
+  const response = await server.call("conversations.runs.start", {
     params: { conversationId: conversationId },
     headers: options.headers,
     payload: {
@@ -279,7 +279,7 @@ export async function drainRunEvents(
     afterSequence?: number;
   } = {}
 ): Promise<string> {
-  const response = await server.call("observeConversationRun", {
+  const response = await server.call("conversations.runs.observe", {
     params: { conversationId, runId },
     query: { after: options.afterSequence },
     headers: options.headers
@@ -297,7 +297,7 @@ export async function fetchStartConversationRun(
     idempotencyKey?: string;
   } = {}
 ): Promise<StartedRunBody> {
-  const response = await fetch(`${baseUrl}/api/conversations/${conversationId}/runs`, {
+  const response = await fetch(`${baseUrl}/api/v1/conversations/${conversationId}/runs`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -320,7 +320,7 @@ export async function fetchRunEvents(
   runId: string
 ): Promise<string> {
   const response = await fetch(
-    `${baseUrl}/api/conversations/${conversationId}/runs/${runId}/events`
+    `${baseUrl}/api/v1/conversations/${conversationId}/runs/${runId}/events`
   );
   expect(response.status).toBe(200);
   return response.text();

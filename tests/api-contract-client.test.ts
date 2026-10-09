@@ -96,10 +96,9 @@ describe("api operation catalog and client", () => {
 
   // Registered by the server and absent from the released document.
   const undocumentedOperationIds = [
-    "getHealth",
-    "getViewRuntimeFile",
-    "listCapturedMail",
-    "issueSessionTokenLegacyAlias"
+    "health.get",
+    "view_runtime.files.get",
+    "captured_mail.list"
   ];
 
   it("keeps the OpenAPI artifact generated from the operation catalog", async () => {
@@ -120,28 +119,32 @@ describe("api operation catalog and client", () => {
   });
 
   it("keeps Collaboration Workspace create and update request contracts aligned", () => {
-    const createOperation = openApiJsonOperation("createCollaborationWorkspace");
+    const createOperation = openApiJsonOperation("workspaces.create");
     const createSchema = createOperation.requestBody.content["application/json"].schema;
 
     expect(createSchema.required).toEqual(["name"]);
-    expect(apiOperations.createCollaborationWorkspace.body.parse({ name: "Product" })).toEqual({
+    expect(apiOperations["workspaces.create"].body.parse({ name: "Product" })).toEqual({
       name: "Product"
     });
-    expect(apiOperations.updateCollaborationWorkspace.body.parse({})).toEqual({});
+    expect(apiOperations["workspaces.update"].body.parse({})).toEqual({});
   });
 
   it("exposes agent availability operations through the contract and client", async () => {
-    expect(apiOperations.setConfigAgentAvailability.body.parse({ mode: "selected" })).toEqual({
+    expect(
+      apiOperations["config_agents.set_availability"].body.parse({ mode: "selected" })
+    ).toEqual({
       mode: "selected"
     });
-    expect(() => apiOperations.setConfigAgentAvailability.body.parse({ mode: "some" })).toThrow();
+    expect(() =>
+      apiOperations["config_agents.set_availability"].body.parse({ mode: "some" })
+    ).toThrow();
     expect(
-      apiOperations.replaceConfigAssets.response.schema.parse({
+      apiOperations["config_assets.replace"].response.schema.parse({
         version: 2,
         hiddenAgentNames: ["a"]
       })
     ).toEqual({ version: 2, hiddenAgentNames: ["a"] });
-    expect(apiOperations.replaceConfigAssets.response.schema.parse({ version: 2 })).toEqual({
+    expect(apiOperations["config_assets.replace"].response.schema.parse({ version: 2 })).toEqual({
       version: 2
     });
 
@@ -238,13 +241,13 @@ describe("api operation catalog and client", () => {
     await expect(client.governance.listAuditActivities()).resolves.toEqual([]);
     await expect(client.governance.listAuditEvents()).resolves.toEqual([]);
     expect(calls.map((url) => `${url.pathname}${url.search}`)).toEqual([
-      apiOperations.listAuditActivities.path,
-      `${apiOperations.listAuditEvents.path}?limit=100`
+      apiOperations["audit_activities.list"].path,
+      `${apiOperations["audit_events.list"].path}?limit=100`
     ]);
   });
 
   it("carries conversation visibility through the workspace, conversation and move contracts", async () => {
-    const moveOperation = openApiJsonOperation("moveConversation");
+    const moveOperation = openApiJsonOperation("conversations.move");
     const conversationSchema = required(moveOperation.responses["200"]).content["application/json"]
       .schema;
     expect(moveOperation.requestBody.content["application/json"].schema.required).toEqual([
@@ -252,18 +255,18 @@ describe("api operation catalog and client", () => {
     ]);
     expect(conversationSchema.required).toContain("visibility");
     expect(
-      apiOperations.createCollaborationWorkspace.body.parse({
+      apiOperations["workspaces.create"].body.parse({
         name: "Product",
         defaultConversationVisibility: "private"
       })
     ).toEqual({ name: "Product", defaultConversationVisibility: "private" });
     expect(() =>
-      apiOperations.updateCollaborationWorkspace.body.parse({
+      apiOperations["workspaces.update"].body.parse({
         defaultConversationVisibility: "secret"
       })
     ).toThrow();
     expect(() =>
-      apiOperations.moveConversation.body.parse({
+      apiOperations["conversations.move"].body.parse({
         collaborationWorkspaceId: "cws_1",
         visibility: "secret"
       })
@@ -310,29 +313,31 @@ describe("api operation catalog and client", () => {
 
   it("builds encoded paths from operation params and query values", () => {
     expect(
-      apiOperations.listConversationMessages.buildPath({
+      apiOperations["conversations.messages.list"].buildPath({
         params: { conversationId: "conversation 1/2" }
       })
     ).toBe(contractPathFixtures.encodedMessages);
-    expect(apiOperations.getConfig.buildPath({ query: { locale: "de" } })).toBe(
+    expect(apiOperations["config.get"].buildPath({ query: { locale: "de" } })).toBe(
       contractPathFixtures.localizedConfig
     );
     expect(
-      apiOperations.listConversations.buildPath({
+      apiOperations["conversations.list"].buildPath({
         query: { collaborationWorkspaceId: "workspace/one" }
       })
     ).toBe(contractPathFixtures.encodedWorkspaceConversations);
-    expect(apiOperations.listConversations.buildPath()).toBe(contractPathFixtures.conversations);
+    expect(apiOperations["conversations.list"].buildPath()).toBe(
+      contractPathFixtures.conversations
+    );
     expect(
       buildApiPath(contractPathFixtures.exampleTemplate, {
         params: { exampleId: "value/with spaces" },
         query: { view: "full" }
       })
     ).toBe(contractPathFixtures.exampleValue);
-    expect(() => apiOperations.listConversationMessages.buildPath()).toThrow(
+    expect(() => apiOperations["conversations.messages.list"].buildPath()).toThrow(
       /Missing path parameter "conversationId"/u
     );
-    expect(() => apiOperations.getConfig.buildPath({ query: { unknown: "value" } })).toThrow(
+    expect(() => apiOperations["config.get"].buildPath({ query: { unknown: "value" } })).toThrow(
       /Unknown query parameter "unknown"/u
     );
   });
@@ -352,9 +357,9 @@ describe("api operation catalog and client", () => {
     await client.conversations.list(42 as never);
 
     expect(calls.map((request) => request.url)).toEqual([
-      "https://chat.example/api/conversations?limit=200",
-      "https://chat.example/api/conversations?collaborationWorkspaceId=workspace%2Fone&limit=200",
-      "https://chat.example/api/conversations?limit=200"
+      "https://chat.example/api/v1/conversations?limit=200",
+      "https://chat.example/api/v1/conversations?collaborationWorkspaceId=workspace%2Fone&limit=200",
+      "https://chat.example/api/v1/conversations?limit=200"
     ]);
   });
 
@@ -369,7 +374,7 @@ describe("api operation catalog and client", () => {
       getToken: () => "test-token",
       fetchImpl
     });
-    const operation = apiOperations.listConversationMessages;
+    const operation = apiOperations["conversations.messages.list"];
 
     await expect(client.conversations.listMessages("conversation/with space")).resolves.toEqual([]);
 
@@ -431,19 +436,19 @@ describe("api operation catalog and client", () => {
     expect(blob.type).toBe("application/json");
     expect(client.browserManagedDownloads).toBe(false);
     expect(client.conversations.artifacts.contentUrl("conv 1", "art/final")).toBe(
-      `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
+      `https://chat.example${apiOperations["conversations.artifacts.get_content"].buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
       })}`
     );
     expect(client.conversations.artifacts.contentUrl("conv 1", "art/final", true)).toBe(
-      `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
+      `https://chat.example${apiOperations["conversations.artifacts.get_content"].buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
       })}?inline=true`
     );
     expect(calls).toHaveLength(1);
     const request = calls[0];
     expect(request?.url).toBe(
-      `https://chat.example${apiOperations.getConversationArtifactContent.buildPath({
+      `https://chat.example${apiOperations["conversations.artifacts.get_content"].buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
       })}`
     );
@@ -458,7 +463,7 @@ describe("api operation catalog and client", () => {
     });
 
     expect(client.conversations.files.contentUrl("conv 1", "file/image")).toBe(
-      `https://chat.example${apiOperations.getConversationFileContent.buildPath({
+      `https://chat.example${apiOperations["conversations.files.get_content"].buildPath({
         params: { conversationId: "conv 1", fileId: "file/image" }
       })}`
     );
@@ -525,7 +530,7 @@ describe("api operation catalog and client", () => {
     expect(calls).toHaveLength(1);
     const request = calls[0];
     expect(request?.url).toBe(
-      `https://chat.example${apiOperations.getConversationArtifactPreview.buildPath({
+      `https://chat.example${apiOperations["conversations.artifacts.get_preview"].buildPath({
         params: { conversationId: "conv 1", artifactId: "art/final" }
       })}`
     );
@@ -541,7 +546,7 @@ describe("api operation catalog and client", () => {
 
     expect(client.browserManagedDownloads).toBe(true);
     expect(client.conversations.artifacts.contentUrl("conversation/with space", "art/final")).toBe(
-      "https://chat.example/api/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
+      "https://chat.example/api/v1/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
     );
   });
 
@@ -762,7 +767,7 @@ describe("api operation catalog and client", () => {
           },
           serverTime: "2026-06-27T00:00:00.000Z"
         },
-        eventsUrl: "https://chat.example/api/conversations/conv_1/runs/run_1/events"
+        eventsUrl: "https://chat.example/api/v1/conversations/conv_1/runs/run_1/events"
       });
     };
     const client = createApiClient({
@@ -792,11 +797,11 @@ describe("api operation catalog and client", () => {
           `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`
       )
     ).toEqual([
-      "POST /api/conversations/conv%201/runs",
-      "POST /api/conversations/runs",
-      "POST /api/conversations/conv%201/runs/run%201/cancel",
-      "POST /api/conversations/conv%201/runs/run%201/commands",
-      "GET /api/conversations/conv_1/runs/run_1/events?after=7"
+      "POST /api/v1/conversations/conv%201/runs",
+      "POST /api/v1/conversations/runs",
+      "POST /api/v1/conversations/conv%201/runs/run%201/cancel",
+      "POST /api/v1/conversations/conv%201/runs/run%201/commands",
+      "GET /api/v1/conversations/conv_1/runs/run_1/events?after=7"
     ]);
     expect(
       calls.every((request) => request.headers.get("authorization") === "Bearer test-token")
@@ -840,7 +845,7 @@ describe("api operation catalog and client", () => {
         (request) =>
           `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`
       )
-    ).toEqual(["GET /api/conversations/conv_1/runs/run_1/events?after=7"]);
+    ).toEqual(["GET /api/v1/conversations/conv_1/runs/run_1/events?after=7"]);
     expect(observed).toEqual([]);
     expect(caughtUp).toBe(true);
   });
@@ -902,12 +907,8 @@ describe("api operation catalog and client", () => {
 
     for (const file of routeFiles) {
       const source = await readFile(file, "utf8");
-      expect(source, file).toContain("apiOperations.");
-      const catalogRouteSource =
-        file === "packages/chat-server/src/routes/session-token-routes.ts"
-          ? source.replace('app.post("/auth/session-token", issueSessionToken);', "")
-          : source;
-      expect(catalogRouteSource, file).not.toMatch(
+      expect(source, file).toContain("apiOperations[");
+      expect(source, file).not.toMatch(
         /app\.(?:get|post|patch|put|delete)\(\s*["'`]\/(?:api|auth)\//u
       );
     }

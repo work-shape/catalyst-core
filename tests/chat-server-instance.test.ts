@@ -20,7 +20,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const response = await app.call("getConfig", {});
+    const response = await app.call("config.get", {});
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ agents: [] });
@@ -44,14 +44,14 @@ describe("client instance app vertical slice", () => {
       env: {},
       tools: []
     });
-    const config = await app.call("getConfig", {});
+    const config = await app.call("config.get", {});
     expect(config.json().agents[0].selectableModels).toEqual([
       { bindingId: "own", model: "own-model", selectableReasoningEfforts: [] },
       { bindingId: "offered", model: "offered-model", selectableReasoningEfforts: [] }
     ]);
 
     const start = (modelBindingId: string) =>
-      app.call("createConversationRun", {
+      app.call("conversations.runs.create", {
         payload: {
           idempotencyKey: `start-${modelBindingId}`,
           modelBindingId,
@@ -67,7 +67,7 @@ describe("client instance app vertical slice", () => {
       );
     }
     // A rejected model leaves no conversation behind.
-    const conversations = await app.call("listConversations", {});
+    const conversations = await app.call("conversations.list", {});
     expect(conversations.json().items).toEqual([]);
 
     for (const modelBindingId of ["own", "offered"]) {
@@ -102,21 +102,21 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const initial = await app.call("getCurrentUserModelPreference");
+    const initial = await app.call("me.model_preference.get");
     expect(initial.json()).toEqual({ reasoningEfforts: {} });
     const preference = { modelBindingId: "offered", reasoningEfforts: { own: "high" } };
-    const stored = await app.call("setCurrentUserModelPreference", {
+    const stored = await app.call("me.model_preference.set", {
       payload: preference
     });
     expect(stored.statusCode).toBe(200);
-    expect((await app.call("getCurrentUserModelPreference")).json()).toEqual(preference);
-    const invalid = await app.call("setCurrentUserModelPreference", {
+    expect((await app.call("me.model_preference.get")).json()).toEqual(preference);
+    const invalid = await app.call("me.model_preference.set", {
       payload: { reasoningEfforts: { own: "maximal" } }
     });
     expect(invalid.statusCode).toBe(422);
 
     const threadAfterRun = async (payload: Record<string, unknown>) => {
-      const started = await app.call("createConversationRun", {
+      const started = await app.call("conversations.runs.create", {
         payload: { ...payload, message: { text: "Hello" } }
       });
       expect(started.statusCode).toBe(200);
@@ -125,7 +125,7 @@ describe("client instance app vertical slice", () => {
         run: { id: string };
       };
       await drainRunEvents(app, conversation.id, run.id);
-      const thread = await app.call("getConversationThread", {
+      const thread = await app.call("conversations.thread.get", {
         params: { conversationId: conversation.id }
       });
       return thread.json() as { modelSelection?: unknown };
@@ -161,7 +161,7 @@ describe("client instance app vertical slice", () => {
       env: {},
       tools: []
     });
-    const config = await app.call("getConfig", {});
+    const config = await app.call("config.get", {});
     expect(config.json().agents[0].selectableModels).toEqual([
       {
         bindingId: "own",
@@ -174,7 +174,7 @@ describe("client instance app vertical slice", () => {
     ]);
 
     const start = (reasoningEffort: string, modelBindingId?: string) =>
-      app.call("createConversationRun", {
+      app.call("conversations.runs.create", {
         payload: {
           idempotencyKey: `start-${modelBindingId ?? "own"}-${reasoningEffort}`,
           modelBindingId,
@@ -187,7 +187,7 @@ describe("client instance app vertical slice", () => {
       expect(rejected.statusCode).toBe(422);
       expect(rejected.json().error.message).toMatch(/is not available for user selection$/u);
     }
-    const conversations = await app.call("listConversations", {});
+    const conversations = await app.call("conversations.list", {});
     expect(conversations.json().items).toEqual([]);
 
     for (const reasoningEffort of ["high", "medium"]) {
@@ -224,10 +224,12 @@ describe("client instance app vertical slice", () => {
       env: {},
       tools: []
     });
-    const created = await app.call("createConversation", { payload: { title: "Model selection" } });
+    const created = await app.call("conversations.create", {
+      payload: { title: "Model selection" }
+    });
     const conversation = created.json() as { id: string };
 
-    const rejected = await app.call("startConversationRun", {
+    const rejected = await app.call("conversations.runs.start", {
       params: { conversationId: conversation.id },
       payload: {
         idempotencyKey: "reject-internal-model",
@@ -237,7 +239,7 @@ describe("client instance app vertical slice", () => {
     });
 
     expect(rejected.statusCode).toBe(422);
-    const messages = await app.call("listConversationMessages", {
+    const messages = await app.call("conversations.messages.list", {
       params: { conversationId: conversation.id }
     });
     expect(messages.json().items).toEqual([]);
@@ -264,7 +266,7 @@ describe("client instance app vertical slice", () => {
       tools: [tool]
     });
 
-    const created = await app.call("createConversation", { payload: { title: "Tool test" } });
+    const created = await app.call("conversations.create", { payload: { title: "Tool test" } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
@@ -275,7 +277,7 @@ describe("client instance app vertical slice", () => {
     );
     await drainRunEvents(app, conversation.id, started.run.id);
 
-    const messages = await app.call("listConversationMessages", {
+    const messages = await app.call("conversations.messages.list", {
       params: { conversationId: conversation.id }
     });
     expect(messages.statusCode).toBe(200);
@@ -290,7 +292,7 @@ describe("client instance app vertical slice", () => {
       ])
     );
 
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     expect(
       audit
@@ -298,7 +300,7 @@ describe("client instance app vertical slice", () => {
         .items.some((event) => event.type === "tool.completed")
     ).toBe(true);
 
-    const usage = await app.call("getUsageSummary", {});
+    const usage = await app.call("usage.get_summary", {});
     expect(usage.statusCode).toBe(200);
     const usageBody = usage.json() as {
       today: { modelCallCount: number; totalTokens: number };
@@ -356,7 +358,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const adminUsage = await app.call("getUsageSummary", {
+    const adminUsage = await app.call("usage.get_summary", {
       headers: {
         "x-dev-user-id": "admin-1"
       }
@@ -395,7 +397,7 @@ describe("client instance app vertical slice", () => {
     expect(JSON.stringify(adminUsageBody)).not.toContain("totalCostMicros");
     expect(JSON.stringify(adminUsageBody)).not.toContain("budgetedCostMicros");
 
-    const adminConfig = await app.call("getConfig", {
+    const adminConfig = await app.call("config.get", {
       headers: {
         "x-dev-user-id": "admin-1"
       }
@@ -404,7 +406,7 @@ describe("client instance app vertical slice", () => {
     expect(JSON.stringify(adminConfig.json())).not.toContain("monthlySpendLimit");
     expect(JSON.stringify(adminConfig.json())).not.toContain("costSafetyMultiplier");
 
-    const superadminUsage = await app.call("getUsageSummary", {
+    const superadminUsage = await app.call("usage.get_summary", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -483,7 +485,7 @@ describe("client instance app vertical slice", () => {
       env: {},
       tools: []
     });
-    const webSearchUsage = await webSearchApp.call("getUsageSummary", {
+    const webSearchUsage = await webSearchApp.call("usage.get_summary", {
       headers: {
         "x-dev-user-id": "admin-1"
       }
@@ -515,7 +517,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const response = await app.call("getConfig", {});
+    const response = await app.call("config.get", {});
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
@@ -559,7 +561,7 @@ describe("client instance app vertical slice", () => {
       });
       const readAgentNames = async () =>
         (
-          (await app.call("getConfig", {})).json() as {
+          (await app.call("config.get", {})).json() as {
             agents: Array<{ name: string }>;
           }
         ).agents.map((agent) => agent.name);
@@ -609,7 +611,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const response = await app.call("getConfig", { query: { locale: "de" } });
+    const response = await app.call("config.get", { query: { locale: "de" } });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({

@@ -359,6 +359,6 @@ function createStartResponse({
       },
       serverTime: "2026-06-26T10:00:01.000Z"
     },
-    eventsUrl: `https://example.test/api/conversations/${conversationId}/runs/run_1/events`
+    eventsUrl: `https://example.test/api/v1/conversations/${conversationId}/runs/run_1/events`
   };
 }

@@ -11,7 +11,7 @@ const AUDIT_ACTIVITY_LIMIT = 100;
 
 export function registerAuditRoutes(route: Route, options: ChatServerOptions): void {
   // Raw, machine-queryable evidence feed.
-  route(apiOperations.listAuditEvents, async ({ user, context, paging }) => {
+  route(apiOperations["audit_events.list"], async ({ user, context, paging }) => {
     await recordGovernanceAccess({
       options,
       user,
@@ -27,7 +27,7 @@ export function registerAuditRoutes(route: Route, options: ChatServerOptions): v
   // Curated activity timeline for the admin UI: grouped, labelled, and filtered
   // to governance/workflow plus anything that failed or was denied. It shows the latest
   // activities only; paging activities needs a store query over correlation groups.
-  route(apiOperations.listAuditActivities, async ({ user, context }) => {
+  route(apiOperations["audit_activities.list"], async ({ user, context }) => {
     await recordGovernanceAccess({
       options,
       user,

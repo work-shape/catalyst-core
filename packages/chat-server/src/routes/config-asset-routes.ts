@@ -8,54 +8,52 @@ import type { ChatServerOptions } from "../types";
 export function registerConfigAssetRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new ConfigAssetWorkflow({ options });
 
-  route(apiOperations.getConfigAssetsOverview, ({ identity, context }) =>
+  route(apiOperations["config_assets.get_overview"], ({ identity, context }) =>
     workflow.getOverview(identity, context)
   );
 
-  route(apiOperations.getConfigAsset, ({ identity, params }) =>
+  route(apiOperations["config_assets.get"], ({ identity, params }) =>
     workflow.getAsset(identity, assetParams(params))
   );
 
-  route(apiOperations.putConfigAsset, ({ identity, context, params, body }) =>
+  route(apiOperations["config_assets.put"], ({ identity, context, params, body }) =>
     workflow.putAsset(identity, context, { ...assetParams(params), ...body })
   );
 
-  route(apiOperations.deleteConfigAsset, ({ identity, context, params, body }) =>
+  route(apiOperations["config_assets.delete"], ({ identity, context, params, body }) =>
     workflow.deleteAsset(identity, context, { ...assetParams(params), ...body })
   );
 
-  route(apiOperations.setDefaultConfigAgent, ({ identity, context, body }) =>
+  route(apiOperations["config_agents.set_default"], ({ identity, context, body }) =>
     workflow.setDefaultAgent(identity, context, body)
   );
 
-  route(apiOperations.setConfigAgentAvailability, ({ identity, context, params, body }) =>
+  route(apiOperations["config_agents.set_availability"], ({ identity, context, params, body }) =>
     workflow.setAgentAvailability(identity, context, {
       agentName: requirePathParam(params.name, "Missing config asset name"),
       ...body
     })
   );
 
-  route(apiOperations.listAdministeredCollaborationWorkspaces, () =>
-    workflow.listAdministeredWorkspaces()
-  );
+  route(apiOperations["instance.workspaces.list"], () => workflow.listAdministeredWorkspaces());
 
-  route(apiOperations.listConfigAssetRevisions, ({ identity, params, paging }) =>
+  route(apiOperations["config_assets.revisions.list"], ({ identity, params, paging }) =>
     workflow.listRevisions(identity, { ...assetParams(params), page: paging })
   );
 
-  route(apiOperations.revertConfigAsset, ({ identity, context, params, body }) =>
+  route(apiOperations["config_assets.revert"], ({ identity, context, params, body }) =>
     workflow.revertAsset(identity, context, { ...assetParams(params), ...body })
   );
 
-  route(apiOperations.exportConfigAssets, ({ identity, context }) =>
+  route(apiOperations["config_assets.export"], ({ identity, context }) =>
     workflow.exportAssets(identity, context)
   );
 
-  route(apiOperations.replaceConfigAssets, ({ identity, context, body }) =>
+  route(apiOperations["config_assets.replace"], ({ identity, context, body }) =>
     workflow.replaceAssets(identity, context, body)
   );
 
-  route(apiOperations.validateConfigAssets, ({ identity, context, body }) =>
+  route(apiOperations["config_assets.validate"], ({ identity, context, body }) =>
     workflow.validateAssets(identity, context, body)
   );
 }

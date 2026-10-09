@@ -5,9 +5,9 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/api/approval-requests/{requestId}": {
+    "/api/v1/approval-requests/{requestId}": {
       "get": {
-        "operationId": "getApprovalRequest",
+        "operationId": "approval_requests.get",
         "parameters": [
           {
             "name": "requestId",
@@ -237,9 +237,9 @@
         }
       }
     },
-    "/api/approval-requests": {
+    "/api/v1/approval-requests": {
       "get": {
-        "operationId": "listApprovalRequests",
+        "operationId": "approval_requests.list",
         "parameters": [
           {
             "name": "status",
@@ -513,9 +513,9 @@
         }
       }
     },
-    "/api/approval-requests/pending-count": {
+    "/api/v1/approval-requests/pending-count": {
       "get": {
-        "operationId": "countPendingApprovalRequests",
+        "operationId": "approval_requests.count_pending",
         "parameters": [],
         "responses": {
           "200": {
@@ -546,9 +546,9 @@
         }
       }
     },
-    "/api/approval-requests/{requestId}/decide": {
+    "/api/v1/approval-requests/{requestId}/decide": {
       "post": {
-        "operationId": "decideApprovalRequest",
+        "operationId": "approval_requests.decide",
         "parameters": [
           {
             "name": "requestId",
@@ -819,9 +819,9 @@
         }
       }
     },
-    "/api/approval-requests/{requestId}/withdraw": {
+    "/api/v1/approval-requests/{requestId}/withdraw": {
       "post": {
-        "operationId": "withdrawApprovalRequest",
+        "operationId": "approval_requests.withdraw",
         "parameters": [
           {
             "name": "requestId",
@@ -1031,9 +1031,9 @@
         }
       }
     },
-    "/api/approval-requests/{requestId}/revert": {
+    "/api/v1/approval-requests/{requestId}/revert": {
       "post": {
-        "operationId": "revertApprovalRequest",
+        "operationId": "approval_requests.revert",
         "parameters": [
           {
             "name": "requestId",
@@ -1243,9 +1243,9 @@
         }
       }
     },
-    "/api/me": {
+    "/api/v1/me": {
       "get": {
-        "operationId": "getCurrentUser",
+        "operationId": "me.get",
         "parameters": [],
         "responses": {
           "200": {
@@ -1406,7 +1406,7 @@
         }
       },
       "patch": {
-        "operationId": "updateCurrentUser",
+        "operationId": "me.update",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1587,7 +1587,7 @@
         }
       },
       "delete": {
-        "operationId": "deleteCurrentUser",
+        "operationId": "me.delete",
         "parameters": [],
         "responses": {
           "200": {
@@ -1613,9 +1613,9 @@
         }
       }
     },
-    "/api/me/model-preference": {
+    "/api/v1/me/model-preference": {
       "get": {
-        "operationId": "getCurrentUserModelPreference",
+        "operationId": "me.model_preference.get",
         "parameters": [],
         "responses": {
           "200": {
@@ -1659,7 +1659,7 @@
         }
       },
       "put": {
-        "operationId": "setCurrentUserModelPreference",
+        "operationId": "me.model_preference.set",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1741,9 +1741,9 @@
         }
       }
     },
-    "/api/me/password": {
+    "/api/v1/me/password": {
       "post": {
-        "operationId": "changeCurrentUserPassword",
+        "operationId": "me.password.change",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1794,9 +1794,9 @@
         }
       }
     },
-    "/api/password-reset": {
+    "/api/v1/password-reset": {
       "post": {
-        "operationId": "requestPasswordReset",
+        "operationId": "password_reset.request",
         "parameters": [
           {
             "name": "locale",
@@ -1852,9 +1852,9 @@
         }
       }
     },
-    "/api/password-setup": {
+    "/api/v1/password-setup": {
       "post": {
-        "operationId": "completePasswordSetup",
+        "operationId": "password_setup.complete",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1905,9 +1905,9 @@
         }
       }
     },
-    "/api/branding": {
+    "/api/v1/instance/branding": {
       "get": {
-        "operationId": "getBranding",
+        "operationId": "branding.get",
         "parameters": [
           {
             "name": "locale",
@@ -2102,9 +2102,9 @@
         }
       }
     },
-    "/api/config": {
+    "/api/v1/instance/config": {
       "get": {
-        "operationId": "getConfig",
+        "operationId": "config.get",
         "parameters": [
           {
             "name": "locale",
@@ -2696,9 +2696,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/personal": {
+    "/api/v1/workspaces/personal": {
       "post": {
-        "operationId": "ensurePersonalCollaborationWorkspace",
+        "operationId": "workspaces.ensure_personal",
         "parameters": [],
         "responses": {
           "200": {
@@ -2862,9 +2862,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces": {
+    "/api/v1/workspaces": {
       "get": {
-        "operationId": "listCollaborationWorkspaces",
+        "operationId": "workspaces.list",
         "parameters": [
           {
             "name": "limit",
@@ -3064,7 +3064,7 @@
         }
       },
       "post": {
-        "operationId": "createCollaborationWorkspace",
+        "operationId": "workspaces.create",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -3315,9 +3315,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/directory": {
+    "/api/v1/workspaces/directory": {
       "get": {
-        "operationId": "listCollaborationWorkspaceDirectory",
+        "operationId": "workspaces.directory.list",
         "parameters": [
           {
             "name": "limit",
@@ -3450,9 +3450,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}": {
       "get": {
-        "operationId": "getCollaborationWorkspace",
+        "operationId": "workspaces.get",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -3625,7 +3625,7 @@
         }
       },
       "patch": {
-        "operationId": "updateCollaborationWorkspace",
+        "operationId": "workspaces.update",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -3882,7 +3882,7 @@
         }
       },
       "delete": {
-        "operationId": "deleteCollaborationWorkspace",
+        "operationId": "workspaces.delete",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -3954,9 +3954,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/agents": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/agents": {
       "get": {
-        "operationId": "listCollaborationWorkspaceAgents",
+        "operationId": "workspaces.agents.list",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4146,9 +4146,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/deletion-impact": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/deletion-impact": {
       "get": {
-        "operationId": "getCollaborationWorkspaceDeletionImpact",
+        "operationId": "workspaces.deletion_impact.get",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4196,9 +4196,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/members": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/members": {
       "get": {
-        "operationId": "listCollaborationWorkspaceMembers",
+        "operationId": "workspaces.members.list",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4291,7 +4291,7 @@
         }
       },
       "post": {
-        "operationId": "addCollaborationWorkspaceMember",
+        "operationId": "workspaces.members.add",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4370,9 +4370,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/member-candidates": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/member-candidates": {
       "get": {
-        "operationId": "listCollaborationWorkspaceMemberCandidates",
+        "operationId": "workspaces.member_candidates.list",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4461,9 +4461,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/members/{userId}": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/members/{userId}": {
       "patch": {
-        "operationId": "updateCollaborationWorkspaceMemberRole",
+        "operationId": "workspaces.members.update_role",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4558,7 +4558,7 @@
         }
       },
       "delete": {
-        "operationId": "removeCollaborationWorkspaceMember",
+        "operationId": "workspaces.members.remove",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4629,9 +4629,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/members/me": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/members/me": {
       "delete": {
-        "operationId": "leaveCollaborationWorkspace",
+        "operationId": "workspaces.members.leave",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4694,9 +4694,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/access-requests": {
       "post": {
-        "operationId": "requestCollaborationWorkspaceAccess",
+        "operationId": "workspaces.access_requests.create",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4748,7 +4748,7 @@
         }
       },
       "get": {
-        "operationId": "listCollaborationWorkspaceAccessRequests",
+        "operationId": "workspaces.access_requests.list",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4838,9 +4838,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve": {
       "post": {
-        "operationId": "approveCollaborationWorkspaceAccessRequest",
+        "operationId": "workspaces.access_requests.approve",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4911,9 +4911,9 @@
         }
       }
     },
-    "/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests/{userId}": {
+    "/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}": {
       "delete": {
-        "operationId": "declineCollaborationWorkspaceAccessRequest",
+        "operationId": "workspaces.access_requests.decline",
         "parameters": [
           {
             "name": "collaborationWorkspaceId",
@@ -4973,9 +4973,9 @@
         }
       }
     },
-    "/api/conversations": {
+    "/api/v1/conversations": {
       "get": {
-        "operationId": "listConversations",
+        "operationId": "conversations.list",
         "parameters": [
           {
             "name": "limit",
@@ -5163,7 +5163,7 @@
         }
       },
       "post": {
-        "operationId": "createConversation",
+        "operationId": "conversations.create",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -5271,9 +5271,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/title": {
+    "/api/v1/conversations/{conversationId}/title": {
       "post": {
-        "operationId": "generateConversationTitle",
+        "operationId": "conversations.title.generate",
         "parameters": [
           {
             "name": "conversationId",
@@ -5362,7 +5362,7 @@
         }
       },
       "patch": {
-        "operationId": "renameConversation",
+        "operationId": "conversations.rename",
         "parameters": [
           {
             "name": "conversationId",
@@ -5472,9 +5472,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/move": {
+    "/api/v1/conversations/{conversationId}/move": {
       "post": {
-        "operationId": "moveConversation",
+        "operationId": "conversations.move",
         "parameters": [
           {
             "name": "conversationId",
@@ -5590,9 +5590,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/thread": {
+    "/api/v1/conversations/{conversationId}/thread": {
       "get": {
-        "operationId": "getConversationThread",
+        "operationId": "conversations.thread.get",
         "parameters": [
           {
             "name": "conversationId",
@@ -6721,9 +6721,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/messages": {
+    "/api/v1/conversations/{conversationId}/messages": {
       "get": {
-        "operationId": "listConversationMessages",
+        "operationId": "conversations.messages.list",
         "parameters": [
           {
             "name": "conversationId",
@@ -7212,9 +7212,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/resources": {
+    "/api/v1/conversations/{conversationId}/resources": {
       "get": {
-        "operationId": "listConversationResources",
+        "operationId": "conversations.resources.list",
         "parameters": [
           {
             "name": "conversationId",
@@ -7648,9 +7648,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/structured-data/{structuredDataResourceId}": {
+    "/api/v1/conversations/{conversationId}/structured-data/{structuredDataResourceId}": {
       "get": {
-        "operationId": "getStructuredDataResource",
+        "operationId": "conversations.structured_data.get",
         "parameters": [
           {
             "name": "conversationId",
@@ -7818,9 +7818,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/runs/{runId}/cancel": {
+    "/api/v1/conversations/{conversationId}/runs/{runId}/cancel": {
       "post": {
-        "operationId": "cancelConversationRun",
+        "operationId": "conversations.runs.cancel",
         "parameters": [
           {
             "name": "conversationId",
@@ -8002,9 +8002,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/runs": {
+    "/api/v1/conversations/{conversationId}/runs": {
       "post": {
-        "operationId": "startConversationRun",
+        "operationId": "conversations.runs.start",
         "parameters": [
           {
             "name": "conversationId",
@@ -9833,9 +9833,9 @@
         }
       }
     },
-    "/api/conversations/runs": {
+    "/api/v1/conversations/runs": {
       "post": {
-        "operationId": "createConversationRun",
+        "operationId": "conversations.runs.create",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -11676,9 +11676,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/runs/{runId}/events": {
+    "/api/v1/conversations/{conversationId}/runs/{runId}/events": {
       "get": {
-        "operationId": "observeConversationRun",
+        "operationId": "conversations.runs.observe",
         "parameters": [
           {
             "name": "conversationId",
@@ -12240,9 +12240,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/runs/{runId}/commands": {
+    "/api/v1/conversations/{conversationId}/runs/{runId}/commands": {
       "post": {
-        "operationId": "commandConversationRun",
+        "operationId": "conversations.runs.command",
         "parameters": [
           {
             "name": "conversationId",
@@ -12465,9 +12465,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}": {
+    "/api/v1/conversations/{conversationId}": {
       "delete": {
-        "operationId": "deleteConversation",
+        "operationId": "conversations.delete",
         "parameters": [
           {
             "name": "conversationId",
@@ -12556,9 +12556,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/artifacts/{artifactId}/preview": {
+    "/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview": {
       "post": {
-        "operationId": "startConversationArtifactPreview",
+        "operationId": "conversations.artifacts.start_preview",
         "parameters": [
           {
             "name": "conversationId",
@@ -12744,7 +12744,7 @@
         }
       },
       "get": {
-        "operationId": "getConversationArtifactPreview",
+        "operationId": "conversations.artifacts.get_preview",
         "parameters": [
           {
             "name": "conversationId",
@@ -12930,9 +12930,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/attachments/{attachmentId}/preview": {
+    "/api/v1/conversations/{conversationId}/attachments/{attachmentId}/preview": {
       "post": {
-        "operationId": "startConversationAttachmentPreview",
+        "operationId": "conversations.attachments.start_preview",
         "parameters": [
           {
             "name": "conversationId",
@@ -13118,7 +13118,7 @@
         }
       },
       "get": {
-        "operationId": "getConversationAttachmentPreview",
+        "operationId": "conversations.attachments.get_preview",
         "parameters": [
           {
             "name": "conversationId",
@@ -13304,9 +13304,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/draft-attachments": {
+    "/api/v1/conversations/{conversationId}/draft-attachments": {
       "get": {
-        "operationId": "listDraftAttachments",
+        "operationId": "conversations.draft_attachments.list",
         "parameters": [
           {
             "name": "conversationId",
@@ -13466,7 +13466,7 @@
         }
       },
       "post": {
-        "operationId": "uploadDraftAttachment",
+        "operationId": "conversations.draft_attachments.upload",
         "parameters": [
           {
             "name": "conversationId",
@@ -13733,9 +13733,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/draft-attachments/{attachmentId}/retry": {
+    "/api/v1/conversations/{conversationId}/draft-attachments/{attachmentId}/retry": {
       "post": {
-        "operationId": "retryDraftAttachment",
+        "operationId": "conversations.draft_attachments.retry",
         "parameters": [
           {
             "name": "conversationId",
@@ -13991,9 +13991,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/draft-attachments/{attachmentId}": {
+    "/api/v1/conversations/{conversationId}/draft-attachments/{attachmentId}": {
       "delete": {
-        "operationId": "deleteDraftAttachment",
+        "operationId": "conversations.draft_attachments.delete",
         "parameters": [
           {
             "name": "conversationId",
@@ -14126,9 +14126,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/files/{fileId}/content": {
+    "/api/v1/conversations/{conversationId}/files/{fileId}/content": {
       "get": {
-        "operationId": "getConversationFileContent",
+        "operationId": "conversations.files.get_content",
         "parameters": [
           {
             "name": "conversationId",
@@ -14170,9 +14170,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/artifacts/{artifactId}/content": {
+    "/api/v1/conversations/{conversationId}/artifacts/{artifactId}/content": {
       "get": {
-        "operationId": "getConversationArtifactContent",
+        "operationId": "conversations.artifacts.get_content",
         "parameters": [
           {
             "name": "conversationId",
@@ -14214,9 +14214,9 @@
         }
       }
     },
-    "/api/conversations/{conversationId}/artifacts/{artifactId}/preview/retry": {
+    "/api/v1/conversations/{conversationId}/artifacts/{artifactId}/preview/retry": {
       "post": {
-        "operationId": "retryConversationArtifactPreview",
+        "operationId": "conversations.artifacts.retry_preview",
         "parameters": [
           {
             "name": "conversationId",
@@ -14402,9 +14402,9 @@
         }
       }
     },
-    "/api/audit-events": {
+    "/api/v1/instance/audit-events": {
       "get": {
-        "operationId": "listAuditEvents",
+        "operationId": "audit_events.list",
         "parameters": [
           {
             "name": "limit",
@@ -14569,9 +14569,9 @@
         }
       }
     },
-    "/api/audit-activities": {
+    "/api/v1/instance/audit-activities": {
       "get": {
-        "operationId": "listAuditActivities",
+        "operationId": "audit_activities.list",
         "parameters": [],
         "responses": {
           "200": {
@@ -14824,9 +14824,9 @@
         }
       }
     },
-    "/api/superadmin/usage": {
+    "/api/v1/instance/usage": {
       "get": {
-        "operationId": "getUsageSummary",
+        "operationId": "usage.get_summary",
         "parameters": [],
         "responses": {
           "200": {
@@ -15656,9 +15656,9 @@
         }
       }
     },
-    "/api/admin/config/assets": {
+    "/api/v1/instance/config/assets": {
       "get": {
-        "operationId": "getConfigAssetsOverview",
+        "operationId": "config_assets.get_overview",
         "parameters": [],
         "responses": {
           "200": {
@@ -15823,9 +15823,9 @@
         }
       }
     },
-    "/api/admin/config/assets/{kind}/{name}": {
+    "/api/v1/instance/config/assets/{kind}/{name}": {
       "get": {
-        "operationId": "getConfigAsset",
+        "operationId": "config_assets.get",
         "parameters": [
           {
             "name": "kind",
@@ -15895,7 +15895,7 @@
         }
       },
       "put": {
-        "operationId": "putConfigAsset",
+        "operationId": "config_assets.put",
         "parameters": [
           {
             "name": "kind",
@@ -15973,9 +15973,9 @@
         }
       }
     },
-    "/api/admin/config/assets/{kind}/{name}/delete": {
+    "/api/v1/instance/config/assets/{kind}/{name}/delete": {
       "post": {
-        "operationId": "deleteConfigAsset",
+        "operationId": "config_assets.delete",
         "parameters": [
           {
             "name": "kind",
@@ -16037,9 +16037,9 @@
         }
       }
     },
-    "/api/admin/config/default-agent": {
+    "/api/v1/instance/config/default-agent": {
       "put": {
-        "operationId": "setDefaultConfigAgent",
+        "operationId": "config_agents.set_default",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -16088,9 +16088,9 @@
         }
       }
     },
-    "/api/admin/config/agents/{name}/availability": {
+    "/api/v1/instance/config/agents/{name}/availability": {
       "put": {
-        "operationId": "setConfigAgentAvailability",
+        "operationId": "config_agents.set_availability",
         "parameters": [
           {
             "name": "name",
@@ -16172,9 +16172,9 @@
         }
       }
     },
-    "/api/admin/collaboration-workspaces": {
+    "/api/v1/instance/workspaces": {
       "get": {
-        "operationId": "listAdministeredCollaborationWorkspaces",
+        "operationId": "instance.workspaces.list",
         "parameters": [
           {
             "name": "limit",
@@ -16245,9 +16245,9 @@
         }
       }
     },
-    "/api/admin/config/assets/{kind}/{name}/revisions": {
+    "/api/v1/instance/config/assets/{kind}/{name}/revisions": {
       "get": {
-        "operationId": "listConfigAssetRevisions",
+        "operationId": "config_assets.revisions.list",
         "parameters": [
           {
             "name": "kind",
@@ -16461,9 +16461,9 @@
         }
       }
     },
-    "/api/admin/config/assets/{kind}/{name}/revert": {
+    "/api/v1/instance/config/assets/{kind}/{name}/revert": {
       "post": {
-        "operationId": "revertConfigAsset",
+        "operationId": "config_assets.revert",
         "parameters": [
           {
             "name": "kind",
@@ -16539,9 +16539,9 @@
         }
       }
     },
-    "/api/admin/config/export": {
+    "/api/v1/instance/config/export": {
       "get": {
-        "operationId": "exportConfigAssets",
+        "operationId": "config_assets.export",
         "parameters": [],
         "responses": {
           "200": {
@@ -16609,9 +16609,9 @@
         }
       }
     },
-    "/api/admin/config/import": {
+    "/api/v1/instance/config/import": {
       "post": {
-        "operationId": "replaceConfigAssets",
+        "operationId": "config_assets.replace",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -16756,9 +16756,9 @@
         }
       }
     },
-    "/api/admin/config/validate": {
+    "/api/v1/instance/config/validate": {
       "post": {
-        "operationId": "validateConfigAssets",
+        "operationId": "config_assets.validate",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -16825,9 +16825,9 @@
         }
       }
     },
-    "/api/superadmin/users": {
+    "/api/v1/instance/users": {
       "get": {
-        "operationId": "listAdministeredUsers",
+        "operationId": "users.list",
         "parameters": [
           {
             "name": "limit",
@@ -17000,7 +17000,7 @@
         }
       },
       "post": {
-        "operationId": "createAdministeredUser",
+        "operationId": "users.create",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -17200,9 +17200,9 @@
         }
       }
     },
-    "/api/superadmin/users/{userId}": {
+    "/api/v1/instance/users/{userId}": {
       "patch": {
-        "operationId": "updateAdministeredUser",
+        "operationId": "users.update",
         "parameters": [
           {
             "name": "userId",
@@ -17402,7 +17402,7 @@
         }
       },
       "delete": {
-        "operationId": "deleteAdministeredUser",
+        "operationId": "users.delete",
         "parameters": [
           {
             "name": "userId",
@@ -17548,9 +17548,9 @@
         }
       }
     },
-    "/api/superadmin/users/{userId}/identities": {
+    "/api/v1/instance/users/{userId}/identities": {
       "put": {
-        "operationId": "upsertAdministeredUserIdentity",
+        "operationId": "users.identities.upsert",
         "parameters": [
           {
             "name": "userId",
@@ -17733,9 +17733,9 @@
         }
       }
     },
-    "/api/superadmin/users/{userId}/password": {
+    "/api/v1/instance/users/{userId}/password": {
       "post": {
-        "operationId": "resetAdministeredUserPassword",
+        "operationId": "users.password.reset",
         "parameters": [
           {
             "name": "userId",
@@ -17790,9 +17790,9 @@
         }
       }
     },
-    "/api/superadmin/users/{userId}/invitation": {
+    "/api/v1/instance/users/{userId}/invitation": {
       "post": {
-        "operationId": "sendAdministeredUserInvitation",
+        "operationId": "users.invitation.send",
         "parameters": [
           {
             "name": "userId",
@@ -17827,9 +17827,9 @@
         }
       }
     },
-    "/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}": {
+    "/api/v1/instance/users/{userId}/identities/{authSource}/{externalUserId}": {
       "delete": {
-        "operationId": "deleteAdministeredUserIdentity",
+        "operationId": "users.identities.delete",
         "parameters": [
           {
             "name": "userId",
@@ -17991,9 +17991,9 @@
         }
       }
     },
-    "/api/superadmin/api-access/service-principals": {
+    "/api/v1/instance/service-principals": {
       "get": {
-        "operationId": "listServicePrincipals",
+        "operationId": "service_principals.list",
         "parameters": [
           {
             "name": "limit",
@@ -18183,7 +18183,7 @@
         }
       },
       "post": {
-        "operationId": "createServicePrincipal",
+        "operationId": "service_principals.create",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -18378,9 +18378,9 @@
         }
       }
     },
-    "/api/superadmin/api-access/service-principals/{servicePrincipalId}": {
+    "/api/v1/instance/service-principals/{servicePrincipalId}": {
       "patch": {
-        "operationId": "updateServicePrincipal",
+        "operationId": "service_principals.update",
         "parameters": [
           {
             "name": "servicePrincipalId",
@@ -18588,9 +18588,9 @@
         }
       }
     },
-    "/api/superadmin/api-access/service-principals/{servicePrincipalId}/credentials": {
+    "/api/v1/instance/service-principals/{servicePrincipalId}/credentials": {
       "post": {
-        "operationId": "createApiCredential",
+        "operationId": "api_credentials.create",
         "parameters": [
           {
             "name": "servicePrincipalId",
@@ -18719,9 +18719,9 @@
         }
       }
     },
-    "/api/superadmin/api-access/credentials/{credentialId}/revoke": {
+    "/api/v1/instance/api-credentials/{credentialId}/revoke": {
       "post": {
-        "operationId": "revokeApiCredential",
+        "operationId": "api_credentials.revoke",
         "parameters": [
           {
             "name": "credentialId",
@@ -18802,9 +18802,9 @@
         }
       }
     },
-    "/api/superadmin/session-tokens": {
+    "/api/v1/instance/session-tokens": {
       "post": {
-        "operationId": "issueSessionToken",
+        "operationId": "session_tokens.issue",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -18943,9 +18943,9 @@
         }
       }
     },
-    "/api/auth/access-token": {
+    "/api/v1/auth/access-token": {
       "post": {
-        "operationId": "exchangeApiKey",
+        "operationId": "access_tokens.exchange",
         "parameters": [],
         "responses": {
           "200": {

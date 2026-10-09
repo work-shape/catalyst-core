@@ -383,7 +383,7 @@ export async function waitForReadyDraftAttachment(
   conversationId: string
 ): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const response = await server.call("listDraftAttachments", {
+    const response = await server.call("conversations.draft_attachments.list", {
       params: { conversationId: conversationId }
     });
     expect(response.statusCode).toBe(200);

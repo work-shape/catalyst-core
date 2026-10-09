@@ -66,11 +66,11 @@ Create the credential once as a superadmin under **Administration → API Access
 2. Create a key restricted to `config_assets:read` and `config_assets:release`.
 3. Copy the secret when it is shown once and expose it as `CATALYST_API_KEY` in the operator environment or CI secret store.
 
-The CLI sends the API key only to `POST /api/auth/access-token`, then uses the returned short-lived access token for config operations. It refuses to send an API key over plain HTTP except to `localhost`, `127.0.0.0/8`, or `::1`; remote instances must use HTTPS. A key belongs to a service principal but is independently named, audited, expirable, and revocable. Create separate keys for developer machines and CI jobs so they can be rotated without disrupting one another.
+The CLI sends the API key only to `POST /api/v1/auth/access-token`, then uses the returned short-lived access token for config operations. It refuses to send an API key over plain HTTP except to `localhost`, `127.0.0.0/8`, or `::1`; remote instances must use HTTPS. A key belongs to a service principal but is independently named, audited, expirable, and revocable. Create separate keys for developer machines and CI jobs so they can be rotated without disrupting one another.
 
 Do not pass the key on the command line or put it in `catalyst.yaml` or `.catalyst-state.json`. Keychain-backed profiles are a future enhancement; the current CLI intentionally reads only environment variables.
 
-For one compatibility release, a CLI without `CATALYST_API_KEY` falls back to `CATALYST_SERVER_CREDENTIAL`, then `CHAT_SERVER_CREDENTIAL`, and prints a deprecation warning. `CATALYST_API_KEY` always takes precedence when both new and legacy values are present.
+The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
 
 ## Interactive editing and field ownership
 

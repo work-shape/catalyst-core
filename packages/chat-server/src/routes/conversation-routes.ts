@@ -8,7 +8,7 @@ import type { ChatServerOptions } from "../types";
 export function registerConversationRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  route(apiOperations.listConversations, ({ user, query, paging }) => {
+  route(apiOperations["conversations.list"], ({ user, query, paging }) => {
     const { collaborationWorkspaceId } = query;
     if (collaborationWorkspaceId === "") {
       throw new AppError("BAD_REQUEST", "Missing collaborationWorkspaceId query parameter");
@@ -22,7 +22,7 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
     );
   });
 
-  route(apiOperations.createConversation, ({ user, context, body, request }) =>
+  route(apiOperations["conversations.create"], ({ user, context, body, request }) =>
     conversations.createConversation(
       user,
       withRequestLocale(context, options, request, body.locale),
@@ -35,26 +35,26 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
     )
   );
 
-  route(apiOperations.listConversationMessages, ({ user, params }) =>
+  route(apiOperations["conversations.messages.list"], ({ user, params }) =>
     conversations.listMessages(conversationIdParam(params), user)
   );
 
-  route(apiOperations.getConversationThread, ({ user, params }) =>
+  route(apiOperations["conversations.thread.get"], ({ user, params }) =>
     conversations.getThreadSnapshot(conversationIdParam(params), user)
   );
 
-  route(apiOperations.renameConversation, ({ user, context, params, body }) =>
+  route(apiOperations["conversations.rename"], ({ user, context, params, body }) =>
     conversations.renameConversation(conversationIdParam(params), body.title, user, context)
   );
 
-  route(apiOperations.moveConversation, ({ user, context, params, body }) =>
+  route(apiOperations["conversations.move"], ({ user, context, params, body }) =>
     conversations.moveConversation(conversationIdParam(params), user, context, {
       collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId),
       visibility: body.visibility
     })
   );
 
-  route(apiOperations.deleteConversation, ({ user, context, params }) =>
+  route(apiOperations["conversations.delete"], ({ user, context, params }) =>
     conversations.deleteConversation(conversationIdParam(params), user, context)
   );
 }

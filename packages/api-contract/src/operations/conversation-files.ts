@@ -8,10 +8,10 @@ import {
 import { blob, defineOperation, json, page } from "./define-operation";
 
 export const conversationFileOperations = {
-  startConversationArtifactPreview: defineOperation({
-    id: "startConversationArtifactPreview",
+  "conversations.artifacts.start_preview": defineOperation({
+    id: "conversations.artifacts.start_preview",
     method: "POST",
-    path: "/api/conversations/:conversationId/artifacts/:artifactId/preview",
+    path: "/api/v1/conversations/:conversationId/artifacts/:artifactId/preview",
     summary: "Prepare the page preview of an artifact",
     tag: "Conversation Files",
     auth: "user",
@@ -22,10 +22,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  startConversationAttachmentPreview: defineOperation({
-    id: "startConversationAttachmentPreview",
+  "conversations.attachments.start_preview": defineOperation({
+    id: "conversations.attachments.start_preview",
     method: "POST",
-    path: "/api/conversations/:conversationId/attachments/:attachmentId/preview",
+    path: "/api/v1/conversations/:conversationId/attachments/:attachmentId/preview",
     summary: "Prepare the page preview of a sent attachment",
     tag: "Conversation Files",
     auth: "user",
@@ -37,10 +37,10 @@ export const conversationFileOperations = {
     rateClass: "write"
   }),
 
-  listDraftAttachments: defineOperation({
-    id: "listDraftAttachments",
+  "conversations.draft_attachments.list": defineOperation({
+    id: "conversations.draft_attachments.list",
     method: "GET",
-    path: "/api/conversations/:conversationId/draft-attachments",
+    path: "/api/v1/conversations/:conversationId/draft-attachments",
     summary: "List the attachments of the unsent message",
     tag: "Conversation Files",
     auth: "user",
@@ -52,10 +52,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  uploadDraftAttachment: defineOperation({
-    id: "uploadDraftAttachment",
+  "conversations.draft_attachments.upload": defineOperation({
+    id: "conversations.draft_attachments.upload",
     method: "POST",
-    path: "/api/conversations/:conversationId/draft-attachments",
+    path: "/api/v1/conversations/:conversationId/draft-attachments",
     summary: "Upload an attachment for the next message",
     tag: "Conversation Files",
     auth: "user",
@@ -67,10 +67,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  retryDraftAttachment: defineOperation({
-    id: "retryDraftAttachment",
+  "conversations.draft_attachments.retry": defineOperation({
+    id: "conversations.draft_attachments.retry",
     method: "POST",
-    path: "/api/conversations/:conversationId/draft-attachments/:attachmentId/retry",
+    path: "/api/v1/conversations/:conversationId/draft-attachments/:attachmentId/retry",
     summary: "Process a failed draft attachment again",
     tag: "Conversation Files",
     auth: "user",
@@ -81,10 +81,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  deleteDraftAttachment: defineOperation({
-    id: "deleteDraftAttachment",
+  "conversations.draft_attachments.delete": defineOperation({
+    id: "conversations.draft_attachments.delete",
     method: "DELETE",
-    path: "/api/conversations/:conversationId/draft-attachments/:attachmentId",
+    path: "/api/v1/conversations/:conversationId/draft-attachments/:attachmentId",
     summary: "Remove a draft attachment",
     tag: "Conversation Files",
     auth: "user",
@@ -95,10 +95,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  getConversationFileContent: defineOperation({
-    id: "getConversationFileContent",
+  "conversations.files.get_content": defineOperation({
+    id: "conversations.files.get_content",
     method: "GET",
-    path: "/api/conversations/:conversationId/files/:fileId/content",
+    path: "/api/v1/conversations/:conversationId/files/:fileId/content",
     summary: "Download or display a file of a conversation",
     tag: "Conversation Files",
     auth: "user",
@@ -110,10 +110,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  getConversationArtifactContent: defineOperation({
-    id: "getConversationArtifactContent",
+  "conversations.artifacts.get_content": defineOperation({
+    id: "conversations.artifacts.get_content",
     method: "GET",
-    path: "/api/conversations/:conversationId/artifacts/:artifactId/content",
+    path: "/api/v1/conversations/:conversationId/artifacts/:artifactId/content",
     summary: "Download or display an artifact of a conversation",
     tag: "Conversation Files",
     auth: "user",
@@ -125,10 +125,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  getConversationArtifactPreview: defineOperation({
-    id: "getConversationArtifactPreview",
+  "conversations.artifacts.get_preview": defineOperation({
+    id: "conversations.artifacts.get_preview",
     method: "GET",
-    path: "/api/conversations/:conversationId/artifacts/:artifactId/preview",
+    path: "/api/v1/conversations/:conversationId/artifacts/:artifactId/preview",
     summary: "Read the page preview of an artifact",
     tag: "Conversation Files",
     auth: "user",
@@ -139,10 +139,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  getConversationAttachmentPreview: defineOperation({
-    id: "getConversationAttachmentPreview",
+  "conversations.attachments.get_preview": defineOperation({
+    id: "conversations.attachments.get_preview",
     method: "GET",
-    path: "/api/conversations/:conversationId/attachments/:attachmentId/preview",
+    path: "/api/v1/conversations/:conversationId/attachments/:attachmentId/preview",
     summary: "Read the page preview of a sent attachment",
     tag: "Conversation Files",
     auth: "user",
@@ -153,10 +153,10 @@ export const conversationFileOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  retryConversationArtifactPreview: defineOperation({
-    id: "retryConversationArtifactPreview",
+  "conversations.artifacts.retry_preview": defineOperation({
+    id: "conversations.artifacts.retry_preview",
     method: "POST",
-    path: "/api/conversations/:conversationId/artifacts/:artifactId/preview/retry",
+    path: "/api/v1/conversations/:conversationId/artifacts/:artifactId/preview/retry",
     summary: "Render a failed artifact preview again",
     tag: "Conversation Files",
     auth: "user",

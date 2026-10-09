@@ -18,7 +18,7 @@ describe("client instance app vertical slice", () => {
   it("reads a stale run without recovery and cancels it explicitly before thread snapshots without duplicate terminal observations", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
-    const before = await server.call("getConversationThread", {
+    const before = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
     expect(before.json().activeRun.run.status).toBe("running");
@@ -28,12 +28,12 @@ describe("client instance app vertical slice", () => {
         runId: run.id
       })
     ).toHaveLength(1);
-    await server.call("cancelConversationRun", {
+    await server.call("conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: run.id },
       payload: {}
     });
 
-    const snapshot = await server.call("getConversationThread", {
+    const snapshot = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
     expect(snapshot.statusCode).toBe(200);
@@ -57,7 +57,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    await server.call("getConversationThread", { params: { conversationId: conversation.id } });
+    await server.call("conversations.thread.get", { params: { conversationId: conversation.id } });
     const observations = await store.agentRuns.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
       runId: run.id
@@ -74,7 +74,7 @@ describe("client instance app vertical slice", () => {
   it("reads stale runs without recovery and cancels them explicitly before listing conversations", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
-    const before = await server.call("getConversationThread", {
+    const before = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
     expect(before.json().activeRun.run.status).toBe("running");
@@ -84,13 +84,13 @@ describe("client instance app vertical slice", () => {
         runId: run.id
       })
     ).toHaveLength(1);
-    await server.call("cancelConversationRun", {
+    await server.call("conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: run.id },
       payload: {}
     });
 
     const listed = await server.call(
-      "listConversations",
+      "conversations.list",
       await personalConversationListInput(server)
     );
     expect(listed.statusCode).toBe(200);
@@ -119,7 +119,7 @@ describe("client instance app vertical slice", () => {
   it("cancels a stale durable active run before reading observation cursors after the last pre-crash sequence", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
-    const before = await server.call("getConversationThread", {
+    const before = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
     expect(before.json().activeRun.run.status).toBe("running");
@@ -129,12 +129,12 @@ describe("client instance app vertical slice", () => {
         runId: run.id
       })
     ).toHaveLength(1);
-    await server.call("cancelConversationRun", {
+    await server.call("conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: run.id },
       payload: {}
     });
 
-    const events = await server.call("observeConversationRun", {
+    const events = await server.call("conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: run.id },
       query: { after: "1" }
     });
@@ -162,7 +162,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const replay = await server.call("observeConversationRun", {
+    const replay = await server.call("conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: run.id },
       query: { after: "1" }
     });
@@ -190,12 +190,12 @@ describe("client instance app vertical slice", () => {
       lastSequence: 1
     });
 
-    await server.call("cancelConversationRun", {
+    await server.call("conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: run.id },
       payload: {}
     });
 
-    const events = await server.call("observeConversationRun", {
+    const events = await server.call("conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: run.id },
       query: { after: "1" }
     });
@@ -232,7 +232,7 @@ describe("client instance app vertical slice", () => {
       lastSequence: 1
     });
 
-    const cancelled = await server.call("cancelConversationRun", {
+    const cancelled = await server.call("conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: run.id },
       payload: { reason: "User stopped a missing local run" }
     });
@@ -329,8 +329,11 @@ describe("client instance app vertical slice", () => {
 
     // The first request starts the server, and with it the watchdog.
     expect(
-      (await server.call("getConversationThread", { params: { conversationId: conversation.id } }))
-        .statusCode
+      (
+        await server.call("conversations.thread.get", {
+          params: { conversationId: conversation.id }
+        })
+      ).statusCode
     ).toBe(200);
     await vi.waitFor(() => expectRunStatus(store, fixture.clientInstanceId, run.id, "failed"));
 
@@ -338,7 +341,11 @@ describe("client instance app vertical slice", () => {
     expect(next.run.id).not.toBe(run.id);
     await drainRunEvents(server, conversation.id, next.run.id);
     expect(
-      (await server.call("getConversationThread", { params: { conversationId: conversation.id } }))
+      (
+        await server.call("conversations.thread.get", {
+          params: { conversationId: conversation.id }
+        })
+      )
         .json<{ messages: Array<{ role: string; text: string }> }>()
         .messages.at(-1)
     ).toMatchObject({ role: "assistant", text: "Done." });
@@ -367,13 +374,13 @@ describe("client instance app vertical slice", () => {
       leaseExpiresAt: new Date(now + 10 * 60 * 1000).toISOString()
     });
 
-    const events = await server.call("observeConversationRun", {
+    const events = await server.call("conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: run.id },
       query: { after: "1" }
     });
     expect(parseSseChunks(events.payload).map((chunk) => chunk.type)).not.toContain("run_failed");
 
-    const cancelled = await server.call("cancelConversationRun", {
+    const cancelled = await server.call("conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: run.id },
       payload: { reason: "Stop" }
     });
@@ -387,7 +394,7 @@ describe("client instance app vertical slice", () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
 
-    const wrongOwnerEvents = await server.call("observeConversationRun", {
+    const wrongOwnerEvents = await server.call("conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: run.id },
       query: { after: "1" },
       headers: {
@@ -396,7 +403,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(wrongOwnerEvents.statusCode).toBe(404);
 
-    const wrongOwnerSnapshot = await server.call("getConversationThread", {
+    const wrongOwnerSnapshot = await server.call("conversations.thread.get", {
       params: { conversationId: conversation.id },
       headers: {
         "x-test-user": "other-user"

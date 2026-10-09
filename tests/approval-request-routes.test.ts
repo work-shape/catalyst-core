@@ -154,13 +154,13 @@ describe("approval routes and generated instance client", () => {
       expect(await f.reviewer.approvalRequests.list("pending")).toMatchObject([
         { id: request.id, canDecide: true }
       ]);
-      const invalid = await f.app.call("decideApprovalRequest", {
+      const invalid = await f.app.call("approval_requests.decide", {
         params: { requestId: request.id },
         headers: { "x-dev-user-id": "reviewer" },
         payload: { decision: "request_changes", comment: " " }
       });
       expect(invalid.statusCode).toBe(422);
-      const invalidFilter = await f.app.call("listApprovalRequests", {
+      const invalidFilter = await f.app.call("approval_requests.list", {
         query: { status: "invalid" },
         headers: { "x-dev-user-id": "reviewer" }
       });
@@ -246,7 +246,7 @@ describe("approval routes and generated instance client", () => {
       approvalRequestHandlers: new Map([[fakeHandler.kind, fakeHandler]])
     });
     try {
-      const issued = await app.call("issueSessionToken", {
+      const issued = await app.call("session_tokens.issue", {
         headers: { "x-server-credential": "server-credential" },
         payload: {
           externalUserId: "embedded-admin",
@@ -257,7 +257,7 @@ describe("approval routes and generated instance client", () => {
       const headers = {
         authorization: `Bearer ${issued.json<{ chatSessionToken: string }>().chatSessionToken}`
       };
-      const me = await app.call("getCurrentUser", { headers });
+      const me = await app.call("me.get", { headers });
       const admin = me.json<{ id: string; displayLabel: string }>();
       const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
       const create = () =>
@@ -272,16 +272,16 @@ describe("approval routes and generated instance client", () => {
       const call = (operation: TestOperationName, input: TestCallInput = {}) =>
         app.call(operation, { ...input, headers });
 
-      const card = await call("getApprovalRequest", { params: { requestId: pending.id } });
+      const card = await call("approval_requests.get", { params: { requestId: pending.id } });
       expect(card.statusCode).toBe(200);
       expect(card.json()).toMatchObject({ canDecide: false, canRevert: false, canWithdraw: true });
-      expect((await call("countPendingApprovalRequests", {})).statusCode).toBe(200);
-      const listed = await call("listApprovalRequests", {});
+      expect((await call("approval_requests.count_pending", {})).statusCode).toBe(200);
+      const listed = await call("approval_requests.list", {});
       expect(listed.statusCode).toBe(403);
       expect(listed.json()).toMatchObject({
         error: { message: "Missing auth scope 'governance:read'" }
       });
-      const decided = await call("decideApprovalRequest", {
+      const decided = await call("approval_requests.decide", {
         params: { requestId: pending.id },
         payload: { decision: "approve" }
       });
@@ -290,13 +290,13 @@ describe("approval routes and generated instance client", () => {
         error: { message: "Missing auth scope 'governance:write'" }
       });
       expect(
-        (await call("revertApprovalRequest", { params: { requestId: pending.id } })).statusCode
+        (await call("approval_requests.revert", { params: { requestId: pending.id } })).statusCode
       ).toBe(403);
       expect(
         await app.stores.approvals.getApprovalRequest({ clientInstanceId, requestId: pending.id })
       ).toMatchObject({ status: "pending" });
       expect(
-        (await call("withdrawApprovalRequest", { params: { requestId: pending.id } })).statusCode
+        (await call("approval_requests.withdraw", { params: { requestId: pending.id } })).statusCode
       ).toBe(200);
     } finally {
       await app.close();

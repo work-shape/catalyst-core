@@ -266,7 +266,7 @@ describe("process logger", () => {
       tools: []
     });
     try {
-      const created = await app.call("createConversation", { payload: { title: "test" } });
+      const created = await app.call("conversations.create", { payload: { title: "test" } });
       const conversation: { id: string } = created.json();
       const started = await injectStartConversationRun(app, conversation.id, "hello", {
         idempotencyKey: "logger-failure"
@@ -304,7 +304,7 @@ describe("process logger", () => {
       return {};
     });
     try {
-      const response = await app.call("getHealth", {
+      const response = await app.call("health.get", {
         headers: { authorization: bearer, cookie: "private-cookie" }
       });
       expect(response.statusCode).toBe(200);

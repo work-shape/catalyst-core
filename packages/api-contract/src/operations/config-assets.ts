@@ -21,10 +21,10 @@ import {
 import { defineOperation, json, page } from "./define-operation";
 
 export const configAssetOperations = {
-  getConfigAssetsOverview: defineOperation({
-    id: "getConfigAssetsOverview",
+  "config_assets.get_overview": defineOperation({
+    id: "config_assets.get_overview",
     method: "GET",
-    path: "/api/admin/config/assets",
+    path: "/api/v1/instance/config/assets",
     summary: "List agents and skills with their revisions",
     tag: "Config Assets",
     auth: "principal",
@@ -35,10 +35,10 @@ export const configAssetOperations = {
     errors: [],
     rateClass: "read"
   }),
-  getConfigAsset: defineOperation({
-    id: "getConfigAsset",
+  "config_assets.get": defineOperation({
+    id: "config_assets.get",
     method: "GET",
-    path: "/api/admin/config/assets/:kind/:name",
+    path: "/api/v1/instance/config/assets/:kind/:name",
     summary: "Read one agent or skill",
     tag: "Config Assets",
     auth: "principal",
@@ -49,10 +49,10 @@ export const configAssetOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  putConfigAsset: defineOperation({
-    id: "putConfigAsset",
+  "config_assets.put": defineOperation({
+    id: "config_assets.put",
     method: "PUT",
-    path: "/api/admin/config/assets/:kind/:name",
+    path: "/api/v1/instance/config/assets/:kind/:name",
     summary: "Create or replace one agent or skill",
     tag: "Config Assets",
     auth: "principal",
@@ -64,10 +64,10 @@ export const configAssetOperations = {
     errors: ["CONFLICT"],
     rateClass: "write"
   }),
-  deleteConfigAsset: defineOperation({
-    id: "deleteConfigAsset",
+  "config_assets.delete": defineOperation({
+    id: "config_assets.delete",
     method: "POST",
-    path: "/api/admin/config/assets/:kind/:name/delete",
+    path: "/api/v1/instance/config/assets/:kind/:name/delete",
     summary: "Delete one agent or skill",
     tag: "Config Assets",
     auth: "principal",
@@ -79,10 +79,10 @@ export const configAssetOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  setDefaultConfigAgent: defineOperation({
-    id: "setDefaultConfigAgent",
+  "config_agents.set_default": defineOperation({
+    id: "config_agents.set_default",
     method: "PUT",
-    path: "/api/admin/config/default-agent",
+    path: "/api/v1/instance/config/default-agent",
     summary: "Set or clear the default agent",
     tag: "Config Assets",
     auth: "principal",
@@ -94,10 +94,10 @@ export const configAssetOperations = {
     errors: ["CONFLICT"],
     rateClass: "write"
   }),
-  setConfigAgentAvailability: defineOperation({
-    id: "setConfigAgentAvailability",
+  "config_agents.set_availability": defineOperation({
+    id: "config_agents.set_availability",
     method: "PUT",
-    path: "/api/admin/config/agents/:name/availability",
+    path: "/api/v1/instance/config/agents/:name/availability",
     summary: "Set the workspaces an agent is available in",
     tag: "Config Assets",
     auth: "principal",
@@ -109,10 +109,10 @@ export const configAssetOperations = {
     errors: [],
     rateClass: "write"
   }),
-  listAdministeredCollaborationWorkspaces: defineOperation({
-    id: "listAdministeredCollaborationWorkspaces",
+  "instance.workspaces.list": defineOperation({
+    id: "instance.workspaces.list",
     method: "GET",
-    path: "/api/admin/collaboration-workspaces",
+    path: "/api/v1/instance/workspaces",
     summary: "List the Shared Workspaces an agent can be made available in",
     tag: "Config Assets",
     auth: "principal",
@@ -124,10 +124,10 @@ export const configAssetOperations = {
     errors: [],
     rateClass: "read"
   }),
-  listConfigAssetRevisions: defineOperation({
-    id: "listConfigAssetRevisions",
+  "config_assets.revisions.list": defineOperation({
+    id: "config_assets.revisions.list",
     method: "GET",
-    path: "/api/admin/config/assets/:kind/:name/revisions",
+    path: "/api/v1/instance/config/assets/:kind/:name/revisions",
     summary: "List the revisions of one agent or skill",
     tag: "Config Assets",
     auth: "principal",
@@ -139,10 +139,10 @@ export const configAssetOperations = {
     errors: [],
     rateClass: "read"
   }),
-  revertConfigAsset: defineOperation({
-    id: "revertConfigAsset",
+  "config_assets.revert": defineOperation({
+    id: "config_assets.revert",
     method: "POST",
-    path: "/api/admin/config/assets/:kind/:name/revert",
+    path: "/api/v1/instance/config/assets/:kind/:name/revert",
     summary: "Restore an earlier revision of one agent or skill",
     tag: "Config Assets",
     auth: "principal",
@@ -154,10 +154,10 @@ export const configAssetOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  exportConfigAssets: defineOperation({
-    id: "exportConfigAssets",
+  "config_assets.export": defineOperation({
+    id: "config_assets.export",
     method: "GET",
-    path: "/api/admin/config/export",
+    path: "/api/v1/instance/config/export",
     summary: "Export every agent and skill as one bundle",
     tag: "Config Assets",
     auth: "principal",
@@ -168,10 +168,10 @@ export const configAssetOperations = {
     errors: [],
     rateClass: "read"
   }),
-  replaceConfigAssets: defineOperation({
-    id: "replaceConfigAssets",
+  "config_assets.replace": defineOperation({
+    id: "config_assets.replace",
     method: "POST",
-    path: "/api/admin/config/import",
+    path: "/api/v1/instance/config/import",
     summary: "Apply a bundle of agents and skills from a release",
     tag: "Config Assets",
     auth: "principal",
@@ -183,10 +183,10 @@ export const configAssetOperations = {
     errors: ["CONFLICT"],
     rateClass: "write"
   }),
-  validateConfigAssets: defineOperation({
-    id: "validateConfigAssets",
+  "config_assets.validate": defineOperation({
+    id: "config_assets.validate",
     method: "POST",
-    path: "/api/admin/config/validate",
+    path: "/api/v1/instance/config/validate",
     summary: "Check a bundle of agents and skills without applying it",
     tag: "Config Assets",
     auth: "principal",

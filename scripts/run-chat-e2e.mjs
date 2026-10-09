@@ -49,6 +49,7 @@ const generatedConfigPath = resolve(repoRoot, ".tmp/e2e/e2e-app.yaml");
 const e2eConfigPath = resolve(repoRoot, process.env.E2E_CONFIG_PATH ?? generatedConfigPath);
 const e2eSessionTokenSecret = "e2e-session-token-secret-with-at-least-24-characters";
 const e2eServerCredential = "e2e-server-to-server-credential";
+const e2eServiceAccessTokenSecret = "e2e-service-access-token-secret-with-32-characters";
 
 const children = new Set();
 let cleanupStarted = false;
@@ -84,8 +85,8 @@ try {
       waitForUrl(e2eUiUrl, { label: "Vite UI" })
     ])
   );
-  await withServerMonitoring(pushConfigAssets());
   await withServerMonitoring(waitForAuthReady());
+  await withServerMonitoring(pushConfigAssets());
   await withServerMonitoring(runPlaywright());
   await cleanup();
 } catch (error) {
@@ -238,7 +239,8 @@ function startApiServer() {
       E2E_SUPERADMIN_EMAIL: "e2e-superadmin@example.test",
       E2E_USER_EMAIL: "e2e-user@example.test",
       CHAT_SESSION_TOKEN_SECRET: e2eSessionTokenSecret,
-      CHAT_SERVER_CREDENTIAL: e2eServerCredential
+      CHAT_SERVER_CREDENTIAL: e2eServerCredential,
+      SERVICE_ACCESS_TOKEN_SECRET: e2eServiceAccessTokenSecret
     }
   });
 }
@@ -261,10 +263,49 @@ async function pushConfigAssets() {
       label: "config asset push",
       env: {
         ...process.env,
-        CATALYST_SERVER_CREDENTIAL: e2eServerCredential
+        CATALYST_API_KEY: await createConfigApiKey()
       }
     }
   );
+}
+
+/** The CLI signs in with an API key only, so the superadmin creates one as an operator would. */
+async function createConfigApiKey() {
+  const signIn = await fetch(`${e2eApiUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { origin: e2eUiUrl, "content-type": "application/json" },
+    body: JSON.stringify({
+      email: "e2e-superadmin@example.test",
+      password: "e2e-superadmin-password"
+    })
+  });
+  if (!signIn.ok) {
+    throw new Error(`superadmin sign-in returned ${signIn.status}`);
+  }
+  const cookie = signIn.headers
+    .getSetCookie()
+    .map((value) => value.split(";")[0])
+    .join("; ");
+  const post = async (path, body) => {
+    const response = await fetch(`${e2eApiUrl}/api/v1/instance${path}`, {
+      method: "POST",
+      headers: { origin: e2eUiUrl, "content-type": "application/json", cookie },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      throw new Error(`POST ${path} returned ${response.status}: ${await response.text()}`);
+    }
+    return response.json();
+  };
+  const { principal } = await post("/service-principals", {
+    displayLabel: "E2E config push",
+    permissions: ["config_assets.read", "config_assets.release"]
+  });
+  const credential = await post(`/service-principals/${principal.id}/credentials`, {
+    name: "e2e runner",
+    scopes: ["config_assets:read", "config_assets:release"]
+  });
+  return credential.secret;
 }
 
 function startUiServer() {

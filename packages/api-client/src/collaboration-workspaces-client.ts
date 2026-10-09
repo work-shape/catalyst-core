@@ -1,4 +1,4 @@
-import type { EnsurePersonalCollaborationWorkspaceResponse } from "./generated/types.gen";
+import type { WorkspacesEnsurePersonalResponse } from "./generated/types.gen";
 import {
   apiOperations,
   type LocaleCode,
@@ -9,116 +9,116 @@ import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
 export function createCollaborationWorkspacesClient(transport: ApiClientTransport) {
   return {
-    ensurePersonal: (): Promise<EnsurePersonalCollaborationWorkspaceResponse> =>
+    ensurePersonal: (): Promise<WorkspacesEnsurePersonalResponse> =>
       transport.unwrapJson(
-        generatedSdk.ensurePersonalCollaborationWorkspace({ client: transport.generatedClient }),
-        apiOperations.ensurePersonalCollaborationWorkspace.response.schema
+        generatedSdk.workspacesEnsurePersonal({ client: transport.generatedClient }),
+        apiOperations["workspaces.ensure_personal"].response.schema
       ),
     list: () =>
       transport.unwrapList(
         (paging) =>
-          generatedSdk.listCollaborationWorkspaces({
+          generatedSdk.workspacesList({
             client: transport.generatedClient,
             query: paging
           }),
-        apiOperations.listCollaborationWorkspaces.response.schema
+        apiOperations["workspaces.list"].response.schema
       ),
-    create: (input: OperationRequestInput<typeof apiOperations.createCollaborationWorkspace>) =>
+    create: (input: OperationRequestInput<(typeof apiOperations)["workspaces.create"]>) =>
       transport.unwrapJson(
-        generatedSdk.createCollaborationWorkspace({
+        generatedSdk.workspacesCreate({
           client: transport.generatedClient,
-          body: apiOperations.createCollaborationWorkspace.body.parse(input)
+          body: apiOperations["workspaces.create"].body.parse(input)
         }),
-        apiOperations.createCollaborationWorkspace.response.schema
+        apiOperations["workspaces.create"].response.schema
       ),
     browseDirectory: () =>
       transport.unwrapList(
         (paging) =>
-          generatedSdk.listCollaborationWorkspaceDirectory({
+          generatedSdk.workspacesDirectoryList({
             client: transport.generatedClient,
             query: paging
           }),
-        apiOperations.listCollaborationWorkspaceDirectory.response.schema
+        apiOperations["workspaces.directory.list"].response.schema
       ),
     get: (collaborationWorkspaceId: string) =>
       transport.unwrapJson(
-        generatedSdk.getCollaborationWorkspace({
+        generatedSdk.workspacesGet({
           client: transport.generatedClient,
           path: { collaborationWorkspaceId }
         }),
-        apiOperations.getCollaborationWorkspace.response.schema
+        apiOperations["workspaces.get"].response.schema
       ),
     listAgents: async (collaborationWorkspaceId: string, locale?: LocaleCode) => {
       let defaultAgentName: string | undefined;
       const agents = await transport.unwrapList(async (paging) => {
-        const result = await generatedSdk.listCollaborationWorkspaceAgents({
+        const result = await generatedSdk.workspacesAgentsList({
           client: transport.generatedClient,
           path: { collaborationWorkspaceId },
           query: { locale, ...paging }
         });
         if (result.data) defaultAgentName = result.data.defaultAgentName;
         return result;
-      }, apiOperations.listCollaborationWorkspaceAgents.response.schema);
+      }, apiOperations["workspaces.agents.list"].response.schema);
       return { defaultAgentName, items: agents };
     },
     update: (
       collaborationWorkspaceId: string,
-      input: OperationRequestInput<typeof apiOperations.updateCollaborationWorkspace>
+      input: OperationRequestInput<(typeof apiOperations)["workspaces.update"]>
     ) =>
       transport.unwrapJson(
-        generatedSdk.updateCollaborationWorkspace({
+        generatedSdk.workspacesUpdate({
           client: transport.generatedClient,
           path: { collaborationWorkspaceId },
-          body: apiOperations.updateCollaborationWorkspace.body.parse(input)
+          body: apiOperations["workspaces.update"].body.parse(input)
         }),
-        apiOperations.updateCollaborationWorkspace.response.schema
+        apiOperations["workspaces.update"].response.schema
       ),
     deletionImpact: (collaborationWorkspaceId: string) =>
       transport.unwrapJson(
-        generatedSdk.getCollaborationWorkspaceDeletionImpact({
+        generatedSdk.workspacesDeletionImpactGet({
           client: transport.generatedClient,
           path: { collaborationWorkspaceId }
         }),
-        apiOperations.getCollaborationWorkspaceDeletionImpact.response.schema
+        apiOperations["workspaces.deletion_impact.get"].response.schema
       ),
     delete: (collaborationWorkspaceId: string, confirmName: string) =>
       transport.unwrapJson(
-        generatedSdk.deleteCollaborationWorkspace({
+        generatedSdk.workspacesDelete({
           client: transport.generatedClient,
           path: { collaborationWorkspaceId },
-          body: apiOperations.deleteCollaborationWorkspace.body.parse({ confirmName })
+          body: apiOperations["workspaces.delete"].body.parse({ confirmName })
         }),
-        apiOperations.deleteCollaborationWorkspace.response.schema
+        apiOperations["workspaces.delete"].response.schema
       ),
     members: {
       list: (collaborationWorkspaceId: string) =>
         transport.unwrapList(
           (paging) =>
-            generatedSdk.listCollaborationWorkspaceMembers({
+            generatedSdk.workspacesMembersList({
               client: transport.generatedClient,
               path: { collaborationWorkspaceId },
               query: paging
             }),
-          apiOperations.listCollaborationWorkspaceMembers.response.schema
+          apiOperations["workspaces.members.list"].response.schema
         ),
       searchCandidates: (collaborationWorkspaceId: string, query: string) =>
         transport.unwrapList(
           (paging) =>
-            generatedSdk.listCollaborationWorkspaceMemberCandidates({
+            generatedSdk.workspacesMemberCandidatesList({
               client: transport.generatedClient,
               path: { collaborationWorkspaceId },
               query: { q: query, ...paging }
             }),
-          apiOperations.listCollaborationWorkspaceMemberCandidates.response.schema
+          apiOperations["workspaces.member_candidates.list"].response.schema
         ),
       addByEmail: (collaborationWorkspaceId: string, email: string) =>
         transport.unwrapJson(
-          generatedSdk.addCollaborationWorkspaceMember({
+          generatedSdk.workspacesMembersAdd({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId },
-            body: apiOperations.addCollaborationWorkspaceMember.body.parse({ email })
+            body: apiOperations["workspaces.members.add"].body.parse({ email })
           }),
-          apiOperations.addCollaborationWorkspaceMember.response.schema
+          apiOperations["workspaces.members.add"].response.schema
         ),
       changeRole: (
         collaborationWorkspaceId: string,
@@ -126,64 +126,64 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
         role: WorkspaceMembershipRole
       ) =>
         transport.unwrapJson(
-          generatedSdk.updateCollaborationWorkspaceMemberRole({
+          generatedSdk.workspacesMembersUpdateRole({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId },
-            body: apiOperations.updateCollaborationWorkspaceMemberRole.body.parse({ role })
+            body: apiOperations["workspaces.members.update_role"].body.parse({ role })
           }),
-          apiOperations.updateCollaborationWorkspaceMemberRole.response.schema
+          apiOperations["workspaces.members.update_role"].response.schema
         ),
       remove: (collaborationWorkspaceId: string, userId: string) =>
         transport.unwrapJson(
-          generatedSdk.removeCollaborationWorkspaceMember({
+          generatedSdk.workspacesMembersRemove({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId }
           }),
-          apiOperations.removeCollaborationWorkspaceMember.response.schema
+          apiOperations["workspaces.members.remove"].response.schema
         ),
       leave: (collaborationWorkspaceId: string) =>
         transport.unwrapJson(
-          generatedSdk.leaveCollaborationWorkspace({
+          generatedSdk.workspacesMembersLeave({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId }
           }),
-          apiOperations.leaveCollaborationWorkspace.response.schema
+          apiOperations["workspaces.members.leave"].response.schema
         )
     },
     accessRequests: {
       create: (collaborationWorkspaceId: string) =>
         transport.unwrapJson(
-          generatedSdk.requestCollaborationWorkspaceAccess({
+          generatedSdk.workspacesAccessRequestsCreate({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId }
           }),
-          apiOperations.requestCollaborationWorkspaceAccess.response.schema
+          apiOperations["workspaces.access_requests.create"].response.schema
         ),
       list: (collaborationWorkspaceId: string) =>
         transport.unwrapList(
           (paging) =>
-            generatedSdk.listCollaborationWorkspaceAccessRequests({
+            generatedSdk.workspacesAccessRequestsList({
               client: transport.generatedClient,
               path: { collaborationWorkspaceId },
               query: paging
             }),
-          apiOperations.listCollaborationWorkspaceAccessRequests.response.schema
+          apiOperations["workspaces.access_requests.list"].response.schema
         ),
       approve: (collaborationWorkspaceId: string, userId: string) =>
         transport.unwrapJson(
-          generatedSdk.approveCollaborationWorkspaceAccessRequest({
+          generatedSdk.workspacesAccessRequestsApprove({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId }
           }),
-          apiOperations.approveCollaborationWorkspaceAccessRequest.response.schema
+          apiOperations["workspaces.access_requests.approve"].response.schema
         ),
       decline: (collaborationWorkspaceId: string, userId: string) =>
         transport.unwrapJson(
-          generatedSdk.declineCollaborationWorkspaceAccessRequest({
+          generatedSdk.workspacesAccessRequestsDecline({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId }
           }),
-          apiOperations.declineCollaborationWorkspaceAccessRequest.response.schema
+          apiOperations["workspaces.access_requests.decline"].response.schema
         )
     }
   };

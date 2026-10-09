@@ -357,7 +357,7 @@ test("a first message that fails leaves the start page with the agent and its na
   const createRunGate = new Promise<void>((resolve) => {
     failCreateRun = resolve;
   });
-  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
+  await page.route(`${apiBaseUrl}/api/v1/conversations/runs`, async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
@@ -418,7 +418,7 @@ test("an opened conversation without messages has the agent in the header only",
 
   // The chat itself never leaves a conversation without a message behind, the API does.
   const workspaceUrl = page.url();
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/conversations`, {
     data: { collaborationWorkspaceId: decodeURIComponent(workspaceUrl.split("/w/")[1] ?? "") }
   });
   expect(created.ok()).toBe(true);
@@ -769,7 +769,7 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   let legacyChatRequests = 0;
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
-    if (request.method() === "POST" && pathname === "/api/conversations/runs") {
+    if (request.method() === "POST" && pathname === "/api/v1/conversations/runs") {
       createRunRequests += 1;
     }
     if (request.method() === "POST" && pathname === "/api/chat") {
@@ -795,7 +795,7 @@ test("composer sends on Enter and inserts a newline on Shift+Enter", async ({ pa
   const createRunResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/conversations/runs"
+      new URL(response.url()).pathname === "/api/v1/conversations/runs"
   );
   await input.press("Enter");
   await createRunResponse;
@@ -825,7 +825,7 @@ test(
     await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
 
     const conversationId = currentConversationId(page);
-    const runPath = `/api/conversations/${conversationId}/runs`;
+    const runPath = `/api/v1/conversations/${conversationId}/runs`;
     let followUpRunRequests = 0;
     page.on("request", (request) => {
       if (request.method() === "POST" && new URL(request.url()).pathname === runPath) {
@@ -979,7 +979,10 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await signInViaUi(page, normalUser);
   let createConversationRequests = 0;
   page.on("request", (request) => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/conversations") {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/api/v1/conversations"
+    ) {
       createConversationRequests += 1;
     }
   });
@@ -1014,7 +1017,7 @@ test("new conversation action returns from a persisted conversation to a clean d
   const createRunResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/conversations/runs"
+      new URL(response.url()).pathname === "/api/v1/conversations/runs"
   );
   await page.getByRole("button", { name: "Send message" }).click();
   await createRunResponse;
@@ -1087,7 +1090,7 @@ test("collaboration workspaces scope navigation, settings, and discovery", async
   const createRunResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/conversations/runs"
+      new URL(response.url()).pathname === "/api/v1/conversations/runs"
   );
   await input.fill(messageText);
   await page.getByRole("button", { name: "Send message" }).click();
@@ -1150,7 +1153,7 @@ test("conversation rail moves a conversation into another workspace", async ({ p
   const createdCollaborationWorkspace = await requestWithOrigin(
     page,
     "post",
-    `${apiBaseUrl}/api/collaboration-workspaces`,
+    `${apiBaseUrl}/api/v1/workspaces`,
     { data: { name: destinationName, visibility: "private" } }
   );
   expect(createdCollaborationWorkspace.ok()).toBe(true);
@@ -1183,7 +1186,7 @@ test("conversation rail moves a conversation into another workspace", async ({ p
     page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
-        /^\/api\/conversations\/[^/]+\/move$/u.test(new URL(response.url()).pathname)
+        /^\/api\/v1\/conversations\/[^/]+\/move$/u.test(new URL(response.url()).pathname)
     ),
     moveDialog.getByRole("button", { name: "Move", exact: true }).click()
   ]);
@@ -1226,7 +1229,7 @@ test("collaboration workspace settings delete a workspace and fall back to perso
   const createdCollaborationWorkspace = await requestWithOrigin(
     page,
     "post",
-    `${apiBaseUrl}/api/collaboration-workspaces`,
+    `${apiBaseUrl}/api/v1/workspaces`,
     { data: { name: workspaceName, visibility: "discoverable" } }
   );
   expect(createdCollaborationWorkspace.ok()).toBe(true);
@@ -1259,7 +1262,7 @@ test("collaboration workspace settings delete a workspace and fall back to perso
     page.waitForResponse(
       (response) =>
         response.request().method() === "DELETE" &&
-        /^\/api\/collaboration-workspaces\/[^/]+$/u.test(new URL(response.url()).pathname)
+        /^\/api\/v1\/workspaces\/[^/]+$/u.test(new URL(response.url()).pathname)
     ),
     confirmButton.click()
   ]);
@@ -1285,7 +1288,7 @@ test("a superadmin manages a shared workspace without being a member", async ({
   const createdCollaborationWorkspace = await requestWithOrigin(
     memberPage,
     "post",
-    `${apiBaseUrl}/api/collaboration-workspaces`,
+    `${apiBaseUrl}/api/v1/workspaces`,
     { data: { name: workspaceName, visibility: "private" } }
   );
   expect(createdCollaborationWorkspace.ok()).toBe(true);
@@ -1330,7 +1333,7 @@ test("first message from the root route moves to the persisted conversation rout
   const createRunResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/conversations/runs"
+      new URL(response.url()).pathname === "/api/v1/conversations/runs"
   );
   await page.getByPlaceholder("Message").fill(messageText);
   await page.getByRole("button", { name: "Send message" }).click();
@@ -1359,7 +1362,7 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
   });
   let createRunRequests = 0;
   let legacyChatRequests = 0;
-  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
+  await page.route(`${apiBaseUrl}/api/v1/conversations/runs`, async (route) => {
     const request = route.request();
     if (request.method() !== "POST") {
       await route.continue();
@@ -1382,7 +1385,7 @@ test("root submit stays draft-only while create-run is pending", async ({ page }
   const createRunResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/conversations/runs"
+      new URL(response.url()).pathname === "/api/v1/conversations/runs"
   );
   await page.getByRole("button", { name: "Send message" }).click();
 
@@ -1443,8 +1446,8 @@ test("stop generating cancels the active stream instead of only hiding the butto
   const conversationId = currentConversationId(page);
   const persistedMessages = await readPagedList(
     page,
-    `/api/conversations/${conversationId}/messages`,
-    apiOperations.listConversationMessages.response.schema
+    `/api/v1/conversations/${conversationId}/messages`,
+    apiOperations["conversations.messages.list"].response.schema
   );
   const persistedAssistantText = persistedMessages
     .filter((message) => message.role === "assistant")
@@ -1496,7 +1499,7 @@ test(
       releaseStream = resolve;
     });
     const runEventsRoute = new RegExp(
-      `${escapeRegExp(apiBaseUrl)}/api/conversations/[^/]+/runs/[^/]+/events(?:\\?.*)?$`,
+      `${escapeRegExp(apiBaseUrl)}/api/v1/conversations/[^/]+/runs/[^/]+/events(?:\\?.*)?$`,
       "u"
     );
     await page.route(runEventsRoute, async (route) => {
@@ -1568,7 +1571,7 @@ test(
       if (
         request.method() === "GET" &&
         isRunEventsPath(url.pathname) &&
-        url.pathname.startsWith(`/api/conversations/${conversation.id}/runs/`)
+        url.pathname.startsWith(`/api/v1/conversations/${conversation.id}/runs/`)
       ) {
         eventRequests.push(request.url());
       }
@@ -1683,7 +1686,7 @@ test(
       page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&
-          new URL(response.url()).pathname === "/api/conversations/runs"
+          new URL(response.url()).pathname === "/api/v1/conversations/runs"
       ),
       sendButton.click()
     ]);
@@ -1774,7 +1777,7 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   const title = `Retention hint ${Date.now()}`;
   const { id } = await createListedConversation(page, title);
   const thread = await page.request.get(
-    `${apiBaseUrl}/api/conversations/${encodeURIComponent(id)}/thread`
+    `${apiBaseUrl}/api/v1/conversations/${encodeURIComponent(id)}/thread`
   );
   expect(thread.ok()).toBe(true);
   const { conversation } = z
@@ -1849,7 +1852,7 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   page.on("request", (request) => {
     if (
       request.method() === "DELETE" &&
-      /^\/api\/conversations\/[^/]+$/u.test(new URL(request.url()).pathname)
+      /^\/api\/v1\/conversations\/[^/]+$/u.test(new URL(request.url()).pathname)
     ) {
       deleteConversationRequests += 1;
     }
@@ -1886,7 +1889,7 @@ test("conversation rail deletes a conversation", async ({ page }) => {
     page.waitForResponse(
       (response) =>
         response.request().method() === "DELETE" &&
-        /^\/api\/conversations\/[^/]+$/u.test(new URL(response.url()).pathname)
+        /^\/api\/v1\/conversations\/[^/]+$/u.test(new URL(response.url()).pathname)
     ),
     page.getByRole("button", { name: "Delete", exact: true }).click()
   ]);
@@ -1906,7 +1909,7 @@ test("conversation rail renames from the menu and a later selected-title click",
   const otherTitle = `Rename navigation target ${Date.now()}`;
   await createListedConversation(page, initialTitle);
   await createListedConversation(page, otherTitle);
-  await page.route("**/api/conversations/*/title", async (route) => {
+  await page.route("**/api/v1/conversations/*/title", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.continue();
   });
@@ -1927,7 +1930,7 @@ test("conversation rail renames from the menu and a later selected-title click",
   const menuRenameResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "PATCH" &&
-      /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
+      /\/api\/v1\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
   );
   await titleInput.press("Enter");
   expect(await titleInput.count()).toBe(0);
@@ -1945,7 +1948,7 @@ test("conversation rail renames from the menu and a later selected-title click",
   const doubleClickRenameResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "PATCH" &&
-      /\/api\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
+      /\/api\/v1\/conversations\/[^/]+\/title$/u.test(new URL(response.url()).pathname)
   );
   await titleInput.press("Enter");
   expect(await titleInput.count()).toBe(0);
@@ -2108,7 +2111,7 @@ test("superadmin manages config assets with validation and conflict protection",
 }) => {
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);
-  const originalResponse = await page.request.get(`${apiBaseUrl}/api/admin/config/export`);
+  const originalResponse = await page.request.get(`${apiBaseUrl}/api/v1/instance/config/export`);
   expect(originalResponse.ok()).toBe(true);
   const original = (await originalResponse.json()) as {
     version: number;
@@ -2208,7 +2211,7 @@ test("superadmin manages config assets with validation and conflict protection",
     // The confirmation sits inside the editor's form: closing it must not submit the form.
     const configWrites: string[] = [];
     const recordConfigWrite = (request: { method(): string; url(): string }) => {
-      if (request.method() !== "GET" && request.url().includes("/api/admin/config")) {
+      if (request.method() !== "GET" && request.url().includes("/api/v1/instance/config")) {
         configWrites.push(`${request.method()} ${request.url()}`);
       }
     };
@@ -2260,7 +2263,7 @@ test("superadmin manages config assets with validation and conflict protection",
     const serverChange = await requestWithOrigin(
       page,
       "put",
-      `${apiBaseUrl}/api/admin/config/assets/agent/research_assistant`,
+      `${apiBaseUrl}/api/v1/instance/config/assets/agent/research_assistant`,
       {
         data: {
           baseVersion: original.version + 4,
@@ -2284,7 +2287,7 @@ test("superadmin manages config assets with validation and conflict protection",
     const restored = await requestWithOrigin(
       page,
       "post",
-      `${apiBaseUrl}/api/admin/config/import`,
+      `${apiBaseUrl}/api/v1/instance/config/import`,
       {
         data: {
           baseVersion: null,
@@ -2402,7 +2405,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
     const url = new URL(response.url());
     if (
       response.request().method() === "GET" &&
-      /^\/api\/conversations\/[^/]+\/(?:messages|thread)$/u.test(url.pathname)
+      /^\/api\/v1\/conversations\/[^/]+\/(?:messages|thread)$/u.test(url.pathname)
     ) {
       historyResponses += 1;
     }
@@ -2463,7 +2466,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
 test("superadmin resets a user's password from the users panel", async ({ page }) => {
   // Make sure the normal user exists in the platform user store before administering it.
   await signInViaApi(page, normalUser);
-  const normalMe = await page.request.get(`${apiBaseUrl}/api/me`);
+  const normalMe = await page.request.get(`${apiBaseUrl}/api/v1/me`);
   expect(normalMe.ok()).toBe(true);
   await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`, { data: {} });
   await page.context().clearCookies();
@@ -2498,15 +2501,15 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await signInViaApi(page, superadminUser);
   const administeredUsers = await readPagedList(
     page,
-    "/api/superadmin/users",
-    apiOperations.listAdministeredUsers.response.schema
+    "/api/v1/instance/users",
+    apiOperations["users.list"].response.schema
   );
   const target = administeredUsers.find((candidate) => candidate.email === normalUser.email);
   expect(target).toBeDefined();
   const restored = await requestWithOrigin(
     page,
     "post",
-    `${apiBaseUrl}/api/superadmin/users/${target?.id}/password`,
+    `${apiBaseUrl}/api/v1/instance/users/${target?.id}/password`,
     { data: { password: normalUser.password } }
   );
   expect(restored.ok()).toBe(true);
@@ -2604,8 +2607,8 @@ test("superadmin deletes a user from the users panel", async ({ page }) => {
 
   const users = await readPagedList(
     page,
-    "/api/superadmin/users",
-    apiOperations.listAdministeredUsers.response.schema
+    "/api/v1/instance/users",
+    apiOperations["users.list"].response.schema
   );
   expect(users.some((user) => user.email === createdUser.email)).toBe(false);
 });
@@ -2616,7 +2619,7 @@ test("superadmin deletes a user from the users panel", async ({ page }) => {
  * no stream from the setup is still running when the test starts.
  */
 async function createListedConversation(page: Page, title: string): Promise<{ id: string }> {
-  const started = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations/runs`, {
+  const started = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/conversations/runs`, {
     data: {
       idempotencyKey: randomUUID(),
       conversation: { title },
@@ -2630,7 +2633,7 @@ async function createListedConversation(page: Page, title: string): Promise<{ id
   await expect
     .poll(async () => {
       const thread = await page.request.get(
-        `${apiBaseUrl}/api/conversations/${encodeURIComponent(conversation.id)}/thread`
+        `${apiBaseUrl}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`
       );
       expect(thread.ok()).toBe(true);
       const snapshot = z
@@ -2654,7 +2657,7 @@ function conversationUrlPattern(conversationId: string): RegExp {
 }
 
 function isRunEventsPath(pathname: string): boolean {
-  return /^\/api\/conversations\/[^/]+\/runs\/[^/]+\/events$/u.test(pathname);
+  return /^\/api\/v1\/conversations\/[^/]+\/runs\/[^/]+\/events$/u.test(pathname);
 }
 
 function currentConversationId(page: Page): string {
@@ -2796,8 +2799,8 @@ async function serveAgentSettings(
   const { singleAgent = false, ...ui } = settings;
   await page.route(
     ({ pathname }) =>
-      pathname === "/api/config" ||
-      /^\/api\/collaboration-workspaces\/[^/]+\/agents$/u.test(pathname),
+      pathname === "/api/v1/instance/config" ||
+      /^\/api\/v1\/workspaces\/[^/]+\/agents$/u.test(pathname),
     async (route) => {
       if (route.request().method() !== "GET") {
         await route.continue();
@@ -2826,7 +2829,7 @@ async function holdCreateRun(page: Page): Promise<() => void> {
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route(`${apiBaseUrl}/api/conversations/runs`, async (route) => {
+  await page.route(`${apiBaseUrl}/api/v1/conversations/runs`, async (route) => {
     if (route.request().method() === "POST") {
       await gate;
     }
@@ -2839,7 +2842,7 @@ async function holdCreateRun(page: Page): Promise<() => void> {
 function waitForCreateRun(page: Page): Promise<unknown> {
   return page.waitForRequest(
     (request) =>
-      request.method() === "POST" && request.url() === `${apiBaseUrl}/api/conversations/runs`
+      request.method() === "POST" && request.url() === `${apiBaseUrl}/api/v1/conversations/runs`
   );
 }
 

@@ -228,7 +228,7 @@ async function signIn() {
 }
 
 async function runScenario(scenario) {
-  const started = await requestJson("/api/conversations/runs", {
+  const started = await requestJson("/api/v1/conversations/runs", {
     method: "POST",
     body: {
       idempotencyKey: `live-${scenario.id}-${globalThis.crypto.randomUUID()}`,
@@ -243,8 +243,8 @@ async function runScenario(scenario) {
     conversationId: started.conversation.id,
     runId: started.run.id
   });
-  const messages = await requestList(`/api/conversations/${started.conversation.id}/messages`);
-  const thread = await requestJson(`/api/conversations/${started.conversation.id}/thread`, {
+  const messages = await requestList(`/api/v1/conversations/${started.conversation.id}/messages`);
+  const thread = await requestJson(`/api/v1/conversations/${started.conversation.id}/thread`, {
     method: "GET"
   });
   const toolCalls = buildToolTrace(events);
@@ -302,7 +302,7 @@ async function observeRun(eventsUrl, input) {
           event.payload.toolCallId
         ) {
           await requestJson(
-            `/api/conversations/${input.conversationId}/runs/${input.runId}/commands`,
+            `/api/v1/conversations/${input.conversationId}/runs/${input.runId}/commands`,
             {
               method: "POST",
               body: {

@@ -40,11 +40,11 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
     try {
-      const created = await app.call("createConversation", {
+      const created = await app.call("conversations.create", {
         payload: { title: "Worker dispatch" }
       });
       const conversation = created.json() as { id: string };
-      const started = await app.call("startConversationRun", {
+      const started = await app.call("conversations.runs.start", {
         params: { conversationId: conversation.id },
         payload: {
           idempotencyKey: "worker-dispatch-key",
@@ -76,7 +76,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Public runs API test" }
     });
     expect(created.statusCode).toBe(200);
@@ -84,7 +84,7 @@ describe("client instance app vertical slice", () => {
 
     const baseUrl = await listenTestInstance(app);
 
-    const missingIdempotency = await fetchTestOperation(baseUrl, "startConversationRun", {
+    const missingIdempotency = await fetchTestOperation(baseUrl, "conversations.runs.start", {
       params: { conversationId: conversation.id },
       ...{
         method: "POST",
@@ -99,7 +99,7 @@ describe("client instance app vertical slice", () => {
     expect(missingIdempotency.status).toBe(422);
     await missingIdempotency.text();
 
-    const firstStart = await fetchTestOperation(baseUrl, "startConversationRun", {
+    const firstStart = await fetchTestOperation(baseUrl, "conversations.runs.start", {
       params: { conversationId: conversation.id },
       ...{
         method: "POST",
@@ -128,12 +128,12 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(firstStartBody.eventsUrl).toContain(
-      testOperations.observeConversationRun.buildPath({
+      testOperations["conversations.runs.observe"].buildPath({
         params: { conversationId: conversation.id, runId: firstStartBody.run.id }
       })
     );
 
-    const retryStart = await fetchTestOperation(baseUrl, "startConversationRun", {
+    const retryStart = await fetchTestOperation(baseUrl, "conversations.runs.start", {
       params: { conversationId: conversation.id },
       ...{
         method: "POST",
@@ -156,7 +156,7 @@ describe("client instance app vertical slice", () => {
       run: { id: firstStartBody.run.id }
     });
 
-    const events = await fetchTestOperation(baseUrl, "observeConversationRun", {
+    const events = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: firstStartBody.run.id }
     });
     expect(events.status).toBe(200);
@@ -180,7 +180,7 @@ describe("client instance app vertical slice", () => {
     );
 
     const [concurrentStartA, concurrentStartB] = await Promise.all([
-      fetchTestOperation(baseUrl, "startConversationRun", {
+      fetchTestOperation(baseUrl, "conversations.runs.start", {
         params: { conversationId: conversation.id },
         ...{
           method: "POST",
@@ -193,7 +193,7 @@ describe("client instance app vertical slice", () => {
           })
         }
       }),
-      fetchTestOperation(baseUrl, "startConversationRun", {
+      fetchTestOperation(baseUrl, "conversations.runs.start", {
         params: { conversationId: conversation.id },
         ...{
           method: "POST",
@@ -231,17 +231,17 @@ describe("client instance app vertical slice", () => {
       "duplicate concurrent public run start"
     ]).toContain(concurrentStartBodyA.userMessage.text);
 
-    const concurrentEvents = await fetchTestOperation(baseUrl, "observeConversationRun", {
+    const concurrentEvents = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: concurrentStartBodyA.run.id }
     });
     expect(concurrentEvents.status).toBe(200);
     await concurrentEvents.text();
 
-    const messages = await fetchTestOperation(baseUrl, "listConversationMessages", {
+    const messages = await fetchTestOperation(baseUrl, "conversations.messages.list", {
       params: { conversationId: conversation.id }
     });
     expect(messages.status).toBe(200);
-    const userMessages = apiOperations.listConversationMessages.response.schema
+    const userMessages = apiOperations["conversations.messages.list"].response.schema
       .parse(await messages.json())
       .items.filter((message) => message.role === "user");
     expect(userMessages).toEqual([
@@ -259,7 +259,7 @@ describe("client instance app vertical slice", () => {
       contentType: "text/plain",
       content: "This draft should only be claimed by the accepted run start."
     });
-    const uploaded = await app.call("uploadDraftAttachment", {
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
       params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
@@ -269,7 +269,7 @@ describe("client instance app vertical slice", () => {
     await waitForReadyDraftAttachment(app, conversation.id);
 
     const differentKeyStarts = await Promise.all([
-      fetchTestOperation(baseUrl, "startConversationRun", {
+      fetchTestOperation(baseUrl, "conversations.runs.start", {
         params: { conversationId: conversation.id },
         ...{
           method: "POST",
@@ -282,7 +282,7 @@ describe("client instance app vertical slice", () => {
           })
         }
       }),
-      fetchTestOperation(baseUrl, "startConversationRun", {
+      fetchTestOperation(baseUrl, "conversations.runs.start", {
         params: { conversationId: conversation.id },
         ...{
           method: "POST",
@@ -309,7 +309,7 @@ describe("client instance app vertical slice", () => {
       run: { id: string };
     };
     await rejectedDifferentKeyStarts[0]?.text();
-    const differentKeyEvents = await fetchTestOperation(baseUrl, "observeConversationRun", {
+    const differentKeyEvents = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: acceptedDifferentKeyStart.run.id }
     });
     expect(differentKeyEvents.status).toBe(200);
@@ -317,11 +317,13 @@ describe("client instance app vertical slice", () => {
 
     const afterDifferentKeyMessages = await fetchTestOperation(
       baseUrl,
-      "listConversationMessages",
+      "conversations.messages.list",
       { params: { conversationId: conversation.id } }
     );
     expect(afterDifferentKeyMessages.status).toBe(200);
-    const afterDifferentKeyUserMessages = apiOperations.listConversationMessages.response.schema
+    const afterDifferentKeyUserMessages = apiOperations[
+      "conversations.messages.list"
+    ].response.schema
       .parse(await afterDifferentKeyMessages.json())
       .items.filter((message) => message.role === "user");
     const racedMessages = afterDifferentKeyUserMessages.filter((message) =>
@@ -343,7 +345,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const firstCreateAndStart = await fetchTestOperation(baseUrl, "createConversationRun", {
+    const firstCreateAndStart = await fetchTestOperation(baseUrl, "conversations.runs.create", {
       ...{
         method: "POST",
         headers: {
@@ -363,7 +365,7 @@ describe("client instance app vertical slice", () => {
       run: { id: string };
     };
 
-    const retryCreateAndStart = await fetchTestOperation(baseUrl, "createConversationRun", {
+    const retryCreateAndStart = await fetchTestOperation(baseUrl, "conversations.runs.create", {
       ...{
         method: "POST",
         headers: {
@@ -384,7 +386,7 @@ describe("client instance app vertical slice", () => {
     });
 
     const [concurrentCreateA, concurrentCreateB] = await Promise.all([
-      fetchTestOperation(baseUrl, "createConversationRun", {
+      fetchTestOperation(baseUrl, "conversations.runs.create", {
         ...{
           method: "POST",
           headers: {
@@ -397,7 +399,7 @@ describe("client instance app vertical slice", () => {
           })
         }
       }),
-      fetchTestOperation(baseUrl, "createConversationRun", {
+      fetchTestOperation(baseUrl, "conversations.runs.create", {
         ...{
           method: "POST",
           headers: {
@@ -442,7 +444,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const command = await fetchTestOperation(baseUrl, "commandConversationRun", {
+    const command = await fetchTestOperation(baseUrl, "conversations.runs.command", {
       params: { conversationId: conversation.id, runId: firstStartBody.run.id },
       ...{
         method: "POST",
@@ -486,7 +488,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       headers: {
         "x-dev-user-id": "user-1"
       },
@@ -509,7 +511,7 @@ describe("client instance app vertical slice", () => {
     );
     const runId = started.run.id;
 
-    const wrongOwnerEvents = await fetchTestOperation(baseUrl, "observeConversationRun", {
+    const wrongOwnerEvents = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: runId },
       ...{
         headers: {
@@ -519,7 +521,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(wrongOwnerEvents.status).toBe(404);
 
-    const wrongOwnerCancel = await fetchTestOperation(baseUrl, "cancelConversationRun", {
+    const wrongOwnerCancel = await fetchTestOperation(baseUrl, "conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: runId },
       ...{
         method: "POST",
@@ -538,7 +540,7 @@ describe("client instance app vertical slice", () => {
         (chunk) => chunk.type === "run_completed"
       )
     ).toBe(true);
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     expect(audit.json().items).not.toContainEqual(
       expect.objectContaining({
@@ -559,7 +561,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createConversation", { payload: { title: "Cancel test" } });
+    const created = await app.call("conversations.create", { payload: { title: "Cancel test" } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
@@ -571,7 +573,7 @@ describe("client instance app vertical slice", () => {
       "cancel this deliberately long enough response"
     );
     const runId = started.run.id;
-    const events = await fetchTestOperation(baseUrl, "observeConversationRun", {
+    const events = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
       params: { conversationId: conversation.id, runId: runId }
     });
     expect(events.status).toBe(200);
@@ -585,7 +587,7 @@ describe("client instance app vertical slice", () => {
       sentPayload += sentDecoder.decode(next.value, { stream: true });
     }
 
-    const cancelled = await fetchTestOperation(baseUrl, "cancelConversationRun", {
+    const cancelled = await fetchTestOperation(baseUrl, "conversations.runs.cancel", {
       params: { conversationId: conversation.id, runId: runId },
       ...{
         method: "POST",
@@ -626,11 +628,11 @@ describe("client instance app vertical slice", () => {
       .map((chunk) => chunk.payload?.delta ?? "")
       .join("");
     expect(streamedPrefix.length).toBeGreaterThan(0);
-    const messages = await fetchTestOperation(baseUrl, "listConversationMessages", {
+    const messages = await fetchTestOperation(baseUrl, "conversations.messages.list", {
       params: { conversationId: conversation.id }
     });
     expect(messages.status).toBe(200);
-    const assistantMessages = apiOperations.listConversationMessages.response.schema
+    const assistantMessages = apiOperations["conversations.messages.list"].response.schema
       .parse(await messages.json())
       .items.filter((message) => message.role === "assistant");
     expect(assistantMessages).toHaveLength(1);
@@ -646,7 +648,7 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const snapshot = await fetchTestOperation(baseUrl, "getConversationThread", {
+    const snapshot = await fetchTestOperation(baseUrl, "conversations.thread.get", {
       params: { conversationId: conversation.id }
     });
     expect(snapshot.status).toBe(200);
@@ -673,7 +675,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Active run guard" }
     });
     expect(created.statusCode).toBe(200);
@@ -692,7 +694,7 @@ describe("client instance app vertical slice", () => {
       contentType: "text/plain",
       content: "This draft must remain unclaimed when the send is rejected."
     });
-    const uploaded = await app.call("uploadDraftAttachment", {
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
       params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
@@ -701,7 +703,7 @@ describe("client instance app vertical slice", () => {
     const uploadedBody = uploaded.json() as { attachment: { id: string } };
     await waitForReadyDraftAttachment(app, conversation.id);
 
-    const rejectedSend = await fetchTestOperation(baseUrl, "startConversationRun", {
+    const rejectedSend = await fetchTestOperation(baseUrl, "conversations.runs.start", {
       params: { conversationId: conversation.id },
       ...{
         method: "POST",
@@ -720,7 +722,7 @@ describe("client instance app vertical slice", () => {
     await rejectedSend.text();
     await fetchRunEvents(baseUrl, conversation.id, firstRun.run.id);
 
-    const messages = await app.call("listConversationMessages", {
+    const messages = await app.call("conversations.messages.list", {
       params: { conversationId: conversation.id }
     });
     expect(messages.statusCode).toBe(200);
@@ -736,7 +738,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const drafts = await app.call("listDraftAttachments", {
+    const drafts = await app.call("conversations.draft_attachments.list", {
       params: { conversationId: conversation.id }
     });
     expect(drafts.statusCode).toBe(200);
@@ -747,7 +749,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     const messageCreatedEvents = audit
       .json<{ items: Array<{ type: string; metadata?: { conversationId?: string } }> }>()
@@ -768,7 +770,7 @@ describe("client instance app vertical slice", () => {
     });
 
     try {
-      const created = await app.call("createConversation", {
+      const created = await app.call("conversations.create", {
         payload: { title: "Cancel stream test" }
       });
       expect(created.statusCode).toBe(200);
@@ -785,7 +787,7 @@ describe("client instance app vertical slice", () => {
       );
       const runId = started.run.id;
 
-      const cancelled = await fetchTestOperation(baseUrl, "cancelConversationRun", {
+      const cancelled = await fetchTestOperation(baseUrl, "conversations.runs.cancel", {
         params: { conversationId: conversation.id, runId: runId },
         ...{
           method: "POST",
@@ -811,11 +813,11 @@ describe("client instance app vertical slice", () => {
         setTimeout(resolve, 6_000);
       });
 
-      const messages = await fetchTestOperation(baseUrl, "listConversationMessages", {
+      const messages = await fetchTestOperation(baseUrl, "conversations.messages.list", {
         params: { conversationId: conversation.id }
       });
       expect(messages.status).toBe(200);
-      const persistedMessages = apiOperations.listConversationMessages.response.schema.parse(
+      const persistedMessages = apiOperations["conversations.messages.list"].response.schema.parse(
         await messages.json()
       ).items;
       const assistantText = persistedMessages
@@ -839,7 +841,7 @@ describe("client instance app vertical slice", () => {
       tools: []
     });
 
-    const created = await app.call("createConversation", {
+    const created = await app.call("conversations.create", {
       payload: { title: "Usage limit test" }
     });
     expect(created.statusCode).toBe(200);
@@ -867,7 +869,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const audit = await app.call("listAuditEvents", {});
+    const audit = await app.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     expect(audit.json().items).toContainEqual(
       expect.objectContaining({
@@ -888,7 +890,7 @@ async function waitForAuditEvents(
   type: string
 ): Promise<Array<{ type: string; metadata?: Record<string, unknown> }>> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const audit = await server.call("listAuditEvents", {});
+    const audit = await server.call("audit_events.list", {});
     expect(audit.statusCode).toBe(200);
     const events = audit.json<{
       items: Array<{ type: string; metadata?: Record<string, unknown> }>;
@@ -919,7 +921,7 @@ describe("agent availability per Collaboration Workspace", () => {
         expect(rejected.statusCode).toBe(404);
         expect(rejected.json()).toMatchObject(notDefined(agentName));
       }
-      const messages = await app.call("listConversationMessages", {
+      const messages = await app.call("conversations.messages.list", {
         params: { conversationId: shared }
       });
       expect(messages.json().items).toEqual([]);
@@ -939,11 +941,11 @@ describe("agent availability per Collaboration Workspace", () => {
 
       // The create-and-run entry point applies the same rule before creating anything.
       const personalBefore = (
-        await app.call("listConversations", {
+        await app.call("conversations.list", {
           query: { collaborationWorkspaceId: personalWorkspaceId }
         })
       ).json<{ items: unknown[] }>().items;
-      const createRejected = await app.call("createConversationRun", {
+      const createRejected = await app.call("conversations.runs.create", {
         payload: {
           agentName: "shared_only",
           idempotencyKey: "create-rejected",
@@ -954,12 +956,12 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(createRejected.json()).toMatchObject(notDefined("shared_only"));
       expect(
         (
-          await app.call("listConversations", {
+          await app.call("conversations.list", {
             query: { collaborationWorkspaceId: personalWorkspaceId }
           })
         ).json().items
       ).toHaveLength(personalBefore.length);
-      const createAllowed = await app.call("createConversationRun", {
+      const createAllowed = await app.call("conversations.runs.create", {
         payload: {
           agentName: "shared_only",
           idempotencyKey: "create-allowed",
@@ -1038,7 +1040,7 @@ describe("agent availability per Collaboration Workspace", () => {
     const fixture = await createAvailabilityFixture();
     const { app, sharedWorkspaceId, personalWorkspaceId } = fixture;
     try {
-      const shared = await app.call("listCollaborationWorkspaceAgents", {
+      const shared = await app.call("workspaces.agents.list", {
         params: { collaborationWorkspaceId: sharedWorkspaceId }
       });
       expect(shared.statusCode).toBe(200);
@@ -1053,7 +1055,7 @@ describe("agent availability per Collaboration Workspace", () => {
         "selectableModels"
       ]);
 
-      const personal = await app.call("listCollaborationWorkspaceAgents", {
+      const personal = await app.call("workspaces.agents.list", {
         params: { collaborationWorkspaceId: personalWorkspaceId }
       });
       expect(
@@ -1061,7 +1063,7 @@ describe("agent availability per Collaboration Workspace", () => {
       ).toEqual(["personal_only", "test_agent"]);
 
       // The instance-wide list is the caller's Personal Workspace view.
-      const config = await app.call("getConfig", {});
+      const config = await app.call("config.get", {});
       expect(config.json()).toMatchObject({ defaultAgentName: "test_agent" });
       expect(
         (config.json() as { agents: Array<{ name: string }> }).agents.map((agent) => agent.name)
@@ -1072,7 +1074,7 @@ describe("agent availability per Collaboration Workspace", () => {
         personalWorkspaceId,
         "cws_missing"
       ]) {
-        const outsider = await app.call("listCollaborationWorkspaceAgents", {
+        const outsider = await app.call("workspaces.agents.list", {
           params: { collaborationWorkspaceId },
           headers: { "x-dev-user-id": "outsider" }
         });
@@ -1118,11 +1120,11 @@ async function createAvailabilityFixture() {
     tools: []
   });
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
-  const created = await app.call("createCollaborationWorkspace", { payload: { name: "KAI" } });
+  const created = await app.call("workspaces.create", { payload: { name: "KAI" } });
   expect(created.statusCode).toBe(200);
   const sharedWorkspaceId = (created.json() as { id: string }).id;
-  expect((await app.call("ensurePersonalCollaborationWorkspace", {})).statusCode).toBe(200);
-  const workspaces = (await app.call("listCollaborationWorkspaces", {})).json<{
+  expect((await app.call("workspaces.ensure_personal", {})).statusCode).toBe(200);
+  const workspaces = (await app.call("workspaces.list", {})).json<{
     items: Array<{
       id: string;
       kind: string;
@@ -1165,7 +1167,7 @@ async function createAvailabilityFixture() {
     personalWorkspaceId,
     setAvailability,
     async createConversation(collaborationWorkspaceId?: string): Promise<string> {
-      const response = await app.call("createConversation", {
+      const response = await app.call("conversations.create", {
         payload: { title: "Availability", collaborationWorkspaceId }
       });
       expect(response.statusCode).toBe(200);
@@ -1173,7 +1175,7 @@ async function createAvailabilityFixture() {
     },
     startRun(conversationId: string, agentName?: string) {
       runCount += 1;
-      return app.call("startConversationRun", {
+      return app.call("conversations.runs.start", {
         params: { conversationId: conversationId },
         payload: {
           agentName,

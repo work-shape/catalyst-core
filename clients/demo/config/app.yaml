@@ -38,7 +38,7 @@ auth:
     ttlSeconds: 900
 mail:
   enabled: true
-  # Mails are kept in memory and listed at /api/dev/captured-mail instead of being delivered.
+  # Mails are kept in memory and listed at /api/v1/dev/captured-mail instead of being delivered.
   provider: capture
   appUrl: http://127.0.0.1:5173
   sender:

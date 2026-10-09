@@ -22,10 +22,10 @@ import {
 import { defineOperation, json, page, sse } from "./define-operation";
 
 export const conversationOperations = {
-  listConversations: defineOperation({
-    id: "listConversations",
+  "conversations.list": defineOperation({
+    id: "conversations.list",
     method: "GET",
-    path: "/api/conversations",
+    path: "/api/v1/conversations",
     summary: "List the caller's conversations in a workspace",
     tag: "Conversations",
     auth: "user",
@@ -37,10 +37,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  createConversation: defineOperation({
-    id: "createConversation",
+  "conversations.create": defineOperation({
+    id: "conversations.create",
     method: "POST",
-    path: "/api/conversations",
+    path: "/api/v1/conversations",
     summary: "Create an empty conversation",
     tag: "Conversations",
     auth: "user",
@@ -52,10 +52,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  generateConversationTitle: defineOperation({
-    id: "generateConversationTitle",
+  "conversations.title.generate": defineOperation({
+    id: "conversations.title.generate",
     method: "POST",
-    path: "/api/conversations/:conversationId/title",
+    path: "/api/v1/conversations/:conversationId/title",
     summary: "Generate a conversation's title from its messages",
     tag: "Conversations",
     auth: "user",
@@ -66,10 +66,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  renameConversation: defineOperation({
-    id: "renameConversation",
+  "conversations.rename": defineOperation({
+    id: "conversations.rename",
     method: "PATCH",
-    path: "/api/conversations/:conversationId/title",
+    path: "/api/v1/conversations/:conversationId/title",
     summary: "Rename a conversation",
     tag: "Conversations",
     auth: "user",
@@ -81,10 +81,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  moveConversation: defineOperation({
-    id: "moveConversation",
+  "conversations.move": defineOperation({
+    id: "conversations.move",
     method: "POST",
-    path: "/api/conversations/:conversationId/move",
+    path: "/api/v1/conversations/:conversationId/move",
     summary: "Move a conversation to another workspace or visibility",
     tag: "Conversations",
     auth: "user",
@@ -96,10 +96,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  getConversationThread: defineOperation({
-    id: "getConversationThread",
+  "conversations.thread.get": defineOperation({
+    id: "conversations.thread.get",
     method: "GET",
-    path: "/api/conversations/:conversationId/thread",
+    path: "/api/v1/conversations/:conversationId/thread",
     summary: "Read a conversation with its messages and active run",
     tag: "Conversations",
     auth: "user",
@@ -110,10 +110,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  listConversationMessages: defineOperation({
-    id: "listConversationMessages",
+  "conversations.messages.list": defineOperation({
+    id: "conversations.messages.list",
     method: "GET",
-    path: "/api/conversations/:conversationId/messages",
+    path: "/api/v1/conversations/:conversationId/messages",
     summary: "List the messages of a conversation",
     tag: "Conversations",
     auth: "user",
@@ -125,10 +125,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  listConversationResources: defineOperation({
-    id: "listConversationResources",
+  "conversations.resources.list": defineOperation({
+    id: "conversations.resources.list",
     method: "GET",
-    path: "/api/conversations/:conversationId/resources",
+    path: "/api/v1/conversations/:conversationId/resources",
     summary: "List the files and data a conversation produced",
     tag: "Conversations",
     auth: "user",
@@ -140,10 +140,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  getStructuredDataResource: defineOperation({
-    id: "getStructuredDataResource",
+  "conversations.structured_data.get": defineOperation({
+    id: "conversations.structured_data.get",
     method: "GET",
-    path: "/api/conversations/:conversationId/structured-data/:structuredDataResourceId",
+    path: "/api/v1/conversations/:conversationId/structured-data/:structuredDataResourceId",
     summary: "Read one structured data resource of a conversation",
     tag: "Conversations",
     auth: "user",
@@ -154,10 +154,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  cancelConversationRun: defineOperation({
-    id: "cancelConversationRun",
+  "conversations.runs.cancel": defineOperation({
+    id: "conversations.runs.cancel",
     method: "POST",
-    path: "/api/conversations/:conversationId/runs/:runId/cancel",
+    path: "/api/v1/conversations/:conversationId/runs/:runId/cancel",
     summary: "Cancel an agent run",
     tag: "Conversations",
     auth: "user",
@@ -169,10 +169,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  startConversationRun: defineOperation({
-    id: "startConversationRun",
+  "conversations.runs.start": defineOperation({
+    id: "conversations.runs.start",
     method: "POST",
-    path: "/api/conversations/:conversationId/runs",
+    path: "/api/v1/conversations/:conversationId/runs",
     summary: "Send a message and start an agent run",
     tag: "Conversations",
     auth: "user",
@@ -184,10 +184,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  createConversationRun: defineOperation({
-    id: "createConversationRun",
+  "conversations.runs.create": defineOperation({
+    id: "conversations.runs.create",
     method: "POST",
-    path: "/api/conversations/runs",
+    path: "/api/v1/conversations/runs",
     summary: "Create a conversation and start its first agent run",
     tag: "Conversations",
     auth: "user",
@@ -199,10 +199,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  observeConversationRun: defineOperation({
-    id: "observeConversationRun",
+  "conversations.runs.observe": defineOperation({
+    id: "conversations.runs.observe",
     method: "GET",
-    path: "/api/conversations/:conversationId/runs/:runId/events",
+    path: "/api/v1/conversations/:conversationId/runs/:runId/events",
     summary: "Follow the events of an agent run",
     tag: "Conversations",
     auth: "user",
@@ -214,10 +214,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  commandConversationRun: defineOperation({
-    id: "commandConversationRun",
+  "conversations.runs.command": defineOperation({
+    id: "conversations.runs.command",
     method: "POST",
-    path: "/api/conversations/:conversationId/runs/:runId/commands",
+    path: "/api/v1/conversations/:conversationId/runs/:runId/commands",
     summary: "Continue a waiting agent run or decide its tool permission",
     tag: "Conversations",
     auth: "user",
@@ -229,10 +229,10 @@ export const conversationOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  deleteConversation: defineOperation({
-    id: "deleteConversation",
+  "conversations.delete": defineOperation({
+    id: "conversations.delete",
     method: "DELETE",
-    path: "/api/conversations/:conversationId",
+    path: "/api/v1/conversations/:conversationId",
     summary: "Delete a conversation",
     tag: "Conversations",
     auth: "user",

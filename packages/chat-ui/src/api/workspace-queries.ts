@@ -333,7 +333,7 @@ export function useWorkspaceAuditActivitiesQuery(
 ) {
   return useQuery({
     // `auditEvents` is the historical cache namespace; it now holds the
-    // projected activity timeline served from /api/audit-activities.
+    // projected activity timeline served from /api/v1/instance/audit-activities.
     queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope),
     queryFn: input.client.governance.listAuditActivities,
     enabled: input.enabled

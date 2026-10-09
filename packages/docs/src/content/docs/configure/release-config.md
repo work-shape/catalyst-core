@@ -371,7 +371,7 @@ mail:
 - The sender domain must be validated with SPF and DKIM in the Mailjet account that owns the
   API key. Use a separate Mailjet sub-account and key per client instance.
 - Startup fails when mail is enabled and either named environment variable is missing.
-- `provider: capture` keeps mails in memory and lists them at `GET /api/dev/captured-mail`.
+- `provider: capture` keeps mails in memory and lists them at `GET /api/v1/dev/captured-mail`.
   That route needs no sign-in, so only `environment: development` config accepts it; staging
   and production config reject it.
 

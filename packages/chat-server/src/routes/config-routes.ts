@@ -7,24 +7,24 @@ import { resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
 export function registerConfigRoutes(route: Route, options: ChatServerOptions): void {
-  route(apiOperations.getHealth, () => ({
+  route(apiOperations["health.get"], () => ({
     status: "ok" as const,
     clientInstanceId: options.clientInstanceId,
     time: new Date().toISOString()
   }));
 
-  route(apiOperations.getCurrentUser, ({ user }) => ({
+  route(apiOperations["me.get"], ({ user }) => ({
     ...user,
     permissions: [...resolveEffectivePermissions(user)]
   }));
 
-  route(apiOperations.getBranding, ({ request }) =>
+  route(apiOperations["branding.get"], ({ request }) =>
     createClientBranding(options.config, {
       requestedLocale: resolveRequestLocale(options, request)
     })
   );
 
-  route(apiOperations.getConfig, async ({ request }) => {
+  route(apiOperations["config.get"], async ({ request }) => {
     // The instance-wide agent list is what the caller sees in their Personal Workspace.
     const assets = await getWorkspaceAssetSnapshot(options, { kind: "personal" });
     const config = createSafeConfigView(options.config, assets, {

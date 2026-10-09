@@ -14,10 +14,10 @@ import {
 import { defineOperation, json } from "./define-operation";
 
 export const accountOperations = {
-  getCurrentUser: defineOperation({
-    id: "getCurrentUser",
+  "me.get": defineOperation({
+    id: "me.get",
     method: "GET",
-    path: "/api/me",
+    path: "/api/v1/me",
     summary: "Read the signed-in user with effective permissions",
     tag: "Account",
     auth: "user",
@@ -28,10 +28,10 @@ export const accountOperations = {
     errors: [],
     rateClass: "read"
   }),
-  updateCurrentUser: defineOperation({
-    id: "updateCurrentUser",
+  "me.update": defineOperation({
+    id: "me.update",
     method: "PATCH",
-    path: "/api/me",
+    path: "/api/v1/me",
     summary: "Change the signed-in user's profile",
     tag: "Account",
     auth: "user",
@@ -43,10 +43,10 @@ export const accountOperations = {
     errors: [],
     rateClass: "write"
   }),
-  getCurrentUserModelPreference: defineOperation({
-    id: "getCurrentUserModelPreference",
+  "me.model_preference.get": defineOperation({
+    id: "me.model_preference.get",
     method: "GET",
-    path: "/api/me/model-preference",
+    path: "/api/v1/me/model-preference",
     summary: "Read the signed-in user's model preference",
     tag: "Account",
     auth: "user",
@@ -57,10 +57,10 @@ export const accountOperations = {
     errors: [],
     rateClass: "read"
   }),
-  setCurrentUserModelPreference: defineOperation({
-    id: "setCurrentUserModelPreference",
+  "me.model_preference.set": defineOperation({
+    id: "me.model_preference.set",
     method: "PUT",
-    path: "/api/me/model-preference",
+    path: "/api/v1/me/model-preference",
     summary: "Replace the signed-in user's model preference",
     tag: "Account",
     auth: "user",
@@ -72,10 +72,10 @@ export const accountOperations = {
     errors: [],
     rateClass: "write"
   }),
-  changeCurrentUserPassword: defineOperation({
-    id: "changeCurrentUserPassword",
+  "me.password.change": defineOperation({
+    id: "me.password.change",
     method: "POST",
-    path: "/api/me/password",
+    path: "/api/v1/me/password",
     summary: "Change the signed-in user's password",
     tag: "Account",
     auth: "user",
@@ -87,10 +87,10 @@ export const accountOperations = {
     errors: [],
     rateClass: "auth"
   }),
-  deleteCurrentUser: defineOperation({
-    id: "deleteCurrentUser",
+  "me.delete": defineOperation({
+    id: "me.delete",
     method: "DELETE",
-    path: "/api/me",
+    path: "/api/v1/me",
     summary: "Delete the signed-in user's account and data",
     tag: "Account",
     auth: "user",
@@ -101,10 +101,10 @@ export const accountOperations = {
     errors: [],
     rateClass: "write"
   }),
-  requestPasswordReset: defineOperation({
-    id: "requestPasswordReset",
+  "password_reset.request": defineOperation({
+    id: "password_reset.request",
     method: "POST",
-    path: "/api/password-reset",
+    path: "/api/v1/password-reset",
     summary: "Send a password reset mail to a locked-out user",
     tag: "Account",
     auth: "public",
@@ -115,10 +115,10 @@ export const accountOperations = {
     errors: [],
     rateClass: "auth"
   }),
-  completePasswordSetup: defineOperation({
-    id: "completePasswordSetup",
+  "password_setup.complete": defineOperation({
+    id: "password_setup.complete",
     method: "POST",
-    path: "/api/password-setup",
+    path: "/api/v1/password-setup",
     summary: "Set a password with a setup or reset token",
     tag: "Account",
     auth: "public",

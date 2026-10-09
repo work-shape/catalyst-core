@@ -63,7 +63,7 @@ export function registerAgentRunRoutes(
     return conversations.requireConversationAccess(conversationId, user);
   }
 
-  route(apiOperations.generateConversationTitle, async ({ user, context, params }) => {
+  route(apiOperations["conversations.title.generate"], async ({ user, context, params }) => {
     const conversationId = conversationIdParam(params);
     return (
       (await generateTitleForConversationOnce(conversationId, user, context)) ??
@@ -71,57 +71,63 @@ export function registerAgentRunRoutes(
     );
   });
 
-  route(apiOperations.cancelConversationRun, async ({ user, context, params, body, request }) => {
-    const conversationId = asConversationId(params.conversationId);
-    const runId = asAgentRunId(params.runId);
-    const run = await conversations.cancelRun(
-      conversationId,
-      runId,
-      user,
-      withRequestLocale(context, options, request, undefined),
-      body.reason
-    );
-    return cancelRunResponseSchema.parse({ run });
-  });
-
-  route(apiOperations.startConversationRun, async ({ user, context, params, body, request }) => {
-    // The descriptor carries one scope; starting a run needs this second one as well.
-    requireAuthScope(user, "run:start");
-    const conversationId = conversationIdParam(params);
-    const localizedContext = withRequestLocale(context, options, request, body.locale);
-    const started = await conversations.startMessageRun(conversationId, user, localizedContext, {
-      agentName: body.agentName,
-      modelBindingId: body.modelBindingId,
-      reasoningEffort: body.reasoningEffort,
-      idempotencyKey: body.idempotencyKey,
-      text: body.message.text
-    });
-    void generateTitleForConversationOnce(conversationId, user, localizedContext).catch(
-      (error: unknown) => {
-        request.log.warn(
-          { err: error, conversationId, runId: started.runId },
-          "Conversation title generation failed after public run start"
-        );
-      }
-    );
-    if (isObservableRunStatus(started.run.status)) {
-      monitorRunLifecycleOnce({
+  route(
+    apiOperations["conversations.runs.cancel"],
+    async ({ user, context, params, body, request }) => {
+      const conversationId = asConversationId(params.conversationId);
+      const runId = asAgentRunId(params.runId);
+      const run = await conversations.cancelRun(
         conversationId,
-        context: localizedContext,
-        runId: started.runId,
-        user
-      });
+        runId,
+        user,
+        withRequestLocale(context, options, request, undefined),
+        body.reason
+      );
+      return cancelRunResponseSchema.parse({ run });
     }
-    return createStartRunResponse(
-      request,
-      await readCurrentConversation(conversationId, user),
-      started.userMessage,
-      started.run,
-      user
-    );
-  });
+  );
 
-  route(apiOperations.createConversationRun, async ({ user, context, body, request }) => {
+  route(
+    apiOperations["conversations.runs.start"],
+    async ({ user, context, params, body, request }) => {
+      // The descriptor carries one scope; starting a run needs this second one as well.
+      requireAuthScope(user, "run:start");
+      const conversationId = conversationIdParam(params);
+      const localizedContext = withRequestLocale(context, options, request, body.locale);
+      const started = await conversations.startMessageRun(conversationId, user, localizedContext, {
+        agentName: body.agentName,
+        modelBindingId: body.modelBindingId,
+        reasoningEffort: body.reasoningEffort,
+        idempotencyKey: body.idempotencyKey,
+        text: body.message.text
+      });
+      void generateTitleForConversationOnce(conversationId, user, localizedContext).catch(
+        (error: unknown) => {
+          request.log.warn(
+            { err: error, conversationId, runId: started.runId },
+            "Conversation title generation failed after public run start"
+          );
+        }
+      );
+      if (isObservableRunStatus(started.run.status)) {
+        monitorRunLifecycleOnce({
+          conversationId,
+          context: localizedContext,
+          runId: started.runId,
+          user
+        });
+      }
+      return createStartRunResponse(
+        request,
+        await readCurrentConversation(conversationId, user),
+        started.userMessage,
+        started.run,
+        user
+      );
+    }
+  );
+
+  route(apiOperations["conversations.runs.create"], async ({ user, context, body, request }) => {
     // The descriptor carries one scope; starting a run needs this second one as well.
     requireAuthScope(user, "run:start");
     const localizedContext = withRequestLocale(context, options, request, body.locale);
@@ -165,21 +171,24 @@ export function registerAgentRunRoutes(
     );
   });
 
-  route(apiOperations.commandConversationRun, async ({ user, context, params, body, request }) => {
-    const conversationId = asConversationId(params.conversationId);
-    const runId = asAgentRunId(params.runId);
-    const run = await conversations.commandRun(
-      conversationId,
-      runId,
-      user,
-      withRequestLocale(context, options, request, undefined),
-      toRuntimeRunCommand(body.command)
-    );
-    return runCommandResponseSchema.parse({ run });
-  });
+  route(
+    apiOperations["conversations.runs.command"],
+    async ({ user, context, params, body, request }) => {
+      const conversationId = asConversationId(params.conversationId);
+      const runId = asAgentRunId(params.runId);
+      const run = await conversations.commandRun(
+        conversationId,
+        runId,
+        user,
+        withRequestLocale(context, options, request, undefined),
+        toRuntimeRunCommand(body.command)
+      );
+      return runCommandResponseSchema.parse({ run });
+    }
+  );
 
   route(
-    apiOperations.observeConversationRun,
+    apiOperations["conversations.runs.observe"],
     async ({ user, context, params, query, request, reply }) => {
       const conversationId = asConversationId(params.conversationId);
       const runId = asAgentRunId(params.runId);
@@ -298,7 +307,7 @@ export function registerAgentRunRoutes(
     run: AgentRun,
     user: AuthenticatedUser
   ) {
-    const eventsUrl = apiOperations.observeConversationRun.buildPath({
+    const eventsUrl = apiOperations["conversations.runs.observe"].buildPath({
       params: {
         conversationId: conversation.id,
         runId: run.id

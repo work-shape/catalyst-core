@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createApiClient, type LocaleCode } from "@vivd-catalyst/api-client";
+import { createApiClient, signInWithEmail, type LocaleCode } from "@vivd-catalyst/api-client";
 import {
   Button,
   Card,
@@ -12,7 +12,6 @@ import {
   UiRoot
 } from "@vivd-catalyst/ui";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
-import { signInWithEmail } from "./api/auth-client";
 import { useTranslation } from "./i18n";
 import { LocaleSelector } from "./locale-selector";
 import { readSystemThemeMode, resolveThemeModePreference, type ResolvedThemeMode } from "./theme";

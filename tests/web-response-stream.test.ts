@@ -68,7 +68,7 @@ describe("web response bridge", () => {
 
     const baseUrl = await listenTestInstance(app);
     try {
-      const conversationResponse = await fetchTestOperation(baseUrl, "createConversation", {
+      const conversationResponse = await fetchTestOperation(baseUrl, "conversations.create", {
         ...{
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -78,7 +78,7 @@ describe("web response bridge", () => {
       expect(conversationResponse.ok).toBe(true);
       const conversation = (await conversationResponse.json()) as { id: string };
 
-      const startResponse = await fetchTestOperation(baseUrl, "startConversationRun", {
+      const startResponse = await fetchTestOperation(baseUrl, "conversations.runs.start", {
         params: { conversationId: conversation.id },
         ...{
           method: "POST",
@@ -94,7 +94,7 @@ describe("web response bridge", () => {
 
       expect(startResponse.ok).toBe(true);
       const started = (await startResponse.json()) as { run: { id: string } };
-      const eventsResponse = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      const eventsResponse = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
         params: { conversationId: conversation.id, runId: started.run.id }
       });
       expect(eventsResponse.ok).toBe(true);
@@ -135,7 +135,7 @@ describe("web response bridge", () => {
 
     const baseUrl = await listenTestInstance(app);
     try {
-      const conversationResponse = await fetchTestOperation(baseUrl, "createConversation", {
+      const conversationResponse = await fetchTestOperation(baseUrl, "conversations.create", {
         ...{
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -145,7 +145,7 @@ describe("web response bridge", () => {
       expect(conversationResponse.ok).toBe(true);
       const conversation = (await conversationResponse.json()) as { id: string };
 
-      const startResponse = await fetchTestOperation(baseUrl, "startConversationRun", {
+      const startResponse = await fetchTestOperation(baseUrl, "conversations.runs.start", {
         params: { conversationId: conversation.id },
         ...{
           method: "POST",
@@ -161,7 +161,7 @@ describe("web response bridge", () => {
 
       expect(startResponse.ok).toBe(true);
       const started = (await startResponse.json()) as { run: { id: string } };
-      const eventsResponse = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      const eventsResponse = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
         params: { conversationId: conversation.id, runId: started.run.id }
       });
       expect(eventsResponse.ok).toBe(true);

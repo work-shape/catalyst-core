@@ -16,46 +16,49 @@ import type { UploadFileContent } from "../attachments";
 export function registerDraftAttachmentRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  route(apiOperations.listDraftAttachments, async ({ user, params }) => {
+  route(apiOperations["conversations.draft_attachments.list"], async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     return listed(await attachments(options).listDraftAttachments(conversationId));
   });
 
-  route(apiOperations.uploadDraftAttachment, async ({ user, params, request }) => {
-    const conversationId = conversationIdParam(params);
-    await conversations.requireConversationAccess(conversationId, user);
-    const file = await request.file();
-    if (!file) {
-      throw new AppError("VALIDATION_FAILED", "A file upload is required");
-    }
-    const staged = await stageMultipartFile(file.file);
-    try {
-      if (file.file.truncated) {
-        throw new AppError("VALIDATION_FAILED", "File exceeds the configured upload size limit");
-      }
-      // Receiving the body can take minutes. Check again before any bytes are stored, so that
-      // a Conversation deleted in the meantime does not receive objects nothing cleans up.
+  route(
+    apiOperations["conversations.draft_attachments.upload"],
+    async ({ user, params, request }) => {
+      const conversationId = conversationIdParam(params);
       await conversations.requireConversationAccess(conversationId, user);
-      const service = attachments(options);
-      const { attachment, outcome } = await service.uploadDraftAttachment({
-        conversationId,
-        ownerUserId: getSubjectUserId(user),
-        filename: file.filename,
-        mimeType: file.mimetype,
-        content: staged.content
-      });
-      return {
-        attachment: withoutNullError(attachment),
-        attachments: listed(await service.listDraftAttachments(conversationId)),
-        outcome
-      };
-    } finally {
-      await staged.cleanup();
+      const file = await request.file();
+      if (!file) {
+        throw new AppError("VALIDATION_FAILED", "A file upload is required");
+      }
+      const staged = await stageMultipartFile(file.file);
+      try {
+        if (file.file.truncated) {
+          throw new AppError("VALIDATION_FAILED", "File exceeds the configured upload size limit");
+        }
+        // Receiving the body can take minutes. Check again before any bytes are stored, so that
+        // a Conversation deleted in the meantime does not receive objects nothing cleans up.
+        await conversations.requireConversationAccess(conversationId, user);
+        const service = attachments(options);
+        const { attachment, outcome } = await service.uploadDraftAttachment({
+          conversationId,
+          ownerUserId: getSubjectUserId(user),
+          filename: file.filename,
+          mimeType: file.mimetype,
+          content: staged.content
+        });
+        return {
+          attachment: withoutNullError(attachment),
+          attachments: listed(await service.listDraftAttachments(conversationId)),
+          outcome
+        };
+      } finally {
+        await staged.cleanup();
+      }
     }
-  });
+  );
 
-  route(apiOperations.retryDraftAttachment, async ({ user, params }) => {
+  route(apiOperations["conversations.draft_attachments.retry"], async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const service = attachments(options);
@@ -69,7 +72,7 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
     };
   });
 
-  route(apiOperations.deleteDraftAttachment, async ({ user, params }) => {
+  route(apiOperations["conversations.draft_attachments.delete"], async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     return withoutNullError(
