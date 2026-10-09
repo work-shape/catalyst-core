@@ -2,19 +2,24 @@ import { ChevronDown, CircleAlert, TriangleAlert } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import type { ApprovalRequestView, DraftAttachment } from "@vivd-catalyst/api-client";
+import {
+  Badge,
+  type BadgeProps,
+  Button,
+  Card,
+  cn,
+  Spinner,
+  Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from "@vivd-catalyst/ui";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useAttachmentContentContext } from "../attachment-content";
 import { useToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useToolDisplayPanel } from "../tool-display-panel";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Card } from "../ui/card";
-import { cn } from "../ui/cn";
-import { Textarea } from "../ui/input";
-import { Spinner } from "../ui/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useWorkspaceDraftController } from "../workspace/workspace-drafts";
 import {
   APPROVAL_AUTH_SCOPE,
@@ -635,7 +640,7 @@ function ApprovalStatusBadge({
   children: ReactNode;
 }) {
   return (
-    <Badge variant={STATUS_BADGE_VARIANT[tone]} className={STATUS_BADGE_CLASS[tone]}>
+    <Badge {...STATUS_BADGE_LOOK[tone]} className={STATUS_BADGE_CLASS[tone]}>
       {children}
     </Badge>
   );
@@ -828,12 +833,12 @@ function ApprovalRequestActions({
   );
 }
 
-const STATUS_BADGE_VARIANT = {
-  pending: "secondary",
-  positive: "success",
-  negative: "outline",
-  neutral: "outline"
-} as const satisfies Record<ApprovalStatusTone, string>;
+const STATUS_BADGE_LOOK = {
+  pending: {},
+  positive: { tone: "success" },
+  negative: { appearance: "outline" },
+  neutral: { appearance: "outline" }
+} satisfies Record<ApprovalStatusTone, Pick<BadgeProps, "tone" | "appearance">>;
 
 const STATUS_BADGE_CLASS: Record<ApprovalStatusTone, string | undefined> = {
   pending: undefined,

@@ -1,5 +1,6 @@
 import { FileText } from "lucide-react";
 import { useCallback, useEffect } from "react";
+import { cn } from "@vivd-catalyst/ui";
 import { useAttachmentContentContext } from "./attachment-content";
 import {
   ConversationFileDownloadButton,
@@ -9,7 +10,6 @@ import {
 } from "./conversation-file-presentation";
 import { useTranslation } from "./i18n";
 import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
-import { cn } from "./ui/cn";
 import {
   artifactDisplayFilename,
   getArtifactFileType,

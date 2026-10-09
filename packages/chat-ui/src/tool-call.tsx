@@ -2,6 +2,7 @@ import { CheckCircle2, ChevronRight, CircleAlert, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
+import { cn, Spinner } from "@vivd-catalyst/ui";
 import { ApprovalRequestCard } from "./approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "./approvals/approval-request-model";
 import {
@@ -19,8 +20,6 @@ import {
 import { ToolArtifactList } from "./artifact-download-card";
 import { useTranslation } from "./i18n";
 import { useToolDisplayPanel } from "./tool-display-panel";
-import { cn } from "./ui/cn";
-import { Spinner } from "./ui/spinner";
 import {
   readWorkspacePromotedArtifactsData,
   readSurfacedToolArtifactRefs,

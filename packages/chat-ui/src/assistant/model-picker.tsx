@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { formatModelLabel } from "../model-label";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { cn } from "../ui/cn";
 import { EuResidencyBadge, ModelVendorIcon, modelVendorLabel } from "./model-vendor";
 
 type UsageTier = NonNullable<AgentSelectableModel["usageTier"]>;

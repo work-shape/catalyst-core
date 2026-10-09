@@ -3,15 +3,13 @@ import { AlertCircle, CheckCircle2, Paperclip, RotateCcw, Send, Square, X } from
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
+import { Button, cn, Spinner } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
 import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { Spinner } from "../ui/spinner";
 
 export interface LocalUploadingAttachment {
   id: string;

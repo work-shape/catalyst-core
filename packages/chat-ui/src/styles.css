@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+/* Tailwind, the theme tokens and the default theme come with the shared UI library. */
+@import "@vivd-catalyst/ui/styles.css";
 @import "@univerjs/preset-sheets-core/lib/index.css";
 
 @source "./**/*.{ts,tsx}";
@@ -13,92 +13,7 @@
 @source "../../../@streamdown/code/dist/*.js";
 @source "../../../@streamdown/mermaid/dist/*.js";
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-info: var(--info);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
-
-:root {
-  --radius: 0.5rem;
-  --background: #fffdfa;
-  --foreground: #17201d;
-  --card: #fffdfa;
-  --card-foreground: #17201d;
-  --popover: #fffdfa;
-  --popover-foreground: #17201d;
-  --primary: #0f766e;
-  --primary-foreground: #ffffff;
-  --secondary: #ebe7dc;
-  --secondary-foreground: #17201d;
-  --muted: #ebe7dc;
-  --muted-foreground: #68746f;
-  --accent: #e5f3ef;
-  --accent-foreground: #0b5f59;
-  --destructive: #b42318;
-  --success: #047857;
-  --warning: #b45309;
-  --info: #0369a1;
-  --chart-1: #0f766e;
-  --chart-2: #b45309;
-  --chart-3: #0369a1;
-  --chart-4: #7c3aed;
-  --chart-5: #be185d;
-  --border: #d8d3c7;
-  --input: #d8d3c7;
-  --ring: #0f766e;
-  --sidebar: #f4f1e8;
-  --sidebar-foreground: #17201d;
-  --sidebar-primary: #0f766e;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e5f3ef;
-  --sidebar-accent-foreground: #0b5f59;
-  --sidebar-border: #d8d3c7;
-  --sidebar-ring: #0f766e;
-}
-
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-
   html,
   body,
   #root {

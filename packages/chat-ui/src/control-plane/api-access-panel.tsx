@@ -12,6 +12,25 @@ import type {
   UpdateServicePrincipalRequest
 } from "@vivd-catalyst/api-client";
 import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Dialog,
+  InlineError,
+  Input,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea
+} from "@vivd-catalyst/ui";
+import {
   constrainCredentialScopes,
   copyStateFor,
   DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS,
@@ -25,14 +44,6 @@ import {
 } from "./api-access-model";
 import { ControlPlanePage } from "./control-plane-page";
 import { useTranslation } from "../i18n";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Dialog } from "../ui/dialog";
-import { InlineError } from "../ui/inline-error";
-import { Input, Textarea } from "../ui/input";
-import { Select } from "../ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 
 export interface ApiAccessPanelInput {
   canMutate: boolean;
@@ -146,9 +157,7 @@ export function ApiAccessPanel({
                           <span className="truncate text-sm font-medium">
                             {detail.principal.displayLabel}
                           </span>
-                          <Badge
-                            variant={detail.principal.status === "active" ? "default" : "secondary"}
-                          >
+                          <Badge tone={detail.principal.status === "active" ? "accent" : "neutral"}>
                             {detail.principal.status === "active"
                               ? t("apiAccessActive")
                               : t("apiAccessDisabled")}
@@ -296,9 +305,7 @@ function PrincipalDetail({
       <CardContent className="grid gap-5 p-4 pt-0">
         <div className="flex flex-wrap gap-2">
           {principal.permissions.map((permission) => (
-            <Badge key={permission} variant="secondary">
-              {permission}
-            </Badge>
+            <Badge key={permission}>{permission}</Badge>
           ))}
           {principal.permissions.length === 0 ? (
             <span className="text-xs text-muted-foreground">{t("apiAccessNoGrants")}</span>
@@ -353,11 +360,7 @@ function PrincipalDetail({
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {credential.scopes?.length ? (
-                            credential.scopes.map((scope) => (
-                              <Badge key={scope} variant="secondary">
-                                {scope}
-                              </Badge>
-                            ))
+                            credential.scopes.map((scope) => <Badge key={scope}>{scope}</Badge>)
                           ) : (
                             <span className="text-xs text-muted-foreground">
                               {t("apiAccessInheritsGrants")}
@@ -372,7 +375,7 @@ function PrincipalDetail({
                         {formatDate(credential.expiresAt, t("apiAccessNeverExpires"), locale)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={active ? "default" : "secondary"}>
+                        <Badge tone={active ? "accent" : "neutral"}>
                           {active
                             ? t("apiAccessActive")
                             : credential.revokedAt

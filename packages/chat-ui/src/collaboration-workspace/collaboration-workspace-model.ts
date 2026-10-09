@@ -339,5 +339,10 @@ export function useCollaborationWorkspaceModel(
 }
 
 function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {
-  return route.kind === "settings" || route.kind === "approvals" || route.kind === "superadmin";
+  return (
+    route.kind === "settings" ||
+    route.kind === "approvals" ||
+    route.kind === "superadmin" ||
+    route.kind === "ui-library"
+  );
 }

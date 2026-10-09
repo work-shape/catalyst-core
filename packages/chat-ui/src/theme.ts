@@ -1,7 +1,6 @@
-import type { CSSProperties } from "react";
-import type { SafeConfig } from "@vivd-catalyst/api-client";
+import type { ThemeMode } from "@vivd-catalyst/ui/theme";
 
-export type ResolvedThemeMode = "light" | "dark";
+export type ResolvedThemeMode = ThemeMode;
 export type ThemeModePreference = ResolvedThemeMode | "system";
 
 export function resolveThemeModePreference(
@@ -18,101 +17,11 @@ export function readSystemThemeMode(): ResolvedThemeMode {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+/**
+ * Marks the document with the mode, which selects the stylesheet's default theme for anything
+ * outside a `UiRoot`. Only an entry that owns its document calls this; an embedded shell never
+ * writes to its host page.
+ */
 export function applyDocumentThemeMode(mode: ResolvedThemeMode): void {
   document.documentElement.dataset.vivdTheme = mode;
-}
-
-export function createThemeStyle(
-  ui: SafeConfig["ui"] | undefined,
-  mode: ResolvedThemeMode
-): CSSProperties | undefined {
-  if (!ui) {
-    return undefined;
-  }
-
-  const theme = mode === "dark" ? ui.darkTheme : ui.theme;
-  const primaryForeground = readableForeground(theme.accentColor);
-
-  return {
-    "--background": theme.surfaceColor,
-    "--foreground": theme.textColor,
-    "--card": theme.surfaceColor,
-    "--card-foreground": theme.textColor,
-    "--popover": theme.surfaceColor,
-    "--popover-foreground": theme.textColor,
-    "--primary": theme.accentColor,
-    "--primary-foreground": primaryForeground,
-    "--secondary": theme.backgroundColor,
-    "--secondary-foreground": theme.textColor,
-    "--muted": theme.backgroundColor,
-    "--muted-foreground": theme.mutedTextColor,
-    "--accent": theme.backgroundColor,
-    "--accent-foreground": theme.accentStrongColor,
-    "--destructive": mode === "dark" ? "#f87171" : "#b42318",
-    "--success": mode === "dark" ? "#34d399" : "#047857",
-    "--warning": mode === "dark" ? "#fbbf24" : "#b45309",
-    "--info": mode === "dark" ? "#38bdf8" : "#0369a1",
-    "--chart-1": mode === "dark" ? "#2dd4bf" : "#0f766e",
-    "--chart-2": mode === "dark" ? "#fbbf24" : "#b45309",
-    "--chart-3": mode === "dark" ? "#38bdf8" : "#0369a1",
-    "--chart-4": mode === "dark" ? "#a78bfa" : "#7c3aed",
-    "--chart-5": mode === "dark" ? "#f472b6" : "#be185d",
-    "--border": theme.borderColor,
-    "--input": theme.borderColor,
-    "--ring": theme.accentColor,
-    "--sidebar": theme.backgroundColor,
-    "--sidebar-foreground": theme.textColor,
-    "--sidebar-primary": theme.accentColor,
-    "--sidebar-primary-foreground": primaryForeground,
-    "--sidebar-accent": theme.surfaceColor,
-    "--sidebar-accent-foreground": theme.accentStrongColor,
-    "--sidebar-border": theme.borderColor,
-    "--sidebar-ring": theme.accentColor
-  } as CSSProperties;
-}
-
-function readableForeground(background: string): "#ffffff" | "#071312" {
-  const rgb = parseHexColor(background);
-  if (!rgb) {
-    return "#ffffff";
-  }
-  const backgroundLuminance = relativeLuminance(rgb);
-  const darkForeground = "#071312";
-  const darkLuminance = relativeLuminance({ r: 7, g: 19, b: 18 });
-  return contrastRatio(backgroundLuminance, darkLuminance) >= contrastRatio(backgroundLuminance, 1)
-    ? darkForeground
-    : "#ffffff";
-}
-
-function contrastRatio(firstLuminance: number, secondLuminance: number): number {
-  const lighter = Math.max(firstLuminance, secondLuminance);
-  const darker = Math.min(firstLuminance, secondLuminance);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function parseHexColor(value: string): { r: number; g: number; b: number } | undefined {
-  const hex = value.trim().replace(/^#/u, "");
-  if (!/^[0-9a-f]{3}([0-9a-f]{3})?$/iu.test(hex)) {
-    return undefined;
-  }
-  const normalized =
-    hex.length === 3
-      ? hex
-          .split("")
-          .map((character) => `${character}${character}`)
-          .join("")
-      : hex;
-  return {
-    r: Number.parseInt(normalized.slice(0, 2), 16),
-    g: Number.parseInt(normalized.slice(2, 4), 16),
-    b: Number.parseInt(normalized.slice(4, 6), 16)
-  };
-}
-
-function relativeLuminance({ r, g, b }: { r: number; g: number; b: number }): number {
-  const [red, green, blue] = [r, g, b].map((channel) => {
-    const value = channel / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * (red ?? 0) + 0.7152 * (green ?? 0) + 0.0722 * (blue ?? 0);
 }

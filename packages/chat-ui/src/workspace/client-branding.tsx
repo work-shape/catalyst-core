@@ -1,5 +1,5 @@
 import type { SafeConfig } from "@vivd-catalyst/api-client";
-import { cn } from "../ui/cn";
+import { cn } from "@vivd-catalyst/ui";
 
 /**
  * The client identity the rail shows: logo when one is configured, otherwise

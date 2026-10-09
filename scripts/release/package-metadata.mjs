@@ -27,6 +27,9 @@ const OVERRIDES = {
   // Ships src/ so Tailwind `@source` scanning and the `./vite` and `./styles.css` exports
   // work from node_modules. Imports CSS and Univer facades for their side effects.
   "chat-ui": { files: ["dist", "src"], sideEffects: undefined },
+  // Ships src/ for the same Tailwind scanning and for its `./styles.css` export. Its
+  // JavaScript imports no CSS and has no side effects.
+  ui: { files: ["dist", "src"] },
   // The entry runs the CLI when executed as `catalyst`.
   "config-cli": { sideEffects: undefined },
   // Migrations are read at runtime from ../migrations relative to dist/.

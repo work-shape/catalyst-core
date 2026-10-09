@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "./ui/cn";
+import { cn } from "@vivd-catalyst/ui";
 import type { ArtifactFileType } from "./tool-artifacts";
 
 export function ArtifactPreviewFrame({ children }: { children: ReactNode }) {

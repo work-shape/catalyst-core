@@ -1,9 +1,9 @@
 import { MessagePrimitive, useAuiState } from "@assistant-ui/react";
 import { Paperclip } from "lucide-react";
 import { useMemo, useState } from "react";
+import { cn } from "@vivd-catalyst/ui";
 import { AttachmentPreview, isImageAttachment } from "./attachment-preview";
 import { useTranslation } from "./i18n";
-import { cn } from "./ui/cn";
 
 /** Short stacks stay inline; longer ones use a card and collapse when they exceed its capacity. */
 const INLINE_LIMIT = 4;

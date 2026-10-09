@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { LogOut, Settings } from "lucide-react";
 import type { ApiUser } from "@vivd-catalyst/api-client";
-import { avatarGradient } from "../ui/avatar-gradient";
+import { avatarGradient, Button, cn } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
 
 export function UserMenu({
   user,
@@ -68,7 +66,7 @@ export function UserMenu({
       >
         <span
           style={{ background: avatarGradient(label) }}
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-white/45 text-xs font-semibold text-white shadow-xs"
+          className="grid size-8 shrink-0 place-items-center rounded-full border border-white/45 text-xs font-semibold text-primary-foreground shadow-xs"
           aria-hidden="true"
         >
           {initials}

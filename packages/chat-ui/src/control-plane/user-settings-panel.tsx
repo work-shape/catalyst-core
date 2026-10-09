@@ -7,13 +7,18 @@ import {
   type LocaleCode,
   type UpdateCurrentUserRequest
 } from "@vivd-catalyst/api-client";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Dialog,
+  Input,
+  Switch
+} from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { LocaleSelector } from "../locale-selector";
-import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Dialog } from "../ui/dialog";
-import { Input } from "../ui/input";
-import { Switch } from "../ui/switch";
 
 export function UserSettingsPanel({
   user,

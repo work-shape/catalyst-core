@@ -1,14 +1,11 @@
 import { Plus } from "lucide-react";
+import { Button, cn, Dialog, Input } from "@vivd-catalyst/ui";
 import {
   LANGUAGE_CODE_LABELS,
   type AgentFormState,
   type LocalizedPair
 } from "./config-assets-model";
 import { useTranslation } from "../i18n";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { Dialog } from "../ui/dialog";
-import { Input } from "../ui/input";
 
 export function Field({
   label,

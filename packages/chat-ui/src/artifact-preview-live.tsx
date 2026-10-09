@@ -1,6 +1,7 @@
 import type { ApiClient, ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
 import { RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@vivd-catalyst/ui";
 import { useTranslation } from "./i18n";
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
 import {
@@ -11,7 +12,6 @@ import {
   type ToolArtifactDownloadRef,
   type ToolArtifactImagePagesPreview
 } from "./tool-artifacts";
-import { Button } from "./ui/button";
 
 export const ARTIFACT_PREVIEW_POLL_DELAYS_MS = [
   1000, 2000, 3000, 5000, 5000, 5000, 5000, 5000

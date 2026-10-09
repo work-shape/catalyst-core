@@ -1,11 +1,9 @@
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AdministeredUser } from "@vivd-catalyst/api-client";
-import { avatarGradient } from "../ui/avatar-gradient";
+import { avatarGradient, Badge, cn } from "@vivd-catalyst/ui";
 import type { FormNoticeState } from "./user-administration-model";
 import { useTranslation } from "../i18n";
-import { Badge } from "../ui/badge";
-import { cn } from "../ui/cn";
 
 export function Field({
   label,
@@ -59,7 +57,7 @@ export function UserAvatar({
       aria-hidden="true"
       style={{ background: avatarGradient(displayLabel) }}
       className={cn(
-        "grid shrink-0 place-items-center font-semibold text-white shadow-sm ring-1 ring-white/45",
+        "grid shrink-0 place-items-center font-semibold text-primary-foreground shadow-sm ring-1 ring-white/45",
         size === "lg" ? "size-11 rounded-[11px] text-sm" : "size-8 rounded-[9px] text-xs"
       )}
     >
@@ -71,7 +69,10 @@ export function UserAvatar({
 export function StatusBadge({ status }: { status: AdministeredUser["status"] }) {
   const { t } = useTranslation();
   return (
-    <Badge variant={status === "active" ? "success" : "outline"}>
+    <Badge
+      tone={status === "active" ? "success" : "neutral"}
+      appearance={status === "active" ? "soft" : "outline"}
+    >
       {t(status === "active" ? "settings.statusActive" : "settings.statusDisabled")}
     </Badge>
   );

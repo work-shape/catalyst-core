@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { cn, Spinner, UiRoot } from "@vivd-catalyst/ui";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { ApprovalsView } from "./approvals/approvals-view";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
@@ -13,7 +14,7 @@ import { LoginPanel } from "./login-panel";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
-import { cn } from "./ui/cn";
+import { uiLabelsFor } from "./ui-labels";
 import { agentChipDisplayFor } from "./workspace/agent-selector";
 import { ClientBrandingHeader } from "./workspace/client-branding";
 import { UserMenu } from "./workspace/user-menu";
@@ -22,6 +23,12 @@ import { WorkspaceRail } from "./workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./workspace/workspace-providers";
+
+// The gallery of the shared UI library is its own chunk, loaded only when its route is opened.
+const UiGallery = lazy(async () => {
+  const { UiGallery: Gallery } = await import("@vivd-catalyst/ui/gallery");
+  return { default: Gallery };
+});
 
 interface ChatWorkspaceProps extends ChatShellProps {
   route: WorkspaceRoute;
@@ -50,6 +57,7 @@ export function ChatWorkspace({
   getToken,
   adminPanel,
   manageDocumentTitle,
+  onThemeModeChange,
   className,
   route,
   onRouteChange
@@ -67,6 +75,7 @@ export function ChatWorkspace({
       <ChatWorkspaceContent
         adminPanel={adminPanel}
         manageDocumentTitle={manageDocumentTitle}
+        onThemeModeChange={onThemeModeChange}
         className={className}
         collaborationWorkspacesAvailable={workspacesAvailable}
       />
@@ -77,9 +86,13 @@ export function ChatWorkspace({
 function ChatWorkspaceContent({
   adminPanel,
   manageDocumentTitle,
+  onThemeModeChange,
   className,
   collaborationWorkspacesAvailable
-}: Pick<ChatWorkspaceProps, "adminPanel" | "manageDocumentTitle" | "className"> & {
+}: Pick<
+  ChatWorkspaceProps,
+  "adminPanel" | "manageDocumentTitle" | "onThemeModeChange" | "className"
+> & {
   collaborationWorkspacesAvailable: boolean;
 }) {
   const model = useWorkspaceChatModel({
@@ -107,8 +120,18 @@ function ChatWorkspaceContent({
   });
   const displayPanel = useToolDisplayPanel();
   const resourcesVisible = resourcesPanel.open && !displayPanel.open;
+  const showsLogin = model.auth.loginRequired || Boolean(passwordSetupToken);
+  const themeMode = model.config.resolvedThemeMode;
+  const uiLabels = uiLabelsFor(model.config.activeLocale);
 
-  if (model.auth.loginRequired || passwordSetupToken) {
+  // The login panel resolves its own mode from the public branding and reports that instead.
+  useEffect(() => {
+    if (!showsLogin) {
+      onThemeModeChange?.(themeMode);
+    }
+  }, [onThemeModeChange, showsLogin, themeMode]);
+
+  if (showsLogin) {
     return (
       <TranslationProvider locale={model.config.activeLocale}>
         <LoginPanel
@@ -119,6 +142,7 @@ function ChatWorkspaceContent({
           manageDocumentTitle={manageDocumentTitle}
           passwordSetupToken={passwordSetupToken}
           onPasswordSetupClosed={clearPasswordSetupToken}
+          onThemeModeChange={onThemeModeChange}
           onSignedIn={model.auth.invalidateCurrentUser}
         />
       </TranslationProvider>
@@ -128,12 +152,14 @@ function ChatWorkspaceContent({
   if (!model.auth.user) {
     return (
       <TranslationProvider locale={model.config.activeLocale}>
-        <SessionCheckPanel
-          className={className}
-          unavailable={model.auth.sessionUnavailable}
-          retrying={model.auth.sessionRetrying}
-          onRetry={model.auth.retryCurrentUser}
-        />
+        <UiRoot mode={themeMode} labels={uiLabels}>
+          <SessionCheckPanel
+            className={className}
+            unavailable={model.auth.sessionUnavailable}
+            retrying={model.auth.sessionRetrying}
+            onRetry={model.auth.retryCurrentUser}
+          />
+        </UiRoot>
       </TranslationProvider>
     );
   }
@@ -141,8 +167,32 @@ function ChatWorkspaceContent({
   if (!model.config.config) {
     return (
       <TranslationProvider locale={model.config.activeLocale}>
-        <ConfigCheckPanel className={className} error={model.config.error} />
+        <UiRoot mode={themeMode} labels={uiLabels}>
+          <ConfigCheckPanel className={className} error={model.config.error} />
+        </UiRoot>
       </TranslationProvider>
+    );
+  }
+
+  if (model.controlPlane.showUiLibrary) {
+    return (
+      <Suspense
+        fallback={
+          <UiRoot
+            as="main"
+            theme={model.config.theme}
+            mode={themeMode}
+            labels={uiLabels}
+            className="grid h-dvh w-full place-items-center bg-background text-muted-foreground"
+            role="status"
+            aria-label={uiLabels.loading}
+          >
+            <Spinner size="lg" />
+          </UiRoot>
+        }
+      >
+        <UiGallery initialMode={themeMode} initialLanguage={model.config.activeLocale} />
+      </Suspense>
     );
   }
 
@@ -178,17 +228,19 @@ function ChatWorkspaceContent({
 
   return (
     <TranslationProvider locale={model.config.activeLocale}>
-      <main
+      <UiRoot
+        as="main"
+        theme={model.config.theme}
+        mode={themeMode}
+        labels={uiLabels}
         className={cn(
           "relative grid h-dvh w-full min-h-0 overflow-hidden bg-background text-foreground transition-colors md:grid-rows-[minmax(0,1fr)] max-md:grid-cols-1",
           model.chrome.sidebarOpen
             ? "md:grid-cols-[20rem_minmax(0,1fr)]"
             : "md:grid-cols-[minmax(0,1fr)]",
           isStaging && "pt-6",
-          model.config.resolvedThemeMode === "dark" && "dark",
           className
         )}
-        style={model.config.workspaceStyle}
       >
         {model.chrome.sidebarOpen ? <SidebarBackdrop onClose={model.chrome.closeSidebar} /> : null}
 
@@ -231,7 +283,7 @@ function ChatWorkspaceContent({
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
           showAgentSelector={!onStartPage}
-          themeMode={model.config.resolvedThemeMode}
+          themeMode={themeMode}
           onSelectAgent={model.config.selectAgentName}
           onToggleSidebar={model.chrome.toggleSidebar}
           onToggleTheme={model.config.toggleTheme}
@@ -313,7 +365,7 @@ function ChatWorkspaceContent({
             </section>
           </ControlPlaneRoutes>
         </ApprovalRevisionHostProvider>
-      </main>
+      </UiRoot>
     </TranslationProvider>
   );
 }

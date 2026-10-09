@@ -7,15 +7,18 @@ import type {
   WorkspaceMemberCandidate,
   WorkspaceMembershipRole
 } from "@vivd-catalyst/api-client";
+import {
+  Badge,
+  Button,
+  cn,
+  Dialog,
+  Input,
+  Select,
+  Spinner,
+  Textarea,
+  useScrollEdgeFade
+} from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { Dialog } from "../ui/dialog";
-import { Input, Textarea } from "../ui/input";
-import { Select } from "../ui/select";
-import { Spinner } from "../ui/spinner";
-import { useScrollEdgeFade } from "../ui/scroll-edge-fade";
 import {
   resolveCollaborationWorkspaceAccentColor,
   type CollaborationWorkspaceAccentColor
@@ -808,7 +811,7 @@ export function CollaborationWorkspaceMembersTab({
                       <option value="member">{t("collaborationWorkspaceRoleMember")}</option>
                     </Select>
                   ) : (
-                    <Badge variant="secondary">{t(roleLabelKeys[member.role])}</Badge>
+                    <Badge>{t(roleLabelKeys[member.role])}</Badge>
                   )}
                   {!isSelf && canRemoveCollaborationWorkspaceMember(actorRole, member.role) ? (
                     <Button

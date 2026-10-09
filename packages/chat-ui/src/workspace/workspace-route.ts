@@ -1,5 +1,5 @@
 export type SuperadminRouteTab = "usage" | "users" | "api-access" | "audit" | "config";
-export type WorkspaceRouteView = "chat" | "settings" | "superadmin" | "approvals";
+export type WorkspaceRouteView = "chat" | "settings" | "superadmin" | "approvals" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -13,7 +13,9 @@ export type WorkspaceRoute =
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
   | { kind: "settings" }
   | { kind: "approvals" }
-  | { kind: "superadmin"; tab: SuperadminRouteTab };
+  | { kind: "superadmin"; tab: SuperadminRouteTab }
+  /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
+  | { kind: "ui-library" };
 
 export interface WorkspaceRouteChangeOptions {
   replace?: boolean;
@@ -52,6 +54,9 @@ export function workspaceRouteView(route: WorkspaceRoute): WorkspaceRouteView {
   }
   if (route.kind === "approvals") {
     return "approvals";
+  }
+  if (route.kind === "ui-library") {
+    return "ui-library";
   }
   return "chat";
 }

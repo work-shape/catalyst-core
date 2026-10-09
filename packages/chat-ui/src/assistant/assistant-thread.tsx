@@ -8,6 +8,7 @@ import {
 import { ArrowDown, CircleAlert, Lock, Sparkles } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
+import { cn } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,
@@ -19,7 +20,6 @@ import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-co
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "../i18n";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
-import { cn } from "../ui/cn";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;

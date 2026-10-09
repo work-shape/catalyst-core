@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import { ContextIndicator } from "../packages/chat-ui/src/assistant/context-indicator";
 import { resolveContextUsage } from "../packages/chat-ui/src/assistant/context-usage";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";

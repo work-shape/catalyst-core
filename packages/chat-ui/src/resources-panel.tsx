@@ -2,6 +2,7 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { BarChart3, ChevronDown, Database, Library, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
+import { Spinner, IconButton } from "@vivd-catalyst/ui";
 import { ArtifactFileIcon } from "./artifact-download-card";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import {
@@ -26,8 +27,6 @@ import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-da
 import { displayPanelKey, renderBuiltInDisplay } from "./tool-display-rendering";
 import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
 import { getArtifactFileType } from "./tool-artifacts";
-import { TooltipIconButton } from "./ui/tooltip-icon-button";
-import { Spinner } from "./ui/spinner";
 import { useWorkspacePreferences } from "./workspace/workspace-ui-state";
 
 const AUTH_SCOPE = "standalone";
@@ -84,13 +83,15 @@ export function ResourcesPanelToggle({ onOpen }: { onOpen(): void }) {
   const { t } = useTranslation();
   return (
     <div className="animate-in fade-in zoom-in-95 absolute top-20 right-6 z-[45] duration-200">
-      <TooltipIconButton
-        className="size-9 rounded-md border bg-popover text-muted-foreground shadow-lg hover:bg-accent hover:text-accent-foreground"
-        tooltip={t("resourcesToggle")}
+      <IconButton
+        variant="outline"
+        size="lg"
+        className="bg-popover shadow-overlay"
+        label={t("resourcesToggle")}
         onClick={onOpen}
       >
         <Library size={16} aria-hidden="true" />
-      </TooltipIconButton>
+      </IconButton>
     </div>
   );
 }
@@ -200,9 +201,9 @@ export function ResourcesPanel({
     >
       <div className="flex h-11 shrink-0 items-center justify-between border-b px-3">
         <h2 className="text-sm font-semibold">{t("resourcesTitle")}</h2>
-        <TooltipIconButton className="size-7" tooltip={t("resourcesClose")} onClick={onClose}>
+        <IconButton size="sm" label={t("resourcesClose")} onClick={onClose}>
           <X size={15} aria-hidden="true" />
-        </TooltipIconButton>
+        </IconButton>
       </div>
       <div className="chat-scrollbar min-h-0 overflow-y-auto p-2">
         {loading ? (

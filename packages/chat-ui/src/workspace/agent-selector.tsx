@@ -9,8 +9,8 @@ import {
 } from "react";
 import { Bot, Check, ChevronDown } from "lucide-react";
 import type { SafeConfig } from "@vivd-catalyst/api-client";
+import { cn } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { cn } from "../ui/cn";
 
 type Agent = SafeConfig["agents"][number];
 

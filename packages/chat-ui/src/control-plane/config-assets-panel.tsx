@@ -6,6 +6,7 @@ import type {
   ConfigAssetRevision,
   ConfigAssetsOverview
 } from "@vivd-catalyst/api-client";
+import { Button, cn, Dialog, Spinner } from "@vivd-catalyst/ui";
 import {
   agentAvailabilitySummary,
   agentConfigToForm,
@@ -25,10 +26,6 @@ import {
 } from "./config-asset-editors";
 import { ControlPlanePage } from "./control-plane-page";
 import { useTranslation } from "../i18n";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { Dialog } from "../ui/dialog";
-import { Spinner } from "../ui/spinner";
 import { apiErrorStatus } from "../workspace-utils";
 
 export interface ConfigAssetBundleEntry {

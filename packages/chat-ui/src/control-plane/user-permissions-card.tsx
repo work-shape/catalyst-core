@@ -2,10 +2,8 @@ import { useEffect, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import type { AdministeredUser, UpdateAdministeredUserRequest } from "@vivd-catalyst/api-client";
 import type { Permission } from "@vivd-catalyst/core";
+import { Badge, Card, CardContent, CardHeader, CardTitle, Switch } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { Badge } from "../ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Switch } from "../ui/switch";
 import {
   USER_PERMISSION_SOURCE_LABEL_KEYS,
   errorMessage,
@@ -87,7 +85,7 @@ export function UserPermissionsCard({
                   <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-medium">{label}</span>
                     {state.source !== "none" ? (
-                      <Badge variant="outline" className="font-normal text-muted-foreground">
+                      <Badge appearance="outline" className="font-normal text-muted-foreground">
                         {t(USER_PERMISSION_SOURCE_LABEL_KEYS[state.source])}
                       </Badge>
                     ) : null}

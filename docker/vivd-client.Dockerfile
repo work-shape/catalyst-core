@@ -194,8 +194,10 @@ ENV VITE_CHAT_API_URL=${VITE_CHAT_API_URL}
 ENV VITE_CHAT_API_PORT=${VITE_CHAT_API_PORT}
 ENV NODE_ENV=development
 
+# The Vite plugin of chat-ui runs in Node and imports these three from their built output.
 RUN pnpm --filter @vivd-catalyst/core build \
-  && pnpm --filter @vivd-catalyst/config-schema build
+  && pnpm --filter @vivd-catalyst/config-schema build \
+  && pnpm --filter @vivd-catalyst/ui build
 
 EXPOSE 5173
 CMD ["sh", "-c", "pnpm --filter \"${UI_PACKAGE}\" exec vite --host 0.0.0.0 --port ${UI_DEV_PORT}"]

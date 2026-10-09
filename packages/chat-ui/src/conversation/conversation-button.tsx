@@ -2,12 +2,16 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { Clock, FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
+import {
+  Button,
+  cn,
+  Dialog,
+  Spinner,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { Dialog } from "../ui/dialog";
-import { Spinner } from "../ui/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 /** How long before its retention date a conversation is marked as about to be deleted. */
 export const RETENTION_WARNING_DAYS = 7;

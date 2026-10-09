@@ -1,5 +1,4 @@
-import { avatarGradient } from "../ui/avatar-gradient";
-import { cn } from "../ui/cn";
+import { avatarGradient, cn } from "@vivd-catalyst/ui";
 import {
   collaborationWorkspaceAccentAttributes,
   resolveCollaborationWorkspaceAccentColor
@@ -61,7 +60,7 @@ export function PersonalCollaborationWorkspaceAvatar({
     <span
       style={{ background: avatarGradient(label) }}
       className={cn(
-        "grid shrink-0 place-items-center overflow-hidden border border-white/45 font-semibold leading-none text-white shadow-xs",
+        "grid shrink-0 place-items-center overflow-hidden border border-white/45 font-semibold leading-none text-primary-foreground shadow-xs",
         avatarSizes[size],
         className
       )}

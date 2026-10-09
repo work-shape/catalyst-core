@@ -5,13 +5,23 @@ import type {
   ModelUsageMonthlyBucket,
   UsageSummary
 } from "@vivd-catalyst/api-client";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  cn,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@vivd-catalyst/ui";
 import { ControlPlanePage } from "./control-plane-page";
 import { formatDateTime } from "./locale-format";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
-import { Badge } from "../ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { cn } from "../ui/cn";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 
 export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
   const i18n = useTranslation();
@@ -288,7 +298,7 @@ function SpendBudgetProgress({
             <p className="text-sm font-medium">{label}</p>
             <p className="text-xs text-muted-foreground">{t("settings.usageBudgetIncomplete")}</p>
           </div>
-          <Badge variant="secondary">{t("settings.usageIncomplete")}</Badge>
+          <Badge>{t("settings.usageIncomplete")}</Badge>
         </div>
       </div>
     );
@@ -311,7 +321,7 @@ function SpendBudgetProgress({
             })}
           </p>
         </div>
-        <Badge variant={reached ? "default" : "secondary"}>
+        <Badge tone={reached ? "accent" : "neutral"}>
           {reached
             ? t("settings.usageBudgetLimitReached")
             : t("settings.usageBudgetPercentUsed", { percent: displayedPercentage })}
@@ -548,9 +558,7 @@ function MonthlyHistoryCard({
                   <TableCell className="font-medium whitespace-nowrap">
                     {formatUtcMonth(month.month, locale)}
                     {index === 0 ? (
-                      <Badge variant="secondary" className="ml-2">
-                        {t("settings.usageCurrentMonth")}
-                      </Badge>
+                      <Badge className="ml-2">{t("settings.usageCurrentMonth")}</Badge>
                     ) : null}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">

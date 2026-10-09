@@ -5,6 +5,7 @@ import {
   createClientBranding,
   loadClientInstanceConfigFromFile
 } from "@vivd-catalyst/config-schema";
+import { createThemeTokens, serializeThemeRule } from "@vivd-catalyst/ui/theme";
 
 const DEFAULT_FAVICON_PUBLIC_PATH = "/favicon.svg";
 const DEFAULT_CLIENT_CONFIG_PATH = "config/app.yaml";
@@ -116,8 +117,8 @@ function createThemeBootstrapScript(defaultThemeMode) {
 }
 
 function createThemeBootstrapStyle(branding) {
-  const lightVariables = createThemeVariables(branding.theme, "light");
-  const darkVariables = createThemeVariables(branding.darkTheme, "dark");
+  const lightVariables = createThemeTokens(branding.theme, "light");
+  const darkVariables = createThemeTokens(branding.darkTheme, "dark");
   const fallbackThemeMode = branding.defaultThemeMode === "dark" ? "dark" : "light";
   const fallbackVariables = fallbackThemeMode === "dark" ? darkVariables : lightVariables;
   const fallbackRules = [
@@ -136,107 +137,6 @@ function createThemeBootstrapStyle(branding) {
     serializeThemeRule(':root[data-vivd-theme="dark"]', darkVariables),
     "html,body,#root{background:var(--background);color:var(--foreground);}"
   ].join("");
-}
-
-function createThemeVariables(theme, mode) {
-  const primaryForeground = readableForeground(theme.accentColor);
-  return {
-    "--background": theme.surfaceColor,
-    "--foreground": theme.textColor,
-    "--card": theme.surfaceColor,
-    "--card-foreground": theme.textColor,
-    "--popover": theme.surfaceColor,
-    "--popover-foreground": theme.textColor,
-    "--primary": theme.accentColor,
-    "--primary-foreground": primaryForeground,
-    "--secondary": theme.backgroundColor,
-    "--secondary-foreground": theme.textColor,
-    "--muted": theme.backgroundColor,
-    "--muted-foreground": theme.mutedTextColor,
-    "--accent": theme.backgroundColor,
-    "--accent-foreground": theme.accentStrongColor,
-    "--destructive": mode === "dark" ? "#f87171" : "#b42318",
-    "--success": mode === "dark" ? "#34d399" : "#047857",
-    "--warning": mode === "dark" ? "#fbbf24" : "#b45309",
-    "--info": mode === "dark" ? "#38bdf8" : "#0369a1",
-    "--chart-1": mode === "dark" ? "#2dd4bf" : "#0f766e",
-    "--chart-2": mode === "dark" ? "#fbbf24" : "#b45309",
-    "--chart-3": mode === "dark" ? "#38bdf8" : "#0369a1",
-    "--chart-4": mode === "dark" ? "#a78bfa" : "#7c3aed",
-    "--chart-5": mode === "dark" ? "#f472b6" : "#be185d",
-    "--border": theme.borderColor,
-    "--input": theme.borderColor,
-    "--ring": theme.accentColor,
-    "--sidebar": theme.backgroundColor,
-    "--sidebar-foreground": theme.textColor,
-    "--sidebar-primary": theme.accentColor,
-    "--sidebar-primary-foreground": primaryForeground,
-    "--sidebar-accent": theme.surfaceColor,
-    "--sidebar-accent-foreground": theme.accentStrongColor,
-    "--sidebar-border": theme.borderColor,
-    "--sidebar-ring": theme.accentColor
-  };
-}
-
-function serializeThemeRule(selector, variables) {
-  const declarations = Object.entries(variables)
-    .map(([name, value]) => `${name}:${safeCssValue(value)};`)
-    .join("");
-  return `${selector}{${declarations}}`;
-}
-
-function safeCssValue(value) {
-  const trimmed = String(value).trim();
-  if (!/^[#a-zA-Z0-9\s.,()%+/-]+$/u.test(trimmed)) {
-    throw new Error(`Unsupported theme CSS value for branding bootstrap: ${trimmed}`);
-  }
-  return trimmed;
-}
-
-function readableForeground(background) {
-  const rgb = parseHexColor(background);
-  if (!rgb) {
-    return "#ffffff";
-  }
-  const backgroundLuminance = relativeLuminance(rgb);
-  const darkForeground = "#071312";
-  const darkLuminance = relativeLuminance({ r: 7, g: 19, b: 18 });
-  return contrastRatio(backgroundLuminance, darkLuminance) >= contrastRatio(backgroundLuminance, 1)
-    ? darkForeground
-    : "#ffffff";
-}
-
-function contrastRatio(firstLuminance, secondLuminance) {
-  const lighter = Math.max(firstLuminance, secondLuminance);
-  const darker = Math.min(firstLuminance, secondLuminance);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function parseHexColor(value) {
-  const hex = value.trim().replace(/^#/u, "");
-  if (!/^[0-9a-f]{3}([0-9a-f]{3})?$/iu.test(hex)) {
-    return undefined;
-  }
-  const normalized =
-    hex.length === 3
-      ? hex
-          .split("")
-          .map((character) => `${character}${character}`)
-          .join("")
-      : hex;
-  return {
-    r: Number.parseInt(normalized.slice(0, 2), 16),
-    g: Number.parseInt(normalized.slice(2, 4), 16),
-    b: Number.parseInt(normalized.slice(4, 6), 16)
-  };
-}
-
-function relativeLuminance({ r, g, b }) {
-  const [red, green, blue] = [r, g, b].map((channel) => {
-    const value = channel / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * (red ?? 0) + 0.7152 * (green ?? 0) + 0.0722 * (blue ?? 0);
 }
 
 function clientAssetExists(config, relativePath) {

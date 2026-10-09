@@ -13,6 +13,7 @@ import { ChatShell, type ChatShellAdminPanel } from "./chat-shell";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
 import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./assistant/tool-activity";
 import { installStaleChunkRecovery } from "./stale-chunk-recovery";
+import { applyDocumentThemeMode } from "./theme";
 import type {
   SuperadminRouteTab,
   WorkspaceRoute,
@@ -91,6 +92,10 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     getParentRoute: () => rootRoute,
     path: "approvals"
   });
+  const uiLibraryRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "ui-library"
+  });
   const adminIndexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "admin",
@@ -125,6 +130,7 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
     conversationRoute,
     settingsRoute,
     approvalsRoute,
+    uiLibraryRoute,
     adminIndexRoute,
     adminUsageRoute,
     adminUsersRoute,
@@ -160,6 +166,7 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
         adminPanel={options.adminPanel}
         displayWidgets={options.displayWidgets}
         manageDocumentTitle
+        onThemeModeChange={applyDocumentThemeMode}
         route={route}
         onRouteChange={onRouteChange}
       />
@@ -197,6 +204,9 @@ export function workspaceRouteNavigation(route: WorkspaceRoute) {
   }
   if (route.kind === "superadmin") {
     return { to: `/admin/${route.tab}` };
+  }
+  if (route.kind === "ui-library") {
+    return { to: "/ui-library" };
   }
   return { to: "/" };
 }
@@ -237,6 +247,9 @@ export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
   }
   if (normalizedPathname === "/approvals") {
     return { kind: "approvals" };
+  }
+  if (normalizedPathname === "/ui-library") {
+    return { kind: "ui-library" };
   }
   if (normalizedPathname.startsWith("/admin/")) {
     const tab = normalizedPathname.slice("/admin/".length);

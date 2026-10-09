@@ -42,6 +42,7 @@ x-backend-package-watch-ignore: &backend-package-watch-ignore
   - "**/.astro/**"
   - "chat-standalone/**"
   - "chat-ui/**"
+  - "ui/**"
   - "chat-widget/**"
   - "docs/**"
 
@@ -216,6 +217,10 @@ services:
           target: /app/packages/chat-ui/src
           ignore: *watch-ignore
         - action: sync
+          path: ../../packages/ui/src
+          target: /app/packages/ui/src
+          ignore: *watch-ignore
+        - action: sync
           path: ../../packages/api-client/src
           target: /app/packages/api-client/src
           initial_sync: true
@@ -235,6 +240,8 @@ services:
           path: ../../packages/chat-ui/package.json
         - action: rebuild
           path: ../../packages/chat-ui/tsconfig.json
+        - action: rebuild
+          path: ../../packages/ui/package.json
         - action: rebuild
           path: ../../docker
         - action: rebuild

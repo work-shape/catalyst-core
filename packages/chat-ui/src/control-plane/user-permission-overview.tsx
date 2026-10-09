@@ -1,7 +1,7 @@
 import { Check, X } from "lucide-react";
 import type { AdministeredUser } from "@vivd-catalyst/api-client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import {
   USER_PERMISSIONS,
   USER_PERMISSION_SOURCE_LABEL_KEYS,

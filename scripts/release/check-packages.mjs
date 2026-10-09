@@ -13,8 +13,8 @@ const CONSUMER_SET = ["core", "config-schema", "api-contract", "api-client", "co
 // Installed next to them for its bin only; it has no module entry to import.
 const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
-// chat-ui ships src/ next to dist/ for Tailwind scanning.
-const MAX_TARBALL_BYTES_BY_DIR = { "chat-ui": 1_000_000 };
+// chat-ui and ui ship src/ next to dist/ for Tailwind scanning.
+const MAX_TARBALL_BYTES_BY_DIR = { "chat-ui": 1_000_000, ui: 500_000 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],
   [/\.(test|spec)\.[cm]?[jt]sx?$/u, "test file"],

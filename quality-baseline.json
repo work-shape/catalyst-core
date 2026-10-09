@@ -145,7 +145,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/chat-ui",
-      "count": 34,
+      "count": 33,
       "owner": "G-5c"
     },
     {
@@ -208,7 +208,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 93,
+      "count": 91,
       "owner": "CB-2"
     },
     {
@@ -339,13 +339,6 @@
     },
     {
       "target": "lint",
-      "rule": "eslint/inline-config",
-      "scope": "packages/chat-ui",
-      "count": 1,
-      "owner": "G-5c"
-    },
-    {
-      "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "scripts",
       "count": 3,
@@ -357,13 +350,6 @@
       "scope": "tests",
       "count": 170,
       "owner": "CB-2"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/dependencies",
-      "scope": "clients/demo",
-      "count": 1,
-      "owner": "CB-8b"
     },
     {
       "target": "lint",
@@ -384,13 +370,6 @@
       "rule": "knip/dependencies",
       "scope": "packages/chat-standalone",
       "count": 2,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/devDependencies",
-      "scope": "clients/demo",
-      "count": 1,
       "owner": "CB-8b"
     },
     {
@@ -460,7 +439,7 @@
       "target": "lint",
       "rule": "knip/exports",
       "scope": "packages/chat-ui",
-      "count": 15,
+      "count": 14,
       "owner": "G-5c"
     },
     {

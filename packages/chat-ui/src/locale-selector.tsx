@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Languages } from "lucide-react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
+import { cn } from "@vivd-catalyst/ui";
 import { useTranslation } from "./i18n";
-import { cn } from "./ui/cn";
 
 export function LocaleSelector({
   locales,

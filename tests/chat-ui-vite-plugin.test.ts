@@ -35,7 +35,7 @@ describe("vivdCatalystChatUiPlugin", () => {
     expect(style).toContain(':root[data-vivd-theme="light"]');
     expect(style).toContain(':root[data-vivd-theme="dark"]');
     expect(style).toContain("--primary:#00a6e3;");
-    expect(style).toContain("--primary-foreground:#071312;");
+    expect(style).toContain("--primary-foreground:#111111;");
     expect(style).toContain("--background:#ffffff;");
     expect(style).toContain("--success:#047857;");
     expect(style).toContain("--warning:#b45309;");
@@ -46,6 +46,8 @@ describe("vivdCatalystChatUiPlugin", () => {
     expect(style).toContain("--info:#38bdf8;");
     expect(style).toContain("--chart-1:#2dd4bf;");
     expect(style).toContain("--sidebar:#f7f9fb;");
+    expect(style).toContain("--state-selected:color-mix(in srgb, #00a6e3 12%, transparent);");
+    expect(style).toContain("--popover:color-mix(in srgb, #eef7f6 6%, #171f1e);");
     expect(style).toContain(
       "html,body,#root{background:var(--background);color:var(--foreground);}"
     );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ApiClient,
   ApiUser,
@@ -10,6 +10,7 @@ import type {
   SafeConfig,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
+import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
 import { useApprovalPendingCountQuery } from "../approvals/approval-request-api";
 import {
   startApprovalRevision,
@@ -221,7 +222,8 @@ export interface WorkspaceConfigModel {
   localePreference: LocaleCode | undefined;
   supportedLocales: LocaleCode[];
   resolvedThemeMode: ResolvedThemeMode;
-  workspaceStyle: CSSProperties;
+  /** The instance's theme inputs for the resolved mode; undefined until the config has loaded. */
+  theme: ThemeInputs | undefined;
   activeAgentName: string | undefined;
   selectAgentName(agentName: string | undefined): void;
   selectLocale(locale: LocaleCode): void;
@@ -593,7 +595,7 @@ export function useWorkspaceChatModel({
   });
   const supportedLocales =
     config?.localization.supportedLocales ?? preferences.supportedFallbackLocales;
-  const { resolvedThemeMode, workspaceStyle, toggleTheme } = useWorkspaceTheme(config?.ui);
+  const { resolvedThemeMode, theme, toggleTheme } = useWorkspaceTheme(config?.ui);
   const activeAgentName = activeAgentNameFor(config, selectedAgentName);
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
@@ -879,7 +881,7 @@ export function useWorkspaceChatModel({
       localePreference: preferences.localePreference,
       supportedLocales,
       resolvedThemeMode,
-      workspaceStyle,
+      theme,
       activeAgentName,
       selectAgentName: setSelectedAgentName,
       selectLocale: preferences.selectLocale,

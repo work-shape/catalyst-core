@@ -1,6 +1,7 @@
 import { Database, LayoutDashboard, PanelRightOpen } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND, type LocaleCode } from "@vivd-catalyst/core";
+import { cn } from "@vivd-catalyst/ui";
 import {
   isToolDisplayPayload,
   ToolDisplayWidgetNode,
@@ -14,7 +15,6 @@ import {
   renderBuiltInDisplay
 } from "./tool-display-rendering";
 import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
-import { cn } from "./ui/cn";
 import type { ToolSurfaceRef } from "./tool-surfaces";
 
 export function ToolSurfaceList({

@@ -28,6 +28,7 @@ const requiredBuilds = [
   ["packages/web-access", "build"],
   ["packages/client-assembly", "build"],
   ["packages/api-client", "build"],
+  ["packages/ui", "build"],
   ["packages/chat-ui", "build"],
   ["packages/config-cli", "build"],
   ["clients/demo", "build:server"]
@@ -269,7 +270,8 @@ function startUiServer() {
 }
 
 async function runPlaywright() {
-  const args = ["test", "e2e/chat-standalone.spec.ts"];
+  // Every spec under e2e/: the chat workspace and the UI library gallery.
+  const args = ["test"];
   if (options.mode === "state") {
     args.push("--grep", defaultStateGrep);
   }

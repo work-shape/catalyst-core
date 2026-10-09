@@ -7,6 +7,7 @@ import type {
   ConfigAssetsOverview
 } from "@vivd-catalyst/api-client";
 import { SKILL_RESOURCE_MEDIA_TYPES } from "@vivd-catalyst/core";
+import { Badge, Button, cn, Input, Select, Spinner, Switch, Textarea } from "@vivd-catalyst/ui";
 import {
   CheckboxGroup,
   DeleteDialog,
@@ -31,13 +32,6 @@ import {
 } from "./config-assets-model";
 import { useTranslation } from "../i18n";
 import { formatModelLabel } from "../model-label";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { Input, Textarea } from "../ui/input";
-import { Select } from "../ui/select";
-import { Spinner } from "../ui/spinner";
-import { Switch } from "../ui/switch";
 import { apiErrorMessage } from "../workspace-utils";
 
 interface MutationOutcome {
@@ -115,7 +109,7 @@ export function AgentEditor({
             : form.displayName.en.trim() || form.displayName.de.trim() || form.name
         }
         identifier={isNew ? undefined : form.name}
-        badges={isDefault ? <Badge variant="secondary">{t("configDefaultAgent")}</Badge> : null}
+        badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
         actions={
           <>
             {onMakeDefault ? (
@@ -960,7 +954,7 @@ export function RevisionHistory({
                     className="grid min-w-0 items-center gap-2 px-3 py-2.5 text-xs sm:grid-cols-[auto_auto_minmax(0,1fr)_auto]"
                   >
                     <span className="font-mono font-medium">#{revision.revision}</span>
-                    <Badge variant="outline" className="w-fit capitalize">
+                    <Badge appearance="outline" className="w-fit capitalize">
                       {t(
                         revision.operation === "create"
                           ? "configRevisionCreate"

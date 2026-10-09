@@ -16,6 +16,7 @@ import "@univerjs/sheets-drawing-ui/lib/index.css";
 import "@univerjs/ui/facade";
 import type { ApiClient } from "@vivd-catalyst/api-client";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Spinner } from "@vivd-catalyst/ui";
 import {
   LiveArtifactPreview,
   shouldUseLiveArtifactPreviewState as shouldUseLiveArtifactPreviewStateValue
@@ -31,7 +32,6 @@ import { MarkdownArtifact } from "./markdown-text";
 import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
 import { SPREADSHEET_VISUAL_COMPONENT, SpreadsheetVisualLayer } from "./spreadsheet-visual-layer";
 import type { SpreadsheetVisual, SpreadsheetVisualAnchor } from "./spreadsheet-visuals";
-import { Spinner } from "./ui/spinner";
 import {
   artifactDisplayFilename,
   getArtifactFileType,

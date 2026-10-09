@@ -1,13 +1,13 @@
 import { ChevronLeft, ClipboardCheck, PanelLeft, Plus, Search, Shield } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
+import { Button, cn } from "@vivd-catalyst/ui";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
+import type { WorkspaceRouteView } from "./workspace-route";
 
-export type WorkspaceView = "chat" | "settings" | "superadmin" | "approvals";
+export type WorkspaceView = WorkspaceRouteView;
 
 export function WorkspaceRail({
   config,

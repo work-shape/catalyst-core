@@ -17,6 +17,11 @@
       ],
       "vite": false
     },
+    "packages/ui": {
+      "entry": ["src/index.ts", "src/theme/index.ts", "src/gallery/index.tsx"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "vite": false
+    },
     "packages/quality-config": {
       "entry": ["check.mjs", "baseline-guard.mjs", "eslint.config.mjs", "baseline.mjs"],
       "project": ["*.mjs"],

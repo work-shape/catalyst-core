@@ -19,6 +19,20 @@ import type {
   AuditEvent
 } from "@vivd-catalyst/api-client";
 import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  cn,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@vivd-catalyst/ui";
+import {
   useApiAccessMutations,
   useConfigAssetMutations,
   useSuperadminUserMutations
@@ -38,10 +52,6 @@ import type {
   ChatShellAdminRouteInput,
   ChatShellAdminRouteState
 } from "../chat-shell";
-import { Badge } from "../ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { cn } from "../ui/cn";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { ConfigAssetsPanel, type ConfigAssetsPanelInput } from "./config-assets-panel";
 import { ApiAccessPanel, type ApiAccessPanelInput } from "./api-access-panel";
 import { createApiAccessAuthorityKey } from "./api-access-reveal-controller";
@@ -485,7 +495,7 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
               <span className="text-xs text-muted-foreground">×{activity.repeatCount}</span>
             ) : null}
             {activity.tier === "governance" ? (
-              <Badge variant="secondary" className="gap-1">
+              <Badge className="gap-1">
                 <ShieldCheck size={12} aria-hidden="true" />
                 {t("settings.auditTierGovernance")}
               </Badge>
@@ -540,7 +550,8 @@ function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
               <TableCell className="font-mono text-xs break-words">{event.type}</TableCell>
               <TableCell>
                 <Badge
-                  variant={event.status === "success" ? "success" : "outline"}
+                  tone={event.status === "success" ? "success" : "neutral"}
+                  appearance={event.status === "success" ? "soft" : "outline"}
                   className={cn(
                     "capitalize",
                     event.status !== "success" && "border-destructive/40 text-destructive"
@@ -592,17 +603,17 @@ function OutcomeBadge({ outcome }: { outcome: AuditActivity["outcome"] }) {
   const { t } = useTranslation();
   const label = t(OUTCOME_LABEL_KEYS[outcome]);
   if (outcome === "success") {
-    return <Badge variant="success">{label}</Badge>;
+    return <Badge tone="success">{label}</Badge>;
   }
   if (outcome === "warning") {
     return (
-      <Badge variant="outline" className="border-amber-500 text-amber-600">
+      <Badge appearance="outline" className="border-amber-500 text-amber-600">
         {label}
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="border-destructive/50 text-destructive">
+    <Badge appearance="outline" className="border-destructive/50 text-destructive">
       {label}
     </Badge>
   );

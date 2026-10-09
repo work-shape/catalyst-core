@@ -6,6 +6,16 @@ import type {
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
 } from "@vivd-catalyst/api-client";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Dialog,
+  Input
+} from "@vivd-catalyst/ui";
 import { MaskedPasswordInput, UserFields } from "./user-administration-fields";
 import {
   STANDALONE_AUTH_SOURCE,
@@ -23,11 +33,6 @@ import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administratio
 import { UserPermissionsCard } from "./user-permissions-card";
 import { formatDateTime } from "./locale-format";
 import { useTranslation } from "../i18n";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Dialog } from "../ui/dialog";
-import { Input } from "../ui/input";
 
 export function UserDetail({
   user,
@@ -284,9 +289,9 @@ function IdentitiesCard({
               >
                 <div className="grid min-w-0 flex-1 gap-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{identity.authSource}</Badge>
+                    <Badge appearance="outline">{identity.authSource}</Badge>
                     {identity.emailVerified ? (
-                      <Badge variant="success">{t("settings.userIdentityVerified")}</Badge>
+                      <Badge tone="success">{t("settings.userIdentityVerified")}</Badge>
                     ) : null}
                   </span>
                   <span className="truncate font-mono text-xs text-muted-foreground">

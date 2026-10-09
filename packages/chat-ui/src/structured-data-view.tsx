@@ -1,12 +1,19 @@
 import { Check, ClipboardCopy, FileSearch, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import type { StructuredDataResourceResponse } from "@vivd-catalyst/api-client";
+import {
+  Button,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from "@vivd-catalyst/ui";
 import { useTranslation } from "./i18n";
 import { formatStructuredDataValue, structuredDataToTsv } from "./resources-panel-model";
-import { Button } from "./ui/button";
-import { Table, TableBody, TableCell, TableRow } from "./ui/table";
-import { TooltipIconButton } from "./ui/tooltip-icon-button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 type StructuredDataSource =
   StructuredDataResourceResponse["sections"][number]["fields"][number]["sources"] extends
@@ -156,20 +163,20 @@ function StructuredDataFieldRow({
                 );
               }
               return (
-                <TooltipIconButton
+                <IconButton
                   key={key}
                   className="size-6 text-muted-foreground/55 hover:bg-muted/50 hover:text-muted-foreground [&_svg]:size-3.5"
-                  tooltip={sourceLabel}
+                  label={sourceLabel}
                   onClick={() => onSourceOpen(source)}
                 >
                   <FileSearch aria-hidden="true" />
-                </TooltipIconButton>
+                </IconButton>
               );
             })}
           </span>
-          <TooltipIconButton
+          <IconButton
             className="size-6 opacity-0 group-hover:opacity-100 focus:opacity-100"
-            tooltip={copied ? t("copied") : t("resourcesCopyValue")}
+            label={copied ? t("copied") : t("resourcesCopyValue")}
             onClick={() => {
               const rawValue = field.value === null ? "" : String(field.value);
               void navigator.clipboard.writeText(rawValue).then(() => {
@@ -183,7 +190,7 @@ function StructuredDataFieldRow({
             ) : (
               <ClipboardCopy size={13} aria-hidden="true" />
             )}
-          </TooltipIconButton>
+          </IconButton>
         </div>
       </TableCell>
     </TableRow>

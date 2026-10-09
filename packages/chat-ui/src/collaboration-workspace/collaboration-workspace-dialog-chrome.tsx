@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "../ui/cn";
-import { useScrollEdgeFade } from "../ui/scroll-edge-fade";
+import { cn, useScrollEdgeFade } from "@vivd-catalyst/ui";
 
 /**
  * The scrolling region of a workspace dialog.

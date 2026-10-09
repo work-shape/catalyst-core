@@ -12,8 +12,8 @@ import {
   type ReactNode
 } from "react";
 import { Maximize2, Minimize2, X } from "lucide-react";
+import { cn } from "@vivd-catalyst/ui";
 import { useTranslation } from "./i18n";
-import { cn } from "./ui/cn";
 
 const DEFAULT_PANEL_WIDTH = 560;
 const MIN_PANEL_WIDTH = 380;

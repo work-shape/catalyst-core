@@ -20,6 +20,7 @@ import type {
   WorkspaceRouteView
 } from "../workspace/workspace-route";
 import { STANDALONE_AUTH_SOURCE } from "../workspace-utils";
+import { canViewAdministrationPanel } from "./governance";
 
 export interface ControlPlaneModelInput {
   apiBaseUrl: string;
@@ -44,6 +45,8 @@ export interface ControlPlaneModelInput {
 
 export interface ControlPlaneModel {
   canViewAdministration: boolean;
+  /** True while the UI library gallery's route is active for a user who may open it. */
+  showUiLibrary: boolean;
   settings: ControlPlaneSettingsModel;
   superadmin: ControlPlaneSuperadminModel;
 }
@@ -98,6 +101,7 @@ export function useControlPlaneModel({
   const administrationPending = administrationRoute?.pending ?? false;
   const selectedAdministrationTab = administrationRoute?.selectedTab;
   const administrationEnabled = canViewAdministration && view === "superadmin";
+  const canViewUiLibrary = canViewAdministrationPanel(user);
   const updateCurrentUser = useUpdateCurrentUserMutation({
     apiBaseUrl,
     authScope,
@@ -139,6 +143,12 @@ export function useControlPlaneModel({
     showSuperadmin
   ]);
 
+  useEffect(() => {
+    if (isAuthenticated && route.kind === "ui-library" && !canViewUiLibrary) {
+      goToDefaultChat({ replace: true });
+    }
+  }, [canViewUiLibrary, goToDefaultChat, isAuthenticated, route.kind]);
+
   const superadmin: ControlPlaneSuperadminModel =
     administrationEnabled && user && selectedAdministrationTab
       ? {
@@ -158,6 +168,7 @@ export function useControlPlaneModel({
 
   return {
     canViewAdministration,
+    showUiLibrary: view === "ui-library" && canViewUiLibrary,
     settings: {
       shouldRender: view === "settings",
       user,

@@ -1114,7 +1114,7 @@ test("collaboration workspaces scope navigation, settings, and discovery", async
   await page.getByLabel("Name").fill(renamedWorkspaceName);
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(selectorTrigger).toContainText(renamedWorkspaceName);
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
 
   await selectorTrigger.click();
   await page.getByRole("button", { name: "Browse workspaces" }).click();
@@ -1123,7 +1123,8 @@ test("collaboration workspaces scope navigation, settings, and discovery", async
       hasText: renamedWorkspaceName
     })
   ).toHaveCount(1);
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  // The directory has a Close button of its own under the list; this is the one in the header.
+  await page.getByRole("button", { name: "Close", exact: true }).first().click();
 
   await selectorTrigger.click();
   await page.getByRole("button", { name: "Personal workspace" }).click();
@@ -1206,7 +1207,7 @@ test("conversation rail moves a conversation into another workspace", async ({ p
     .click();
   await page.getByRole("menuitem", { name: "Move to workspace…", exact: true }).click();
   await expect(moveDialog.getByRole("radio", { name: "Personal workspace" })).toHaveCount(1);
-  await moveDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await moveDialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(moveDialog).toHaveCount(0);
 
   await selectorTrigger.click();
@@ -1303,7 +1304,7 @@ test("a superadmin manages a shared workspace without being a member", async ({
   await expect(page.getByRole("button", { name: "Leave workspace" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Members" }).click();
   await expect(page.getByText(normalUser.email)).toBeVisible();
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
 
   await selectorTrigger.click();
   await page.getByRole("button", { name: workspaceName, exact: true }).click();

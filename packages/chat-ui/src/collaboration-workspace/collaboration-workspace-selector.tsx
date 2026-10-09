@@ -1,10 +1,8 @@
 import { ChevronsUpDown, Compass, Plus, Settings } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import { Button, cn, useScrollEdgeFade } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { useScrollEdgeFade } from "../ui/scroll-edge-fade";
 import {
   collaborationWorkspaceAccentAttributes,
   resolveCollaborationWorkspaceAccentColor,

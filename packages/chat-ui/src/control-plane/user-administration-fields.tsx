@@ -1,5 +1,6 @@
 import { useState, type FocusEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { Button, Input, Select } from "@vivd-catalyst/ui";
 import {
   ACCESS_LEVEL_OPTIONS,
   generatePassword,
@@ -8,9 +9,6 @@ import {
 } from "./user-administration-model";
 import { Field } from "./user-administration-primitives";
 import { useTranslation } from "../i18n";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Select } from "../ui/select";
 
 export function UserFields({
   form,

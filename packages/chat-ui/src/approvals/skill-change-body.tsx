@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
+import { cn } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { cn } from "../ui/cn";
 import {
   SKILL_ROOT_TARGET,
   parseSkillChangePreview,

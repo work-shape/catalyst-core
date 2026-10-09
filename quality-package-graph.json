@@ -21,7 +21,8 @@
   "@vivd-catalyst/chat-ui": [
     "@vivd-catalyst/api-client",
     "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/core"
+    "@vivd-catalyst/core",
+    "@vivd-catalyst/ui"
   ],
   "@vivd-catalyst/chat-widget": ["@vivd-catalyst/chat-ui"],
   "@vivd-catalyst/client-assembly": [
@@ -63,11 +64,13 @@
     "@vivd-catalyst/tool-sdk"
   ],
   "@vivd-catalyst/tool-sdk": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/ui": [],
   "@vivd-catalyst/usage-governance": ["@vivd-catalyst/core"],
   "@vivd-catalyst/web-access": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
   "@vivd-catalyst/demo": [
     "@vivd-catalyst/chat-ui",
     "@vivd-catalyst/client-assembly",
-    "@vivd-catalyst/tool-sdk"
+    "@vivd-catalyst/tool-sdk",
+    "@vivd-catalyst/ui"
   ]
 }

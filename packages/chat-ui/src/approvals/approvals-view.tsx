@@ -1,11 +1,9 @@
 import { CircleAlert } from "lucide-react";
 import { useState } from "react";
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import { Button, cn, Spinner } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
-import { Spinner } from "../ui/spinner";
 import { APPROVAL_AUTH_SCOPE, useApprovalRequestListQuery } from "./approval-request-api";
 import { ListedApprovalRequestCard } from "./approval-request-card";
 import { decidedApprovalRequests } from "./approval-request-model";

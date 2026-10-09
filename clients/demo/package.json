@@ -24,6 +24,7 @@
     "@vivd-catalyst/chat-ui": "workspace:*",
     "@vivd-catalyst/client-assembly": "workspace:*",
     "@vivd-catalyst/tool-sdk": "workspace:*",
+    "@vivd-catalyst/ui": "workspace:*",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

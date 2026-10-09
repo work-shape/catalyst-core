@@ -1,20 +1,22 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createApiClient, type LocaleCode } from "@vivd-catalyst/api-client";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  cn,
+  Input,
+  UiRoot
+} from "@vivd-catalyst/ui";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import { signInWithEmail } from "./api/auth-client";
 import { useTranslation } from "./i18n";
 import { LocaleSelector } from "./locale-selector";
-import {
-  applyDocumentThemeMode,
-  createThemeStyle,
-  readSystemThemeMode,
-  resolveThemeModePreference
-} from "./theme";
-import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { cn } from "./ui/cn";
-import { Input } from "./ui/input";
+import { readSystemThemeMode, resolveThemeModePreference, type ResolvedThemeMode } from "./theme";
+import { uiLabelsFor } from "./ui-labels";
 import { createEnvironmentDocumentTitle } from "./workspace-utils";
 
 const DEFAULT_LOGIN_LOCALES: LocaleCode[] = ["en", "de"];
@@ -29,6 +31,7 @@ export function LoginPanel({
   manageDocumentTitle,
   passwordSetupToken,
   onPasswordSetupClosed,
+  onThemeModeChange,
   onSignedIn
 }: {
   apiBaseUrl: string;
@@ -39,9 +42,10 @@ export function LoginPanel({
   /** Token from an emailed link; shows the set-password form instead of sign-in. */
   passwordSetupToken?: string;
   onPasswordSetupClosed?: () => void;
+  onThemeModeChange?: (mode: ResolvedThemeMode) => void;
   onSignedIn: () => void;
 }) {
-  const { t, localeName } = useTranslation();
+  const { t, locale, localeName } = useTranslation();
   const [mode, setMode] = useState<LoginMode>(passwordSetupToken ? "setPassword" : "signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,7 +68,7 @@ export function LoginPanel({
   const activeLocale = branding?.localization.locale ?? fallbackLocale;
   const supportedLocales = branding?.localization.supportedLocales ?? DEFAULT_LOGIN_LOCALES;
   const resolvedThemeMode = resolveThemeModePreference(branding?.defaultThemeMode, systemThemeMode);
-  const themeStyle = createThemeStyle(branding, resolvedThemeMode);
+  const theme = resolvedThemeMode === "dark" ? branding?.darkTheme : branding?.theme;
   const documentTitle = branding
     ? createEnvironmentDocumentTitle(branding.title, branding.environment)
     : undefined;
@@ -86,8 +90,8 @@ export function LoginPanel({
   }, []);
 
   useEffect(() => {
-    applyDocumentThemeMode(resolvedThemeMode);
-  }, [resolvedThemeMode]);
+    onThemeModeChange?.(resolvedThemeMode);
+  }, [onThemeModeChange, resolvedThemeMode]);
 
   useEffect(() => {
     if (!manageDocumentTitle || !documentTitle) {
@@ -174,14 +178,17 @@ export function LoginPanel({
           : t("signIn");
 
   return (
-    <main
+    <UiRoot
+      as="main"
+      theme={theme}
+      mode={resolvedThemeMode}
+      labels={uiLabelsFor(locale)}
       className={cn(
         "relative grid h-dvh w-full place-items-center overflow-hidden bg-sidebar p-5 text-foreground",
         // `scheme-dark` makes the browser paint autofilled inputs in its dark palette.
-        resolvedThemeMode === "dark" && "dark scheme-dark"
+        resolvedThemeMode === "dark" && "scheme-dark"
       )}
       aria-label={t("signIn")}
-      style={themeStyle}
     >
       <Card className="w-full max-w-[380px]">
         <CardHeader className="gap-4">
@@ -305,6 +312,6 @@ export function LoginPanel({
           </div>
         </CardContent>
       </Card>
-    </main>
+    </UiRoot>
   );
 }

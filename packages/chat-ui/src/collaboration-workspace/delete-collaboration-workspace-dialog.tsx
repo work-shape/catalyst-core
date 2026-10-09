@@ -1,10 +1,8 @@
 import { Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ApiClient } from "@vivd-catalyst/api-client";
+import { Button, Dialog, Input } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { Button } from "../ui/button";
-import { Dialog } from "../ui/dialog";
-import { Input } from "../ui/input";
 
 export type CollaborationWorkspaceDeletionStep = "impact" | "confirm";
 

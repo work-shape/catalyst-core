@@ -5,15 +5,15 @@
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "packages/chat-ui/src/styles.css",
+    "css": "packages/ui/src/styles.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""
   },
   "aliases": {
     "components": "packages/chat-ui/src",
-    "ui": "packages/chat-ui/src/ui",
-    "utils": "packages/chat-ui/src/ui/cn",
+    "ui": "packages/ui/src",
+    "utils": "packages/ui/src/cn",
     "lib": "packages/chat-ui/src",
     "hooks": "packages/chat-ui/src/hooks"
   },

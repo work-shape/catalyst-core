@@ -21,6 +21,7 @@ import {
   User
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button, cn, IconButton } from "@vivd-catalyst/ui";
 import { ApprovalDecisionLine } from "../approvals/approval-decision-line";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
 import { MessageAttachments } from "../message-attachments";
@@ -41,9 +42,6 @@ import { useTranslation } from "../i18n";
 import { MarkdownText } from "../markdown-text";
 import { DataPart, ToolCallPart } from "../tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
-import { TooltipIconButton, tooltipIconButtonClassName } from "../ui/tooltip-icon-button";
-import { Button } from "../ui/button";
-import { cn } from "../ui/cn";
 import { formatWorkHistoryLabel } from "./elapsed-time";
 import { isWorkspacePromotedSurfacesData } from "../tool-surfaces";
 
@@ -248,16 +246,14 @@ function AssistantMessage({
       </div>
       {!messageRunning ? (
         <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-          <ActionBarPrimitive.Copy
-            className={tooltipIconButtonClassName}
-            title={t("copy")}
-            aria-label={t("copy")}
-          >
-            <CopiedState />
+          <ActionBarPrimitive.Copy asChild>
+            <IconButton label={t("copy")}>
+              <CopiedState />
+            </IconButton>
           </ActionBarPrimitive.Copy>
-          <TooltipIconButton tooltip={t("regenerateResponse")} disabled>
+          <IconButton label={t("regenerateResponse")} disabled>
             <RefreshCw aria-hidden="true" />
-          </TooltipIconButton>
+          </IconButton>
         </div>
       ) : null}
     </MessagePrimitive.Root>
@@ -537,16 +533,14 @@ function UserMessage() {
         </CollapsibleUserContent>
       </div>
       <div className="flex min-h-8 items-center gap-1 opacity-100 md:absolute md:right-0 md:top-full md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-        <ActionBarPrimitive.Copy
-          className={tooltipIconButtonClassName}
-          title={t("copy")}
-          aria-label={t("copy")}
-        >
-          <CopiedState />
+        <ActionBarPrimitive.Copy asChild>
+          <IconButton label={t("copy")}>
+            <CopiedState />
+          </IconButton>
         </ActionBarPrimitive.Copy>
-        <TooltipIconButton tooltip={t("editMessage")} disabled>
+        <IconButton label={t("editMessage")} disabled>
           <Pencil aria-hidden="true" />
-        </TooltipIconButton>
+        </IconButton>
       </div>
     </MessagePrimitive.Root>
   );

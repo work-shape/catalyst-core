@@ -1,7 +1,7 @@
 import { CheckCircle2, CircleSlash, PencilLine, RotateCcw, Undo2, XCircle } from "lucide-react";
 import type { ComponentType } from "react";
+import { cn } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { cn } from "../ui/cn";
 import {
   approvalDecisionLineLabelKey,
   formatApprovalDate,

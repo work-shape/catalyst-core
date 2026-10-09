@@ -8,3 +8,5 @@ packages/api-contract/openapi.json
 packages/postgres-store/migrations/**
 skills-lock.json
 pnpm-lock.yaml
+packages/ui/src/theme/defaults.css
+tests/ui-guard.baseline.json

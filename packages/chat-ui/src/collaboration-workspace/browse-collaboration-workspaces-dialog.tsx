@@ -1,8 +1,6 @@
 import type { CollaborationWorkspaceDirectoryItem } from "@vivd-catalyst/api-client";
+import { Badge, Button, Dialog } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Dialog } from "../ui/dialog";
 import { CollaborationWorkspaceAvatar } from "./collaboration-workspace-avatar";
 import {
   CollaborationWorkspaceDialogFooter,
@@ -115,10 +113,10 @@ function DirectoryAction({
   const { t } = useTranslation();
 
   if (accessState === "member") {
-    return <Badge variant="secondary">{t("collaborationWorkspaceRoleMember")}</Badge>;
+    return <Badge>{t("collaborationWorkspaceRoleMember")}</Badge>;
   }
   if (accessState === "request_pending") {
-    return <Badge variant="outline">{t("collaborationWorkspaceRequestPending")}</Badge>;
+    return <Badge appearance="outline">{t("collaborationWorkspaceRequestPending")}</Badge>;
   }
   return (
     <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onRequestAccess}>

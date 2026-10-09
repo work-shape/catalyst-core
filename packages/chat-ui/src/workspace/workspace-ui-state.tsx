@@ -6,19 +6,13 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type Context,
   type ReactNode
 } from "react";
 import type { LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { readBrowserLocale } from "../i18n";
-import {
-  applyDocumentThemeMode,
-  createThemeStyle,
-  readSystemThemeMode,
-  resolveThemeModePreference,
-  type ResolvedThemeMode
-} from "../theme";
+import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
+import { readSystemThemeMode, resolveThemeModePreference, type ResolvedThemeMode } from "../theme";
 import {
   DEFAULT_LOCALES,
   readStoredLocale,
@@ -452,22 +446,14 @@ export function useWorkspaceLocale(configLocale: LocaleCode | undefined): Locale
 
 export function useWorkspaceTheme(ui: SafeConfig["ui"] | undefined): {
   resolvedThemeMode: ResolvedThemeMode;
-  workspaceStyle: CSSProperties;
+  /** The instance's inputs for the resolved mode; undefined until the config has loaded. */
+  theme: ThemeInputs | undefined;
   toggleTheme(): void;
 } {
   const { selectThemeMode, systemThemeMode, themeOverride } = useWorkspacePreferences();
   const resolvedThemeMode =
     themeOverride ?? resolveThemeModePreference(ui?.defaultThemeMode, systemThemeMode);
-  const workspaceStyle = useMemo<CSSProperties>(
-    () => ({
-      ...(createThemeStyle(ui, resolvedThemeMode) ?? {})
-    }),
-    [resolvedThemeMode, ui]
-  );
-
-  useEffect(() => {
-    applyDocumentThemeMode(resolvedThemeMode);
-  }, [resolvedThemeMode]);
+  const theme = resolvedThemeMode === "dark" ? ui?.darkTheme : ui?.theme;
 
   const toggleTheme = useCallback(() => {
     selectThemeMode(resolvedThemeMode === "dark" ? "light" : "dark");
@@ -476,10 +462,10 @@ export function useWorkspaceTheme(ui: SafeConfig["ui"] | undefined): {
   return useMemo(
     () => ({
       resolvedThemeMode,
-      workspaceStyle,
+      theme,
       toggleTheme
     }),
-    [resolvedThemeMode, toggleTheme, workspaceStyle]
+    [resolvedThemeMode, theme, toggleTheme]
   );
 }
 

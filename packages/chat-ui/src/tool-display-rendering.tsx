@@ -6,49 +6,13 @@ import {
   type CSSProperties,
   type ReactNode
 } from "react";
+import { Spinner, useUiMode } from "@vivd-catalyst/ui";
+import { THEME_TOKEN_NAMES } from "@vivd-catalyst/ui/theme";
 import { useTranslation } from "./i18n";
 import { renderStructuredDataResourceDisplay } from "./structured-data-resource-display";
-import { Spinner } from "./ui/spinner";
 
 const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
 const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
-const THEME_CSS_VARIABLE_NAMES = [
-  "--radius",
-  "--background",
-  "--foreground",
-  "--card",
-  "--card-foreground",
-  "--popover",
-  "--popover-foreground",
-  "--primary",
-  "--primary-foreground",
-  "--secondary",
-  "--secondary-foreground",
-  "--muted",
-  "--muted-foreground",
-  "--accent",
-  "--accent-foreground",
-  "--destructive",
-  "--success",
-  "--warning",
-  "--info",
-  "--chart-1",
-  "--chart-2",
-  "--chart-3",
-  "--chart-4",
-  "--chart-5",
-  "--border",
-  "--input",
-  "--ring",
-  "--sidebar",
-  "--sidebar-foreground",
-  "--sidebar-primary",
-  "--sidebar-primary-foreground",
-  "--sidebar-accent",
-  "--sidebar-accent-foreground",
-  "--sidebar-border",
-  "--sidebar-ring"
-] as const;
 
 /**
  * The frame grows to its reported content height so the view never scrolls
@@ -170,20 +134,10 @@ function RenderedHtmlDisplay({
     }));
   }, [html]);
 
+  // The frame carries the theme it finds on its host after each render. Reading the mode
+  // subscribes this component to the root's mode, so a switch renders it again.
+  useUiMode();
   useEffect(refreshFrameDocument);
-
-  useEffect(() => {
-    if (typeof MutationObserver === "undefined") {
-      return undefined;
-    }
-
-    const observer = new MutationObserver(refreshFrameDocument);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-vivd-theme"]
-    });
-    return () => observer.disconnect();
-  }, [refreshFrameDocument]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -243,7 +197,7 @@ function RenderedHtmlDisplay({
 
 function readThemeDeclarations(element: HTMLElement): string {
   const style = window.getComputedStyle(element);
-  return THEME_CSS_VARIABLE_NAMES.flatMap((name) => {
+  return THEME_TOKEN_NAMES.flatMap((name) => {
     const value = toSafeCssCustomPropertyValue(style.getPropertyValue(name));
     return value ? [`  ${name}: ${value};`] : [];
   }).join("\n");

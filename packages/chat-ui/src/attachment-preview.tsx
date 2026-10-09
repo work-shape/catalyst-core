@@ -1,11 +1,10 @@
 import { AttachmentPrimitive, useAuiState } from "@assistant-ui/react";
 import { ImageIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { cn, Spinner } from "@vivd-catalyst/ui";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
 import { useOpenConversationFile } from "./conversation-file-presentation";
 import { useTranslation } from "./i18n";
-import { cn } from "./ui/cn";
-import { Spinner } from "./ui/spinner";
 
 /** `row` renders the file as a full-width list entry inside a grouped attachment card. */
 export type AttachmentPreviewVariant = "chip" | "row";

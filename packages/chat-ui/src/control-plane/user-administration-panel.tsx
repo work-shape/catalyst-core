@@ -7,13 +7,22 @@ import type {
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
 } from "@vivd-catalyst/api-client";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Card, CardContent } from "../ui/card";
-import { Dialog } from "../ui/dialog";
-import { Input } from "../ui/input";
-import { Select } from "../ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  cn,
+  Dialog,
+  Input,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@vivd-catalyst/ui";
 import {
   DEFAULT_ROWS_PER_PAGE,
   accessLevelLabel,
@@ -34,7 +43,6 @@ import { CreateUserFields, MaskedPasswordInput } from "./user-administration-fie
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
 import { UserPermissionOverview } from "./user-permission-overview";
 import { useTranslation } from "../i18n";
-import { cn } from "../ui/cn";
 import { ControlPlanePage } from "./control-plane-page";
 import { formatDateTime } from "./locale-format";
 
@@ -332,7 +340,7 @@ export function UserAdministrationPanel({
                     </button>
                   </TableCell>
                   <TableCell className="px-4">
-                    <Badge variant="outline">
+                    <Badge appearance="outline">
                       {t(accessLevelLabel(rolesToAccessLevel(user.roles)))}
                     </Badge>
                   </TableCell>

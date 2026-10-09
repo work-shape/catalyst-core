@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import type { ConversationListItem, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";

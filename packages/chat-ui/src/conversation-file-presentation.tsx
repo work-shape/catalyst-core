@@ -12,6 +12,7 @@ import {
   type MouseEvent,
   type ReactNode
 } from "react";
+import { Button, cn, Spinner } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import { workspaceQueryKeys } from "./api/workspace-query-keys";
 import {
@@ -30,9 +31,6 @@ import {
   getArtifactPreviewKind,
   type ToolArtifactDownloadRef
 } from "./tool-artifacts";
-import { Button } from "./ui/button";
-import { cn } from "./ui/cn";
-import { Spinner } from "./ui/spinner";
 
 const SOURCE_FILE_AUTH_SCOPE = "standalone";
 

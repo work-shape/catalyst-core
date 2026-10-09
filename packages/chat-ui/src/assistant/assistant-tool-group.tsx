@@ -2,7 +2,7 @@ import * as CollapsiblePrimitive from "@radix-ui/react-collapsible";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useState, type ComponentProps, type ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "../ui/cn";
+import { cn } from "@vivd-catalyst/ui";
 
 const toolGroupVariants = cva("aui-tool-group-root group/tool-group-root w-full", {
   variants: {
