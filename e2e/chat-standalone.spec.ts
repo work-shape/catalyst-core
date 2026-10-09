@@ -149,7 +149,7 @@ test("conversation rail keeps dense histories readable and scrollable", async ({
   await expect(targetConversation).toHaveCount(1);
   await expect
     .poll(() => targetConversation.evaluate((element) => element.getBoundingClientRect().height))
-    .toBeGreaterThanOrEqual(36);
+    .toBeGreaterThanOrEqual(32);
 
   const conversationNavigation = page.getByRole("navigation");
   await expect(conversationNavigation).toBeVisible();

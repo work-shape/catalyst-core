@@ -5,7 +5,7 @@ import {
   useAuiState,
   useThreadViewportStore
 } from "@assistant-ui/react";
-import { ArrowDown, CircleAlert, Lock, Sparkles } from "lucide-react";
+import { ArrowDown, CircleAlert, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { cn } from "@vivd-catalyst/ui";
@@ -372,7 +372,7 @@ export function ThreadWelcomeHeading({
         </div>
       ) : null}
       <div className="grid gap-1">
-        <h2 className="text-xl font-semibold tracking-normal">
+        <h2 className="text-title-lg">
           {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? t("genericWelcome")}
         </h2>
         {agent?.welcomeSubtitle ? (
@@ -385,10 +385,9 @@ export function ThreadWelcomeHeading({
   );
 }
 
-const startCardClassName = cn(
-  "rounded-md border bg-card p-3 text-left text-sm shadow-xs transition-colors",
-  "hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-);
+// A suggestion is an outlined pill: hairline, no fill, no shadow, the hover fill.
+const suggestionChipClassName =
+  "inline-flex min-h-8 max-w-full items-center rounded-full border px-3 py-1 text-left text-body transition-colors hover:bg-state-hover focus-visible:focus-ring";
 
 function ThreadStartBlock({
   initialPrompts
@@ -398,19 +397,14 @@ function ThreadStartBlock({
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
       {initialPrompts.length > 0 ? (
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="flex flex-wrap justify-center gap-2">
           {initialPrompts.map((initialPrompt) => (
             <ThreadPrimitive.Suggestion
               key={`${initialPrompt.title}:${initialPrompt.prompt}`}
               prompt={initialPrompt.prompt}
-              className={cn(startCardClassName, "group/suggestion grid min-h-20 content-between")}
+              className={suggestionChipClassName}
             >
-              <span className="font-medium">{initialPrompt.title}</span>
-              <Sparkles
-                size={15}
-                className="mt-2 text-muted-foreground group-hover/suggestion:text-primary"
-                aria-hidden="true"
-              />
+              {initialPrompt.title}
             </ThreadPrimitive.Suggestion>
           ))}
         </div>

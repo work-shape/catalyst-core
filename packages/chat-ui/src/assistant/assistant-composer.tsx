@@ -258,8 +258,9 @@ export function AssistantComposer({
         <div
           ref={composerShellRef}
           className={cn(
-            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 rounded-2xl border bg-background p-1.5 shadow-sm transition-colors",
-            "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30"
+            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 rounded-xl border bg-popover p-1.5 shadow-raised transition-colors",
+            // The composer holds the focus most of the time: its line steps up and no ring shows.
+            "focus-within:border-input"
           )}
         >
           {attachmentsEnabled ? (
@@ -284,7 +285,7 @@ export function AssistantComposer({
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "col-start-1 size-9 shrink-0 rounded-xl text-muted-foreground",
+                  "col-start-1 size-9 shrink-0 rounded-full text-muted-foreground",
                   composerExpanded ? "row-start-2" : "row-start-1"
                 )}
                 title={t("addAttachment")}
@@ -642,7 +643,7 @@ function ComposerAction({
     <Button
       type="button"
       size="icon"
-      className="absolute inset-0 size-9 rounded-xl"
+      className="absolute inset-0 size-9 rounded-full"
       aria-label={t("stopGenerating")}
       onClick={onCancelRun}
     >
@@ -675,7 +676,7 @@ function ComposerAction({
         <Button
           type="button"
           size="icon"
-          className="absolute inset-0 size-9 rounded-xl"
+          className="absolute inset-0 size-9 rounded-full"
           aria-label={t("sendMessage")}
           title={effectiveDisabledReason ?? t("sendMessage")}
           disabled={sendDisabled}
@@ -688,7 +689,7 @@ function ComposerAction({
           <Button
             type="button"
             size="icon"
-            className="absolute inset-0 size-9 rounded-xl"
+            className="absolute inset-0 size-9 rounded-full"
             aria-label={t("sendMessage")}
             title={effectiveDisabledReason ?? t("sendMessage")}
             disabled={sendDisabled}

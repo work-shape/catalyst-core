@@ -136,21 +136,15 @@ export function ConversationButton({
         data-testid="conversation-row"
         data-selected={selected ? "true" : undefined}
         className={cn(
-          "group/conversation relative grid min-h-9 min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] items-center overflow-hidden rounded-md border border-transparent transition-colors",
-          "hover:bg-sidebar-accent/55",
-          selected && "bg-sidebar-accent/80"
+          "group/conversation relative grid min-h-8 min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center overflow-hidden rounded-md transition-colors",
+          "hover:bg-state-hover",
+          selected && "bg-state-selected hover:bg-state-selected"
         )}
       >
-        {selected ? (
-          <span
-            className="absolute inset-y-1.5 left-0 w-0.5 rounded-r-full bg-primary"
-            aria-hidden="true"
-          />
-        ) : null}
         {editing ? (
           <form
             ref={editorFormRef}
-            className="grid min-w-0 px-1 py-1"
+            className="grid min-w-0 px-1 py-0.5"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 exitEditing();
@@ -180,7 +174,7 @@ export function ConversationButton({
           </form>
         ) : (
           <Button
-            className="h-auto min-w-0 justify-start px-2 py-2 text-left text-foreground hover:bg-transparent"
+            className="h-auto min-w-0 justify-start px-2 py-1.5 text-left text-foreground hover:bg-transparent"
             type="button"
             variant="ghost"
             aria-describedby={expiryLabel ? expiryHintId : undefined}
@@ -260,10 +254,10 @@ export function ConversationButton({
         <ThreadListItemMorePrimitive.Root>
           <ThreadListItemMorePrimitive.Trigger
             className={cn(
-              "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
-              "hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40",
+              "mx-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
+              "hover:bg-state-hover hover:text-accent-foreground focus-visible:focus-ring",
               "opacity-100 md:opacity-0 md:group-hover/conversation:opacity-100 md:group-focus-within/conversation:opacity-100",
-              "data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[state=open]:opacity-100"
+              "data-[state=open]:bg-state-hover data-[state=open]:text-accent-foreground data-[state=open]:opacity-100"
             )}
             type="button"
             disabled={deleting || saving}
@@ -275,7 +269,7 @@ export function ConversationButton({
           <ThreadListItemMorePrimitive.Content
             align="end"
             sideOffset={6}
-            className="z-50 min-w-44 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-lg"
+            className="z-50 min-w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-overlay"
             onCloseAutoFocus={(event) => {
               if (renamingFromMenuRef.current) {
                 event.preventDefault();
@@ -460,7 +454,7 @@ function AnimatedConversationTitle({ title }: { title: string }) {
 
   return (
     <span
-      className="inline-flex min-w-0 max-w-full items-baseline text-sm font-medium leading-5"
+      className="inline-flex min-w-0 max-w-full items-baseline text-sm font-normal leading-5 group-data-[selected=true]/conversation:font-medium"
       title={title}
       aria-label={title}
     >

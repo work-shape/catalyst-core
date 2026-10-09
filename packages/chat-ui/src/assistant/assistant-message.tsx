@@ -525,7 +525,7 @@ function UserMessage() {
         aria-hidden="true"
       />
       <MessageAttachments />
-      <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground shadow-xs [overflow-wrap:anywhere]">
+      <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-state-selected px-4 py-2.5 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
         <CollapsibleUserContent>
           <MessagePrimitive.Parts
             components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
@@ -589,7 +589,7 @@ function CollapsibleUserContent({ children }: { children: ReactNode }) {
       {overflowing ? (
         <button
           type="button"
-          className="w-fit cursor-pointer rounded-sm text-xs font-medium underline underline-offset-2 opacity-90 outline-none hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-primary-foreground/50"
+          className="w-fit cursor-pointer rounded-sm text-xs font-medium underline underline-offset-2 opacity-90 hover:opacity-100 focus-visible:focus-ring"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >

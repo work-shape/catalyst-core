@@ -1,7 +1,7 @@
 import { ChevronLeft, ClipboardCheck, PanelLeft, Plus, Search, Shield } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
-import { Button, cn, CountBadge } from "@vivd-catalyst/ui";
+import { Button, cn, CountBadge, Input } from "@vivd-catalyst/ui";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -152,14 +152,14 @@ export function WorkspaceRail({
         exactly as it was.
       */}
       {collaborationWorkspaceSelector ? (
-        <div className="min-w-0 border-b border-sidebar-border pb-3">
+        <div className="min-w-0 pb-3">
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
             <div className="-ml-2 min-w-0">{collaborationWorkspaceSelector}</div>
             {closeSidebarButton("shrink-0")}
           </div>
         </div>
       ) : branding.logoUrl ? (
-        <div className="flex h-16 min-w-0 items-start border-b border-sidebar-border pb-3 pr-11">
+        <div className="flex h-16 min-w-0 items-start pb-3 pr-11">
           <button
             type="button"
             className="flex h-12 min-w-0 max-w-[11rem] cursor-pointer items-center justify-start overflow-hidden rounded-sm border-0 bg-transparent p-0 text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
@@ -173,7 +173,7 @@ export function WorkspaceRail({
           </button>
         </div>
       ) : (
-        <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 border-b border-sidebar-border pb-3 pr-11">
+        <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 pb-3 pr-11">
           <div className="grid size-9 place-items-center overflow-hidden rounded-md border border-sidebar-border bg-sidebar-accent/50 text-primary">
             <span className="text-sm font-semibold" aria-hidden="true">
               {branding.clientInitial}
@@ -188,7 +188,7 @@ export function WorkspaceRail({
 
       <div className="grid gap-3 pb-3 pt-4">
         <div className="flex min-w-0 items-center justify-between gap-2">
-          <span className="truncate text-[0.6875rem] font-semibold uppercase tracking-[0.13em] text-muted-foreground">
+          <span className="truncate text-caption font-medium text-muted-foreground">
             {t("conversations")}
           </span>
           <Button
@@ -204,28 +204,20 @@ export function WorkspaceRail({
             <Plus size={17} aria-hidden="true" />
           </Button>
         </div>
-        <label className="relative block min-w-0">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={conversationQuery}
-            className="h-10 w-full min-w-0 rounded-md border border-sidebar-border bg-transparent pl-9 pr-3 text-sm text-sidebar-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-sidebar-ring focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
-            placeholder={t("searchConversations")}
-            aria-label={t("searchConversations")}
-            onChange={(event) => setConversationQuery(event.currentTarget.value)}
-          />
-        </label>
+        <Input
+          type="search"
+          size="sm"
+          value={conversationQuery}
+          leadingIcon={<Search aria-hidden="true" />}
+          placeholder={t("searchConversations")}
+          aria-label={t("searchConversations")}
+          onChange={(event) => setConversationQuery(event.currentTarget.value)}
+        />
       </div>
 
       <nav className="chat-scrollbar -ml-1 -mr-3 grid min-h-0 auto-rows-max content-start gap-0.5 overflow-y-auto overflow-x-hidden pl-1 pr-3 pb-3">
         {conversations.length === 0 ? (
-          <div className="rounded-md border border-dashed border-sidebar-border px-3 py-4 text-sm text-muted-foreground">
-            {t("noConversations")}
-          </div>
+          <div className="px-3 py-4 text-sm text-muted-foreground">{t("noConversations")}</div>
         ) : filteredConversations.length === 0 ? (
           <div className="px-3 py-4 text-sm text-muted-foreground">
             {t("noConversationMatches")}
@@ -251,7 +243,7 @@ export function WorkspaceRail({
         )}
       </nav>
 
-      <footer className="-mx-5 flex min-w-0 items-center justify-between gap-2 border-t border-sidebar-border px-5 pt-4">
+      <footer className="-mx-5 flex min-w-0 items-center justify-between gap-2 px-5 pt-4">
         {userMenu}
         {approvalsButton || administrationButton ? (
           <div className="flex shrink-0 items-center gap-1">
