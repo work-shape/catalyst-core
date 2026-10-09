@@ -329,9 +329,15 @@ function link(target: string, path: string) {
   symlinkSync(target, join(directory, path), "dir");
 }
 
+// pnpm starts vitest with a NODE_PATH that reaches the packages hoisted by the surrounding
+// install, and the import resolver follows it. Which packages are hoisted depends on the
+// install, so the collector runs without it and the fixture resolves nothing but itself.
+const { NODE_PATH: _hoisted, ...hermeticEnv } = process.env;
+
 function collect(...args: string[]) {
   return spawnSync(process.execPath, [join(qualityConfig, "check.mjs"), ...args], {
     cwd: directory,
+    env: hermeticEnv,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024
   });
@@ -419,7 +425,9 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/sql-boundary ${source}/sql-require.cjs`,
         `catalyst/sql-boundary ${source}/sql-export.ts`,
         `catalyst/sql-boundary ${source}/sql-import-type.ts`,
+        `import-x/no-unresolved ${source}/sql-dynamic.ts`,
         `import-x/no-unresolved ${source}/sql-require.cjs`,
+        `import-x/no-unresolved ${source}/sql-export.ts`,
         `catalyst/logger-boundary ${source}/logger-interface.ts`,
         `catalyst/console-boundary ${source}/console-member.ts`,
         `catalyst/console-boundary ${source}/console-destructured.ts`,
