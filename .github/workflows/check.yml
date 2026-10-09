@@ -1,0 +1,33 @@
+name: Check
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: catalyst
+          POSTGRES_PASSWORD: local-check
+          POSTGRES_DB: catalyst_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U catalyst -d catalyst_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+  # CB-1b adds the browser job and its browser installation here.
