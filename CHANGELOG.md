@@ -218,9 +218,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   30 seconds apart, a lease of 5 minutes) and `conversation_attachment.preprocess` (three
   attempts, 30 seconds doubling up to 10 minutes, a lease of twice the preprocessing timeout
   and at least a minute). The preview row and the attachment stay the record the interface
-  reads; the row and its job are written in one transaction. No migration. A document that
-  fails for a passing reason is now tried three times before its attachment shows as failed;
-  a document that is refused, such as an unsupported format, fails at once as before.
+  reads; the row and its job are written in one transaction. No migration. A storage
+  or database error, or a converter killed by a signal, is now tried three times before the
+  attachment shows as failed, and a conversion that timed out twice; a refused or corrupt
+  document, such as an unsupported format or a converter ending with an exit code, fails at
+  once as before.
   - The preview worker no longer reads `ARTIFACT_PREVIEW_POLL_INTERVAL_MS`,
     `ARTIFACT_PREVIEW_LEASE_DURATION_MS`, `ARTIFACT_PREVIEW_LEASE_RENEW_INTERVAL_MS` and
     `ARTIFACT_PREVIEW_MAX_ATTEMPTS`, and the document worker no longer reads
