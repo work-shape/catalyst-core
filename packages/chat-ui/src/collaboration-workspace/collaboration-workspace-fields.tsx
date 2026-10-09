@@ -1,7 +1,7 @@
 import { Ban, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { ConversationListItem } from "@vivd-catalyst/api-client";
-import { cn, Input, useScrollEdgeFade } from "@vivd-catalyst/ui";
+import { cn, Input, RadioGroup, useScrollEdgeFade } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   collaborationWorkspaceAccentAttributes,
@@ -49,24 +49,24 @@ export function CollaborationWorkspaceVisibilityField({
   const { t } = useTranslation();
 
   return (
-    <ChoiceField
+    <RadioGroup
       name="collaboration-workspace-visibility"
-      legend={t("collaborationWorkspaceVisibilityLabel")}
+      label={t("collaborationWorkspaceVisibilityLabel")}
       value={value}
       disabled={disabled}
       options={[
         {
           value: "discoverable",
           label: t("collaborationWorkspaceVisibilityDiscoverable"),
-          hint: t("collaborationWorkspaceVisibilityDiscoverableHint")
+          description: t("collaborationWorkspaceVisibilityDiscoverableHint")
         },
         {
           value: "private",
           label: t("collaborationWorkspaceVisibilityPrivate"),
-          hint: t("collaborationWorkspaceVisibilityPrivateHint")
+          description: t("collaborationWorkspaceVisibilityPrivateHint")
         }
       ]}
-      onChange={onChange}
+      onValueChange={onChange}
     />
   );
 }
@@ -84,74 +84,26 @@ export function CollaborationWorkspaceConversationVisibilityField({
   const { t } = useTranslation();
 
   return (
-    <ChoiceField
+    <RadioGroup
       name="collaboration-workspace-conversation-visibility"
-      legend={t("collaborationWorkspaceConversationVisibilityLabel")}
-      help={t("collaborationWorkspaceConversationVisibilityHelp")}
+      label={t("collaborationWorkspaceConversationVisibilityLabel")}
+      hint={t("collaborationWorkspaceConversationVisibilityHelp")}
       value={value}
       disabled={disabled}
       options={[
         {
           value: "workspace",
           label: t("collaborationWorkspaceConversationVisibilityWorkspace"),
-          hint: t("collaborationWorkspaceConversationVisibilityWorkspaceHint")
+          description: t("collaborationWorkspaceConversationVisibilityWorkspaceHint")
         },
         {
           value: "private",
           label: t("collaborationWorkspaceConversationVisibilityPrivate"),
-          hint: t("collaborationWorkspaceConversationVisibilityPrivateHint")
+          description: t("collaborationWorkspaceConversationVisibilityPrivateHint")
         }
       ]}
-      onChange={onChange}
+      onValueChange={onChange}
     />
-  );
-}
-
-/** A radio group drawn as bordered cards, each with a label and one hint line. */
-export function ChoiceField<Value extends string>({
-  name,
-  legend,
-  help,
-  value,
-  options,
-  disabled,
-  onChange
-}: {
-  name: string;
-  legend: string;
-  help?: string;
-  value: Value;
-  options: Array<{ value: Value; label: string; hint: string }>;
-  disabled?: boolean;
-  onChange(value: Value): void;
-}) {
-  return (
-    <fieldset className="grid gap-2" disabled={disabled}>
-      <legend className="pb-2 text-sm font-medium">{legend}</legend>
-      {options.map((option) => (
-        <label
-          key={option.value}
-          className={cn(
-            "grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-2.5 rounded-md border p-3 transition-colors",
-            value === option.value ? "border-ring bg-accent/50" : "hover:bg-accent/30"
-          )}
-        >
-          <input
-            type="radio"
-            name={name}
-            className="mt-1 size-4 accent-[var(--primary)]"
-            checked={value === option.value}
-            value={option.value}
-            onChange={() => onChange(option.value)}
-          />
-          <span className="grid gap-1">
-            <span className="text-sm font-medium">{option.label}</span>
-            <span className="text-xs leading-5 text-muted-foreground">{option.hint}</span>
-          </span>
-        </label>
-      ))}
-      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
-    </fieldset>
   );
 }
 

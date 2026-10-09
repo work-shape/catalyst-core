@@ -1,16 +1,16 @@
-import { avatarGradient, cn } from "@vivd-catalyst/ui";
+import { Avatar, type AvatarSize } from "@vivd-catalyst/ui";
 import {
   collaborationWorkspaceAccentAttributes,
   resolveCollaborationWorkspaceAccentColor
 } from "./collaboration-workspace-accent";
 
-const avatarSizes = {
-  sm: "size-6 text-[0.625rem] rounded-md",
-  md: "size-8 text-xs rounded-md",
-  lg: "size-10 text-sm rounded-lg"
-} as const;
+export type CollaborationWorkspaceAvatarSize = Extract<AvatarSize, "sm" | "md" | "lg">;
 
-export type CollaborationWorkspaceAvatarSize = keyof typeof avatarSizes;
+// The pair `styles.css` resolves for the active mode from the attributes on the same element.
+const workspaceAccent = {
+  background: "var(--collaboration-workspace-accent-surface)",
+  foreground: "var(--collaboration-workspace-accent-on-surface)"
+};
 
 export function CollaborationWorkspaceAvatar({
   name,
@@ -26,23 +26,17 @@ export function CollaborationWorkspaceAvatar({
   className?: string;
 }) {
   const accent = resolveCollaborationWorkspaceAccentColor({ accentColor, name });
-  const accentAttributes = collaborationWorkspaceAccentAttributes(accent, {
-    background: "var(--collaboration-workspace-accent-surface)",
-    color: "var(--collaboration-workspace-accent-on-surface)"
-  });
 
   return (
-    <span
-      {...accentAttributes}
-      className={cn(
-        "grid shrink-0 place-items-center overflow-hidden font-semibold leading-none",
-        avatarSizes[size],
-        className
-      )}
-      aria-hidden="true"
-    >
-      {emoji?.trim() ? emoji.trim() : collaborationWorkspaceInitials(name)}
-    </span>
+    <Avatar
+      {...collaborationWorkspaceAccentAttributes(accent)}
+      kind="workspace"
+      name={name}
+      emoji={emoji}
+      accent={workspaceAccent}
+      size={size}
+      className={className}
+    />
   );
 }
 
@@ -56,21 +50,10 @@ export function PersonalCollaborationWorkspaceAvatar({
   size?: CollaborationWorkspaceAvatarSize;
   className?: string;
 }) {
-  return (
-    <span
-      style={{ background: avatarGradient(label) }}
-      className={cn(
-        "grid shrink-0 place-items-center overflow-hidden border border-white/45 font-semibold leading-none text-primary-foreground shadow-xs",
-        avatarSizes[size],
-        className
-      )}
-      aria-hidden="true"
-    >
-      {collaborationWorkspaceInitials(label)}
-    </span>
-  );
+  return <Avatar kind="person" name={label} size={size} className={className} />;
 }
 
+/** The initials a hand-drawn member mark shows; the avatars above take theirs from the library. */
 export function collaborationWorkspaceInitials(label: string): string {
   const words = label.trim().split(/\s+/u).filter(Boolean);
   const initials =

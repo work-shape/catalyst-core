@@ -1,13 +1,13 @@
 import { FolderInput } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
-import { Button, cn, Dialog } from "@vivd-catalyst/ui";
+import { Button, cn, Dialog, RadioGroup } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import {
   CollaborationWorkspaceAvatar,
   PersonalCollaborationWorkspaceAvatar
 } from "./collaboration-workspace-avatar";
-import { ChoiceField, type ConversationVisibility } from "./collaboration-workspace-fields";
+import type { ConversationVisibility } from "./collaboration-workspace-fields";
 import { collaborationWorkspaceDisplayName } from "./collaboration-workspace-selector";
 
 export function MoveConversationDialog({
@@ -205,24 +205,24 @@ export function MoveConversationVisibility({
   }
 
   return (
-    <ChoiceField
+    <RadioGroup
       name="move-conversation-visibility"
-      legend={t("moveConversationVisibilityLabel")}
+      label={t("moveConversationVisibilityLabel")}
       value={visibility}
       disabled={disabled}
       options={[
         {
           value: "workspace",
           label: t("collaborationWorkspaceConversationVisibilityWorkspace"),
-          hint: t("moveConversationVisibilityWorkspaceHint", { name: destinationName })
+          description: t("moveConversationVisibilityWorkspaceHint", { name: destinationName })
         },
         {
           value: "private",
           label: t("moveConversationVisibilityPrivate"),
-          hint: t("moveConversationVisibilityPrivateHint")
+          description: t("moveConversationVisibilityPrivateHint")
         }
       ]}
-      onChange={onChange}
+      onValueChange={onChange}
     />
   );
 }

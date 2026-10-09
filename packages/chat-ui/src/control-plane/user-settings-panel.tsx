@@ -8,6 +8,7 @@ import {
   type UpdateCurrentUserRequest
 } from "@vivd-catalyst/api-client";
 import {
+  Banner,
   Button,
   Card,
   CardContent,
@@ -341,20 +342,13 @@ export function UserSettingsPanel({
   );
 }
 
+/** A form's outcome: the error when it failed, else the confirmation. */
 function FormMessage({ message, error }: { message?: string; error?: string }) {
   if (error) {
-    return (
-      <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {error}
-      </p>
-    );
+    return <Banner tone="danger">{error}</Banner>;
   }
   if (message) {
-    return (
-      <p className="rounded-md border border-emerald-600/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-        {message}
-      </p>
-    );
+    return <Banner tone="success">{message}</Banner>;
   }
   return null;
 }

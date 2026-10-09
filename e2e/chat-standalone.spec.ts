@@ -2123,12 +2123,7 @@ test("superadmin manages config assets with validation and conflict protection",
   const versionLabel = (version: number) => page.getByText(`Version ${version}`, { exact: false });
   const form = () => page.locator("form");
   const fieldset = (name: string) => form().getByRole("group", { name, exact: true });
-  const fieldControl = (label: string, selector: string) =>
-    form()
-      .locator("label")
-      .filter({ hasText: new RegExp(`^${label}`) })
-      .locator(selector)
-      .first();
+  const fieldControl = (label: string) => form().getByLabel(label, { exact: true });
   const clickAgent = async () => {
     await page
       .getByRole("region", { name: "Agents", exact: true })
@@ -2178,17 +2173,17 @@ test("superadmin manages config assets with validation and conflict protection",
 
     await page.getByRole("button", { name: "New skill", exact: true }).click();
     await page.locator('input[placeholder="generic_workflow_review"]').fill("config_e2e_skill");
-    await fieldControl("Title", "input").fill("Config E2E skill");
-    await fieldControl("Description", "input").fill("Verifies config asset editing");
-    await fieldControl("Content", "textarea").fill("# Verify config assets");
+    await fieldControl("Title").fill("Config E2E skill");
+    await fieldControl("Description").fill("Verifies config asset editing");
+    await fieldControl("Content").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
     await expect(versionLabel(original.version + 1)).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Config E2E skill", exact: true })
     ).toBeVisible();
-    await expect(fieldControl("Title", "input")).toHaveValue("Config E2E skill");
-    await expect(fieldControl("Description", "input")).toHaveValue("Verifies config asset editing");
-    await expect(fieldControl("Content", "textarea")).toHaveValue("# Verify config assets");
+    await expect(fieldControl("Title")).toHaveValue("Config E2E skill");
+    await expect(fieldControl("Description")).toHaveValue("Verifies config asset editing");
+    await expect(fieldControl("Content")).toHaveValue("# Verify config assets");
 
     await clickAgent();
     await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).check();
@@ -2209,6 +2204,28 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(firstPromptText).toHaveValue(updatedPrompt);
 
     await clickSkill();
+    // The confirmation sits inside the editor's form: closing it must not submit the form.
+    const configWrites: string[] = [];
+    const recordConfigWrite = (request: { method(): string; url(): string }) => {
+      if (request.method() !== "GET" && request.url().includes("/api/admin/config")) {
+        configWrites.push(`${request.method()} ${request.url()}`);
+      }
+    };
+    page.on("request", recordConfigWrite);
+    const deleteSkillDialog = page.getByRole("dialog", {
+      name: "Delete skill 'config_e2e_skill'?",
+      exact: true
+    });
+    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await deleteSkillDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(deleteSkillDialog).toBeHidden();
+    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await deleteSkillDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(deleteSkillDialog).toBeHidden();
+    expect(configWrites).toEqual([]);
+    page.off("request", recordConfigWrite);
+    await expect(versionLabel(original.version + 2)).toBeVisible();
+
     await form().getByRole("button", { name: "Delete", exact: true }).click();
     await page
       .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
@@ -2237,7 +2254,7 @@ test("superadmin manages config assets with validation and conflict protection",
     ).toBeVisible();
 
     await clickAgent();
-    const instructions = fieldControl("Instructions", "textarea");
+    const instructions = fieldControl("Instructions");
     const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
     const serverChange = await requestWithOrigin(
       page,
@@ -2261,7 +2278,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await conflict.getByRole("button", { name: "Reload latest", exact: true }).click();
     await expect(conflict).toBeHidden();
     await expect(versionLabel(original.version + 5)).toBeVisible();
-    await expect(fieldControl("Instructions", "textarea")).toHaveValue(serverInstructions);
+    await expect(fieldControl("Instructions")).toHaveValue(serverInstructions);
   } finally {
     const restored = await requestWithOrigin(
       page,

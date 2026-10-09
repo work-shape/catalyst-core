@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { Button, cn, Dialog, Input } from "@vivd-catalyst/ui";
+import { Banner, Button, cn, ConfirmDialog, Input } from "@vivd-catalyst/ui";
 import {
   LANGUAGE_CODE_LABELS,
   type AgentFormState,
@@ -7,25 +7,7 @@ import {
 } from "./config-assets-model";
 import { useTranslation } from "../i18n";
 
-export function Field({
-  label,
-  hint,
-  className,
-  children
-}: {
-  label: string;
-  hint?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className={cn("grid gap-1.5", className)}>
-      <span className="text-sm font-medium">{label}</span>
-      {children}
-      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
-    </label>
-  );
-}
+export { Field } from "@vivd-catalyst/ui";
 
 export function LocalizedField({
   label,
@@ -145,11 +127,7 @@ export function CheckboxGroup({
           </div>
         )}
       </div>
-      {hint ? (
-        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-          {hint}
-        </p>
-      ) : null}
+      {hint ? <Banner tone="warning">{hint}</Banner> : null}
     </fieldset>
   );
 }
@@ -247,23 +225,16 @@ export function DeleteDialog({
   const title = t(kind === "agent" ? "configDeleteAgentTitle" : "configDeleteSkillTitle", {
     name
   });
-  const description = t(
-    kind === "agent" ? "configDeleteAgentDescription" : "configDeleteSkillDescription"
-  );
 
   return (
-    <Dialog open={open} title={title} onClose={() => onOpenChange(false)}>
-      <div className="grid gap-4 p-5">
-        <p className="text-sm text-muted-foreground">{description}</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {t("cancel")}
-          </Button>
-          <Button type="button" variant="danger" onClick={onConfirm}>
-            {t("configDelete")}
-          </Button>
-        </div>
-      </div>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      title={title}
+      confirmLabel={t("configDelete")}
+      onConfirm={onConfirm}
+      onClose={() => onOpenChange(false)}
+    >
+      {t(kind === "agent" ? "configDeleteAgentDescription" : "configDeleteSkillDescription")}
+    </ConfirmDialog>
   );
 }
