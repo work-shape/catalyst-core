@@ -18,6 +18,8 @@ const NODE_ENGINE = ">=22";
 export const UNPUBLISHED = {
   "chat-standalone": "Vite application, not a library; deployments build their own UI entry",
   docs: "Astro documentation site",
+  "quality-config":
+    "Check tooling for this repository and capabilities, used from the platform checkout",
   "registry-canary": "GitHub Packages canary from the superseded registry decision"
 };
 
@@ -32,8 +34,14 @@ const OVERRIDES = {
   ui: { files: ["dist", "src"] },
   // The entry runs the CLI when executed as `catalyst`.
   "config-cli": { sideEffects: undefined },
-  // Migrations are read at runtime from ../migrations relative to dist/.
-  "postgres-store": { files: ["dist", "migrations"] },
+  // Ships the pinned view runtime it serves, read at runtime from ../vendor relative to dist/.
+  "chat-server": { files: ["dist", "vendor"] },
+  // Migrations are read at runtime from ../migrations relative to dist/. The
+  // `./migration-statements` export is plain JavaScript with a declaration file, so the
+  // migration checks can import it without a build.
+  "postgres-store": {
+    files: ["dist", "migrations", "src/migration-statements.js", "src/migration-statements.d.ts"]
+  },
   // Shell scripts, host files and Node checks, shipped as they are: nothing is built.
   // Deployments use it from the platform checkout until it can be published; deleting
   // `heldBack` is the whole switch.
