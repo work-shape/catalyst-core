@@ -168,30 +168,46 @@ describe("operation over HTTP: a call that runs", () => {
 });
 
 describe("operation over HTTP: who checks the right", () => {
-  it("makes a registration without a required right say that it checks rights itself", () => {
+  it("makes a registration without a required right bring its own check", () => {
     const check = (route: TestRoute) => {
       expectTypeOf(route.operation<typeof operations.testRunList>)
         .parameter(1)
-        .toHaveProperty("checksRightsItself")
-        .toEqualTypeOf<true>();
+        .toHaveProperty("authorize")
+        .toBeFunction();
       expectTypeOf(route.operation<typeof operations.testRunRead>)
         .parameter(1)
-        .toHaveProperty("checksRightsItself")
+        .toHaveProperty("authorize")
         .toEqualTypeOf<undefined>();
     };
     expect(check).toBeTypeOf("function");
   });
 
-  it("does not start with an operation that requires no right and does not say so", async () => {
+  it("asks the operation's own check before the policy, so a refusal tells nothing of it", async () => {
+    const { server, executed, authorized } = await createServer({ readingDefault: "deny" });
+    const list = (as: ReturnType<typeof person>) => server.call("testRunList", {}, as);
+
+    const without = await list(person({ permissions: [] }));
+    expect(without.statusCode).toBe(403);
+    expect(errorOf(without)).toMatchObject({
+      code: "FORBIDDEN",
+      details: { action: "audit.view", reason: "no_grant" }
+    });
+    const withRight = await list(person({ permissions: right("users.manage") }));
+    expect(errorOf(withRight).code).toBe("POLICY_DENIED");
+    expect(authorized).toEqual(["testRunList", "testRunList"]);
+    expect(executed).toEqual([]);
+  });
+
+  it("does not start with an operation that requires no right and has no check", async () => {
     const unchecked = createUncheckedTestOperation();
     const start = createServer({
       register: (route) =>
         route.operation(unchecked, { execute: () => Promise.resolve({ value: "open" }) })
     }).then(({ server }) => server.call("testRunRead", { params: { itemId: "1" } }, person()));
-    await expect(start).rejects.toThrow(/does not say that it checks rights itself/u);
+    await expect(start).rejects.toThrow(/requires no right and has no check of its own/u);
   });
 
-  it("does not start with an operation that names a right and says it checks rights itself", async () => {
+  it("does not start with an operation that names a right and checks rights itself too", async () => {
     // The types refuse this too, so the right the descriptor names is hidden from them.
     const named: Omit<typeof operations.testRunRead, "requires"> & {
       requires: NonNullable<Operation["requires"]>;
@@ -199,14 +215,14 @@ describe("operation over HTTP: who checks the right", () => {
     const start = createServer({
       register: (route) =>
         route.operation(named, {
-          checksRightsItself: true,
+          authorize: () => ({ allowed: true }),
           execute: () => Promise.resolve({ itemId: "1" })
         })
     }).then(({ server }) => server.call("testRunRead", { params: { itemId: "1" } }, person()));
-    await expect(start).rejects.toThrow(/may not say that it checks rights itself/u);
+    await expect(start).rejects.toThrow(/may not check rights itself too/u);
   });
 
-  it("asks the server's authorizer, for the call and for reading a run", async () => {
+  it("asks the server's authorizer for the call and for reading and listing runs", async () => {
     const asked: string[] = [];
     const authorizer: Authorizer = {
       forActor: () =>
@@ -232,7 +248,15 @@ describe("operation over HTTP: who checks the right", () => {
       person({ id: "usr_two" })
     );
     expect(read.statusCode).toBe(403);
-    expect(asked).toEqual(["users.manage", "audit.view"]);
+    // The legacy permission would let this caller list the runs. The authorizer decides.
+    const listed = await server.call(
+      "operations.list_runs",
+      {},
+      person({ id: "usr_two", permissions: right("audit.view") })
+    );
+    expect(listed.statusCode).toBe(403);
+    expect(errorOf(listed)).toMatchObject({ code: "FORBIDDEN", details: { reason: "denied" } });
+    expect(asked).toEqual(["users.manage", "audit.view", "audit.view"]);
   });
 });
 
@@ -483,7 +507,7 @@ describe("operation over HTTP: a call that fails", () => {
     expect(logged).toContainEqual(expect.objectContaining({ operationRunId: run?.id }));
   });
 
-  it("takes the same run for the next attempt when a failed call is sent again", async () => {
+  it("answers the failure again and never runs a failed change twice under its key", async () => {
     const { server, runs, executed } = await createServer();
     const first = await server.call(
       "testRunChange",
@@ -497,8 +521,30 @@ describe("operation over HTTP: a call that fails", () => {
     );
     expect([first.statusCode, second.statusCode]).toEqual([404, 404]);
     expect(second.headers["operation-run-id"]).toBe(first.headers["operation-run-id"]);
-    expect(second.headers["idempotent-replayed"]).toBeUndefined();
+    expect(errorOf(second).code).toBe(errorOf(first).code);
+    expect(second.headers["idempotent-replayed"]).toBe("true");
+    // The implementation may have changed something before it threw, so it ran once.
+    expect(executed).toEqual(["testRunChange:gone"]);
+    expect(await runs()).toMatchObject([{ status: "failed", attempt: 1 }]);
+
+    const fresh = await server.call(
+      "testRunChange",
+      change("gone", "not-found", "key-2"),
+      person()
+    );
+    expect(fresh.headers["idempotent-replayed"]).toBeUndefined();
     expect(executed).toHaveLength(2);
+  });
+
+  it("runs a call again under its key where it failed before the operation was reached", async () => {
+    const { server, runs, executed } = await createServer({ failingEvent: "operation.started" });
+    const call = () => server.call("testRunChange", change("early", "ok", "key-1"), person());
+    const first = await call();
+    const second = await call();
+    expect([first.statusCode, second.statusCode]).toEqual([500, 500]);
+    expect(second.headers["operation-run-id"]).toBe(first.headers["operation-run-id"]);
+    expect(second.headers["idempotent-replayed"]).toBeUndefined();
+    expect(executed).toEqual([]);
     expect(await runs()).toMatchObject([{ status: "failed", attempt: 2 }]);
   });
 });

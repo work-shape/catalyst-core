@@ -295,7 +295,8 @@ describe("route helper: scope and rights", () => {
         error: {
           correlationId: expect.any(String),
           code: "FORBIDDEN",
-          message: `Missing permission '${missing}'`
+          message: `Missing the right '${missing}'`,
+          details: { action: missing, reason: "no_grant" }
         }
       });
     }
@@ -365,7 +366,8 @@ describe("route helper: scope and rights", () => {
         error: {
           correlationId: expect.any(String),
           code: "FORBIDDEN",
-          message: "Missing permission 'users.manage'"
+          message: "Missing the right 'users.manage'",
+          details: { action: "users.manage", reason: "no_grant" }
         }
       }
     ]);

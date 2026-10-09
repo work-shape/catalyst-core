@@ -40,6 +40,7 @@ export interface ServerInput {
 
 export async function createServer(input: ServerInput = {}) {
   const executed: string[] = [];
+  const authorized: string[] = [];
   const logged: unknown[] = [];
   const approvalRequests: string[] = [];
   let release: () => void = () => undefined;
@@ -109,7 +110,16 @@ export async function createServer(input: ServerInput = {}) {
       }
     });
     route.operation(operations.testRunList, {
-      checksRightsItself: true,
+      // Whoever may view the audit log or manage users may list the items.
+      authorize: (_input, { access }) => {
+        authorized.push("testRunList");
+        const allowed = ["audit.view", "users.manage"].some(
+          (action) => access.authorize(action).allowed
+        );
+        return allowed
+          ? { allowed: true }
+          : { allowed: false, action: "audit.view", reason: "no_grant" };
+      },
       execute: (_input, { paging }) => {
         executed.push(`testRunList:${paging?.limit}`);
         return Array.from({ length: 5 }, (_, index) => ({
@@ -152,6 +162,7 @@ export async function createServer(input: ServerInput = {}) {
   return {
     server,
     executed,
+    authorized,
     logged,
     approvalRequests,
     gate,

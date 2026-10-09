@@ -3,6 +3,7 @@ import {
   AppError,
   IDEMPOTENCY_KEY_MAX_LENGTH,
   INTERRUPTED_RUN_ERROR,
+  assertOperationChecksRights,
   callerCanConfirm,
   createPlatformId,
   isAuthenticatedServicePrincipal,
@@ -10,6 +11,7 @@ import {
   resolvePolicy,
   toErrorEnvelope,
   unknownToJsonValue,
+  type AccessDecision,
   type AuditRecorder,
   type Authorizer,
   type CentralPolicySetting,
@@ -17,6 +19,7 @@ import {
   type JsonObject,
   type JsonValue,
   type Logger,
+  type OperationAuthorization,
   type OperationCall,
   type OperationDefinition,
   type OperationDenial,
@@ -104,6 +107,7 @@ export async function runOperation(
   if (!definition) {
     throw new AppError("NOT_FOUND", `Operation '${call.operation}' is not registered`);
   }
+  assertOperationChecksRights(definition);
   if (definition.effect !== call.effect) {
     throw new AppError("INTERNAL", `Operation '${call.operation}' is ${definition.effect}`);
   }
@@ -152,8 +156,11 @@ export async function runOperation(
       actor,
       idempotencyKey
     });
-    // A failed run is taken by the next `create`; a run that is gone frees the key.
-    if (held && (held.status !== "failed" || isInterrupted(held))) {
+    // A run that may be run again is taken by the next `create`; a run that is gone frees the
+    // key. Every other run answers again what it answered, to the actor that holds its key and
+    // without asking for the right again: the actor had it when the call ran, and a refusal
+    // now would hide an outcome that happened and invite the same change under a new key.
+    if (held && !runsAgain(held)) {
       return { result: replay(held, definition, actor, inputHash), run: held, replayed: true };
     }
     if (held && !sameCall(held, definition, actor, inputHash)) {
@@ -208,13 +215,13 @@ function sameCall(
   );
 }
 
-/** A changing call that was cut off. A read that was cut off changed nothing and runs again. */
-function isInterrupted(run: OperationRun): boolean {
-  return (
-    run.effect === "changing" &&
-    run.status === "failed" &&
-    run.error?.code === INTERRUPTED_RUN_ERROR.code
-  );
+/**
+ * Whether the key of a failed run starts its call again. A read changed nothing. A changing
+ * call does only where it failed before its implementation started: one that started may have
+ * changed something before it threw or was cut off.
+ */
+function runsAgain(run: OperationRun): boolean {
+  return run.status === "failed" && (run.effect === "reading" || run.error?.unexecuted === true);
 }
 
 function keyReused(): AppError {
@@ -262,13 +269,22 @@ function replay(
         operationRunId: runId
       });
     case "failed":
-      if (!isInterrupted(held)) break;
-      // Nobody knows how far the first call got, so the key never runs it a second time.
-      throw new AppError(
-        "OPERATION_IN_PROGRESS",
-        "The first call with this key was interrupted and its outcome is not known. Check what it changed, then call again with a new Idempotency-Key.",
-        { operationRunId: runId, interrupted: true }
-      );
+      if (!held.error) break;
+      if (held.error.code === INTERRUPTED_RUN_ERROR.code) {
+        // Nobody knows how far the first call got, so the key never runs it a second time.
+        throw new AppError(
+          "OPERATION_IN_PROGRESS",
+          "The first call with this key was interrupted and its outcome is not known. Check what it changed, then call again with a new Idempotency-Key.",
+          { operationRunId: runId, interrupted: true }
+        );
+      }
+      // The call may have changed something before it failed. It answers its failure again;
+      // another attempt takes a new key.
+      return {
+        status: "failed",
+        runId,
+        error: { code: held.error.code, message: held.error.message }
+      };
   }
   throw new AppError("INTERNAL", `Operation run '${runId}' cannot be answered again`);
 }
@@ -337,18 +353,29 @@ async function executeRun(
   };
 
   let completed: Pick<OperationOutcome, "result" | "run"> | undefined;
+  let started = false;
   try {
     const access = await deps.authorizer.forActor(call.actor);
-    if (definition.action !== null) {
-      const right = access.authorize(definition.action, resource);
-      await emit("operation.authorization_checked", "after", {
-        action: definition.action,
-        status: right.allowed ? "success" : "denied",
-        ...(right.allowed ? {} : { reason: right.reason })
-      });
-      if (!right.allowed) {
-        return await deny({ kind: "forbidden", action: definition.action, reason: right.reason });
-      }
+    // The right is asked here for every operation, by its name or by the operation's own
+    // check, so nobody without it learns what the policy says or receives an approval.
+    const right: OperationAuthorization =
+      definition.action === null
+        ? await definition.authorize(call.input, {
+            actor: call.actor,
+            origin: call.origin,
+            workspaceId: call.workspaceId,
+            correlationId: call.correlationId,
+            access,
+            resource
+          })
+        : namedRight(access.authorize(definition.action, resource), definition.action);
+    await emit("operation.authorization_checked", "after", {
+      ...(definition.action === null ? {} : { action: definition.action }),
+      status: right.allowed ? "success" : "denied",
+      ...(right.allowed ? {} : { action: right.action, reason: right.reason })
+    });
+    if (!right.allowed) {
+      return await deny({ kind: "forbidden", action: right.action, reason: right.reason });
     }
 
     const policyInput = {
@@ -408,6 +435,7 @@ async function executeRun(
       access,
       audit: auditForRun(deps.audit, run.id, call.correlationId)
     };
+    started = true;
     const output = await definition.execute(call.input, context);
     // From here on the call has happened. Whatever fails below is a failure to record it, and
     // the caller is still told the outcome with the run: an error would make it call again.
@@ -437,15 +465,21 @@ async function executeRun(
       );
       return completed;
     }
-    // An operation that checks a right itself refuses through `context.access.require`.
+    // An implementation that asks for a further right refuses through `context.access.require`.
     const refused = forbiddenSchema.safeParse(error);
     if (refused.success) return deny({ kind: "forbidden", ...refused.data.details });
-    return fail(error, run, definition, call, deps, now, end, emit);
+    return fail(error, !started, run, definition, call, deps, now, end, emit);
   }
+}
+
+function namedRight(decision: AccessDecision, action: string): OperationAuthorization {
+  return decision.allowed ? { allowed: true } : { allowed: false, action, reason: decision.reason };
 }
 
 async function fail(
   error: unknown,
+  /** Whether the call failed before the operation's implementation was reached. */
+  unexecuted: boolean,
   run: OperationRun,
   definition: OperationDefinition,
   call: OperationCall,
@@ -471,7 +505,7 @@ async function fail(
   const failed = await end({
     status: "failed",
     finishedAt: now().toISOString(),
-    error: { code: safe.code, message: safe.message }
+    error: { code: safe.code, message: safe.message, ...(unexecuted ? { unexecuted } : {}) }
   });
   await emit("operation.failed", "after", { status: "failed", reason: safe.code });
   const details = detailsRecord(safe.details);

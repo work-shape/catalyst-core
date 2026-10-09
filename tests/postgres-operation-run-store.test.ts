@@ -105,7 +105,27 @@ describe("Postgres operation run store", () => {
     });
   });
 
-  it("takes a failed run for the next attempt of the same call only", async () => {
+  it("never takes a changing run again that failed after its implementation started", async () => {
+    const runs = await createStore();
+    const first = await runs.create(newRun({ idempotencyKey: "key-1" }));
+    if (!first) throw new Error("The first call must start a run");
+    await runs.finish({
+      clientInstanceId,
+      id: first.id,
+      end: {
+        status: "failed",
+        finishedAt: new Date().toISOString(),
+        error: { code: "UNAVAILABLE", message: "Try again" }
+      }
+    });
+    expect(await runs.create(newRun({ idempotencyKey: "key-1" }))).toBeUndefined();
+    expect(await runs.get({ clientInstanceId, id: first.id })).toMatchObject({
+      status: "failed",
+      attempt: 1
+    });
+  });
+
+  it("takes a run that failed unexecuted for the next attempt of the same call only", async () => {
     const runs = await createStore();
     const first = await runs.create(newRun({ idempotencyKey: "key-1" }));
     if (!first) throw new Error("The first call must start a run");
@@ -113,7 +133,11 @@ describe("Postgres operation run store", () => {
     await runs.finish({
       clientInstanceId,
       id: first.id,
-      end: { status: "failed", finishedAt, error: { code: "UNAVAILABLE", message: "Try again" } }
+      end: {
+        status: "failed",
+        finishedAt,
+        error: { code: "UNAVAILABLE", message: "Try again", unexecuted: true }
+      }
     });
 
     // Another input or another operation under the key is another call.

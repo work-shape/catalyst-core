@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   callerCanConfirm,
+  createOperationRegistry,
   operationDenialError,
   resolvePolicy,
+  type OperationDefinition,
   type OperationOrigin,
   type PolicyInput
 } from "@vivd-catalyst/core";
@@ -196,6 +199,51 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     for (const [origin, expected] of origins) {
       expect(callerCanConfirm(origin)).toBe(expected);
     }
+  });
+});
+
+describe("operation registry: who checks the right", () => {
+  const definition = (): OperationDefinition => ({
+    name: "items.list",
+    effect: "reading",
+    action: "audit.view",
+    scope: null,
+    auth: "principal",
+    inputSchema: z.unknown(),
+    outputSchema: z.unknown(),
+    resource: () => undefined,
+    http: { method: "GET", path: "/items" },
+    timeoutMs: 1000,
+    execute: () => Promise.resolve([])
+  });
+
+  it("registers an operation with a named right or with its own check", () => {
+    const registry = createOperationRegistry();
+    registry.register(definition());
+    const { action: _action, ...rest } = definition();
+    registry.register({
+      ...rest,
+      name: "items.own",
+      action: null,
+      authorize: () => ({ allowed: true })
+    });
+  });
+
+  // The types refuse both registrations, so each is built around them.
+  it("refuses an operation that names no right and has no check of its own", () => {
+    const unchecked = definition();
+    Reflect.set(unchecked, "action", null);
+    expect(() => createOperationRegistry().register(unchecked)).toThrow(
+      /names no right and has no check of its own/u
+    );
+  });
+
+  it("refuses an operation that names a right and checks rights itself too", () => {
+    const doubled = definition();
+    Reflect.set(doubled, "authorize", () => ({ allowed: true }));
+    expect(() => createOperationRegistry().register(doubled)).toThrow(
+      /may not check rights itself too/u
+    );
   });
 });
 

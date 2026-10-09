@@ -45,6 +45,11 @@ export interface OperationRunDecision {
 export interface OperationRunError {
   code: string;
   message: string;
+  /**
+   * Set where the call failed before the operation's implementation was reached, so nothing
+   * was changed. Only such a failed run of a changing operation is run again under its key.
+   */
+  unexecuted?: true;
 }
 
 /**
@@ -133,10 +138,11 @@ export interface OperationRunFilters {
 
 export interface OperationRunStore {
   /**
-   * Starts a run. Where the actor already used the run's idempotency key, nothing is inserted:
-   * a failed run of the same operation and input is taken for its next attempt and returned,
-   * and any other run that holds the key leaves the answer `undefined`. An interrupted run of
-   * a changing operation is never taken again: nobody knows how far its call got.
+   * Starts a run. Where the actor already used the run's idempotency key, nothing is inserted.
+   * A failed run of the same operation and input is taken for its next attempt and returned
+   * where it is a read or its error says `unexecuted`. Every other run that holds the key
+   * leaves the answer `undefined`: a changing call that failed or was interrupted after its
+   * implementation started may have changed something, and is never run again under its key.
    */
   create(run: NewOperationRun): Promise<OperationRun | undefined>;
   /** Ends a run that is still `running`. `undefined` when it is not running any more. */

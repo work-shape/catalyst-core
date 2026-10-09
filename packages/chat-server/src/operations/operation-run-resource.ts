@@ -28,7 +28,7 @@ export function toOperationRunResource(run: OperationRun): OperationRunResource 
       at: run.decision.at,
       comment: run.decision.comment
     },
-    error: run.error,
+    error: run.error && { code: run.error.code, message: run.error.message },
     correlationId: run.correlationId,
     createdAt: run.createdAt,
     startedAt: run.startedAt,

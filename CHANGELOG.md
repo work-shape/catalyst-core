@@ -18,12 +18,19 @@ contain breaking changes; a patch version does not.
   from the run with `Idempotent-Replayed: true`, and `409` tells a key used for another call
   (`IDEMPOTENCY_KEY_REUSED`), a first call still running (`OPERATION_IN_PROGRESS`), an
   expired one (`OPERATION_EXPIRED`) or an answer too large to keep (`OUTPUT_NOT_RETAINED`).
-  A changing call that was interrupted is never run again under its key: the key answers
-  `409 OPERATION_IN_PROGRESS` with `details.interrupted: true`, because nobody knows how far
-  the call got. The origin of a run over HTTP follows how the call was authenticated: a
-  browser session is `user`, a key or token in the request is `cli`, also for a person's
-  token. An operation that requires no right must be registered with
-  `checksRightsItself: true`, or the server does not start.
+  A changing call that failed is never run again under its key, since it may have changed
+  something before it failed: the key answers the recorded failure again, with the same
+  status and code and `Idempotent-Replayed: true`, and another attempt takes a new key. Only
+  a call that failed before its operation was reached runs again under its key. A changing
+  call that was interrupted answers `409 OPERATION_IN_PROGRESS` with
+  `details.interrupted: true`, because nobody knows how far it got. A replay answers the
+  actor that holds the key without asking for the right again: the actor had it when the
+  call ran, and a refusal would hide an outcome that happened. The origin of a run over HTTP
+  follows how the call was authenticated: a browser session is `user`, a key or token in the
+  request is `cli`, also for a person's token. An operation that requires no right must be
+  registered with an `authorize` function, which is asked where a named right is: after the
+  scope and before the policy, the guardrails and an approval. Without one the server does
+  not start.
   No operation of the release is registered this way yet. A run stores a hash of the input,
   never the input, and for a failure a code and a safe message.
 - **Operations:** `GET /api/v1/operations/runs/{runId}` reads one Operation Run and
@@ -90,6 +97,14 @@ contain breaking changes; a patch version does not.
 
 ### Changed
 
+- **API:** a call refused for a missing right answers `403 FORBIDDEN` with the message
+  `Missing the right '<action>'` and `details.action` and `details.reason`, on every route.
+  The message was `Missing permission '<permission>'` and named the legacy permission. The
+  routes ask the server's authorizer, a new server option `authorizer` whose default decides
+  as before.
+- **Logs:** the log record of a failed tool handler or operation keeps of a database error
+  its SQLSTATE code, constraint and table and no longer its message, which can quote
+  rejected values.
 - **Interface, Settings:** the Settings dialog, the workspace settings dialog and the
   administration panel are one Settings area with a rail of pages in three groups: You (Profile,
   Language and appearance, Security), Workspace (General, Members, with the shared workspace

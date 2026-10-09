@@ -13,13 +13,13 @@ import {
   createPlatformId,
   isAppError,
   isAuthenticatedServicePrincipal,
-  legacyPermissionFor,
   normalizeAuthenticatedUser,
   requireAuthScope,
-  requirePermission,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type OperationAuthorization,
+  type OperationAuthorizeContext,
   type OperationOrigin,
   type OperationResource,
   type StorePage,
@@ -116,16 +116,21 @@ type OperationInput<Op extends Operation> = InputPart<Op["body"]> &
 
 /**
  * Who checks the caller's right. Where the descriptor requires one, the registry checks it.
- * Where it requires none, the registration must say that the implementation checks.
+ * Where it requires none, the registration must bring the check.
  */
 type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknown, ...unknown[]]
-  ? { checksRightsItself?: never }
-  : { checksRightsItself: true };
+  ? { authorize?: never }
+  : {
+      authorize(
+        input: OperationInput<Op>,
+        context: OperationAuthorizeContext
+      ): OperationAuthorization | Promise<OperationAuthorization>;
+    };
 
 /** What a registration adds to the descriptor: what the call touches and what it does. */
 type OperationBinding<Op extends Operation> = Omit<
   AssembledOperationBinding,
-  "resource" | "execute" | "checksRightsItself"
+  "resource" | "execute" | "authorize"
 > &
   RightsCheck<Op> & {
     resource?(input: OperationInput<Op>): OperationResource | undefined;
@@ -188,9 +193,9 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           reply
         );
         if (caller.identity) {
+          const access = await options.authorizer.forActor(caller.identity);
           for (const action of operation.requires ?? []) {
-            // AP-1 replaces this line with `access.require(action)`.
-            requirePermission(caller.identity, legacyPermissionFor(action));
+            access.require(action);
           }
         }
         const paging =

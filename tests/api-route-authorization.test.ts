@@ -127,10 +127,14 @@ describe("every operation of the catalog", () => {
   );
 
   const requiring = authenticated.flatMap(({ name, operation }) =>
-    operation.requires.map((action) => [name, action] as const)
+    operation.requires.map((action) => {
+      const missing = legacyPermissionFor(action);
+      // Two actions can stand behind one legacy permission; the first of them refuses.
+      const refused = operation.requires.find((other) => legacyPermissionFor(other) === missing);
+      return [name, action, missing, refused ?? action] as const;
+    })
   );
-  it.each(requiring)("%s refuses a holder without %s", async (name, action) => {
-    const missing = legacyPermissionFor(action);
+  it.each(requiring)("%s refuses a holder without %s", async (name, _action, missing, refused) => {
     const response = await call(
       name,
       asCaller({
@@ -144,7 +148,8 @@ describe("every operation of the catalog", () => {
       error: {
         correlationId: expect.any(String),
         code: "FORBIDDEN",
-        message: `Missing permission '${missing}'`
+        message: `Missing the right '${refused}'`,
+        details: { action: refused, reason: "no_grant" }
       }
     });
   });

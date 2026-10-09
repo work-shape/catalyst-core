@@ -10,6 +10,8 @@ import {
   isAppErrorCode,
   operationDenialError,
   type AuthenticatedIdentity,
+  type OperationAuthorization,
+  type OperationAuthorizeContext,
   type OperationChangeClass,
   type OperationDefinition,
   type OperationExecutionContext,
@@ -59,10 +61,14 @@ export interface AssembledOperationBinding {
   module?: string;
   timeoutMs?: number;
   /**
-   * Says that the implementation checks the caller's right itself, through `context.access`.
-   * An operation whose descriptor requires no right must say so, and no other may.
+   * Decides who may call an operation whose descriptor requires no right, from the parsed
+   * input and the caller's rights. It is asked where a named right is: before the policy, the
+   * guardrails and an approval. Such an operation must have one, and no other may.
    */
-  checksRightsItself?: true;
+  authorize?(
+    input: unknown,
+    context: OperationAuthorizeContext
+  ): OperationAuthorization | Promise<OperationAuthorization>;
   /** What the call touches: what the right is checked on and the subject of its events. */
   resource?(input: unknown): OperationResource | undefined;
   execute(input: unknown, context: OperationBindingContext): unknown;
@@ -130,15 +136,22 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         throw new Error(`Operation '${operation.id}' may require one right`);
       }
       // Nothing is unchecked by omission: either the registry checks the right the descriptor
-      // names, or the registration says that the implementation checks it.
-      if (action === undefined && binding.checksRightsItself !== true) {
+      // names, or the registration brings the check.
+      const { authorize } = binding;
+      if (action !== undefined && authorize !== undefined) {
         throw new Error(
-          `Operation '${operation.id}' requires no right and does not say that it checks rights itself`
+          `Operation '${operation.id}' requires '${action}' and may not check rights itself too`
         );
       }
-      if (action !== undefined && binding.checksRightsItself !== undefined) {
+      const rights =
+        action !== undefined
+          ? { action }
+          : authorize !== undefined
+            ? { action: null, authorize }
+            : undefined;
+      if (!rights) {
         throw new Error(
-          `Operation '${operation.id}' requires '${action}' and may not say that it checks rights itself`
+          `Operation '${operation.id}' requires no right and has no check of its own`
         );
       }
       const page =
@@ -150,7 +163,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         effect: operation.effect,
         changeClass: binding.changeClass,
         defaultPolicy: binding.defaultPolicy,
-        action: action ?? null,
+        ...rights,
         scope: operation.scope ?? null,
         auth: operation.auth,
         inputSchema: operationInputSchema(operation),

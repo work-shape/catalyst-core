@@ -39,10 +39,10 @@ export async function createOperationRun(
       startedAt,
       updatedAt: startedAt
     })
-    // The key is taken. Only a failed run of the same call is handed out again, as its next
-    // attempt; every other holder of the key leaves this statement without a row. So does an
-    // interrupted run of a changing operation: its call may have changed something, and running
-    // it again would repeat it.
+    // The key is taken. A failed run of the same call is handed out again, as its next attempt,
+    // only where it is a read or failed before its implementation started. Every other holder
+    // of the key leaves this statement without a row: a changing call that failed or was
+    // interrupted may have changed something, and running it again would repeat it.
     .onConflictDoUpdate({
       target: [
         operationRuns.clientInstanceId,
@@ -64,10 +64,7 @@ export async function createOperationRun(
         eq(operationRuns.status, "failed"),
         eq(operationRuns.operation, run.operation),
         eq(operationRuns.inputHash, run.inputHash),
-        or(
-          eq(operationRuns.effect, "reading"),
-          sql`${operationRuns.error}->>'code' is distinct from ${INTERRUPTED_RUN_ERROR.code}`
-        )
+        or(eq(operationRuns.effect, "reading"), sql`${operationRuns.error}->>'unexecuted' = 'true'`)
       )
     })
     .returning();
@@ -226,7 +223,13 @@ function mapOperationRun(row: OperationRunRow): OperationRun {
     approvalRequestId: row.approvalRequestId ?? undefined,
     output: row.output ?? undefined,
     resultRef: row.resultRef ?? undefined,
-    error: row.error ? { code: row.error.code, message: row.error.message } : undefined,
+    error: row.error
+      ? {
+          code: row.error.code,
+          message: row.error.message,
+          ...(row.error.unexecuted ? { unexecuted: true } : {})
+        }
+      : undefined,
     denial: row.error?.denial,
     usage: row.usage ?? undefined,
     correlationId: row.correlationId,

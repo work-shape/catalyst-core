@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { OperationDenial } from "./operation-denial";
 import type { AuditRecorder } from "./audit";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
@@ -33,19 +34,68 @@ export interface OperationExecutionContext {
   audit: AuditRecorder;
 }
 
+/** What an operation's own check of the caller's right answers. A refusal names the right. */
+export type OperationAuthorization =
+  | { allowed: true }
+  | ({ allowed: false } & Omit<Extract<OperationDenial, { kind: "forbidden" }>, "kind">);
+
+/** What an operation's own check of the caller's right knows about the call. */
+export interface OperationAuthorizeContext {
+  actor: AuthenticatedIdentity;
+  origin: OperationOrigin;
+  workspaceId?: CollaborationWorkspaceId;
+  correlationId: string;
+  access: ActorAccess;
+  resource: OperationResource | undefined;
+}
+
+/**
+ * Who may call. Either one right the actor needs on the resource, or, where the rule is not
+ * one action, the operation's own check. Both are asked at the same place of the call: after
+ * the scope and before the policy, the guardrails and an approval. No operation has neither.
+ */
+type OperationRightsCheck<Input> =
+  | { action: string; authorize?: never }
+  | {
+      action: null;
+      authorize(
+        input: Input,
+        context: OperationAuthorizeContext
+      ): OperationAuthorization | Promise<OperationAuthorization>;
+    };
+
 /** An operation as it is registered once and reached from every surface. */
-export interface OperationDefinition<Input = unknown, Output = unknown> {
+export type OperationDefinition<Input = unknown, Output = unknown> = OperationDefinitionBase<
+  Input,
+  Output
+> &
+  OperationRightsCheck<Input>;
+
+/**
+ * Refuses an operation nobody checks the caller's right for. The types refuse it already; this
+ * stops one that reached the registry around them, from a release or from a source.
+ */
+export function assertOperationChecksRights(definition: OperationDefinition): void {
+  const check: { action: unknown; authorize?: unknown } = definition;
+  const named = typeof check.action === "string" && check.action.length > 0;
+  const own = typeof check.authorize === "function";
+  if (named === own) {
+    throw new AppError(
+      "INTERNAL",
+      named
+        ? `Operation '${definition.name}' names a right and may not check rights itself too`
+        : `Operation '${definition.name}' names no right and has no check of its own`
+    );
+  }
+}
+
+interface OperationDefinitionBase<Input, Output> {
   /** `<resource>.<verb>`. Over HTTP it is the operation id of the API contract. */
   name: string;
   effect: OperationEffect;
   changeClass?: OperationChangeClass;
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
-  /**
-   * The right the actor needs on the resource. `null` where the rule is not one action: the
-   * implementation then decides through `context.access` who may call.
-   */
-  action: string | null;
   /** The scope a credential must carry; `null` asks for none. Checked where a credential arrives. */
   scope: OperationScope | null;
   /** `user` refuses service principals. */
@@ -93,6 +143,7 @@ export function createOperationRegistry(): OperationRegistry {
       if (registered.has(definition.name)) {
         throw new AppError("INTERNAL", `Operation '${definition.name}' is registered twice`);
       }
+      assertOperationChecksRights(definition);
       registered.set(definition.name, definition);
     },
     addSource(source) {
