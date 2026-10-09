@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ThemeMode } from "@vivd-catalyst/ui/theme";
+import type { TranslationLabelOverrides } from "./i18n";
 import { ChatWorkspace } from "./chat-workspace";
 import {
   ToolDisplayActionsProvider,
@@ -24,6 +25,7 @@ export interface ChatShellProps {
    */
   administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
+  labelOverrides?: TranslationLabelOverrides;
   manageDocumentTitle?: boolean;
   /**
    * Told the light or dark mode the shell shows. An entry that owns its document uses it to

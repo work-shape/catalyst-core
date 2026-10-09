@@ -726,7 +726,8 @@ function createPreviewConfig(clientInstanceId: ClientInstanceId) {
     },
     auth: {
       development: {
-        enabled: true
+        enabled: true,
+        user: { permissionRefs: ["demo-tools"] }
       }
     },
     infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },

@@ -455,7 +455,8 @@ function createWorkspaceAttachmentConfig(input: { toolNames?: string[]; root?: s
     },
     auth: {
       development: {
-        enabled: true
+        enabled: true,
+        user: { permissionRefs: ["demo-tools"] }
       }
     },
     infrastructure: {

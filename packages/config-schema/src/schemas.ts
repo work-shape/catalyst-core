@@ -37,7 +37,7 @@ export const userIdentitySchema = z.object({
   email: z.string().email().optional(),
   emailVerified: z.boolean().optional(),
   roles: z.array(z.string().min(1)).default(["user", "admin"]),
-  permissionRefs: z.array(z.string().min(1)).default(["demo-tools"]),
+  permissionRefs: z.array(z.string().min(1)).default([]),
   permissions: z.array(z.string().min(1)).default([]),
   authSource: z.string().min(1).default("development")
 });
@@ -47,7 +47,7 @@ const defaultDevelopmentUser = {
   externalUserId: "dev-user",
   displayLabel: "Development User",
   roles: ["user", "admin"],
-  permissionRefs: ["demo-tools"],
+  permissionRefs: [],
   permissions: [],
   authSource: "development"
 };

@@ -33,7 +33,7 @@ pnpm dev:demo
 For a deployment-owned local instance:
 
 ```bash
-pnpm dev:musterbau
+pnpm dev:<client>
 ```
 
 ## Local Runner Modes

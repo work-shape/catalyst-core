@@ -3,6 +3,28 @@ import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { resolveTrustedOrigins } from "../packages/client-assembly/src/auth";
 
 describe("client instance standalone auth trusted origins", () => {
+  it("grants no tool permissions to a default or partial development user", () => {
+    const base = {
+      version: 1,
+      auth: { development: {} },
+      clientInstance: { id: "test", displayName: "Test", environment: "development" },
+      infrastructure: { models: { local: { provider: "deterministic", model: "local" } } }
+    };
+    expect(parseClientInstanceConfig(base).auth.development?.user.permissionRefs).toEqual([]);
+    expect(
+      parseClientInstanceConfig({
+        ...base,
+        auth: { development: { enabled: true, user: { id: "test-user" } } }
+      }).auth.development?.user.permissionRefs
+    ).toEqual([]);
+    expect(
+      parseClientInstanceConfig({
+        ...base,
+        auth: { development: { enabled: true, user: { permissionRefs: ["test-tools"] } } }
+      }).auth.development?.user.permissionRefs
+    ).toEqual(["test-tools"]);
+  });
+
   it("expands local loopback aliases for development standalone login", () => {
     const origins = resolveTrustedOrigins({
       config: createTestConfig({

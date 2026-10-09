@@ -62,6 +62,7 @@ export function ChatWorkspace({
   token,
   getToken,
   administration,
+  labelOverrides,
   manageDocumentTitle,
   onThemeModeChange,
   className,
@@ -79,6 +80,7 @@ export function ChatWorkspace({
       onRouteChange={onRouteChange}
     >
       <ChatWorkspaceContent
+        labelOverrides={labelOverrides}
         administration={administration}
         manageDocumentTitle={manageDocumentTitle}
         onThemeModeChange={onThemeModeChange}
@@ -91,13 +93,14 @@ export function ChatWorkspace({
 
 function ChatWorkspaceContent({
   administration,
+  labelOverrides,
   manageDocumentTitle,
   onThemeModeChange,
   className,
   collaborationWorkspacesAvailable
 }: Pick<
   ChatWorkspaceProps,
-  "administration" | "manageDocumentTitle" | "onThemeModeChange" | "className"
+  "administration" | "labelOverrides" | "manageDocumentTitle" | "onThemeModeChange" | "className"
 > & {
   collaborationWorkspacesAvailable: boolean;
 }) {
@@ -144,7 +147,7 @@ function ChatWorkspaceContent({
 
   if (showsLogin) {
     return (
-      <TranslationProvider locale={model.config.activeLocale}>
+      <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
         <LoginPanel
           apiBaseUrl={model.auth.apiBaseUrl}
           localePreference={model.config.localePreference}
@@ -162,7 +165,7 @@ function ChatWorkspaceContent({
 
   if (!model.auth.user) {
     return (
-      <TranslationProvider locale={model.config.activeLocale}>
+      <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
         <UiRoot mode={themeMode} labels={uiLabels}>
           <OutdatedInterfaceNotice />
           <SessionCheckPanel
@@ -178,7 +181,7 @@ function ChatWorkspaceContent({
 
   if (!model.config.config) {
     return (
-      <TranslationProvider locale={model.config.activeLocale}>
+      <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
         <UiRoot mode={themeMode} labels={uiLabels}>
           {/* A failed load says it in the panel; the notice above it would say it twice. */}
           {model.config.failure ? null : <OutdatedInterfaceNotice />}
@@ -266,7 +269,7 @@ function ChatWorkspaceContent({
   };
 
   const workspace = (
-    <TranslationProvider locale={model.config.activeLocale}>
+    <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
       <UiRoot
         as="main"
         theme={model.config.theme}

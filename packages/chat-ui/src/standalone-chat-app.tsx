@@ -9,6 +9,7 @@ import {
   useLocation,
   useRouter
 } from "@tanstack/react-router";
+import type { TranslationLabelOverrides } from "./i18n";
 import { ChatShell } from "./chat-shell";
 import type { ChatShellAdministration } from "./settings/page-definition";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
@@ -23,6 +24,7 @@ export interface StandaloneChatAppOptions {
   defaultApiPort?: string | number;
   administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
+  labelOverrides?: TranslationLabelOverrides;
   toolActivityLabels?: ToolActivityLabels;
   rootElement?: HTMLElement | null;
 }
@@ -32,6 +34,7 @@ export function renderStandaloneChatApp({
   defaultApiPort,
   administration,
   displayWidgets,
+  labelOverrides,
   toolActivityLabels,
   rootElement = document.getElementById("root")
 }: StandaloneChatAppOptions): void {
@@ -45,6 +48,7 @@ export function renderStandaloneChatApp({
     apiBaseUrl: resolveApiBaseUrl(apiBaseUrl, defaultApiPort),
     administration,
     displayWidgets,
+    labelOverrides,
     toolActivityLabels
   });
 
@@ -59,6 +63,7 @@ interface StandaloneChatRouterOptions {
   apiBaseUrl: string;
   administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
+  labelOverrides?: TranslationLabelOverrides;
   toolActivityLabels?: ToolActivityLabels;
 }
 
@@ -107,6 +112,7 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
         apiBaseUrl={options.apiBaseUrl}
         administration={options.administration}
         displayWidgets={options.displayWidgets}
+        labelOverrides={options.labelOverrides}
         manageDocumentTitle
         onThemeModeChange={applyDocumentThemeMode}
         route={route}

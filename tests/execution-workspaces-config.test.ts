@@ -235,7 +235,8 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
     },
     auth: {
       development: {
-        enabled: true
+        enabled: true,
+        user: { permissionRefs: ["demo-tools"] }
       }
     },
     localization: {

@@ -1,5 +1,6 @@
 import { AuiProvider, Tools, defineToolkit, useAui } from "@assistant-ui/react";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+import { useToolDisplayToolNames } from "../domain-ui-widgets";
 import { ToolCallPart } from "../tool-call";
 
 const backendToolUi = {
@@ -7,14 +8,17 @@ const backendToolUi = {
   render: ToolCallPart
 } as const;
 
-const vivdToolUiToolkit = defineToolkit({
-  show_view: backendToolUi,
-  "demo.weather_forecast": backendToolUi,
-  "demo.workflow_summary": backendToolUi
-});
-
 export function AssistantToolRegistry({ children }: { children: ReactNode }) {
-  const aui = useAui({ tools: Tools({ toolkit: vivdToolUiToolkit }) });
+  const toolNames = useToolDisplayToolNames();
+  const toolkit = useMemo(
+    () =>
+      defineToolkit({
+        show_view: backendToolUi,
+        ...Object.fromEntries(toolNames.map((name) => [name, backendToolUi]))
+      }),
+    [toolNames]
+  );
+  const aui = useAui({ tools: Tools({ toolkit }) });
 
   return <AuiProvider value={aui}>{children}</AuiProvider>;
 }

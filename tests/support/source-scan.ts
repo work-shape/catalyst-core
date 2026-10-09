@@ -2,6 +2,12 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts|js|mjs)$/u;
+const PRODUCT_TEXT_FILE = /\.(?:ts|tsx|mts|js|mjs|md|mdx|yaml|yml|json|py|sh)$/u;
+// Split customer names so the guard can scan its own test without an exemption.
+const CUSTOMER_NAMES = ["muster" + "bau", "example" + "tax"];
+const DEMO_TOOL_NAME = /["'`]demo\.[A-Za-z0-9_]+/gu;
+const DEMO_PERMISSION = /["'`]demo-tools["'`]/gu;
+const PERSONAL_PATH = /\/Users\/|[A-Z]:\\{1,2}Users\\{1,2}/gu;
 const GENERATED_FILE = /\.gen\.ts$/u;
 const URL_LITERAL = /https?:\/\/([A-Za-z0-9.-]+)/gu;
 /** A read of the environment by a name that is computed, such as `env[name]`. */
@@ -21,15 +27,17 @@ function isAddressOfNothing(url: string, host: string): boolean {
   );
 }
 
-async function sourceFiles(directory: string): Promise<string[]> {
+async function sourceFiles(directory: string, extension = SOURCE_FILE): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
   const nested = await Promise.all(
     entries.map(async (entry) => {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
-        return entry.name === "node_modules" || entry.name === "dist" ? [] : sourceFiles(path);
+        return entry.name === "node_modules" || entry.name === "dist"
+          ? []
+          : sourceFiles(path, extension);
       }
-      return SOURCE_FILE.test(entry.name) && !GENERATED_FILE.test(entry.name) ? [path] : [];
+      return extension.test(entry.name) && !GENERATED_FILE.test(entry.name) ? [path] : [];
     })
   );
   return nested.flat();
@@ -38,6 +46,9 @@ async function sourceFiles(directory: string): Promise<string[]> {
 export interface SourceScan {
   /** `<file> <host>` for every address of a real host outside a `src/adapters/` folder. */
   hostLiterals: string[];
+  customerNames: string[];
+  demoToolNames: string[];
+  personalPaths: string[];
   /** `<file>` for every read of the environment by a computed name. */
   computedEnvReads: string[];
   /** `<file> <NAME>` for every read of a variable whose name says it holds a secret. */
@@ -46,11 +57,20 @@ export interface SourceScan {
 
 /**
  * Reads the product source of a repository: `src` and `tools` of every package and client.
+ * Name and personal-path guards also read package scripts and documentation, client widgets,
+ * and the name guard itself. Customer names are assembled from parts, not exempted.
  * A provider's address belongs in its adapter and a secret is read by the resolver, so both
  * are searched for everywhere else.
  */
 export async function scanProductSource(repositoryRoot: string): Promise<SourceScan> {
-  const scan: SourceScan = { hostLiterals: [], computedEnvReads: [], secretNamedEnvReads: [] };
+  const scan: SourceScan = {
+    hostLiterals: [],
+    computedEnvReads: [],
+    secretNamedEnvReads: [],
+    customerNames: [],
+    demoToolNames: [],
+    personalPaths: []
+  };
   const owners = (
     await Promise.all(
       ["packages", "clients"].map(async (group) =>
@@ -84,6 +104,43 @@ export async function scanProductSource(repositoryRoot: string): Promise<SourceS
     }
     for (const match of text.matchAll(SECRET_NAMED_ENV_READ)) {
       scan.secretNamedEnvReads.push(`${path} ${match[1] ?? ""}`);
+    }
+  }
+  const nameFiles = new Set([
+    ...files,
+    ...(
+      await Promise.all(
+        owners.flatMap((owner) => [
+          sourceFiles(join(owner, "src"), PRODUCT_TEXT_FILE),
+          sourceFiles(join(owner, "scripts"), PRODUCT_TEXT_FILE),
+          sourceFiles(join(owner, "widgets"), PRODUCT_TEXT_FILE),
+          sourceFiles(join(owner, "docs"), PRODUCT_TEXT_FILE)
+        ])
+      )
+    ).flat(),
+    ...(await sourceFiles(
+      join(repositoryRoot, "tests"),
+      /^(?:source-names\.test|source-scan)\.ts$/u
+    ))
+  ]);
+  for (const file of [...nameFiles].sort()) {
+    const path = relative(repositoryRoot, file).replaceAll("\\", "/");
+    const text = await readFile(file, "utf8");
+    for (const name of CUSTOMER_NAMES) {
+      if (text.toLowerCase().includes(name)) scan.customerNames.push(`${path} ${name}`);
+    }
+    if (!path.startsWith("clients/demo/")) {
+      for (const match of text.matchAll(DEMO_TOOL_NAME)) {
+        scan.demoToolNames.push(`${path} ${match[0]}`);
+      }
+      for (const match of text.matchAll(DEMO_PERMISSION)) {
+        scan.demoToolNames.push(`${path} ${match[0]}`);
+      }
+    }
+    if (/^packages\/[^/]+\/(?:src|scripts)\//u.test(path)) {
+      for (const match of text.matchAll(PERSONAL_PATH)) {
+        scan.personalPaths.push(`${path} ${match[0]}`);
+      }
     }
   }
   return scan;

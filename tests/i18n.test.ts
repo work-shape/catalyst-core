@@ -8,6 +8,21 @@ describe("interface translations", () => {
   const en = createTranslationContext("en");
   const de = createTranslationContext("de");
 
+  it("uses a neutral data label unless the client overrides that locale", () => {
+    expect(en.t("resourcesCustomerData")).toBe("Data");
+    expect(de.t("resourcesCustomerData")).toBe("Daten");
+    const labels = { resourcesCustomerData: { en: "Client records", de: "Datensätze" } };
+    expect(createTranslationContext("en", labels).t("resourcesCustomerData")).toBe(
+      "Client records"
+    );
+    expect(createTranslationContext("de", labels).t("resourcesCustomerData")).toBe("Datensätze");
+    expect(
+      createTranslationContext("de", { resourcesCustomerData: { en: "Client records" } }).t(
+        "resourcesCustomerData"
+      )
+    ).toBe("Daten");
+  });
+
   it("looks a message up in the chosen locale", () => {
     expect(en.locale).toBe("en");
     expect(en.t("cancel")).toBe("Cancel");

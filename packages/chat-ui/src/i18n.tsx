@@ -4,6 +4,10 @@ import { translations, type TranslationKey } from "./i18n/translations";
 
 export type { TranslationKey };
 
+export type TranslationLabelOverrides = Partial<
+  Record<TranslationKey, Partial<Record<LocaleCode, string>>>
+>;
+
 type TranslationValues = Record<string, string | number>;
 
 export interface TranslationContextValue {
@@ -17,12 +21,17 @@ const TranslationContext = createContext<TranslationContextValue>(defaultTransla
 
 export function TranslationProvider({
   locale,
+  labelOverrides,
   children
 }: {
   locale: LocaleCode;
+  labelOverrides?: TranslationLabelOverrides;
   children: ReactNode;
 }) {
-  const value = useMemo(() => createTranslationContext(locale), [locale]);
+  const value = useMemo(
+    () => createTranslationContext(locale, labelOverrides),
+    [locale, labelOverrides]
+  );
   return <TranslationContext.Provider value={value}>{children}</TranslationContext.Provider>;
 }
 
@@ -45,11 +54,17 @@ export function readBrowserLocale(): LocaleCode | undefined {
   return undefined;
 }
 
-export function createTranslationContext(locale: LocaleCode): TranslationContextValue {
+export function createTranslationContext(
+  locale: LocaleCode,
+  labelOverrides: TranslationLabelOverrides = {}
+): TranslationContextValue {
   return {
     locale,
     t(key, values) {
-      return interpolate(translations[locale][key] ?? translations.en[key], values);
+      return interpolate(
+        labelOverrides[key]?.[locale] ?? translations[locale][key] ?? translations.en[key],
+        values
+      );
     },
     localeName(targetLocale) {
       return translations[locale][`locale${targetLocale === "de" ? "De" : "En"}`];

@@ -24,6 +24,7 @@ const translations = {
 
 export const weatherForecastWidget = defineToolDisplayWidget({
   kind: "weather.forecast",
+  toolNames: ["demo.weather_forecast"],
   version: 1,
   dataSchema: weatherForecastOutputSchema,
   render: ({ data, input }) => <WeatherForecastPreview forecast={data} input={input} />
