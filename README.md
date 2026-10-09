@@ -51,9 +51,12 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm check
+pnpm check:local
 pnpm test:e2e
 pnpm test:e2e:chat-state
 ```
+
+`pnpm check:local` is `pnpm check` with a throwaway Postgres 17 container of its own; it needs Docker.
 
 `pnpm test:e2e` uses a deterministic fixture config so it does not require an OpenAI key.
 It runs the standalone chat Playwright suite through `scripts/run-chat-e2e.mjs`, which builds

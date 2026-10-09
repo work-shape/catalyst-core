@@ -24,7 +24,9 @@ pnpm check
 
 Platform database tests need Postgres via `POSTGRES_STORE_TEST_DATABASE_URL`. Its HTTP tests also open local ports. Both workflows provide Postgres and invoke the same local commands. On a pull request they first run the baseline guard described under [Baselines](#baselines).
 
-The capabilities lockfile records the platform manifests it was resolved against. A platform change that adds or changes a dependency needs a matching capabilities lockfile update, or the frozen installation of capabilities fails. The capabilities workflow checks out platform `main` on purpose, because the two repositories move together.
+`pnpm check:local`, in either repository, is `pnpm check` with its own database. It starts a Postgres 17 container under a unique name on a free local port, points `POSTGRES_STORE_TEST_DATABASE_URL` at it, runs the check and removes the container when the check ends, fails or is interrupted. It needs a running Docker and says so when there is none.
+
+The capabilities lockfile records the platform manifests it was resolved against. The capabilities workflow checks out platform `main` on purpose, because the two repositories move together, so a platform change that adds or changes a dependency leaves that lockfile behind. The workflow therefore installs capabilities without `--frozen-lockfile`: versions the lockfile knows stay pinned, and only what platform changed is resolved fresh. Update the capabilities lockfile with `pnpm install --lockfile-only` in capabilities when convenient; a clean local checkout that installs with `--frozen-lockfile` fails until then.
 
 ## What checks what
 
