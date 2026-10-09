@@ -77,13 +77,16 @@ export async function createClientInstanceAuth(
     adapters.push(standaloneAuth.authAdapter);
   }
 
-  const tokenSecret = input.config.auth.sessionToken
-    ? await resolveOptionalSecret(input.secrets, PLATFORM_SECRET_NAMES.chatSessionTokenSecret)
-    : undefined;
-  const serverCredential = tokenSecret
-    ? await resolveOptionalSecret(input.secrets, PLATFORM_SECRET_NAMES.chatServerCredential)
-    : undefined;
-  if (tokenSecret && serverCredential && input.config.auth.sessionToken) {
+  // A configured sign-in path never disappears: without its two secrets startup stops.
+  if (input.config.auth.sessionToken) {
+    const tokenSecret = await resolveSessionTokenSecret(
+      input.secrets,
+      PLATFORM_SECRET_NAMES.chatSessionTokenSecret
+    );
+    const serverCredential = await resolveSessionTokenSecret(
+      input.secrets,
+      PLATFORM_SECRET_NAMES.chatServerCredential
+    );
     const tokenOptions = {
       secret: tokenSecret,
       clientInstanceId: input.clientInstanceId,
@@ -229,6 +232,17 @@ function resolveSeedEmail(
   return seedUser.emailEnvName
     ? (input.env[seedUser.emailEnvName] ?? seedUser.email)
     : seedUser.email;
+}
+
+async function resolveSessionTokenSecret(secrets: SecretResolver, name: string): Promise<string> {
+  const value = await resolveOptionalSecret(secrets, name);
+  if (!value) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'auth.sessionToken' is configured, but the secret '${name}' is not set. Set it, or remove 'auth.sessionToken' from the instance config`
+    );
+  }
+  return value;
 }
 
 async function resolveSeedPassword(

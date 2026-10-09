@@ -20,7 +20,7 @@ const UPPER_CASE_SECRET_VALUES = [
   "X7K9P2QW4M"
 ];
 const SECRET_NAME_RULE =
-  "must be the name of a secret such as MODEL_API_KEY: upper-case words joined by underscores, at most 64 characters, never its value";
+  "expected the name of an environment variable such as MODEL_API_KEY (upper-case words joined by underscores, at most 64 characters); the value given does not read as one and looks like a credential value";
 
 const models = { local: { provider: "deterministic" } };
 
@@ -213,7 +213,7 @@ describe("infrastructure section", () => {
       const empty = createEnvironmentSecretResolver({ env: {}, readSecretFile: async () => "" });
       const inResolver = await failure(() => empty.resolve(value));
       expect(inResolver).toBeInstanceOf(SecretNotResolvedError);
-      expect(inResolver.message).toBe(`A secret ${SECRET_NAME_RULE}`);
+      expect(inResolver.message).toBe(`A secret reference is refused: ${SECRET_NAME_RULE}`);
       expectNoSecretValue(inResolver, value);
       // A reference that is not a name is broken config, never an optional secret left unset.
       await expect(resolveOptionalSecret(empty, value)).rejects.toBeInstanceOf(
@@ -246,6 +246,40 @@ describe("infrastructure section", () => {
     }
   );
 
+  it("names the seed user's field and not the value when its password name is refused", () => {
+    for (const value of [...UPPER_CASE_SECRET_VALUES, "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]) {
+      const error = (() => {
+        try {
+          parseClientInstanceConfig({
+            ...config({ models }),
+            auth: {
+              standalone: {
+                enabled: true,
+                seedUsers: [
+                  {
+                    email: "admin@example.test",
+                    displayLabel: "Admin",
+                    passwordEnvName: value,
+                    roles: ["superadmin"]
+                  }
+                ]
+              }
+            }
+          });
+        } catch (thrown) {
+          if (thrown instanceof Error) {
+            return thrown;
+          }
+        }
+        throw new Error("Expected the config to be refused");
+      })();
+      expect(error.message).toBe(
+        `Client instance config is invalid: auth.standalone.seedUsers.0.passwordEnvName: ${SECRET_NAME_RULE}`
+      );
+      expectNoSecretValue(error, value);
+    }
+  });
+
   it("accepts the names deployments use for their secrets", () => {
     for (const name of [
       "DATABASE_URL",
@@ -256,6 +290,15 @@ describe("infrastructure section", () => {
       "S3_SECRET_KEY",
       "OAUTH2_CLIENT_SECRET",
       "E2E_ADMIN_PASSWORD",
+      // Ordinary names that begin as a well-known credential does.
+      "GHOST_API_KEY",
+      "ASIA_MODEL_KEY",
+      "AKIA_REGION_KEY",
+      "GHP_TOKEN",
+      "GHS_DEPLOY_KEY",
+      "XOXO_API_KEY",
+      "EYJ_SIGNING_KEY",
+      "AIZA_MAPS_KEY",
       "MUSTERBAU_SUPERADMIN_PASSWORD",
       "TOKEN"
     ]) {
@@ -379,6 +422,31 @@ describe("keys that moved into the infrastructure section", () => {
 
   it.each(moved)("refuses '%s' and names its new place", (_key, old, message) => {
     expect(() => parseClientInstanceConfig(config({ models }, old))).toThrow(message);
+  });
+
+  it("says what else changes with a moved key", () => {
+    const message = (old: Record<string, unknown>): string => {
+      try {
+        parseClientInstanceConfig(config({ models }, old));
+      } catch (error) {
+        if (error instanceof Error) {
+          return error.message;
+        }
+      }
+      throw new Error("Expected the config to be refused");
+    };
+    const regionRequired =
+      "'region' is now required for a provider that sends data outside the instance";
+
+    expect(message({ modelProviders: [] })).toContain(regionRequired);
+    const mail = message({ mail: { enabled: true } });
+    expect(mail).toContain("Drop 'enabled: true'");
+    expect(mail).toContain(regionRequired);
+    const files = message({ capabilities: { documentProcessing: { objectStorage: {} } } });
+    expect(files).toContain(
+      "'accessKeyIdEnvName' becomes 'accessKeySecret' and 'secretAccessKeyEnvName' becomes 'secretKeySecret'"
+    );
+    expect(files).toContain("is required for a provider that sends data outside the instance");
   });
 
   it("no longer reads the workspace object root from the environment", () => {

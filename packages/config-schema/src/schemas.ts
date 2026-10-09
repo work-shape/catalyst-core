@@ -21,8 +21,10 @@ import type {
 } from "@vivd-catalyst/core";
 import {
   AGENT_EDITABLE_FIELDS,
+  isSecretName,
   MODEL_USAGE_TIERS,
   REASONING_EFFORTS,
+  SECRET_NAME_EXPECTATION,
   SKILL_RESOURCE_MEDIA_TYPES
 } from "@vivd-catalyst/core";
 import { infrastructureConfigSchema } from "./infrastructure";
@@ -61,7 +63,8 @@ const standaloneSeedUserSchema = z.object({
   email: z.string().email(),
   emailEnvName: z.string().min(1).optional(),
   displayLabel: z.string().min(1),
-  passwordEnvName: z.string().min(1),
+  /** The name of a secret, never the password. A refused name is not repeated in a message. */
+  passwordEnvName: z.string().min(1).refine(isSecretName, SECRET_NAME_EXPECTATION),
   developmentPassword: z.string().min(8).optional(),
   roles: z.array(z.string().min(1)).default(["user"]),
   permissionRefs: z.array(z.string().min(1)).default([]),

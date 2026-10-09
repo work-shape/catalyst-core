@@ -79,7 +79,11 @@ export function createEnvironmentSecretResolver(
   return {
     async resolve(name) {
       if (!isSecretName(name)) {
-        throw new SecretNotResolvedError(name, SECRET_NAME_RULE, "unusable");
+        throw new SecretNotResolvedError(
+          name,
+          `reference is refused: ${SECRET_NAME_EXPECTATION}`,
+          "unusable"
+        );
       }
       const value = input.env[name];
       if (value) {
@@ -123,10 +127,14 @@ const SECRET_NAME_SINGLE_WORD_MAX_LENGTH = 12;
 // short number. A credential is one long run, or mixes many digits into its letters.
 const SECRET_NAME_WORD = /^[A-Z0-9]{1,16}$/u;
 const SECRET_NAME_WORD_MAX_DIGITS = 2;
-// How well-known credentials start once written in upper case.
-const CREDENTIAL_PREFIX = /^(?:AKIA|ASIA|AIZA|GHP|GHO|GHS|XOX|EYJ)/u;
-const SECRET_NAME_RULE =
-  "must be the name of a secret such as MODEL_API_KEY: upper-case words joined by underscores, at most 64 characters, never its value";
+// The shapes of well-known credentials, in any case: an AWS access key id, a GitHub token, a
+// Google API key, a Slack token and a JSON Web Token. Each is the prefix with what follows it
+// in a real credential, so a name such as GHOST_API_KEY or ASIA_MODEL_KEY is not one.
+const CREDENTIAL_SHAPE =
+  /^(?:(?:AKIA|ASIA)[A-Z0-9]{16}$|GH[OPRSU]_[A-Z0-9]{20,}|AIZA[A-Z0-9_-]{30,}|XOX[A-Z]-|EYJ[A-Z0-9_-]{16,})/iu;
+/** Why a reference is refused as a secret name. It never repeats the reference. */
+export const SECRET_NAME_EXPECTATION =
+  "expected the name of an environment variable such as MODEL_API_KEY (upper-case words joined by underscores, at most 64 characters); the value given does not read as one and looks like a credential value";
 
 /**
  * True for text that is safe to repeat as the name of a secret: it reads as an environment
@@ -134,7 +142,7 @@ const SECRET_NAME_RULE =
  * into a message, a log line or an error.
  */
 export function isSecretName(value: string): boolean {
-  if (value.length > SECRET_NAME_MAX_LENGTH || CREDENTIAL_PREFIX.test(value)) {
+  if (value.length > SECRET_NAME_MAX_LENGTH || CREDENTIAL_SHAPE.test(value)) {
     return false;
   }
   const words = value.split("_");
@@ -157,7 +165,7 @@ function isSecretNameWord(word: string): boolean {
  * never the secret itself, so a config file and a validation message can show it.
  */
 export function secretRef(): z.ZodString {
-  const schema = z.string().refine(isSecretName, SECRET_NAME_RULE);
+  const schema = z.string().refine(isSecretName, SECRET_NAME_EXPECTATION);
   Object.defineProperty(schema, SECRET_REF_MARK, { value: true });
   return schema;
 }

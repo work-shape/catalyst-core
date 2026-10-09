@@ -9,12 +9,12 @@ const MOVED_KEYS: { path: string[]; message: string }[] = [
   {
     path: ["modelProviders"],
     message:
-      "'modelProviders' moved to 'infrastructure.models', a map from each provider's name to its entry: 'id' becomes the map key, 'type' becomes 'provider', the two '...EnvName' fields become 'credentialSecret' and 'organizationSecret', and 'compliance.residency' becomes 'region'"
+      "'modelProviders' moved to 'infrastructure.models', a map from each provider's name to its entry: 'id' becomes the map key, 'type' becomes 'provider', the two '...EnvName' fields become 'credentialSecret' and 'organizationSecret', and 'compliance.residency' becomes 'region'. 'region' is now required for a provider that sends data outside the instance"
   },
   {
     path: ["mail"],
     message:
-      "'mail' moved to 'infrastructure.mail': the two '...EnvName' fields become 'apiKeySecret' and 'apiSecretSecret', and an instance without mail leaves the key out instead of setting 'enabled: false'"
+      "'mail' moved to 'infrastructure.mail': the two '...EnvName' fields become 'apiKeySecret' and 'apiSecretSecret', and an instance without mail leaves the key out instead of setting 'enabled: false'. Drop 'enabled: true'. 'region' is now required for a provider that sends data outside the instance"
   },
   {
     path: ["executionWorkspaces", "runner"],
@@ -26,7 +26,7 @@ const MOVED_KEYS: { path: string[]; message: string }[] = [
     // capability stops on the old key too.
     path: ["capabilities", "documentProcessing", "objectStorage"],
     message:
-      "'capabilities.documentProcessing.objectStorage' moved to 'infrastructure.objectStorage.files': 'kind' becomes 'provider', the vendor's 'region' becomes 'bucketRegion', and 'region' now states where the data is processed"
+      "'capabilities.documentProcessing.objectStorage' moved to 'infrastructure.objectStorage.files': 'kind' becomes 'provider', the vendor's 'region' becomes 'bucketRegion', 'accessKeyIdEnvName' becomes 'accessKeySecret' and 'secretAccessKeyEnvName' becomes 'secretKeySecret'. 'region' now states where the data is processed and is required for a provider that sends data outside the instance"
   }
 ];
 

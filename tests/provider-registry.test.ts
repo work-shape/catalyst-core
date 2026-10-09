@@ -211,13 +211,37 @@ describe("a secret that is configured and broken", () => {
     });
   const authSecret = { BETTER_AUTH_SECRET: "a-test-secret-with-at-least-32-characters" };
 
-  it("starts without session-token sign-in when nothing configures its secret", async () => {
+  it.each([
+    ["CHAT_SESSION_TOKEN_SECRET", {}],
+    [
+      "CHAT_SERVER_CREDENTIAL",
+      { CHAT_SESSION_TOKEN_SECRET: "a-session-token-secret-with-32-characters" }
+    ]
+  ])(
+    "stops startup and names %s when session-token sign-in is configured and it is unset",
+    async (name, present) => {
+      await expect(
+        createTestInstanceOnSecrets(
+          { config: sessionTokenConfig(), tools: [], seedAssets: false },
+          { ...authSecret, ...present }
+        )
+      ).rejects.toThrow(
+        `'auth.sessionToken' is configured, but the secret '${name}' is not set. Set it, or remove 'auth.sessionToken' from the instance config`
+      );
+    }
+  );
+
+  it("starts with session-token sign-in when both of its secrets resolve", async () => {
     const { instance, resolved } = await createTestInstanceOnSecrets(
       { config: sessionTokenConfig(), tools: [], seedAssets: false },
-      authSecret
+      {
+        ...authSecret,
+        CHAT_SESSION_TOKEN_SECRET: "a-session-token-secret-with-32-characters",
+        CHAT_SERVER_CREDENTIAL: "a-server-credential-with-32-characters"
+      }
     );
     try {
-      expect(resolved).toContain("CHAT_SESSION_TOKEN_SECRET");
+      expect(resolved).toContain("CHAT_SERVER_CREDENTIAL");
     } finally {
       await instance.close();
     }

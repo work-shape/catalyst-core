@@ -157,7 +157,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   characters); anything else is refused and never repeated in a message, so a credential
   pasted where a name belongs does not reach a log. The same holds for a data source's
   `connectionRef: env:NAME`. A secret whose `<NAME>_FILE` is set and whose file cannot be read
-  or is empty stops startup, also for a secret the instance may leave unset.
+  or is empty stops startup, also for a secret the instance may leave unset. An instance whose
+  config carries `auth.sessionToken` no longer starts without `CHAT_SESSION_TOKEN_SECRET` and
+  `CHAT_SERVER_CREDENTIAL`: before, it started without session-token sign-in when another
+  sign-in path existed. Set both, or remove `auth.sessionToken`. A seed user's
+  `passwordEnvName` follows the same naming rule.
   `createClientInstanceApp`, the worker factories and `seedStandaloneAuthUsers` accept a
   `secrets` resolver. `@vivd-catalyst/data-source` no longer exports `createEnvSecretResolver`,
   `createDataSourceRegistry` is asynchronous and takes `secrets`, and

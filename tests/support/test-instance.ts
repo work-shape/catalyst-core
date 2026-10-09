@@ -624,7 +624,7 @@ export async function createTestInstanceOnSecrets(
     }
   });
   const instance = bindInstance(app.store, {
-    server: app.server,
+    runtime: app,
     config: app.config,
     closed: false,
     cleanup: () => app.close()
