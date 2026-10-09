@@ -8,6 +8,7 @@ import {
   type ModelUsageEvent,
   type ModelUsageEventRecordInput,
   type ModelUsageWindowSummary,
+  AppError,
   createPlatformId
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
@@ -62,19 +63,30 @@ export async function listAuditEvents(
   return rows.map(mapAuditEvent);
 }
 
-export async function deleteAuditEventsBefore(
+export async function deleteAuditEventsOlderThan(
   db: PostgresConnection,
-  input: { clientInstanceId: ClientInstanceId; createdBefore: string }
-): Promise<number> {
+  input: { clientInstanceId: ClientInstanceId; days: number }
+): Promise<{ deletedCount: number; createdBefore: string }> {
+  // The cutoff is the database's: its clock stamped the events, a worker's clock may differ.
+  const [cutoff] = await db.execute(drizzleSql`
+    select to_char(
+      (now() - make_interval(days => ${input.days})) at time zone 'UTC',
+      'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+    ) as created_before
+  `);
+  const createdBeforeText = cutoff?.created_before;
+  if (typeof createdBeforeText !== "string")
+    throw new AppError("INTERNAL", "The database returned no time");
+  const createdBefore = new Date(createdBeforeText);
   const removed = await db
     .delete(auditEvents)
     .where(
       and(
         eq(auditEvents.clientInstanceId, input.clientInstanceId),
-        lt(auditEvents.createdAt, new Date(input.createdBefore))
+        lt(auditEvents.createdAt, createdBefore)
       )
     );
-  return removed.count;
+  return { deletedCount: removed.count, createdBefore: createdBefore.toISOString() };
 }
 
 export async function appendModelUsageEvent(

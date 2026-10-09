@@ -118,6 +118,11 @@ export interface UpdateConversationTitleInput {
   updatedAt: ISODateString;
 }
 
+export interface ReplaceConversationTitleInput extends UpdateConversationTitleInput {
+  /** The title the caller read. Another title by now means someone else wrote one. */
+  expectedTitle: string;
+}
+
 export interface MoveConversationInput {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
@@ -145,6 +150,11 @@ export interface ConversationStore extends ConversationHistoryStore {
   }): Promise<Conversation[]>;
   moveConversation(input: MoveConversationInput): Promise<Conversation>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
+  /**
+   * Writes the title only while the conversation still carries `expectedTitle`, in one
+   * statement. False when it carries another title or is not active.
+   */
+  replaceConversationTitle(input: ReplaceConversationTitleInput): Promise<boolean>;
   deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

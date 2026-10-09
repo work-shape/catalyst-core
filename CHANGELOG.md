@@ -207,9 +207,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   removed, with `ConversationRetentionJob`, `createConversationRetentionJob`,
   `ExecutionWorkspaceCleanupJob` and the `start`/`stop`
   of `RunRecoveryWatchdog`. `createChatServerJobs(options)` returns the handlers and schedules
-  for a job worker. A store implementation needs `jobs` and
-  `audit.deleteAuditEventsBefore`. Runs that a process-bound runtime lost with the last
-  process are recovered by the first `agent_run.recover` tick, up to a minute after start.
+  for a job worker. A store implementation needs `jobs`,
+  `audit.deleteAuditEventsOlderThan` and `conversations.replaceConversationTitle`. Runs that a
+  process-bound runtime lost with the last process are recovered by an `agent_run.recover`
+  tick that is due at every start. The generated title is written only while the conversation
+  still carries the title the job read, so a rename by the user stays.
 
 - **Platform store (breaking):** Postgres is the only platform store. The `STORE` environment
   variable is no longer read, so `STORE=memory` no longer starts an instance without a

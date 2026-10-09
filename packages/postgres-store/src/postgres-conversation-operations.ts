@@ -300,6 +300,31 @@ export async function listExpiredConversations(
   return rows.map(mapConversation);
 }
 
+export async function replaceConversationTitle(
+  db: PostgresConnection,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    expectedTitle: string;
+    title: string;
+    updatedAt: string;
+  }
+): Promise<boolean> {
+  const rows = await db
+    .update(conversations)
+    .set({ title: input.title, updatedAt: new Date(input.updatedAt) })
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId),
+        eq(conversations.status, "active"),
+        eq(conversations.title, input.expectedTitle)
+      )
+    )
+    .returning({ id: conversations.id });
+  return rows.length > 0;
+}
+
 export async function updateConversationTitle(
   db: PostgresConnection,
   input: {

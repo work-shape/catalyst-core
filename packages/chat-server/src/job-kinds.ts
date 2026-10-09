@@ -52,7 +52,9 @@ export const expireConversationsSchedule = defineSchedule({
 });
 export const recoverAgentRunsSchedule = defineSchedule({
   kind: recoverAgentRunsJob,
-  every: MINUTE_MS
+  every: MINUTE_MS,
+  // A conversation whose run the last process lost refuses messages until this ran.
+  dueAtStart: true
 });
 export const pruneAuditEventsSchedule = defineSchedule({
   kind: pruneAuditEventsJob,

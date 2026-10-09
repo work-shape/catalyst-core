@@ -62,11 +62,14 @@ export interface AuditEventStore {
     type?: string;
     page?: StorePage;
   }): Promise<AuditEvent[]>;
-  /** Removes the events created before the moment and returns how many there were. */
-  deleteAuditEventsBefore(input: {
+  /**
+   * Removes the events older than `days`, counted from the database's clock, the one that
+   * stamped them. Returns how many there were and the moment before which they were removed.
+   */
+  deleteAuditEventsOlderThan(input: {
     clientInstanceId: ClientInstanceId;
-    createdBefore: ISODateString;
-  }): Promise<number>;
+    days: number;
+  }): Promise<{ deletedCount: number; createdBefore: ISODateString }>;
 }
 
 export interface AuditRecorder {

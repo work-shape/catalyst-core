@@ -24,8 +24,6 @@ import { RunRecoveryWatchdog } from "./run-recovery";
 import type { ChatServerOptions, ConversationRetentionOptions, RunRecoveryOptions } from "./types";
 import { ExecutionWorkspaceCleanupWorkflow } from "./workspace-cleanup";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /** The job kinds the API process serves, with their schedules. */
 export interface ChatServerJobs {
   handlers: RegisteredJobHandler[];
@@ -88,14 +86,11 @@ export function createChatServerJobs(
       kind: pruneAuditEventsJob,
       slots: 1,
       async run(job, control) {
-        const createdBefore = new Date(
-          now().getTime() - options.config.retention.auditDays * DAY_MS
-        ).toISOString();
         // The deletion and its record commit together, or neither does.
         await control.transaction(async (stores) => {
-          const deletedCount = await stores.audit.deleteAuditEventsBefore({
+          const { deletedCount, createdBefore } = await stores.audit.deleteAuditEventsOlderThan({
             clientInstanceId: options.clientInstanceId,
-            createdBefore
+            days: options.config.retention.auditDays
           });
           await stores.audit.appendAuditEvent({
             clientInstanceId: options.clientInstanceId,

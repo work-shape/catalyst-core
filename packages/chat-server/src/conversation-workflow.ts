@@ -933,22 +933,17 @@ export class ConversationWorkflow {
         return;
       }
 
-      const updated = await control.transaction(async (stores) => {
-        const current = await stores.conversations.getConversation(
-          this.options.clientInstanceId,
-          conversationId
-        );
-        if (current?.title !== conversation.title) {
-          return false;
-        }
-        await stores.conversations.updateConversationTitle({
+      // One statement decides: a title the user wrote since the job read the conversation
+      // is not the expected one and stays.
+      const updated = await control.transaction((stores) =>
+        stores.conversations.replaceConversationTitle({
           clientInstanceId: this.options.clientInstanceId,
           conversationId,
+          expectedTitle: conversation.title,
           title,
           updatedAt: new Date().toISOString()
-        });
-        return true;
-      });
+        })
+      );
       if (!updated) {
         return;
       }

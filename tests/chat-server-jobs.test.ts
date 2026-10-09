@@ -1,8 +1,15 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
+import { createChatServerJobs, generateConversationTitleJob } from "@vivd-catalyst/chat-server";
+import { createJobWorker } from "@vivd-catalyst/client-assembly";
 import { asClientInstanceId } from "@vivd-catalyst/core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
-import { createTestConfig, personalConversationListInput } from "./support/fixtures";
+import {
+  createFailingTestLogger,
+  createTestConfig,
+  personalConversationListInput
+} from "./support/fixtures";
+import { createRetentionOptions } from "./support/retention-harness";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance, getTestJobs, type TestInstance } from "./support/test-instance";
 
@@ -69,6 +76,33 @@ describe("the jobs of the API process", () => {
     ]);
   });
 
+  it("runs the run recovery at the first pass after every start", async () => {
+    const recoveries = () =>
+      withSql(async (sql) => {
+        const rows = await sql<{ status: string; due: boolean }[]>`
+          select status, run_after <= now() as due from platform_jobs
+          where kind = 'agent_run.recover' order by created_at, id`;
+        return rows.map((row) => ({ ...row }));
+      });
+    const first = await createApp();
+    await getTestJobs(first).runDue();
+    // The next tick is a minute away.
+    await expect(recoveries()).resolves.toEqual([
+      { status: "succeeded", due: true },
+      { status: "queued", due: false }
+    ]);
+    await first.close();
+
+    const second = await createApp();
+    await getTestJobs(second).runDue();
+
+    await expect(recoveries()).resolves.toEqual([
+      { status: "succeeded", due: true },
+      { status: "succeeded", due: true },
+      { status: "queued", due: false }
+    ]);
+  });
+
   it("removes audit events older than the audit retention and records the count", async () => {
     const app = await createApp();
     const auditDays = createTestConfig().retention.auditDays;
@@ -90,7 +124,8 @@ describe("the jobs of the API process", () => {
     await age("inside-retention", auditDays - 1);
     await age("other-instance-expired", auditDays + 400);
 
-    const jobs = getTestJobs(app);
+    // The worker's clock is two years ahead. The cutoff is the database's, so it changes nothing.
+    const jobs = getTestJobs(app, { now: () => new Date(Date.now() + 730 * DAY_MS) });
     await jobs.runDue();
     // The next tick is a day away: a second pass prunes nothing and records nothing.
     await jobs.runDue();
@@ -114,6 +149,108 @@ describe("the jobs of the API process", () => {
     await expect(
       app.stores.audit.listAuditEvents({ clientInstanceId: otherInstance, limit: 100 })
     ).resolves.toHaveLength(1);
+  });
+});
+
+describe("the title job and a rename by the user", () => {
+  const titleInstance = asClientInstanceId("title-rename-test");
+
+  async function titledConversation(renameDuringGeneration: string | undefined) {
+    const store = (await createTestInstance()).stores;
+    const conversation = await store.createConversationForTesting({
+      clientInstanceId: titleInstance,
+      createdByUserId: "user-1",
+      createdByExternalUserId: "external-user-1",
+      title: "please summarize the release notes",
+      retainedUntil: new Date(Date.now() + 30 * DAY_MS).toISOString()
+    });
+    await store.conversations.appendMessage({
+      clientInstanceId: titleInstance,
+      conversationId: conversation.id,
+      role: "user",
+      text: "please summarize the release notes"
+    });
+    const options = createRetentionOptions({ clientInstanceId: titleInstance, store });
+    const worker = createJobWorker({
+      stores: store,
+      clientInstanceId: titleInstance,
+      logger: createFailingTestLogger("The title job failed"),
+      ...createChatServerJobs({
+        ...options,
+        modelProvider: {
+          id: "local",
+          // The job has read the conversation and has not written the title yet.
+          async complete() {
+            if (renameDuringGeneration)
+              await store.conversations.updateConversationTitle({
+                clientInstanceId: titleInstance,
+                conversationId: conversation.id,
+                title: renameDuringGeneration,
+                updatedAt: new Date().toISOString()
+              });
+            return {
+              text: "Release Notes Summary",
+              toolCalls: [],
+              usage: {
+                inputTokens: 0,
+                outputTokens: 0,
+                totalTokens: 0,
+                source: "not_reported",
+                webSearchCallCount: 0
+              }
+            };
+          }
+        }
+      })
+    });
+    await store.jobs.enqueue(
+      generateConversationTitleJob,
+      { conversationId: conversation.id, userId: "user-1" },
+      { clientInstanceId: titleInstance, dedupeKey: conversation.id }
+    );
+    await worker.runDue();
+    await worker.stop();
+    const stored = await store.conversations.getConversation(titleInstance, conversation.id);
+    const audit = await store.audit.listAuditEvents({ clientInstanceId: titleInstance, limit: 20 });
+    return {
+      store,
+      conversation,
+      title: stored?.title,
+      generatedEvents: audit.filter((event) => event.type === "conversation.title_generated")
+    };
+  }
+
+  it("writes the generated title while the conversation still carries the temporary one", async () => {
+    const result = await titledConversation(undefined);
+    expect(result.title).toBe("Release Notes Summary");
+    expect(result.generatedEvents).toHaveLength(1);
+  });
+
+  it("keeps a title the user wrote between the job's read and its write", async () => {
+    const result = await titledConversation("Mine");
+    expect(result.title).toBe("Mine");
+    expect(result.generatedEvents).toHaveLength(0);
+  });
+
+  it("replaces a title in one statement, and only the expected one", async () => {
+    const { store, conversation } = await titledConversation("Mine");
+    const replace = (expectedTitle: string) =>
+      store.conversations.replaceConversationTitle({
+        clientInstanceId: titleInstance,
+        conversationId: conversation.id,
+        expectedTitle,
+        title: "Generated",
+        updatedAt: new Date().toISOString()
+      });
+
+    await expect(replace("please summarize the release notes")).resolves.toBe(false);
+    await expect(
+      store.conversations.getConversation(titleInstance, conversation.id)
+    ).resolves.toMatchObject({ title: "Mine" });
+    await expect(replace("Mine")).resolves.toBe(true);
+    await expect(
+      store.conversations.getConversation(titleInstance, conversation.id)
+    ).resolves.toMatchObject({ title: "Generated" });
   });
 });
 

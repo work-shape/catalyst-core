@@ -25,6 +25,7 @@ import {
   listExpiredConversations as listPostgresExpiredConversations,
   listMessages as listPostgresMessages,
   listRecentMessages as listPostgresRecentMessages,
+  replaceConversationTitle as replacePostgresConversationTitle,
   updateConversationTitle as updatePostgresConversationTitle
 } from "../postgres-conversation-operations";
 import {
@@ -74,6 +75,9 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
       updatedAt: string;
     }): Promise<Conversation> {
       return updatePostgresConversationTitle(db, input);
+    },
+    async replaceConversationTitle(input): Promise<boolean> {
+      return replacePostgresConversationTitle(db, input);
     },
     async appendMessage(input: CreateMessageInput): Promise<ChatMessage> {
       return appendPostgresMessage(db, input);
