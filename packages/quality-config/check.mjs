@@ -272,6 +272,10 @@ else if (!process.argv.includes("--write")) {
   );
   if (errors.length) {
     console.error(errors.join("\n"));
+    if (errors.some((error) => error.includes("repair the increase")))
+      console.error(
+        `Counts may only fall. After a repair, run \`pnpm exec catalyst-quality ${target}\` again until it reports 0 baseline differences; add \`--measure\` to list every finding with its file and position.`
+      );
     process.exitCode = 1;
   }
 }

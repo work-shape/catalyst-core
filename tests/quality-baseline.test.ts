@@ -47,6 +47,30 @@ describe("quality baseline", () => {
     }
   });
 
+  it("names the invalid entry", () => {
+    const invalid = { ...entry, rule: "test/unowned", owner: "" };
+    expect(() => compareBaseline([], { version: 1, entries: [entry, invalid] }, "lint")).toThrow(
+      `Invalid baseline entry: ${JSON.stringify(invalid)}`
+    );
+  });
+
+  it("names the files that hold the findings of a raised count, the first ten", () => {
+    const inFile = (file: string) => ({ ...finding, file });
+    expect(
+      compareBaseline(
+        [inFile("src/b.ts"), inFile("src/a.ts"), inFile("src/b.ts")],
+        baseline,
+        "lint"
+      )
+    ).toEqual([
+      "lint|test/rule|packages/example: measured 3, baseline 2; repair the increase. Findings are in src/a.ts (1), src/b.ts (2)"
+    ]);
+    const many = Array.from({ length: 12 }, (_, index) => inFile(`src/${index + 10}.ts`));
+    const [error] = compareBaseline(many, baseline, "lint");
+    expect(error).toContain("src/19.ts (1) and 2 more");
+    expect(error).not.toContain("src/20.ts");
+  });
+
   it("holds test type errors to the count that CB-2b owns", () => {
     const errors = {
       target: "types:tests",

@@ -270,7 +270,12 @@ describe("quality collector", { timeout: 180_000 }, () => {
     ]);
     const unbaselined = collect("format");
     expect(unbaselined.status).toBe(1);
-    expect(unbaselined.stderr).toContain("measured 1, baseline 0; repair the increase");
+    expect(unbaselined.stderr).toContain(
+      `format|prettier|packages/alpha: measured 1, baseline 0; repair the increase. Findings are in ${source}/unformatted.ts (1)\n`
+    );
+    expect(unbaselined.stderr).toContain(
+      "After a repair, run `pnpm exec catalyst-quality format` again"
+    );
 
     const entry = { target: "format", scope: "packages/alpha", owner: "CB-1a" };
     write({
