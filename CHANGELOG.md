@@ -116,6 +116,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   - `modelProviders` (a list) becomes `infrastructure.models` (a map): `id` is the map key,
     `type` becomes `provider`, the key's `…EnvName` field becomes `credentialSecret`, the
     organization's becomes `organizationSecret` and `compliance.residency` becomes `region`.
+    A residency of `unknown` has no counterpart: state where the provider processes data, and
+    `global` when no EU processing is agreed. An id made only of digits is refused, because
+    such a key is read before the others and would move the default provider; rename it, also
+    where an agent names it.
     Maps merge key by key across `extends` files, so delete an entry of a base file that an
     overlay used to replace. At least one entry is required; the implicit `deterministic`
     default is gone.
@@ -124,7 +128,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     `enabled: false`.
   - `executionWorkspaces.runner` becomes `infrastructure.sandbox`: `mode` becomes `provider`
     (`docker` or `local`). `networkMode` and `readOnlyRootFilesystem` are fixed and no longer
-    settings. `EXECUTION_WORKSPACE_RUNNER_IMAGE` still replaces the image.
+    settings. `EXECUTION_WORKSPACE_RUNNER_IMAGE` still replaces the image of a `docker` sandbox
+    and is ignored for any other. A Docker sandbox with an `endpoint` runs on another host and
+    must state a `region`; without an endpoint it must not.
   - `capabilities.documentProcessing.objectStorage` becomes `infrastructure.objectStorage.files`:
     `kind` becomes `provider`, the vendor's `region` becomes `bucketRegion`.
     `DOCUMENT_OBJECT_STORE_BUCKET`, `DOCUMENT_OBJECT_STORE_REGION` and
@@ -132,7 +138,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   - The variables `EXECUTION_WORKSPACE_OBJECT_ROOT` and `ARTIFACT_PREVIEW_OBJECT_ROOT` are no
     longer read. Name the directory in `infrastructure.objectStorage.workspaces`
     (`provider: filesystem`, `root`), and mount the same directory into the API and its workers.
-    Enabled execution workspaces need this entry and `infrastructure.sandbox`.
+    Enabled execution workspaces need this entry and `infrastructure.sandbox`. A deployment
+    that set the directory through one of the two variables, in Compose or in an environment
+    file, moves that path into config and removes the variable; the files stay where they are
+    as long as `root` names the same directory.
   - A provider that sends data outside the instance (`openai-compatible`, `mailjet`, `s3`) must
     state `region: eu` or `region: global`; one that keeps data inside must not.
 - **Secrets (breaking for integrators):** every secret is taken from one secret resolver, by
@@ -141,11 +150,18 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   fields that take a secret end in `Secret` and hold its name, never its value. The S3 store
   always takes its credentials by name (default `AWS_ACCESS_KEY_ID` and
   `AWS_SECRET_ACCESS_KEY`); the AWS credential chain and the built-in S3Mock credentials are no
-  longer used, so a local S3Mock needs both variables set to any value.
+  longer used. A deployment that reached S3 through an instance role or another source of the
+  AWS credential chain must now provide an access key pair as two named secrets, and a local
+  S3Mock that ran without credentials needs both variables set to any value. A name must read
+  as an environment variable name (upper-case words joined by underscores, at most 64
+  characters); anything else is refused and never repeated in a message, so a credential
+  pasted where a name belongs does not reach a log. The same holds for a data source's
+  `connectionRef: env:NAME`. A secret whose `<NAME>_FILE` is set and whose file cannot be read
+  or is empty stops startup, also for a secret the instance may leave unset.
   `createClientInstanceApp`, the worker factories and `seedStandaloneAuthUsers` accept a
   `secrets` resolver. `@vivd-catalyst/data-source` no longer exports `createEnvSecretResolver`,
-  and `createDataSourceRegistry` and `createModelProviderRegistry` are asynchronous and take
-  `secrets`. A capability receives `secrets`, `logger` and `objectStorage` in its context and
+  `createDataSourceRegistry` is asynchronous and takes `secrets`, and
+  `createModelProviderRegistry` is asynchronous and takes the instance's provider `registry`. A capability receives `secrets`, `logger` and `objectStorage` in its context and
   may bring provider definitions in `providers`. An artifact preview `sourceReaderFactory`
   receives `context` (the resolver and the logger) for the store it creates.
 - **Config API:** a selectable model in the safe config view carries `region` (`eu` or

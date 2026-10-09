@@ -466,13 +466,20 @@ infrastructure:
 - `region` is `eu` or `global` and says where the provider processes the data it is sent. A
   provider that sends data outside the instance (`openai-compatible`, `mailjet`, `s3`) must
   state it. A provider that keeps data inside the instance (`deterministic`, `capture`,
-  `filesystem`, `docker`, `local`) must not. A vendor's own region name is a separate setting,
+  `filesystem`, `docker`, `local`) must not. A `docker` sandbox with an `endpoint` runs on
+  another host and must state it too. A vendor's own region name is a separate setting,
   such as `bucketRegion`.
 - A setting whose name ends in `Secret` holds the name of a secret, never its value. The
   `environment` secret provider reads the variable of that name and, when it is not set, the
   file named by the variable `<NAME>_FILE`, which is how a mounted Docker or Kubernetes secret
   is read. A name that does not resolve stops startup; the message names the field and the
-  secret name.
+  secret name. So does a `<NAME>_FILE` whose file cannot be read or is empty, also for a secret
+  the instance may leave unset.
+- A secret name reads as an environment variable name: upper-case words joined by underscores,
+  at most 64 characters. Anything else is refused and never repeated in a message, so a
+  credential pasted where a name belongs does not reach a log.
+- The first entry of `models` serves an agent that names no provider. An id made only of digits
+  is refused, because such a key is read before the others whatever its place in the file.
 
 Providers and their settings:
 
@@ -484,7 +491,7 @@ Providers and their settings:
 | `mail`          | `capture`                   | `appUrl`, `sender`. Development only.                                                                                                                                                                        |
 | `objectStorage` | `s3` (`files`)              | `bucket`, `bucketRegion`, `endpoint`, `forcePathStyle`, `accessKeySecret` (default `AWS_ACCESS_KEY_ID`), `secretKeySecret` (default `AWS_SECRET_ACCESS_KEY`). Comes with the document-processing capability. |
 | `objectStorage` | `filesystem` (`workspaces`) | `root`: a directory that the API and its workers share.                                                                                                                                                      |
-| `sandbox`       | `docker`                    | `image`, `cpuCount`, `memoryBytes`, `pidsLimit`, `endpoint` (a `tcp://` or `ssh://` Docker endpoint). The container has no network and a read-only root file system.                                         |
+| `sandbox`       | `docker`                    | `image`, `cpuCount`, `memoryBytes`, `pidsLimit`, `endpoint` (a `tcp://` or `ssh://` Docker engine on another host; needs `region`). The container has no network and a read-only root file system.           |
 | `sandbox`       | `local`                     | None. Development only.                                                                                                                                                                                      |
 
 The platform takes its own secrets from the same provider by fixed names: `DATABASE_URL`,
@@ -497,6 +504,18 @@ The keys `modelProviders`, `mail`, `executionWorkspaces.runner` and
 carries one of them does not load: startup stops and names the key and its new place. The
 variables `EXECUTION_WORKSPACE_OBJECT_ROOT` and `ARTIFACT_PREVIEW_OBJECT_ROOT` are no longer
 read; the directory is `infrastructure.objectStorage.workspaces.root`.
+
+When moving an existing instance:
+
+- A model provider whose old `compliance.residency` was `unknown` needs a decision: `region`
+  is `eu` or `global`. State `global` when no EU processing is agreed.
+- A deployment that reached S3 through an instance role or another source of the AWS credential
+  chain must provide an access key pair as two named secrets. A local S3Mock that ran without
+  credentials needs both variables set to any value.
+- A deployment that set the workspace object directory through the environment moves the path
+  into `infrastructure.objectStorage.workspaces.root` and removes the variable. Keep the same
+  directory and the same mount so existing files stay reachable.
+- `EXECUTION_WORKSPACE_RUNNER_IMAGE` replaces the image of a `docker` sandbox only.
 
 ## Config Is Not A Secret Store
 
