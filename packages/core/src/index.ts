@@ -10,7 +10,11 @@ export * from "./artifact-preview-lifecycle";
 export * from "./config-asset-concurrency";
 export * from "./origins";
 export * from "./operations";
+export * from "./operation-denial";
 export * from "./events";
+export * from "./operation-policy";
+export * from "./operation-registry";
+export * from "./operation-runs";
 
 export type { Logger } from "./logger";
 export type { HttpListenInput, HttpRuntime } from "./http-runtime";

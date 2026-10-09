@@ -197,6 +197,15 @@ function emittedNames(sources: readonly string[]): Set<string> {
   return names;
 }
 
+/** The names handed to a `PlatformEventEmitter` where the call is written: `emit("name", …)`. */
+function emitterNames(sources: readonly string[]): Set<string> {
+  return new Set(
+    sources.flatMap((source) =>
+      Array.from(source.matchAll(/\bemit\(\s*"([a-z_]+\.[a-z_.]+)"/gu), (match) => match[1] ?? "")
+    )
+  );
+}
+
 function registryDifferences(emitted: ReadonlySet<string>, registered: readonly string[]) {
   return {
     missing: [...emitted].filter((name) => !registered.includes(name)).sort(),
@@ -237,10 +246,8 @@ describe("event registry", () => {
       ? "registers exactly the audit names emitted across platform and capabilities"
       : "capabilities completeness skipped: sibling capabilities/packages repository is absent",
     () => {
-      const names = emittedNames([
-        ...packageSources(platformPackages),
-        ...packageSources(capabilityPackages)
-      ]);
+      const sources = [...packageSources(platformPackages), ...packageSources(capabilityPackages)];
+      const names = new Set([...emittedNames(sources), ...emitterNames(sources)]);
       expect(registryDifferences(names, Object.keys(EVENTS))).toEqual({ missing: [], unused: [] });
     }
   );
@@ -342,13 +349,28 @@ describe("event registry", () => {
   });
 
   it("retains every current audit name unchanged as legacy and audited", () => {
-    for (const [name, definition] of Object.entries(EVENTS)) {
+    const definitions: [string, PlatformEventDefinition][] = Object.entries(EVENTS);
+    for (const [name, definition] of definitions) {
       expect(definition.name).toBe(name);
-      expect(definition.legacy).toBe(true);
+      expect(definition.subject).not.toBe("");
+      if (!definition.legacy) continue;
       expect(definition.audited).toBe(true);
       expect(definition.phases).toEqual(["after"]);
-      expect(definition.subject).not.toBe("");
     }
+    // The events added since: those of an operation's call. Only the question the guardrails
+    // answer before a call is no audit row.
+    expect(
+      definitions
+        .filter(([, definition]) => !definition.legacy)
+        .map(([name, { audited, phases }]) => [name, audited, phases.join()])
+    ).toEqual([
+      ["operation.authorization_checked", true, "after"],
+      ["operation.before_call", false, "before"],
+      ["operation.completed", true, "after"],
+      ["operation.denied", true, "after"],
+      ["operation.failed", true, "after"],
+      ["operation.started", true, "after"]
+    ]);
     expectTypeOf<(typeof EVENTS)[PlatformEventName]>().toExtend<PlatformEventDefinition>();
     expectTypeOf<AuditEventName>().toEqualTypeOf<PlatformEventName>();
     expectTypeOf<PlatformEventEmitter["emit"]>().parameter(0).toEqualTypeOf<PlatformEventName>();

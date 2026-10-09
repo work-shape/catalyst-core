@@ -1,3 +1,4 @@
+import type { OperationDenial } from "./operation-denial";
 import type { ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { AuthenticatedIdentity } from "./identity";
 import type {
@@ -12,6 +13,17 @@ import type { ISODateString } from "./time";
 import type { ToolExecutionRequest } from "./tool-execution";
 
 export type OperationEffect = "reading" | "changing";
+
+/**
+ * The longest `Idempotency-Key` a caller may send, in characters. It protects the index the
+ * key is looked up in. A longer key is refused with VALIDATION_FAILED naming this limit.
+ */
+export const IDEMPOTENCY_KEY_MAX_LENGTH = 255;
+
+/** From the loosest to the strictest. Where several values meet, the strictest wins. */
+export const POLICY_VALUES = ["allow", "confirm", "approval", "deny"] as const;
+
+export type PolicyValue = (typeof POLICY_VALUES)[number];
 
 export type OperationOrigin =
   | {
@@ -46,16 +58,6 @@ export interface OperationCall<TInput = unknown> {
   correlationId: string;
 }
 
-export type OperationDenial =
-  | {
-      kind: "forbidden";
-      action: string;
-      reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive";
-    }
-  | { kind: "policy"; operation: string }
-  | { kind: "guardrail"; guardrailId: string; message?: string }
-  | { kind: "declined"; by: string; comment?: string };
-
 export type OperationResult<TOutput = unknown> =
   | {
       status: "done";
@@ -85,6 +87,25 @@ export type OperationResult<TOutput = unknown> =
       error: { code: string; message: string; details?: Record<string, unknown> };
     }
   | { status: "expired"; runId: OperationRunId };
+
+/**
+ * Whether the caller of this origin is present and the call is its own, so that the call
+ * itself is the confirmation a `confirm` policy asks for. An agent, a workflow and a schedule
+ * act for somebody who is not the caller.
+ */
+export function callerCanConfirm(origin: OperationOrigin): boolean {
+  switch (origin.kind) {
+    case "user":
+    case "cli":
+    case "mcp":
+    case "app":
+      return true;
+    case "agent":
+    case "workflow":
+    case "schedule":
+      return false;
+  }
+}
 
 export function operationCallFromToolRequest(input: {
   request: ToolExecutionRequest;

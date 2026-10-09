@@ -7,6 +7,13 @@ export type AppErrorCode =
   | "TIMEOUT"
   | "VALIDATION_FAILED"
   | "RATE_LIMITED"
+  | "POLICY_DENIED"
+  | "GUARDRAIL_BLOCKED"
+  | "DECLINED"
+  | "IDEMPOTENCY_KEY_REUSED"
+  | "OPERATION_IN_PROGRESS"
+  | "OPERATION_EXPIRED"
+  | "OUTPUT_NOT_RETAINED"
   | "INTERNAL";
 
 /** The HTTP status every error code answers with. */
@@ -19,6 +26,13 @@ export const APP_ERROR_STATUS_CODES: Record<AppErrorCode, number> = {
   TIMEOUT: 504,
   VALIDATION_FAILED: 422,
   RATE_LIMITED: 429,
+  POLICY_DENIED: 403,
+  GUARDRAIL_BLOCKED: 403,
+  DECLINED: 403,
+  IDEMPOTENCY_KEY_REUSED: 409,
+  OPERATION_IN_PROGRESS: 409,
+  OPERATION_EXPIRED: 409,
+  OUTPUT_NOT_RETAINED: 409,
   INTERNAL: 500
 };
 
@@ -45,6 +59,10 @@ export class AppError extends Error {
 
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
+}
+
+export function isAppErrorCode(code: string): code is AppErrorCode {
+  return Object.hasOwn(APP_ERROR_STATUS_CODES, code);
 }
 
 export interface ErrorEnvelope {

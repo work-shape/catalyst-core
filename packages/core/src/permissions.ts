@@ -1,4 +1,5 @@
 import { AppError } from "./errors";
+import { operationDenialError } from "./operation-denial";
 import type {
   AuthenticatedIdentity,
   AuthenticatedServicePrincipal,
@@ -145,6 +146,35 @@ export interface ActorAccess {
 
 export interface Authorizer {
   forActor(actor: AuthenticatedIdentity): Promise<ActorAccess>;
+}
+
+/**
+ * Rights as the legacy permissions hold them, behind the interface AP-1's evaluator will
+ * implement. It knows the registered actions only and ignores the resource.
+ */
+export const legacyAuthorizer: Authorizer = {
+  forActor(actor) {
+    const authorize = (action: string): AccessDecision => {
+      if (!isPlatformAction(action)) return { allowed: false, reason: "unknown_action" };
+      // AP-1 replaces this line with its evaluator.
+      return hasPermission(actor, legacyPermissionFor(action))
+        ? { allowed: true, source: "legacy" }
+        : { allowed: false, reason: "no_grant" };
+    };
+    return Promise.resolve({
+      authorize,
+      require(action) {
+        const decision = authorize(action);
+        if (!decision.allowed) {
+          throw operationDenialError({ kind: "forbidden", action, reason: decision.reason });
+        }
+      }
+    });
+  }
+};
+
+function isPlatformAction(action: string): action is PlatformAction {
+  return ACTIONS.some((candidate) => candidate === action);
 }
 
 export function resolveEffectivePermissions(

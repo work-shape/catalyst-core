@@ -15,6 +15,12 @@ export interface PlatformEventDefinition {
 }
 
 const LEGACY_AUDIT = { legacy: true, audited: true, phases: ["after"] } as const;
+const OPERATION_AUDIT = {
+  subject: "operation",
+  legacy: false,
+  audited: true,
+  phases: ["after"]
+} as const;
 
 // Run observations remain a separate stream from platform events and audit.
 export const EVENTS = {
@@ -305,6 +311,22 @@ export const EVENTS = {
   "message.completed": { ...LEGACY_AUDIT, name: "message.completed", subject: "message" },
   "message.created": { ...LEGACY_AUDIT, name: "message.created", subject: "message" },
   "message.failed": { ...LEGACY_AUDIT, name: "message.failed", subject: "message" },
+  "operation.authorization_checked": {
+    ...OPERATION_AUDIT,
+    name: "operation.authorization_checked"
+  },
+  // Guardrails answer here before anything runs. EW-1 supplies them.
+  "operation.before_call": {
+    name: "operation.before_call",
+    subject: "operation",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
+  "operation.completed": { ...OPERATION_AUDIT, name: "operation.completed" },
+  "operation.denied": { ...OPERATION_AUDIT, name: "operation.denied" },
+  "operation.failed": { ...OPERATION_AUDIT, name: "operation.failed" },
+  "operation.started": { ...OPERATION_AUDIT, name: "operation.started" },
   "storage.orphaned_file_cleanup_failed": {
     ...LEGACY_AUDIT,
     name: "storage.orphaned_file_cleanup_failed",
