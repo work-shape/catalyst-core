@@ -135,7 +135,7 @@ async function showView(
   html: string
 ): Promise<{ id: string; title: string; collaborationWorkspaceId: string }> {
   const title = `View ${randomUUID()}`;
-  const started = await request.post(`${apiOrigin}/api/conversations/runs`, {
+  const started = await request.post(`${apiOrigin}/api/v1/conversations/runs`, {
     headers,
     data: {
       idempotencyKey: randomUUID(),
@@ -154,7 +154,7 @@ async function showView(
   await expect
     .poll(async () => {
       const thread = await request.get(
-        `${apiOrigin}/api/conversations/${encodeURIComponent(conversation.id)}/thread`,
+        `${apiOrigin}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`,
         { headers }
       );
       expect(thread.ok()).toBe(true);
@@ -281,7 +281,7 @@ test.describe("a generated view loads its runtime from the instance alone", () =
     const siteOrigin = siteUrl.origin;
     expect([apiOrigin, uiOrigin]).not.toContain(siteOrigin);
 
-    const issued = await request.post(`${apiOrigin}/api/superadmin/session-tokens`, {
+    const issued = await request.post(`${apiOrigin}/api/v1/instance/session-tokens`, {
       headers: { "x-server-credential": serverCredential },
       data: {
         externalUserId: `embedded-${randomUUID()}`,

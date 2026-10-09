@@ -95,11 +95,7 @@ describe("api operation catalog and client", () => {
   });
 
   // Registered by the server and absent from the released document.
-  const undocumentedOperationIds = [
-    "health.get",
-    "view_runtime.files.get",
-    "captured_mail.list"
-  ];
+  const undocumentedOperationIds = ["health.get", "view_runtime.files.get", "captured_mail.list"];
 
   it("keeps the OpenAPI artifact generated from the operation catalog", async () => {
     const artifact = JSON.parse(

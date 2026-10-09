@@ -29,7 +29,10 @@ const names = Object.keys(apiOperations).filter(
 // Read through the descriptor's own type: each catalog entry is narrower than a test needs.
 const descriptor = (name: ApiOperationName): Operation => apiOperations[name];
 const routeOf = (name: ApiOperationName) => `${descriptor(name).method} ${descriptor(name).path}`;
-const versioned = names.filter((name) => name !== "health.get");
+// Outside the versioned API: the health probe, and the runtime files a sandboxed view frame
+// loads as script addresses.
+const unversioned: readonly ApiOperationName[] = ["health.get", "view_runtime.files.get"];
+const versioned = names.filter((name) => !unversioned.includes(name));
 
 const capturedMail = {
   sender: { send: () => Promise.resolve({ ok: true as const }) },
@@ -120,6 +123,7 @@ describe("the operation catalog", () => {
         "users.list  GET /api/v1/instance/users",
         "users.password.reset  POST /api/v1/instance/users/:userId/password",
         "users.update  PATCH /api/v1/instance/users/:userId",
+        "view_runtime.files.get  GET /app-runtime/view/:version/:file",
         "workspaces.access_requests.approve  POST /api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId/approve",
         "workspaces.access_requests.create  POST /api/v1/workspaces/:collaborationWorkspaceId/access-requests",
         "workspaces.access_requests.decline  DELETE /api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId",
@@ -150,13 +154,15 @@ describe("the operation catalog", () => {
     }
   });
 
-  it("puts every operation except the health probe under the version prefix", () => {
+  it("puts every operation except the health probe and the view runtime files under the version prefix", () => {
     expect(API_VERSION_PREFIX.split("/")).toEqual(["", "api", "v1"]);
     for (const name of versioned) {
       expect(descriptor(name).path.startsWith(`${API_VERSION_PREFIX}/`), name).toBe(true);
     }
     expect(routeOf("health.get")).toBe("GET /health");
     expect(descriptor("health.get").auth).toBe("public");
+    expect(routeOf("view_runtime.files.get")).toBe("GET /app-runtime/view/:version/:file");
+    expect(descriptor("view_runtime.files.get").auth).toBe("public");
   });
 
   it("scopes paths by resource and never by a role name", () => {
@@ -212,12 +218,13 @@ describe("the released document", () => {
     );
   });
 
-  it("leaves out the development mail listing and the unversioned health probe", () => {
+  it("leaves out the development mail listing and the unversioned paths", () => {
     expect(descriptor("captured_mail.list").devOnly).toBe(true);
     const paths = Object.keys(document.paths);
     expect(paths.every((path) => path.startsWith(`${API_VERSION_PREFIX}/`))).toBe(true);
     expect(paths).not.toContain(descriptor("captured_mail.list").path);
     expect(paths).not.toContain(descriptor("health.get").path);
+    expect(paths.some((path) => path.startsWith("/app-runtime"))).toBe(false);
     expect(names.filter((name) => descriptor(name).devOnly === true)).toEqual([
       "captured_mail.list"
     ]);
@@ -325,6 +332,13 @@ describe("the sign-in library's mount", () => {
     if (!retiredExchange) throw new Error("The retired API-key exchange path is not listed");
     const retired = await callTestPath(instance, retiredExchange[0], retiredExchange[1]);
     expect(retired.statusCode).toBe(404);
+    // An older CLI sends its key as a bearer there. The mount refuses explicit credentials
+    // before it routes, so that caller reads 401 and not 404.
+    const withKey = await callTestPath(instance, retiredExchange[0], retiredExchange[1], {
+      authorization: "Bearer cat_live_an_older_cli_key"
+    });
+    expect(withKey.statusCode).toBe(401);
+    expect(withKey.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
     // The operation itself answers: this instance has no API access configured.
     const exchange = await instance.call("access_tokens.exchange");
     expect(exchange.statusCode).toBe(404);
