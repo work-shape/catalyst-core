@@ -38,6 +38,24 @@ afterEach(() => {
 });
 
 describe("provider error boundary", () => {
+  it("keeps how long the provider asks to wait, given in seconds or as a date", () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-09T12:00:00.000Z") });
+    try {
+      const read = (value: string) =>
+        readProviderErrorMetadata(undefined, new Headers({ "retry-after": value })).retryAfterMs;
+
+      expect(read("30")).toBe(30_000);
+      expect(read("Fri, 09 Oct 2026 12:00:45 GMT")).toBe(45_000);
+      expect(read("Fri, 09 Oct 2026 11:00:00 GMT")).toBe(0);
+      expect(read("soon")).toBeUndefined();
+      expect(readProviderErrorMetadata(undefined, new Headers())).not.toHaveProperty(
+        "retryAfterMs"
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("allowlists only bounded type/code fields and request-id headers", () => {
     expect(
       readProviderErrorMetadata(

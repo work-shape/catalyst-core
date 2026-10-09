@@ -1856,97 +1856,18 @@ describe("local agent runtime", () => {
   });
 
   it("survives two consecutive rate limit answers and gives up after the third", async () => {
-    const clientInstanceId = asClientInstanceId("provider-rate-limit-retry-client");
-    const context: RuntimeCallContext = {
-      clientInstanceId,
-      correlationId: "corr-provider-rate-limit-retry",
-      user: {
-        id: "user-1",
-        externalUserId: "user-1",
-        displayLabel: "User",
-        roles: ["user"],
-        permissionRefs: [],
-        clientInstanceId,
-        authSource: "test"
-      }
-    };
-    const store = (await createTestInstance()).stores;
-    const providerConfig: ModelProviderConfig = {
-      id: "test-provider",
-      type: "deterministic",
-      model: "test-model"
-    };
-    let rateLimitedAnswers = 2;
-    let attemptTimes: number[] = [];
-    const modelProvider: ModelProvider = {
-      id: "test-provider",
-      async complete() {
-        throw new Error("Expected the streaming provider path to be used");
-      },
-      async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
-        attemptTimes.push(Date.now());
-        if (attemptTimes.length <= rateLimitedAnswers) {
-          throw new AppError("INTERNAL", "Model provider request failed", { status: 429 });
-        }
-        yield {
-          type: "completed",
-          completion: {
-            text: "Answered on the third attempt.",
-            toolCalls: [],
-            usage: noReportedUsage()
-          }
-        };
-      }
-    };
-    const runtime = new LocalAgentRuntime({
-      assetSource: createStaticConfigAssetSource({
-        agents: [
-          {
-            skillNames: [],
-            name: "rate_limit_retry_agent",
-            displayName: "Rate Limit Retry Agent",
-            instructions: "Help the user.",
-            modelProviderId: "test-provider",
-            toolNames: [],
-            initialPrompts: []
-          }
-        ]
-      }),
-      modelProviders: [providerConfig],
-      defaultModelProvider: providerConfig,
-      conversationHistory: store.conversations,
-      modelProvider,
-      toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
-      usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
-    });
-    const waitsBetween = (times: number[]) =>
-      times.slice(1).map((time, index) => time - (times[index] ?? 0));
-    const runToEnd = async (text: string) => {
-      const conversationId = await createConversationWithMessages(store, {
-        clientInstanceId,
-        messages: []
-      });
-      const run = await runtime.start(
-        { agentName: "rate_limit_retry_agent", conversationId, message: { text } },
-        context
-      );
-      const types: string[] = [];
-      for await (const event of runtime.observe(run.runId, context)) {
-        types.push(event.type);
-      }
-      return types;
-    };
+    const f = await rateLimitFixture("provider-rate-limit-retry");
     const stepMs = 50;
     // The largest jitter: each wait is its base plus 20 percent.
     const random = vi.spyOn(Math, "random").mockReturnValue(1);
     useFakeClockBesidePostgres();
     try {
-      const survived = await advanceFakeClockUntilSettled(runToEnd("hello"), stepMs);
+      f.rateLimitedAnswers = 2;
+      const survived = await advanceFakeClockUntilSettled(f.runToEnd("hello"), stepMs);
 
       expect(survived).toEqual(["message_delta", "message_completed", "run_completed"]);
-      expect(attemptTimes).toHaveLength(3);
-      const waits = waitsBetween(attemptTimes);
+      expect(f.attemptTimes).toHaveLength(3);
+      const waits = waitsBetween(f.attemptTimes);
       expect(waits[0]).toBeGreaterThanOrEqual(1_200);
       expect(waits[0]).toBeLessThan(1_200 + 4 * stepMs);
       expect(waits[1]).toBeGreaterThanOrEqual(4_800);
@@ -1954,17 +1875,79 @@ describe("local agent runtime", () => {
 
       // The smallest jitter: each wait is its base minus 20 percent.
       random.mockReturnValue(0);
-      attemptTimes = [];
-      rateLimitedAnswers = 3;
-      const failed = await advanceFakeClockUntilSettled(runToEnd("hello again"), stepMs);
+      f.attemptTimes.length = 0;
+      f.rateLimitedAnswers = 3;
+      const failed = await advanceFakeClockUntilSettled(f.runToEnd("hello again"), stepMs);
 
       expect(failed).toEqual(["run_failed"]);
-      expect(attemptTimes).toHaveLength(3);
-      const failedWaits = waitsBetween(attemptTimes);
+      expect(f.attemptTimes).toHaveLength(3);
+      const failedWaits = waitsBetween(f.attemptTimes);
       expect(failedWaits[0]).toBeGreaterThanOrEqual(800);
       expect(failedWaits[0]).toBeLessThan(800 + 4 * stepMs);
       expect(failedWaits[1]).toBeGreaterThanOrEqual(3_200);
       expect(failedWaits[1]).toBeLessThan(3_200 + 4 * stepMs);
+    } finally {
+      vi.useRealTimers();
+      random.mockRestore();
+    }
+  });
+
+  it("waits as long as the provider asks and fails when it asks for more than a minute", async () => {
+    const f = await rateLimitFixture("provider-retry-after");
+    const stepMs = 250;
+    useFakeClockBesidePostgres();
+    try {
+      f.rateLimitedAnswers = 2;
+      f.retryAfterMs = 30_000;
+      const survived = await advanceFakeClockUntilSettled(f.runToEnd("hello"), stepMs, 1_000);
+
+      expect(survived).toEqual(["message_delta", "message_completed", "run_completed"]);
+      const waits = waitsBetween(f.attemptTimes);
+      expect(waits).toHaveLength(2);
+      for (const wait of waits) {
+        expect(wait).toBeGreaterThanOrEqual(30_000);
+        expect(wait).toBeLessThan(30_000 + 4 * stepMs);
+      }
+
+      f.attemptTimes.length = 0;
+      f.retryAfterMs = 60_001;
+      const startedAt = Date.now();
+      const failed = await advanceFakeClockUntilSettled(f.runToEnd("hello again"), stepMs);
+
+      expect(failed).toEqual(["run_failed"]);
+      expect(f.attemptTimes).toHaveLength(1);
+      expect(Date.now() - startedAt).toBeLessThan(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts no attempt and no wait that would pass the run's deadline", async () => {
+    const f = await rateLimitFixture("provider-retry-deadline");
+    const stepMs = 50;
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    useFakeClockBesidePostgres();
+    try {
+      // The first wait of 1 s fits before the deadline; the second of 4 s would end after it.
+      f.rateLimitedAnswers = 3;
+      const startedAt = Date.now();
+      const bounded = await advanceFakeClockUntilSettled(
+        f.runToEnd("hello", { deadline: new Date(startedAt + 3_000) }),
+        stepMs
+      );
+
+      expect(bounded).toEqual(["run_failed"]);
+      expect(f.attemptTimes).toHaveLength(2);
+      expect(Date.now() - startedAt).toBeLessThan(3_000);
+
+      f.attemptTimes.length = 0;
+      const expired = await advanceFakeClockUntilSettled(
+        f.runToEnd("hello again", { deadline: new Date(Date.now() - 1) }),
+        stepMs
+      );
+
+      expect(expired).toEqual(["run_failed"]);
+      expect(f.attemptTimes).toHaveLength(0);
     } finally {
       vi.useRealTimers();
       random.mockRestore();
@@ -2910,4 +2893,99 @@ async function waitForPersistedRunStatus(
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error(`Run did not reach status '${input.status}'`);
+}
+
+function waitsBetween(times: number[]): number[] {
+  return times.slice(1).map((time, index) => time - (times[index] ?? 0));
+}
+
+/** A runtime whose provider answers 429 a set number of times, then completes. */
+async function rateLimitFixture(name: string) {
+  const clientInstanceId = asClientInstanceId(`${name}-client`);
+  const context: RuntimeCallContext = {
+    clientInstanceId,
+    correlationId: `corr-${name}`,
+    user: {
+      id: "user-1",
+      externalUserId: "user-1",
+      displayLabel: "User",
+      roles: ["user"],
+      permissionRefs: [],
+      clientInstanceId,
+      authSource: "test"
+    }
+  };
+  const store = (await createTestInstance()).stores;
+  const providerConfig: ModelProviderConfig = {
+    id: "test-provider",
+    type: "deterministic",
+    model: "test-model"
+  };
+  const fixture = {
+    rateLimitedAnswers: 0,
+    retryAfterMs: undefined as number | undefined,
+    attemptTimes: [] as number[],
+    async runToEnd(text: string, overrides: Partial<RuntimeCallContext> = {}): Promise<string[]> {
+      const runContext = { ...context, ...overrides };
+      const conversationId = await createConversationWithMessages(store, {
+        clientInstanceId,
+        messages: []
+      });
+      const run = await runtime.start(
+        { agentName: "rate_limit_retry_agent", conversationId, message: { text } },
+        runContext
+      );
+      const types: string[] = [];
+      for await (const event of runtime.observe(run.runId, runContext)) {
+        types.push(event.type);
+      }
+      return types;
+    }
+  };
+  const modelProvider: ModelProvider = {
+    id: "test-provider",
+    async complete() {
+      throw new Error("Expected the streaming provider path to be used");
+    },
+    async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
+      fixture.attemptTimes.push(Date.now());
+      if (fixture.attemptTimes.length <= fixture.rateLimitedAnswers) {
+        throw new AppError("INTERNAL", "Model provider request failed", {
+          status: 429,
+          ...(fixture.retryAfterMs === undefined ? {} : { retryAfterMs: fixture.retryAfterMs })
+        });
+      }
+      yield {
+        type: "completed",
+        completion: {
+          text: "Answered after the rate limit.",
+          toolCalls: [],
+          usage: noReportedUsage()
+        }
+      };
+    }
+  };
+  const runtime = new LocalAgentRuntime({
+    assetSource: createStaticConfigAssetSource({
+      agents: [
+        {
+          skillNames: [],
+          name: "rate_limit_retry_agent",
+          displayName: "Rate Limit Retry Agent",
+          instructions: "Help the user.",
+          modelProviderId: "test-provider",
+          toolNames: [],
+          initialPrompts: []
+        }
+      ]
+    }),
+    modelProviders: [providerConfig],
+    defaultModelProvider: providerConfig,
+    conversationHistory: store.conversations,
+    modelProvider,
+    toolRegistry: new ToolRegistry({ tools: [] }),
+    toolExecution: createUnusedToolExecution(),
+    usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
+  });
+  return fixture;
 }

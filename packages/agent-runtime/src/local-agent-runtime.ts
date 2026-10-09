@@ -122,6 +122,9 @@ const MODEL_PROVIDER_RETRY_WAITS_MS = [1_000, 4_000];
 const MODEL_PROVIDER_MAX_ATTEMPTS = MODEL_PROVIDER_RETRY_WAITS_MS.length + 1;
 // Each wait varies by this share in both directions, so runs that failed together do not retry together.
 const MODEL_PROVIDER_RETRY_JITTER_RATIO = 0.2;
+// Protects a run from waiting on a provider that asks for a long pause in `Retry-After`. A
+// shorter pause replaces the fixed wait; a longer one fails the run with the provider's error.
+const MODEL_PROVIDER_RETRY_AFTER_MAX_MS = 60_000;
 const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
   toolOutput: {
     maxTokens: 60000
@@ -912,6 +915,18 @@ export class LocalAgentRuntime implements AgentRuntime {
     execute: (attempt: ModelProviderAttempt) => Promise<T>
   ): Promise<T> {
     for (let attempt = 1; attempt <= MODEL_PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+      if (context.signal?.aborted) {
+        throw new AppError(
+          "CONFLICT",
+          "Agent run was stopped before the model provider was called"
+        );
+      }
+      if (context.deadline && Date.now() >= context.deadline.getTime()) {
+        throw new AppError(
+          "TIMEOUT",
+          "Agent run deadline passed before the model provider was called"
+        );
+      }
       const progress: ModelProviderAttempt = { retrySafe: true, preparingToolCallIds: [] };
       try {
         return await execute(progress);
@@ -924,6 +939,13 @@ export class LocalAgentRuntime implements AgentRuntime {
         ) {
           throw error;
         }
+        const waitMs = readRetryAfterMs(error) ?? modelProviderRetryWaitMs(attempt);
+        if (
+          waitMs > MODEL_PROVIDER_RETRY_AFTER_MAX_MS ||
+          (context.deadline && Date.now() + waitMs >= context.deadline.getTime())
+        ) {
+          throw error;
+        }
         for (const toolCallId of progress.preparingToolCallIds) {
           state.emit({
             type: "tool_call_preparation_cancelled",
@@ -932,7 +954,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           });
         }
         try {
-          await waitUnlessAborted(modelProviderRetryWaitMs(attempt), context.signal);
+          await waitUnlessAborted(waitMs, context.signal);
         } catch {
           throw error;
         }
@@ -965,6 +987,20 @@ function waitUnlessAborted(waitMs: number, signal: AbortSignal | undefined): Pro
 function modelProviderRetryWaitMs(failedAttempt: number): number {
   const waitMs = MODEL_PROVIDER_RETRY_WAITS_MS[failedAttempt - 1] ?? 0;
   return Math.round(waitMs * (1 + (Math.random() * 2 - 1) * MODEL_PROVIDER_RETRY_JITTER_RATIO));
+}
+
+/** The pause a provider asked for with its refusal, read from the error or what caused it. */
+function readRetryAfterMs(error: unknown): number | undefined {
+  let candidate = error;
+  for (let depth = 0; depth < 4 && candidate instanceof Error; depth += 1) {
+    const details =
+      candidate instanceof AppError && isRecord(candidate.details) ? candidate.details : undefined;
+    if (typeof details?.retryAfterMs === "number" && details.retryAfterMs >= 0) {
+      return details.retryAfterMs;
+    }
+    candidate = candidate.cause;
+  }
+  return undefined;
 }
 
 function isTransientModelProviderError(error: unknown): boolean {
