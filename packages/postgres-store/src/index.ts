@@ -20,6 +20,8 @@ import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 
 export interface PostgresStoresOptions {
   databaseUrl: string;
+  /** Connections the pool keeps at most. Left out, the driver's own default applies. */
+  poolSize?: number;
   logger?: Logger;
 }
 
@@ -84,7 +86,7 @@ export async function createPostgresStores(
   options: PostgresStoresOptions
 ): Promise<PostgresStores> {
   const sql = postgres(options.databaseUrl, {
-    max: 10,
+    ...(options.poolSize === undefined ? {} : { max: options.poolSize }),
     idle_timeout: 30,
     onnotice: (notice) => handlePostgresNotice(notice, options.logger)
   });

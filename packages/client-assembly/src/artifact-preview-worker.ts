@@ -63,7 +63,11 @@ export async function createClientInstanceArtifactPreviewWorker(
     uses: [WORKSPACE_STORE_PATH]
   });
   const { secrets } = infrastructure;
-  const store = await createPlatformStore({ secrets, logger });
+  const store = await createPlatformStore({
+    secrets,
+    poolSize: config.infrastructure.database.poolSize,
+    logger
+  });
   const clientInstanceId = getClientInstanceId(config);
   const sourceReader = input.sourceReaderFactory
     ? await input.sourceReaderFactory({

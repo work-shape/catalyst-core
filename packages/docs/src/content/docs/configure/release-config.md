@@ -458,6 +458,9 @@ infrastructure:
   and an agent's `modelProviderId` refer to. At least one entry is required; there is no default.
   Config files merge maps key by key, so an entry of a base file stays unless the overlay
   replaces it under the same name.
+- `database.poolSize` is how many PostgreSQL connections each process of the instance (the API
+  and every worker) keeps at most, 10 unless set; raise it when requests wait for a connection
+  and the database's `max_connections` leaves room for all processes together.
 - `mail`, `objectStorage.files`, `objectStorage.workspaces` and `sandbox` are left out when the
   instance does not use them. Enabled execution workspaces need `objectStorage.workspaces` and
   `sandbox`.

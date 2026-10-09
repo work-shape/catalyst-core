@@ -400,6 +400,19 @@ describe("infrastructure section", () => {
   });
 });
 
+describe("database pool size", () => {
+  it("is 10 unless the config sets it, and refuses a pool without a connection", () => {
+    expect(parseClientInstanceConfig(config({ models })).infrastructure.database.poolSize).toBe(10);
+    expect(
+      parseClientInstanceConfig(config({ models, database: { poolSize: 25 } })).infrastructure
+        .database.poolSize
+    ).toBe(25);
+    expect(() => parseClientInstanceConfig(config({ models, database: { poolSize: 0 } }))).toThrow(
+      "infrastructure.database.poolSize"
+    );
+  });
+});
+
 describe("keys that moved into the infrastructure section", () => {
   const moved: [string, Record<string, unknown>, string][] = [
     [

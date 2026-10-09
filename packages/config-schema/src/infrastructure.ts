@@ -84,6 +84,13 @@ export const infrastructureConfigSchema = z.strictObject(
         }
       }),
     mail: mailEntrySchema.optional(),
+    database: z
+      .strictObject({
+        // Connections each process of the instance keeps to PostgreSQL at most. A request that
+        // finds all of them busy waits for one.
+        poolSize: z.number().int().min(1).max(100).default(10)
+      })
+      .prefault({}),
     objectStorage: z
       .strictObject({
         files: providerEntrySchema.optional(),

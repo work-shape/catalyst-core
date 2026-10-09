@@ -224,7 +224,11 @@ export async function createClientInstanceExecutionAssembly(
     providers: capabilities.flatMap((capability) => capability.providers ?? [])
   });
   const { secrets } = infrastructure;
-  const store = await createPlatformStore({ secrets, logger });
+  const store = await createPlatformStore({
+    secrets,
+    poolSize: config.infrastructure.database.poolSize,
+    logger
+  });
   const dataSources = await createDataSourceRegistry({ configs: config.dataSources, secrets });
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspaceObjectStore(config, infrastructure.context)

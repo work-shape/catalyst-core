@@ -57,7 +57,11 @@ export async function createClientInstanceWorkspaceCommandWorker(
     secrets: input.secrets,
     uses: [WORKSPACE_STORE_PATH, SANDBOX_PATH]
   });
-  const store = await createPlatformStore({ secrets: infrastructure.secrets, logger });
+  const store = await createPlatformStore({
+    secrets: infrastructure.secrets,
+    poolSize: config.infrastructure.database.poolSize,
+    logger
+  });
   const clientInstanceId = getClientInstanceId(config);
   const byteStore = (await createWorkspaceObjectStore(config, infrastructure.context)).fileBytes;
   const auditRecorder = new StoreBackedAuditRecorder({

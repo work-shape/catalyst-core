@@ -32,7 +32,10 @@ describe("the migration boundary", () => {
 
   /** How an API or a worker opens its store when it starts. */
   async function start(databaseUrl: string): Promise<void> {
-    const store = await createPlatformStore({ env: { DATABASE_URL: databaseUrl } });
+    const store = await createPlatformStore({
+      env: { DATABASE_URL: databaseUrl },
+      poolSize: 2
+    });
     await store.close?.();
   }
 

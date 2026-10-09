@@ -11,11 +11,14 @@ import { createEnvironmentSecrets, PLATFORM_SECRET_NAMES } from "./infrastructur
 export async function createPlatformStore(input: {
   env?: ClientInstanceEnv;
   secrets?: SecretResolver;
+  /** `infrastructure.database.poolSize` of the instance config. */
+  poolSize: number;
   logger?: Logger;
 }): Promise<PlatformStores> {
   const secrets = input.secrets ?? createEnvironmentSecrets(input.env ?? {});
   return createPostgresStores({
     databaseUrl: await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl),
+    poolSize: input.poolSize,
     logger: input.logger ?? createLogger()
   });
 }

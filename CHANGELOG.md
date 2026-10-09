@@ -182,6 +182,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `global`) in place of `residency`.
 - **Startup messages:** an invalid instance config names the first failing key in the error
   message, not only in its details.
+- **Database (operator-relevant):** `infrastructure.database.poolSize` sets how many PostgreSQL
+  connections each process of the instance keeps at most; the default is 10, the value until
+  now. `createPlatformStore` requires `poolSize` (breaking for integrators that call it).
+- **Run start:** a repeated run start with the same idempotency key waits up to 10 seconds for
+  the first one, in steps of 100 ms, before it answers 409; until now it waited one second.
 - **Jobs (operator-relevant):** the API process runs a job executor on the new table
   `platform_jobs` (one migration, which only creates the table and moves no data). It replaces
   the three interval timers for conversation expiry, workspace cleanup and run recovery, and
