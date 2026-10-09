@@ -189,6 +189,98 @@ const mayFetch = (filename) =>
   packageAt(filename)?.directory === "packages/api-client" ||
   /[\\/](?:adapters|providers|connectors)[\\/]/.test(filename);
 
+/**
+ * The claim queries and interval timers that predate the job executor, each with the ticket
+ * that removes it. `within` is the function or method that holds the occurrence and `count`
+ * how many it holds. One more in the same function, or one anywhere else, is a finding. The
+ * list only shrinks.
+ * @type {{ file: string, within: string, count: number, removedBy: string }[]}
+ */
+const leaseExemptions = [
+  // The agent run lease: CB-7b.
+  {
+    file: "packages/postgres-store/src/postgres-agent-run-worker-operations.ts",
+    within: "claimNextAgentRun",
+    count: 1,
+    removedBy: "CB-7b"
+  },
+  {
+    file: "packages/postgres-store/src/postgres-agent-run-worker-operations.ts",
+    within: "recoverExpiredAgentRuns",
+    count: 1,
+    removedBy: "CB-7b"
+  },
+  // Heartbeat and cancellation timers.
+  {
+    file: "packages/agent-runtime/src/agent-run-worker.ts",
+    within: "runClaimed",
+    count: 2,
+    removedBy: "CB-7b"
+  },
+  // The workspace command lease: CB-7c.
+  {
+    file: "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
+    within: "claimNextWorkspaceCommand",
+    count: 1,
+    removedBy: "CB-7c"
+  },
+  {
+    file: "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
+    within: "recoverStaleWorkspaceCommands",
+    count: 1,
+    removedBy: "CB-7c"
+  },
+  // Heartbeat and cancellation timers.
+  {
+    file: "packages/tool-execution/src/workspace-command-worker.ts",
+    within: "runClaimedCommand",
+    count: 2,
+    removedBy: "CB-7c"
+  },
+  // The preview and document leases: S2-06b.
+  {
+    file: "packages/postgres-store/src/postgres-artifact-preview-operations.ts",
+    within: "claimNextArtifactPreviewJob",
+    count: 1,
+    removedBy: "S2-06b"
+  },
+  {
+    file: "packages/postgres-store/src/postgres-artifact-preview-operations.ts",
+    within: "recoverStaleArtifactPreviewJobs",
+    count: 1,
+    removedBy: "S2-06b"
+  },
+  {
+    file: "packages/postgres-store/src/postgres-file-store.ts",
+    within: "claimNextQueuedConversationAttachment",
+    count: 1,
+    removedBy: "S2-06b"
+  },
+  {
+    file: "packages/tool-execution/src/artifact-preview-worker.ts",
+    within: "startLeaseRenewal",
+    count: 1,
+    removedBy: "S2-06b"
+  }
+];
+
+/**
+ * The name of the closest named function or method around a node.
+ * @param {Context} context
+ * @param {AnyNode} node
+ */
+const enclosingFunctionName = (context, node) => {
+  for (const current of context.sourceCode.getAncestors(node).reverse()) {
+    if (current.type === "FunctionDeclaration" && current.id) return current.id.name;
+    if (
+      (current.type === "MethodDefinition" || current.type === "Property") &&
+      current.value.type === "FunctionExpression"
+    )
+      return keyName(current.key, current.computed);
+  }
+  return undefined;
+};
+
 const letter = /\p{L}/u;
 
 /**
@@ -577,6 +669,57 @@ const plugin = {
             report(node);
         }
       })
+    ),
+    "job-executor-boundary": rule(
+      "Claim queries (skip locked) and interval timers belong in postgres-store/src/jobs; a new leased kind registers on the job executor",
+      (filename) =>
+        isServerSource(filename) &&
+        !relative(root, filename)
+          .replaceAll("\\", "/")
+          .startsWith("packages/postgres-store/src/jobs/"),
+      (context, report) => {
+        /** @type {AnyNode[]} */
+        const found = [];
+        const skipLocked = /skip\s+locked/iu;
+        return {
+          /** @param {AnyNode} node */
+          Literal: (node) => {
+            if (
+              node.type === "Literal" &&
+              typeof node.value === "string" &&
+              skipLocked.test(node.value)
+            )
+              found.push(node);
+          },
+          /** @param {AnyNode & { value: { raw: string } }} node */
+          TemplateElement: (node) => {
+            if (skipLocked.test(node.value.raw)) found.push(node);
+          },
+          /** @param {AnyNode} node */
+          Property: (node) => {
+            if (node.type === "Property" && keyName(node.key, node.computed) === "skipLocked")
+              found.push(node);
+          },
+          "Program:exit": () => {
+            found.push(
+              ...globalUses(context, ["setInterval"]),
+              ...hostMemberUses(context, ["setInterval"])
+            );
+            const file = relative(root, context.filename).replaceAll("\\", "/");
+            /** @type {Map<string, number>} */
+            const seen = new Map();
+            for (const node of found) {
+              const within = enclosingFunctionName(context, node);
+              const allowed =
+                leaseExemptions.find((entry) => entry.file === file && entry.within === within)
+                  ?.count ?? 0;
+              const count = (seen.get(within ?? "") ?? 0) + 1;
+              seen.set(within ?? "", count);
+              if (count > allowed) report(node);
+            }
+          }
+        };
+      }
     ),
     "memory-store": rule(
       "Postgres is the only platform store; STORE=memory and InMemoryPlatformStore stay removed",

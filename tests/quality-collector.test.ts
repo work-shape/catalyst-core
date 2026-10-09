@@ -64,6 +64,8 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
     "@fixture/ghost": [],
     "@fixture/chat-server": [],
     "@fixture/document-worker": [],
+    "@fixture/postgres-store": [],
+    "@fixture/tool-execution": [],
     "@fixture/auth": []
   }),
   "packages/alpha/package.json": JSON.stringify({
@@ -244,6 +246,39 @@ app.route({ method: "GET", url: "/api/users", handler });
 app.get("/internal/pages", handler);
 app.get("/api/pages", handler);
 export const register = (path: string) => app.get(path, handler);
+`,
+
+  // Claim queries and interval timers outside the job executor
+  [`${source}/claim-query.ts`]: "export const claim = `select 1 for update skip locked`;\n",
+  [`${source}/claim-text.ts`]: `export const claim = "for update SKIP  LOCKED";\n`,
+  [`${source}/claim-option.ts`]: `export const lock = { skipLocked: true };\n`,
+  [`${source}/interval.ts`]: `export const timer = setInterval(() => {}, 1000);\n`,
+  [`${source}/interval-host.ts`]: `export const timer = globalThis.setInterval(() => {}, 1000);\n`,
+  [`${source}/interval-alias.ts`]: `const every = setInterval;\nexport const timer = every(() => {}, 1000);\n`,
+  "packages/postgres-store/package.json": JSON.stringify({ name: "@fixture/postgres-store" }),
+  // The executor's folder is where both belong.
+  "packages/postgres-store/src/jobs/worker.ts": `export const claim = "for update skip locked";
+export const heartbeat = setInterval(() => {}, 1000);
+`,
+  "packages/tool-execution/package.json": JSON.stringify({ name: "@fixture/tool-execution" }),
+  // One timer in this method is a named exemption. The second is the thirteenth.
+  "packages/tool-execution/src/artifact-preview-worker.ts": `export class ArtifactPreviewWorker {
+  startLeaseRenewal() {
+    const renewal = setInterval(() => {}, 1000);
+    const thirteenth = setInterval(() => {}, 1000);
+    return [renewal, thirteenth];
+  }
+}
+`,
+  // The same timer under another name is not the exempted one.
+  "packages/tool-execution/src/workspace-command-worker.ts": `export class WorkspaceCommandWorker {
+  runClaimedCommand() {
+    return [setInterval(() => {}, 1000), setInterval(() => {}, 1000)];
+  }
+  runAnother() {
+    return setInterval(() => {}, 1000);
+  }
+}
 `,
 
   // Size, retired stores and database skips
@@ -499,6 +534,14 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "catalyst/route-registration packages/document-worker/src/index.ts",
         "catalyst/route-registration packages/document-worker/src/index.ts",
         `max-lines ${source}/large.ts`,
+        `catalyst/job-executor-boundary ${source}/claim-query.ts`,
+        `catalyst/job-executor-boundary ${source}/claim-text.ts`,
+        `catalyst/job-executor-boundary ${source}/claim-option.ts`,
+        `catalyst/job-executor-boundary ${source}/interval.ts`,
+        `catalyst/job-executor-boundary ${source}/interval-host.ts`,
+        `catalyst/job-executor-boundary ${source}/interval-alias.ts`,
+        "catalyst/job-executor-boundary packages/tool-execution/src/artifact-preview-worker.ts",
+        "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
         `catalyst/memory-store ${source}/memory-store.ts`,
         "catalyst/test-api-path tests/api-path.test.ts",
         "catalyst/test-api-path tests/api-template.test.ts",
