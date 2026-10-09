@@ -56,6 +56,9 @@ contain breaking changes; a patch version does not.
   `headers`, which the OpenAPI document states. Error codes that share a status share one
   answer in the document, named after all of them.
 
+- **API:** `GET /api/v1/conversations` takes an optional `query`. It keeps the conversations
+  whose title contains the text, without regard to case, with the paging and the access
+  filter of the list.
 - **API reference:** an instance serves the OpenAPI document of the operations it runs at
   `GET /api/v1/openapi.json` and the same document as a page at `GET /api/v1/docs`. Both
   answer any signed-in person and any access token, whatever its scopes, and refuse a caller

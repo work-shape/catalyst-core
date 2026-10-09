@@ -168,7 +168,8 @@ export class ConversationWorkflow {
   async listConversations(
     collaborationWorkspaceId: CollaborationWorkspaceId | undefined,
     user: AuthenticatedUser,
-    page?: StorePage
+    page?: StorePage,
+    titleQuery?: string
   ): Promise<ConversationListItem[]> {
     if (!collaborationWorkspaceId) {
       const personal = (
@@ -185,6 +186,7 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       scope: { kind: "viewer", userId: getSubjectUserId(user) },
+      titleQuery,
       page
     });
     return Promise.all(

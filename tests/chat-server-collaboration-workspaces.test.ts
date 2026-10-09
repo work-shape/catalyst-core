@@ -1613,6 +1613,70 @@ describe("Collaboration Workspace API", () => {
 const EVERY_ROUTE_FOR_EVERY_ROLE_TIMEOUT_MS = 180_000;
 
 describe("Conversation visibility", () => {
+  it("searches the list by title and keeps its paging and its access filter", async () => {
+    const app = await createWorkspaceApp();
+    for (const actor of ["admin", "member", "outsider"]) await currentUser(app, actor);
+    const created = await app.call(
+      "workspaces.create",
+      { payload: { name: "Searched", defaultConversationVisibility: "private" } },
+      "admin"
+    );
+    expect(created.statusCode).toBe(200);
+    const workspaceId = created.json<{ id: string }>().id;
+    await addWorkspaceMember(app, "admin", workspaceId, "member@example.test");
+    const listed = async (actor: string, query: Record<string, string | number>) =>
+      app.call(
+        "conversations.list",
+        { query: { collaborationWorkspaceId: workspaceId, ...query } },
+        actor
+      );
+    const create = async (actor: string, title: string) => {
+      const id = await createConversation(app, actor, workspaceId, title);
+      await seedConversationMessage(app.stores.conversations, id);
+      return id;
+    };
+
+    try {
+      await create("admin", "Quarterly report of the other author");
+      const plans = [
+        await create("member", "quarterly plan one"),
+        await create("member", "Quarterly plan two"),
+        await create("member", "QUARTERLY plan three")
+      ];
+      const literal = await create("member", "100%_done");
+      await create("member", "100 percent done");
+
+      // A match beyond the first page is found, and the pages hold every match once.
+      const found: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const response = await listed("member", {
+          query: "quarterly",
+          limit: 2,
+          ...(cursor === undefined ? {} : { cursor })
+        });
+        expect(response.statusCode).toBe(200);
+        const page = response.json<{ items: { id: string }[]; nextCursor?: string }>();
+        expect(page.items.length).toBeLessThanOrEqual(2);
+        found.push(...page.items.map((item) => item.id));
+        cursor = page.nextCursor;
+      } while (cursor !== undefined);
+      // The other author's private conversation matches the text and is not found.
+      expect(found.sort()).toEqual([...plans].sort());
+
+      // The wildcards of the match are read as text.
+      const escaped = await listed("member", { query: "0%_D" });
+      expect(escaped.json<{ items: { id: string }[] }>().items.map((item) => item.id)).toEqual([
+        literal
+      ]);
+
+      // A person outside the workspace finds nothing in it.
+      expect((await listed("outsider", { query: "quarterly" })).statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("lists a conversation without messages only to its creator while it holds draft attachments", async () => {
     const app = await createWorkspaceApp();
     await currentUser(app, "owner");

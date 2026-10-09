@@ -21,6 +21,12 @@ import {
 } from "../conversations";
 import { defineOperation, json, page, sse } from "./define-operation";
 
+/**
+ * The longest search text the conversation list takes, in characters. A title holds 120, so
+ * nothing longer can match; a longer text is refused as an invalid request.
+ */
+const CONVERSATION_TITLE_QUERY_MAX_CHARS = 200;
+
 export const conversationOperations = {
   "conversations.list": defineOperation({
     id: "conversations.list",
@@ -32,7 +38,11 @@ export const conversationOperations = {
     scope: "conversation:read",
     requires: [],
     effect: "reading",
-    query: listQuerySchema.extend({ collaborationWorkspaceId: z.string().optional() }),
+    query: listQuerySchema.extend({
+      collaborationWorkspaceId: z.string().optional(),
+      /** Keeps the conversations whose title contains this text, without regard to case. */
+      query: z.string().trim().min(1).max(CONVERSATION_TITLE_QUERY_MAX_CHARS).optional()
+    }),
     response: page(conversationListItemSchema, ["updatedAt", "id"], true),
     errors: ["NOT_FOUND"],
     rateClass: "read"

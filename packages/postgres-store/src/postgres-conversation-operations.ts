@@ -1,3 +1,4 @@
+import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
 import type { StorePage } from "@vivd-catalyst/core";
 import {
@@ -6,6 +7,7 @@ import {
   desc,
   eq,
   exists,
+  ilike,
   inArray,
   isNull,
   lt,
@@ -91,6 +93,7 @@ export async function listConversationsForWorkspace(
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
     scope: ConversationListScope;
+    titleQuery?: string;
     page?: StorePage;
   }
 ): Promise<Conversation[]> {
@@ -103,6 +106,9 @@ export async function listConversationsForWorkspace(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
         eq(conversations.status, "active"),
+        input.titleQuery === undefined
+          ? undefined
+          : ilike(conversations.title, containsPattern(input.titleQuery)),
         keysetFilter(input.page, [conversations.updatedAt, conversations.id], true),
         ...(scope.kind === "lifecycle"
           ? []

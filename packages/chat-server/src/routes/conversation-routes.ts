@@ -18,7 +18,8 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
         ? undefined
         : asCollaborationWorkspaceId(collaborationWorkspaceId),
       user,
-      paging
+      paging,
+      query.query
     );
   });
 

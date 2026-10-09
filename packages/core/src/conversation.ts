@@ -141,6 +141,8 @@ export interface ConversationStore extends ConversationHistoryStore {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
     scope: ConversationListScope;
+    /** Keeps the conversations whose title contains this text, without regard to case. */
+    titleQuery?: string;
     page?: StorePage;
   }): Promise<Conversation[]>;
   /** Lifecycle only: every active private Conversation the user created, in any workspace. */

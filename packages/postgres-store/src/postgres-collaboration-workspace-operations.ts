@@ -17,6 +17,7 @@ import {
   createWorkspaceAccessRequestId,
   validateWorkspaceCreation
 } from "@vivd-catalyst/core";
+import { containsPattern } from "./like-pattern";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
 import {
@@ -391,7 +392,7 @@ export async function searchMemberCandidates(
   input: Parameters<CollaborationWorkspaceStore["searchMemberCandidates"]>[0]
 ): Promise<WorkspaceMemberCandidate[]> {
   await requireWorkspace(db, input.clientInstanceId, input.collaborationWorkspaceId);
-  const pattern = `%${escapeLikePattern(input.query)}%`;
+  const pattern = containsPattern(input.query);
   const effectiveEmail = drizzleSql<string | null>`coalesce(
     ${productUsers.email},
     (
@@ -776,8 +777,4 @@ function accessRequestWhere(input: {
     ),
     eq(collaborationWorkspaceAccessRequests.userId, input.userId)
   );
-}
-
-function escapeLikePattern(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
