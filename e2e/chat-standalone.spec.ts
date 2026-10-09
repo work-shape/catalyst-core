@@ -2578,7 +2578,7 @@ async function createListedConversation(page: Page, title: string): Promise<{ id
       );
       expect(thread.ok()).toBe(true);
       const snapshot = z
-        .object({ activeRun: z.unknown(), messages: z.array(z.unknown()) })
+        .object({ activeRun: z.unknown().optional(), messages: z.array(z.unknown()) })
         .parse(await thread.json());
       return { running: snapshot.activeRun !== undefined, messages: snapshot.messages.length };
     })
