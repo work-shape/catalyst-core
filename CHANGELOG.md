@@ -7,6 +7,19 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Access:** an instance administrator can give one user read, write or delete on agents or
+  skills inside a Namespace or on one asset, and can deny it. A Namespace is a registered name
+  prefix such as `kai-`; it can carry a list of allowed tools and a list of allowed model
+  bindings, which bind every writer of an agent in it, an administrator and the release sync
+  included. Eight operations under `/api/v1/instance/access` write and read grants and
+  Namespaces; they need `users.manage`. A matching deny wins over every allow. No interface
+  for it ships yet. A migration adds the tables `permission_grants` and `namespaces` and
+  changes no other table; no user, service principal or API key gains or loses a right.
+  `node --experimental-strip-types scripts/verify-permissions.ts` with `DATABASE_URL` set
+  compares every holder's rights with what the legacy columns answered and exits non-zero on
+  a difference. Before rolling back to an earlier release, list the deny rows
+  (`select * from permission_grants where effect = 'deny'`): an earlier release reads neither
+  table, so every grant stops applying and every deny stops refusing.
 - **Operations:** an operation can be registered once in the operation registry and is then
   reached through one call path, `runOperation`, that checks the actor's right, resolves the
   policy, asks the guardrails, executes and records the call as an Operation Run. Over HTTP
@@ -100,11 +113,17 @@ contain breaking changes; a patch version does not.
 
 ### Changed
 
+- **Config assets:** the overview lists the `id` of each agent and skill.
+- **Rights:** every rights check of the API and of tool calls is answered by one evaluator,
+  `evaluateAccess` in `@vivd-catalyst/core`. `InProcessToolExecution` takes an optional
+  `authorizer`; `ChatServerOptions.stores` needs the `access` store, which
+  `createPostgresStores` provides.
 - **API:** a call refused for a missing right answers `403 FORBIDDEN` with the message
   `Missing the right '<action>'` and `details.action` and `details.reason`, on every route.
   The message was `Missing permission '<permission>'` and named the legacy permission. The
-  routes ask the server's authorizer, a new server option `authorizer` whose default decides
-  as before.
+  routes ask the server's authorizer, a new server option `authorizer` whose default is the
+  rights evaluator over the instance's access store. `details.reason` is `no_grant`,
+  `denied`, `holder_inactive` or `unknown_action`.
 - **Logs:** the log record of a failed tool handler or operation keeps of a database error
   its SQLSTATE code, constraint and table and no longer its message, which can quote
   rejected values.
