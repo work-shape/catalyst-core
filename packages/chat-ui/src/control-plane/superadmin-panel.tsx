@@ -54,7 +54,8 @@ import {
   canViewAudit,
   canViewUsageGovernance
 } from "./governance";
-import { useTranslation } from "../i18n";
+import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
+import { formatDateTime } from "./locale-format";
 import { UsageView } from "./usage-view";
 import { UserAdministrationPanel } from "./user-administration-panel";
 import type { SuperadminRouteTab } from "../workspace/workspace-route";
@@ -208,7 +209,11 @@ export function SuperadminPanel({
       <div className="grid gap-3 border-b px-5 pt-20">
         <div className="grid min-w-0 gap-1">
           <span className="text-xs text-muted-foreground">
-            {canManageSuperadminAccess ? "Superadmin" : "Admin"}
+            {t(
+              canManageSuperadminAccess
+                ? "settings.accessLevelSuperadmin"
+                : "settings.accessLevelAdmin"
+            )}
           </span>
           <h1 className="text-xl font-semibold tracking-normal">{t("administration")}</h1>
         </div>
@@ -421,18 +426,19 @@ function ErrorBanner({ message }: { message: string }) {
 }
 
 function AuditView({ auditActivities }: { auditActivities: AuditActivity[] }) {
+  const { t, locale } = useTranslation();
   return (
     <ControlPlanePage
-      title="Audit log"
-      description={`${auditActivities.length.toLocaleString()} recent ${auditActivities.length === 1 ? "activity" : "activities"}`}
+      title={t("administrationAuditLog")}
+      description={t(
+        auditActivities.length === 1 ? "settings.auditCountOne" : "settings.auditCountOther",
+        { count: auditActivities.length.toLocaleString(locale) }
+      )}
     >
       <Card>
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Recent activity</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Governance and workflow events, plus anything that failed or was denied. Expand a row
-            for the underlying evidence.
-          </p>
+          <CardTitle className="text-base">{t("settings.auditRecentActivity")}</CardTitle>
+          <p className="text-xs text-muted-foreground">{t("settings.auditDescription")}</p>
         </CardHeader>
         <CardContent className="p-4 pt-1">
           {auditActivities.length ? (
@@ -442,7 +448,7 @@ function AuditView({ auditActivities }: { auditActivities: AuditActivity[] }) {
               ))}
             </ul>
           ) : (
-            <p className="pt-1 text-sm text-muted-foreground">No activity visible yet.</p>
+            <p className="pt-1 text-sm text-muted-foreground">{t("settings.auditEmpty")}</p>
           )}
         </CardContent>
       </Card>
@@ -451,6 +457,7 @@ function AuditView({ auditActivities }: { auditActivities: AuditActivity[] }) {
 }
 
 function AuditActivityRow({ activity }: { activity: AuditActivity }) {
+  const { t, locale } = useTranslation();
   const [open, setOpen] = useState(false);
   const showReason = Boolean(activity.reason) && activity.outcome !== "success";
 
@@ -480,17 +487,24 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
             {activity.tier === "governance" ? (
               <Badge variant="secondary" className="gap-1">
                 <ShieldCheck size={12} aria-hidden="true" />
-                Governance
+                {t("settings.auditTierGovernance")}
               </Badge>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span className="whitespace-nowrap">{formatDateTime(activity.at)}</span>
+            <span className="whitespace-nowrap">{formatDateTime(activity.at, locale)}</span>
             <ActorChip actor={activity.actor} />
             {activity.target ? (
               <span className="break-all">{targetText(activity.target)}</span>
             ) : null}
-            <span className="whitespace-nowrap">{formatEventCount(activity.eventCount)}</span>
+            <span className="whitespace-nowrap">
+              {t(
+                activity.eventCount === 1
+                  ? "settings.auditEventCountOne"
+                  : "settings.auditEventCountOther",
+                { count: activity.eventCount }
+              )}
+            </span>
           </div>
           {showReason ? (
             <p className="text-xs break-words text-destructive">{activity.reason}</p>
@@ -503,24 +517,25 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
 }
 
 function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
+  const { t, locale } = useTranslation();
   return (
     <div className="mt-2 ml-6 overflow-hidden rounded-md border bg-muted/30">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Time</TableHead>
-            <TableHead>Event</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Actor</TableHead>
-            <TableHead>Subject</TableHead>
-            <TableHead>Reason</TableHead>
+            <TableHead>{t("settings.time")}</TableHead>
+            <TableHead>{t("settings.auditEvent")}</TableHead>
+            <TableHead>{t("settings.status")}</TableHead>
+            <TableHead>{t("settings.auditActor")}</TableHead>
+            <TableHead>{t("settings.auditSubject")}</TableHead>
+            <TableHead>{t("settings.auditReason")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {evidence.map((event) => (
             <TableRow key={event.id}>
               <TableCell className="whitespace-nowrap text-muted-foreground">
-                {formatDateTime(event.createdAt)}
+                {formatDateTime(event.createdAt, locale)}
               </TableCell>
               <TableCell className="font-mono text-xs break-words">{event.type}</TableCell>
               <TableCell>
@@ -531,10 +546,10 @@ function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
                     event.status !== "success" && "border-destructive/40 text-destructive"
                   )}
                 >
-                  {event.status}
+                  {eventStatusText(event.status, t)}
                 </Badge>
               </TableCell>
-              <TableCell className="text-muted-foreground">{evidenceActorText(event)}</TableCell>
+              <TableCell className="text-muted-foreground">{evidenceActorText(event, t)}</TableCell>
               <TableCell className="break-all text-muted-foreground">
                 {event.subject ?? "—"}
               </TableCell>
@@ -547,47 +562,73 @@ function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
       </Table>
       {evidence[0] ? (
         <p className="px-3 py-1.5 font-mono text-[11px] text-muted-foreground">
-          correlation: {evidence[0].correlationId}
+          {t("settings.auditCorrelation", { id: evidence[0].correlationId })}
         </p>
       ) : null}
     </div>
   );
 }
 
+const OUTCOME_LABEL_KEYS: Record<AuditActivity["outcome"], TranslationKey> = {
+  success: "settings.auditOutcomeSuccess",
+  warning: "settings.auditOutcomeWarning",
+  failed: "settings.auditOutcomeFailed",
+  denied: "settings.auditOutcomeDenied"
+};
+
+// The contract carries the event status as an open string, so an unknown value is shown as sent.
+const EVENT_STATUS_LABEL_KEYS: Partial<Record<string, TranslationKey>> = {
+  success: "settings.auditOutcomeSuccess",
+  failed: "settings.auditOutcomeFailed",
+  denied: "settings.auditOutcomeDenied"
+};
+
+function eventStatusText(status: string, t: Translate): string {
+  const key = EVENT_STATUS_LABEL_KEYS[status];
+  return key ? t(key) : status;
+}
+
 function OutcomeBadge({ outcome }: { outcome: AuditActivity["outcome"] }) {
+  const { t } = useTranslation();
+  const label = t(OUTCOME_LABEL_KEYS[outcome]);
   if (outcome === "success") {
-    return <Badge variant="success">Success</Badge>;
+    return <Badge variant="success">{label}</Badge>;
   }
   if (outcome === "warning") {
     return (
       <Badge variant="outline" className="border-amber-500 text-amber-600">
-        Warning
+        {label}
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="border-destructive/50 text-destructive capitalize">
-      {outcome}
+    <Badge variant="outline" className="border-destructive/50 text-destructive">
+      {label}
     </Badge>
   );
 }
 
 function ActorChip({ actor }: { actor: AuditActivityActor }) {
+  const { t } = useTranslation();
   const Icon = actor.kind === "assistant" ? Bot : actor.kind === "user" ? UserIcon : ShieldCheck;
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap">
       <Icon size={12} aria-hidden="true" />
-      {actorText(actor)}
+      {actorText(actor, t)}
     </span>
   );
 }
 
-function actorText(actor: AuditActivityActor): string {
+type Translate = TranslationContextValue["t"];
+
+function actorText(actor: AuditActivityActor, t: Translate): string {
   if (actor.kind === "assistant") {
-    return actor.onBehalfOf ? `Assistant · for ${actor.onBehalfOf}` : "Assistant";
+    return actor.onBehalfOf
+      ? t("settings.auditActorAssistantFor", { name: actor.onBehalfOf })
+      : t("settings.auditActorAssistant");
   }
   if (actor.kind === "service") {
-    return `${actor.label} · service`;
+    return t("settings.auditActorService", { name: actor.label });
   }
   return actor.label;
 }
@@ -596,17 +637,16 @@ function targetText(target: AuditActivityTarget): string {
   return `${target.kind}: ${target.label ?? target.id}`;
 }
 
-function formatEventCount(count: number): string {
-  return `${count} event${count === 1 ? "" : "s"}`;
-}
-
-function evidenceActorText(event: AuditEvent): string {
+function evidenceActorText(event: AuditEvent, t: Translate): string {
   const actor = event.actor;
   if (!actor) {
-    return "System";
+    return t("settings.auditActorSystem");
   }
   if (actor.delegatedActor) {
-    return `${actor.delegatedActor.displayLabel ?? "Assistant"} (for ${actor.displayLabel})`;
+    return t("settings.auditActorDelegated", {
+      delegate: actor.delegatedActor.displayLabel ?? t("settings.auditActorAssistant"),
+      name: actor.displayLabel
+    });
   }
   return actor.displayLabel;
 }
@@ -623,8 +663,4 @@ function evidenceReasonText(event: AuditEvent): string | undefined {
     }
   }
   return undefined;
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString();
 }

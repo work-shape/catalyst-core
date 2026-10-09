@@ -7,6 +7,7 @@ import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { conversation } from "./conversation";
 import { files } from "./files";
+import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
 import { workspace } from "./workspace";
@@ -25,6 +26,7 @@ export const translations = combineTranslations(common)
   .and(configAssets)
   .and(conversation)
   .and(files)
+  .and(settings)
   .and(signIn)
   .and(tools)
   .and(workspace).messages;

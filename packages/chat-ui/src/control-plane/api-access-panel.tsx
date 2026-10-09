@@ -6,6 +6,7 @@ import type {
   CreateApiCredentialRequest,
   CreateApiCredentialResponse,
   CreateServicePrincipalRequest,
+  LocaleCode,
   ServicePrincipalDetail,
   ServicePrincipalPermission,
   UpdateServicePrincipalRequest
@@ -196,7 +197,7 @@ export function ApiAccessPanel({
               setSelectedPrincipalId(detail.principal.id);
               setPrincipalDialog(undefined);
             } catch (caught) {
-              setActionError(errorMessage(caught));
+              setActionError(errorMessage(caught, t("settings.requestFailed")));
             }
           }}
         />
@@ -215,7 +216,7 @@ export function ApiAccessPanel({
               await onCreateCredential(selectedPrincipal.principal.id, input);
               setCredentialDialogOpen(false);
             } catch (caught) {
-              setActionError(errorMessage(caught));
+              setActionError(errorMessage(caught, t("settings.requestFailed")));
             }
           }}
         />
@@ -246,7 +247,7 @@ export function ApiAccessPanel({
                   await onRevokeCredential(credentialToRevoke.id);
                   setCredentialToRevoke(undefined);
                 } catch (caught) {
-                  setActionError(errorMessage(caught));
+                  setActionError(errorMessage(caught, t("settings.requestFailed")));
                 }
               }}
             >
@@ -274,7 +275,7 @@ function PrincipalDetail({
   onCreateCredential(): void;
   onRevokeCredential(credential: ApiCredential): void;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { principal, credentials } = detail;
   return (
     <Card>
@@ -365,10 +366,10 @@ function PrincipalDetail({
                         </div>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(credential.createdAt, t("apiAccessNever"))}
+                        {formatDate(credential.createdAt, t("apiAccessNever"), locale)}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(credential.expiresAt, t("apiAccessNeverExpires"))}
+                        {formatDate(credential.expiresAt, t("apiAccessNeverExpires"), locale)}
                       </TableCell>
                       <TableCell>
                         <Badge variant={active ? "default" : "secondary"}>
@@ -380,7 +381,7 @@ function PrincipalDetail({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {formatDate(credential.lastUsedAt, t("apiAccessNever"))}
+                        {formatDate(credential.lastUsedAt, t("apiAccessNever"), locale)}
                       </TableCell>
                       {canMutate ? (
                         <TableCell className="text-right">
@@ -701,7 +702,7 @@ export function SecretFields({
   const { t } = useTranslation();
   return (
     <div className="grid gap-4">
-      <p className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
         {t("apiAccessSecretOnce")}
       </p>
       <CopyField
@@ -738,6 +739,7 @@ function CopyField({
   secret?: boolean;
   onCopy(): void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-1.5">
       <span className="text-sm font-medium">{label}</span>
@@ -752,7 +754,7 @@ function CopyField({
           type="button"
           variant="outline"
           size="icon"
-          aria-label={`Copy ${label}`}
+          aria-label={t("settings.copyValue", { label })}
           onClick={onCopy}
         >
           {copied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
@@ -771,9 +773,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function formatDate(value: string | undefined, fallback: string): string {
+function formatDate(value: string | undefined, fallback: string, locale: LocaleCode): string {
   return value
-    ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
+    ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
         new Date(value)
       )
     : fallback;
@@ -788,6 +790,6 @@ async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Request failed";
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }

@@ -15,6 +15,9 @@ import {
   LocalizedField
 } from "./config-asset-form-fields";
 import {
+  EXAMPLE_AGENT_NAME,
+  EXAMPLE_SKILL_NAME,
+  SKILL_ROOT_FILE_NAME,
   agentAvailabilityFormsEqual,
   agentAvailabilityToForm,
   agentModelRows,
@@ -153,7 +156,7 @@ export function AgentEditor({
             <Input
               value={form.name}
               required
-              placeholder="workflow_assistant"
+              placeholder={EXAMPLE_AGENT_NAME}
               onChange={(event) => update({ name: event.target.value })}
             />
           </Field>
@@ -656,7 +659,7 @@ export function SkillEditor({
               value={form.name}
               disabled={!editable}
               required
-              placeholder="generic_workflow_review"
+              placeholder={EXAMPLE_SKILL_NAME}
               onChange={(event) => update({ name: event.target.value })}
             />
           </Field>
@@ -693,7 +696,7 @@ export function SkillEditor({
               onClick={() => setSelectedResource("root")}
             >
               <FileText className="shrink-0" size={14} aria-hidden="true" />
-              <span className="truncate">SKILL.md</span>
+              <span className="truncate">{SKILL_ROOT_FILE_NAME}</span>
             </button>
             {form.resources.length || editable ? (
               <div className="ml-3 grid min-w-0 gap-2 border-l pl-3">

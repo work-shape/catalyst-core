@@ -17,7 +17,6 @@ Counts are exact by target, rule and package in each repository's `quality-basel
 | lint           | `catalyst/env-boundary`                            | ESLint plugin     |       15 |           47 | CB-8c                                                                                                   |
 | lint           | `catalyst/fetch-boundary`                          | ESLint plugin     |       15 |            2 | CB-6a, CB-10a, PA-3                                                                                     |
 | lint           | `catalyst/host-object-boundary`                    | ESLint plugin     |        1 |            0 | CB-8c                                                                                                   |
-| lint           | `catalyst/literal-text`                            | ESLint plugin     |      144 |            0 | NL-4a                                                                                                   |
 | lint           | `catalyst/memory-store`                            | ESLint plugin     |        6 |            0 | CB-3b                                                                                                   |
 | lint           | `catalyst/module-cycle`                            | Collector         |       16 |           11 | CB-4d, CB-8b, G-5c                                                                                      |
 | lint           | `eslint/inline-config`                             | ESLint            |        1 |            0 | G-5c                                                                                                    |
@@ -49,4 +48,4 @@ Capabilities environment findings include the 30 artifact-helper CLI entries tha
 
 C-126 owns the 16 artifact-helper source and script files over 800 lines.
 
-CB-8a added the literal interface text rule. All 144 findings are in `packages/chat-ui/src/control-plane`; NL-4a owns them. The same change split `chat-ui/src/i18n.tsx`, which removed its large-file entry, and stopped exporting one unused function from it.
+CB-8a added the literal interface text rule with 144 findings, all in `packages/chat-ui/src/control-plane`. NL-4a localized that folder and removed the entry, so the rule has no baseline left. CB-8a also split `chat-ui/src/i18n.tsx`, which removed its large-file entry, and stopped exporting one unused function from it.

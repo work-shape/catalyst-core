@@ -62,8 +62,9 @@ function createUsageSummary(): UsageSummary {
   };
 }
 
+/** The view renders in English here, so amounts are written the English way. */
 function formatEuro(amount: number): string {
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat("en", {
     style: "currency",
     currency: "EUR",
     minimumFractionDigits: 2,

@@ -40,23 +40,23 @@ export type AccessLevel = "user" | "admin" | "superadmin";
 
 export const ACCESS_LEVEL_OPTIONS: Array<{
   value: AccessLevel;
-  label: string;
-  description: string;
+  label: TranslationKey;
+  description: TranslationKey;
 }> = [
   {
     value: "user",
-    label: "User",
-    description: "Can use chat and assigned capabilities."
+    label: "settings.accessLevelUser",
+    description: "settings.accessLevelUserDescription"
   },
   {
     value: "admin",
-    label: "Admin",
-    description: "Can use chat and operational governance views."
+    label: "settings.accessLevelAdmin",
+    description: "settings.accessLevelAdminDescription"
   },
   {
     value: "superadmin",
-    label: "Superadmin",
-    description: "Can manage users, audit, and sensitive governance."
+    label: "settings.accessLevelSuperadmin",
+    description: "settings.accessLevelSuperadminDescription"
   }
 ];
 
@@ -137,10 +137,6 @@ export function distinctAuthSources(identities: AdministeredUserIdentity[]): str
   return [...new Set(identities.map((identity) => identity.authSource))];
 }
 
-export function formatDateTime(value: string | undefined): string | undefined {
-  return value ? new Date(value).toLocaleString() : undefined;
-}
-
 export function generatePassword(): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const bytes = new Uint8Array(16);
@@ -148,8 +144,9 @@ export function generatePassword(): string {
   return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
 }
 
-export function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "Request failed";
+/** The server's own message for a failed request, or `fallback` when it sent none. */
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export function userToForm(user: AdministeredUser): UserFormState {
@@ -216,8 +213,15 @@ export function accessLevelToRoles(accessLevel: AccessLevel): string[] {
   return ["user"];
 }
 
-export function accessLevelLabel(accessLevel: AccessLevel): string {
-  return ACCESS_LEVEL_OPTIONS.find((option) => option.value === accessLevel)?.label ?? "User";
+export function accessLevelLabel(accessLevel: AccessLevel): TranslationKey {
+  return (
+    ACCESS_LEVEL_OPTIONS.find((option) => option.value === accessLevel)?.label ??
+    "settings.accessLevelUser"
+  );
+}
+
+export function roleLabel(role: string): TranslationKey | undefined {
+  return ACCESS_LEVEL_OPTIONS.find((option) => option.value === role)?.label;
 }
 
 function parseList(value: string): string[] {

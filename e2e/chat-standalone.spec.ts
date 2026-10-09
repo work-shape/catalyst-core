@@ -2027,6 +2027,39 @@ test("standalone settings and superadmin tabs are route-backed", async ({ page }
   await expect(page.getByText("Billable this month")).toBeVisible();
 });
 
+test("users, usage, audit and API access follow the German locale", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("vivd-catalyst:locale", "de");
+  });
+  await signInViaApi(page, superadminUser);
+  const panel = page.getByRole("region", { name: "Administrationsbereich" });
+
+  await page.goto("/admin/users");
+  await expect(panel.getByRole("heading", { name: "Benutzer", exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Neuer Benutzer" })).toBeVisible();
+  await expect(panel.getByRole("searchbox", { name: "Benutzer suchen" })).toBeVisible();
+  await expect(panel.getByRole("columnheader", { name: "Anmeldemethoden" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Nächste Seite" })).toBeVisible();
+  // The sign-in above is the superadmin's last activity, written as a German date.
+  await expect(panel.getByRole("row", { name: /E2E Superadmin/u })).toContainText(
+    /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}:\d{2}/u
+  );
+
+  await page.goto("/admin/usage");
+  await expect(panel.getByRole("heading", { name: "Nutzung", exact: true })).toBeVisible();
+  await expect(panel.getByText("Kosten diesen Monat")).toBeVisible();
+  // Numbers are grouped the German way.
+  await expect(page.getByTestId("configured-safeguards")).toContainText("25.000");
+  await expect(panel.getByText("Billable")).toHaveCount(0);
+
+  await page.goto("/admin/audit");
+  await expect(panel.getByRole("heading", { name: "Auditprotokoll", exact: true })).toBeVisible();
+  await expect(panel.getByText("Letzte Aktivitäten", { exact: true })).toBeVisible();
+
+  await page.goto("/admin/api-access");
+  await expect(panel.getByRole("heading", { name: "API-Zugriff", exact: true })).toBeVisible();
+});
+
 test("superadmin config follows the German locale", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("vivd-catalyst:locale", "de");

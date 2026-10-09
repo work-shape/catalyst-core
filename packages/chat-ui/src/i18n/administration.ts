@@ -114,7 +114,7 @@ export const administration = defineTranslations({
     userRightApiAccessManage: "API-Zugriff verwalten",
     userRightApiAccessManageDescription:
       "Zugänge für die CLI und Automatisierungen anlegen und sperren.",
-    userRightAuditView: "Audit-Log ansehen",
+    userRightAuditView: "Auditprotokoll ansehen",
     userRightAuditViewDescription: "Sehen, wer in dieser Instanz was geändert hat.",
     userRightConfigAssetsRead: "Agenten-Konfiguration ansehen",
     userRightConfigAssetsReadDescription: "Agenten und Fähigkeiten in der Administration öffnen.",

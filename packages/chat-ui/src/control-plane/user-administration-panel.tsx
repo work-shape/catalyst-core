@@ -22,8 +22,8 @@ import {
   errorMessage,
   filterUsers,
   formToCreateInput,
-  formatDateTime,
   roleFilterOptions,
+  roleLabel,
   rolesToAccessLevel,
   type CreateUserFormState,
   type FormNoticeState,
@@ -36,6 +36,7 @@ import { UserPermissionOverview } from "./user-permission-overview";
 import { useTranslation } from "../i18n";
 import { cn } from "../ui/cn";
 import { ControlPlanePage } from "./control-plane-page";
+import { formatDateTime } from "./locale-format";
 
 interface UserAdministrationPanelProps {
   users: AdministeredUser[];
@@ -79,7 +80,7 @@ export function UserAdministrationPanel({
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
   const [createOpen, setCreateOpen] = useState(false);
   const [listView, setListView] = useState<"users" | "permissions">("users");
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const selectedUser = users.find((user) => user.id === selectedUserId);
 
   useEffect(() => {
@@ -151,12 +152,15 @@ export function UserAdministrationPanel({
 
   return (
     <ControlPlanePage
-      title="Users"
-      description={`${users.length.toLocaleString()} users · ${activeUserCount.toLocaleString()} active`}
+      title={t("administrationUsers")}
+      description={t("settings.usersSummary", {
+        total: users.length.toLocaleString(locale),
+        active: activeUserCount.toLocaleString(locale)
+      })}
       actions={
         <Button type="button" onClick={() => setCreateOpen(true)}>
           <UserPlus size={16} aria-hidden="true" />
-          New user
+          {t("settings.userNew")}
         </Button>
       }
     >
@@ -170,34 +174,37 @@ export function UserAdministrationPanel({
           <Input
             type="search"
             className="pl-9"
-            placeholder="Search users"
-            aria-label="Search users"
+            placeholder={t("settings.userSearch")}
+            aria-label={t("settings.userSearch")}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
         <Select
           className="h-10 w-full font-medium sm:w-40"
-          aria-label="Filter by status"
+          aria-label={t("settings.userFilterByStatus")}
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
         >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
+          <option value="all">{t("allStatuses")}</option>
+          <option value="active">{t("settings.statusActive")}</option>
+          <option value="disabled">{t("settings.statusDisabled")}</option>
         </Select>
         <Select
           className="h-10 w-full font-medium sm:w-40"
-          aria-label="Filter by role"
+          aria-label={t("settings.userFilterByRole")}
           value={roleFilter}
           onChange={(event) => setRoleFilter(event.target.value)}
         >
-          <option value="all">All roles</option>
-          {roleOptions.map((role) => (
-            <option key={role} value={role}>
-              {role}
-            </option>
-          ))}
+          <option value="all">{t("settings.userAllRoles")}</option>
+          {roleOptions.map((role) => {
+            const label = roleLabel(role);
+            return (
+              <option key={role} value={role}>
+                {label ? t(label) : role}
+              </option>
+            );
+          })}
         </Select>
         <div className="flex shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5">
           {(["users", "permissions"] as const).map((view) => (
@@ -223,7 +230,9 @@ export function UserAdministrationPanel({
         {selectedRowIds.size > 0 && listView === "users" ? (
           <div className="flex flex-wrap items-center gap-3 border-b bg-primary/10 px-4 py-2.5">
             <span className="text-sm font-semibold text-primary">
-              {selectedRowIds.size.toLocaleString()} selected
+              {t("settings.userSelectedCount", {
+                count: selectedRowIds.size.toLocaleString(locale)
+              })}
             </span>
             <div className="flex-1" />
             <Button
@@ -233,23 +242,25 @@ export function UserAdministrationPanel({
               className="text-primary hover:bg-primary/15"
               onClick={() => setSelectedRowIds(new Set())}
             >
-              Clear
+              {t("settings.userClearSelection")}
             </Button>
           </div>
         ) : null}
 
         {loading ? (
-          <CardContent className="p-4 text-sm text-muted-foreground">Loading users…</CardContent>
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            {t("settings.usersLoading")}
+          </CardContent>
         ) : visibleUsers.length === 0 ? (
           <CardContent className="grid justify-items-center gap-2 p-8 text-center">
             <Users size={20} aria-hidden="true" className="text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              {users.length === 0 ? "No users yet." : "No users match your search."}
+              {t(users.length === 0 ? "settings.usersEmpty" : "settings.usersNoMatch")}
             </p>
             {users.length === 0 ? (
               <Button type="button" variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
                 <UserPlus size={15} aria-hidden="true" />
-                Create the first user
+                {t("settings.userCreateFirst")}
               </Button>
             ) : null}
           </CardContent>
@@ -263,25 +274,25 @@ export function UserAdministrationPanel({
                   <input
                     type="checkbox"
                     className="size-4 accent-sky-600"
-                    aria-label="Select visible users"
+                    aria-label={t("settings.userSelectVisible")}
                     checked={allPageRowsSelected}
                     onChange={(event) => togglePageSelection(event.target.checked)}
                   />
                 </TableHead>
                 <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  User
+                  {t("userRightsOverviewUser")}
                 </TableHead>
                 <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  Access
+                  {t("settings.userAccess")}
                 </TableHead>
                 <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  Status
+                  {t("settings.status")}
                 </TableHead>
                 <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  Sign-in methods
+                  {t("settings.userSignInMethods")}
                 </TableHead>
                 <TableHead className="px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
-                  Last active
+                  {t("settings.userLastActive")}
                 </TableHead>
                 <TableHead className="w-8" />
               </TableRow>
@@ -297,7 +308,7 @@ export function UserAdministrationPanel({
                     <input
                       type="checkbox"
                       className="size-4 accent-sky-600"
-                      aria-label={`Select ${user.displayLabel}`}
+                      aria-label={t("settings.userSelect", { name: user.displayLabel })}
                       checked={selectedRowIds.has(user.id)}
                       onChange={(event) => toggleRowSelection(user.id, event.target.checked)}
                     />
@@ -322,7 +333,7 @@ export function UserAdministrationPanel({
                   </TableCell>
                   <TableCell className="px-4">
                     <Badge variant="outline">
-                      {accessLevelLabel(rolesToAccessLevel(user.roles))}
+                      {t(accessLevelLabel(rolesToAccessLevel(user.roles)))}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4">
@@ -331,10 +342,12 @@ export function UserAdministrationPanel({
                   <TableCell className="px-4 text-muted-foreground">
                     {user.identities.length > 0
                       ? distinctAuthSources(user.identities).join(", ")
-                      : "None"}
+                      : t("settings.userSignInMethodsNone")}
                   </TableCell>
                   <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
-                    {formatDateTime(user.lastAuthenticatedAt) ?? "Never"}
+                    {user.lastAuthenticatedAt
+                      ? formatDateTime(user.lastAuthenticatedAt, locale)
+                      : t("settings.never")}
                   </TableCell>
                   <TableCell className="px-4 text-muted-foreground">
                     <ChevronRight size={15} aria-hidden="true" />
@@ -348,15 +361,18 @@ export function UserAdministrationPanel({
         {!loading && visibleUsers.length > 0 && listView === "users" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
             <div className="text-sm text-muted-foreground">
-              {pageStart + 1}-{Math.min(pageStart + rowsPerPage, visibleUsers.length)} of{" "}
-              {visibleUsers.length.toLocaleString()}
+              {t("settings.paginationRange", {
+                from: pageStart + 1,
+                to: Math.min(pageStart + rowsPerPage, visibleUsers.length),
+                total: visibleUsers.length.toLocaleString(locale)
+              })}
             </div>
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                Rows
+                {t("settings.paginationRows")}
                 <Select
                   className="h-8 w-20 px-2 text-sm"
-                  aria-label="Rows per page"
+                  aria-label={t("settings.paginationRowsPerPage")}
                   value={String(rowsPerPage)}
                   onChange={(event) => setRowsPerPage(Number(event.target.value))}
                 >
@@ -370,7 +386,7 @@ export function UserAdministrationPanel({
                 size="icon"
                 variant="outline"
                 className="size-8"
-                aria-label="Previous page"
+                aria-label={t("settings.paginationPrevious")}
                 disabled={currentPage <= 1}
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
               >
@@ -384,7 +400,7 @@ export function UserAdministrationPanel({
                 size="icon"
                 variant="outline"
                 className="size-8"
-                aria-label="Next page"
+                aria-label={t("settings.paginationNext")}
                 disabled={currentPage >= pageCount}
                 onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
               >
@@ -428,6 +444,7 @@ function CreateUserDialog({
   onSendInvitation?(userId: string): Promise<unknown>;
   onCreated(user: AdministeredUser): void;
 }) {
+  const { t } = useTranslation();
   const invitationsEnabled = Boolean(onSendInvitation);
   const [form, setForm] = useState<CreateUserFormState>(() =>
     createEmptyCreateUserForm(invitationsEnabled)
@@ -455,11 +472,13 @@ function CreateUserDialog({
         setCreatedResult({ user: created });
         try {
           await onSendInvitation(created.id);
-          setNotice({ kind: "success", text: "User created. The invitation email was sent." });
+          setNotice({ kind: "success", text: t("settings.userCreatedInvitationSent") });
         } catch (error) {
           setNotice({
             kind: "error",
-            text: `User created, but the invitation was not sent: ${errorMessage(error)} You can resend it from the user's page.`
+            text: t("settings.userCreatedInvitationFailed", {
+              error: errorMessage(error, t("settings.requestFailed"))
+            })
           });
         }
         return;
@@ -468,14 +487,14 @@ function CreateUserDialog({
         setCreatedResult({ user: created, password: form.password });
         setNotice({
           kind: "success",
-          text: "User created. Share this password over a secure channel."
+          text: t("settings.userCreatedSharePassword")
         });
         return;
       }
       setForm(createEmptyCreateUserForm(invitationsEnabled));
       onCreated(created);
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 
@@ -485,22 +504,25 @@ function CreateUserDialog({
     }
     try {
       await navigator.clipboard.writeText(createdResult.password);
-      setNotice({ kind: "success", text: "Password copied." });
+      setNotice({ kind: "success", text: t("settings.userPasswordCopied") });
     } catch {
-      setNotice({ kind: "error", text: "Password could not be copied automatically." });
+      setNotice({ kind: "error", text: t("settings.userPasswordCopyFailed") });
     }
   }
 
   if (createdResult) {
     return (
-      <Dialog open={open} title="User created" onClose={onClose}>
+      <Dialog open={open} title={t("settings.userCreated")} onClose={onClose}>
         <div className="grid gap-4">
           <div className="grid gap-1">
             <strong className="text-sm">{createdResult.user.displayLabel}</strong>
             <span className="text-sm text-muted-foreground">{createdResult.user.email}</span>
           </div>
           {createdResult.password ? (
-            <Field label="Initial password" hint="This is only shown here. Share it securely.">
+            <Field
+              label={t("settings.passwordInitial")}
+              hint={t("settings.userInitialPasswordShownOnce")}
+            >
               <div className="flex gap-2">
                 <MaskedPasswordInput
                   readOnly
@@ -514,7 +536,7 @@ function CreateUserDialog({
                   onClick={() => void copyPassword()}
                 >
                   <Copy size={16} aria-hidden="true" />
-                  Copy
+                  {t("copy")}
                 </Button>
               </div>
             </Field>
@@ -522,10 +544,10 @@ function CreateUserDialog({
           <FormNotice notice={notice} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
-              Close
+              {t("close")}
             </Button>
             <Button type="button" onClick={() => onCreated(createdResult.user)}>
-              Open user
+              {t("settings.userOpen")}
             </Button>
           </div>
         </div>
@@ -534,7 +556,7 @@ function CreateUserDialog({
   }
 
   return (
-    <Dialog open={open} title="New user" onClose={onClose}>
+    <Dialog open={open} title={t("settings.userNew")} onClose={onClose}>
       <form className="grid gap-3" onSubmit={submit}>
         <CreateUserFields
           form={form}
@@ -545,7 +567,7 @@ function CreateUserDialog({
         <FormNotice notice={notice} />
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             type="submit"
@@ -558,7 +580,7 @@ function CreateUserDialog({
             }
           >
             <UserPlus size={16} aria-hidden="true" />
-            Create user
+            {t("settings.userCreate")}
           </Button>
         </div>
       </form>

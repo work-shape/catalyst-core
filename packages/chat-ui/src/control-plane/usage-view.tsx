@@ -6,51 +6,65 @@ import type {
   UsageSummary
 } from "@vivd-catalyst/api-client";
 import { ControlPlanePage } from "./control-plane-page";
+import { formatDateTime } from "./locale-format";
+import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { cn } from "../ui/cn";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 
 export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
+  const i18n = useTranslation();
+  const { t, locale } = i18n;
   const recentEvents = usage?.recentEvents ?? [];
   const showWebSearchCosts = shouldShowWebSearchCosts(usage);
+  const callsAndTokens = (window: UsageWindow | undefined) =>
+    t("settings.usageCallsAndTokens", {
+      calls: (window?.modelCallCount ?? 0).toLocaleString(locale),
+      tokens: (window?.totalTokens ?? 0).toLocaleString(locale)
+    });
   return (
     <ControlPlanePage
-      title="Usage"
-      description={`${(usage?.currentMonth.modelCallCount ?? 0).toLocaleString()} model calls · ${(usage?.currentMonth.totalTokens ?? 0).toLocaleString()} tokens this month`}
+      title={t("administrationUsage")}
+      description={t("settings.usageSummary", {
+        calls: (usage?.currentMonth.modelCallCount ?? 0).toLocaleString(locale),
+        tokens: (usage?.currentMonth.totalTokens ?? 0).toLocaleString(locale)
+      })}
     >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UsageMetric
           icon={<DollarSign size={15} />}
-          label="Billable this month"
-          value={formatBillableCost(usage?.currentMonth.cost)}
-          detail={`${(usage?.currentMonth.modelCallCount ?? 0).toLocaleString()} calls · ${(usage?.currentMonth.totalTokens ?? 0).toLocaleString()} tokens`}
+          label={t("settings.usageBillableMonth")}
+          value={formatBillableCost(usage?.currentMonth.cost, i18n)}
+          detail={callsAndTokens(usage?.currentMonth)}
         />
         <UsageMetric
           icon={<DollarSign size={15} />}
-          label="Billable today"
-          value={formatBillableCost(usage?.today.cost)}
-          detail={`${(usage?.today.modelCallCount ?? 0).toLocaleString()} calls · ${(usage?.today.totalTokens ?? 0).toLocaleString()} tokens`}
+          label={t("settings.usageBillableToday")}
+          value={formatBillableCost(usage?.today.cost, i18n)}
+          detail={callsAndTokens(usage?.today)}
         />
         {showWebSearchCosts ? (
           <UsageMetric
             icon={<Search size={15} />}
-            label="Web search billable"
-            value={formatWebSearchBillableCost(usage?.currentMonth.cost)}
-            detail={`${(usage?.currentMonth.webSearchCallCount ?? 0).toLocaleString()} searches this month`}
+            label={t("settings.usageWebSearchBillable")}
+            value={formatWebSearchBillableCost(usage?.currentMonth.cost, i18n)}
+            detail={t("settings.usageSearchesMonthCount", {
+              count: (usage?.currentMonth.webSearchCallCount ?? 0).toLocaleString(locale)
+            })}
           />
         ) : (
           <UsageMetric
             icon={<Database size={15} />}
-            label="Tokens this month"
-            value={(usage?.currentMonth.totalTokens ?? 0).toLocaleString()}
+            label={t("settings.usageTokensMonth")}
+            value={(usage?.currentMonth.totalTokens ?? 0).toLocaleString(locale)}
           />
         )}
         <UsageMetric
           icon={<DollarSign size={15} />}
-          label="Billable all time"
-          value={formatBillableCost(usage?.allTime.cost)}
-          detail={`${(usage?.allTime.modelCallCount ?? 0).toLocaleString()} calls · ${(usage?.allTime.totalTokens ?? 0).toLocaleString()} tokens`}
+          label={t("settings.usageBillableAllTime")}
+          value={formatBillableCost(usage?.allTime.cost, i18n)}
+          detail={callsAndTokens(usage?.allTime)}
         />
       </div>
 
@@ -70,29 +84,29 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
       {showWebSearchCosts ? (
         <Card data-testid="web-search-usage">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">Web search usage</CardTitle>
+            <CardTitle className="text-base">{t("settings.usageWebSearchTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-2">
             <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <UsageStat
                 icon={<Search size={15} />}
-                label="Searches today"
+                label={t("settings.usageSearchesToday")}
                 value={usage?.today.webSearchCallCount ?? 0}
               />
               <UsageStat
                 icon={<Search size={15} />}
-                label="Searches this month"
+                label={t("settings.usageSearchesMonth")}
                 value={usage?.currentMonth.webSearchCallCount ?? 0}
               />
               <UsageStat
                 icon={<DollarSign size={15} />}
-                label="Search cost today"
-                value={formatWebSearchBillableCost(usage?.today.cost)}
+                label={t("settings.usageSearchCostToday")}
+                value={formatWebSearchBillableCost(usage?.today.cost, i18n)}
               />
               <UsageStat
                 icon={<DollarSign size={15} />}
-                label="Search cost this month"
-                value={formatWebSearchBillableCost(usage?.currentMonth.cost)}
+                label={t("settings.usageSearchCostMonth")}
+                value={formatWebSearchBillableCost(usage?.currentMonth.cost, i18n)}
               />
             </dl>
           </CardContent>
@@ -101,23 +115,23 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
 
       <Card data-testid="configured-safeguards">
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Configured safeguards</CardTitle>
+          <CardTitle className="text-base">{t("settings.usageSafeguards")}</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-2">
           <dl className="grid gap-3 md:grid-cols-3">
             <UsageStat
               icon={<ShieldCheck size={15} />}
-              label="Model calls per day"
+              label={t("settings.usageSafeguardCallsPerDay")}
               value={usage?.safeguards.modelCallsPerDay}
             />
             <UsageStat
               icon={<ShieldCheck size={15} />}
-              label="Tokens per day"
+              label={t("settings.usageSafeguardTokensPerDay")}
               value={usage?.safeguards.tokensPerDay}
             />
             <UsageStat
               icon={<ShieldCheck size={15} />}
-              label="Tokens per month"
+              label={t("settings.usageSafeguardTokensPerMonth")}
               value={usage?.safeguards.tokensPerMonth}
             />
           </dl>
@@ -126,50 +140,56 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
 
       <Card>
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">Recent model usage</CardTitle>
+          <CardTitle className="text-base">{t("settings.usageRecentTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-1">
           {recentEvents.length ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Tokens</TableHead>
-                  <TableHead>Cached input (reported)</TableHead>
-                  <TableHead>Billable</TableHead>
-                  {showWebSearchCosts ? <TableHead>Web search</TableHead> : null}
-                  {showWebSearchCosts ? <TableHead>Search billable</TableHead> : null}
-                  <TableHead>Source</TableHead>
+                  <TableHead>{t("settings.time")}</TableHead>
+                  <TableHead>{t("settings.usageModel")}</TableHead>
+                  <TableHead>{t("settings.usageTokens")}</TableHead>
+                  <TableHead>{t("settings.usageCachedInput")}</TableHead>
+                  <TableHead>{t("settings.usageBillable")}</TableHead>
+                  {showWebSearchCosts ? (
+                    <TableHead>{t("settings.usageWebSearch")}</TableHead>
+                  ) : null}
+                  {showWebSearchCosts ? (
+                    <TableHead>{t("settings.usageSearchBillable")}</TableHead>
+                  ) : null}
+                  <TableHead>{t("settings.usageSource")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentEvents.map((event) => (
                   <TableRow key={event.id}>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatDateTime(event.createdAt)}
+                      {formatDateTime(event.createdAt, locale)}
                     </TableCell>
                     <TableCell className="font-medium break-words">
-                      {event.model}
-                      {event.billedAsFast ? " · fast" : ""}
+                      {event.billedAsFast
+                        ? t("settings.usageModelFast", { model: event.model })
+                        : event.model}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {event.totalTokens.toLocaleString()}
+                      {event.totalTokens.toLocaleString(locale)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {event.cachedInputTokens?.toLocaleString() ?? "Unknown"}
+                      {event.cachedInputTokens?.toLocaleString(locale) ??
+                        t("settings.usageUnknown")}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatBillableCost(event.cost)}
+                      {formatBillableCost(event.cost, i18n)}
                     </TableCell>
                     {showWebSearchCosts ? (
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {event.webSearchCallCount.toLocaleString()}
+                        {event.webSearchCallCount.toLocaleString(locale)}
                       </TableCell>
                     ) : null}
                     {showWebSearchCosts ? (
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatWebSearchBillableCost(event.cost)}
+                        {formatWebSearchBillableCost(event.cost, i18n)}
                       </TableCell>
                     ) : null}
                     <TableCell className="text-muted-foreground">{event.source}</TableCell>
@@ -178,7 +198,7 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
               </TableBody>
             </Table>
           ) : (
-            <p className="pt-1 text-sm text-muted-foreground">No model usage recorded yet.</p>
+            <p className="pt-1 text-sm text-muted-foreground">{t("settings.usageRecentEmpty")}</p>
           )}
         </CardContent>
       </Card>
@@ -187,19 +207,37 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
 }
 
 type DailyUsageMetric = "cost" | "tokens";
+type UsageWindow = UsageSummary["today"];
+type BudgetPeriod = "day" | "month";
+
+/** The messages of a spend budget, by the period it covers. */
+const BUDGET_TEXT_KEYS: Record<
+  BudgetPeriod,
+  { label: TranslationKey; blocked: TranslationKey; remaining: TranslationKey }
+> = {
+  day: {
+    label: "settings.usageBudgetDaily",
+    blocked: "settings.usageBudgetBlockedToday",
+    remaining: "settings.usageBudgetRemainingToday"
+  },
+  month: {
+    label: "settings.usageBudgetMonthly",
+    blocked: "settings.usageBudgetBlockedMonth",
+    remaining: "settings.usageBudgetRemainingMonth"
+  }
+};
 
 function SpendBudgetCard({ usage }: { usage: UsageSummary | undefined }) {
+  const { t } = useTranslation();
   const currency = usage?.spendBudget.currency ?? usage?.today.cost.currency;
   const budgets = [
     {
-      label: "Daily budget",
-      period: "today",
+      period: "day" as const,
       spentMicros: usage?.today.cost.billableCostMicros,
       limitMicros: usage?.spendBudget.dailyLimitMicros
     },
     {
-      label: "Monthly budget",
-      period: "this month",
+      period: "month" as const,
       spentMicros: usage?.currentMonth.cost.billableCostMicros,
       limitMicros: usage?.spendBudget.monthlyLimitMicros
     }
@@ -208,20 +246,18 @@ function SpendBudgetCard({ usage }: { usage: UsageSummary | undefined }) {
   return (
     <Card data-testid="spend-budget-progress">
       <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">Spend budgets</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Customer billable usage calculated from the configured rate card.
-        </p>
+        <CardTitle className="text-base">{t("settings.usageBudgets")}</CardTitle>
+        <p className="text-xs text-muted-foreground">{t("settings.usageBudgetsDescription")}</p>
       </CardHeader>
       <CardContent className="p-4 pt-2">
         {budgets.length ? (
           <div className="grid gap-5 md:grid-cols-2">
             {budgets.map((budget) => (
-              <SpendBudgetProgress key={budget.label} {...budget} currency={currency} />
+              <SpendBudgetProgress key={budget.period} {...budget} currency={currency} />
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No spend budgets configured.</p>
+          <p className="text-sm text-muted-foreground">{t("settings.usageBudgetsEmpty")}</p>
         )}
       </CardContent>
     </Card>
@@ -229,28 +265,30 @@ function SpendBudgetCard({ usage }: { usage: UsageSummary | undefined }) {
 }
 
 interface SpendBudgetProgressInput {
-  label: string;
-  period: string;
+  period: BudgetPeriod;
   spentMicros: number | undefined;
   limitMicros: number;
 }
 
 function SpendBudgetProgress({
-  label,
   period,
   spentMicros,
   limitMicros,
   currency
 }: SpendBudgetProgressInput & { currency?: string }) {
+  const i18n = useTranslation();
+  const { t } = i18n;
+  const text = BUDGET_TEXT_KEYS[period];
+  const label = t(text.label);
   if (spentMicros === undefined || currency === undefined) {
     return (
       <div className="grid gap-2">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium">{label}</p>
-            <p className="text-xs text-muted-foreground">Billable cost is incomplete.</p>
+            <p className="text-xs text-muted-foreground">{t("settings.usageBudgetIncomplete")}</p>
           </div>
-          <Badge variant="secondary">Incomplete</Badge>
+          <Badge variant="secondary">{t("settings.usageIncomplete")}</Badge>
         </div>
       </div>
     );
@@ -267,17 +305,22 @@ function SpendBudgetProgress({
         <div>
           <p className="text-sm font-medium">{label}</p>
           <p className="text-xs text-muted-foreground">
-            {formatMicrosCost(spentMicros, currency)} of {formatMicrosCost(limitMicros, currency)}
+            {t("settings.usageBudgetSpent", {
+              spent: formatMicrosCost(spentMicros, currency, i18n),
+              limit: formatMicrosCost(limitMicros, currency, i18n)
+            })}
           </p>
         </div>
         <Badge variant={reached ? "default" : "secondary"}>
-          {reached ? "Limit reached" : `${displayedPercentage}% used`}
+          {reached
+            ? t("settings.usageBudgetLimitReached")
+            : t("settings.usageBudgetPercentUsed", { percent: displayedPercentage })}
         </Badge>
       </div>
       <div
         className="h-2.5 overflow-hidden rounded-full bg-muted"
         role="progressbar"
-        aria-label={`${label} used`}
+        aria-label={t("settings.usageBudgetUsedLabel", { budget: label })}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.min(displayedPercentage, 100)}
@@ -292,8 +335,8 @@ function SpendBudgetProgress({
       </div>
       <p className="text-xs text-muted-foreground">
         {reached
-          ? `New model calls are blocked for the rest of ${period}.`
-          : `${formatMicrosCost(remainingMicros, currency)} remaining ${period}.`}
+          ? t(text.blocked)
+          : t(text.remaining, { amount: formatMicrosCost(remainingMicros, currency, i18n) })}
       </p>
     </div>
   );
@@ -308,7 +351,9 @@ function DailyUsageCard({
   defaultMetric: DailyUsageMetric;
   showWebSearchCosts: boolean;
 }) {
+  const { t, locale } = useTranslation();
   const [metric, setMetric] = useState<DailyUsageMetric>(defaultMetric);
+  const dayCount = days.length || 30;
   const values = days.map((day) =>
     metric === "cost" ? (day.cost.billableCostMicros ?? 0) : day.totalTokens
   );
@@ -320,18 +365,18 @@ function DailyUsageCard({
       <CardHeader className="flex flex-row items-center justify-between p-4 pb-2">
         <CardTitle className="inline-flex items-center gap-2 text-base">
           <CalendarDays size={15} aria-hidden="true" className="text-muted-foreground" />
-          Last {days.length || 30} days
+          {t("settings.usageDailyTitle", { count: dayCount })}
         </CardTitle>
         <div
           className="flex items-center gap-0.5 rounded-md border p-0.5"
           role="group"
-          aria-label="Chart metric"
+          aria-label={t("settings.usageChartMetric")}
         >
           <MetricToggleButton active={metric === "cost"} onClick={() => setMetric("cost")}>
-            Billable
+            {t("settings.usageBillable")}
           </MetricToggleButton>
           <MetricToggleButton active={metric === "tokens"} onClick={() => setMetric("tokens")}>
-            Tokens
+            {t("settings.usageTokens")}
           </MetricToggleButton>
         </div>
       </CardHeader>
@@ -351,13 +396,13 @@ function DailyUsageCard({
               ))}
             </div>
             <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-              <span>{days[0] ? formatUtcDay(days[0].date) : ""}</span>
-              <span>Today</span>
+              <span>{days[0] ? formatUtcDay(days[0].date, locale) : ""}</span>
+              <span>{t("settings.usageToday")}</span>
             </div>
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No usage in the last {days.length || 30} days.
+            {t("settings.usageDailyEmpty", { count: dayCount })}
           </p>
         )}
       </CardContent>
@@ -394,6 +439,8 @@ function DailyUsageBar({
   showWebSearchCosts: boolean;
   tooltipAlign: TooltipAlign;
 }) {
+  const i18n = useTranslation();
+  const { t, locale } = i18n;
   const heightPercent = value > 0 ? Math.max((value / maxValue) * 100, 3) : 0;
   return (
     <div className="group relative flex h-full flex-1 items-end">
@@ -415,15 +462,22 @@ function DailyUsageBar({
         )}
       >
         <div className="grid gap-0.5 rounded-md border bg-popover px-2.5 py-1.5 text-xs whitespace-nowrap text-popover-foreground shadow-md">
-          <span className="font-medium">{formatUtcDay(day.date)}</span>
-          <span>{formatBillableCost(day.cost)} billable</span>
+          <span className="font-medium">{formatUtcDay(day.date, locale)}</span>
+          <span>
+            {t("settings.usageDayBillable", { amount: formatBillableCost(day.cost, i18n) })}
+          </span>
           <span className="text-muted-foreground">
-            {day.modelCallCount.toLocaleString()} calls · {day.totalTokens.toLocaleString()} tokens
+            {t("settings.usageCallsAndTokens", {
+              calls: day.modelCallCount.toLocaleString(locale),
+              tokens: day.totalTokens.toLocaleString(locale)
+            })}
           </span>
           {showWebSearchCosts && day.webSearchCallCount > 0 ? (
             <span className="text-muted-foreground">
-              {day.webSearchCallCount.toLocaleString()} searches ·{" "}
-              {formatWebSearchBillableCost(day.cost)}
+              {t("settings.usageDaySearches", {
+                count: day.webSearchCallCount.toLocaleString(locale),
+                amount: formatWebSearchBillableCost(day.cost, i18n)
+              })}
             </span>
           ) : null}
         </div>
@@ -463,68 +517,70 @@ function MonthlyHistoryCard({
   months: ModelUsageMonthlyBucket[];
   showWebSearchCosts: boolean;
 }) {
+  const i18n = useTranslation();
+  const { t, locale } = i18n;
   const rows = [...months].reverse();
   return (
     <Card data-testid="monthly-usage">
       <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">Monthly history</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Billable usage per calendar month, most recent first.
-        </p>
+        <CardTitle className="text-base">{t("settings.usageMonthlyTitle")}</CardTitle>
+        <p className="text-xs text-muted-foreground">{t("settings.usageMonthlyDescription")}</p>
       </CardHeader>
       <CardContent className="p-4 pt-1">
         {rows.length ? (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Month</TableHead>
-                <TableHead>Calls</TableHead>
-                <TableHead>Tokens</TableHead>
-                <TableHead>Cached input (reported)</TableHead>
-                {showWebSearchCosts ? <TableHead>Searches</TableHead> : null}
-                {showWebSearchCosts ? <TableHead>Search billable</TableHead> : null}
-                <TableHead className="text-right">Billable</TableHead>
+                <TableHead>{t("settings.usageMonth")}</TableHead>
+                <TableHead>{t("settings.usageCalls")}</TableHead>
+                <TableHead>{t("settings.usageTokens")}</TableHead>
+                <TableHead>{t("settings.usageCachedInput")}</TableHead>
+                {showWebSearchCosts ? <TableHead>{t("settings.usageSearches")}</TableHead> : null}
+                {showWebSearchCosts ? (
+                  <TableHead>{t("settings.usageSearchBillable")}</TableHead>
+                ) : null}
+                <TableHead className="text-right">{t("settings.usageBillable")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((month, index) => (
                 <TableRow key={month.month}>
                   <TableCell className="font-medium whitespace-nowrap">
-                    {formatUtcMonth(month.month)}
+                    {formatUtcMonth(month.month, locale)}
                     {index === 0 ? (
                       <Badge variant="secondary" className="ml-2">
-                        Current
+                        {t("settings.usageCurrentMonth")}
                       </Badge>
                     ) : null}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {month.modelCallCount.toLocaleString()}
+                    {month.modelCallCount.toLocaleString(locale)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {month.totalTokens.toLocaleString()}
+                    {month.totalTokens.toLocaleString(locale)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {month.cachedInputTokens.toLocaleString()}
+                    {month.cachedInputTokens.toLocaleString(locale)}
                   </TableCell>
                   {showWebSearchCosts ? (
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {month.webSearchCallCount.toLocaleString()}
+                      {month.webSearchCallCount.toLocaleString(locale)}
                     </TableCell>
                   ) : null}
                   {showWebSearchCosts ? (
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatWebSearchBillableCost(month.cost)}
+                      {formatWebSearchBillableCost(month.cost, i18n)}
                     </TableCell>
                   ) : null}
                   <TableCell className="text-right font-medium whitespace-nowrap">
-                    {formatBillableCost(month.cost)}
+                    {formatBillableCost(month.cost, i18n)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         ) : (
-          <p className="pt-1 text-sm text-muted-foreground">No usage recorded yet.</p>
+          <p className="pt-1 text-sm text-muted-foreground">{t("settings.usageMonthlyEmpty")}</p>
         )}
       </CardContent>
     </Card>
@@ -565,6 +621,7 @@ function UsageStat({
   label: string;
   value: ReactNode | undefined;
 }) {
+  const { t, locale } = useTranslation();
   return (
     <div className="rounded-md border bg-card p-3">
       <dt className="inline-flex items-center gap-2 text-xs text-muted-foreground">
@@ -573,29 +630,27 @@ function UsageStat({
       </dt>
       <dd className="mt-1 font-medium">
         {value === undefined
-          ? "Not configured"
+          ? t("settings.usageNotConfigured")
           : typeof value === "number"
-            ? value.toLocaleString()
+            ? value.toLocaleString(locale)
             : value}
       </dd>
     </div>
   );
 }
 
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString();
-}
+type LocaleCode = TranslationContextValue["locale"];
 
-function formatUtcDay(date: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatUtcDay(date: string, locale: LocaleCode): string {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     timeZone: "UTC"
   }).format(new Date(date));
 }
 
-function formatUtcMonth(month: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatUtcMonth(month: string, locale: LocaleCode): string {
+  return new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
     timeZone: "UTC"
@@ -616,31 +671,37 @@ function shouldShowWebSearchCosts(usage: UsageSummary | undefined): boolean {
 
 function formatBillableCost(
   cost:
-    Pick<UsageSummary["today"]["cost"], "currency" | "billableCostMicros" | "complete"> | undefined
+    Pick<UsageSummary["today"]["cost"], "currency" | "billableCostMicros" | "complete"> | undefined,
+  i18n: TranslationContextValue
 ): string {
   if (cost && !cost.complete) {
-    return "Incomplete";
+    return i18n.t("settings.usageIncomplete");
   }
-  return formatMicrosCost(cost?.billableCostMicros, cost?.currency);
+  return formatMicrosCost(cost?.billableCostMicros, cost?.currency, i18n);
 }
 
 function formatWebSearchBillableCost(
   cost:
     | Pick<UsageSummary["today"]["cost"], "currency" | "webSearchBillableCostMicros" | "complete">
-    | undefined
+    | undefined,
+  i18n: TranslationContextValue
 ): string {
   if (cost && !cost.complete) {
-    return "Incomplete";
+    return i18n.t("settings.usageIncomplete");
   }
-  return formatMicrosCost(cost?.webSearchBillableCostMicros, cost?.currency);
+  return formatMicrosCost(cost?.webSearchBillableCostMicros, cost?.currency, i18n);
 }
 
-function formatMicrosCost(micros: number | undefined, currency: string | undefined): string {
+function formatMicrosCost(
+  micros: number | undefined,
+  currency: string | undefined,
+  { t, locale }: TranslationContextValue
+): string {
   if (micros === undefined || currency === undefined) {
-    return "Not priced";
+    return t("settings.usageNotPriced");
   }
   const amount = micros / 1_000_000;
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     minimumFractionDigits: 2,

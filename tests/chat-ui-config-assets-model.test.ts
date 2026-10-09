@@ -351,7 +351,7 @@ describe("config assets form model", () => {
       }
     });
 
-    expect(configAssetMutationErrorMessage(error)).toBe(
+    expect(configAssetMutationErrorMessage(error, "Not saved")).toBe(
       "Agent 'research_assistant' references skills but does not allow 'read_skill'"
     );
   });
@@ -359,9 +359,16 @@ describe("config assets form model", () => {
   it("surfaces the server's refusal to hide the default agent", () => {
     expect(
       configAssetMutationErrorMessage(
-        new Error("Default agent 'assistant' must be available in all workspaces")
+        new Error("Default agent 'assistant' must be available in all workspaces"),
+        "Not saved"
       )
     ).toBe("Default agent 'assistant' must be available in all workspaces");
+  });
+
+  it("falls back to the caller's translated message when the server sent none", () => {
+    expect(configAssetMutationErrorMessage(undefined, "Nicht gespeichert")).toBe(
+      "Nicht gespeichert"
+    );
   });
 });
 

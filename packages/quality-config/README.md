@@ -58,7 +58,7 @@ Platform `main` is protected with this check required once the pipeline runs; Fe
 
 ## Baselines
 
-The collector compares the exact measured count with each baseline entry by target, rule and package. Large files are counted per file and literal interface text per folder, so the entry for `chat-ui/src/control-plane` cannot cover new text in another folder. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
+The collector compares the exact measured count with each baseline entry by target, rule and package. Large files are counted per file and literal interface text per folder, so an entry for one folder cannot cover new text in another. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
 
 A rise names the files that hold the findings for that rule and scope, the first ten, with the number in each. An invalid entry is printed in full.
 
@@ -68,7 +68,7 @@ Counts may only fall. On a pull request, `baseline-guard.mjs` compares `quality-
 
 `platform/tests/quality-baseline.test.ts` tests the comparison and the guard. `platform/tests/quality-collector.test.ts` runs the real collector over a small project that breaks every rule once, including each known way around a rule; weakening a rule or the collection fails it.
 
-Owners are recorded per entry. Test compiler errors belong to CB-2b. Other test findings go to CB-2, browser findings to CB-1b, environment, console and host objects to CB-8c, provider fetch to CB-6a and CB-10a, CLI non-null assertions to PA-1b and its fetch to PA-3. Literal interface text in `chat-ui/src/control-plane` belongs to NL-4a, which localizes the panels it moves and removes the entry. Other cleanup findings use CB-8b. See [the measured baseline](BASELINE.md).
+Owners are recorded per entry. Test compiler errors belong to CB-2b. Other test findings go to CB-2, browser findings to CB-1b, environment, console and host objects to CB-8c, provider fetch to CB-6a and CB-10a, CLI non-null assertions to PA-1b and its fetch to PA-3. Literal interface text has no entry: every finding is new and fails. Other cleanup findings use CB-8b. See [the measured baseline](BASELINE.md).
 
 ## Open points
 

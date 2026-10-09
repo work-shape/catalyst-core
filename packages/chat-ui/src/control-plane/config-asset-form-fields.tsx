@@ -1,5 +1,9 @@
 import { Plus } from "lucide-react";
-import type { AgentFormState, LocalizedPair } from "./config-assets-model";
+import {
+  LANGUAGE_CODE_LABELS,
+  type AgentFormState,
+  type LocalizedPair
+} from "./config-assets-model";
 import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
 import { cn } from "../ui/cn";
@@ -47,7 +51,7 @@ export function LocalizedField({
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="grid gap-1.5">
           <span className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-            EN · {t("configEnglishLanguage")}
+            {LANGUAGE_CODE_LABELS.en} · {t("configEnglishLanguage")}
           </span>
           <Input
             value={value.en}
@@ -58,7 +62,7 @@ export function LocalizedField({
         </label>
         <label className="grid gap-1.5">
           <span className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-            DE · {t("configGermanLanguage")}
+            {LANGUAGE_CODE_LABELS.de} · {t("configGermanLanguage")}
           </span>
           <Input
             value={value.de}

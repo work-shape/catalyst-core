@@ -396,14 +396,24 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
   };
 }
 
+/** Example names shown in the empty name fields. Names are identifiers and are not translated. */
+export const EXAMPLE_AGENT_NAME = "workflow_assistant";
+export const EXAMPLE_SKILL_NAME = "generic_workflow_review";
+
+/** The file that holds a skill's instructions. */
+export const SKILL_ROOT_FILE_NAME = "SKILL.md";
+
+/** The language codes that head the two fields of a localized text. */
+export const LANGUAGE_CODE_LABELS = { en: "EN", de: "DE" } satisfies Record<
+  keyof LocalizedPair,
+  string
+>;
+
 export function emptySkillForm(): SkillFormState {
   return { name: "", title: "", description: "", content: "", resources: [] };
 }
 
-export function configAssetMutationErrorMessage(
-  error: unknown,
-  fallback = "The change could not be saved."
-): string {
+export function configAssetMutationErrorMessage(error: unknown, fallback: string): string {
   const issueMessages = readValidationIssueMessages(error);
   if (issueMessages.length > 0) {
     return issueMessages.join(" ");

@@ -138,7 +138,7 @@ describe("user rights in the administration", () => {
     expect(markup).toContain("Änderungen an Fähigkeiten freigeben");
     expect(markup).toContain("über Rolle");
     expect(markup).toContain("einzeln entzogen");
-    expect(markup).toContain('aria-label="Audit-Log ansehen"');
+    expect(markup).toContain('aria-label="Auditprotokoll ansehen"');
     expect(markup).toContain("Dieses Recht können nur Superadmins vergeben.");
     expect(markup.match(/role="switch"/gu)).toHaveLength(USER_PERMISSIONS.length);
   });

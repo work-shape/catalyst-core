@@ -13,7 +13,6 @@ import {
   errorMessage,
   formToIdentityInput,
   formToUpdateInput,
-  formatDateTime,
   generatePassword,
   userToForm,
   type FormNoticeState,
@@ -22,6 +21,8 @@ import {
 } from "./user-administration-model";
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
 import { UserPermissionsCard } from "./user-permissions-card";
+import { formatDateTime } from "./locale-format";
+import { useTranslation } from "../i18n";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -58,10 +59,9 @@ export function UserDetail({
   onResetPassword(userId: string, password: string): Promise<unknown>;
   onSendInvitation?(userId: string): Promise<unknown>;
 }) {
+  const { t } = useTranslation();
   const canManageUser = canManageSuperadminAccess || !user.roles.includes("superadmin");
-  const managementDisabledReason = canManageUser
-    ? undefined
-    : "Only superadmins can manage superadmin users.";
+  const managementDisabledReason = canManageUser ? undefined : t("settings.userSuperadminOnly");
 
   return (
     <div className="grid content-start gap-4">
@@ -74,7 +74,7 @@ export function UserDetail({
           onClick={onBack}
         >
           <ArrowLeft size={15} aria-hidden="true" />
-          All users
+          {t("settings.userAllUsers")}
         </Button>
       </div>
 
@@ -146,6 +146,7 @@ function ProfileCard({
   mutating: boolean;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
 }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState<UserFormState>(() => userToForm(user));
   const [notice, setNotice] = useState<FormNoticeState>();
 
@@ -159,16 +160,16 @@ function ProfileCard({
     setNotice(undefined);
     try {
       await onUpdateUser(user.id, formToUpdateInput(form));
-      setNotice({ kind: "success", text: "Changes saved." });
+      setNotice({ kind: "success", text: t("settings.userChangesSaved") });
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">Profile</CardTitle>
+        <CardTitle className="text-base">{t("profile")}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-2">
         <form className="grid gap-3" onSubmit={submit}>
@@ -187,7 +188,7 @@ function ProfileCard({
               disabled={mutating || Boolean(disabledReason) || !form.displayLabel.trim()}
             >
               <Save size={16} aria-hidden="true" />
-              Save changes
+              {t("settings.userSaveChanges")}
             </Button>
             <FormNotice notice={notice} />
           </div>
@@ -213,6 +214,7 @@ function IdentitiesCard({
   ): Promise<AdministeredUser>;
   onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
 }) {
+  const { t } = useTranslation();
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<IdentityFormState>(emptyIdentityForm);
   const [confirmingKey, setConfirmingKey] = useState<string | undefined>();
@@ -232,9 +234,9 @@ function IdentitiesCard({
       await onUpsertIdentity(user.id, formToIdentityInput(form));
       setForm(emptyIdentityForm);
       setFormOpen(false);
-      setNotice({ kind: "success", text: "Identity linked." });
+      setNotice({ kind: "success", text: t("settings.userIdentityLinked") });
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 
@@ -243,10 +245,10 @@ function IdentitiesCard({
     try {
       await onDeleteIdentity(user.id, identity);
       setConfirmingKey(undefined);
-      setNotice({ kind: "success", text: "Identity removed." });
+      setNotice({ kind: "success", text: t("settings.userIdentityRemoved") });
     } catch (error) {
       setConfirmingKey(undefined);
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 
@@ -256,7 +258,7 @@ function IdentitiesCard({
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Link2 size={17} aria-hidden="true" />
-            Sign-in identities
+            {t("settings.userIdentities")}
           </CardTitle>
           <Button
             type="button"
@@ -266,14 +268,12 @@ function IdentitiesCard({
             onClick={() => setFormOpen((open) => !open)}
           >
             <Plus size={15} aria-hidden="true" />
-            Link identity
+            {t("settings.userIdentityLink")}
           </Button>
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 p-4 pt-2">
-        <p className="text-sm text-muted-foreground">
-          External auth systems can be linked here when password sign-in is not the right path.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("settings.userIdentitiesDescription")}</p>
         <div className="grid gap-2">
           {user.identities.map((identity) => {
             const key = `${identity.authSource}:${identity.externalUserId}`;
@@ -285,7 +285,9 @@ function IdentitiesCard({
                 <div className="grid min-w-0 flex-1 gap-1">
                   <span className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{identity.authSource}</Badge>
-                    {identity.emailVerified ? <Badge variant="success">Verified</Badge> : null}
+                    {identity.emailVerified ? (
+                      <Badge variant="success">{t("settings.userIdentityVerified")}</Badge>
+                    ) : null}
                   </span>
                   <span className="truncate font-mono text-xs text-muted-foreground">
                     {identity.externalUserId}
@@ -305,7 +307,7 @@ function IdentitiesCard({
                       disabled={mutating || Boolean(disabledReason)}
                       onClick={() => void deleteIdentity(identity)}
                     >
-                      Remove
+                      {t("settings.remove")}
                     </Button>
                     <Button
                       type="button"
@@ -313,7 +315,7 @@ function IdentitiesCard({
                       variant="ghost"
                       onClick={() => setConfirmingKey(undefined)}
                     >
-                      Cancel
+                      {t("cancel")}
                     </Button>
                   </span>
                 ) : (
@@ -322,7 +324,7 @@ function IdentitiesCard({
                     size="icon"
                     variant="ghost"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete ${identity.authSource} identity`}
+                    aria-label={t("settings.userIdentityDelete", { source: identity.authSource })}
                     disabled={mutating || Boolean(disabledReason)}
                     onClick={() => setConfirmingKey(key)}
                   >
@@ -333,9 +335,7 @@ function IdentitiesCard({
             );
           })}
           {user.identities.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No identities yet — this user cannot sign in.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("settings.userIdentitiesEmpty")}</p>
           ) : null}
         </div>
 
@@ -344,26 +344,26 @@ function IdentitiesCard({
         {formOpen ? (
           <form className="grid gap-3 rounded-md border bg-muted/30 p-3" onSubmit={submit}>
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Auth source">
+              <Field label={t("settings.userIdentityAuthSource")}>
                 <Input
                   value={form.authSource}
-                  placeholder="session-token"
+                  placeholder={emptyIdentityForm.authSource}
                   onChange={(event) => setForm({ ...form, authSource: event.target.value })}
                 />
               </Field>
-              <Field label="External user id">
+              <Field label={t("settings.userIdentityExternalId")}>
                 <Input
                   value={form.externalUserId}
                   onChange={(event) => setForm({ ...form, externalUserId: event.target.value })}
                 />
               </Field>
-              <Field label="Display label">
+              <Field label={t("settings.displayLabel")}>
                 <Input
                   value={form.displayLabel}
                   onChange={(event) => setForm({ ...form, displayLabel: event.target.value })}
                 />
               </Field>
-              <Field label="Email">
+              <Field label={t("email")}>
                 <Input
                   type="email"
                   value={form.email}
@@ -377,7 +377,7 @@ function IdentitiesCard({
                 checked={form.emailVerified}
                 onChange={(event) => setForm({ ...form, emailVerified: event.target.checked })}
               />
-              <span>Email verified</span>
+              <span>{t("settings.userIdentityEmailVerified")}</span>
             </label>
             <div className="flex gap-2">
               <Button
@@ -386,10 +386,10 @@ function IdentitiesCard({
                 disabled={mutating || !form.authSource.trim() || !form.externalUserId.trim()}
               >
                 <Link2 size={15} aria-hidden="true" />
-                Save identity
+                {t("settings.userIdentitySave")}
               </Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => setFormOpen(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
             </div>
           </form>
@@ -414,6 +414,7 @@ function PasswordCard({
   onResetPassword(userId: string, password: string): Promise<unknown>;
   onSendInvitation?(userId: string): Promise<unknown>;
 }) {
+  const { t } = useTranslation();
   const [password, setPassword] = useState("");
   const [notice, setNotice] = useState<FormNoticeState>();
   const hasPasswordIdentity = user.identities.some(
@@ -432,12 +433,14 @@ function PasswordCard({
       await onResetPassword(user.id, password);
       setNotice({
         kind: "success",
-        text: hasPasswordIdentity
-          ? "Password updated. The user was signed out everywhere."
-          : "Password sign-in created."
+        text: t(
+          hasPasswordIdentity
+            ? "settings.userPasswordUpdated"
+            : "settings.userPasswordSignInCreated"
+        )
       });
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 
@@ -448,9 +451,9 @@ function PasswordCard({
     setNotice(undefined);
     try {
       await onSendInvitation(user.id);
-      setNotice({ kind: "success", text: "A link to set a password was emailed to the user." });
+      setNotice({ kind: "success", text: t("settings.userPasswordLinkSent") });
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 
@@ -459,26 +462,20 @@ function PasswordCard({
       <CardHeader className="p-4 pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <KeyRound size={17} aria-hidden="true" />
-          Password
+          {t("password")}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-2">
         <form className="grid gap-3" onSubmit={submit}>
           {!hasPasswordIdentity ? (
-            <p className="text-sm text-muted-foreground">
-              This user has no password sign-in yet. Creating one uses their profile email.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("settings.userPasswordMissing")}</p>
           ) : null}
           {disabledReason ? (
             <p className="text-sm text-muted-foreground">{disabledReason}</p>
           ) : null}
           <Field
-            label={hasPasswordIdentity ? "New password" : "Initial password"}
-            hint={
-              user.email
-                ? "At least 8 characters. Share it with the user over a secure channel."
-                : "Add an email in Profile before creating a password sign-in."
-            }
+            label={t(hasPasswordIdentity ? "newPassword" : "settings.passwordInitial")}
+            hint={t(user.email ? "settings.userPasswordHint" : "settings.userPasswordNeedsEmail")}
           >
             <div className="flex gap-2">
               <MaskedPasswordInput
@@ -494,7 +491,7 @@ function PasswordCard({
                 disabled={Boolean(disabledReason)}
                 onClick={() => setPassword(generatePassword())}
               >
-                Generate
+                {t("settings.generate")}
               </Button>
             </div>
           </Field>
@@ -508,7 +505,11 @@ function PasswordCard({
             }
           >
             <KeyRound size={16} aria-hidden="true" />
-            {hasPasswordIdentity ? "Reset password" : "Create password sign-in"}
+            {t(
+              hasPasswordIdentity
+                ? "settings.userPasswordReset"
+                : "settings.userPasswordSignInCreate"
+            )}
           </Button>
           {onSendInvitation ? (
             <Button
@@ -520,7 +521,7 @@ function PasswordCard({
               onClick={() => void sendInvitation()}
             >
               <Mail size={16} aria-hidden="true" />
-              Email a set-password link
+              {t("settings.userPasswordEmailLink")}
             </Button>
           ) : null}
           <FormNotice notice={notice} />
@@ -543,10 +544,13 @@ function DeleteUserCard({
   onDeleteUser(userId: string): Promise<AdministeredUser>;
   onDeleted(): void;
 }) {
+  const { t } = useTranslation();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [notice, setNotice] = useState<FormNoticeState>();
   const confirmationTarget = user.email ?? user.id;
+  // The sentence is one message; the value to type sits inside it as its own element.
+  const [beforeTarget, afterTarget] = t("settings.userDeleteTypeToConfirm").split("{target}");
 
   useEffect(() => {
     setDeleteOpen(false);
@@ -564,19 +568,17 @@ function DeleteUserCard({
       await onDeleteUser(user.id);
       onDeleted();
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">Delete account</CardTitle>
+        <CardTitle className="text-base">{t("deleteAccount")}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 p-4 pt-2">
-        <p className="text-sm text-muted-foreground">
-          Removes the user profile, sign-in identities, and standalone password access.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("settings.userDeleteDescription")}</p>
         <Button
           type="button"
           variant="outline"
@@ -589,11 +591,11 @@ function DeleteUserCard({
           }}
         >
           <Trash2 size={16} aria-hidden="true" />
-          Delete user
+          {t("settings.userDelete")}
         </Button>
         <Dialog
           open={deleteOpen}
-          title={`Delete ${user.displayLabel}?`}
+          title={t("settings.userDeleteDialogTitle", { name: user.displayLabel })}
           onClose={() => {
             if (!mutating) {
               setDeleteOpen(false);
@@ -610,16 +612,14 @@ function DeleteUserCard({
             }}
           >
             <div className="grid gap-2 text-sm text-muted-foreground">
+              <p>{t("settings.userDeleteDialogDescription")}</p>
               <p>
-                This permanently removes the user profile, sign-in identities, and standalone
-                password access. This cannot be undone.
-              </p>
-              <p>
-                Type <strong className="font-mono text-foreground">{confirmationTarget}</strong> to
-                confirm you are deleting the intended user.
+                {beforeTarget}
+                <strong className="font-mono text-foreground">{confirmationTarget}</strong>
+                {afterTarget}
               </p>
             </div>
-            <Field label="Confirmation">
+            <Field label={t("settings.userDeleteConfirmation")}>
               <Input
                 autoComplete="off"
                 spellCheck={false}
@@ -635,7 +635,7 @@ function DeleteUserCard({
                 disabled={mutating}
                 onClick={() => setDeleteOpen(false)}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 type="submit"
@@ -643,7 +643,7 @@ function DeleteUserCard({
                 disabled={mutating || confirmation !== confirmationTarget}
               >
                 <Trash2 size={16} aria-hidden="true" />
-                {mutating ? "Deleting…" : "Permanently delete user"}
+                {t(mutating ? "settings.userDeleting" : "settings.userDeletePermanently")}
               </Button>
             </div>
           </form>
@@ -654,19 +654,27 @@ function DeleteUserCard({
 }
 
 function AccountMetaCard({ user }: { user: AdministeredUser }) {
+  const { t, locale } = useTranslation();
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-base">Account</CardTitle>
+        <CardTitle className="text-base">{t("account")}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2 p-4 pt-2 text-sm">
         <MetaRow
-          label="User id"
+          label={t("settings.userId")}
           value={<span className="font-mono text-xs break-all">{user.id}</span>}
         />
-        <MetaRow label="Created" value={formatDateTime(user.createdAt) ?? "—"} />
-        <MetaRow label="Updated" value={formatDateTime(user.updatedAt) ?? "—"} />
-        <MetaRow label="Last active" value={formatDateTime(user.lastAuthenticatedAt) ?? "Never"} />
+        <MetaRow label={t("settings.created")} value={formatDateTime(user.createdAt, locale)} />
+        <MetaRow label={t("settings.updated")} value={formatDateTime(user.updatedAt, locale)} />
+        <MetaRow
+          label={t("settings.userLastActive")}
+          value={
+            user.lastAuthenticatedAt
+              ? formatDateTime(user.lastAuthenticatedAt, locale)
+              : t("settings.never")
+          }
+        />
       </CardContent>
     </Card>
   );

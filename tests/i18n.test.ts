@@ -28,6 +28,28 @@ describe("interface translations", () => {
     expect(de.localeName("en")).toBe("English");
   });
 
+  it("reads the settings pages in both languages", () => {
+    expect(en.t("settings.auditEmpty")).toBe("No activity visible yet.");
+    expect(de.t("settings.auditEmpty")).toBe("Noch keine Aktivitäten sichtbar.");
+    expect([
+      de.t("settings.time"),
+      de.t("settings.auditEvent"),
+      de.t("settings.status"),
+      de.t("settings.auditActor"),
+      de.t("settings.auditSubject"),
+      de.t("settings.auditReason")
+    ]).toEqual(["Zeit", "Ereignis", "Status", "Akteur", "Betrifft", "Grund"]);
+    expect(en.t("settings.paginationRange", { from: 1, to: 10, total: 23 })).toBe("1-10 of 23");
+    expect(de.t("settings.paginationRange", { from: 1, to: 10, total: 23 })).toBe("1–10 von 23");
+    expect(en.t("settings.usageBudgetUsedLabel", { budget: "Daily budget" })).toBe(
+      "Daily budget used"
+    );
+    expect(de.t("settings.usageBudgetRemainingToday", { amount: "40,00 €" })).toBe(
+      "Heute noch 40,00 € übrig."
+    );
+    expect(de.t("settings.copyValue", { label: "Server-URL" })).toBe("Server-URL kopieren");
+  });
+
   it("puts values into their placeholders", () => {
     expect(en.t("attachmentsShowMore", { count: 3 })).toBe("+ 3 more");
     expect(de.t("attachmentsSummary", { count: 2, size: "4 MB" })).toBe("2 Dateien · 4 MB");

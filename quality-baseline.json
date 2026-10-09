@@ -346,13 +346,6 @@
     },
     {
       "target": "lint",
-      "rule": "catalyst/literal-text",
-      "scope": "packages/chat-ui/src/control-plane",
-      "count": 144,
-      "owner": "NL-4a"
-    },
-    {
-      "target": "lint",
       "rule": "catalyst/memory-store",
       "scope": "packages/client-assembly",
       "count": 2,

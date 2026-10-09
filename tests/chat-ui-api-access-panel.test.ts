@@ -220,4 +220,16 @@ describe("API access panel", () => {
     expect(markup.match(/lucide-check/g)).toHaveLength(1);
     expect(markup).not.toContain('role="alert"');
   });
+
+  it("names each copy button in the reader's language and warns in the warning colour", () => {
+    const english = renderSecretFields({});
+    expect(english).toContain('aria-label="Copy Server URL"');
+    expect(english).toContain('aria-label="Copy API key"');
+    expect(english).toContain("border-warning/40 bg-warning/10");
+    expect(english).not.toContain("amber");
+
+    const german = renderSecretFields({}, "de");
+    expect(german).toContain('aria-label="Server-URL kopieren"');
+    expect(german).toContain('aria-label="API-Schlüssel kopieren"');
+  });
 });

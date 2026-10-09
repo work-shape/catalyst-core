@@ -7,6 +7,7 @@ import {
   type UserFormState
 } from "./user-administration-model";
 import { Field } from "./user-administration-primitives";
+import { useTranslation } from "../i18n";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select } from "../ui/select";
@@ -22,17 +23,18 @@ export function UserFields({
   disabled?: boolean;
   onChange(nextForm: UserFormState): void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Display label">
+        <Field label={t("settings.displayLabel")}>
           <Input
             value={form.displayLabel}
             disabled={disabled}
             onChange={(event) => onChange({ ...form, displayLabel: event.target.value })}
           />
         </Field>
-        <Field label="Email">
+        <Field label={t("email")}>
           <Input
             type="email"
             value={form.email}
@@ -42,7 +44,7 @@ export function UserFields({
         </Field>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        <Field label="Status">
+        <Field label={t("settings.status")}>
           <Select
             value={form.status}
             disabled={disabled}
@@ -50,8 +52,8 @@ export function UserFields({
               onChange({ ...form, status: event.target.value as UserFormState["status"] })
             }
           >
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
+            <option value="active">{t("settings.statusActive")}</option>
+            <option value="disabled">{t("settings.statusDisabled")}</option>
           </Select>
         </Field>
         <AccessLevelField
@@ -60,7 +62,7 @@ export function UserFields({
           disabled={disabled}
           onChange={(accessLevel) => onChange({ ...form, accessLevel })}
         />
-        <Field label="Permission refs" hint="Comma-separated tool permissions">
+        <Field label={t("settings.userPermissionRefs")} hint={t("settings.userPermissionRefsHint")}>
           <Input
             value={form.permissionRefs}
             disabled={disabled}
@@ -83,22 +85,23 @@ export function CreateUserFields({
   invitationsEnabled: boolean;
   onChange(nextForm: CreateUserFormState): void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Display label">
+        <Field label={t("settings.displayLabel")}>
           <Input
             value={form.displayLabel}
             onChange={(event) => onChange({ ...form, displayLabel: event.target.value })}
           />
         </Field>
         <Field
-          label="Email"
+          label={t("email")}
           hint={
             form.sendInvitation
-              ? "The invitation is sent to this address."
+              ? t("settings.userEmailInvitationHint")
               : form.createPasswordSignIn
-                ? "Required for password sign-in."
+                ? t("settings.userEmailPasswordHint")
                 : undefined
           }
         >
@@ -115,15 +118,15 @@ export function CreateUserFields({
           canManageSuperadminAccess={canManageSuperadminAccess}
           onChange={(accessLevel) => onChange({ ...form, accessLevel })}
         />
-        <Field label="Status">
+        <Field label={t("settings.status")}>
           <Select
             value={form.status}
             onChange={(event) =>
               onChange({ ...form, status: event.target.value as CreateUserFormState["status"] })
             }
           >
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
+            <option value="active">{t("settings.statusActive")}</option>
+            <option value="disabled">{t("settings.statusDisabled")}</option>
           </Select>
         </Field>
       </div>
@@ -134,7 +137,7 @@ export function CreateUserFields({
             checked={form.sendInvitation}
             onChange={(event) => onChange({ ...form, sendInvitation: event.target.checked })}
           />
-          <span>Email an invitation to set a password</span>
+          <span>{t("settings.userInvite")}</span>
         </label>
       ) : null}
       {form.sendInvitation ? null : (
@@ -144,14 +147,11 @@ export function CreateUserFields({
             checked={form.createPasswordSignIn}
             onChange={(event) => onChange({ ...form, createPasswordSignIn: event.target.checked })}
           />
-          <span>Create password sign-in</span>
+          <span>{t("settings.userPasswordSignInCreate")}</span>
         </label>
       )}
       {form.createPasswordSignIn && !form.sendInvitation ? (
-        <Field
-          label="Initial password"
-          hint="At least 8 characters. Share it with the user securely."
-        >
+        <Field label={t("settings.passwordInitial")} hint={t("settings.userInitialPasswordHint")}>
           <div className="flex gap-2">
             <MaskedPasswordInput
               value={form.password}
@@ -164,15 +164,20 @@ export function CreateUserFields({
               className="shrink-0"
               onClick={() => onChange({ ...form, password: generatePassword() })}
             >
-              Generate
+              {t("settings.generate")}
             </Button>
           </div>
         </Field>
       ) : null}
       <details className="rounded-md border bg-muted/20 p-3">
-        <summary className="cursor-pointer text-sm font-medium">Advanced permissions</summary>
+        <summary className="cursor-pointer text-sm font-medium">
+          {t("settings.userAdvancedPermissions")}
+        </summary>
         <div className="mt-3">
-          <Field label="Permission refs" hint="Comma-separated tool permissions">
+          <Field
+            label={t("settings.userPermissionRefs")}
+            hint={t("settings.userPermissionRefsHint")}
+          >
             <Input
               value={form.permissionRefs}
               onChange={(event) => onChange({ ...form, permissionRefs: event.target.value })}
@@ -199,6 +204,7 @@ export function MaskedPasswordInput({
   disabled?: boolean;
   onFocus?(event: FocusEvent<HTMLInputElement>): void;
 }) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
 
   return (
@@ -219,7 +225,7 @@ export function MaskedPasswordInput({
         size="icon"
         variant="ghost"
         className="absolute right-1 top-1/2 size-8 -translate-y-1/2 text-muted-foreground"
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={t(visible ? "settings.passwordHide" : "settings.passwordShow")}
         disabled={disabled}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => setVisible((currentVisible) => !currentVisible)}
@@ -241,12 +247,13 @@ function AccessLevelField({
   disabled?: boolean;
   onChange(value: CreateUserFormState["accessLevel"]): void;
 }) {
+  const { t } = useTranslation();
   const selected = ACCESS_LEVEL_OPTIONS.find((option) => option.value === value);
   const options = ACCESS_LEVEL_OPTIONS.filter(
     (option) => canManageSuperadminAccess || option.value !== "superadmin" || value === "superadmin"
   );
   return (
-    <Field label="Access level" hint={selected?.description}>
+    <Field label={t("settings.accessLevel")} hint={selected ? t(selected.description) : undefined}>
       <Select
         value={value}
         disabled={disabled}
@@ -254,7 +261,7 @@ function AccessLevelField({
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
-            {option.label}
+            {t(option.label)}
           </option>
         ))}
       </Select>

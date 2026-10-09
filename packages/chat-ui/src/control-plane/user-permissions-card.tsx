@@ -53,7 +53,7 @@ export function UserPermissionsCard({
       await onUpdateUser(user.id, { permissions: setUserPermission(user, permission, held) });
     } catch (error) {
       setSavedChange(undefined);
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
     }
   }
 

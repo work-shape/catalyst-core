@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { AdministeredUser } from "@vivd-catalyst/api-client";
 import { avatarGradient } from "../ui/avatar-gradient";
 import type { FormNoticeState } from "./user-administration-model";
+import { useTranslation } from "../i18n";
 import { Badge } from "../ui/badge";
 import { cn } from "../ui/cn";
 
@@ -68,9 +69,10 @@ export function UserAvatar({
 }
 
 export function StatusBadge({ status }: { status: AdministeredUser["status"] }) {
+  const { t } = useTranslation();
   return (
-    <Badge variant={status === "active" ? "success" : "outline"} className="capitalize">
-      {status}
+    <Badge variant={status === "active" ? "success" : "outline"}>
+      {t(status === "active" ? "settings.statusActive" : "settings.statusDisabled")}
     </Badge>
   );
 }
