@@ -2,7 +2,7 @@
 
 Each repository owns its `quality-package-graph.json`, `knip.json`, TypeScript check projects and `quality-baseline.json`. The ESLint configuration, the collector and the baseline comparison live in this package. Capabilities consumes it through its existing sibling platform workspace, not through a copy or a published package.
 
-`pnpm check` builds first, then runs format, lint, compiler checks, tests and the named CB-1b browser placeholder. Capabilities first builds the platform packages its own packages depend on, not every platform package. The build comes first because some tests and package exports load compiled files. The browser placeholder runs no browser tests; the follow-up after CB-1a and CB-1b replaces it and adds the workflow job.
+`pnpm check` builds first, then runs format, lint, compiler checks and tests. Capabilities first builds the platform packages its own packages depend on, not every platform package. The build comes first because some tests and package exports load compiled files. The browser suite is not part of `pnpm check`: it needs a browser and ports of its own, so the platform Check workflow runs `pnpm test:e2e` as a second job beside it.
 
 ## Clean checkouts
 

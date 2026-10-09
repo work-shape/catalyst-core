@@ -58,4 +58,57 @@ jobs:
       - name: Packages are fit to publish
         timeout-minutes: 5
         run: pnpm release:check --skip-build
-  # CB-1b adds the browser job and its browser installation here.
+  # The whole browser suite, beside the job above. It is not part of `pnpm check`, because it
+  # needs a browser and ports of its own; locally it is `pnpm test:e2e`.
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # The suite's own database, with the names its runner expects on its default port. The
+      # runner would otherwise start `postgres:17` from Docker Hub, which rate-limits the runners.
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:17.6
+        env:
+          POSTGRES_USER: agent_chat
+          POSTGRES_PASSWORD: agent_chat
+          POSTGRES_DB: agent_chat
+        ports: [55433:5432]
+        options: >-
+          --health-cmd "pg_isready -U agent_chat -d agent_chat"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Installed Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # With the cache restored this downloads nothing and only installs the system libraries.
+      - name: Chromium and its system libraries
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+      # The runner builds what it serves, migrates the database and starts the API and the
+      # interface itself. A test that fails is tried once more; one that fails twice fails the job.
+      - name: Browser suite
+        shell: bash
+        env:
+          E2E_EXTERNAL_POSTGRES: "1"
+        run: pnpm test:e2e --retries=1 --reporter=list 2>&1 | tee browser-run.log
+      - name: Keep traces and the server log of a failed run
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-run
+          path: |
+            test-results/
+            browser-run.log
+          retention-days: 7

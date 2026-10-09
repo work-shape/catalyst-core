@@ -43,6 +43,9 @@ const e2eUiPort = process.env.E2E_UI_PORT ?? "5273";
 const e2ePostgresPort = process.env.E2E_POSTGRES_PORT ?? "55433";
 const e2eDatabaseUrl = `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
 const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
+// The caller already runs an empty Postgres on E2E_HOST:E2E_POSTGRES_PORT with user, password
+// and database `agent_chat`, as the hosted check does; the runner starts and removes no container.
+const e2eExternalPostgres = process.env.E2E_EXTERNAL_POSTGRES === "1";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
 const generatedConfigPath = resolve(repoRoot, ".tmp/e2e/e2e-app.yaml");
@@ -148,6 +151,8 @@ Environment:
   E2E_UI_PORT           UI port, default 5273
   E2E_POSTGRES_PORT     Postgres host port, default 55433
   E2E_COMPOSE_PROJECT   Docker Compose project name, default agent-chat-e2e
+  E2E_EXTERNAL_POSTGRES=1  Use the empty Postgres already listening on E2E_POSTGRES_PORT
+                        (user, password and database agent_chat); start no container
   E2E_SKIP_BUILD=1      Skip package/server builds
   E2E_KEEP_STACK=1      Leave services running for debugging
 
@@ -190,6 +195,10 @@ async function buildRequiredPackages() {
 }
 
 async function startPostgres() {
+  if (e2eExternalPostgres) {
+    console.log(`\n[e2e] using the Postgres provided on ${e2eHost}:${e2ePostgresPort}`);
+    return;
+  }
   const composeEnv = {
     ...process.env,
     COMPOSE_PROJECT_NAME: e2eComposeProject,
@@ -461,6 +470,9 @@ async function cleanup() {
 
   await Promise.all([...children].map((child) => stopChild(child)));
 
+  if (e2eExternalPostgres) {
+    return;
+  }
   if (options.keep) {
     console.log("\n[e2e] keeping docker stack because --keep-stack/E2E_KEEP_STACK is set");
     return;

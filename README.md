@@ -71,6 +71,9 @@ development servers are already using them:
 E2E_API_PORT=4211 E2E_UI_PORT=5274 E2E_POSTGRES_PORT=55434 pnpm test:e2e:chat-state
 ```
 
+The hosted check runs the same `pnpm test:e2e` as its own job. It provides the database itself
+and sets `E2E_EXTERNAL_POSTGRES=1`, so the runner starts no container there.
+
 Use `E2E_SKIP_BUILD=1` for a faster rerun when the package dist output is already fresh, or pass
 Playwright flags after `--`:
 

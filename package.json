@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm -r --filter './packages/*' build && pnpm -r --filter './clients/*' build",
     "build:demo": "pnpm -r --filter './packages/*' build && pnpm --filter @vivd-catalyst/demo build",
-    "check": "pnpm build && pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:openapi && pnpm check:contract && pnpm check:migrations && pnpm test && pnpm test:upgrade && pnpm check:browser:cb-1b",
+    "check": "pnpm build && pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:openapi && pnpm check:contract && pnpm check:migrations && pnpm test && pnpm test:upgrade",
     "check:local": "node scripts/check-local.mjs",
     "check:contract": "pnpm --filter @vivd-catalyst/api-contract check:contract",
     "check:openapi": "pnpm --filter @vivd-catalyst/api-contract check:openapi",
@@ -33,7 +33,6 @@
     "test:e2e:chat-state:headed": "node scripts/run-chat-e2e.mjs --state -- --headed",
     "test:e2e:live-agent-artifacts": "node scripts/run-live-agent-artifact-e2e.mjs",
     "typecheck": "pnpm typecheck:packages && pnpm typecheck:tests && pnpm typecheck:docs",
-    "check:browser:cb-1b": "node -e \"console.log('CB-1b adds the browser check here')\"",
     "lint": "catalyst-quality lint",
     "typecheck:packages": "catalyst-quality types:packages",
     "typecheck:tests": "catalyst-quality types:tests",
