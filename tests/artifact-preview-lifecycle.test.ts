@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARTIFACT_PREVIEW_MAX_PAGES,
   asClientInstanceId,
   asConversationId,
   asManagedArtifactId,
@@ -60,7 +61,28 @@ describe("artifact preview lifecycle", () => {
       ]
     });
   });
+
+  it("reads an embedded snapshot up to the worker's page ceiling and no further", () => {
+    expect(ARTIFACT_PREVIEW_MAX_PAGES).toBe(500);
+    const read = (count: number) => {
+      const state = resolveArtifactPreviewLifecycle({
+        metadata: { preview: { type: "image_pages", format: "png", pages: embeddedPages(count) } }
+      });
+      return state.status === "ready" ? state.pages.length : 0;
+    };
+
+    expect(read(ARTIFACT_PREVIEW_MAX_PAGES)).toBe(ARTIFACT_PREVIEW_MAX_PAGES);
+    expect(read(ARTIFACT_PREVIEW_MAX_PAGES + 1)).toBe(ARTIFACT_PREVIEW_MAX_PAGES);
+  });
 });
+
+function embeddedPages(count: number): JsonObject[] {
+  return Array.from({ length: count }, (_, index) => ({
+    artifactId: `art_embedded_page_${index + 1}`,
+    mimeType: "image/png",
+    pageNumber: index + 1
+  }));
+}
 
 function job(status: ArtifactPreviewJobRecord["status"]): ArtifactPreviewJobRecord {
   return {

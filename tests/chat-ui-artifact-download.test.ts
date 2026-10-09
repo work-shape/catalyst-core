@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createApiClient, type Message } from "@vivd-catalyst/api-client";
 import {
+  ARTIFACT_PREVIEW_MAX_PAGES,
   asManagedArtifactId,
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
@@ -205,6 +206,34 @@ describe("chat UI artifact download cards", () => {
     expect(JSON.stringify(refs)).not.toContain("execution-workspaces/private");
     expect(JSON.stringify(refs)).not.toContain("workspacePath");
     expect(JSON.stringify(refs)).not.toContain("wcmd_secret");
+  });
+
+  it("reads an embedded preview up to the worker's page ceiling and no further", () => {
+    const read = (count: number) =>
+      readToolArtifactRefs({
+        status: "success",
+        artifacts: [
+          {
+            artifactId: "art_long_document",
+            filename: "long.pdf",
+            mimeType: "application/pdf",
+            metadata: {
+              preview: {
+                type: "image_pages",
+                format: "png",
+                pages: Array.from({ length: count }, (_, index) => ({
+                  artifactId: `art_page_${index + 1}`,
+                  mimeType: "image/png",
+                  pageNumber: index + 1
+                }))
+              }
+            }
+          }
+        ]
+      }).map((ref) => readArtifactImagePagesPreview(ref)?.pages.length);
+
+    expect(read(ARTIFACT_PREVIEW_MAX_PAGES)).toEqual([ARTIFACT_PREVIEW_MAX_PAGES]);
+    expect(read(ARTIFACT_PREVIEW_MAX_PAGES + 1)).toEqual([ARTIFACT_PREVIEW_MAX_PAGES]);
   });
 
   it("keeps only safe embedded preview snapshot fields for optimistic artifact previews", () => {

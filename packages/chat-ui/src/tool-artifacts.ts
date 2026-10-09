@@ -1,5 +1,5 @@
 import type { ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
-import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
+import { ARTIFACT_PREVIEW_MAX_PAGES, resolveFilePreviewCapability } from "@vivd-catalyst/core";
 
 export const WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE = "data-workspace-promoted-artifacts";
 
@@ -276,10 +276,12 @@ function sanitizeImagePagesPreview(value: unknown): ToolArtifactImagePagesPrevie
     return undefined;
   }
   const pages = Array.isArray(record.pages)
-    ? record.pages.slice(0, 200).flatMap((page): ToolArtifactPreviewImagePageRef[] => {
-        const sanitized = sanitizePreviewImagePage(page);
-        return sanitized ? [sanitized] : [];
-      })
+    ? record.pages
+        .slice(0, ARTIFACT_PREVIEW_MAX_PAGES)
+        .flatMap((page): ToolArtifactPreviewImagePageRef[] => {
+          const sanitized = sanitizePreviewImagePage(page);
+          return sanitized ? [sanitized] : [];
+        })
     : [];
   return pages.length > 0 ? { type: "image_pages", format, pages } : undefined;
 }

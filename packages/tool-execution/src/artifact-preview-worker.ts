@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { basename, extname } from "node:path";
 import {
   AppError,
+  ARTIFACT_PREVIEW_MAX_PAGES,
   detectArtifactPreviewSourceKind,
   type ArtifactPreviewImageArtifactInput,
   type ArtifactPreviewImageFormat,
@@ -28,6 +29,7 @@ import type { DeletableWorkspaceObjectStorage } from "./workspace-file-bytes";
 
 export {
   LibreOfficeArtifactPreviewRenderer,
+  SPREADSHEET_PREVIEW_MAX_CELLS,
   type ArtifactPreviewRenderedPage,
   type ArtifactPreviewRenderInput,
   type ArtifactPreviewRenderResult,
@@ -47,7 +49,6 @@ const HARD_MAX_CONVERTED_PDF_BYTES = 1024 * 1024 * 1024;
 const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
 const HARD_MAX_OUTPUT_BYTES = 1024 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 80;
-const HARD_MAX_PAGES = 500;
 const DEFAULT_MAX_RASTER_DIMENSION = 4096;
 const HARD_MAX_RASTER_DIMENSION = 8192;
 const DEFAULT_CONVERSION_TIMEOUT_MS = 180000;
@@ -164,7 +165,7 @@ export class ArtifactPreviewWorker {
       options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
       HARD_MAX_OUTPUT_BYTES
     );
-    this.maxPages = Math.min(options.maxPages ?? DEFAULT_MAX_PAGES, HARD_MAX_PAGES);
+    this.maxPages = Math.min(options.maxPages ?? DEFAULT_MAX_PAGES, ARTIFACT_PREVIEW_MAX_PAGES);
     this.maxRasterDimension = Math.min(
       options.maxRasterDimension ?? DEFAULT_MAX_RASTER_DIMENSION,
       HARD_MAX_RASTER_DIMENSION
@@ -513,7 +514,7 @@ export class ArtifactPreviewWorker {
       jobId: job.id,
       leaseToken: requiredLeaseToken(job),
       errorCode: failure.code,
-      errorMessage: previewFailureMessage(failure.code),
+      errorMessage: failure.message ?? previewFailureMessage(failure.code),
       failedAt,
       ...(canRetry ? { retryAt: addMilliseconds(failedAt, this.retryDelayMs) } : {})
     });

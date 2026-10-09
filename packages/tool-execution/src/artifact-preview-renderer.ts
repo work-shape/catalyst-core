@@ -20,7 +20,9 @@ import {
   resolveSpreadsheetSheetName
 } from "./spreadsheet-preview-selectors";
 
-const MAX_SPREADSHEET_PREVIEW_CELLS = 5000;
+// Protects the preview worker's memory and conversion time, counted over a sheet's whole used
+// range. A larger sheet or range gets no preview image and fails with "page_limit_exceeded".
+export const SPREADSHEET_PREVIEW_MAX_CELLS = 50_000;
 
 export interface ArtifactPreviewRenderInput {
   sourceKind: ArtifactPreviewSourceKind;
@@ -432,8 +434,15 @@ function decodeSpreadsheetRange(rangeText: string): XLSX.Range {
 function assertSpreadsheetRangeBounds(range: XLSX.Range): void {
   const rowCount = range.e.r - range.s.r + 1;
   const columnCount = range.e.c - range.s.c + 1;
-  if (rowCount <= 0 || columnCount <= 0 || rowCount * columnCount > MAX_SPREADSHEET_PREVIEW_CELLS) {
+  if (rowCount <= 0 || columnCount <= 0) {
     throw previewFailure("page_limit_exceeded", false);
+  }
+  if (rowCount * columnCount > SPREADSHEET_PREVIEW_MAX_CELLS) {
+    throw previewFailure(
+      "page_limit_exceeded",
+      false,
+      `Spreadsheet range of ${rowCount * columnCount} cells exceeds the preview limit of ${SPREADSHEET_PREVIEW_MAX_CELLS} cells`
+    );
   }
 }
 

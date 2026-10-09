@@ -3,13 +3,16 @@ import type { ArtifactPreviewFailureCode } from "@vivd-catalyst/core";
 export interface ArtifactPreviewFailure {
   code: ArtifactPreviewFailureCode;
   retryable: boolean;
+  /** Replaces the code's general message where the failure can name the limit that was hit. */
+  message?: string;
 }
 
 export function previewFailure(
   code: ArtifactPreviewFailureCode,
-  retryable: boolean
+  retryable: boolean,
+  message?: string
 ): ArtifactPreviewFailure {
-  return { code, retryable };
+  return { code, retryable, ...(message ? { message } : {}) };
 }
 
 export function normalizePreviewFailure(error: unknown): ArtifactPreviewFailure {

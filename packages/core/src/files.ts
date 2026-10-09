@@ -46,6 +46,9 @@ export type ArtifactPreviewFailureCode =
   | "internal_error"
   | "stale_lease";
 
+// Protects the preview worker and every reader of a preview from an unbounded page list. A
+// preview of a longer document shows its first 500 pages.
+export const ARTIFACT_PREVIEW_MAX_PAGES = 500;
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER = "artifact-preview-worker";
 export const DEFAULT_ARTIFACT_PREVIEW_RENDERER_VERSION = "preview-contract-v1";
 export const DEFAULT_ARTIFACT_PREVIEW_SETTINGS_HASH = "default-image-pages-v1";

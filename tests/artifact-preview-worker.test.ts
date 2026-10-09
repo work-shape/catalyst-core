@@ -2,7 +2,7 @@ import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -14,11 +14,13 @@ import {
   type ArtifactPreviewWorkerOptions,
   ArtifactPreviewWorker,
   LibreOfficeArtifactPreviewRenderer,
+  SPREADSHEET_PREVIEW_MAX_CELLS,
   createArtifactPreviewSettingsHash,
   type DeletableWorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
 
 import {
+  ARTIFACT_PREVIEW_MAX_PAGES,
   type ArtifactPreviewFailureCode,
   type ClientInstanceId,
   type Conversation,
@@ -541,6 +543,64 @@ describe("ArtifactPreviewWorker", () => {
     expect(imageDigest(summary.pages[0]!.bytes)).not.toBe(imageDigest(detail.pages[0]!.bytes));
   }, 30000);
 
+  it("previews a sheet of 20,000 cells and one at the limit of 50,000 cells", async () => {
+    const root = await mkdtemp(join(tmpdir(), "artifact-preview-renderer-cells-"));
+    try {
+      const commands = await writeFakeRendererCommands(root);
+      const renderer = new LibreOfficeArtifactPreviewRenderer({
+        tempRootDirectory: join(root, "tmp"),
+        ...commands.options
+      });
+
+      for (const rows of [2_000, 5_000]) {
+        const result = await renderer.render({
+          ...spreadsheetRenderInput(createGridWorkbookBytes(rows, 10)),
+          sheets: ["Grid"]
+        });
+
+        expect(result.pages).toEqual([
+          expect.objectContaining({ mimeType: "image/png", sheet: "Grid", width: 1, height: 1 })
+        ]);
+        // The whole used range reaches the converter, not a cut-down part of it.
+        const converted = XLSX.read(await readFile(commands.convertedSourcePath), {
+          type: "buffer"
+        });
+        expect(converted.Sheets.Grid?.["!ref"]).toBe(`A1:J${rows}`);
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("refuses a sheet above 50,000 cells and names the limit", async () => {
+    expect(SPREADSHEET_PREVIEW_MAX_CELLS).toBe(50_000);
+    const renderer = new LibreOfficeArtifactPreviewRenderer();
+    const input = spreadsheetRenderInput(createGridWorkbookBytes(5_001, 10));
+
+    await expect(renderer.render({ ...input, sheets: ["Grid"] })).rejects.toEqual({
+      code: "page_limit_exceeded",
+      retryable: false,
+      message: "Spreadsheet range of 50010 cells exceeds the preview limit of 50000 cells"
+    });
+  });
+
+  it("stores the limit a failure names and caps the page setting at the shared ceiling", async () => {
+    const fixture = await createWorkerFixture();
+    const message = "Spreadsheet range of 50010 cells exceeds the preview limit of 50000 cells";
+    const renderer = new FakeRenderer({
+      failure: { code: "page_limit_exceeded", retryable: false, message }
+    });
+    const worker = createWorker(fixture, renderer, { maxPages: ARTIFACT_PREVIEW_MAX_PAGES + 1 });
+
+    const result = await worker.runOnce();
+
+    expect(renderer.inputs[0]?.maxPages).toBe(ARTIFACT_PREVIEW_MAX_PAGES);
+    expect(result).toMatchObject({
+      status: "claimed",
+      job: { status: "failed", errorCode: "page_limit_exceeded", errorMessage: message }
+    });
+  });
+
   it("creates the configured renderer temp root before rendering", async () => {
     const root = await mkdtemp(join(tmpdir(), "artifact-preview-renderer-temp-root-"));
     try {
@@ -807,7 +867,7 @@ class FakeRenderer implements ArtifactPreviewRenderer {
   constructor(
     private readonly behavior: {
       result?: ArtifactPreviewRenderResult;
-      failure?: { code: ArtifactPreviewFailureCode; retryable: boolean };
+      failure?: { code: ArtifactPreviewFailureCode; retryable: boolean; message?: string };
       deferred?: ReturnType<typeof createDeferred<ArtifactPreviewRenderResult>>;
     }
   ) {
@@ -882,11 +942,68 @@ function createDistinctWorkbookBytes(): Uint8Array {
   detail["!cols"] = [{ wch: 18 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(workbook, summary, "Summary");
   XLSX.utils.book_append_sheet(workbook, detail, "Detail");
+  return workbookBytes(workbook);
+}
+
+function workbookBytes(workbook: XLSX.WorkBook): Uint8Array {
   const output = XLSX.write(workbook, {
     bookType: "xlsx",
     type: "buffer"
   }) as Uint8Array | string;
   return typeof output === "string" ? Buffer.from(output, "binary") : output;
+}
+
+function createGridWorkbookBytes(rows: number, columns: number): Uint8Array {
+  const workbook = XLSX.utils.book_new();
+  const grid = XLSX.utils.aoa_to_sheet(
+    Array.from({ length: rows }, (_, row) =>
+      Array.from({ length: columns }, (_, column) => row * columns + column)
+    )
+  );
+  XLSX.utils.book_append_sheet(workbook, grid, "Grid");
+  return workbookBytes(workbook);
+}
+
+function spreadsheetRenderInput(sourceBytes: Uint8Array): ArtifactPreviewRenderInput {
+  return {
+    sourceKind: "spreadsheet",
+    filename: "grid.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    bytes: sourceBytes,
+    maxPages: 1,
+    maxConvertedPdfBytes: 1024 * 1024,
+    maxOutputBytes: 1024 * 1024,
+    maxRasterDimension: 4096,
+    previewDpi: 96,
+    outputFormat: "png",
+    conversionTimeoutMs: 60_000,
+    rasterizationTimeoutMs: 60_000
+  };
+}
+
+/** Stand-ins for the native tools. The converter keeps a copy of the workbook it was handed. */
+async function writeFakeRendererCommands(root: string): Promise<{
+  convertedSourcePath: string;
+  options: { sofficeCommand: string; pdfInfoCommand: string; pdfToPpmCommand: string };
+}> {
+  const bin = join(root, "bin");
+  await mkdir(bin);
+  const convertedSourcePath = join(root, "converted-source.xlsx");
+  const options = {
+    sofficeCommand: join(bin, "fake-soffice"),
+    pdfInfoCommand: join(bin, "fake-pdfinfo"),
+    pdfToPpmCommand: join(bin, "fake-pdftoppm")
+  };
+  await writeExecutable(
+    options.sofficeCommand,
+    `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst path = require("node:path");\nconst args = process.argv.slice(2);\nconst source = args[args.length - 1];\nconst outdir = args[args.indexOf("--outdir") + 1];\nfs.copyFileSync(source, ${JSON.stringify(convertedSourcePath)});\nfs.writeFileSync(path.join(outdir, path.basename(source, path.extname(source)) + ".pdf"), "%PDF-1.4");\n`
+  );
+  await writeExecutable(options.pdfInfoCommand, `#!/usr/bin/env node\nconsole.log("Pages: 1");\n`);
+  await writeExecutable(
+    options.pdfToPpmCommand,
+    `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst prefix = process.argv[process.argv.length - 1];\nfs.writeFileSync(prefix + ".png", Buffer.from("${onePixelPngHex()}", "hex"));\n`
+  );
+  return { convertedSourcePath, options };
 }
 
 function hasPreviewRendererDependencies(): boolean {

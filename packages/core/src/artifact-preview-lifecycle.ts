@@ -1,4 +1,5 @@
 import {
+  ARTIFACT_PREVIEW_MAX_PAGES,
   normalizeArtifactPreviewIdentity,
   isImageFileFormat,
   type ArtifactPreviewImageFormat,
@@ -141,7 +142,10 @@ function readEmbeddedArtifactPreview(
   if (preview?.type !== "image_pages" || !Array.isArray(preview.pages)) {
     return undefined;
   }
-  const pages = preview.pages.slice(0, 200).map(sanitizePreviewPage).filter(isDefined);
+  const pages = preview.pages
+    .slice(0, ARTIFACT_PREVIEW_MAX_PAGES)
+    .map(sanitizePreviewPage)
+    .filter(isDefined);
   return pages.length > 0
     ? {
         status: "ready",
