@@ -65,7 +65,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
     store: store.audit
   });
   const telemetry = createConsoleWorkspaceCommandTelemetry(logger);
-  const processExecutor = await createSandbox(config, infrastructure.context);
+  const processExecutor = await createSandbox(config, infrastructure);
   const runner = new LocalWorkspaceCommandRunner({
     store,
     byteStore,
@@ -105,8 +105,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
 
 /**
  * A release builds its own sandbox image, so a deployment names it per release in the variable
- * `EXECUTION_WORKSPACE_RUNNER_IMAGE`. It replaces `infrastructure.sandbox.image`; a setting, not
- * a secret, so it stays an environment read.
+ * `EXECUTION_WORKSPACE_RUNNER_IMAGE`. It replaces `infrastructure.sandbox.image` of a `docker`
+ * sandbox and is ignored for any other; a setting, not a secret, so it stays an environment read.
  */
 export function applyWorkspaceRunnerImageEnvOverride(
   config: ClientInstanceConfig,
@@ -114,7 +114,7 @@ export function applyWorkspaceRunnerImageEnvOverride(
 ): ClientInstanceConfig {
   const image = env.EXECUTION_WORKSPACE_RUNNER_IMAGE?.trim();
   const { sandbox } = config.infrastructure;
-  if (!image || !sandbox) {
+  if (!image || sandbox?.provider !== "docker") {
     return config;
   }
   return {

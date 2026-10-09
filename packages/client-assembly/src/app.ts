@@ -162,7 +162,11 @@ export async function createClientInstanceApp(
     modelProvider,
     allowedOrigins,
     standaloneAuth,
-    mail: await createClientInstanceMail({ config, context: execution.infrastructure.context }),
+    mail: await createClientInstanceMail({
+      config,
+      registry: execution.infrastructure.registry,
+      context: execution.infrastructure.context
+    }),
     sessionToken,
     serviceAccessToken
   });
@@ -298,6 +302,7 @@ export async function createClientInstanceExecutionAssembly(
     costs: config.usage.costs
   });
   const modelProvider = await createModelProviderRegistry({
+    registry: infrastructure.registry,
     providers: modelProviders,
     entries: config.infrastructure.models,
     context: infrastructure.context

@@ -10,18 +10,42 @@ export interface SecretResolver {
   resolve(name: string): Promise<string>;
 }
 
-/** Names the secret that could not be resolved. It never carries a value or a file's contents. */
-export class SecretNotResolvedError extends AppError {
-  readonly secretName: string;
+/**
+ * Why a secret did not resolve. `absent` means nothing configures it, which an optional secret
+ * may be. `unusable` means it is configured and broken, such as a mounted file that cannot be
+ * read or is empty; that always stops startup.
+ */
+export type SecretNotResolvedKind = "absent" | "unusable";
 
-  constructor(secretName: string, reason: string) {
-    super("VALIDATION_FAILED", `Secret '${secretName}' ${reason}`);
+/**
+ * Names the secret that could not be resolved. It never carries a value or a file's contents,
+ * and it repeats the name only when the name passes `isSecretName`: a credential pasted where a
+ * name belongs is not echoed.
+ */
+export class SecretNotResolvedError extends AppError {
+  readonly secretName: string | undefined;
+  readonly kind: SecretNotResolvedKind;
+  /** What went wrong, without the name: "is not set", "is empty in the file named by ...". */
+  readonly reason: string;
+
+  /** `reason` must not repeat the name unless the caller checked it with `isSecretName`. */
+  constructor(secretName: string, reason: string, kind: SecretNotResolvedKind = "absent") {
+    const printable = isSecretName(secretName) ? secretName : undefined;
+    super(
+      "VALIDATION_FAILED",
+      printable ? `Secret '${printable}' ${reason}` : `A secret ${reason}`
+    );
     this.name = "SecretNotResolvedError";
-    this.secretName = secretName;
+    this.secretName = printable;
+    this.kind = kind;
+    this.reason = reason;
   }
 }
 
-/** Resolves a secret that an instance may leave unset. Any other failure is thrown. */
+/**
+ * Resolves a secret that an instance may leave unset. Only a secret that nothing configures is
+ * absent; one that is configured and cannot be read is thrown, as any other failure is.
+ */
 export async function resolveOptionalSecret(
   secrets: SecretResolver,
   name: string
@@ -29,7 +53,7 @@ export async function resolveOptionalSecret(
   try {
     return await secrets.resolve(name);
   } catch (error) {
-    if (error instanceof SecretNotResolvedError) {
+    if (error instanceof SecretNotResolvedError && error.kind === "absent") {
       return undefined;
     }
     throw error;
@@ -54,6 +78,9 @@ export function createEnvironmentSecretResolver(
   const { readSecretFile } = input;
   return {
     async resolve(name) {
+      if (!isSecretName(name)) {
+        throw new SecretNotResolvedError(name, SECRET_NAME_RULE, "unusable");
+      }
       const value = input.env[name];
       if (value) {
         return value;
@@ -72,12 +99,17 @@ export function createEnvironmentSecretResolver(
       } catch {
         throw new SecretNotResolvedError(
           name,
-          `could not be read from the file named by '${fileVariable}'`
+          `could not be read from the file named by '${fileVariable}'`,
+          "unusable"
         );
       }
       const fromFile = contents.replace(/\r?\n$/u, "");
       if (!fromFile) {
-        throw new SecretNotResolvedError(name, `is empty in the file named by '${fileVariable}'`);
+        throw new SecretNotResolvedError(
+          name,
+          `is empty in the file named by '${fileVariable}'`,
+          "unusable"
+        );
       }
       return fromFile;
     }
@@ -85,22 +117,47 @@ export function createEnvironmentSecretResolver(
 }
 
 const SECRET_REF_MARK = Symbol.for("vivd-catalyst.secretRef");
-// Upper case only, as environment variables are written. A pasted secret value almost never
-// has this form, so it is refused here instead of being echoed back as a name.
-const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
+const SECRET_NAME_MAX_LENGTH = 64;
+const SECRET_NAME_SINGLE_WORD_MAX_LENGTH = 12;
+// A word of a name is short and carries at most two digits (`S3`, `E2E`, `OAUTH2`) or is a
+// short number. A credential is one long run, or mixes many digits into its letters.
+const SECRET_NAME_WORD = /^[A-Z0-9]{1,16}$/u;
+const SECRET_NAME_WORD_MAX_DIGITS = 2;
+// How well-known credentials start once written in upper case.
+const CREDENTIAL_PREFIX = /^(?:AKIA|ASIA|AIZA|GHP|GHO|GHS|XOX|EYJ)/u;
+const SECRET_NAME_RULE =
+  "must be the name of a secret such as MODEL_API_KEY: upper-case words joined by underscores, at most 64 characters, never its value";
+
+/**
+ * True for text that is safe to repeat as the name of a secret: it reads as an environment
+ * variable name and not as a credential. Anything else is refused as a name and is never put
+ * into a message, a log line or an error.
+ */
+export function isSecretName(value: string): boolean {
+  if (value.length > SECRET_NAME_MAX_LENGTH || CREDENTIAL_PREFIX.test(value)) {
+    return false;
+  }
+  const words = value.split("_");
+  if (words.length === 1 && value.length > SECRET_NAME_SINGLE_WORD_MAX_LENGTH) {
+    return false;
+  }
+  return /^[A-Z]/u.test(value) && words.every(isSecretNameWord);
+}
+
+function isSecretNameWord(word: string): boolean {
+  if (!SECRET_NAME_WORD.test(word)) {
+    return false;
+  }
+  const digits = word.replace(/[A-Z]/gu, "").length;
+  return digits === word.length ? word.length <= 4 : digits <= SECRET_NAME_WORD_MAX_DIGITS;
+}
 
 /**
  * A config field that names a secret. The value in config is the name the resolver looks up,
- * never the secret itself, so a config file, the safe config view and a validation message can
- * all show it.
+ * never the secret itself, so a config file and a validation message can show it.
  */
 export function secretRef(): z.ZodString {
-  const schema = z
-    .string()
-    .regex(
-      SECRET_NAME_PATTERN,
-      "must be the name of a secret in upper case, digits and underscores, never its value"
-    );
+  const schema = z.string().refine(isSecretName, SECRET_NAME_RULE);
   Object.defineProperty(schema, SECRET_REF_MARK, { value: true });
   return schema;
 }

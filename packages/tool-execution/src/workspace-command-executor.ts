@@ -250,3 +250,10 @@ function signalNumber(signal: NodeJS.Signals): number {
       return 1;
   }
 }
+
+declare module "@vivd-catalyst/core" {
+  /** What the `sandbox` port creates. */
+  interface ProviderInstances {
+    sandbox: WorkspaceCommandProcessExecutor;
+  }
+}

@@ -197,6 +197,22 @@ describe("execution workspaces config", () => {
       "ghcr.io/example/catalyst-runner-base:placeholder"
     );
   });
+
+  it("leaves a sandbox that is not Docker alone when the runner image variable is set", () => {
+    const config = parseClientInstanceConfig(
+      baseConfig({
+        infrastructure: workspaceInfrastructure({ provider: "local" }),
+        executionWorkspaces: { enabled: true }
+      })
+    );
+
+    const resolved = applyWorkspaceRunnerImageEnvOverride(config, {
+      EXECUTION_WORKSPACE_RUNNER_IMAGE: "ghcr.io/example/catalyst-runner-base:staging"
+    });
+
+    expect(resolved).toBe(config);
+    expect(resolved.infrastructure.sandbox).toEqual({ provider: "local" });
+  });
 });
 
 const models = { local: { provider: "deterministic", model: "local" } };

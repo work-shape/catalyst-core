@@ -10,11 +10,17 @@ import {
   createProvider,
   defineProvider,
   ProviderRegistry,
+  resolveOptionalSecret,
   secretRef,
   SecretNotResolvedError
 } from "@vivd-catalyst/core";
 import { mailProviderDefinitions } from "@vivd-catalyst/mail";
-import { createModelProviderRegistry } from "@vivd-catalyst/model-provider";
+import {
+  createModelProviderRegistry,
+  DeterministicModelProvider,
+  modelProviderDefinitions,
+  type ModelProviderFactory
+} from "@vivd-catalyst/model-provider";
 import { createFailingTestLogger, createFakeSecrets, createTestUser } from "./support/fixtures";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 
@@ -118,6 +124,7 @@ describe("instance startup on the secret resolver", () => {
       }
     };
     const providers = await createModelProviderRegistry({
+      registry: new ProviderRegistry(modelProviderDefinitions),
       providers: [{ id: "main", type: "openai-compatible", model: "test-model", region: "eu" }],
       entries,
       context: {
@@ -156,8 +163,7 @@ describe("instance startup on the secret resolver", () => {
       async () => new Response(JSON.stringify({ Messages: [{ Status: "success" }] }))
     );
     vi.stubGlobal("fetch", fetchMock);
-    const mail = await createProvider(
-      mailProviderDefinitions,
+    const mail = await new ProviderRegistry(mailProviderDefinitions).create(
       "mail",
       {
         path: "infrastructure.mail",
@@ -185,6 +191,77 @@ describe("instance startup on the secret resolver", () => {
     expect(new Headers(init?.headers).get("authorization")).toBe(
       `Basic ${Buffer.from("mail-key-value:mail-secret-value").toString("base64")}`
     );
+  });
+});
+
+describe("a secret that is configured and broken", () => {
+  const sessionTokenConfig = () =>
+    parseClientInstanceConfig({
+      version: 1,
+      clientInstance: {
+        id: "provider-registry-test",
+        displayName: "Provider Registry Test",
+        environment: "staging"
+      },
+      auth: {
+        standalone: { enabled: true },
+        sessionToken: { issuer: "provider-registry-test", ttlSeconds: 300 }
+      },
+      infrastructure: { models: { local: { provider: "deterministic" } } }
+    });
+  const authSecret = { BETTER_AUTH_SECRET: "a-test-secret-with-at-least-32-characters" };
+
+  it("starts without session-token sign-in when nothing configures its secret", async () => {
+    const { instance, resolved } = await createTestInstanceOnSecrets(
+      { config: sessionTokenConfig(), tools: [], seedAssets: false },
+      authSecret
+    );
+    try {
+      expect(resolved).toContain("CHAT_SESSION_TOKEN_SECRET");
+    } finally {
+      await instance.close();
+    }
+  });
+
+  it.each(["CHAT_SESSION_TOKEN_SECRET", "CHAT_SERVER_CREDENTIAL", "SERVICE_ACCESS_TOKEN_SECRET"])(
+    "stops startup and names %s when its mounted file cannot be read",
+    async (name) => {
+      await expect(
+        createTestInstanceOnSecrets(
+          { config: sessionTokenConfig(), tools: [], seedAssets: false },
+          {
+            ...authSecret,
+            CHAT_SESSION_TOKEN_SECRET: "a-session-token-secret-with-32-characters",
+            CHAT_SERVER_CREDENTIAL: "a-server-credential-with-32-characters"
+          },
+          [name]
+        )
+      ).rejects.toThrow(`Secret '${name}' could not be read from the file named by '${name}_FILE'`);
+    }
+  );
+
+  it("tells a broken file from an unset secret", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "vivd-catalyst-secrets-"));
+    try {
+      const emptyPath = join(directory, "empty");
+      await writeFile(emptyPath, "\n", "utf8");
+      const secrets = createEnvironmentSecrets({
+        EMPTY_KEY_FILE: emptyPath,
+        MISSING_KEY_FILE: join(directory, "absent")
+      });
+
+      await expect(resolveOptionalSecret(secrets, "UNSET_KEY")).resolves.toBeUndefined();
+      await expect(resolveOptionalSecret(secrets, "EMPTY_KEY")).rejects.toThrow(
+        "Secret 'EMPTY_KEY' is empty in the file named by 'EMPTY_KEY_FILE'"
+      );
+      await expect(resolveOptionalSecret(secrets, "MISSING_KEY")).rejects.toThrow(
+        "Secret 'MISSING_KEY' could not be read from the file named by 'MISSING_KEY_FILE'"
+      );
+      await expect(secrets.resolve("MISSING_KEY")).rejects.toMatchObject({ kind: "unusable" });
+      await expect(secrets.resolve("UNSET_KEY")).rejects.toMatchObject({ kind: "absent" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 
@@ -251,6 +328,54 @@ describe("provider registry", () => {
     expect(() => registry.validate("sandbox", { path: "infrastructure.sandbox", entry })).toThrow(
       "'infrastructure.sandbox.provider' is not a registered provider for the port 'sandbox'; registered: none"
     );
+  });
+
+  it("creates a model provider that only a capability registers", async () => {
+    const created: string[] = [];
+    const capabilityModel = defineProvider({
+      port: "models",
+      type: "capability-model",
+      configSchema: z.object({ keySecret: secretRef() }),
+      external: true,
+      create: async (config, { secrets }): Promise<ModelProviderFactory> => {
+        created.push(await secrets.resolve(config.keySecret));
+        return (provider) => new DeterministicModelProvider(provider.id);
+      },
+      describe: () => ({})
+    });
+    const registry = new ProviderRegistry([...modelProviderDefinitions, capabilityModel]);
+
+    const providers = await createModelProviderRegistry({
+      registry,
+      providers: [{ id: "main", type: "capability-model", model: "m", region: "eu" }],
+      entries: {
+        main: {
+          provider: "capability-model",
+          region: "eu",
+          model: "m",
+          keySecret: "CAPABILITY_KEY"
+        }
+      },
+      context: { logger, secrets: createFakeSecrets({ CAPABILITY_KEY: "resolved" }) }
+    });
+
+    expect(created).toEqual(["resolved"]);
+    const clientInstanceId = asClientInstanceId("provider-registry-test");
+    await expect(
+      providers.complete(
+        {
+          providerId: "main",
+          model: "m",
+          messages: [{ role: "user", content: "hello" }],
+          tools: []
+        },
+        {
+          clientInstanceId,
+          correlationId: "provider-registry-test",
+          user: createTestUser("user-1", clientInstanceId)
+        }
+      )
+    ).resolves.toBeDefined();
   });
 
   it("creates a provider with the secrets its schema names", async () => {

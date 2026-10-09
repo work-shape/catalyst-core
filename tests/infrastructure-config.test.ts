@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  createEnvironmentSecretResolver,
+  isSecretName,
+  resolveOptionalSecret,
+  SecretNotResolvedError
+} from "@vivd-catalyst/core";
+import { createDataSourceRegistry } from "@vivd-catalyst/data-source";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 
 const SECRET_VALUE = "sk-live-4f9c2d7e1a8b-never-printed";
+// Credentials that are upper case and alphanumeric, so the shape of a name alone does not
+// tell them from one.
+const UPPER_CASE_SECRET_VALUES = [
+  "AKIAIOSFODNN7EXAMPLE",
+  "Q7ZK2M9XP4LT8VB3NH6WR5YD",
+  "KJHGFDSAQWERTYUIOPMNBVCXZLKJHG",
+  "X9_QWHZKPLMVBNTRXDFGCSJAYEOIU_77",
+  "X7K9P2QW4M"
+];
+const SECRET_NAME_RULE =
+  "must be the name of a secret such as MODEL_API_KEY: upper-case words joined by underscores, at most 64 characters, never its value";
 
 const models = { local: { provider: "deterministic" } };
 
@@ -40,10 +58,23 @@ async function startupFailure(
   throw new Error("Expected startup to stop");
 }
 
-function expectNoSecretValue(error: Error): void {
-  expect(error.message).not.toContain(SECRET_VALUE);
-  expect(JSON.stringify(error)).not.toContain(SECRET_VALUE);
-  expect(error.stack ?? "").not.toContain(SECRET_VALUE);
+function expectNoSecretValue(error: Error, value = SECRET_VALUE): void {
+  expect(error.message).not.toContain(value);
+  expect(JSON.stringify(error)).not.toContain(value);
+  expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toContain(value);
+  expect(error.stack ?? "").not.toContain(value);
+}
+
+async function failure(run: () => Promise<unknown>): Promise<Error> {
+  try {
+    await run();
+  } catch (error) {
+    if (error instanceof Error) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error("Expected a failure");
 }
 
 describe("infrastructure section", () => {
@@ -149,7 +180,7 @@ describe("infrastructure section", () => {
       }
     });
     expect(asName.message).toBe(
-      "'infrastructure.models.main.credentialSecret' is invalid: must be the name of a secret in upper case, digits and underscores, never its value"
+      `'infrastructure.models.main.credentialSecret' is invalid: ${SECRET_NAME_RULE}`
     );
     expectNoSecretValue(asName);
 
@@ -162,6 +193,115 @@ describe("infrastructure section", () => {
       "'infrastructure.models.main.apiKey' is not a setting of the 'openai-compatible' provider"
     );
     expectNoSecretValue(asUnknownKey);
+  });
+
+  it.each(UPPER_CASE_SECRET_VALUES)(
+    "never repeats the upper-case credential %s pasted where a name belongs",
+    async (value) => {
+      expect(isSecretName(value)).toBe(false);
+
+      const inProvider = await startupFailure({
+        models: {
+          main: { provider: "openai-compatible", region: "eu", model: "m", credentialSecret: value }
+        }
+      });
+      expect(inProvider.message).toBe(
+        `'infrastructure.models.main.credentialSecret' is invalid: ${SECRET_NAME_RULE}`
+      );
+      expectNoSecretValue(inProvider, value);
+
+      const empty = createEnvironmentSecretResolver({ env: {}, readSecretFile: async () => "" });
+      const inResolver = await failure(() => empty.resolve(value));
+      expect(inResolver).toBeInstanceOf(SecretNotResolvedError);
+      expect(inResolver.message).toBe(`A secret ${SECRET_NAME_RULE}`);
+      expectNoSecretValue(inResolver, value);
+      // A reference that is not a name is broken config, never an optional secret left unset.
+      await expect(resolveOptionalSecret(empty, value)).rejects.toBeInstanceOf(
+        SecretNotResolvedError
+      );
+
+      const inDataSource = await failure(() =>
+        createDataSourceRegistry({
+          secrets: empty,
+          configs: {
+            reporting: {
+              kind: "postgres",
+              connectionRef: `env:${value}`,
+              description: "Reporting warehouse",
+              sql: {
+                dialect: "postgres",
+                access: "read_only",
+                statementTimeoutMs: 1000,
+                maxRows: 10,
+                allowedSchemas: ["public"]
+              }
+            }
+          }
+        })
+      );
+      expect(inDataSource.message).toBe(
+        "'dataSources.reporting.connectionRef' must be 'env:' followed by the name of a secret such as REPORTING_DATABASE_URL, never a connection string"
+      );
+      expectNoSecretValue(inDataSource, value);
+    }
+  );
+
+  it("accepts the names deployments use for their secrets", () => {
+    for (const name of [
+      "DATABASE_URL",
+      "MODEL_KEY",
+      "AZURE_OPENAI_API_KEY",
+      "INTERNAL_CATALYST_DEPLOYMENT_OPENAI_API_KEY",
+      "AWS_ACCESS_KEY_ID",
+      "S3_SECRET_KEY",
+      "OAUTH2_CLIENT_SECRET",
+      "E2E_ADMIN_PASSWORD",
+      "MUSTERBAU_SUPERADMIN_PASSWORD",
+      "TOKEN"
+    ]) {
+      expect(isSecretName(name)).toBe(true);
+    }
+  });
+
+  it("requires a region of a Docker sandbox on another host and none of the local engine", async () => {
+    const sandbox = { provider: "docker", image: "runner:test" };
+    const remote = await startupFailure({
+      models,
+      sandbox: { ...sandbox, endpoint: "tcp://docker.example.test:2376" }
+    });
+    expect(remote.message).toBe(
+      "'infrastructure.sandbox.region' is required and must be one of eu, global: the 'docker' provider sends data outside the instance"
+    );
+
+    const local = await startupFailure({ models, sandbox: { ...sandbox, region: "eu" } });
+    expect(local.message).toBe(
+      "'infrastructure.sandbox.region' must be absent: the 'docker' provider keeps data inside the instance"
+    );
+
+    const { instance } = await createTestInstanceOnSecrets({
+      config: parseClientInstanceConfig(
+        config({
+          models,
+          sandbox: { ...sandbox, region: "eu", endpoint: "ssh://docker.example.test" }
+        })
+      ),
+      tools: [],
+      seedAssets: false
+    });
+    await instance.close();
+  });
+
+  it("refuses a model id made only of digits, which would move the default provider", () => {
+    expect(() =>
+      parseClientInstanceConfig(
+        config({
+          models: { "20": { provider: "deterministic" }, "3": { provider: "deterministic" } }
+        })
+      )
+    ).toThrow(
+      // The file names "20" first; the object already hands back "3" first.
+      "'infrastructure.models.3' is not a usable id: an id made only of digits is read before the other entries whatever its place in the file, which would change the default provider. Rename it, for example to 'model-3', also where an agent names it"
+    );
   });
 
   it("keeps secret names and values out of the safe config view", () => {

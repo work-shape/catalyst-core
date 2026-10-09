@@ -11,6 +11,7 @@ import {
   type ProviderDefinition,
   type ProviderEntry,
   type ProviderPort,
+  type RegisteredProviderDefinition,
   type SecretResolver
 } from "@vivd-catalyst/core";
 import { mailProviderDefinitions } from "@vivd-catalyst/mail";
@@ -79,7 +80,7 @@ export async function createInstanceInfrastructure(input: {
   /** Replaces the configured secret provider. For tests. */
   secrets?: SecretResolver;
   /** Providers that capabilities bring, such as their object store. */
-  providers?: readonly ProviderDefinition[];
+  providers?: readonly RegisteredProviderDefinition[];
   /**
    * The entries this process creates providers from, by their path. Absent means the whole
    * section, which is what the chat server validates. A worker names its own entries: it does
@@ -150,11 +151,13 @@ export async function createWorkspaceObjectStore(
 }
 
 /** The command sandbox of an instance that runs execution workspaces. */
-export async function createSandbox(config: ClientInstanceConfig, context: ProviderCreateContext) {
-  return createProvider(
-    sandboxProviderDefinitions,
+export async function createSandbox(
+  config: ClientInstanceConfig,
+  infrastructure: InstanceInfrastructure
+) {
+  return infrastructure.registry.create(
     "sandbox",
     { path: SANDBOX_PATH, entry: config.infrastructure.sandbox },
-    context
+    infrastructure.context
   );
 }

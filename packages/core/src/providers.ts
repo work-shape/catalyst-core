@@ -26,6 +26,19 @@ export const PROVIDER_PORT_FIELDS: Record<ProviderPort, readonly string[]> = {
   secrets: []
 };
 
+/**
+ * What the providers of a port create. The package that owns a port's interface adds its line
+ * by declaration merging, so the registry hands back that type and a definition for the port
+ * must create it. A port without a line here creates a value the registry cannot type.
+ */
+export interface ProviderInstances {
+  secrets: SecretResolver;
+}
+
+export type ProviderInstance<Port extends ProviderPort> = Port extends keyof ProviderInstances
+  ? ProviderInstances[Port]
+  : unknown;
+
 export interface ProviderCreateContext {
   secrets: SecretResolver;
   logger: Logger;
@@ -46,8 +59,11 @@ export interface ProviderDefinitionInput<
   type: string;
   /** Owned by the adapter. A field that takes a secret is `secretRef()`. */
   configSchema: Schema;
-  /** True when data leaves the instance. The entry must then state a `region`. */
-  external: boolean;
+  /**
+   * True when data leaves the instance. The entry must then state a `region`. A function when
+   * it depends on the entry, such as an engine that is local unless an endpoint names a host.
+   */
+  external: boolean | ((config: z.output<Schema>) => boolean);
   create(config: z.output<Schema>, context: ProviderCreateContext): Instance | Promise<Instance>;
   /** Never a prompt, a mail or a user-visible write. */
   check?(instance: Instance): Promise<ProviderCheckResult>;
@@ -73,7 +89,6 @@ export interface ValidatedProviderEntry {
 export interface ProviderDefinition<Port extends ProviderPort = ProviderPort, Instance = unknown> {
   readonly port: Port;
   readonly type: string;
-  readonly external: boolean;
   readonly configSchema: z.ZodObject;
   /** Validates an entry against the adapter's schema and the region rule. Reads no secret. */
   validate(entry: ProviderEntry): ValidatedProviderEntry;
@@ -102,7 +117,6 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
     if (!isRecord(entry.entry)) {
       throw infrastructureError(entry.path, "must be an object with a 'provider'");
     }
-    const region = readRegion(entry, input);
     const adapterFields = Object.fromEntries(
       Object.entries(entry.entry).filter(([key]) => !portFields.has(key))
     );
@@ -125,12 +139,14 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
       );
     }
     const config = parsed.data;
+    const external = typeof input.external === "function" ? input.external(config) : input.external;
+    const region = readRegion(entry, { type: input.type, external });
     return {
       config,
       validated: {
         port: input.port,
         type: input.type,
-        external: input.external,
+        external,
         ...(region ? { region } : {}),
         secrets: secretFields.flatMap((field) => {
           const name: unknown = Reflect.get(config, field);
@@ -144,7 +160,6 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
   return {
     port: input.port,
     type: input.type,
-    external: input.external,
     configSchema: input.configSchema,
     ...(input.check ? { check: input.check } : {}),
     validate(entry) {
@@ -159,7 +174,7 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
           if (error instanceof SecretNotResolvedError) {
             throw infrastructureError(
               `${entry.path}.${secret.field}`,
-              `names the secret '${secret.name}', which does not resolve`
+              describeUnresolvedSecret(error)
             );
           }
           throw error;
@@ -170,57 +185,77 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
   };
 }
 
-/** Every provider an instance can run on. Client assembly builds one at startup. */
-export class ProviderRegistry {
-  private readonly definitions = new Map<string, ProviderDefinition>();
+/** A definition as the registry holds it: its instance is the one its port creates. */
+export type RegisteredProviderDefinition = {
+  [Port in ProviderPort]: ProviderDefinition<Port, ProviderInstance<Port>>;
+}[ProviderPort];
 
-  constructor(definitions: readonly ProviderDefinition[] = []) {
+type DefinitionsByPort = {
+  [Port in ProviderPort]: Map<string, ProviderDefinition<Port, ProviderInstance<Port>>>;
+};
+
+/**
+ * Every provider an instance can run on. Client assembly builds one at startup from the
+ * platform's own providers and the ones capabilities bring, and every provider of a typed port
+ * is created through it.
+ */
+export class ProviderRegistry {
+  private readonly definitions: DefinitionsByPort = {
+    models: new Map(),
+    mail: new Map(),
+    objectStorage: new Map(),
+    sandbox: new Map(),
+    secrets: new Map()
+  };
+
+  constructor(definitions: readonly RegisteredProviderDefinition[] = []) {
     for (const definition of definitions) {
       this.register(definition);
     }
   }
 
-  register(definition: ProviderDefinition): void {
-    const key = registryKey(definition.port, definition.type);
-    if (this.definitions.has(key)) {
+  register<Port extends ProviderPort>(
+    definition: ProviderDefinition<Port, ProviderInstance<Port>>
+  ): void {
+    const ofPort = this.definitions[definition.port];
+    if (ofPort.has(definition.type)) {
       throw new AppError(
         "VALIDATION_FAILED",
         `Provider '${definition.type}' is registered twice for the port '${definition.port}'`
       );
     }
-    this.definitions.set(key, definition);
-  }
-
-  list(): ProviderDefinition[] {
-    return [...this.definitions.values()];
+    ofPort.set(definition.type, definition);
   }
 
   /** The definition an entry names. An unknown type names the port, the field and the choices. */
-  find(port: ProviderPort, entry: ProviderEntry): ProviderDefinition {
-    const type = isRecord(entry.entry) ? entry.entry.provider : undefined;
-    const definition =
-      typeof type === "string" ? this.definitions.get(registryKey(port, type)) : undefined;
-    if (!definition) {
-      const known = this.list()
-        .filter((candidate) => candidate.port === port)
-        .map((candidate) => candidate.type)
-        .sort();
-      throw infrastructureError(
-        `${entry.path}.provider`,
-        `${typeof type === "string" ? `'${type}' is` : "is"} not a registered provider for the port '${port}'; registered: ${known.join(", ") || "none"}`
-      );
-    }
-    return definition;
+  find<Port extends ProviderPort>(
+    port: Port,
+    entry: ProviderEntry
+  ): ProviderDefinition<Port, ProviderInstance<Port>> {
+    return findDefinition([...this.definitions[port].values()], port, entry);
   }
 
   validate(port: ProviderPort, entry: ProviderEntry): ValidatedProviderEntry {
     return this.find(port, entry).validate(entry);
   }
+
+  /** Validates the entry, resolves the secrets it names and creates the provider it names. */
+  async create<Port extends ProviderPort>(
+    port: Port,
+    entry: ProviderEntry,
+    context: ProviderCreateContext
+  ): Promise<ProviderInstance<Port>> {
+    if (entry.entry === undefined) {
+      throw infrastructureError(entry.path, "is required and names the provider to use");
+    }
+    return this.find(port, entry).create(entry, context);
+  }
 }
 
 /**
- * Creates the provider an entry names from the typed definitions of one port. A type that is
- * not among them stops startup and names the port and the field.
+ * Creates the provider an entry names from the typed definitions of one slot, for a slot whose
+ * instance type is narrower than its port's, such as each of the two object stores. A type that
+ * is not among them stops startup and names the port and the field.
  */
 export async function createProvider<Port extends ProviderPort, Instance>(
   definitions: readonly ProviderDefinition<Port, Instance>[],
@@ -231,6 +266,14 @@ export async function createProvider<Port extends ProviderPort, Instance>(
   if (entry.entry === undefined) {
     throw infrastructureError(entry.path, "is required and names the provider to use");
   }
+  return findDefinition(definitions, port, entry).create(entry, context);
+}
+
+function findDefinition<Port extends ProviderPort, Instance>(
+  definitions: readonly ProviderDefinition<Port, Instance>[],
+  port: Port,
+  entry: ProviderEntry
+): ProviderDefinition<Port, Instance> {
   const type = isRecord(entry.entry) ? entry.entry.provider : undefined;
   const definition = definitions.find(
     (candidate) => candidate.port === port && candidate.type === type
@@ -246,7 +289,15 @@ export async function createProvider<Port extends ProviderPort, Instance>(
       }`
     );
   }
-  return definition.create(entry, context);
+  return definition;
+}
+
+/** Names the secret only when the error carries a name, which it does for a checked name. */
+function describeUnresolvedSecret(error: SecretNotResolvedError): string {
+  const which = error.kind === "absent" ? "does not resolve" : error.reason;
+  return error.secretName
+    ? `names the secret '${error.secretName}', which ${which}`
+    : `names a secret that ${which}`;
 }
 
 function readRegion(
@@ -276,10 +327,6 @@ function readRegion(
 /** A startup failure in the `infrastructure` section. The message names the field, no value. */
 export function infrastructureError(field: string, reason: string): AppError {
   return new AppError("VALIDATION_FAILED", `'${field}' ${reason}`, { field });
-}
-
-function registryKey(port: ProviderPort, type: string): string {
-  return `${port}:${type}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -60,6 +60,13 @@ export const infrastructureConfigSchema = z.strictObject(
           });
         }
         for (const [name, entry] of entries) {
+          if (/^[0-9]+$/u.test(name)) {
+            context.addIssue({
+              code: "custom",
+              path: [name],
+              message: `'infrastructure.models.${name}' is not a usable id: an id made only of digits is read before the other entries whatever its place in the file, which would change the default provider. Rename it, for example to 'model-${name}', also where an agent names it`
+            });
+          }
           if (entry.model === undefined && entry.provider !== "deterministic") {
             context.addIssue({
               code: "custom",
@@ -97,7 +104,8 @@ export type InfrastructureConfig = z.infer<typeof infrastructureConfigSchema>;
 
 /**
  * The model providers of an instance in the order the config names them. The first one serves
- * an agent that names neither a provider nor a binding.
+ * an agent that names neither a provider nor a binding. The order holds because the schema
+ * refuses an id made only of digits, the one kind of key an object reorders.
  */
 export function getModelProviderConfigs(config: {
   infrastructure: InfrastructureConfig;

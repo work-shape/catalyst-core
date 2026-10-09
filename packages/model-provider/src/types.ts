@@ -176,3 +176,10 @@ export function modelContentImages(
  * entry from the fields of the models port.
  */
 export type ModelProviderFactory = (provider: ModelProviderConfig) => ModelProvider;
+
+declare module "@vivd-catalyst/core" {
+  /** What the `models` port creates. */
+  interface ProviderInstances {
+    models: ModelProviderFactory;
+  }
+}

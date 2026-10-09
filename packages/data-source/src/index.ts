@@ -5,7 +5,7 @@ import type {
   PostgresDataSourceConfig,
   SecretResolver
 } from "@vivd-catalyst/core";
-import { AppError, SecretNotResolvedError } from "@vivd-catalyst/core";
+import { AppError, isSecretName, SecretNotResolvedError } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 export interface DataSourceRegistration {
@@ -178,20 +178,21 @@ async function resolveConnectionRef(
   sourceName: string,
   ref: string
 ): Promise<string> {
-  if (!ref.startsWith(CONNECTION_REF_PREFIX)) {
+  const secretName = ref.slice(CONNECTION_REF_PREFIX.length);
+  // The reference is never repeated: a connection string pasted here must not reach a message.
+  if (!ref.startsWith(CONNECTION_REF_PREFIX) || !isSecretName(secretName)) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `'dataSources.${sourceName}.connectionRef' must be 'env:' followed by the name of a secret`
+      `'dataSources.${sourceName}.connectionRef' must be 'env:' followed by the name of a secret such as REPORTING_DATABASE_URL, never a connection string`
     );
   }
-  const secretName = ref.slice(CONNECTION_REF_PREFIX.length);
   try {
     return await secrets.resolve(secretName);
   } catch (error) {
     if (error instanceof SecretNotResolvedError) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `'dataSources.${sourceName}.connectionRef' names the secret '${error.secretName}', which does not resolve`
+        `'dataSources.${sourceName}.connectionRef' names the secret '${secretName}', which ${error.kind === "absent" ? "does not resolve" : error.reason}`
       );
     }
     throw error;

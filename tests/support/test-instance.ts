@@ -588,11 +588,13 @@ export function getTestExecution(
 
 /**
  * Starts the app with an empty environment. Everything it takes from outside comes from the
- * resolver over `values`, and `resolved` records every name the app asked for.
+ * resolver over `values`, and `resolved` records every name the app asked for. A name in
+ * `unusable` is configured and broken, as a mounted secret file that cannot be read is.
  */
 export async function createTestInstanceOnSecrets(
   input: Omit<TestAppInput, "env" | "secrets">,
-  values: Record<string, string> = {}
+  values: Record<string, string> = {},
+  unusable: readonly string[] = []
 ): Promise<{ instance: TestInstance; resolved: Set<string> }> {
   if (!testActive) preserveSuiteState = true;
   const known: Record<string, string> = {
@@ -607,6 +609,13 @@ export async function createTestInstanceOnSecrets(
       async resolve(name) {
         resolved.add(name);
         const value = known[name];
+        if (unusable.includes(name)) {
+          throw new SecretNotResolvedError(
+            name,
+            `could not be read from the file named by '${name}_FILE'`,
+            "unusable"
+          );
+        }
         if (value === undefined) {
           throw new SecretNotResolvedError(name, "is not set in the test resolver");
         }

@@ -15,7 +15,7 @@ import {
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
   type PlatformFileStore,
-  type ProviderDefinition,
+  type RegisteredProviderDefinition,
   type SecretResolver
 } from "@vivd-catalyst/core";
 import type {
@@ -185,7 +185,7 @@ export interface ClientInstanceCapability {
   name: string;
   configKey?: string;
   /** Providers the capability brings. They register beside the platform's own at startup. */
-  providers?: readonly ProviderDefinition[];
+  providers?: readonly RegisteredProviderDefinition[];
   create(
     context: ClientInstanceCapabilityContext
   ): ClientInstanceCapabilityContribution | Promise<ClientInstanceCapabilityContribution>;

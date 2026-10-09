@@ -72,3 +72,10 @@ export interface MailProviderInstance {
   /** Present when the provider keeps mails instead of delivering them. */
   listCaptured?: () => CapturedMail[];
 }
+
+declare module "@vivd-catalyst/core" {
+  /** What the `mail` port creates. */
+  interface ProviderInstances {
+    mail: MailProviderInstance;
+  }
+}

@@ -13,8 +13,9 @@ const dockerSandboxConfigSchema = z.object({
     .default(4 * 1024 * 1024 * 1024),
   pidsLimit: z.number().int().positive().default(128),
   /**
-   * A network endpoint of a Docker engine. A socket path or any other host path is not
-   * accepted: absent means the Docker client's own default.
+   * A network endpoint of a Docker engine on another host. With it the entry must state a
+   * `region`. A socket path or any other host path is not accepted: absent means the Docker
+   * client's own default, the engine on this host.
    */
   endpoint: z
     .string()
@@ -30,7 +31,9 @@ export const dockerSandboxProvider = defineProvider({
   port: "sandbox",
   type: "docker",
   configSchema: dockerSandboxConfigSchema,
-  external: false,
+  // The Docker client's own default is the engine on this host. An endpoint names another
+  // host, which then receives the workspace files and must state its region.
+  external: (config) => config.endpoint !== undefined,
   create(config): WorkspaceCommandProcessExecutor {
     return new DockerWorkspaceCommandProcessExecutor({
       image: config.image,
