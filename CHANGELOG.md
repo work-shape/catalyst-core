@@ -39,6 +39,18 @@ contain breaking changes; a patch version does not.
   the capability context, together with the `PlatformStoreMode` type, and an artifact preview
   `sourceReaderFactory` no longer receives `storeMode`. `@vivd-catalyst/core/testing` and its
   `InMemoryPlatformStore` are removed.
+- **Workspaces (breaking):** workspaces are part of every instance, and the switch
+  `ui.collaborationWorkspaces.enabled` is removed. Every signed-in user of the interface sees
+  the workspace selector at the top of the rail, with the client branding inside it; an
+  embedded token session keeps its fixed context and the branding head. Remove
+  `ui.collaborationWorkspaces` from config files. For this one release a config that still
+  says `enabled: true` loads; `enabled: false`, or any other value, stops the instance at
+  startup with a message that names the key. That acceptance ends with the next release. The
+  safe config (`GET /api/v1/config`) no longer carries `features.collaborationWorkspaces`:
+  deploy the interface and the API together, because an interface built before this release
+  reads the new answer as invalid. Creating, browsing and requesting access to a Shared
+  Workspace and adding members no longer answer 403 "Collaboration workspaces are not enabled
+  for this instance".
 - **Views (breaking):** a generated view loads Tailwind CSS and Lucide from the instance, in
   pinned versions under `/app-runtime/view/1/`, and no longer from two public hosts. A reverse
   proxy in front of an instance must route `/app-runtime/*` to the API. The hosts a view may

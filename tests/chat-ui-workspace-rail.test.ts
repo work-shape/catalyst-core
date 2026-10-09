@@ -18,7 +18,6 @@ import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/cha
 import { workspaceSendBlockedReason } from "../packages/chat-ui/src/workspace/workspace-send-blocked-reason";
 import {
   activeAgentNameFor,
-  collaborationWorkspaceChromeVisibleFor,
   isAbandonedDraftConversation,
   workspaceScopedConfigFor
 } from "../packages/chat-ui/src/workspace/workspace-chat-model";
@@ -313,7 +312,7 @@ describe("workspace rail collapse handle", () => {
 });
 
 describe("workspace rail collaboration workspace slot", () => {
-  it("falls back to the pre-feature layout when no selector is supplied", () => {
+  it("keeps the branding head when no selector is supplied", () => {
     const markup = renderRail();
 
     expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
@@ -341,64 +340,29 @@ describe("workspace rail collaboration workspace slot", () => {
   });
 });
 
-describe("collaboration workspace chrome feature flag", () => {
-  function configWithCollaborationWorkspaces(enabled: boolean): SafeConfig {
-    return {
-      ...railConfig,
-      features: { collaborationWorkspaces: { enabled } }
-    } as SafeConfig;
+describe("workspace rail by session kind", () => {
+  // `ChatWorkspace` hands the rail a selector exactly when
+  // `collaborationWorkspacesAvailableFor` says the session is first-party.
+  function railFor(auth: Parameters<typeof collaborationWorkspacesAvailableFor>[0]): string {
+    return renderRail(collaborationWorkspacesAvailableFor(auth) ? selector : undefined);
   }
 
-  // The chrome is composed from one boolean: the rail selector, the dialogs
-  // panel and the conversation move action all read it.
-  function firstPartyChromeVisible(enabled: boolean): boolean {
-    return collaborationWorkspaceChromeVisibleFor({
-      collaborationWorkspacesAvailable: true,
-      config: configWithCollaborationWorkspaces(enabled)
-    });
-  }
+  it("gives every first-party session the selector, with no config to turn it off", () => {
+    const markup = railFor({});
 
-  it("hides the workspace chrome from a first-party session while the feature is off", () => {
-    expect(firstPartyChromeVisible(false)).toBe(false);
-
-    const markup = renderRail(firstPartyChromeVisible(false) ? selector : undefined);
-
-    expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
-    expect(markup).not.toContain('aria-label="Switch workspace"');
-    // Zero visual change for a non-workspace instance: branding row intact.
-    expect(markup).toContain("Musterfinanz");
-    // The rail itself keeps working: conversations, search and the new-chat
-    // action stay exactly as they are without the feature.
-    expect(markup).toContain('aria-label="Conversations"');
-    expect(markup).toContain('aria-label="Search conversations"');
-  });
-
-  it("shows the workspace chrome once the feature is enabled", () => {
-    expect(firstPartyChromeVisible(true)).toBe(true);
-
-    const markup = renderRail(firstPartyChromeVisible(true) ? selector : undefined);
-
-    expect(markup).toContain("grid-rows-[auto_auto_minmax(0,1fr)_auto]");
     expect(markup).toContain('aria-label="Switch workspace"');
     expect(markup).not.toContain("Musterfinanz");
   });
 
-  it("keeps embedded sessions chrome-free whatever the feature flag says", () => {
-    expect(
-      collaborationWorkspaceChromeVisibleFor({
-        collaborationWorkspacesAvailable: false,
-        config: configWithCollaborationWorkspaces(true)
-      })
-    ).toBe(false);
-  });
+  it.each<[string, Parameters<typeof collaborationWorkspacesAvailableFor>[0]]>([
+    ["a fixed token", { token: "hmac-session-token" }],
+    ["a token callback", { getToken: () => "hmac-session-token" }]
+  ])("keeps an embedded session with %s on the branding head without a selector", (_name, auth) => {
+    const markup = railFor(auth);
 
-  it("withholds the chrome until the config has loaded", () => {
-    expect(
-      collaborationWorkspaceChromeVisibleFor({
-        collaborationWorkspacesAvailable: true,
-        config: undefined
-      })
-    ).toBe(false);
+    expect(markup).not.toContain('aria-label="Switch workspace"');
+    expect(markup).toContain("Musterfinanz");
+    expect(markup).toContain('aria-label="Conversations"');
   });
 });
 

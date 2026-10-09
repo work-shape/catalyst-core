@@ -61,7 +61,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "tests",
-      "count": 148,
+      "count": 147,
       "owner": "CB-2"
     },
     {
@@ -194,7 +194,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 86,
+      "count": 85,
       "owner": "CB-2"
     },
     {

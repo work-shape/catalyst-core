@@ -88,23 +88,6 @@ import { workspaceSendBlockedReason } from "./workspace-send-blocked-reason";
 export const WORKSPACE_AUTH_SCOPE = "standalone";
 
 /**
- * Collaboration Workspace chrome — the rail selector, the dialogs panel and
- * the conversation move action — is opt-in per client instance. With it off
- * a first-party session keeps its `collaboration_workspace:read` scope, so
- * routing, the workspace list query and the Personal Workspace stay exactly as
- * they are and only the visible surfaces are withheld.
- */
-export function collaborationWorkspaceChromeVisibleFor(input: {
-  collaborationWorkspacesAvailable: boolean;
-  config: SafeConfig | undefined;
-}): boolean {
-  return (
-    input.collaborationWorkspacesAvailable &&
-    (input.config?.features.collaborationWorkspaces.enabled ?? false)
-  );
-}
-
-/**
  * Narrows the instance config to the agents the active Collaboration Workspace
  * offers. `getConfig` only knows the caller's Personal Workspace view, so it
  * stands in solely where that view is the right one: fixed-context sessions,
@@ -193,8 +176,6 @@ export interface WorkspaceChatModel {
   route: WorkspaceRouteModel;
   chrome: WorkspaceChromeModel;
   collaborationWorkspace: CollaborationWorkspaceModel;
-  /** False when the auth mode or the client instance config withholds the chrome. */
-  collaborationWorkspaceChromeVisible: boolean;
   conversationRail: ConversationRailModel;
   selectedChat: SelectedChatModel;
   controlPlane: ControlPlaneModel;
@@ -503,10 +484,6 @@ export function useWorkspaceChatModel({
   );
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
-  const collaborationWorkspaceChromeVisible = collaborationWorkspaceChromeVisibleFor({
-    collaborationWorkspacesAvailable,
-    config
-  });
   const activeLocale = useWorkspaceLocale(config?.localization.locale);
   const controllerTerminalNotice = isVisibleTerminalControllerError(controller.error?.class)
     ? controller.error?.category === "runtime_interrupted"
@@ -902,7 +879,6 @@ export function useWorkspaceChatModel({
       toggleSidebar: chrome.toggleSidebar
     },
     collaborationWorkspace,
-    collaborationWorkspaceChromeVisible,
     conversationRail: {
       conversations,
       selectedConversationId,
@@ -911,8 +887,7 @@ export function useWorkspaceChatModel({
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
-      canMoveConversation:
-        collaborationWorkspaceChromeVisible && collaborationWorkspace.canMoveConversation,
+      canMoveConversation: collaborationWorkspace.canMoveConversation,
       startNewConversation,
       selectConversation,
       renameConversation: async (conversationId, title) => {
@@ -935,7 +910,6 @@ export function useWorkspaceChatModel({
       collaborationWorkspaceId: activeCollaborationWorkspaceId,
       newConversationPrivate:
         !selectedConversationId &&
-        collaborationWorkspaceChromeVisible &&
         collaborationWorkspace.activeCollaborationWorkspace?.kind === "shared" &&
         collaborationWorkspace.activeCollaborationWorkspace.defaultConversationVisibility ===
           "private",

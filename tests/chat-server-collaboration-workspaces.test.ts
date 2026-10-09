@@ -1,8 +1,4 @@
-import {
-  type TestInstance as TestServer,
-  createTestInstance,
-  getTestConfig
-} from "./support/test-instance";
+import { type TestInstance as TestServer, createTestInstance } from "./support/test-instance";
 import { required } from "./support/assertions";
 import {
   testRequest,
@@ -28,77 +24,6 @@ import { createMultipartFilePayload } from "./support/chat-server-attachment-har
 const clientInstanceId = asClientInstanceId("demo-local");
 
 describe("Collaboration Workspace API", () => {
-  it("blocks growth operations while personal workspace conversations keep working", async () => {
-    const app = await createWorkspaceApp(false);
-    await currentUser(app, "owner");
-
-    const workspaces = await app.call("workspaces.list", {}, "owner");
-    expect(workspaces.statusCode).toBe(200);
-    const personalWorkspace = workspaces
-      .json<{ items: Array<{ id: string; kind: string }> }>()
-      .items.find((workspace) => workspace.kind === "personal");
-    expect(personalWorkspace).toBeDefined();
-
-    const conversation = await app.call(
-      "conversations.create",
-      { payload: { title: "Personal while shared workspaces are disabled" } },
-      "owner"
-    );
-    expect(conversation.statusCode).toBe(200);
-    expect(conversation.json()).toMatchObject({
-      collaborationWorkspaceId: personalWorkspace!.id
-    });
-    const conversationId = conversation.json<{ id: string }>().id;
-    await seedConversationMessage(app.stores.conversations, conversationId);
-    const listedConversations = await app.call("conversations.list", {}, "owner");
-    expect(listedConversations.statusCode).toBe(200);
-    expect(listedConversations.json().items).toContainEqual(
-      expect.objectContaining({ id: conversationId })
-    );
-    expect(
-      (
-        await app.call(
-          "conversations.thread.get",
-          { params: { conversationId: conversationId } },
-          "owner"
-        )
-      ).statusCode
-    ).toBe(200);
-
-    for (const request of [
-      testRequest("workspaces.create", {
-        method: "POST" as const,
-        payload: { name: "Blocked" }
-      }),
-      testRequest("workspaces.directory.list", { method: "GET" as const }),
-      testRequest("workspaces.access_requests.create", {
-        params: { collaborationWorkspaceId: "missing" },
-        method: "POST" as const
-      }),
-      testRequest("workspaces.members.add", {
-        params: { collaborationWorkspaceId: "missing" },
-        method: "POST" as const,
-        payload: { email: "member@example.test" }
-      }),
-      testRequest("workspaces.member_candidates.list", {
-        params: { collaborationWorkspaceId: "missing" },
-        query: { q: "owner" },
-        method: "GET" as const
-      })
-    ]) {
-      const response = await callAs(app, "owner", request);
-      expect(response.statusCode).toBe(403);
-      expect(response.json()).toMatchObject({
-        error: {
-          code: "FORBIDDEN",
-          message: "Collaboration workspaces are not enabled for this instance"
-        }
-      });
-    }
-
-    await app.close();
-  });
-
   it("pages candidates with identical labels and emails by their user ids", async () => {
     const app = await createWorkspaceApp();
     await currentUser(app, "owner");
@@ -312,52 +237,6 @@ describe("Collaboration Workspace API", () => {
     );
     const auditAfter = await app.stores.audit.listAuditEvents({ clientInstanceId });
     expect(auditAfter).toHaveLength(auditBefore.length);
-
-    await app.close();
-  });
-
-  it("keeps existing shared workspaces usable after the feature is disabled", async () => {
-    const app = await createWorkspaceApp();
-    await currentUser(app, "owner");
-    await currentUser(app, "member");
-    const workspaceId = await createSharedWorkspace(app, "owner", "Existing workspace");
-    await addWorkspaceMember(app, "owner", workspaceId, "member@example.test");
-
-    getTestConfig(app).ui.collaborationWorkspaces.enabled = false;
-
-    for (const actor of ["owner", "member"]) {
-      const listed = await app.call("workspaces.list", {}, actor);
-      expect(listed.statusCode).toBe(200);
-      expect(listed.json().items).toContainEqual(expect.objectContaining({ id: workspaceId }));
-
-      const read = await app.call(
-        "workspaces.get",
-        { params: { collaborationWorkspaceId: workspaceId } },
-        actor
-      );
-      expect(read.statusCode).toBe(200);
-      expect(read.json()).toMatchObject({ id: workspaceId, name: "Existing workspace" });
-    }
-
-    const left = await app.call(
-      "workspaces.members.remove",
-      { params: { collaborationWorkspaceId: workspaceId, userId: "me" } },
-      "member"
-    );
-    expect(left.statusCode).toBe(200);
-
-    const deleted = await app.call(
-      "workspaces.delete",
-      {
-        params: { collaborationWorkspaceId: workspaceId },
-        payload: { confirmName: "Existing workspace" }
-      },
-      "owner"
-    );
-    expect(deleted.statusCode).toBe(200);
-    await expect(
-      app.stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
-    ).resolves.toBeUndefined();
 
     await app.close();
   });
@@ -2351,10 +2230,9 @@ function conversationRoutes(
 
 const WORKSPACE_OBJECT_ROOT = "/tmp/vivd-catalyst-phase-d-workspace-objects";
 
-async function createWorkspaceApp(collaborationWorkspacesEnabled = true) {
+async function createWorkspaceApp() {
   return createTestInstance({
     config: createTestConfig({
-      collaborationWorkspacesEnabled,
       developmentAuth: {
         enabled: true,
         defaultUserId: "owner",

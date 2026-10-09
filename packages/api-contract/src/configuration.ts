@@ -116,9 +116,6 @@ export const safeConfigSchema = z.object({
     resources: z.object({
       enabled: z.boolean()
     }),
-    collaborationWorkspaces: z.object({
-      enabled: z.boolean()
-    }),
     configAssets: z.object({
       enabled: z.boolean(),
       editableAgentFields: editableAgentFieldsSchema,

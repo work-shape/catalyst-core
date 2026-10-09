@@ -1,6 +1,7 @@
 import { AppError } from "@vivd-catalyst/core";
 import { clientInstanceConfigSchema, type AgentConfig, type ClientInstanceConfig } from "./schemas";
 import { findDuplicates } from "./reference-validation";
+import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
 import {
   getModelSelectionForAgent,
   getModelSelectionForConversationTitles,
@@ -8,7 +9,7 @@ import {
 } from "./selectors";
 
 export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig {
-  const parsed = clientInstanceConfigSchema.safeParse(input);
+  const parsed = clientInstanceConfigSchema.safeParse(withoutRemovedUiSwitch(input));
   if (!parsed.success) {
     throw new AppError("VALIDATION_FAILED", "Client instance config is invalid", {
       issues: parsed.error.issues
@@ -23,6 +24,13 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
   return parsed.data;
+}
+
+function withoutRemovedUiSwitch(input: unknown): unknown {
+  if (typeof input !== "object" || input === null || !("ui" in input)) {
+    return input;
+  }
+  return { ...input, ui: withoutRemovedWorkspaceSwitch(input.ui) };
 }
 
 function assertModelProviderContextManagement(config: ClientInstanceConfig): void {

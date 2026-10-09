@@ -58,9 +58,6 @@ export function createSafeConfigView(
       resources: {
         enabled: config.ui.resources.enabled
       },
-      collaborationWorkspaces: {
-        enabled: config.ui.collaborationWorkspaces.enabled
-      },
       configAssets: {
         ...config.administration.agentConfiguration
       },

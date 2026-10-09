@@ -31,8 +31,6 @@ const MAX_WORKSPACE_EMOJI_LENGTH = 32;
 const CANNOT_ADD_MEMBER_MESSAGE =
   "This user cannot be added. Invitations for people without an eligible account are not available yet.";
 const LAST_OWNER_MESSAGE = "A Shared Workspace must retain at least one active owner";
-const COLLABORATION_WORKSPACES_DISABLED_MESSAGE =
-  "Collaboration workspaces are not enabled for this instance";
 
 /**
  * What a user may do in one Collaboration Workspace. A superadmin acts as Owner of every Shared
@@ -184,7 +182,6 @@ export class CollaborationWorkspaceWorkflow {
     context: RuntimeCallContext,
     command: CreateSharedWorkspaceCommand
   ): Promise<WorkspaceListItem> {
-    this.requireCollaborationWorkspacesEnabled();
     const workspace = await this.options.stores.workspaces.createWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       kind: "shared",
@@ -447,7 +444,6 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     query: string
   ): Promise<WorkspaceMemberCandidate[]> {
-    this.requireCollaborationWorkspacesEnabled();
     const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     requireOwnerOrAdmin(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
@@ -467,7 +463,6 @@ export class CollaborationWorkspaceWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId,
     email: string
   ): Promise<WorkspaceMemberItem> {
-    this.requireCollaborationWorkspacesEnabled();
     const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     requireOwnerOrAdmin(access);
     await this.requireSharedWorkspace(collaborationWorkspaceId);
@@ -633,7 +628,6 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async browseDirectory(user: AuthenticatedUser): Promise<WorkspaceDirectoryItem[]> {
-    this.requireCollaborationWorkspacesEnabled();
     const subjectUserId = asUserId(getSubjectUserId(user));
     const workspaces = await this.options.stores.workspaces.listDiscoverableWorkspaces({
       clientInstanceId: this.options.clientInstanceId
@@ -670,7 +664,6 @@ export class CollaborationWorkspaceWorkflow {
     context: RuntimeCallContext,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ) {
-    this.requireCollaborationWorkspacesEnabled();
     const subjectUserId = asUserId(getSubjectUserId(user));
     const workspace = await this.options.stores.workspaces.getWorkspace(
       this.options.clientInstanceId,
@@ -803,12 +796,6 @@ export class CollaborationWorkspaceWorkflow {
       { targetUserId }
     );
     return request;
-  }
-
-  private requireCollaborationWorkspacesEnabled(): void {
-    if (!this.options.config.ui.collaborationWorkspaces.enabled) {
-      throw new AppError("FORBIDDEN", COLLABORATION_WORKSPACES_DISABLED_MESSAGE);
-    }
   }
 
   private async toListItem(

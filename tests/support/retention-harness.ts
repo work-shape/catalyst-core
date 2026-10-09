@@ -76,7 +76,6 @@ export function createRetentionOptions(input: {
       allowUserDelete: true
     },
     modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
-    ui: { collaborationWorkspaces: { enabled: true } },
     tools: []
   });
   return completeServerOptions(

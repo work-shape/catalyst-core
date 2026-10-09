@@ -9,6 +9,7 @@ import {
   uiConfigSchema,
   type ClientInstanceConfig
 } from "./schemas";
+import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
 import { parseClientInstanceConfig } from "./validation";
 
 export async function loadClientInstanceConfigFromFile(
@@ -24,8 +25,9 @@ export async function loadClientInstanceConfigFromFile(
   }
 
   const baseDir = dirname(path);
+  const inlineUi = withoutRemovedWorkspaceSwitch(parsed.data.ui);
   if (parsed.data.uiFile && hasInlineUi) {
-    const overlay = uiConfigOverlaySchema.safeParse(parsed.data.ui);
+    const overlay = uiConfigOverlaySchema.safeParse(inlineUi);
     if (!overlay.success) {
       throw new AppError("VALIDATION_FAILED", "Inline UI config overlay is invalid", {
         issues: overlay.error.issues
@@ -34,9 +36,9 @@ export async function loadClientInstanceConfigFromFile(
   }
 
   const fileUi = parsed.data.uiFile
-    ? await loadUiConfigFile(baseDir, parsed.data.uiFile, hasInlineUi ? parsed.data.ui : undefined)
+    ? await loadUiConfigFile(baseDir, parsed.data.uiFile, hasInlineUi ? inlineUi : undefined)
     : hasInlineUi
-      ? parsed.data.ui
+      ? inlineUi
       : undefined;
 
   return parseClientInstanceConfig({
@@ -47,7 +49,7 @@ export async function loadClientInstanceConfigFromFile(
 
 async function loadUiConfigFile(baseDir: string, uiFile: string, overlay?: unknown) {
   const uiPath = resolve(baseDir, uiFile);
-  const uiRaw = await readStructuredFile(uiPath);
+  const uiRaw = withoutRemovedWorkspaceSwitch(await readStructuredFile(uiPath));
   const mergedUi =
     isPlainObject(uiRaw) && isPlainObject(overlay)
       ? mergeConfigObjects(uiRaw, overlay)

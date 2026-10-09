@@ -96,8 +96,8 @@ describe("config file extends", () => {
         "uiFile: ./ui.yaml",
         "ui:",
         "  title: Overlay title",
-        "  collaborationWorkspaces:",
-        "    enabled: true",
+        "  resources:",
+        "    enabled: false",
         ""
       ].join("\n")
     });
@@ -106,7 +106,7 @@ describe("config file extends", () => {
     expect(config.ui.title).toBe("Overlay title");
     expect(config.ui.showAgentName).toBe(false);
     expect(config.ui.accentColor).toBe("#111111");
-    expect(config.ui.collaborationWorkspaces.enabled).toBe(true);
+    expect(config.ui.resources.enabled).toBe(false);
     expect(config.ui.defaultThemeMode).toBe("system");
   });
 
@@ -177,9 +177,9 @@ describe("config file extends", () => {
         baseConfig,
         "uiFile: ./ui.yaml",
         "ui:",
-        "  collaborationWorkspacs:",
+        "  resorces:",
         "    enabled: true",
-        "  collaborationWorkspaces:",
+        "  resources:",
         "    enabld: true",
         ""
       ].join("\n")
@@ -194,7 +194,7 @@ describe("config file extends", () => {
         throw error;
       }
       expect(error.code).toBe("VALIDATION_FAILED");
-      expect(JSON.stringify(error.details)).toContain("collaborationWorkspacs");
+      expect(JSON.stringify(error.details)).toContain("resorces");
       expect(JSON.stringify(error.details)).toContain("enabld");
     }
   });
@@ -206,8 +206,8 @@ describe("config file extends", () => {
       "app.yaml": [
         "extends: ./app.base.yaml",
         "ui:",
-        "  collaborationWorkspaces:",
-        "    enabled: true",
+        "  resources:",
+        "    enabled: false",
         ""
       ].join("\n")
     });
@@ -215,7 +215,7 @@ describe("config file extends", () => {
     const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
     expect(config.ui.clientName).toBe("Base Co");
     expect(config.ui.title).toBe("Shared title");
-    expect(config.ui.collaborationWorkspaces.enabled).toBe(true);
+    expect(config.ui.resources.enabled).toBe(false);
   });
 
   it("replaces a base object with a non-record override instead of silently keeping it", async () => {

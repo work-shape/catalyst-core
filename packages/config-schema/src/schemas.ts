@@ -771,9 +771,6 @@ export const uiConfigSchema = z
     // When true the agent list shows each agent's description under its name.
     showAgentDescriptions: z.boolean().default(false),
     resources: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
-    collaborationWorkspaces: z
-      .object({ enabled: z.boolean().default(false) })
-      .default({ enabled: false }),
     accentColor: z.string().min(1).default(defaultLightUiTheme.accentColor),
     theme: lightUiThemeSchema,
     darkTheme: darkUiThemeSchema,
@@ -785,7 +782,6 @@ export const uiConfigSchema = z
     showAgentName: true,
     showAgentDescriptions: false,
     resources: { enabled: true },
-    collaborationWorkspaces: { enabled: false },
     accentColor: defaultLightUiTheme.accentColor,
     logoInvertOnDark: false,
     theme: defaultLightUiTheme,
@@ -797,11 +793,6 @@ export const uiConfigOverlaySchema = uiConfigSchema
   .unwrap()
   .extend({
     resources: uiConfigSchema.unwrap().shape.resources.unwrap().strict().optional(),
-    collaborationWorkspaces: uiConfigSchema
-      .unwrap()
-      .shape.collaborationWorkspaces.unwrap()
-      .strict()
-      .optional(),
     theme: lightUiThemeSchema.unwrap().strict().optional(),
     darkTheme: darkUiThemeSchema.unwrap().strict().optional()
   })
