@@ -1,7 +1,7 @@
 import { Command } from "cmdk";
 import { Check, Plus, Search } from "lucide-react";
 import { Popover as PopoverPrimitive } from "radix-ui";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { cn } from "../cn";
 import { useScrollEdgeFade } from "../scroll-edge-fade";
 import { useOverlayContainer, useUiLabels } from "../ui-root";
@@ -71,7 +71,8 @@ export type PickerProps = PickerSingleProps | PickerMultipleProps;
 // cmdk needs a value per row; no option can carry this one.
 const CREATE_ROW_VALUE = "\u0000create";
 
-const pickerRowClassName = cn(
+/** The row of a list that takes the arrow keys: the menu row with the hover fill when active. */
+export const pickerRowClassName = cn(
   menuRowClassName,
   "data-[selected=true]:bg-state-hover data-[disabled=true]:text-muted-foreground"
 );
@@ -173,16 +174,12 @@ export function Picker(props: PickerProps) {
           >
             <Command shouldFilter={false} loop className="flex min-h-0 flex-1 flex-col">
               {search ? (
-                <div className="flex shrink-0 items-center gap-2 border-b px-3 text-muted-foreground">
-                  <Search aria-hidden="true" className="size-4 shrink-0" />
-                  <Command.Input
-                    value={query}
-                    placeholder={labels.search}
-                    aria-label={labels.search}
-                    className="h-control-md min-w-0 flex-1 bg-transparent text-body text-foreground outline-none placeholder:text-muted-foreground"
-                    onValueChange={setQuery}
-                  />
-                </div>
+                <PickerSearchField
+                  value={query}
+                  label={labels.search}
+                  placeholder={labels.search}
+                  onValueChange={setQuery}
+                />
               ) : null}
               <Command.List
                 ref={listRef}
@@ -233,6 +230,36 @@ export function Picker(props: PickerProps) {
         </PopoverPrimitive.Portal>
       ) : null}
     </PopoverPrimitive.Root>
+  );
+}
+
+/** The search field over a list that takes the arrow keys. It sits on the list's top edge. */
+export function PickerSearchField({
+  value,
+  label,
+  placeholder,
+  inputRef,
+  onValueChange
+}: {
+  value: string;
+  /** Names the field for assistive technology. */
+  label: string;
+  placeholder: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  onValueChange(value: string): void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b px-3 text-muted-foreground">
+      <Search aria-hidden="true" className="size-4 shrink-0" />
+      <Command.Input
+        ref={inputRef}
+        value={value}
+        placeholder={placeholder}
+        aria-label={label}
+        className="h-control-md min-w-0 flex-1 bg-transparent text-body text-foreground outline-none placeholder:text-muted-foreground"
+        onValueChange={onValueChange}
+      />
+    </div>
   );
 }
 

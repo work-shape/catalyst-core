@@ -1,10 +1,5 @@
-export {
-  NavGroup,
-  NavItem,
-  useSidebarCollapsed,
-  type NavGroupProps,
-  type NavItemProps
-} from "./nav-item";
+export { NavGroup, NavItem, type NavGroupProps, type NavItemProps } from "./nav-item";
+export { useSidebarCollapsed } from "./sidebar-collapsed";
 export {
   SegmentedControl,
   SegmentedControlItem,
@@ -13,6 +8,7 @@ export {
   type SegmentedControlSize
 } from "./segmented-control";
 export { Sidebar, type SidebarProps } from "./sidebar";
+export { SkipLink, type SkipLinkProps } from "./skip-link";
 export {
   SubRail,
   type SubRailAnchorsProps,

@@ -1,25 +1,11 @@
 import { Collapsible } from "radix-ui";
 import { ChevronRight } from "lucide-react";
-import {
-  createContext,
-  useContext,
-  useId,
-  type ButtonHTMLAttributes,
-  type HTMLAttributes,
-  type ReactNode
-} from "react";
+import { useId, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
 import { LinkSlot, splitLinkChild } from "../link-slot";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
-
-/** Whether the navigation around an item shows icons only. `Sidebar` sets it. */
-export const NavCollapsedContext = createContext(false);
-
-/** True inside a `Sidebar` that is collapsed to icons, for what its header and footer show. */
-export function useSidebarCollapsed(): boolean {
-  return useContext(NavCollapsedContext);
-}
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 
 export interface NavItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** A 16 px icon before the label. A collapsed sidebar shows only items that have one. */
@@ -28,6 +14,14 @@ export interface NavItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   selected?: boolean;
   count?: number;
   countTone?: CountBadgeTone;
+  /** The keys that do the same. A collapsed item shows them in its tooltip. */
+  shortcut?: ReactNode;
+  /**
+   * Marks and actions of the row's object, after the label. They show while the pointer is on
+   * the row, while the keyboard is in it and on a touch screen, and take no room otherwise.
+   * `className` then styles the row around the item and the slot.
+   */
+  trailing?: ReactNode;
   /** Renders the single child, a link element, as the item; what is inside it is the label. */
   asChild?: boolean;
 }
@@ -42,6 +36,8 @@ export function NavItem({
   selected = false,
   count,
   countTone = "primary",
+  shortcut,
+  trailing,
   asChild = false,
   type = "button",
   children,
@@ -54,11 +50,15 @@ export function NavItem({
   const { link, label } = asChild
     ? splitLinkChild("NavItem", children)
     : { link: undefined, label: children };
+  const withTrailing = trailing !== undefined && !collapsed;
+  const fill = cn(
+    "transition-colors hover:bg-state-hover",
+    selected && "bg-state-selected font-medium hover:bg-state-selected"
+  );
   const classes = cn(
-    "relative flex h-8 w-full min-w-0 shrink-0 items-center gap-2 rounded-md px-2 text-left text-body text-foreground transition-colors hover:bg-state-hover focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+    "relative flex h-8 w-full min-w-0 shrink-0 items-center gap-2 rounded-md px-2 text-left text-body text-foreground focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
     collapsed && "w-8 justify-center px-0",
-    selected && "bg-state-selected font-medium hover:bg-state-selected",
-    className
+    withTrailing ? "w-auto flex-1" : cn(fill, className)
   );
   const content = collapsed ? (
     <>
@@ -89,16 +89,43 @@ export function NavItem({
       {content}
     </button>
   );
+  if (withTrailing) {
+    return (
+      <div
+        data-selected={selected ? "" : undefined}
+        className={cn(
+          "group/nav-item relative flex h-8 w-full min-w-0 shrink-0 items-center rounded-md",
+          fill,
+          className
+        )}
+      >
+        {item}
+        <span className={trailingSlotClassName}>{trailing}</span>
+      </div>
+    );
+  }
   if (!collapsed) {
     return item;
   }
   return (
     <Tooltip>
       <TooltipTrigger asChild>{item}</TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      <TooltipContent side="right" shortcut={shortcut}>
+        {label}
+      </TooltipContent>
     </Tooltip>
   );
 }
+
+// Out of the flow and unseen until the row is hovered, holds the focus, has an open menu or is
+// on a touch screen. What is in it stays in the tab order all the time.
+const trailingSlotClassName = cn(
+  "absolute right-0.5 flex shrink-0 items-center gap-0.5 pr-0.5 text-muted-foreground opacity-0",
+  "group-hover/nav-item:static group-hover/nav-item:opacity-100",
+  "group-focus-within/nav-item:static group-focus-within/nav-item:opacity-100",
+  "has-[[aria-expanded=true]]:static has-[[aria-expanded=true]]:opacity-100",
+  "pointer-coarse:static pointer-coarse:opacity-100"
+);
 
 export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {
   /** The group's name in sentence case. Without it the items stand as an unnamed group. */

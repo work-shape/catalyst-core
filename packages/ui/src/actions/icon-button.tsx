@@ -1,5 +1,6 @@
-import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
+import { useSidebarCollapsed } from "../navigation/sidebar-collapsed";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 import { Button } from "./button";
 
@@ -20,13 +21,19 @@ export interface IconButtonProps extends Omit<
   label: string;
   variant?: IconButtonVariant;
   size?: IconButtonSize;
+  /** The keys that do the same, shown after the label in the tooltip. */
+  shortcut?: ReactNode;
 }
 
-/** A button that shows only an icon. Its label is required, because the icon alone names nothing. */
+/**
+ * A button that shows only an icon. Its label is required, because the icon alone names
+ * nothing. In a collapsed `Sidebar` the tooltip opens to the right, clear of the strip.
+ */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { className, label, variant = "ghost", size = "md", type = "button", ...props },
+  { className, label, variant = "ghost", size = "md", shortcut, type = "button", ...props },
   ref
 ) {
+  const inCollapsedSidebar = useSidebarCollapsed();
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -40,7 +47,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
           {...props}
         />
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent side={inCollapsedSidebar ? "right" : undefined} shortcut={shortcut}>
+        {label}
+      </TooltipContent>
     </Tooltip>
   );
 });

@@ -122,10 +122,10 @@ test("the sidebar is 280 px wide, collapses to icons and is a drawer under 768 p
 }) => {
   const root = await openGallery(page, "Navigation");
   const entry = root.locator('[data-gallery-entry="Sidebar"]');
-  const sidebar = entry.locator("aside");
+  const sidebar = entry.locator("nav").first();
 
   expect((await sidebar.boundingBox())?.width).toBe(280);
-  expect(await style(sidebar.locator("nav"), "padding-left")).toBe("8px");
+  expect(await style(sidebar.locator("[data-sidebar-body]"), "padding-left")).toBe("8px");
   // No rule between the header, the list and the footer.
   const innerRules = await sidebar.evaluate((element) =>
     Array.from(element.children).map((child) => {

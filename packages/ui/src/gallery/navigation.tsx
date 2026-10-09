@@ -1,5 +1,7 @@
 import {
   AppWindow,
+  Clock,
+  Ellipsis,
   Hammer,
   Inbox,
   List as ListIcon,
@@ -15,13 +17,15 @@ import { useId, useState, type MouseEvent, type ReactNode } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { Select } from "../forms/select";
-import { NavGroup, NavItem, useSidebarCollapsed } from "../navigation/nav-item";
+import { NavGroup, NavItem } from "../navigation/nav-item";
+import { useSidebarCollapsed } from "../navigation/sidebar-collapsed";
 import {
   SegmentedControl,
   SegmentedControlItem,
   type SegmentedControlSize
 } from "../navigation/segmented-control";
 import { Sidebar } from "../navigation/sidebar";
+import { SkipLink } from "../navigation/skip-link";
 import { SubRail, type SubRailGroup } from "../navigation/sub-rail";
 import { Tabs, TabsContent, TabsLink, TabsList, TabsNav, TabsTrigger } from "../navigation/tabs";
 import { Page } from "../structure/page";
@@ -142,10 +146,10 @@ function SidebarSampleHeader({
     </IconButton>
   );
   if (iconsOnly) {
-    return toggle;
+    return <div className="grid h-(--layout-header) place-items-center">{toggle}</div>;
   }
   return (
-    <div className="flex min-w-0 items-center gap-2 pl-2">
+    <div className="flex h-(--layout-header) min-w-0 items-center gap-2 pl-2">
       <Avatar kind="workspace" size="sm" name={text.navWorkspace} />
       <span className="min-w-0 flex-1 truncate text-label">{text.navWorkspace}</span>
       {toggle}
@@ -204,6 +208,24 @@ function NavItemSamples({ text }: { text: GalleryText }) {
             {sampleLink(() => undefined, text.navBuild)}
           </NavItem>
         </NavGroup>
+        <NavGroup label={text.navRowActions}>
+          {[text.navConversationTax, text.navConversationLease].map((title, index) => (
+            <NavItem
+              key={title}
+              selected={index === 1}
+              trailing={
+                <>
+                  <Clock aria-hidden="true" className="size-3.5 text-warning" />
+                  <IconButton size="sm" label={text.navRowMore}>
+                    <Ellipsis aria-hidden="true" />
+                  </IconButton>
+                </>
+              }
+            >
+              {title}
+            </NavItem>
+          ))}
+        </NavGroup>
       </div>
       <div className="grid w-full max-w-(--layout-sidebar) content-start gap-4">
         <NavGroup label={text.navGroupPlain}>
@@ -216,6 +238,26 @@ function NavItemSamples({ text }: { text: GalleryText }) {
         <NavGroup label={text.navGroupFolding} collapsible defaultOpen={false}>
           <NavItem>{text.navConversationLease}</NavItem>
         </NavGroup>
+      </div>
+    </div>
+  );
+}
+
+function SkipLinkSample({ text }: { text: GalleryText }) {
+  const targetId = useId();
+  return (
+    <div className="grid gap-2">
+      <p className="text-body text-muted-foreground">{text.skipLinkHint}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <SkipLink target={targetId}>{text.skipLinkLabel}</SkipLink>
+        <Button variant="outline">{text.navMain}</Button>
+        <span
+          id={targetId}
+          tabIndex={-1}
+          className="rounded-md px-2 py-1 text-body focus-visible:focus-ring"
+        >
+          {text.skipLinkTarget}
+        </span>
       </div>
     </div>
   );
@@ -443,6 +485,11 @@ export const navigationGallery: GalleryGroup = {
       name: "NavItem",
       components: ["NavItem", "NavGroup"],
       render: (text) => <NavItemSamples text={text} />
+    },
+    {
+      name: "SkipLink",
+      components: ["SkipLink"],
+      render: (text) => <SkipLinkSample text={text} />
     },
     {
       name: "SubRail",

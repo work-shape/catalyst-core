@@ -10,6 +10,8 @@ import {
   Section,
   SegmentedControl,
   SegmentedControlItem,
+  Sidebar,
+  SkipLink,
   SubRail,
   Tabs,
   TabsContent,
@@ -98,6 +100,50 @@ describe("navigation, page structure and data components", () => {
     expect(anchor).toMatch(/<a[^>]*href="\/apps"/u);
     expect(anchor).not.toContain("<button");
     expect(anchor).not.toContain("font-medium");
+  });
+
+  it("keeps a navigation item's marks and actions beside it, out of the button", () => {
+    const markup = render(
+      createElement(
+        NavItem,
+        { trailing: createElement("button", { "aria-label": "More" }), className: "mt-1" },
+        "Offer"
+      )
+    );
+
+    // The row carries the fill and the caller's class; the item and the slot are siblings.
+    expect(markup).toMatch(/<div class="group\/nav-item[^"]*hover:bg-state-hover[^"]*mt-1"/u);
+    expect(markup).toMatch(/<button[^>]*>.*?Offer<\/span><\/button><span[^>]*opacity-0/u);
+    expect(markup).toContain("group-focus-within/nav-item:opacity-100");
+    expect(markup).toContain("pointer-coarse:opacity-100");
+  });
+
+  it("makes the sidebar one named navigation landmark and collapses its items to icons", () => {
+    const items = [
+      createElement(NavItem, { key: "a", icon: createElement("svg") }, "New chat"),
+      createElement(NavItem, { key: "b", trailing: "x" }, "No icon")
+    ];
+    const open = render(createElement(Sidebar, { label: "Main navigation" }, items));
+    expect(open).toMatch(/<nav aria-label="Main navigation"[^>]*w-\(--layout-sidebar\)/u);
+    expect(open.match(/<nav/gu)).toHaveLength(1);
+    expect(open).toContain("No icon");
+
+    const collapsed = render(
+      createElement(Sidebar, { label: "Main navigation", collapsed: true }, items)
+    );
+    expect(collapsed).toContain("w-(--layout-sidebar-collapsed)");
+    expect(collapsed).toContain('<span class="sr-only">New chat</span>');
+    // An item without an icon has nothing to show in the strip.
+    expect(collapsed).not.toContain("No icon");
+  });
+
+  it("links past the navigation without changing the address by itself", () => {
+    const markup = render(
+      createElement(SkipLink, { target: "content", children: "Skip to content" })
+    );
+
+    expect(markup).toMatch(/<a href="#content" class="sr-only focus-visible:not-sr-only/u);
+    expect(markup).toContain("Skip to content");
   });
 
   it("offers a sub-rail's entries as a select and as links", () => {

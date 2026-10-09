@@ -93,6 +93,15 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   menuShowDrafts: string;
   menuShowArchived: string;
   pickAgent: string;
+  paletteOpen: string;
+  paletteLabel: string;
+  paletteConversations: string;
+  paletteNoMatch: string;
+  navRowActions: string;
+  navRowMore: string;
+  skipLinkLabel: string;
+  skipLinkHint: string;
+  skipLinkTarget: string;
   pickWorkspaces: string;
   pickRole: string;
   pickerInDialog: string;
@@ -258,6 +267,15 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuShowDrafts: "Show drafts",
     menuShowArchived: "Show archived",
     pickAgent: "Choose agent",
+    paletteOpen: "Open palette",
+    paletteLabel: "Search",
+    paletteConversations: "Conversations",
+    paletteNoMatch: "No results.",
+    navRowActions: "With marks and actions",
+    navRowMore: "More actions",
+    skipLinkLabel: "Skip to content",
+    skipLinkHint: "The link shows while it holds the focus: press Tab from here.",
+    skipLinkTarget: "Content",
     pickWorkspaces: "Workspaces",
     pickRole: "Choose role",
     pickerInDialog: "Picker in a dialog",
@@ -425,6 +443,15 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuShowDrafts: "Entwürfe anzeigen",
     menuShowArchived: "Archivierte anzeigen",
     pickAgent: "Agent wählen",
+    paletteOpen: "Palette öffnen",
+    paletteLabel: "Suchen",
+    paletteConversations: "Unterhaltungen",
+    paletteNoMatch: "Keine Treffer.",
+    navRowActions: "Mit Marken und Aktionen",
+    navRowMore: "Weitere Aktionen",
+    skipLinkLabel: "Zum Inhalt springen",
+    skipLinkHint: "Der Link erscheint, solange er den Fokus hat: von hier aus Tab drücken.",
+    skipLinkTarget: "Inhalt",
     pickWorkspaces: "Workspaces",
     pickRole: "Rolle wählen",
     pickerInDialog: "Auswahl in einem Dialog",

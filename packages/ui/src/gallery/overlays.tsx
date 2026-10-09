@@ -7,6 +7,8 @@ import {
   Link,
   Pencil,
   Play,
+  Search,
+  SquarePen,
   Trash2
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -15,6 +17,7 @@ import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { Field } from "../forms/field";
 import { Select } from "../forms/select";
+import { CommandPalette, type CommandPaletteGroup } from "../overlays/command-palette";
 import { ConfirmDialog, type ConfirmDialogTone } from "../overlays/confirm-dialog";
 import { Dialog, type DialogSize } from "../overlays/dialog";
 import {
@@ -135,6 +138,73 @@ function PopoverSamples({ text }: { text: GalleryText }) {
           </PopoverContent>
         </Popover>
       ))}
+    </Samples>
+  );
+}
+
+function CommandPaletteSample({ text }: { text: GalleryText }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [chosen, setChosen] = useState<string | undefined>(undefined);
+  const conversations = [
+    text.navConversationLease,
+    text.navConversationTax,
+    text.navConversationOffer
+  ];
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = conversations.filter((title) => title.toLocaleLowerCase().includes(needle));
+  const groups: CommandPaletteGroup[] =
+    needle === ""
+      ? [
+          {
+            items: [
+              {
+                value: "new",
+                label: text.navNewChat,
+                leading: <SquarePen aria-hidden="true" />,
+                shortcut: "⌘⇧O"
+              }
+            ]
+          },
+          {
+            heading: text.navRecent,
+            items: conversations.map((title) => ({ value: title, label: title }))
+          }
+        ]
+      : [
+          {
+            heading: text.paletteConversations,
+            items: matches.map((title) => ({ value: title, label: title }))
+          }
+        ];
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
+  return (
+    <Samples>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <Search aria-hidden="true" />
+        {text.paletteOpen}
+      </Button>
+      {chosen === undefined ? null : (
+        <span className="text-body text-muted-foreground" data-gallery-sample="palette-chosen">
+          {chosen}
+        </span>
+      )}
+      <CommandPalette
+        open={open}
+        label={text.paletteLabel}
+        query={query}
+        groups={groups}
+        message={needle !== "" && matches.length === 0 ? text.paletteNoMatch : undefined}
+        onQueryChange={setQuery}
+        onSelect={(value) => {
+          setChosen(value === "new" ? text.navNewChat : value);
+          close();
+        }}
+        onClose={close}
+      />
     </Samples>
   );
 }
@@ -378,6 +448,11 @@ export const overlaysGallery: GalleryGroup = {
         "DropdownMenuSeparator"
       ],
       render: (text) => <DropdownMenuSamples text={text} />
+    },
+    {
+      name: "CommandPalette",
+      components: ["CommandPalette"],
+      render: (text) => <CommandPaletteSample text={text} />
     },
     {
       name: "Picker",

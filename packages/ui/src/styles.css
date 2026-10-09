@@ -125,6 +125,7 @@
   --layout-header: 4rem;
   --layout-gutter: 1.5rem;
   --layout-sidebar: 17.5rem;
+  --layout-sidebar-collapsed: 3rem;
   --layout-subrail: 14rem;
   --layout-content-narrow: 44rem;
   --layout-content: 64rem;

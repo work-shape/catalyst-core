@@ -8,7 +8,7 @@ import {
 import { cn } from "../cn";
 import { useScrollEdgeFade } from "../scroll-edge-fade";
 import { OverlayScope } from "../ui-root";
-import { NavCollapsedContext } from "./nav-item";
+import { NavCollapsedContext } from "./sidebar-collapsed";
 
 /** The width under which the sidebar leaves the layout and becomes a drawer. */
 const DRAWER_QUERY = "(width < 48rem)";
@@ -16,7 +16,10 @@ const DRAWER_QUERY = "(width < 48rem)";
 export interface SidebarProps extends Omit<HTMLAttributes<HTMLElement>, "aria-label"> {
   /** Names the navigation landmark, and the drawer under 768 px. */
   label: string;
-  /** Stays in place above the scrolling body, such as a workspace selector. */
+  /**
+   * Stays in place above the scrolling body, such as a workspace selector. Its first row is
+   * `--layout-header` high where it should meet the header of the page beside it.
+   */
   header?: ReactNode;
   /** Stays in place below the scrolling body, such as the account menu. */
   footer?: ReactNode;
@@ -29,8 +32,9 @@ export interface SidebarProps extends Omit<HTMLAttributes<HTMLElement>, "aria-la
 }
 
 /**
- * The frame of the main navigation: a header, a scrolling body of `NavGroup`s and `NavItem`s,
- * and a footer. It is 280 px wide, collapses to a strip of icons, and under 768 px leaves the
+ * The frame of the main navigation, a navigation landmark: a header, a scrolling body of
+ * `NavGroup`s and `NavItem`s, and a footer. It is 280 px wide, collapses to a strip of icons
+ * 48 px wide whose `IconButton`s open their tooltip to the right, and under 768 px leaves the
  * layout and opens as a modal drawer. What it shows belongs to the caller.
  * Its content mounts anew when the window crosses 768 px, so the caller controls the state of
  * its groups (`NavGroup` `open`) where that state must survive.
@@ -48,32 +52,38 @@ export function Sidebar({
 }: SidebarProps) {
   const drawer = useMediaQuery(DRAWER_QUERY);
   const iconsOnly = collapsed && !drawer;
-  const body = useScrollEdgeFade<HTMLElement>([iconsOnly, drawer]);
+  const body = useScrollEdgeFade<HTMLDivElement>([iconsOnly, drawer]);
 
   const frame = (
-    <aside
+    <nav
       aria-label={label}
       data-collapsed={iconsOnly ? "" : undefined}
       className={cn(
         "flex h-full min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground",
         drawer
           ? "w-full"
-          : cn("border-r border-sidebar-border", iconsOnly ? "w-12" : "w-(--layout-sidebar)"),
+          : cn(
+              "border-r border-sidebar-border",
+              iconsOnly ? "w-(--layout-sidebar-collapsed)" : "w-(--layout-sidebar)"
+            ),
         className
       )}
       {...props}
     >
-      {header === undefined ? null : <div className="shrink-0 px-2 pt-2">{header}</div>}
-      <nav
+      {header === undefined ? null : <div className="shrink-0 px-2">{header}</div>}
+      <div
         ref={body.ref}
         style={body.style}
         onScroll={body.onScroll}
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 [scrollbar-width:thin]"
+        data-sidebar-body=""
+        // Positioned, so that what an item places absolutely or hides for screen readers
+        // scrolls with the list and does not lengthen the page.
+        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 [scrollbar-width:thin]"
       >
         <div className="flex flex-col gap-4">{children}</div>
-      </nav>
+      </div>
       {footer === undefined ? null : <div className="shrink-0 px-2 pb-2">{footer}</div>}
-    </aside>
+    </nav>
   );
 
   return (

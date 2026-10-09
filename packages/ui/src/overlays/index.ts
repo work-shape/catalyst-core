@@ -1,3 +1,9 @@
+export {
+  CommandPalette,
+  type CommandPaletteGroup,
+  type CommandPaletteItem,
+  type CommandPaletteProps
+} from "./command-palette";
 export { ConfirmDialog, type ConfirmDialogProps, type ConfirmDialogTone } from "./confirm-dialog";
 export { Dialog, type DialogProps, type DialogSize } from "./dialog";
 export {
