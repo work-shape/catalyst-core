@@ -1,4 +1,4 @@
-import { Bot, CalendarClock, LayoutGrid, Plus } from "lucide-react";
+import { Bot, CalendarClock, Clock, LayoutGrid, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { Banner, type BannerTone } from "../feedback/banner";
@@ -58,6 +58,9 @@ function BannerSamples({ text }: { text: GalleryText }) {
       </Banner>
       <Banner layout="page" tone="info">
         {text.bannerPage}
+      </Banner>
+      <Banner layout="line" tone="warning" icon={<Clock aria-hidden="true" />}>
+        {text.bannerLine}
       </Banner>
     </div>
   );

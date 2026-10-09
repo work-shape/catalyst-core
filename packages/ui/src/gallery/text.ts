@@ -123,6 +123,7 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText {
   bannerDanger: string;
   bannerAction: string;
   bannerPage: string;
+  bannerLine: string;
   showAgain: string;
   noticeSaved: string;
   noticeFailed: string;
@@ -287,6 +288,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     bannerDanger: "The monthly limit is reached. New runs are refused.",
     bannerAction: "Connect",
     bannerPage: "You are working on the staging instance.",
+    bannerLine: "Will be deleted automatically on Friday, October 16.",
     showAgain: "Show again",
     noticeSaved: "Saved",
     noticeFailed: "The connection test failed.",
@@ -452,6 +454,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     bannerDanger: "Das Monatslimit ist erreicht. Neue Läufe werden abgelehnt.",
     bannerAction: "Verbinden",
     bannerPage: "Du arbeitest auf der Staging-Instanz.",
+    bannerLine: "Wird am Freitag, 16. Oktober automatisch gelöscht.",
     showAgain: "Wieder anzeigen",
     noticeSaved: "Gespeichert",
     noticeFailed: "Der Verbindungstest ist fehlgeschlagen.",

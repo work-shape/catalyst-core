@@ -5,8 +5,11 @@ import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
 
 export type BannerTone = "info" | "success" | "warning" | "danger";
-/** `inline` is a box inside the content; `page` spans the page's width under its header. */
-export type BannerLayout = "inline" | "page";
+/**
+ * `inline` is a box inside the content; `page` spans the page's width under its header; `line`
+ * is one quiet sentence beside what it concerns, where only the icon carries the tone.
+ */
+export type BannerLayout = "inline" | "page" | "line";
 
 // The soft recipe: the tone's tint as fill, its soft foreground as text, its line as border.
 const bannerTones: Record<BannerTone, string> = {
@@ -17,8 +20,17 @@ const bannerTones: Record<BannerTone, string> = {
 };
 
 const bannerLayouts: Record<BannerLayout, string> = {
-  inline: "rounded-md border px-3 py-2",
-  page: "border-b px-(--layout-gutter) py-2"
+  inline: "gap-2.5 rounded-md border px-3 py-2 text-body",
+  page: "gap-2.5 border-b px-(--layout-gutter) py-2 text-body",
+  line: "gap-1.5 text-caption text-muted-foreground"
+};
+
+// A line has no fill to carry the tone, so its icon takes the tone's own colour.
+const lineIconTones: Record<BannerTone, string> = {
+  info: "text-info",
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-destructive"
 };
 
 const toneIcons: Record<BannerTone, ReactNode> = {
@@ -57,20 +69,28 @@ export function Banner({
 }: BannerProps) {
   const labels = useUiLabels("Banner");
   const shownIcon = icon === undefined ? toneIcons[tone] : icon;
+  const line = layout === "line";
   return (
     <div
       role={tone === "danger" ? "alert" : "status"}
       data-tone={tone}
       className={cn(
-        "flex items-start gap-2.5 text-body",
-        bannerTones[tone],
+        "flex items-start",
+        line ? undefined : bannerTones[tone],
         bannerLayouts[layout],
         className
       )}
       {...props}
     >
       {shownIcon === null ? null : (
-        <span className="flex h-5 shrink-0 items-center [&>svg]:size-4">{shownIcon}</span>
+        <span
+          className={cn(
+            "flex shrink-0 items-center",
+            line ? cn("h-4 [&>svg]:size-3.5", lineIconTones[tone]) : "h-5 [&>svg]:size-4"
+          )}
+        >
+          {shownIcon}
+        </span>
       )}
       <div className="grid min-w-0 flex-1 gap-0.5">
         {title === undefined ? null : <p className="text-label">{title}</p>}

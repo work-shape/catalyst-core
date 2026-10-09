@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { createElement, Fragment } from "react";
+import { createElement, Fragment, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import * as library from "@vivd-catalyst/ui";
@@ -255,6 +255,34 @@ describe("form components", () => {
       expect(avatar(kind, "marketing")).toMatch(/rounded-md[^>]*>MA</u);
     }
     expect(avatar("person", " ")).toContain(">?<");
+  });
+});
+
+describe("Banner", () => {
+  const inRoot = (banner: ReactNode) =>
+    renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, banner));
+
+  it("draws a line without a box: quiet text, and the tone on the icon alone", () => {
+    const line = inRoot(
+      createElement(
+        Banner,
+        { layout: "line", tone: "warning", icon: createElement("svg") },
+        "Will be deleted soon."
+      )
+    );
+    const banner = /<div role="status" data-tone="warning" class="([^"]*)"/u.exec(line)?.[1];
+    expect(banner?.split(" ")).toEqual(
+      expect.arrayContaining(["text-caption", "text-muted-foreground"])
+    );
+    expect(banner).not.toMatch(/border|bg-|rounded|text-warning/u);
+    expect(line).toMatch(/<span class="[^"]*text-warning[^"]*"><svg>/u);
+    expect(line).not.toContain("<button");
+  });
+
+  it("keeps the box and the tone's fill for the other layouts", () => {
+    const inline = inRoot(createElement(Banner, { tone: "warning" }, "Read-only."));
+    expect(inline).toMatch(/class="[^"]*border-warning-border bg-warning-soft[^"]*rounded-md/u);
+    expect(inline).not.toContain("text-muted-foreground");
   });
 });
 
