@@ -655,8 +655,8 @@ export const executionWorkspacesConfigSchema = z
 // The base theme: warm paper neutrals with one restrained orange accent, and a warm near-black
 // in dark mode. An instance that sets no colours gets it; a customer theme replaces all seven.
 const defaultLightUiTheme = {
-  accentColor: "#c2530f",
-  accentStrongColor: "#9a3e08",
+  accentColor: "#b5573a",
+  accentStrongColor: "#8c3f26",
   backgroundColor: "#f6f3ec",
   surfaceColor: "#fdfbf7",
   textColor: "#201c17",
@@ -665,8 +665,8 @@ const defaultLightUiTheme = {
 };
 
 const defaultDarkUiTheme = {
-  accentColor: "#e8823c",
-  accentStrongColor: "#f2a469",
+  accentColor: "#d98c6c",
+  accentStrongColor: "#e8ab90",
   backgroundColor: "#131210",
   surfaceColor: "#1c1a17",
   textColor: "#efebe4",

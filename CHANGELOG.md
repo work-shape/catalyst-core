@@ -49,13 +49,15 @@ contain breaking changes; a patch version does not.
 ### Changed
 
 - **Interface, default theme:** an instance that sets no `ui.theme` or `ui.darkTheme` now shows
-  warm paper neutrals with one orange accent (light `#fdfbf7` page, `#f6f3ec` sidebar,
-  `#c2530f` accent; dark `#1c1a17` page, `#131210` sidebar, `#e8823c` accent). An instance
+  warm paper neutrals with one terracotta accent (light `#fdfbf7` page, `#f6f3ec` sidebar,
+  `#b5573a` accent; dark `#1c1a17` page, `#131210` sidebar, `#d98c6c` accent). An instance
   with its own theme keeps its seven colours; the names of the inputs and tokens are
-  unchanged. On every instance, buttons and the segmented control are pills, filled buttons
-  carry a hairline and a faint edge, a hovered primary button moves away from its label's
-  colour instead of fading, and a hovered ghost button keeps the text colour. Two derived
-  tokens are new: `--primary-hover` and `--shadow-control`.
+  unchanged. On every instance, buttons and the segmented control are pills and filled buttons
+  carry a hairline and a faint edge. The primary and the danger button are tinted instead of
+  solid: a soft fill of the accent or of red, its line and its strong text. The send button
+  in the composer is filled with the text colour. A hovered ghost button keeps the text
+  colour, and an avatar without a colour of its own is a neutral grey with initials in the
+  text colour. One derived token is new: `--shadow-control`.
 - **Chat:** the display panel is the surface slot. A tool display or a file preview stands
   beside the conversation while both sides keep 380 px, which is from 760 px of main area, and
   covers the main area below that, where its header offers "Show chat" alone. The former drawer

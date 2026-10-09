@@ -27,7 +27,7 @@ export interface AvatarProps extends Omit<HTMLAttributes<HTMLSpanElement>, "chil
   emoji?: string | null;
   /** Shown in place of the initials and the emoji. */
   icon?: ReactNode;
-  /** The object's own colour pair. Without it the avatar shows the theme's accent. */
+  /** The object's own colour pair. Without it the avatar is a neutral grey with initials in the text colour. */
   accent?: AvatarAccent;
   size?: AvatarSize;
 }
@@ -53,7 +53,7 @@ export function Avatar({
       aria-hidden="true"
       data-kind={kind}
       className={cn(
-        "inline-grid shrink-0 place-items-center overflow-hidden leading-none font-semibold text-primary-foreground select-none",
+        "inline-grid shrink-0 place-items-center overflow-hidden leading-none font-semibold text-foreground select-none",
         kind === "person" ? "rounded-full" : "rounded-md",
         avatarSizes[size],
         className

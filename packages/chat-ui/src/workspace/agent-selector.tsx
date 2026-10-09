@@ -104,7 +104,7 @@ function AgentChip({
   );
   const content = (
     <>
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,var(--background))] text-primary">
+      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-foreground">
         {/*
           Alone, the icon is also the only sign that the list is open. Both
           icons stay mounted: replacing the one under a resting pointer makes

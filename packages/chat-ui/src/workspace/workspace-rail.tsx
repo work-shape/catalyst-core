@@ -162,7 +162,7 @@ export function WorkspaceRail({
         <div className="flex h-16 min-w-0 items-start pb-3 pr-11">
           <button
             type="button"
-            className="flex h-12 min-w-0 max-w-[11rem] cursor-pointer items-center justify-start overflow-hidden rounded-sm border-0 bg-transparent p-0 text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
+            className="flex h-12 min-w-0 max-w-[11rem] cursor-pointer items-center justify-start overflow-hidden rounded-sm border-0 bg-transparent p-0 text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring/30"
             aria-label={branding.clientLabel}
             onClick={onCreateConversation}
           >
@@ -174,7 +174,7 @@ export function WorkspaceRail({
         </div>
       ) : (
         <div className="grid h-16 min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-2.5 pb-3 pr-11">
-          <div className="grid size-9 place-items-center overflow-hidden rounded-md border border-sidebar-border bg-sidebar-accent/50 text-primary">
+          <div className="grid size-9 place-items-center overflow-hidden rounded-md border border-sidebar-border bg-sidebar-accent/50 text-foreground">
             <span className="text-sm font-semibold" aria-hidden="true">
               {branding.clientInitial}
             </span>

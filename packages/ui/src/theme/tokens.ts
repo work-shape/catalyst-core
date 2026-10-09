@@ -1,4 +1,4 @@
-import { TEXT_ON_SOLID_DARK, TEXT_ON_SOLID_LIGHT, textOnSolid } from "./contrast";
+import { textOnSolid } from "./contrast";
 
 export type ThemeMode = "light" | "dark";
 
@@ -27,8 +27,8 @@ export const DEFAULT_THEME_INPUTS: ThemeInputsByMode = {
     textColor: "#201c17",
     mutedTextColor: "#655e54",
     borderColor: "#e7e1d5",
-    accentColor: "#c2530f",
-    accentStrongColor: "#9a3e08"
+    accentColor: "#b5573a",
+    accentStrongColor: "#8c3f26"
   },
   dark: {
     surfaceColor: "#1c1a17",
@@ -36,8 +36,8 @@ export const DEFAULT_THEME_INPUTS: ThemeInputsByMode = {
     textColor: "#efebe4",
     mutedTextColor: "#b3ada3",
     borderColor: "#33302b",
-    accentColor: "#e8823c",
-    accentStrongColor: "#f2a469"
+    accentColor: "#d98c6c",
+    accentStrongColor: "#e8ab90"
   }
 };
 
@@ -51,7 +51,6 @@ export const THEME_TOKEN_NAMES = [
   "--popover-foreground",
   "--primary",
   "--primary-foreground",
-  "--primary-hover",
   "--primary-soft",
   "--primary-soft-foreground",
   "--primary-border",
@@ -175,12 +174,6 @@ export function createThemeTokens(inputs: ThemeInputs, mode: ThemeMode): ThemeTo
     "--popover-foreground": textColor,
     "--primary": accentColor,
     "--primary-foreground": onAccent,
-    // A hovered solid button moves away from its label's colour, so the label never loses contrast.
-    "--primary-hover": mix(
-      accentColor,
-      90,
-      onAccent === TEXT_ON_SOLID_LIGHT ? TEXT_ON_SOLID_DARK : TEXT_ON_SOLID_LIGHT
-    ),
     "--primary-soft": over(accentColor, 12),
     // An accent may be light, so its soft text is the strong accent and not the tone mix.
     "--primary-soft-foreground": accentStrongColor,

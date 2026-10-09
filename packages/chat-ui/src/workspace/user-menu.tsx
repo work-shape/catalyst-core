@@ -66,7 +66,7 @@ export function UserMenu({
       >
         <span
           style={{ background: avatarGradient(label) }}
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-white/45 text-xs font-semibold text-primary-foreground shadow-xs"
+          className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold text-foreground"
           aria-hidden="true"
         >
           {initials}

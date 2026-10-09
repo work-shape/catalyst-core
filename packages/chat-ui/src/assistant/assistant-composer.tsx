@@ -643,7 +643,7 @@ function ComposerAction({
     <Button
       type="button"
       size="icon"
-      className="absolute inset-0 size-9 rounded-full"
+      className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
       aria-label={t("stopGenerating")}
       onClick={onCancelRun}
     >
@@ -663,7 +663,7 @@ function ComposerAction({
         <Button
           type="button"
           size="icon"
-          className="absolute inset-0 size-9 rounded-xl"
+          className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
           aria-label={t("sendMessage")}
           title={effectiveDisabledReason}
           disabled={sendDisabled}
@@ -676,7 +676,7 @@ function ComposerAction({
         <Button
           type="button"
           size="icon"
-          className="absolute inset-0 size-9 rounded-full"
+          className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
           aria-label={t("sendMessage")}
           title={effectiveDisabledReason ?? t("sendMessage")}
           disabled={sendDisabled}
@@ -689,7 +689,7 @@ function ComposerAction({
           <Button
             type="button"
             size="icon"
-            className="absolute inset-0 size-9 rounded-full"
+            className="absolute inset-0 size-9 border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground"
             aria-label={t("sendMessage")}
             title={effectiveDisabledReason ?? t("sendMessage")}
             disabled={sendDisabled}

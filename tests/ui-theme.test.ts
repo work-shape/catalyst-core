@@ -50,8 +50,8 @@ describe("UI theme defaults", () => {
         const { r, g, b } = requireHex(value);
         const warm = r >= g && g >= b;
         const accent = name === "accentColor" || name === "accentStrongColor";
-        // A neutral leans to red by a few levels only; an accent is plainly orange.
-        const quiet = accent ? r - b >= 100 : r - b >= 3 && r - b <= 20;
+        // A neutral leans to red by a few levels only; an accent is plainly terracotta.
+        const quiet = accent ? r - b >= 80 : r - b >= 3 && r - b <= 20;
         expect([mode, name, warm, quiet]).toEqual([mode, name, true, true]);
       }
     }
@@ -164,14 +164,17 @@ describe("UI theme contrast", () => {
     expect(table.light?.["text on sidebar"]).toBeCloseTo(15.28, 1);
     expect(table.light?.["muted text on page"]).toBeCloseTo(6.19, 1);
     expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.53, 1);
-    expect(table.light?.["primary button label"]).toBeCloseTo(4.63, 1);
-    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(4.76, 1);
+    expect(table.light?.["primary button label on page"]).toBeCloseTo(6.1, 1);
+    expect(table.light?.["primary button label when pressed on sidebar"]).toBeCloseTo(4.82, 1);
+    expect(table.light?.["label on the solid accent"]).toBeCloseTo(4.78, 1);
+    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(5.13, 1);
     expect(table.dark?.["text on page"]).toBeCloseTo(14.61, 1);
     expect(table.dark?.["text on raised"]).toBeCloseTo(12.61, 1);
     expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.72, 1);
-    expect(table.dark?.["danger button label"]).toBeCloseTo(6.83, 1);
-    expect(table.dark?.["primary button label"]).toBeCloseTo(6.91, 1);
+    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.3, 1);
+    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.62, 1);
     expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.53, 1);
+    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.62, 1);
   });
 });
 
@@ -224,12 +227,26 @@ function measureContrast(tokens: ThemeTokens): Record<string, number> {
       read("--state-hover"),
       surface
     );
-    measure(
-      `primary button label on hover on ${surfaceName}`,
-      read("--primary-foreground"),
-      read("--primary-hover"),
-      surface
-    );
+    // Primary and danger buttons are tinted: strong text on the soft fill, which deepens to
+    // 20% on hover. A pressed primary goes to 25%; a pressed danger stays at 20%.
+    for (const [name, text, soft, color, pressed] of [
+      ["primary", "--primary-soft-foreground", "--primary-soft", "--primary", 0.25],
+      ["danger", "--destructive-soft-foreground", "--destructive-soft", "--destructive", 0.2]
+    ] as const) {
+      measure(`${name} button label on ${surfaceName}`, read(text), read(soft), surface);
+      measure(
+        `${name} button label on hover on ${surfaceName}`,
+        read(text),
+        { ...read(color), a: 0.2 },
+        surface
+      );
+      measure(
+        `${name} button label when pressed on ${surfaceName}`,
+        read(text),
+        { ...read(color), a: pressed },
+        surface
+      );
+    }
     // The chosen item of a segmented control: strong accent text on the accent tint, in a tray
     // with the secondary fill.
     measure(
@@ -238,13 +255,6 @@ function measureContrast(tokens: ThemeTokens): Record<string, number> {
       read("--primary-soft"),
       flatten(read("--secondary"), surface)
     );
-    // A danger button's hover is the fill at 90% over what lies beneath.
-    measure(
-      `danger button label on hover on ${surfaceName}`,
-      read("--destructive-foreground"),
-      { ...read("--destructive"), a: 0.9 },
-      surface
-    );
     for (const [tone, color, soft, softForeground] of tones) {
       measure(`${tone} badge on ${surfaceName}`, read(softForeground), read(soft), surface);
       measure(`${tone} as text on ${surfaceName}`, read(color), plain, surface);
@@ -252,8 +262,9 @@ function measureContrast(tokens: ThemeTokens): Record<string, number> {
   }
   const page = surfaces.page ?? { r: 0, g: 0, b: 0 };
   measure("placeholder in a field", read("--muted-foreground"), opaque(page), page);
-  measure("primary button label", read("--primary-foreground"), read("--primary"), page);
-  measure("danger button label", read("--destructive-foreground"), read("--destructive"), page);
+  measure("label on the solid accent", read("--primary-foreground"), read("--primary"), page);
+  measure("label on solid danger", read("--destructive-foreground"), read("--destructive"), page);
+  // Also the send button: the page colour on the ink fill.
   measure("tooltip", read("--background"), read("--foreground"), page);
   return ratios;
 }

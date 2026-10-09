@@ -216,7 +216,7 @@ export function LoginPanel({
               ) : null}
             </div>
           ) : clientInitial ? (
-            <div className="grid size-11 place-items-center rounded-lg border bg-card text-primary">
+            <div className="grid size-11 place-items-center rounded-lg border bg-card text-foreground">
               <span className="text-base font-semibold" aria-hidden="true">
                 {clientInitial}
               </span>

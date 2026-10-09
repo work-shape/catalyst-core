@@ -1,3 +1,3 @@
 export function avatarGradient(_seed: string): string {
-  return "linear-gradient(135deg, color-mix(in srgb, var(--primary) 82%, white), color-mix(in srgb, var(--primary) 78%, var(--accent-foreground)))";
+  return "color-mix(in srgb, var(--foreground) 12%, var(--background))";
 }

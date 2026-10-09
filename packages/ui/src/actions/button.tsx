@@ -8,21 +8,22 @@ export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "dan
 export type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 // A button is a pill. The filled variants are a surface: a fill, a hairline and the control
-// edge, which a press takes away. Ghost and link stay flat until hovered.
+// edge, which a press takes away. Primary and danger are tinted, not solid: a soft fill of
+// their colour, its line and its strong text. Ghost and link stay flat until hovered.
 const buttonVariants = cva(
   "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent text-label whitespace-nowrap transition-[color,background-color,border-color,box-shadow] focus-visible:focus-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         primary:
-          "bg-primary text-primary-foreground shadow-control hover:bg-primary-hover active:bg-primary active:shadow-none",
+          "border-primary-border bg-primary-soft text-primary-soft-foreground shadow-control hover:bg-primary/20 active:bg-primary/25 active:shadow-none",
         secondary:
           "border-input bg-secondary text-secondary-foreground shadow-control hover:bg-state-pressed active:shadow-none",
         outline:
           "border-input bg-background text-foreground shadow-control hover:border-input-strong hover:bg-state-hover active:bg-state-pressed active:shadow-none",
         ghost: "hover:bg-state-hover hover:text-foreground active:bg-state-pressed",
         danger:
-          "bg-destructive text-destructive-foreground shadow-control hover:bg-destructive/90 active:bg-destructive active:shadow-none",
+          "border-destructive-border bg-destructive-soft text-destructive-soft-foreground shadow-control hover:bg-destructive/20 active:shadow-none",
         link: "text-accent-foreground underline-offset-4 hover:underline active:opacity-80"
       },
       size: {

@@ -58,9 +58,9 @@ test("the gallery switches mode and language without touching the application", 
   await expect(light).toBeVisible();
   await expect(dark).toBeVisible();
   expect(await token(light, "--background")).toBe("#fdfbf7");
-  expect(await token(light, "--primary")).toBe("#c2530f");
+  expect(await token(light, "--primary")).toBe("#b5573a");
   expect(await token(dark, "--background")).toBe("#1c1a17");
-  expect(await token(dark, "--primary")).toBe("#e8823c");
+  expect(await token(dark, "--primary")).toBe("#d98c6c");
 
   // The group's own name changes with the language, so the choice is checked by its effect.
   await page.getByRole("group", { name: "Language" }).getByRole("button", { name: "DE" }).click();

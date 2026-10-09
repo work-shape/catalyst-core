@@ -45,7 +45,7 @@
     "packages/chat-ui/src/tool-artifacts.ts": {"palette":10},
     "packages/chat-ui/src/tool-call.tsx": {"elements":6,"font-size":1},
     "packages/chat-ui/src/workspace/agent-selector.tsx": {"elements":2,"roles":1},
-    "packages/chat-ui/src/workspace/user-menu.tsx": {"elements":1,"palette":1},
+    "packages/chat-ui/src/workspace/user-menu.tsx": {"elements":1},
     "packages/chat-ui/src/workspace/workspace-chrome.tsx": {"elements":1,"palette":3,"font-size":1},
     "packages/chat-ui/src/workspace/workspace-rail.tsx": {"elements":1},
     "packages/config-schema/src/schemas.ts": {"hex":14},
