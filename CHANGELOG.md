@@ -187,6 +187,8 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   now. `createPlatformStore` requires `poolSize` (breaking for integrators that call it).
 - **Run start:** a repeated run start with the same idempotency key waits up to 10 seconds for
   the first one, in steps of 100 ms, before it answers 409; until now it waited one second.
+- **Jobs:** `JobWorker.idle()` resolves when the worker has no pass and no job in flight and
+  sleeps until its next poll.
 - **Jobs (operator-relevant):** the API process runs a job executor on the new table
   `platform_jobs` (one migration, which only creates the table and moves no data). It replaces
   the three interval timers for conversation expiry, workspace cleanup and run recovery, and

@@ -9,11 +9,6 @@ import {
 } from "@vivd-catalyst/core";
 import { describe, expect, it } from "vitest";
 import { deferred, waitUntil } from "./support/assertions";
-import {
-  advanceFakeClockUntilSettled,
-  settleOnFakeClock,
-  useFakeClockBesidePostgres
-} from "./support/fake-clock";
 import { kindOf, useJobExecutorHarness } from "./support/job-executor-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
 
@@ -123,30 +118,80 @@ describe("job executor leases, wake and start", () => {
   it("claims a job enqueued in the same process without waiting for the next poll", async () => {
     const clientInstanceId = db.clientInstance("wake");
     const kind = kindOf("test.wake");
-    const handled = [deferred<undefined>(), deferred<undefined>()];
     const started = worker(db.store, clientInstanceId, [
-      defineJobHandler({
-        kind,
-        slots: 1,
-        async run(job) {
-          handled[job.payload.n]?.resolve(undefined);
-        }
-      })
+      defineJobHandler({ kind, slots: 1, async run() {} })
     ]);
-    // The poll sleeps on the fake clock, which this test keeps short of one poll interval.
-    useFakeClockBesidePostgres();
-    const startedAt = Date.now();
     started.start();
+    await started.idle();
 
-    for (const [n, done] of handled.entries()) {
-      // The job is visible at commit; the worker hears of it then.
-      await settleOnFakeClock(
-        db.store.transaction((stores) => stores.jobs.enqueue(kind, { n }, { clientInstanceId }))
+    for (const n of [0, 1]) {
+      // The job is visible at commit; the worker hears of it then, and is idle again only
+      // after the pass that the enqueue asked for. A worker that waited for its poll would be
+      // idle at once, with the job still queued.
+      await db.store.transaction((stores) =>
+        stores.jobs.enqueue(kind, { n }, { clientInstanceId })
       );
-      await advanceFakeClockUntilSettled(done.promise, 1, 300);
+      await started.idle();
+      expect((await jobs(clientInstanceId)).map((job) => job.status)).toEqual(
+        Array.from({ length: n + 1 }, () => "succeeded")
+      );
     }
+  });
 
-    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  it("claims a job enqueued while a slow claim is under way, without waiting for the next poll", async () => {
+    const clientInstanceId = db.clientInstance("wake_slow");
+    const slow = kindOf("test.wake_slow");
+    const late = kindOf("test.wake_late");
+    const started = worker(db.store, clientInstanceId, [
+      defineJobHandler({ kind: slow, slots: 1, async run() {} }),
+      defineJobHandler({ kind: late, slots: 1, async run() {} })
+    ]);
+    // The claim of a `slow` job waits inside its UPDATE for a lock this test holds.
+    const gate = 706_001;
+    await db.sql.unsafe(`
+      create function hold_slow_claim() returns trigger language plpgsql as $$
+      begin
+        perform pg_advisory_xact_lock(${gate});
+        return new;
+      end $$;
+      create trigger hold_slow_claim before update on platform_jobs for each row
+        when (new.kind = 'test.wake_slow' and new.status = 'running' and old.status = 'queued')
+        execute function hold_slow_claim();
+    `);
+    let release = async () => {};
+    try {
+      started.start();
+      await started.idle();
+      const held = await db.hold((tx) => tx`select pg_advisory_xact_lock(${gate})`);
+      release = async () => {
+        release = async () => {};
+        await held.rollback();
+      };
+
+      await db.store.jobs.enqueue(slow, { n: 0 }, { clientInstanceId });
+      await waitUntil(async () => {
+        const [row] = await db.sql<{ waiting: number }[]>`
+          select count(*)::int as waiting from pg_locks
+          where locktype = 'advisory' and objid = ${gate} and not granted`;
+        return row?.waiting === 1;
+      }, "the claim waits for the lock");
+      // The pass under way looked for kinds with work before this job existed.
+      await db.store.jobs.enqueue(late, { n: 1 }, { clientInstanceId });
+      await release();
+
+      await started.idle();
+      expect((await jobs(clientInstanceId)).map((job) => job.status)).toEqual([
+        "succeeded",
+        "succeeded"
+      ]);
+    } finally {
+      // A claim still waiting for the lock would keep the trigger from being dropped.
+      await release();
+      await db.sql.unsafe(`
+        drop trigger hold_slow_claim on platform_jobs;
+        drop function hold_slow_claim();
+      `);
+    }
   });
 
   it("makes the waiting tick of a schedule due when a worker starts, if the schedule says so", async () => {

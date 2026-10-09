@@ -82,6 +82,12 @@ export interface JobWorker {
    */
   runDue(): Promise<void>;
   /**
+   * Resolves when the worker has nothing in flight: no pass and no job running, and a started
+   * worker asleep until its next poll. An enqueue in this process ends that sleep at once, so
+   * a caller that must see the effect of what it enqueued waits on this instead of on time.
+   */
+  idle(): Promise<void>;
+  /**
    * Stops claiming, aborts every running handler's signal, waits up to 20 seconds for them to
    * return and releases what is left: such a job is queued again, due at once, with the attempt
    * given back.

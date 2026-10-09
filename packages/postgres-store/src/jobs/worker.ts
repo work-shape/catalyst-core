@@ -94,6 +94,20 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
   let stopListening: (() => void) | undefined;
   let schedulesCheckedAt: number | undefined;
   let passing: Promise<void> = Promise.resolve();
+  let passes = 0;
+  let sleeping = false;
+  const idleWaiters: Array<() => void> = [];
+
+  /**
+   * No pass and no job in flight, and a started worker asleep until its next poll. An enqueue
+   * in this process ends the sleep at once, so the worker is not idle again before the pass
+   * that the enqueue asked for.
+   */
+  const isIdle = () =>
+    passes === 0 && active.size === 0 && (loop === undefined || sleeping || stopping);
+  function noteIdle(): void {
+    if (isIdle()) for (const resolve of idleWaiters.splice(0)) resolve();
+  }
 
   const isTick = (row: JobRow) =>
     schedules.has(row.kind) && row.dedupeKey === scheduleDedupeKey(row.kind);
@@ -219,6 +233,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       .finally(() => {
         clearInterval(heartbeat);
         active.delete(row.id);
+        noteIdle();
       });
     active.set(row.id, {
       lease,
@@ -272,11 +287,13 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
 
   /** Passes of one worker run one after another, so each counts its free slots exactly. */
   function pass(): Promise<Pass> {
+    passes += 1;
     const next = passing.then(onePass, onePass);
-    passing = next.then(
-      () => undefined,
-      () => undefined
-    );
+    const passed = () => {
+      passes -= 1;
+      noteIdle();
+    };
+    passing = next.then(passed, passed);
     return next;
   }
 
@@ -338,19 +355,30 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
           }
           if (stopping) return;
           if (passRequested) continue;
+          sleeping = true;
+          noteIdle();
           await new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, POLL_INTERVAL_MS);
             timer.unref();
             wake = () => {
+              // Not idle from here on: the pass this asks for has yet to run.
+              sleeping = false;
               clearTimeout(timer);
               resolve();
             };
           });
+          sleeping = false;
         }
       })();
     },
     async runDue() {
       await Promise.all((await pass()).started);
+    },
+    idle() {
+      if (isIdle()) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        idleWaiters.push(resolve);
+      });
     },
     async stop() {
       stopping = true;
@@ -369,6 +397,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       ]);
       clearTimeout(graceTimer);
       await releaseActive();
+      noteIdle();
     }
   };
 }
