@@ -6,13 +6,13 @@ describe("workspace session query", () => {
   it("aborts the current-user request when its deadline expires", async () => {
     let requestSignal: AbortSignal | undefined;
     const client = {
-      account: {
-        get: (signal?: AbortSignal) => {
-          requestSignal = signal;
-          return rejectWhenAborted(signal);
+      me: {
+        get: (input?: { signal?: AbortSignal }) => {
+          requestSignal = input?.signal;
+          return rejectWhenAborted(input?.signal);
         }
       }
-    } as { account: Pick<ApiClient["account"], "get"> };
+    } as { me: Pick<ApiClient["me"], "get"> };
 
     await expect(
       getCurrentUserWithinDeadline(client, new AbortController().signal, 1)
@@ -24,13 +24,13 @@ describe("workspace session query", () => {
     const queryController = new AbortController();
     let requestSignal: AbortSignal | undefined;
     const client = {
-      account: {
-        get: (signal?: AbortSignal) => {
-          requestSignal = signal;
-          return rejectWhenAborted(signal);
+      me: {
+        get: (input?: { signal?: AbortSignal }) => {
+          requestSignal = input?.signal;
+          return rejectWhenAborted(input?.signal);
         }
       }
-    } as { account: Pick<ApiClient["account"], "get"> };
+    } as { me: Pick<ApiClient["me"], "get"> };
 
     const request = getCurrentUserWithinDeadline(client, queryController.signal, 60_000);
     queryController.abort();
@@ -59,7 +59,7 @@ describe("workspace session query", () => {
       }
     });
 
-    await client.account.get(controller.signal);
+    await client.me.get({ signal: controller.signal });
     expect(requestSignal?.aborted).toBe(false);
 
     controller.abort();
@@ -67,9 +67,7 @@ describe("workspace session query", () => {
   });
 });
 
-function rejectWhenAborted(
-  signal: AbortSignal | undefined
-): ReturnType<ApiClient["account"]["get"]> {
+function rejectWhenAborted(signal: AbortSignal | undefined): ReturnType<ApiClient["me"]["get"]> {
   return new Promise((_, reject) => {
     if (!signal) {
       reject(new Error("Expected an AbortSignal"));

@@ -52,14 +52,18 @@ export async function createConfigApi(options: ConfigApiOptions) {
   });
 
   return {
-    exportAssets: () => asConfigApiRequest(() => client.configAssets.export()),
+    exportAssets: () => asConfigApiRequest(() => client.config_assets.export()),
     replaceAssets: (input: unknown) =>
       asConfigApiRequest(() =>
-        client.configAssets.replace(apiOperations["config_assets.replace"].body.parse(input))
+        client.config_assets.replace({
+          body: apiOperations["config_assets.replace"].body.parse(input)
+        })
       ),
     validateAssets: (input: unknown) =>
       asConfigApiRequest(() =>
-        client.configAssets.validate(apiOperations["config_assets.validate"].body.parse(input))
+        client.config_assets.validate({
+          body: apiOperations["config_assets.validate"].body.parse(input)
+        })
       )
   };
 }
@@ -101,7 +105,7 @@ async function exchangeApiKey(
       baseUrl,
       getToken: () => apiKey,
       fetchImpl
-    }).authentication.exchangeApiKey();
+    }).access_tokens.exchange();
     return issued.accessToken;
   } catch (error) {
     throw new ApiKeyExchangeError(toConfigApiError(error), apiKey);
@@ -125,6 +129,11 @@ function toConfigApiError(error: unknown): unknown {
   }
   if (error.payload instanceof SyntaxError || typeof error.payload === "string") {
     return new Error(`Catalyst API returned invalid JSON (HTTP ${error.status})`);
+  }
+  if (error.payload instanceof Error) {
+    return new Error(`Catalyst API returned an unexpected response (HTTP ${error.status})`, {
+      cause: error.payload
+    });
   }
   return new ConfigApiError(error.status, error.payload);
 }

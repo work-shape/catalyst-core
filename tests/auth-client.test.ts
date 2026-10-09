@@ -46,9 +46,9 @@ describe("standalone auth client", () => {
     expect(client.browserManagedDownloads).toBe(false);
     await expect(client.conversations.list()).rejects.toMatchObject({ status: 401 });
     expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0]?.[0];
-    expect(request).toBeInstanceOf(Request);
-    expect(request instanceof Request && request.credentials).toBe("omit");
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    expect(init?.credentials).toBe("omit");
+    expect(new Headers(init?.headers).has("authorization")).toBe(false);
   });
 
   it("uses cookies without explicit credential headers for every auth call", async () => {

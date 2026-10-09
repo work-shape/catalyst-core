@@ -1,5 +1,10 @@
 import { appErrorCodeSchema, type ApiErrorCode } from "@vivd-catalyst/api-contract";
 
+/**
+ * Every way a call can fail once its input was accepted. `status` is the HTTP status, or 0 when
+ * no response arrived. `payload` is what the server sent with a refusal; when the request never
+ * got an answer or the answer could not be read, it is the underlying failure.
+ */
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: ApiErrorCode;
@@ -16,21 +21,63 @@ export class ApiError extends Error {
   }
 }
 
-function readApiErrorCode(payload: unknown): ApiErrorCode | undefined {
+const REQUEST_FAILED = "API request failed";
+
+/** The request got no answer, or the answer broke off. */
+export function transportError(cause: unknown): ApiError {
+  return new ApiError(0, REQUEST_FAILED, cause);
+}
+
+/** The server refused the call. Its body is untrusted and need not be an error envelope. */
+export async function refusalError(response: Response): Promise<ApiError> {
+  const text = await response.text().catch(() => "");
+  const payload = parseJsonOrText(text);
+  return new ApiError(response.status, readErrorMessage(payload) ?? REQUEST_FAILED, payload);
+}
+
+/** The server answered a success that is not what the operation's contract describes. */
+export function malformedResponseError(status: number, cause: unknown): ApiError {
+  return new ApiError(
+    status,
+    cause instanceof SyntaxError
+      ? "API response is not valid JSON"
+      : "API response does not match the contract",
+    cause
+  );
+}
+
+function parseJsonOrText(text: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed;
+  } catch {
+    return text;
+  }
+}
+
+function readErrorEnvelope(payload: unknown): object | undefined {
   if (!payload || typeof payload !== "object" || !("error" in payload)) return undefined;
   const error = payload.error;
-  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  return error && typeof error === "object" ? error : undefined;
+}
+
+function readErrorMessage(payload: unknown): string | undefined {
+  const error = readErrorEnvelope(payload);
+  return error && "message" in error && typeof error.message === "string"
+    ? error.message
+    : undefined;
+}
+
+function readApiErrorCode(payload: unknown): ApiErrorCode | undefined {
+  const error = readErrorEnvelope(payload);
+  if (!error || !("code" in error)) return undefined;
   const parsed = appErrorCodeSchema.safeParse(error.code);
   return parsed.success ? parsed.data : undefined;
 }
 
 function readCorrelationId(payload: unknown): string | undefined {
-  if (!payload || typeof payload !== "object" || !("error" in payload)) return undefined;
-  const error = payload.error;
-  return error &&
-    typeof error === "object" &&
-    "correlationId" in error &&
-    typeof error.correlationId === "string"
+  const error = readErrorEnvelope(payload);
+  return error && "correlationId" in error && typeof error.correlationId === "string"
     ? error.correlationId
     : undefined;
 }

@@ -126,6 +126,14 @@ export function defineOperation<const Config extends OperationConfig>(
   };
 }
 
+/** The names of the `:param` segments of a path template, as a union. */
+export type OperationPathParamName<Path extends string> =
+  Path extends `${string}:${infer Param}/${infer Rest}`
+    ? Param | OperationPathParamName<`/${Rest}`>
+    : Path extends `${string}:${infer Param}`
+      ? Param
+      : never;
+
 export function operationPathParamNames(path: string): string[] {
   return Array.from(path.matchAll(PATH_PARAM), (match) => match[1] ?? "");
 }

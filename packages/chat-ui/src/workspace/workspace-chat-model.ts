@@ -516,11 +516,13 @@ export function useWorkspaceChatModel({
     const title =
       files.length === 1 ? (files[0]?.name ?? "Attached file") : `${files.length} attached files`;
     const conversation = await client.conversations.create({
-      title,
-      locale: activeLocale,
-      ...(activeCollaborationWorkspaceId
-        ? { collaborationWorkspaceId: activeCollaborationWorkspaceId }
-        : {})
+      body: {
+        title,
+        locale: activeLocale,
+        ...(activeCollaborationWorkspaceId
+          ? { collaborationWorkspaceId: activeCollaborationWorkspaceId }
+          : {})
+      }
     });
     draftController.moveDraft({
       authScope: WORKSPACE_AUTH_SCOPE,
@@ -656,7 +658,7 @@ export function useWorkspaceChatModel({
       }));
     }
     setChangedUserModelPicks(picks);
-    void client.account.modelPreference.set(picks).catch(() => undefined);
+    void client.me.model_preference.set({ body: picks }).catch(() => undefined);
   };
   const selectedModelBindingId = selectedModel?.bindingId;
   const reasoningEffortSelection = modelReasoningEffortSelection(

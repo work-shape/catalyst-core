@@ -195,9 +195,9 @@ describe("conversation list cache targeting", () => {
       authScope,
       client: {
         conversations: {
-          list: async (collaborationWorkspaceId?: string) => {
-            listArguments.push(collaborationWorkspaceId);
-            return [];
+          list: async (input: { query: { collaborationWorkspaceId?: string } }) => {
+            listArguments.push(input.query.collaborationWorkspaceId);
+            return { items: [] };
           }
         }
       } as never,
@@ -226,10 +226,10 @@ describe("personal workspace on the workspace list", () => {
       calls,
       list: async () => {
         calls.push("list");
-        return (pages.shift() ?? []).map((kind) => ({ kind }));
+        return { items: (pages.shift() ?? []).map((kind) => ({ kind })) };
       },
-      ensurePersonal: async () => {
-        calls.push("ensurePersonal");
+      ensure_personal: async () => {
+        calls.push("ensure_personal");
       }
     };
   };
@@ -245,7 +245,7 @@ describe("personal workspace on the workspace list", () => {
     const api = client([["shared"], ["personal", "shared"]]);
     const listed = await listCollaborationWorkspacesWithPersonal(api);
     expect(listed).toEqual([{ kind: "personal" }, { kind: "shared" }]);
-    expect(api.calls).toEqual(["list", "ensurePersonal", "list"]);
+    expect(api.calls).toEqual(["list", "ensure_personal", "list"]);
   });
 });
 

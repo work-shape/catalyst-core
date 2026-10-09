@@ -85,11 +85,10 @@ export function ArtifactPreview({
   }
 
   if (client.browserManagedDownloads && (previewKind === "pdf" || previewKind === "image")) {
-    const url = client.conversations.artifacts.contentUrl(
-      conversationId,
-      artifact.artifactId,
-      true
-    );
+    const url = client.urlFor("conversations.artifacts.get_content", {
+      params: { conversationId, artifactId: artifact.artifactId },
+      query: { inline: "true" }
+    });
     return (
       <NativeFilePreview kind={previewKind} title={artifactDisplayFilename(artifact)} url={url} />
     );

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, type ApiClient, type DraftAttachment } from "@vivd-catalyst/api-client";
+import { ApiError, listAll, type ApiClient, type DraftAttachment } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
@@ -52,7 +52,12 @@ export function useDraftAttachmentController(
       input.selectedConversationId
     ),
     queryFn: () =>
-      input.client.conversations.draftAttachments.list(input.selectedConversationId ?? ""),
+      listAll((paging) =>
+        input.client.conversations.draft_attachments.list({
+          params: { conversationId: input.selectedConversationId ?? "" },
+          query: paging
+        })
+      ),
     enabled: input.enabled && input.isAuthenticated && Boolean(input.selectedConversationId),
     refetchInterval: (query) =>
       hasProcessingDraftAttachments((query.state.data as DraftAttachment[] | undefined) ?? [])
@@ -105,7 +110,10 @@ export function useDraftAttachmentController(
     await uploadLimiter
       .current(() =>
         uploadFileWithRetry(file, (readFile) =>
-          input.client.conversations.draftAttachments.upload(conversationId, readFile)
+          input.client.conversations.draft_attachments.upload({
+            params: { conversationId },
+            file: readFile
+          })
         )
       )
       .then((response) => {
@@ -144,8 +152,8 @@ export function useDraftAttachmentController(
       input.authScope,
       conversationId
     );
-    void input.client.conversations.draftAttachments
-      .delete(conversationId, attachmentId)
+    void input.client.conversations.draft_attachments
+      .delete({ params: { conversationId, attachmentId } })
       .then(() => {
         const remaining = withoutDraftAttachment(
           queryClient.getQueryData<DraftAttachment[]>(queryKey) ?? [],
@@ -171,8 +179,8 @@ export function useDraftAttachmentController(
     if (!input.selectedConversationId) {
       return;
     }
-    void input.client.conversations.draftAttachments
-      .retry(input.selectedConversationId, attachmentId)
+    void input.client.conversations.draft_attachments
+      .retry({ params: { conversationId: input.selectedConversationId, attachmentId } })
       .then((response) => {
         queryClient.setQueryData(
           workspaceQueryKeys.draftAttachments(

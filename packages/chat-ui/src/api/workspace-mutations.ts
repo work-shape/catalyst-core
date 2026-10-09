@@ -6,6 +6,7 @@ import type {
   ConfigAssetKind,
   AdministeredUserIdentity,
   ApiClient,
+  OperationInput,
   ChangeCurrentUserPasswordRequest,
   CollaborationWorkspaceWithRole,
   ConversationListItem,
@@ -64,15 +65,15 @@ export function useApiAccessMutations(
 
   const createPrincipal = useMutation({
     mutationFn: (mutationInput: CreateServicePrincipalRequest) =>
-      input.client.apiAccess.createServicePrincipal(mutationInput),
+      input.client.service_principals.create({ body: mutationInput }),
     onSuccess: invalidateApiAccess
   });
   const updatePrincipal = useMutation({
     mutationFn: (mutationInput: { principalId: string; update: UpdateServicePrincipalRequest }) =>
-      input.client.apiAccess.updateServicePrincipal(
-        mutationInput.principalId,
-        mutationInput.update
-      ),
+      input.client.service_principals.update({
+        params: { servicePrincipalId: mutationInput.principalId },
+        body: mutationInput.update
+      }),
     onSuccess: invalidateApiAccess
   });
   const createCredential = {
@@ -83,10 +84,10 @@ export function useApiAccessMutations(
       const originAuthority = revealControllerRef.current.captureAuthority();
       setCredentialCreationPending(true);
       try {
-        const response = await input.client.apiAccess.createCredential(
-          mutationInput.principalId,
-          mutationInput.credential
-        );
+        const response = await input.client.api_credentials.create({
+          params: { servicePrincipalId: mutationInput.principalId },
+          body: mutationInput.credential
+        });
         const acceptedReveal = revealControllerRef.current.accept(originAuthority, {
           secret: response.secret,
           credentialName: response.credential.name,
@@ -103,7 +104,8 @@ export function useApiAccessMutations(
     }
   };
   const revokeCredential = useMutation({
-    mutationFn: (credentialId: string) => input.client.apiAccess.revokeCredential(credentialId),
+    mutationFn: (credentialId: string) =>
+      input.client.api_credentials.revoke({ params: { credentialId } }),
     onSuccess: invalidateApiAccess
   });
 
@@ -135,7 +137,8 @@ export function useDeleteConversationMutation(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (conversationId: string) => input.client.conversations.delete(conversationId),
+    mutationFn: (conversationId: string) =>
+      input.client.conversations.delete({ params: { conversationId } }),
     onSuccess: (deletedConversation) => {
       let nextSelectedConversationId: string | undefined;
       const deletedActiveConversation = input.selectedConversationId === deletedConversation.id;
@@ -198,7 +201,7 @@ export function useRenameConversationMutation(
 
   return useMutation({
     mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
-      input.client.conversations.rename(conversationId, title),
+      input.client.conversations.rename({ params: { conversationId }, body: { title } }),
     onSuccess: (updatedConversation) => {
       queryClient.setQueryData<ConversationListItem[]>(
         workspaceQueryKeys.conversations(
@@ -256,11 +259,13 @@ export function useMoveConversationMutation(
       collaborationWorkspaceId: string;
       visibility?: ConversationListItem["visibility"];
     }) =>
-      input.client.conversations.move(
-        mutationInput.conversationId,
-        mutationInput.collaborationWorkspaceId,
-        mutationInput.visibility
-      ),
+      input.client.conversations.move({
+        params: { conversationId: mutationInput.conversationId },
+        body: {
+          collaborationWorkspaceId: mutationInput.collaborationWorkspaceId,
+          visibility: mutationInput.visibility
+        }
+      }),
     onSuccess: (movedConversation, { collaborationWorkspaceId }) => {
       // Dropped from the source list before the refetch lands so the rail never
       // shows a conversation that now lives in another workspace.
@@ -288,17 +293,13 @@ export function useMoveConversationMutation(
   });
 }
 
-export type CreateCollaborationWorkspaceInput = Parameters<
-  ApiClient["collaborationWorkspaces"]["create"]
->[0];
-export type UpdateCollaborationWorkspaceInput = Parameters<
-  ApiClient["collaborationWorkspaces"]["update"]
->[1];
+export type CreateCollaborationWorkspaceInput = OperationInput<"workspaces.create">["body"];
+export type UpdateCollaborationWorkspaceInput = OperationInput<"workspaces.update">["body"];
 
 export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput) {
   const queryClient = useQueryClient();
   const { apiBaseUrl, authScope, client } = input;
-  const collaborationWorkspaces = client.collaborationWorkspaces;
+  const { workspaces } = client;
 
   const invalidateCollaborationWorkspaces = () => {
     void queryClient.invalidateQueries({
@@ -330,7 +331,7 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
 
   const createCollaborationWorkspace = useMutation({
     mutationFn: (mutationInput: CreateCollaborationWorkspaceInput) =>
-      collaborationWorkspaces.create(mutationInput),
+      workspaces.create({ body: mutationInput }),
     onSuccess: (created) => {
       // Seeded before the refetch lands so navigating into the new workspace
       // cannot race a stale list and bounce back to the Personal Workspace.
@@ -352,7 +353,10 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
       collaborationWorkspaceId: string;
       update: UpdateCollaborationWorkspaceInput;
     }) =>
-      collaborationWorkspaces.update(mutationInput.collaborationWorkspaceId, mutationInput.update),
+      workspaces.update({
+        params: { collaborationWorkspaceId: mutationInput.collaborationWorkspaceId },
+        body: mutationInput.update
+      }),
     onSuccess: () => {
       invalidateCollaborationWorkspaces();
       invalidateDirectory();
@@ -360,10 +364,10 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
   });
   const deleteCollaborationWorkspace = useMutation({
     mutationFn: (mutationInput: { collaborationWorkspaceId: string; confirmName: string }) =>
-      collaborationWorkspaces.delete(
-        mutationInput.collaborationWorkspaceId,
-        mutationInput.confirmName
-      ),
+      workspaces.delete({
+        params: { collaborationWorkspaceId: mutationInput.collaborationWorkspaceId },
+        body: { confirmName: mutationInput.confirmName }
+      }),
     onSuccess: (_deletion, { collaborationWorkspaceId }) => {
       // Dropped before the refetch lands so the route guard cannot bounce back
       // into the workspace that no longer exists.
@@ -386,10 +390,10 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
   });
   const addCollaborationWorkspaceMember = useMutation({
     mutationFn: (mutationInput: { collaborationWorkspaceId: string; email: string }) =>
-      collaborationWorkspaces.members.addByEmail(
-        mutationInput.collaborationWorkspaceId,
-        mutationInput.email
-      ),
+      workspaces.members.add({
+        params: { collaborationWorkspaceId: mutationInput.collaborationWorkspaceId },
+        body: { email: mutationInput.email }
+      }),
     onSuccess: (_member, { collaborationWorkspaceId }) =>
       invalidateMembership(collaborationWorkspaceId)
   });
@@ -399,26 +403,25 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
       userId: string;
       role: WorkspaceMembershipRole;
     }) =>
-      collaborationWorkspaces.members.changeRole(
-        mutationInput.collaborationWorkspaceId,
-        mutationInput.userId,
-        mutationInput.role
-      ),
+      workspaces.members.update_role({
+        params: {
+          collaborationWorkspaceId: mutationInput.collaborationWorkspaceId,
+          userId: mutationInput.userId
+        },
+        body: { role: mutationInput.role }
+      }),
     onSuccess: (_membership, { collaborationWorkspaceId }) =>
       invalidateMembership(collaborationWorkspaceId)
   });
   const removeCollaborationWorkspaceMember = useMutation({
-    mutationFn: (mutationInput: { collaborationWorkspaceId: string; userId: string }) =>
-      collaborationWorkspaces.members.remove(
-        mutationInput.collaborationWorkspaceId,
-        mutationInput.userId
-      ),
+    mutationFn: (params: { collaborationWorkspaceId: string; userId: string }) =>
+      workspaces.members.remove({ params }),
     onSuccess: (_membership, { collaborationWorkspaceId }) =>
       invalidateMembership(collaborationWorkspaceId)
   });
   const leaveCollaborationWorkspace = useMutation({
     mutationFn: (collaborationWorkspaceId: string) =>
-      collaborationWorkspaces.members.leave(collaborationWorkspaceId),
+      workspaces.members.leave({ params: { collaborationWorkspaceId } }),
     onSuccess: (_membership, collaborationWorkspaceId) => {
       invalidateMembership(collaborationWorkspaceId);
       invalidateDirectory();
@@ -429,24 +432,18 @@ export function useCollaborationWorkspaceMutations(input: WorkspaceMutationInput
   });
   const requestCollaborationWorkspaceAccess = useMutation({
     mutationFn: (collaborationWorkspaceId: string) =>
-      collaborationWorkspaces.accessRequests.create(collaborationWorkspaceId),
+      workspaces.access_requests.create({ params: { collaborationWorkspaceId } }),
     onSuccess: invalidateDirectory
   });
   const approveCollaborationWorkspaceAccessRequest = useMutation({
-    mutationFn: (mutationInput: { collaborationWorkspaceId: string; userId: string }) =>
-      collaborationWorkspaces.accessRequests.approve(
-        mutationInput.collaborationWorkspaceId,
-        mutationInput.userId
-      ),
+    mutationFn: (params: { collaborationWorkspaceId: string; userId: string }) =>
+      workspaces.access_requests.approve({ params }),
     onSuccess: (_membership, { collaborationWorkspaceId }) =>
       invalidateMembership(collaborationWorkspaceId)
   });
   const declineCollaborationWorkspaceAccessRequest = useMutation({
-    mutationFn: (mutationInput: { collaborationWorkspaceId: string; userId: string }) =>
-      collaborationWorkspaces.accessRequests.decline(
-        mutationInput.collaborationWorkspaceId,
-        mutationInput.userId
-      ),
+    mutationFn: (params: { collaborationWorkspaceId: string; userId: string }) =>
+      workspaces.access_requests.decline({ params }),
     onSuccess: (_request, { collaborationWorkspaceId }) =>
       invalidateMembership(collaborationWorkspaceId)
   });
@@ -486,10 +483,8 @@ export function useCancelRunMutation(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (mutationInput: { conversationId: string; runId: string }) =>
-      input.client.runs.cancel(mutationInput.conversationId, mutationInput.runId, {
-        reason: "user_requested"
-      }),
+    mutationFn: (params: { conversationId: string; runId: string }) =>
+      input.client.conversations.runs.cancel({ params, body: { reason: "user_requested" } }),
     onMutate: ({ conversationId, runId }) => {
       queryClient.setQueryData<ConversationThreadSnapshot>(
         workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, conversationId),
@@ -522,7 +517,7 @@ export function useUpdateCurrentUserMutation(input: WorkspaceMutationInput) {
 
   return useMutation({
     mutationFn: (mutationInput: UpdateCurrentUserRequest) =>
-      input.client.account.update(mutationInput),
+      input.client.me.update({ body: mutationInput }),
     onSuccess: (updatedUser) => {
       queryClient.setQueryData(workspaceQueryKeys.me(input.apiBaseUrl), updatedUser);
       void queryClient.invalidateQueries({
@@ -537,7 +532,7 @@ export function useChangeCurrentUserPasswordMutation(input: WorkspaceMutationInp
 
   return useMutation({
     mutationFn: (mutationInput: ChangeCurrentUserPasswordRequest) =>
-      input.client.account.changePassword(mutationInput),
+      input.client.me.password.change({ body: mutationInput }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
@@ -554,7 +549,7 @@ export function useDeleteCurrentUserMutation(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => input.client.account.delete(),
+    mutationFn: () => input.client.me.delete(),
     onSuccess: () => {
       input.onDeleted();
       queryClient.clear();
@@ -584,22 +579,23 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
       config: Record<string, unknown>;
       baseVersion?: number;
     }) =>
-      input.client.configAssets.put(mutationInput.kind, mutationInput.name, {
-        config: mutationInput.config,
-        baseVersion: mutationInput.baseVersion
+      input.client.config_assets.put({
+        params: { kind: mutationInput.kind, name: mutationInput.name },
+        body: { config: mutationInput.config, baseVersion: mutationInput.baseVersion }
       }),
     onSuccess: invalidateConfigAssets
   });
   const deleteAsset = useMutation({
     mutationFn: (mutationInput: { kind: ConfigAssetKind; name: string; baseVersion?: number }) =>
-      input.client.configAssets.delete(mutationInput.kind, mutationInput.name, {
-        baseVersion: mutationInput.baseVersion
+      input.client.config_assets.delete({
+        params: { kind: mutationInput.kind, name: mutationInput.name },
+        body: { baseVersion: mutationInput.baseVersion }
       }),
     onSuccess: invalidateConfigAssets
   });
   const setDefaultAgent = useMutation({
     mutationFn: (mutationInput: { agentName?: string; baseVersion?: number }) =>
-      input.client.configAssets.setDefaultAgent(mutationInput),
+      input.client.config_agents.set_default({ body: mutationInput }),
     onSuccess: () => invalidateConfigAssets()
   });
   const setAgentAvailability = useMutation({
@@ -610,7 +606,7 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
       collaborationWorkspaceIds: string[];
     }) => {
       const { name, ...availability } = mutationInput;
-      return input.client.configAssets.setAgentAvailability(name, availability);
+      return input.client.config_agents.set_availability({ params: { name }, body: availability });
     },
     // The admin's own picker reads the same lists, so it follows the change at once.
     onSuccess: () =>
@@ -632,9 +628,9 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
       revision: number;
       baseVersion?: number;
     }) =>
-      input.client.configAssets.revert(mutationInput.kind, mutationInput.name, {
-        revision: mutationInput.revision,
-        baseVersion: mutationInput.baseVersion
+      input.client.config_assets.revert({
+        params: { kind: mutationInput.kind, name: mutationInput.name },
+        body: { revision: mutationInput.revision, baseVersion: mutationInput.baseVersion }
       }),
     onSuccess: invalidateConfigAssets
   });
@@ -670,7 +666,7 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
 
   const createUser = useMutation({
     mutationFn: (mutationInput: CreateAdministeredUserRequest) =>
-      input.client.users.create(mutationInput),
+      input.client.users.create({ body: mutationInput }),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
@@ -678,14 +674,17 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   });
   const updateUser = useMutation({
     mutationFn: (mutationInput: { userId: string; update: UpdateAdministeredUserRequest }) =>
-      input.client.users.update(mutationInput.userId, mutationInput.update),
+      input.client.users.update({
+        params: { userId: mutationInput.userId },
+        body: mutationInput.update
+      }),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }
   });
   const deleteUser = useMutation({
-    mutationFn: (userId: string) => input.client.users.delete(userId),
+    mutationFn: (userId: string) => input.client.users.delete({ params: { userId } }),
     onSuccess: (deletedUser) => {
       queryClient.setQueryData<AdministeredUser[]>(
         workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
@@ -699,7 +698,11 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
     mutationFn: (mutationInput: {
       userId: string;
       identity: UpsertAdministeredUserIdentityRequest;
-    }) => input.client.users.upsertIdentity(mutationInput.userId, mutationInput.identity),
+    }) =>
+      input.client.users.identities.upsert({
+        params: { userId: mutationInput.userId },
+        body: mutationInput.identity
+      }),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
@@ -707,11 +710,13 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   });
   const deleteUserIdentity = useMutation({
     mutationFn: (mutationInput: { userId: string; identity: AdministeredUserIdentity }) =>
-      input.client.users.deleteIdentity(
-        mutationInput.userId,
-        mutationInput.identity.authSource,
-        mutationInput.identity.externalUserId
-      ),
+      input.client.users.identities.delete({
+        params: {
+          userId: mutationInput.userId,
+          authSource: mutationInput.identity.authSource,
+          externalUserId: mutationInput.identity.externalUserId
+        }
+      }),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
@@ -719,13 +724,16 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   });
   const resetUserPassword = useMutation({
     mutationFn: (mutationInput: { userId: string; password: string }) =>
-      input.client.users.resetPassword(mutationInput.userId, { password: mutationInput.password }),
+      input.client.users.password.reset({
+        params: { userId: mutationInput.userId },
+        body: { password: mutationInput.password }
+      }),
     onSuccess: () => {
       invalidateAuditEvents();
     }
   });
   const sendUserInvitation = useMutation({
-    mutationFn: (userId: string) => input.client.users.sendInvitation(userId),
+    mutationFn: (userId: string) => input.client.users.invitation.send({ params: { userId } }),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();

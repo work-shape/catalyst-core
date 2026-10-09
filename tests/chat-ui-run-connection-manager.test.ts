@@ -9,7 +9,7 @@ import {
 
 describe("chat UI run connection manager", () => {
   it("remembers cursor hints and asks for a snapshot refresh when observation application reports a gap", async () => {
-    const afterSequences: Array<number | undefined> = [];
+    const afterSequences: Array<string | undefined> = [];
     const signals: AbortSignal[] = [];
     const appliedSequences: number[] = [];
     const refreshedConversationIds: string[] = [];
@@ -20,19 +20,21 @@ describe("chat UI run connection manager", () => {
     const refreshed = new Promise<void>((resolve, reject) => {
       manager = startRunConnectionManager({
         client: {
-          runs: {
-            async *observe(_conversationId, _runId, options = {}) {
-              afterSequences.push(options.afterSequence);
-              if (options.signal) {
-                signals.push(options.signal);
-              }
-              yield createObservation({
-                sequence: 4,
-                type: "message_delta",
-                payload: {
-                  delta: " after a gap"
+          conversations: {
+            runs: {
+              async *observe(options) {
+                afterSequences.push(options.query?.after);
+                if (options.signal) {
+                  signals.push(options.signal);
                 }
-              });
+                yield createObservation({
+                  sequence: 4,
+                  type: "message_delta",
+                  payload: {
+                    delta: " after a gap"
+                  }
+                });
+              }
             }
           }
         },
@@ -62,7 +64,7 @@ describe("chat UI run connection manager", () => {
 
     await refreshed;
 
-    expect(afterSequences).toEqual([2]);
+    expect(afterSequences).toEqual(["2"]);
     expect(appliedSequences).toEqual([4]);
     expect(refreshedConversationIds).toEqual(["conv_1"]);
     expect(rememberedCursors).toEqual([["conv_1", "run_1", 4]]);
@@ -76,9 +78,11 @@ describe("chat UI run connection manager", () => {
     const refreshed = new Promise<void>((resolve, reject) => {
       startRunConnectionManager({
         client: {
-          runs: {
-            async *observe(_conversationId, _runId, options = {}) {
-              options.onCaughtUp?.();
+          conversations: {
+            runs: {
+              async *observe(options) {
+                options.onCaughtUp?.();
+              }
             }
           }
         },
@@ -121,8 +125,10 @@ describe("chat UI run connection manager", () => {
     const completed = new Promise<void>((resolve, reject) => {
       startRunConnectionManager({
         client: {
-          runs: {
-            async *observe() {}
+          conversations: {
+            runs: {
+              async *observe() {}
+            }
           }
         },
         connection: {
@@ -163,18 +169,20 @@ describe("chat UI run connection manager", () => {
     await new Promise<void>((resolve, reject) => {
       startRunConnectionManager({
         client: {
-          runs: {
-            async *observe() {
-              yield createObservation({
-                sequence: 4,
-                type: "tool_call_completed",
-                payload: {
-                  toolCallId: "call_1",
-                  toolName: "publish",
-                  result: { status: "success" },
-                  modelOutput: "{}"
-                }
-              });
+          conversations: {
+            runs: {
+              async *observe() {
+                yield createObservation({
+                  sequence: 4,
+                  type: "tool_call_completed",
+                  payload: {
+                    toolCallId: "call_1",
+                    toolName: "publish",
+                    result: { status: "success" },
+                    modelOutput: "{}"
+                  }
+                });
+              }
             }
           }
         },

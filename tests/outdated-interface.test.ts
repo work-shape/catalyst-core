@@ -57,11 +57,11 @@ describe("an interface older than its server", () => {
 
   it("reports the marked answer and no other 404", async () => {
     const outdated = clientAnswering(() => notFound({ reason: UNKNOWN_OPERATION_REASON }));
-    await expect(outdated.client.account.get()).rejects.toMatchObject({ status: 404 });
+    await expect(outdated.client.me.get()).rejects.toMatchObject({ status: 404 });
     expect(outdated.onUnknownOperation).toHaveBeenCalledTimes(1);
 
     const missing = clientAnswering(() => notFound());
-    await expect(missing.client.account.get()).rejects.toMatchObject({ status: 404 });
+    await expect(missing.client.me.get()).rejects.toMatchObject({ status: 404 });
     expect(missing.onUnknownOperation).not.toHaveBeenCalled();
   });
 });

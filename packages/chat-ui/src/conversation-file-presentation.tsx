@@ -1,5 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
+import {
+  listAll,
+  type ApiClient,
+  type ConversationResourceListItem
+} from "@vivd-catalyst/api-client";
 import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
 import { Download, FileText } from "lucide-react";
 import {
@@ -190,7 +194,10 @@ export function useOpenConversationFile(): (input: OpenConversationFileInput) =>
             SOURCE_FILE_AUTH_SCOPE,
             conversationId
           ),
-          queryFn: () => client.conversations.resources.list(conversationId)
+          queryFn: () =>
+            listAll((paging) =>
+              client.conversations.resources.list({ params: { conversationId }, query: paging })
+            )
         });
         const resource =
           "fileId" in input
@@ -524,8 +531,8 @@ function AttachmentOfficePreview({
     let active = true;
     setArtifactId(undefined);
     setFailed(false);
-    void client.conversations.artifacts
-      .startAttachmentPreview(conversationId, attachmentId)
+    void client.conversations.attachments
+      .start_preview({ params: { conversationId, attachmentId } })
       .then((preview) => {
         if (active) {
           setArtifactId(preview.artifactId);

@@ -146,6 +146,9 @@ export const collaborationWorkspaceDeletionResultSchema = z.object({
 
 export type CollaborationWorkspace = z.infer<typeof collaborationWorkspaceSchema>;
 export type CollaborationWorkspaceWithRole = z.infer<typeof collaborationWorkspaceWithRoleSchema>;
+export type CollaborationWorkspaceDeletionImpact = z.infer<
+  typeof collaborationWorkspaceDeletionImpactSchema
+>;
 export type CollaborationWorkspaceDirectoryItem = z.infer<
   typeof collaborationWorkspaceDirectoryItemSchema
 >;

@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { ApiError, type ApiClient, type ApprovalRequestStatus } from "@vivd-catalyst/api-client";
+import {
+  ApiError,
+  listAll,
+  type ApiClient,
+  type ApprovalRequestStatus,
+  type OperationInput
+} from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 
 export interface ApprovalRequestApiInput {
@@ -9,7 +15,7 @@ export interface ApprovalRequestApiInput {
   client: ApiClient;
 }
 
-export type ApprovalDecisionInput = Parameters<ApiClient["approvalRequests"]["decide"]>[1];
+export type ApprovalDecisionInput = OperationInput<"approval_requests.decide">["body"];
 
 /** `revert_conflict`: newer changes sit on top of the one that should be undone. */
 export type ApprovalActionFailure = "failed" | "revert_conflict";
@@ -34,7 +40,7 @@ export const approvalRequestQueryKeys = {
 export function useApprovalRequestQuery(input: ApprovalRequestApiInput & { requestId: string }) {
   return useQuery({
     queryKey: approvalRequestQueryKeys.request(input.apiBaseUrl, input.authScope, input.requestId),
-    queryFn: () => input.client.approvalRequests.get(input.requestId),
+    queryFn: () => input.client.approval_requests.get({ params: { requestId: input.requestId } }),
     // The card is the live state of a shared request: another approver may
     // have decided while this tab was in the background.
     refetchOnWindowFocus: true,
@@ -52,7 +58,10 @@ export function useApprovalRequestListQuery(
       input.authScope,
       input.status ?? "all"
     ),
-    queryFn: () => input.client.approvalRequests.list(input.status),
+    queryFn: () =>
+      listAll((paging) =>
+        input.client.approval_requests.list({ query: { status: input.status, ...paging } })
+      ),
     enabled: input.enabled,
     refetchOnWindowFocus: true
   });
@@ -63,7 +72,7 @@ export function useApprovalPendingCountQuery(
 ) {
   return useQuery({
     queryKey: approvalRequestQueryKeys.pendingCount(input.apiBaseUrl, input.authScope),
-    queryFn: () => input.client.approvalRequests.pendingCount(),
+    queryFn: () => input.client.approval_requests.count_pending(),
     enabled: input.enabled,
     // Sessions that may not ask (an embedded token, for example) fail once and
     // are left alone instead of being polled.
@@ -85,7 +94,6 @@ export function useApprovalRequestActions(
   }
 ) {
   const queryClient = useQueryClient();
-  const revertRequest = approvalRequestReverter(input.client);
   const onDecided = useRef(input.onDecided);
   useEffect(() => {
     onDecided.current = input.onDecided;
@@ -118,7 +126,10 @@ export function useApprovalRequestActions(
 
   const decide = useMutation({
     mutationFn: (decision: ApprovalDecisionInput) =>
-      input.client.approvalRequests.decide(input.requestId, decision),
+      input.client.approval_requests.decide({
+        params: { requestId: input.requestId },
+        body: decision
+      }),
     onSuccess: (_request, decision) => {
       // A started run answers with the whole thread, decision included. A
       // refetch racing that answer could put an older snapshot over it.
@@ -130,16 +141,13 @@ export function useApprovalRequestActions(
     onSettled: refreshApprovalRequests
   });
   const withdraw = useMutation({
-    mutationFn: () => input.client.approvalRequests.withdraw(input.requestId),
+    mutationFn: () =>
+      input.client.approval_requests.withdraw({ params: { requestId: input.requestId } }),
     onSettled: refreshAfterAction
   });
   const revert = useMutation({
-    mutationFn: async () => {
-      if (!revertRequest) {
-        throw new Error("Reverting approval requests is not available");
-      }
-      await revertRequest(input.requestId);
-    },
+    mutationFn: () =>
+      input.client.approval_requests.revert({ params: { requestId: input.requestId } }),
     onSettled: refreshAfterAction
   });
 
@@ -156,31 +164,10 @@ export function useApprovalRequestActions(
   return {
     decide: (decision: ApprovalDecisionInput) => decide.mutate(decision),
     withdraw: () => withdraw.mutate(),
-    /** Absent while the API client has no rollback operation. */
-    revert: revertRequest ? () => revert.mutate() : undefined,
+    revert: () => revert.mutate(),
     pending: decide.isPending || withdraw.isPending || revert.isPending,
     failure
   };
-}
-
-type RevertApprovalRequest = (requestId: string) => Promise<unknown>;
-
-/**
- * Rollback ships after the first approval operations. Detecting the client
- * method keeps the action compiling and hidden until the generated client has
- * it, and working without a UI change once it does.
- */
-export function approvalRequestReverter(client: {
-  approvalRequests: object;
-}): RevertApprovalRequest | undefined {
-  const approvalRequests = client.approvalRequests;
-  return hasRevertOperation(approvalRequests)
-    ? (requestId) => approvalRequests.revert(requestId)
-    : undefined;
-}
-
-function hasRevertOperation(value: object): value is { revert: RevertApprovalRequest } {
-  return "revert" in value && typeof value.revert === "function";
 }
 
 export function isApprovalRequestNotFound(error: unknown): boolean {

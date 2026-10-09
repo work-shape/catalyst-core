@@ -22,7 +22,7 @@ export interface RunConnectionManager {
 }
 
 export interface StartRunConnectionManagerInput {
-  client: { runs: Pick<ApiClient["runs"], "observe"> };
+  client: { conversations: { runs: Pick<ApiClient["conversations"]["runs"], "observe"> } };
   connection: RunConnectionTarget;
   markConnecting(): void;
   applyObservation(observation: RunObservation): {
@@ -49,17 +49,15 @@ export function startRunConnectionManager(
     try {
       let streamCaughtUp = false;
       let sawObservation = false;
-      for await (const observation of input.client.runs.observe(
-        input.connection.conversationId,
-        input.connection.runId,
-        {
-          afterSequence: input.connection.afterSequence,
-          onCaughtUp: () => {
-            streamCaughtUp = true;
-          },
-          signal: abortController.signal
-        }
-      )) {
+      const { conversationId, runId, afterSequence } = input.connection;
+      for await (const observation of input.client.conversations.runs.observe({
+        params: { conversationId, runId },
+        query: afterSequence === undefined ? {} : { after: String(afterSequence) },
+        onCaughtUp: () => {
+          streamCaughtUp = true;
+        },
+        signal: abortController.signal
+      })) {
         if (cancelled) {
           return;
         }

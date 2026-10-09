@@ -69,7 +69,7 @@ async function fixture(empty = false) {
   const requester = client("requester");
   const reviewer = client("reviewer");
   const stranger = client("stranger");
-  const requesterUser = await requester.account.get();
+  const requesterUser = await requester.me.get();
   const create = (origin?: ApprovalRequest["origin"]) =>
     app.stores.approvals.createApprovalRequest({
       clientInstanceId: asClientInstanceId(getTestConfig(app).clientInstance.id),
@@ -86,21 +86,30 @@ describe("approval routes and generated instance client", () => {
   it("projects a decision in the owner's thread when the reviewer cannot access it", async () => {
     const f = await fixture();
     try {
-      const conversation = await f.requester.conversations.create({ title: "Private origin" });
+      const conversation = await f.requester.conversations.create({
+        body: { title: "Private origin" }
+      });
       const request = await f.create({
         conversationId: asConversationId(conversation.id),
         agentRunId: asAgentRunId("origin-run"),
         toolCallId: asToolCallId("origin-call"),
         agentName: "agent"
       });
-      await expect(f.reviewer.conversations.getThread(conversation.id)).rejects.toMatchObject({
+      await expect(
+        f.reviewer.conversations.thread.get({ params: { conversationId: conversation.id } })
+      ).rejects.toMatchObject({
         status: 404
       });
-      const rejected = await f.reviewer.approvalRequests.decide(request.id, {
-        decision: "reject",
-        comment: "Please be more precise"
+      const rejected = await f.reviewer.approval_requests.decide({
+        params: { requestId: request.id },
+        body: {
+          decision: "reject",
+          comment: "Please be more precise"
+        }
       });
-      const thread = await f.requester.conversations.getThread(conversation.id);
+      const thread = await f.requester.conversations.thread.get({
+        params: { conversationId: conversation.id }
+      });
       expect(thread.messages).toHaveLength(1);
       expect(readApprovalDecisionMetadata(thread.messages[0]?.metadata)).toMatchObject({
         kind: "approval_decision",
@@ -119,7 +128,9 @@ describe("approval routes and generated instance client", () => {
           conversationId: asConversationId(conversation.id)
         })
       ).toBeUndefined();
-      await expect(f.reviewer.conversations.getThread(conversation.id)).rejects.toMatchObject({
+      await expect(
+        f.reviewer.conversations.thread.get({ params: { conversationId: conversation.id } })
+      ).rejects.toMatchObject({
         status: 404
       });
     } finally {
@@ -131,29 +142,35 @@ describe("approval routes and generated instance client", () => {
     const f = await fixture();
     try {
       const request = await f.create();
-      await expect(f.requester.approvalRequests.get(request.id)).resolves.toMatchObject({
+      await expect(
+        f.requester.approval_requests.get({ params: { requestId: request.id } })
+      ).resolves.toMatchObject({
         preview: { proposed: "new" },
         canDecide: false,
         canWithdraw: true
       });
-      await expect(f.requester.approvalRequests.pendingCount()).resolves.toEqual({
+      await expect(f.requester.approval_requests.count_pending()).resolves.toEqual({
         count: 0,
         canReview: false
       });
-      await expect(f.requester.approvalRequests.list()).rejects.toMatchObject({ status: 403 });
-      await expect(f.stranger.approvalRequests.get(request.id)).rejects.toMatchObject({
+      await expect(f.requester.approval_requests.list()).rejects.toMatchObject({ status: 403 });
+      await expect(
+        f.stranger.approval_requests.get({ params: { requestId: request.id } })
+      ).rejects.toMatchObject({
         status: 404
       });
-      await expect(f.stranger.approvalRequests.get("missing")).rejects.toMatchObject({
+      await expect(
+        f.stranger.approval_requests.get({ params: { requestId: "missing" } })
+      ).rejects.toMatchObject({
         status: 404
       });
-      await expect(f.reviewer.approvalRequests.pendingCount()).resolves.toEqual({
+      await expect(f.reviewer.approval_requests.count_pending()).resolves.toEqual({
         count: 1,
         canReview: true
       });
-      expect(await f.reviewer.approvalRequests.list("pending")).toMatchObject([
-        { id: request.id, canDecide: true }
-      ]);
+      expect(
+        (await f.reviewer.approval_requests.list({ query: { status: "pending" } })).items
+      ).toMatchObject([{ id: request.id, canDecide: true }]);
       const invalid = await f.app.call("approval_requests.decide", {
         params: { requestId: request.id },
         headers: { "x-dev-user-id": "reviewer" },
@@ -166,48 +183,74 @@ describe("approval routes and generated instance client", () => {
       });
       expect(invalidFilter.statusCode).toBe(422);
       await expect(
-        f.requester.approvalRequests.decide(request.id, { decision: "approve" })
+        f.requester.approval_requests.decide({
+          params: { requestId: request.id },
+          body: { decision: "approve" }
+        })
       ).rejects.toMatchObject({ status: 403 });
-      const reviewerUser = await f.reviewer.account.get();
-      const approved = await f.reviewer.approvalRequests.decide(request.id, {
-        decision: "approve"
+      const reviewerUser = await f.reviewer.me.get();
+      const approved = await f.reviewer.approval_requests.decide({
+        params: { requestId: request.id },
+        body: {
+          decision: "approve"
+        }
       });
       expect(approvalRequestSchema.parse(approved)).toMatchObject({
         status: "approved",
         decision: { decidedBy: reviewerUser.id, decidedByLabel: reviewerUser.displayLabel },
         applyResult: { actorId: reviewerUser.id }
       });
-      await expect(f.reviewer.approvalRequests.pendingCount()).resolves.toEqual({
+      await expect(f.reviewer.approval_requests.count_pending()).resolves.toEqual({
         count: 0,
         canReview: true
       });
-      await expect(f.reviewer.approvalRequests.list("pending")).resolves.toEqual([]);
       await expect(
-        f.reviewer.approvalRequests.decide(request.id, { decision: "reject" })
+        f.reviewer.approval_requests.list({ query: { status: "pending" } })
+      ).resolves.toEqual({ items: [] });
+      await expect(
+        f.reviewer.approval_requests.decide({
+          params: { requestId: request.id },
+          body: { decision: "reject" }
+        })
       ).rejects.toMatchObject({ status: 409 });
     } finally {
       await f.app.close();
     }
   });
 
-  it("reverts through the generated client only for permitted reviewers", async () => {
+  it("reverts through the client only for permitted reviewers", async () => {
     const f = await fixture();
     try {
       const request = await f.create();
-      await expect(f.reviewer.approvalRequests.revert(request.id)).rejects.toMatchObject({
+      await expect(
+        f.reviewer.approval_requests.revert({ params: { requestId: request.id } })
+      ).rejects.toMatchObject({
         status: 409
       });
-      await f.reviewer.approvalRequests.decide(request.id, { decision: "approve" });
-      expect(await f.reviewer.approvalRequests.get(request.id)).toMatchObject({ canRevert: true });
-      await expect(f.requester.approvalRequests.revert(request.id)).rejects.toMatchObject({
+      await f.reviewer.approval_requests.decide({
+        params: { requestId: request.id },
+        body: { decision: "approve" }
+      });
+      expect(
+        await f.reviewer.approval_requests.get({ params: { requestId: request.id } })
+      ).toMatchObject({ canRevert: true });
+      await expect(
+        f.requester.approval_requests.revert({ params: { requestId: request.id } })
+      ).rejects.toMatchObject({
         status: 403
       });
-      expect(await f.reviewer.approvalRequests.revert(request.id)).toMatchObject({
+      expect(
+        await f.reviewer.approval_requests.revert({ params: { requestId: request.id } })
+      ).toMatchObject({
         status: "reverted",
         reversion: { revertedByLabel: "Reviewer" }
       });
-      expect(await f.reviewer.approvalRequests.get(request.id)).toMatchObject({ canRevert: false });
-      await expect(f.reviewer.approvalRequests.revert(request.id)).rejects.toMatchObject({
+      expect(
+        await f.reviewer.approval_requests.get({ params: { requestId: request.id } })
+      ).toMatchObject({ canRevert: false });
+      await expect(
+        f.reviewer.approval_requests.revert({ params: { requestId: request.id } })
+      ).rejects.toMatchObject({
         status: 409
       });
     } finally {
@@ -219,13 +262,19 @@ describe("approval routes and generated instance client", () => {
     const f = await fixture();
     try {
       const request = await f.create();
-      await expect(f.reviewer.approvalRequests.withdraw(request.id)).rejects.toMatchObject({
+      await expect(
+        f.reviewer.approval_requests.withdraw({ params: { requestId: request.id } })
+      ).rejects.toMatchObject({
         status: 403
       });
-      await expect(f.requester.approvalRequests.withdraw(request.id)).resolves.toMatchObject({
+      await expect(
+        f.requester.approval_requests.withdraw({ params: { requestId: request.id } })
+      ).resolves.toMatchObject({
         status: "withdrawn"
       });
-      await expect(f.requester.approvalRequests.withdraw(request.id)).rejects.toMatchObject({
+      await expect(
+        f.requester.approval_requests.withdraw({ params: { requestId: request.id } })
+      ).rejects.toMatchObject({
         status: 409
       });
     } finally {
@@ -306,12 +355,14 @@ describe("approval routes and generated instance client", () => {
   it("assembles and registers the routes with no handlers", async () => {
     const f = await fixture(true);
     try {
-      await expect(f.reviewer.approvalRequests.pendingCount()).resolves.toEqual({
+      await expect(f.reviewer.approval_requests.count_pending()).resolves.toEqual({
         count: 0,
         canReview: false
       });
-      await expect(f.reviewer.approvalRequests.list()).rejects.toMatchObject({ status: 403 });
-      await expect(f.reviewer.approvalRequests.get("missing")).rejects.toMatchObject({
+      await expect(f.reviewer.approval_requests.list()).rejects.toMatchObject({ status: 403 });
+      await expect(
+        f.reviewer.approval_requests.get({ params: { requestId: "missing" } })
+      ).rejects.toMatchObject({
         status: 404
       });
     } finally {

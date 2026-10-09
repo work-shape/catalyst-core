@@ -206,9 +206,10 @@ export function LiveArtifactPreview({
         preview: current.preview,
         refreshing: true
       }));
+      const params = { conversationId, artifactId: artifact.artifactId };
       const read = !initialized
-        ? client.conversations.artifacts.startPreview(conversationId, artifact.artifactId)
-        : client.conversations.artifacts.getPreview(conversationId, artifact.artifactId);
+        ? client.conversations.artifacts.start_preview({ params })
+        : client.conversations.artifacts.get_preview({ params });
       void read
         .then((preview) => {
           initialized = true;
@@ -269,7 +270,7 @@ export function LiveArtifactPreview({
   function retryPreview() {
     setRetrying(true);
     void client.conversations.artifacts
-      .retryPreview(conversationId, artifact.artifactId)
+      .retry_preview({ params: { conversationId, artifactId: artifact.artifactId } })
       .then((preview) => {
         setState({
           apiError: false,
@@ -429,7 +430,10 @@ function LazyArtifactPreviewPage({
   const [visible, setVisible] = useState(client.browserManagedDownloads);
   const [url, setUrl] = useState<string | undefined>(() =>
     client.browserManagedDownloads
-      ? client.conversations.artifacts.contentUrl(conversationId, page.artifactId, true)
+      ? client.urlFor("conversations.artifacts.get_content", {
+          params: { conversationId, artifactId: page.artifactId },
+          query: { inline: "true" }
+        })
       : undefined
   );
   const [failed, setFailed] = useState(false);
@@ -458,7 +462,7 @@ function LazyArtifactPreviewPage({
     let active = true;
     let objectUrl: string | undefined;
     void client.conversations.artifacts
-      .getContent(conversationId, page.artifactId)
+      .get_content({ params: { conversationId, artifactId: page.artifactId } })
       .then((blob) => {
         objectUrl = URL.createObjectURL(blob);
         if (active) {

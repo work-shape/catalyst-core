@@ -1,67 +1,29 @@
 import { contractPathFixtures, openApiJsonOperation } from "./support/operations";
 import { required } from "./support/assertions";
 import { readFile, readdir } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   apiOperations,
   assistantFinalMessageMetadataSchema,
   buildApiPath,
-  createOpenApiDocument
+  createOpenApiDocument,
+  operationPathParamNames,
+  type Operation
 } from "@vivd-catalyst/api-contract";
-import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
+import {
+  ApiError,
+  createApiClient,
+  listAll,
+  type AdministeredUser,
+  type ApiClientOptions,
+  type ConversationThreadSnapshot,
+  type OperationInput,
+  type RunObservation
+} from "@vivd-catalyst/api-client";
 
 const createdAt = "2026-06-27T00:00:00.000Z";
 
-describe("api operation catalog and client", () => {
-  it.each([
-    { name: "cookie", getToken: undefined, credentials: "include", authorization: null },
-    {
-      name: "token",
-      getToken: () => "test-token",
-      credentials: "omit",
-      authorization: "Bearer test-token"
-    },
-    {
-      name: "empty token source",
-      getToken: () => undefined,
-      credentials: "omit",
-      authorization: null
-    }
-  ])(
-    "uses $name mode for JSON, downloads and event streams",
-    async ({ getToken, credentials, authorization }) => {
-      const requests: Request[] = [];
-      const client = createApiClient({
-        baseUrl: "https://chat.example",
-        getToken,
-        browserManagedDownloads: true,
-        fetchImpl: async (input, init) => {
-          const request = input instanceof Request ? input : new Request(input, init);
-          requests.push(request);
-          if (request.url.endsWith("/events")) return new Response(null, { status: 204 });
-          if (request.url.includes("/content")) return new Response("download");
-          return Response.json({ items: [] });
-        }
-      });
-      await client.conversations.list();
-      await client.conversations.files.getContent("conv_1", "file_1", true);
-      await client.conversations.artifacts.getContent("conv_1", "artifact_1");
-      for await (const event of client.runs.observe("conv_1", "run_1")) {
-        expect.fail(`Unexpected event: ${event.type}`);
-      }
-      expect(requests).toHaveLength(4);
-      for (const request of requests) {
-        expect(request.credentials).toBe(credentials);
-        expect(request.headers.get("authorization")).toBe(authorization);
-      }
-      expect(client.browserManagedDownloads).toBe(getToken === undefined);
-      expect(
-        createApiClient({ baseUrl: "https://chat.example", browserManagedDownloads: false })
-          .browserManagedDownloads
-      ).toBe(false);
-    }
-  );
-
+describe("api operation catalog", () => {
   it("accepts assistant final metadata with normalized web sources and citations", () => {
     const parsed = assistantFinalMessageMetadataSchema.safeParse({
       version: 1,
@@ -114,7 +76,7 @@ describe("api operation catalog and client", () => {
     expect(apiOperations["workspaces.update"].body.parse({})).toEqual({});
   });
 
-  it("exposes agent availability operations through the contract and client", async () => {
+  it("describes agent availability and the config replacement answer", () => {
     expect(
       apiOperations["config_agents.set_availability"].body.parse({ mode: "selected" })
     ).toEqual({
@@ -132,106 +94,9 @@ describe("api operation catalog and client", () => {
     expect(apiOperations["config_assets.replace"].response.schema.parse({ version: 2 })).toEqual({
       version: 2
     });
-
-    const requests: Array<{ method: string; path: string; body?: unknown }> = [];
-    const availability = {
-      mode: "selected",
-      personalWorkspaces: false,
-      collaborationWorkspaceIds: ["cws_1"]
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      fetchImpl: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        const url = new URL(request.url);
-        requests.push({
-          method: request.method,
-          path: `${url.pathname}${url.search}`,
-          ...(request.method === "GET" ? {} : { body: await request.json() })
-        });
-        if (url.pathname.endsWith("/availability")) return Response.json(availability);
-        if (url.pathname.endsWith("/agents")) {
-          return Response.json({
-            defaultAgentName: "kai",
-            items: [{ name: "kai", displayName: "KAI", selectableModels: [], initialPrompts: [] }]
-          });
-        }
-        return Response.json({
-          items: [{ id: "cws_1", name: "KAI", visibility: "private", createdAt }]
-        });
-      }
-    });
-
-    await expect(
-      client.configAssets.setAgentAvailability("kai", {
-        mode: "selected",
-        collaborationWorkspaceIds: ["cws_1"]
-      })
-    ).resolves.toEqual(availability);
-    // The admin picker carries the id and name only.
-    await expect(client.configAssets.listAdministeredWorkspaces()).resolves.toEqual([
-      { id: "cws_1", name: "KAI", createdAt }
-    ]);
-    await expect(client.collaborationWorkspaces.listAgents("cws_1", "de")).resolves.toMatchObject({
-      defaultAgentName: "kai",
-      items: [{ name: "kai" }]
-    });
-    expect(requests).toEqual([
-      {
-        method: "PUT",
-        path: contractPathFixtures.agentAvailability,
-        body: { mode: "selected", collaborationWorkspaceIds: ["cws_1"] }
-      },
-      { method: "GET", path: `${contractPathFixtures.adminWorkspaces}?limit=200` },
-      { method: "GET", path: `${contractPathFixtures.workspaceAgents}&limit=200` }
-    ]);
   });
 
-  it("collects cursor pages through the validated list envelope", async () => {
-    const calls: URL[] = [];
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        const url = new URL(request.url);
-        calls.push(url);
-        return url.searchParams.get("cursor") === "second"
-          ? Response.json({
-              items: [{ id: "cws_2", name: "Second", visibility: "private", createdAt }]
-            })
-          : Response.json({
-              items: [{ id: "cws_1", name: "First", visibility: "private", createdAt }],
-              nextCursor: "second"
-            });
-      }
-    });
-    expect((await client.configAssets.listAdministeredWorkspaces()).map((row) => row.id)).toEqual([
-      "cws_1",
-      "cws_2"
-    ]);
-    expect(calls.map((url) => url.searchParams.get("limit"))).toEqual(["200", "200"]);
-    expect(calls.map((url) => url.searchParams.get("cursor"))).toEqual([null, "second"]);
-  });
-
-  it("asks for one bounded page of the audit log, because every call is recorded as a view", async () => {
-    const calls: URL[] = [];
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        calls.push(new URL(request.url));
-        return Response.json({ items: [], nextCursor: "more" });
-      }
-    });
-    await expect(client.governance.listAuditActivities()).resolves.toEqual([]);
-    await expect(client.governance.listAuditEvents()).resolves.toEqual([]);
-    expect(calls.map((url) => `${url.pathname}${url.search}`)).toEqual([
-      apiOperations["audit_activities.list"].path,
-      `${apiOperations["audit_events.list"].path}?limit=100`
-    ]);
-  });
-
-  it("carries conversation visibility through the workspace, conversation and move contracts", async () => {
+  it("carries conversation visibility through the workspace, conversation and move contracts", () => {
     const moveOperation = openApiJsonOperation("conversations.move");
     const conversationSchema = required(moveOperation.responses["200"]).content["application/json"]
       .schema;
@@ -256,44 +121,6 @@ describe("api operation catalog and client", () => {
         visibility: "secret"
       })
     ).toThrow();
-
-    const bodies: unknown[] = [];
-    const conversation = {
-      id: "conv_1",
-      clientInstanceId: "client_1",
-      collaborationWorkspaceId: "cws_2",
-      createdByUserId: "user_1",
-      createdByExternalUserId: "user_1",
-      visibility: "private",
-      title: "Moved",
-      status: "active",
-      createdAt: "2026-06-27T00:00:00.000Z",
-      updatedAt: "2026-06-27T00:00:00.000Z",
-      retainedUntil: "2026-07-27T00:00:00.000Z"
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      fetchImpl: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        bodies.push(await request.json());
-        return Response.json(conversation);
-      }
-    });
-
-    await expect(client.conversations.move("conv_1", "cws_2")).resolves.toMatchObject({
-      visibility: "private"
-    });
-    await client.conversations.move("conv_1", "cws_2", "private");
-    expect(bodies).toEqual([
-      { collaborationWorkspaceId: "cws_2" },
-      { collaborationWorkspaceId: "cws_2", visibility: "private" }
-    ]);
-    // A response without visibility is a contract violation, not a silently shared conversation.
-    const legacyClient = createApiClient({
-      baseUrl: "https://chat.example/",
-      fetchImpl: async () => Response.json({ ...conversation, visibility: undefined })
-    });
-    await expect(legacyClient.conversations.move("conv_1", "cws_2")).rejects.toBeDefined();
   });
 
   it("builds encoded paths from operation params and query values", () => {
@@ -326,557 +153,6 @@ describe("api operation catalog and client", () => {
       /Unknown query parameter "unknown"/u
     );
   });
-
-  it("omits the workspace query parameter when listing the Personal Workspace", async () => {
-    const calls: Request[] = [];
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      fetchImpl: async (input, init) => {
-        calls.push(input instanceof Request ? input : new Request(input, init));
-        return Response.json({ items: [] });
-      }
-    });
-
-    await client.conversations.list();
-    await client.conversations.list("workspace/one");
-    await client.conversations.list(42 as never);
-
-    expect(calls.map((request) => request.url)).toEqual([
-      "https://chat.example/api/v1/conversations?limit=200",
-      "https://chat.example/api/v1/conversations?collaborationWorkspaceId=workspace%2Fone&limit=200",
-      "https://chat.example/api/v1/conversations?limit=200"
-    ]);
-  });
-
-  it("uses generated SDK operations for client method, path, auth, and response parsing", async () => {
-    const calls: Request[] = [];
-    const fetchImpl: typeof fetch = async (input, init) => {
-      calls.push(input instanceof Request ? input : new Request(input, init));
-      return Response.json({ items: [] });
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      getToken: () => "test-token",
-      fetchImpl
-    });
-    const operation = apiOperations["conversations.messages.list"];
-
-    await expect(client.conversations.listMessages("conversation/with space")).resolves.toEqual([]);
-
-    expect(calls).toHaveLength(1);
-    const request = calls[0];
-    expect(request?.url).toBe(
-      `https://chat.example${operation.buildPath({
-        params: { conversationId: "conversation/with space" },
-        query: { limit: 200 }
-      })}`
-    );
-    expect(request?.method).toBe(operation.method);
-    expect(request?.credentials).toBe("omit");
-    expect(request?.headers.get("authorization")).toBe("Bearer test-token");
-  });
-
-  it("exposes the stable server error code on ApiError", async () => {
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      fetchImpl: async () =>
-        Response.json(
-          { error: { code: "VALIDATION_FAILED", message: "Workspace name does not match" } },
-          { status: 422 }
-        )
-    });
-
-    const error = await client.collaborationWorkspaces
-      .delete("workspace_1", "wrong")
-      .catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({
-      code: "VALIDATION_FAILED",
-      message: "Workspace name does not match",
-      status: 422
-    });
-  });
-
-  it("forces promoted managed artifact content to a blob regardless of content type", async () => {
-    const calls: Request[] = [];
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      calls.push(request);
-      return new Response("artifact-bytes", {
-        headers: {
-          "content-type": "application/json"
-        }
-      });
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      getToken: () => "test-token",
-      fetchImpl
-    });
-
-    const blob = await client.conversations.artifacts.getContent("conv 1", "art/final");
-
-    expect(await blob.text()).toBe("artifact-bytes");
-    expect(blob.type).toBe("application/json");
-    expect(client.browserManagedDownloads).toBe(false);
-    expect(client.conversations.artifacts.contentUrl("conv 1", "art/final")).toBe(
-      `https://chat.example${apiOperations["conversations.artifacts.get_content"].buildPath({
-        params: { conversationId: "conv 1", artifactId: "art/final" }
-      })}`
-    );
-    expect(client.conversations.artifacts.contentUrl("conv 1", "art/final", true)).toBe(
-      `https://chat.example${apiOperations["conversations.artifacts.get_content"].buildPath({
-        params: { conversationId: "conv 1", artifactId: "art/final" }
-      })}?inline=true`
-    );
-    expect(calls).toHaveLength(1);
-    const request = calls[0];
-    expect(request?.url).toBe(
-      `https://chat.example${apiOperations["conversations.artifacts.get_content"].buildPath({
-        params: { conversationId: "conv 1", artifactId: "art/final" }
-      })}`
-    );
-    expect(request?.method).toBe("GET");
-    expect(request?.credentials).toBe("omit");
-    expect(request?.headers.get("authorization")).toBe("Bearer test-token");
-  });
-
-  it("builds browser-managed inline file URLs with encoded identifiers", () => {
-    const client = createApiClient({
-      baseUrl: "https://chat.example/"
-    });
-
-    expect(client.conversations.files.contentUrl("conv 1", "file/image")).toBe(
-      `https://chat.example${apiOperations["conversations.files.get_content"].buildPath({
-        params: { conversationId: "conv 1", fileId: "file/image" }
-      })}`
-    );
-  });
-
-  it("forces conversation file content to a blob regardless of content type", async () => {
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      fetchImpl: async () =>
-        new Response("source-file-bytes", {
-          headers: { "content-type": "text/plain" }
-        })
-    });
-
-    const blob = await client.conversations.files.getContent("conv_1", "file_1");
-
-    expect(blob).toBeInstanceOf(Blob);
-    expect(blob.type).toBe("text/plain");
-    expect(await blob.text()).toBe("source-file-bytes");
-  });
-
-  it("fetches promoted managed artifact preview state through the API client", async () => {
-    const calls: Request[] = [];
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      calls.push(request);
-      return Response.json({
-        status: "ready",
-        artifactId: "art/final",
-        type: "image_pages",
-        format: "png",
-        pages: [
-          {
-            artifactId: "art/page-1",
-            mimeType: "image/png",
-            filename: "page-1.png",
-            pageNumber: 1
-          }
-        ]
-      });
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example/",
-      getToken: () => "test-token",
-      fetchImpl
-    });
-
-    await expect(client.conversations.artifacts.getPreview("conv 1", "art/final")).resolves.toEqual(
-      {
-        status: "ready",
-        artifactId: "art/final",
-        type: "image_pages",
-        format: "png",
-        pages: [
-          {
-            artifactId: "art/page-1",
-            mimeType: "image/png",
-            filename: "page-1.png",
-            pageNumber: 1
-          }
-        ]
-      }
-    );
-    expect(calls).toHaveLength(1);
-    const request = calls[0];
-    expect(request?.url).toBe(
-      `https://chat.example${apiOperations["conversations.artifacts.get_preview"].buildPath({
-        params: { conversationId: "conv 1", artifactId: "art/final" }
-      })}`
-    );
-    expect(request?.method).toBe("GET");
-    expect(request?.credentials).toBe("omit");
-    expect(request?.headers.get("authorization")).toBe("Bearer test-token");
-  });
-
-  it("marks artifact downloads as browser-managed when no token provider is configured", () => {
-    const client = createApiClient({
-      baseUrl: "https://chat.example/"
-    });
-
-    expect(client.browserManagedDownloads).toBe(true);
-    expect(client.conversations.artifacts.contentUrl("conversation/with space", "art/final")).toBe(
-      "https://chat.example/api/v1/conversations/conversation%2Fwith%20space/artifacts/art%2Ffinal/content"
-    );
-  });
-
-  it("validates request bodies through operation schemas before fetch", async () => {
-    const fetchImpl: typeof fetch = async () => {
-      throw new Error("fetch should not run for invalid request input");
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl
-    });
-
-    expect(() => client.conversations.create({ title: "" })).toThrow();
-    expect(() => client.conversations.rename("conv_1", "   ")).toThrow();
-  });
-
-  it("lets the generated SDK own multipart boundaries", async () => {
-    let request: Request | undefined;
-    const attachment = {
-      id: "attachment_1",
-      conversationId: "conv_1",
-      fileId: "file_1",
-      filename: "notes.txt",
-      mimeType: "text/plain",
-      byteSize: 5,
-      status: "ready" as const,
-      artifactRefs: {},
-      processingMetadata: {},
-      warnings: [],
-      createdAt: "2026-06-27T00:00:00.000Z",
-      updatedAt: "2026-06-27T00:00:00.000Z"
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async (input, init) => {
-        request = input instanceof Request ? input : new Request(input, init);
-        return Response.json({ attachment, attachments: [attachment], outcome: "created" });
-      }
-    });
-
-    await client.conversations.draftAttachments.upload(
-      "conv_1",
-      new File(["notes"], "notes.txt", { type: "text/plain" })
-    );
-
-    expect(request?.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/u);
-    expect(await request?.clone().text()).toContain('filename="notes.txt"');
-  });
-
-  it("normalizes generated HTTP and network failures as ApiError", async () => {
-    const httpClient = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async () =>
-        Response.json({ error: { message: "Conversation unavailable" } }, { status: 503 })
-    });
-    const networkFailure = new TypeError("offline");
-    const networkClient = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async () => {
-        throw networkFailure;
-      }
-    });
-
-    await expect(httpClient.conversations.list()).rejects.toMatchObject({
-      name: "ApiError",
-      status: 503,
-      message: "Conversation unavailable"
-    });
-    await expect(networkClient.conversations.list()).rejects.toMatchObject({
-      name: "ApiError",
-      status: 0,
-      message: "API request failed",
-      payload: networkFailure
-    });
-  });
-
-  it("retains RATE_LIMITED codes and error correlation identifiers", async () => {
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async () =>
-        Response.json(
-          {
-            error: {
-              code: "RATE_LIMITED",
-              message: "Try later",
-              correlationId: "corr_rate_limit"
-            }
-          },
-          { status: 429 }
-        )
-    });
-    await expect(client.conversations.list()).rejects.toMatchObject({
-      status: 429,
-      code: "RATE_LIMITED",
-      correlationId: "corr_rate_limit"
-    });
-  });
-
-  it("exposes resource-oriented Agent Runs client helpers", async () => {
-    const calls: Request[] = [];
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      calls.push(request);
-      if (request.url.endsWith("/events?after=7")) {
-        return new Response(
-          [
-            "id: 8",
-            "event: run_completed",
-            `data: ${JSON.stringify({
-              clientInstanceId: "client_1",
-              runId: "run_1",
-              conversationId: "conv_1",
-              ownerUserId: "user_1",
-              sequence: 8,
-              type: "run_completed",
-              payload: {
-                type: "run_completed",
-                runId: "run_1",
-                sequence: 8,
-                createdAt: "2026-06-27T00:00:00.000Z"
-              },
-              createdAt: "2026-06-27T00:00:00.000Z"
-            })}`,
-            "",
-            ""
-          ].join("\n"),
-          {
-            headers: {
-              "content-type": "text/event-stream"
-            }
-          }
-        );
-      }
-      return Response.json({
-        conversation: {
-          id: "conv_1",
-          clientInstanceId: "client_1",
-          collaborationWorkspaceId: "cws_1",
-          createdByUserId: "user_1",
-          createdByExternalUserId: "user_1",
-          visibility: "workspace",
-          title: "Started",
-          status: "active",
-          createdAt: "2026-06-27T00:00:00.000Z",
-          updatedAt: "2026-06-27T00:00:00.000Z",
-          retainedUntil: "2026-07-27T00:00:00.000Z"
-        },
-        userMessage: {
-          id: "msg_1",
-          conversationId: "conv_1",
-          clientInstanceId: "client_1",
-          role: "user",
-          text: "Hello",
-          createdAt: "2026-06-27T00:00:00.000Z"
-        },
-        run: {
-          id: "run_1",
-          clientInstanceId: "client_1",
-          conversationId: "conv_1",
-          ownerUserId: "user_1",
-          inputMessageId: "msg_1",
-          agentName: "test_agent",
-          status: "running",
-          idempotencyKey: "idem_1",
-          startedAt: "2026-06-27T00:00:00.000Z",
-          updatedAt: "2026-06-27T00:00:00.000Z",
-          lastSequence: 0,
-          correlationId: "corr_1"
-        },
-        thread: {
-          conversation: {
-            id: "conv_1",
-            clientInstanceId: "client_1",
-            collaborationWorkspaceId: "cws_1",
-            createdByUserId: "user_1",
-            createdByExternalUserId: "user_1",
-            visibility: "workspace",
-            title: "Started",
-            status: "active",
-            createdAt: "2026-06-27T00:00:00.000Z",
-            updatedAt: "2026-06-27T00:00:00.000Z",
-            retainedUntil: "2026-07-27T00:00:00.000Z"
-          },
-          messages: [
-            {
-              id: "msg_1",
-              conversationId: "conv_1",
-              clientInstanceId: "client_1",
-              role: "user",
-              text: "Hello",
-              createdAt: "2026-06-27T00:00:00.000Z"
-            }
-          ],
-          activeRun: {
-            run: {
-              id: "run_1",
-              conversationId: "conv_1",
-              agentName: "test_agent",
-              status: "running",
-              startedAt: "2026-06-27T00:00:00.000Z",
-              updatedAt: "2026-06-27T00:00:00.000Z",
-              lastSequence: 0
-            },
-            projection: {
-              runId: "run_1",
-              lastSequence: 0,
-              status: "running",
-              text: "",
-              reasoning: [],
-              activeToolCalls: []
-            }
-          },
-          userState: {
-            clientInstanceId: "client_1",
-            conversationId: "conv_1",
-            userId: "user_1",
-            updatedAt: "2026-06-27T00:00:00.000Z"
-          },
-          serverTime: "2026-06-27T00:00:00.000Z"
-        },
-        eventsUrl: "https://chat.example/api/v1/conversations/conv_1/runs/run_1/events"
-      });
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      getToken: () => "test-token",
-      fetchImpl
-    });
-
-    await client.runs.start("conv 1", {
-      idempotencyKey: "idem_1",
-      message: { text: "Hello" }
-    });
-    await client.runs.create({
-      idempotencyKey: "idem_2",
-      message: { text: "Hello" }
-    });
-    await client.runs.cancel("conv 1", "run 1", { reason: "user_requested" });
-    await client.runs.command("conv 1", "run 1", { command: { type: "continue" } });
-    const observed = [];
-    for await (const observation of client.runs.observe("conv_1", "run_1", { afterSequence: 7 })) {
-      observed.push(observation);
-    }
-
-    expect(
-      calls.map(
-        (request) =>
-          `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`
-      )
-    ).toEqual([
-      "POST /api/v1/conversations/conv%201/runs",
-      "POST /api/v1/conversations/runs",
-      "POST /api/v1/conversations/conv%201/runs/run%201/cancel",
-      "POST /api/v1/conversations/conv%201/runs/run%201/commands",
-      "GET /api/v1/conversations/conv_1/runs/run_1/events?after=7"
-    ]);
-    expect(
-      calls.every((request) => request.headers.get("authorization") === "Bearer test-token")
-    ).toBe(true);
-    expect(calls[4]?.headers.get("last-event-id")).toBeNull();
-    expect(calls[4]?.headers.get("accept")).toBe("text/event-stream");
-    expect(observed).toEqual([
-      expect.objectContaining({
-        runId: "run_1",
-        sequence: 8,
-        type: "run_completed"
-      })
-    ]);
-  });
-
-  it("exposes caught-up 204 observation streams without yielding events", async () => {
-    const calls: Request[] = [];
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      calls.push(request);
-      return new Response(null, { status: 204 });
-    };
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl
-    });
-    const observed = [];
-    let caughtUp = false;
-
-    for await (const observation of client.runs.observe("conv_1", "run_1", {
-      afterSequence: 7,
-      onCaughtUp: () => {
-        caughtUp = true;
-      }
-    })) {
-      observed.push(observation);
-    }
-
-    expect(
-      calls.map(
-        (request) =>
-          `${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`
-      )
-    ).toEqual(["GET /api/v1/conversations/conv_1/runs/run_1/events?after=7"]);
-    expect(observed).toEqual([]);
-    expect(caughtUp).toBe(true);
-  });
-
-  it("decodes incrementally split UTF-8 run events with CRLF framing", async () => {
-    const observation = {
-      clientInstanceId: "client_1",
-      runId: "run_1",
-      conversationId: "conv_1",
-      ownerUserId: "user_1",
-      sequence: 1,
-      type: "message_delta",
-      payload: {
-        type: "message_delta",
-        runId: "run_1",
-        sequence: 1,
-        createdAt: "2026-06-27T00:00:00.000Z",
-        delta: "Hello 🌍"
-      },
-      createdAt: "2026-06-27T00:00:00.000Z"
-    };
-    const encoder = new TextEncoder();
-    const [prefix, suffix] = `data: ${JSON.stringify(observation)}\r\n\r\n`.split("🌍");
-    const emoji = encoder.encode("🌍");
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new Uint8Array([...encoder.encode(prefix), ...emoji.slice(0, 2)]));
-        controller.enqueue(new Uint8Array([...emoji.slice(2), ...encoder.encode(suffix)]));
-        controller.close();
-      }
-    });
-    const client = createApiClient({
-      baseUrl: "https://chat.example",
-      fetchImpl: async () =>
-        new Response(stream, { headers: { "content-type": "text/event-stream" } })
-    });
-    const observed = [];
-
-    for await (const event of client.runs.observe("conv_1", "run_1")) {
-      observed.push(event);
-    }
-
-    expect(observed).toEqual([observation]);
-    expect(stream.locked).toBe(false);
-  });
-
   it("keeps normal server route registrations tied to the operation catalog", async () => {
     const routeFiles = [
       "packages/chat-server/src/routes/audit-routes.ts",
@@ -916,5 +192,756 @@ describe("api operation catalog and client", () => {
     expect(contractSource).not.toContain("chatStreamRequestSchema");
     expect(contractSource).not.toContain("chatStreamChunkSchema");
     expect(routeSource).not.toContain(contractPathFixtures.retiredChat);
+  });
+});
+
+const conversation = {
+  id: "conv_1",
+  clientInstanceId: "client_1",
+  collaborationWorkspaceId: "cws_1",
+  createdByUserId: "user_1",
+  createdByExternalUserId: "user_1",
+  visibility: "private",
+  title: "Moved",
+  status: "active",
+  createdAt,
+  updatedAt: createdAt,
+  retainedUntil: "2026-07-27T00:00:00.000Z"
+};
+
+function observation(sequence: number, delta = "Hello") {
+  return {
+    clientInstanceId: "client_1",
+    runId: "run_1",
+    conversationId: "conv_1",
+    ownerUserId: "user_1",
+    sequence,
+    type: "message_delta",
+    payload: { type: "message_delta", runId: "run_1", sequence, createdAt, delta },
+    createdAt
+  };
+}
+
+/** A client whose requests are recorded and answered by `answer`. */
+function recordingClient(
+  answer: (request: Request) => Response | Promise<Response>,
+  options: Partial<ApiClientOptions> = {}
+) {
+  const requests: Request[] = [];
+  const client = createApiClient({
+    baseUrl: "https://chat.example/",
+    ...options,
+    fetchImpl: async (input, init) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return answer(request);
+    }
+  });
+  return { client, requests };
+}
+
+const pathOf = (request: Request | undefined) =>
+  request ? `${new URL(request.url).pathname}${new URL(request.url).search}` : undefined;
+
+const eventStream = (chunks: Array<string | Uint8Array>, end: "close" | Error = "close") => {
+  const encoder = new TextEncoder();
+  const pending = [...chunks];
+  let cancelled = false;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = pending.shift();
+      if (chunk !== undefined) {
+        controller.enqueue(typeof chunk === "string" ? encoder.encode(chunk) : chunk);
+      } else if (end === "close") {
+        controller.close();
+      } else {
+        controller.error(end);
+      }
+    },
+    cancel() {
+      cancelled = true;
+    }
+  });
+  return {
+    body,
+    response: () => new Response(body, { headers: { "content-type": "text/event-stream" } }),
+    wasCancelled: () => cancelled
+  };
+};
+
+const frame = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+const runParams = { conversationId: "conv_1", runId: "run_1" };
+
+async function collect<Item>(stream: AsyncIterable<Item>): Promise<Item[]> {
+  const items: Item[] = [];
+  for await (const item of stream) {
+    items.push(item);
+  }
+  return items;
+}
+
+describe("api client derived from the operation catalog", () => {
+  it("has exactly one method per operation, under the segments of its id", () => {
+    const { client } = recordingClient(() => Response.json({}));
+    const methodIds: string[] = [];
+    const walk = (node: object, prefix: string) => {
+      for (const [segment, value] of Object.entries(node)) {
+        if (typeof value === "function") methodIds.push(`${prefix}${segment}`);
+        else if (value && typeof value === "object") walk(value, `${prefix}${segment}.`);
+      }
+    };
+    walk(client, "");
+
+    expect(methodIds.filter((id) => id !== "urlFor").sort()).toEqual(
+      Object.keys(apiOperations).sort()
+    );
+  });
+
+  it("sends every operation with the method and path of its descriptor", async () => {
+    const operations = Object.values<Operation>(apiOperations).filter(
+      (operation) => !operation.body && !operation.multipart
+    );
+    expect(operations.length).toBeGreaterThan(40);
+
+    for (const operation of operations) {
+      const { client, requests } = recordingClient(() => new Response(null, { status: 500 }));
+      const params = Object.fromEntries(
+        operationPathParamNames(operation.path).map((name) => [name, `${name} 1`])
+      );
+      let method: unknown = client;
+      for (const segment of operation.id.split(".")) {
+        method = Reflect.get(Object(method), segment);
+      }
+      if (typeof method !== "function") {
+        expect.fail(`No client method for ${operation.id}`);
+      }
+      const result: unknown = method({ params });
+      // A stream sends its request once it is read.
+      await (result instanceof Promise ? result : collect(Object(result))).catch(() => undefined);
+
+      expect(requests[0]?.method, operation.id).toBe(operation.method);
+      expect(requests[0]?.url, operation.id).toBe(
+        `https://chat.example${operation.buildPath({ params })}`
+      );
+    }
+  });
+
+  it("types the input and the answer of a method from its operation", () => {
+    const { client } = recordingClient(() => Response.json({}));
+    type Thread = OperationInput<"conversations.thread.get">;
+    type Listing = OperationInput<"conversations.list">;
+
+    // Path parameters are required by name; an operation without a body takes none.
+    expectTypeOf<keyof Thread>().toEqualTypeOf<"params" | "signal">();
+    expectTypeOf<Thread["params"]>().toEqualTypeOf<Record<"conversationId", string>>();
+    expectTypeOf(client.conversations.thread.get).parameters.toEqualTypeOf<[input: Thread]>();
+    expectTypeOf<keyof OperationInput<"me.get">>().toEqualTypeOf<"signal">();
+    expectTypeOf(client.me.get).parameters.toEqualTypeOf<[input?: OperationInput<"me.get">]>();
+
+    // A query carries the descriptor's parameters and nothing else, all of them optional here.
+    expectTypeOf<keyof Listing>().toEqualTypeOf<"query" | "signal">();
+    expectTypeOf<keyof NonNullable<Listing["query"]>>().toEqualTypeOf<
+      "limit" | "cursor" | "collaborationWorkspaceId"
+    >();
+    expectTypeOf<NonNullable<Listing["query"]>["limit"]>().toEqualTypeOf<number | undefined>();
+    expectTypeOf(client.conversations.list).toBeCallableWith();
+
+    // A body follows the request schema and cannot be left out.
+    expectTypeOf<keyof OperationInput<"conversations.rename">>().toEqualTypeOf<
+      "params" | "body" | "signal"
+    >();
+    expectTypeOf<OperationInput<"conversations.rename">["body"]>().toEqualTypeOf<{
+      title: string;
+    }>();
+    expectTypeOf(client.conversations.create).parameters.toEqualTypeOf<
+      [input: OperationInput<"conversations.create">]
+    >();
+
+    // An upload takes a file; only a stream reports that it is caught up.
+    expectTypeOf<keyof OperationInput<"conversations.draft_attachments.upload">>().toEqualTypeOf<
+      "params" | "file" | "signal"
+    >();
+    expectTypeOf<keyof OperationInput<"conversations.runs.observe">>().toEqualTypeOf<
+      "params" | "query" | "signal" | "onCaughtUp"
+    >();
+
+    // The answer is what the response schema parses to, by the kind of the response.
+    expectTypeOf(
+      client.conversations.thread.get
+    ).returns.resolves.toEqualTypeOf<ConversationThreadSnapshot>();
+    expectTypeOf(client.users.list).returns.resolves.toEqualTypeOf<{
+      items: AdministeredUser[];
+      nextCursor?: string | undefined;
+    }>();
+    expectTypeOf(client.conversations.files.get_content).returns.toEqualTypeOf<Promise<Blob>>();
+    expectTypeOf(client.conversations.runs.observe).returns.toEqualTypeOf<
+      AsyncIterable<RunObservation>
+    >();
+  });
+
+  it.each([
+    { name: "cookie", getToken: undefined, credentials: "include", authorization: null },
+    {
+      name: "token",
+      getToken: () => "test-token",
+      credentials: "omit",
+      authorization: "Bearer test-token"
+    },
+    {
+      name: "asynchronous token",
+      getToken: async () => "later-token",
+      credentials: "omit",
+      authorization: "Bearer later-token"
+    },
+    {
+      name: "empty token source",
+      getToken: () => undefined,
+      credentials: "omit",
+      authorization: null
+    }
+  ])(
+    "uses $name mode for JSON, uploads, downloads and event streams",
+    async ({ getToken, credentials, authorization }) => {
+      const { client, requests } = recordingClient(
+        (request) => {
+          if (request.url.endsWith("/events")) return new Response(null, { status: 204 });
+          if (request.url.includes("/content")) return new Response("download");
+          return Response.json({ items: [] });
+        },
+        { getToken, browserManagedDownloads: true }
+      );
+      await client.conversations.list();
+      await client.conversations.files.get_content({
+        params: { conversationId: "conv_1", fileId: "file_1" }
+      });
+      await client.conversations.draft_attachments
+        .upload({ params: { conversationId: "conv_1" }, file: new File(["notes"], "notes.txt") })
+        .catch(() => undefined);
+      await collect(client.conversations.runs.observe({ params: runParams }));
+
+      expect(requests).toHaveLength(4);
+      for (const request of requests) {
+        expect(request.credentials).toBe(credentials);
+        expect(request.headers.get("authorization")).toBe(authorization);
+      }
+      // A browser can only fetch a file by itself when a cookie carries the session.
+      expect(client.browserManagedDownloads).toBe(getToken === undefined);
+    }
+  );
+
+  it("lets a cookie client turn browser-managed downloads off", () => {
+    expect(
+      createApiClient({ baseUrl: "https://chat.example", browserManagedDownloads: false })
+        .browserManagedDownloads
+    ).toBe(false);
+  });
+
+  it("builds the path, the query and a JSON body, and parses the JSON answer", async () => {
+    const { client, requests } = recordingClient(() => Response.json(conversation));
+
+    await expect(
+      client.conversations.move({
+        params: { conversationId: "conv 1/2" },
+        body: { collaborationWorkspaceId: "cws_2", visibility: "private" }
+      })
+    ).resolves.toEqual(conversation);
+    await client.conversations.title.generate({ params: { conversationId: "conv_1" } });
+
+    expect(requests.map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
+      "POST /api/v1/conversations/conv%201%2F2/move",
+      "POST /api/v1/conversations/conv_1/title"
+    ]);
+    expect(requests[0]?.headers.get("content-type")).toBe("application/json");
+    await expect(requests[0]?.json()).resolves.toEqual({
+      collaborationWorkspaceId: "cws_2",
+      visibility: "private"
+    });
+    // An operation without a body sends none, and no content type that would announce one.
+    expect(requests[1]?.headers.get("content-type")).toBeNull();
+    expect(requests[1]?.body).toBeNull();
+  });
+
+  it("leaves out query parameters that are not set", async () => {
+    const { client, requests } = recordingClient(() => Response.json({ items: [] }));
+
+    await client.conversations.list();
+    await client.conversations.list({ query: { collaborationWorkspaceId: "workspace/one" } });
+    await client.conversations.list({ query: { collaborationWorkspaceId: undefined, limit: 5 } });
+
+    expect(requests.map(pathOf)).toEqual([
+      contractPathFixtures.conversations,
+      contractPathFixtures.encodedWorkspaceConversations,
+      `${contractPathFixtures.conversations}?limit=5`
+    ]);
+  });
+
+  it("refuses an input outside the request schema before any request is sent", async () => {
+    const { client, requests } = recordingClient(() => Response.json(conversation));
+
+    await expect(client.conversations.create({ body: { title: "" } })).rejects.toThrow();
+    await expect(
+      client.conversations.rename({ params: { conversationId: "conv_1" }, body: { title: "  " } })
+    ).rejects.toThrow();
+    expect(requests).toEqual([]);
+  });
+
+  it("answers one page per call and reads a list to its end on request", async () => {
+    const workspace = (id: string) => ({ id, name: id, visibility: "private", createdAt });
+    const { client, requests } = recordingClient((request) =>
+      new URL(request.url).searchParams.get("cursor") === "second"
+        ? Response.json({ items: [workspace("cws_2")] })
+        : Response.json({ items: [workspace("cws_1")], nextCursor: "second" })
+    );
+
+    // The admin picker carries the id and name only: the schema drops the rest.
+    await expect(client.instance.workspaces.list({ query: { limit: 1 } })).resolves.toEqual({
+      items: [{ id: "cws_1", name: "cws_1", createdAt }],
+      nextCursor: "second"
+    });
+    const all = await listAll((paging) => client.instance.workspaces.list({ query: paging }));
+
+    expect(all.map((row) => row.id)).toEqual(["cws_1", "cws_2"]);
+    expect(requests.map(pathOf)).toEqual([
+      `${contractPathFixtures.adminWorkspaces}?limit=1`,
+      `${contractPathFixtures.adminWorkspaces}?limit=200`,
+      `${contractPathFixtures.adminWorkspaces}?limit=200&cursor=second`
+    ]);
+  });
+
+  it("returns a file as a blob whatever content type it has", async () => {
+    const { client, requests } = recordingClient(
+      () => new Response("artifact-bytes", { headers: { "content-type": "application/json" } }),
+      { getToken: () => "test-token" }
+    );
+
+    const blob = await client.conversations.artifacts.get_content({
+      params: { conversationId: "conv 1", artifactId: "art/final" }
+    });
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("application/json");
+    expect(await blob.text()).toBe("artifact-bytes");
+    expect(requests[0]?.method).toBe("GET");
+    expect(requests[0]?.url).toBe(
+      "https://chat.example/api/v1/conversations/conv%201/artifacts/art%2Ffinal/content"
+    );
+  });
+
+  it("builds the URL of an operation for the browser to load itself", () => {
+    const client = createApiClient({ baseUrl: "https://chat.example/" });
+    const params = { conversationId: "conv 1", artifactId: "art/final" };
+
+    expect(client.urlFor("conversations.artifacts.get_content", { params })).toBe(
+      "https://chat.example/api/v1/conversations/conv%201/artifacts/art%2Ffinal/content"
+    );
+    expect(
+      client.urlFor("conversations.artifacts.get_content", { params, query: { inline: "true" } })
+    ).toBe(
+      "https://chat.example/api/v1/conversations/conv%201/artifacts/art%2Ffinal/content?inline=true"
+    );
+    expect(
+      client.urlFor("conversations.files.get_content", {
+        params: { conversationId: "conv 1", fileId: "file/image" }
+      })
+    ).toBe("https://chat.example/api/v1/conversations/conv%201/files/file%2Fimage/content");
+  });
+
+  it("uploads a file as multipart and leaves the boundary to the runtime", async () => {
+    const attachment = {
+      id: "attachment_1",
+      conversationId: "conv_1",
+      fileId: "file_1",
+      filename: "notes.txt",
+      mimeType: "text/plain",
+      byteSize: 5,
+      status: "ready",
+      artifactRefs: {},
+      processingMetadata: {},
+      warnings: [],
+      createdAt,
+      updatedAt: createdAt
+    };
+    const { client, requests } = recordingClient(() =>
+      Response.json({ attachment, attachments: [attachment], outcome: "created" })
+    );
+
+    const uploaded = await client.conversations.draft_attachments.upload({
+      params: { conversationId: "conv_1" },
+      file: new File(["notes"], "notes.txt", { type: "text/plain" })
+    });
+
+    expect(uploaded.outcome).toBe("created");
+    expect(requests[0]?.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/u);
+    const form = await requests[0]?.formData();
+    const file = form?.get("file");
+    expect(file).toBeInstanceOf(File);
+    expect(file instanceof File ? [file.name, await file.text()] : []).toEqual([
+      "notes.txt",
+      "notes"
+    ]);
+  });
+
+  it.each([
+    ["an empty answer", () => new Response(null, { status: 204 }), "not valid JSON"],
+    ["a body that is not JSON", () => new Response("<html>"), "not valid JSON"],
+    [
+      // A conversation without visibility must not pass as a silently shared one.
+      "JSON outside the response schema",
+      () => Response.json({ ...conversation, visibility: undefined }),
+      "does not match the contract"
+    ],
+    [
+      "a list without its envelope",
+      () => Response.json([conversation]),
+      "does not match the contract"
+    ]
+  ])("fails on %s where the contract promises JSON", async (_name, answer, message) => {
+    const { client } = recordingClient(answer);
+    const call =
+      message === "does not match the contract" && _name.startsWith("a list")
+        ? client.conversations.list()
+        : client.conversations.thread.get({ params: { conversationId: "conv_1" } });
+
+    const error = await call.catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ message: expect.stringContaining(message), code: undefined });
+    expect(error instanceof ApiError && error.payload).toBeInstanceOf(Error);
+  });
+
+  it("maps a refusal to an ApiError with the server's code, message and correlation id", async () => {
+    const { client } = recordingClient(() =>
+      Response.json(
+        { error: { code: "RATE_LIMITED", message: "Try later", correlationId: "corr_1" } },
+        { status: 429 }
+      )
+    );
+    const refusals = await Promise.all([
+      client.conversations.list().catch((caught: unknown) => caught),
+      client.conversations.files
+        .get_content({ params: { conversationId: "conv_1", fileId: "file_1" } })
+        .catch((caught: unknown) => caught),
+      collect(client.conversations.runs.observe({ params: runParams })).catch(
+        (caught: unknown) => caught
+      )
+    ]);
+
+    for (const refusal of refusals) {
+      expect(refusal).toBeInstanceOf(ApiError);
+      expect(refusal).toMatchObject({
+        name: "ApiError",
+        status: 429,
+        code: "RATE_LIMITED",
+        message: "Try later",
+        correlationId: "corr_1"
+      });
+    }
+  });
+
+  it("does not trust the body of a refusal", async () => {
+    const answers = [
+      () => new Response("<html>Bad gateway</html>", { status: 502 }),
+      () => Response.json({ error: { code: "MADE_UP", message: 42 } }, { status: 500 }),
+      () => Response.json({ error: "nope" }, { status: 400 }),
+      () => new Response(null, { status: 503 })
+    ];
+    const errors = [];
+    for (const answer of answers) {
+      errors.push(
+        await recordingClient(answer)
+          .client.conversations.list()
+          .catch((caught: unknown) => caught)
+      );
+    }
+
+    expect(errors).toMatchObject([
+      { status: 502, message: "API request failed", payload: "<html>Bad gateway</html>" },
+      { status: 500, message: "API request failed", code: undefined },
+      { status: 400, message: "API request failed", code: undefined },
+      { status: 503, message: "API request failed", payload: "" }
+    ]);
+    expect(errors.every((error) => error instanceof ApiError)).toBe(true);
+  });
+
+  it("maps a request without an answer to an ApiError of status 0", async () => {
+    const offline = new TypeError("offline");
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async () => {
+        throw offline;
+      }
+    });
+
+    await expect(client.conversations.list()).rejects.toMatchObject({
+      name: "ApiError",
+      status: 0,
+      message: "API request failed",
+      payload: offline
+    });
+  });
+
+  it("maps an answer that breaks off while it is read", async () => {
+    const { client } = recordingClient(
+      () => new Response(eventStream(['{"items":'], new TypeError("connection reset")).body)
+    );
+
+    await expect(client.conversations.list()).rejects.toMatchObject({
+      name: "ApiError",
+      status: 0
+    });
+  });
+
+  it("leaves an abort as the caller's own abort", async () => {
+    const controller = new AbortController();
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: (_input, init) =>
+        new Promise((_resolve, reject) => {
+          const abort = () => reject(init?.signal?.reason);
+          if (init?.signal?.aborted) abort();
+          init?.signal?.addEventListener("abort", abort);
+        })
+    });
+
+    const pending = client.me.get({ signal: controller.signal });
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    await expect(pending).rejects.not.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("event streams of the api client", () => {
+  it("asks for an event stream from the position the caller gives", async () => {
+    const { client, requests } = recordingClient(() =>
+      eventStream([frame(observation(8))]).response()
+    );
+
+    const observed = await collect(
+      client.conversations.runs.observe({ params: runParams, query: { after: "7" } })
+    );
+
+    expect(observed).toEqual([observation(8)]);
+    expect(requests.map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
+      "GET /api/v1/conversations/conv_1/runs/run_1/events?after=7"
+    ]);
+    expect(requests[0]?.headers.get("accept")).toBe("text/event-stream");
+    expect(requests[0]?.headers.get("last-event-id")).toBeNull();
+  });
+
+  it("sends nothing until the stream is read", async () => {
+    const { client, requests } = recordingClient(() => eventStream([]).response());
+
+    const stream = client.conversations.runs.observe({ params: runParams });
+    expect(requests).toHaveLength(0);
+    await collect(stream);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("reports a caught-up 204 and yields nothing", async () => {
+    const { client } = recordingClient(() => new Response(null, { status: 204 }));
+    let caughtUp = 0;
+
+    const observed = await collect(
+      client.conversations.runs.observe({
+        params: runParams,
+        query: { after: "7" },
+        onCaughtUp: () => {
+          caughtUp += 1;
+        }
+      })
+    );
+
+    expect(observed).toEqual([]);
+    expect(caughtUp).toBe(1);
+  });
+
+  it("ends quietly when a stream closes without events, which is not caught up", async () => {
+    const stream = eventStream([": keep-alive\n\n"]);
+    const { client } = recordingClient(stream.response);
+    let caughtUp = false;
+
+    const observed = await collect(
+      client.conversations.runs.observe({
+        params: runParams,
+        onCaughtUp: () => {
+          caughtUp = true;
+        }
+      })
+    );
+
+    expect(observed).toEqual([]);
+    expect(caughtUp).toBe(false);
+    expect(stream.body.locked).toBe(false);
+  });
+
+  it("reads events cut anywhere: inside a character, a line ending, a field and a frame", async () => {
+    const encoder = new TextEncoder();
+    const first = observation(1, "Hello 🌍");
+    const second = observation(2, "second");
+    const third = observation(3, "third");
+    const [prefix = "", suffix = ""] = `id: 1\r\nevent: message_delta\r\ndata: ${JSON.stringify(
+      first
+    )}\r\n\r`.split("🌍");
+    const emoji = encoder.encode("🌍");
+    const secondFrame = `id: 2\ndata: ${JSON.stringify(second)}\n\n`;
+    const stream = eventStream([
+      // Inside the four bytes of one character.
+      new Uint8Array([...encoder.encode(prefix), ...emoji.slice(0, 2)]),
+      // Between the carriage return and the line feed that end the frame.
+      new Uint8Array([...emoji.slice(2), ...encoder.encode(suffix)]),
+      // Inside the field name of the next frame, with a comment before it.
+      `\n: keep-alive\n\n${secondFrame.slice(0, 9)}`,
+      // Two frames end in one chunk, the last without a blank line before the stream closes.
+      `${secondFrame.slice(9)}data: ${JSON.stringify(third)}`
+    ]);
+    const { client } = recordingClient(stream.response);
+
+    const observed = await collect(client.conversations.runs.observe({ params: runParams }));
+
+    expect(observed).toEqual([first, second, third]);
+    expect(stream.body.locked).toBe(false);
+  });
+
+  it("joins the data lines of one event", async () => {
+    const json = JSON.stringify(observation(1));
+    const cut = json.indexOf('"sequence"');
+    const stream = eventStream([`data: ${json.slice(0, cut)}\ndata:${json.slice(cut)}\n\n`]);
+    const { client } = recordingClient(stream.response);
+
+    await expect(
+      collect(client.conversations.runs.observe({ params: runParams }))
+    ).resolves.toEqual([observation(1)]);
+  });
+
+  it("closes the connection when the reader stops early", async () => {
+    const stream = eventStream([
+      frame(observation(1)),
+      frame(observation(2)),
+      frame(observation(3))
+    ]);
+    const { client } = recordingClient(stream.response);
+    const observed = [];
+
+    for await (const event of client.conversations.runs.observe({ params: runParams })) {
+      observed.push(event.sequence);
+      break;
+    }
+
+    expect(observed).toEqual([1]);
+    expect(stream.wasCancelled()).toBe(true);
+    expect(stream.body.locked).toBe(false);
+  });
+
+  it("passes an abort before the answer on as the caller's abort", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async (_input, init) => {
+        init?.signal?.throwIfAborted();
+        return new Response(null, { status: 204 });
+      }
+    });
+
+    const failure = await collect(
+      client.conversations.runs.observe({ params: runParams, signal: controller.signal })
+    ).catch((caught: unknown) => caught);
+
+    expect(failure).toMatchObject({ name: "AbortError" });
+    expect(failure).not.toBeInstanceOf(ApiError);
+  });
+
+  it("stops a running stream on abort and closes it", async () => {
+    const controller = new AbortController();
+    let cancelled = false;
+    // Like fetch: the body fails with the abort reason once the request's signal fires.
+    const body = new ReadableStream<Uint8Array>({
+      start(streamController) {
+        streamController.enqueue(new TextEncoder().encode(frame(observation(1))));
+        controller.signal.addEventListener("abort", () =>
+          streamController.error(controller.signal.reason)
+        );
+      },
+      cancel() {
+        cancelled = true;
+      }
+    });
+    const { client, requests } = recordingClient(() => new Response(body));
+    const observed: number[] = [];
+
+    const failure = await (async () => {
+      for await (const event of client.conversations.runs.observe({
+        params: runParams,
+        signal: controller.signal
+      })) {
+        observed.push(event.sequence);
+        controller.abort();
+      }
+    })().catch((caught: unknown) => caught);
+
+    expect(observed).toEqual([1]);
+    expect(requests[0]?.signal.aborted).toBe(true);
+    expect(failure).toMatchObject({ name: "AbortError" });
+    expect(failure).not.toBeInstanceOf(ApiError);
+    expect(body.locked).toBe(false);
+    // An errored body has nothing left to cancel; the reader is released either way.
+    expect(cancelled).toBe(false);
+  });
+
+  it("resumes after the last event it saw when the connection breaks", async () => {
+    const answers = [
+      eventStream([frame(observation(1)), frame(observation(2))], new TypeError("terminated")),
+      eventStream([frame(observation(3))])
+    ];
+    const { client, requests } = recordingClient(
+      () => answers.shift()?.response() ?? new Response(null, { status: 204 })
+    );
+    const seen: number[] = [];
+    const read = async () => {
+      const after = seen.at(-1);
+      for await (const event of client.conversations.runs.observe({
+        params: runParams,
+        query: after === undefined ? {} : { after: String(after) }
+      })) {
+        seen.push(event.sequence);
+      }
+    };
+
+    // The events before the break are delivered; the break itself is a failed call.
+    await expect(read()).rejects.toMatchObject({ name: "ApiError", status: 0 });
+    expect(seen).toEqual([1, 2]);
+    await read();
+
+    expect(seen).toEqual([1, 2, 3]);
+    const observe = apiOperations["conversations.runs.observe"];
+    expect(requests.map(pathOf)).toEqual([
+      observe.buildPath({ params: runParams }),
+      observe.buildPath({ params: runParams, query: { after: "2" } })
+    ]);
+  });
+
+  it.each([
+    ["is not JSON", "data: {not json\n\n", "not valid JSON"],
+    [
+      "is outside the event schema",
+      frame({ ...observation(2), sequence: "two" }),
+      "does not match the contract"
+    ]
+  ])("fails on an event that %s, after the events before it", async (_name, bad, message) => {
+    const stream = eventStream([frame(observation(1)), bad, frame(observation(3))]);
+    const { client } = recordingClient(stream.response);
+    const seen: number[] = [];
+
+    const failure = await (async () => {
+      for await (const event of client.conversations.runs.observe({ params: runParams })) {
+        seen.push(event.sequence);
+      }
+    })().catch((caught: unknown) => caught);
+
+    expect(seen).toEqual([1]);
+    expect(failure).toBeInstanceOf(ApiError);
+    expect(failure).toMatchObject({ message: expect.stringContaining(message) });
+    expect(stream.wasCancelled()).toBe(true);
   });
 });

@@ -19,13 +19,15 @@ describe("chat UI product run transport", () => {
   it("starts a new conversation through the product createConversationRun API", async () => {
     const calls: unknown[] = [];
     const client = {
-      runs: {
-        async create(input: unknown) {
-          calls.push(input);
-          return createStartResponse({ conversationId: "conv_new" });
-        },
-        async start() {
-          throw new Error("startRun should not be called");
+      conversations: {
+        runs: {
+          async create(input: { body: unknown }) {
+            calls.push(input.body);
+            return createStartResponse({ conversationId: "conv_new" });
+          },
+          async start() {
+            throw new Error("startRun should not be called");
+          }
         }
       }
     };
@@ -60,13 +62,15 @@ describe("chat UI product run transport", () => {
   it("creates the conversation inside the active collaboration workspace", async () => {
     const calls: unknown[] = [];
     const client = {
-      runs: {
-        async create(input: unknown) {
-          calls.push(input);
-          return createStartResponse({ conversationId: "conv_new" });
-        },
-        async start() {
-          throw new Error("startRun should not be called");
+      conversations: {
+        runs: {
+          async create(input: { body: unknown }) {
+            calls.push(input.body);
+            return createStartResponse({ conversationId: "conv_new" });
+          },
+          async start() {
+            throw new Error("startRun should not be called");
+          }
         }
       }
     };
@@ -96,13 +100,16 @@ describe("chat UI product run transport", () => {
   it("starts an existing conversation through the product startConversationRun API", async () => {
     const calls: unknown[] = [];
     const client = {
-      runs: {
-        async create() {
-          throw new Error("createRun should not be called");
-        },
-        async start(conversationId: string, input: unknown) {
-          calls.push({ conversationId, input });
-          return createStartResponse({ conversationId });
+      conversations: {
+        runs: {
+          async create() {
+            throw new Error("createRun should not be called");
+          },
+          async start(input: { params: { conversationId: string }; body: unknown }) {
+            const { conversationId } = input.params;
+            calls.push({ conversationId, input: input.body });
+            return createStartResponse({ conversationId });
+          }
         }
       }
     };
@@ -132,13 +139,15 @@ describe("chat UI product run transport", () => {
   it("reuses the generated idempotency key for the submitted user message", async () => {
     const idempotencyKeys: string[] = [];
     const client = {
-      runs: {
-        async create(input: { idempotencyKey: string }) {
-          idempotencyKeys.push(input.idempotencyKey);
-          return createStartResponse({ conversationId: "conv_new" });
-        },
-        async start() {
-          throw new Error("startRun should not be called");
+      conversations: {
+        runs: {
+          async create(input: { body: { idempotencyKey: string } }) {
+            idempotencyKeys.push(input.body.idempotencyKey);
+            return createStartResponse({ conversationId: "conv_new" });
+          },
+          async start() {
+            throw new Error("startRun should not be called");
+          }
         }
       }
     };
@@ -176,12 +185,14 @@ describe("chat UI product run transport", () => {
     const startedRuns: StartConversationRunResponse[] = [];
     const response = createStartResponse({ conversationId: "conv_new", lastSequence: 2 });
     const client = {
-      runs: {
-        async create() {
-          return response;
-        },
-        async start() {
-          throw new Error("startRun should not be called");
+      conversations: {
+        runs: {
+          async create() {
+            return response;
+          },
+          async start() {
+            throw new Error("startRun should not be called");
+          }
         }
       }
     };
@@ -215,14 +226,16 @@ describe("chat UI product run transport", () => {
   it("rejects an active-run submission before calling the API", async () => {
     let apiCalls = 0;
     const client = {
-      runs: {
-        async create() {
-          apiCalls += 1;
-          return createStartResponse({ conversationId: "conv_new" });
-        },
-        async start() {
-          apiCalls += 1;
-          return createStartResponse({ conversationId: "conv_existing" });
+      conversations: {
+        runs: {
+          async create() {
+            apiCalls += 1;
+            return createStartResponse({ conversationId: "conv_new" });
+          },
+          async start() {
+            apiCalls += 1;
+            return createStartResponse({ conversationId: "conv_existing" });
+          }
         }
       }
     };

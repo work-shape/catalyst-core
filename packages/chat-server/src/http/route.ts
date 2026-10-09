@@ -1,6 +1,10 @@
 import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
-import { operationPathParamNames, type Operation } from "@vivd-catalyst/api-contract";
+import {
+  operationPathParamNames,
+  type Operation,
+  type OperationPathParamName
+} from "@vivd-catalyst/api-contract";
 import { hasExplicitCredentials } from "@vivd-catalyst/auth";
 import {
   AppError,
@@ -32,12 +36,6 @@ interface RequestContext {
   correlationId: string;
 }
 
-type PathParamName<Path extends string> = Path extends `${string}:${infer Param}/${infer Rest}`
-  ? Param | PathParamName<`/${Rest}`>
-  : Path extends `${string}:${infer Param}`
-    ? Param
-    : never;
-
 type Caller<Auth extends Operation["auth"]> = Auth extends "user"
   ? { user: AuthenticatedUser; context: RuntimeCallContext }
   : Auth extends "principal"
@@ -47,7 +45,7 @@ type Caller<Auth extends Operation["auth"]> = Auth extends "user"
 type Parsed<Schema> = Schema extends z.ZodType ? z.output<Schema> : undefined;
 
 export type RouteCall<Op extends Operation> = Caller<Op["auth"]> & {
-  params: Record<PathParamName<Op["path"]>, string>;
+  params: Record<OperationPathParamName<Op["path"]>, string>;
   query: Parsed<Op["query"]>;
   body: Parsed<Op["body"]>;
   /** For what the descriptor does not carry: headers, the upload stream, the request log. */

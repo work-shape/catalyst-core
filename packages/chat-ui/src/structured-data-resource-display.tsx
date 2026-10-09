@@ -36,8 +36,10 @@ function StructuredDataResourceDisplay({
     let active = true;
     setResource(undefined);
     setFailed(false);
-    void context.client.conversations.resources
-      .getStructuredData(context.selectedConversationId, structuredDataResourceId)
+    void context.client.conversations.structured_data
+      .get({
+        params: { conversationId: context.selectedConversationId, structuredDataResourceId }
+      })
       .then((nextResource) => {
         if (active) {
           setResource(nextResource);

@@ -299,7 +299,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 167,
+      "count": 166,
       "owner": "CB-2"
     },
     {
@@ -361,13 +361,6 @@
     {
       "target": "lint",
       "rule": "knip/exports",
-      "scope": "packages/api-client",
-      "count": 18,
-      "owner": "CB-4b"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/exports",
       "scope": "packages/chat-server",
       "count": 1,
       "owner": "CB-4d"
@@ -395,24 +388,10 @@
     },
     {
       "target": "lint",
-      "rule": "knip/files",
-      "scope": "packages/api-client",
-      "count": 1,
-      "owner": "CB-4b"
-    },
-    {
-      "target": "lint",
       "rule": "knip/types",
       "scope": "packages/agent-runtime",
       "count": 1,
       "owner": "CB-7c"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/types",
-      "scope": "packages/api-client",
-      "count": 105,
-      "owner": "CB-4b"
     },
     {
       "target": "lint",

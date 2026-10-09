@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   createApiClient,
+  listAll,
   signInForSessionFetch,
   type ApiClientOptions
 } from "@vivd-catalyst/api-client";
@@ -64,20 +65,20 @@ export async function createLocalApiKey(options: LocalApiKeyOptions): Promise<st
       password,
       ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
     })
-  }).apiAccess;
-  const existing = (await client.listServicePrincipals()).find(
+  });
+  const principals = await listAll((paging) => client.service_principals.list({ query: paging }));
+  const existing = principals.find(
     (detail) =>
       detail.principal.displayLabel === PRINCIPAL_LABEL && detail.principal.status === "active"
   );
   const { principal } =
     existing ??
-    (await client.createServicePrincipal({
-      displayLabel: PRINCIPAL_LABEL,
-      permissions: [...PERMISSIONS]
+    (await client.service_principals.create({
+      body: { displayLabel: PRINCIPAL_LABEL, permissions: [...PERMISSIONS] }
     }));
-  const credential = await client.createCredential(principal.id, {
-    name: "local development",
-    scopes: [...SCOPES]
+  const credential = await client.api_credentials.create({
+    params: { servicePrincipalId: principal.id },
+    body: { name: "local development", scopes: [...SCOPES] }
   });
   return credential.secret;
 }

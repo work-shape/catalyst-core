@@ -1,10 +1,12 @@
-import { isUnknownOperationResponse } from "@vivd-catalyst/api-contract";
-import type { z } from "zod";
-import { ApiError } from "./errors";
-import { createClient as createGeneratedClient } from "./generated/client";
+import { isUnknownOperationResponse, type Operation } from "@vivd-catalyst/api-contract";
+import { refusalError, transportError } from "./errors";
 
 export interface ApiClientOptions {
   baseUrl: string;
+  /**
+   * The bearer credential of every request. Without a token source the client relies on the
+   * browser's session cookie instead; with one, cookies are never sent.
+   */
   getToken?: () => string | undefined | Promise<string | undefined>;
   fetchImpl?: typeof fetch;
   /** Only available without a token source; browser navigation cannot send a bearer token. */
@@ -16,116 +18,75 @@ export interface ApiClientOptions {
   onUnknownOperation?: () => void;
 }
 
-export type OperationRequestInput<Operation> = Operation extends {
-  body: z.ZodType<infer Request>;
+/** What one call may carry. Which parts an operation takes is decided by its descriptor. */
+export interface OperationRequest {
+  params?: Record<string, string>;
+  query?: Record<string, string | number | boolean | undefined>;
+  body?: unknown;
+  file?: Blob;
+  signal?: AbortSignal;
+  onCaughtUp?: () => void;
 }
-  ? Request
-  : never;
 
-type GeneratedResult<T> =
-  | {
-      data: T;
-      error: undefined;
-      request?: Request;
-      response?: Response;
-    }
-  | {
-      data: undefined;
-      error: unknown;
-      request?: Request;
-      response?: Response;
-    };
-
-export function createApiClientTransport(options: ApiClientOptions) {
+/**
+ * The one place a request to a catalog operation is built and sent. It resolves to a successful
+ * response; a refusal, a missing answer and an abort all reject.
+ */
+export function createApiTransport(options: ApiClientOptions) {
   const baseUrl = options.baseUrl.replace(/\/$/u, "");
   const cookieMode = options.getToken === undefined;
-  const generatedClient = createGeneratedClient({
-    baseUrl,
-    credentials: cookieMode ? "include" : "omit",
-    fetch: options.fetchImpl
-  });
 
-  generatedClient.interceptors.request.use(async (request) => {
-    const token = await options.getToken?.();
-    if (token) {
-      request.headers.set("authorization", `Bearer ${token}`);
-    }
-    return request;
-  });
-
-  generatedClient.interceptors.error.use((error, response) => {
-    if (response?.status === 404 && isUnknownOperationResponse(error)) {
-      options.onUnknownOperation?.();
-    }
-    return error;
-  });
+  const urlFor = (operation: Operation, request: Pick<OperationRequest, "params" | "query">) =>
+    `${baseUrl}${operation.buildPath({ params: request.params, query: request.query })}`;
 
   return {
-    baseUrl,
     browserManagedDownloads: cookieMode && (options.browserManagedDownloads ?? true),
-    generatedClient,
-    buildUrl: (path: string) => `${baseUrl}${path}`,
-    async unwrapJson<T>(
-      result: Promise<GeneratedResult<unknown>>,
-      schema: z.ZodType<T>
-    ): Promise<T> {
-      const payload = await result;
-      if (payload.error !== undefined) {
-        throw apiErrorFromGeneratedResult(payload);
+    urlFor,
+    async send(operation: Operation, request: OperationRequest): Promise<Response> {
+      const url = urlFor(operation, request);
+      const headers = new Headers();
+      if (operation.response.kind === "sse") {
+        headers.set("accept", "text/event-stream");
       }
-      return schema.parse(payload.data);
-    },
-    /** Existing interface lists consume every page instead of silently truncating at 50. */
-    async unwrapList<T>(
-      fetchPage: (query: { limit: number; cursor?: string }) => Promise<GeneratedResult<unknown>>,
-      schema: z.ZodType<{ items: T[]; nextCursor?: string }>
-    ): Promise<T[]> {
-      const items: T[] = [];
-      let cursor: string | undefined;
-      do {
-        const result = await fetchPage({ limit: 200, ...(cursor ? { cursor } : {}) });
-        if (result.error !== undefined) throw apiErrorFromGeneratedResult(result);
-        const page = schema.parse(result.data);
-        items.push(...page.items);
-        cursor = page.nextCursor;
-      } while (cursor);
-      return items;
-    },
-    async unwrapBlob(result: Promise<GeneratedResult<Blob | File>>): Promise<Blob> {
-      const payload = await result;
-      if (payload.error !== undefined) {
-        throw apiErrorFromGeneratedResult(payload);
+      let body: FormData | string | undefined;
+      if (operation.multipart) {
+        if (!request.file) {
+          throw new Error(`Operation "${operation.id}" needs a file`);
+        }
+        // No content type here: the runtime writes it together with the multipart boundary.
+        body = new FormData();
+        body.append("file", request.file);
+      } else if (operation.body) {
+        headers.set("content-type", "application/json");
+        body = JSON.stringify(operation.body.parse(request.body));
       }
-      if (!payload.data) {
-        throw new ApiError(payload.response?.status ?? 0, "API request failed", payload.data);
+      const token = await options.getToken?.();
+      if (token) {
+        headers.set("authorization", `Bearer ${token}`);
       }
-      return payload.data;
+
+      let response: Response;
+      try {
+        response = await (options.fetchImpl ?? fetch)(url, {
+          method: operation.method,
+          headers,
+          body,
+          credentials: cookieMode ? "include" : "omit",
+          signal: request.signal
+        });
+      } catch (error) {
+        throw request.signal?.aborted ? error : transportError(error);
+      }
+      if (response.ok) {
+        return response;
+      }
+      const refusal = await refusalError(response);
+      if (response.status === 404 && isUnknownOperationResponse(refusal.payload)) {
+        options.onUnknownOperation?.();
+      }
+      throw refusal;
     }
   };
 }
 
-export type ApiClientTransport = ReturnType<typeof createApiClientTransport>;
-
-export function apiErrorFromGeneratedResult(result: {
-  error: unknown;
-  response?: Response;
-}): ApiError {
-  const payload = result.error;
-  const status = result.response?.status ?? 0;
-  return new ApiError(status, apiErrorMessage(payload), payload);
-}
-
-function apiErrorMessage(payload: unknown): string {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "error" in payload &&
-    payload.error &&
-    typeof payload.error === "object" &&
-    "message" in payload.error &&
-    typeof payload.error.message === "string"
-  ) {
-    return payload.error.message;
-  }
-  return "API request failed";
-}
+export type ApiTransport = ReturnType<typeof createApiTransport>;

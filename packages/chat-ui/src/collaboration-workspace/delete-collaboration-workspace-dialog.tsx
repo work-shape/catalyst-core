@@ -1,14 +1,10 @@
 import { Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { ApiClient } from "@vivd-catalyst/api-client";
+import type { CollaborationWorkspaceDeletionImpact } from "@vivd-catalyst/api-client";
 import { Button, Dialog, Input } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 
 export type CollaborationWorkspaceDeletionStep = "impact" | "confirm";
-
-export type CollaborationWorkspaceDeletionImpact = Awaited<
-  ReturnType<ApiClient["collaborationWorkspaces"]["deletionImpact"]>
->;
 
 /**
  * Deleting a shared workspace destroys other people's conversations, so the

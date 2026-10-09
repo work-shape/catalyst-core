@@ -158,6 +158,24 @@ contain breaking changes; a patch version does not.
   CLI needs a server that answers under `/api/v1`.
 - **Client:** `getAuthSession`, `signInWithEmail` and `signOut` are exported from
   `@vivd-catalyst/api-client`; the interface no longer fetches `/api/auth/*` itself.
+- **Client (breaking):** the methods of `createApiClient` are derived from the operation
+  catalog instead of written by hand or generated. Every operation is one method under the
+  segments of its id, and takes one object with the parts its descriptor names:
+  `client.conversations.thread.get({ params: { conversationId } })`,
+  `client.conversations.list({ query: { collaborationWorkspaceId } })`,
+  `client.users.create({ body })`, each with an optional `signal`. The old names are gone, for
+  example `client.account.get()` is `client.me.get()`, `client.runs.start(id, input)` is
+  `client.conversations.runs.start({ params, body })` and `client.configAssets.export()` is
+  `client.config_assets.export()`. A list method answers one page, `{ items, nextCursor }`;
+  `listAll((paging) => client.users.list({ query: paging }))` reads a list to its end. A
+  stream is an async iterable, resumed with `query: { after }`. A file URL for the browser
+  comes from `client.urlFor(operationId, { params, query })`. A success that is not valid JSON
+  or does not match the response schema is now an `ApiError` with the response status and the
+  parse failure as `payload`, where a schema mismatch was a `ZodError` before; an abort
+  through the caller's `signal` rejects with the abort itself, never an `ApiError`; a stream
+  that breaks off is an `ApiError` of status 0. The package no longer contains generated code
+  and no longer depends on `@hey-api/openapi-ts`; its `generate` script is removed. The
+  OpenAPI document of `@vivd-catalyst/api-contract` is unchanged.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
   `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is
   absent on the last page; pass it back as `cursor` with the same filters to read the next

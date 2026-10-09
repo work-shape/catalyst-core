@@ -12,11 +12,12 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type {
-  AuditActivity,
-  AuditActivityActor,
-  AuditActivityTarget,
-  AuditEvent
+import {
+  listAll,
+  type AuditActivity,
+  type AuditActivityActor,
+  type AuditActivityTarget,
+  type AuditEvent
 } from "@vivd-catalyst/api-client";
 import {
   Badge,
@@ -198,7 +199,10 @@ export function SuperadminPanel({
     onSetDefaultAgent: (input) => configAssetMutations.setDefaultAgent.mutateAsync(input),
     onSetAgentAvailability: (input) => configAssetMutations.setAgentAvailability.mutateAsync(input),
     onRevertAsset: (input) => configAssetMutations.revertAsset.mutateAsync(input),
-    onLoadRevisions: (kind, name) => client.configAssets.listRevisions(kind, name),
+    onLoadRevisions: (kind, name) =>
+      listAll((paging) =>
+        client.config_assets.revisions.list({ params: { kind, name }, query: paging })
+      ),
     onReload: () =>
       queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.configAssetsOverview(apiBaseUrl, authScope)

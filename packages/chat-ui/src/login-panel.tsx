@@ -55,7 +55,7 @@ export function LoginPanel({
   const client = useMemo(() => createApiClient({ baseUrl: apiBaseUrl }), [apiBaseUrl]);
   const brandingQuery = useQuery({
     queryKey: workspaceQueryKeys.branding(apiBaseUrl, localePreference),
-    queryFn: () => client.branding.get(localePreference),
+    queryFn: () => client.branding.get({ query: { locale: localePreference } }),
     retry: false
   });
   const branding = brandingQuery.data;
@@ -140,7 +140,7 @@ export function LoginPanel({
     setPending(true);
     setError(undefined);
     try {
-      await client.passwordSetup.requestReset({ email }, activeLocale);
+      await client.password_reset.request({ query: { locale: activeLocale }, body: { email } });
       showMode("signIn");
       setNotice(t("passwordResetSent"));
     } catch {
@@ -158,7 +158,7 @@ export function LoginPanel({
     setPending(true);
     setError(undefined);
     try {
-      await client.passwordSetup.complete({ token: passwordSetupToken, password });
+      await client.password_setup.complete({ body: { token: passwordSetupToken, password } });
       closePasswordSetup(t("passwordSetupDone"));
     } catch {
       setError(t("passwordSetupFailed"));

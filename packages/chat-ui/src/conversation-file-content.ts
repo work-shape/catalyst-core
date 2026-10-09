@@ -16,8 +16,13 @@ export function conversationFileContentUrl(
   inline = false
 ): string {
   return content.kind === "artifact"
-    ? client.conversations.artifacts.contentUrl(conversationId, content.artifactId, inline)
-    : client.conversations.files.contentUrl(conversationId, content.fileId);
+    ? client.urlFor("conversations.artifacts.get_content", {
+        params: { conversationId, artifactId: content.artifactId },
+        query: inline ? { inline: "true" } : {}
+      })
+    : client.urlFor("conversations.files.get_content", {
+        params: { conversationId, fileId: content.fileId }
+      });
 }
 
 export function loadConversationFileBlob(
@@ -27,8 +32,13 @@ export function loadConversationFileBlob(
   download = false
 ): Promise<Blob> {
   return content.kind === "artifact"
-    ? client.conversations.artifacts.getContent(conversationId, content.artifactId)
-    : client.conversations.files.getContent(conversationId, content.fileId, download);
+    ? client.conversations.artifacts.get_content({
+        params: { conversationId, artifactId: content.artifactId }
+      })
+    : client.conversations.files.get_content({
+        params: { conversationId, fileId: content.fileId },
+        query: download ? { download: "true" } : {}
+      });
 }
 
 export function useConversationFileBlob({

@@ -2,7 +2,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
-import { approvalRequestReverter } from "../packages/chat-ui/src/approvals/approval-request-api";
 import {
   ApprovalHistoryRow,
   ApprovalRequestCardView,
@@ -715,21 +714,6 @@ describe("approval request model", () => {
     ]);
 
     expect(history.map((entry) => entry.id)).toEqual(["newer", "older"]);
-  });
-
-  it("detects the rollback operation on the API client", async () => {
-    const calls: string[] = [];
-    const revert = approvalRequestReverter({
-      approvalRequests: {
-        revert: async (requestId: string) => {
-          calls.push(requestId);
-        }
-      }
-    });
-
-    await revert?.("apr_1");
-    expect(calls).toEqual(["apr_1"]);
-    expect(approvalRequestReverter({ approvalRequests: {} })).toBeUndefined();
   });
 });
 

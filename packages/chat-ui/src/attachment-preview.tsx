@@ -228,7 +228,9 @@ function useAttachmentImageUrl(attachment: AttachmentSnapshot): string | undefin
     let active = true;
     let nextUrl: string | undefined;
     void attachmentContent.client.conversations.files
-      .getContent(attachmentContent.selectedConversationId, fileId)
+      .get_content({
+        params: { conversationId: attachmentContent.selectedConversationId, fileId }
+      })
       .then((blob) => {
         if (!active) {
           return;

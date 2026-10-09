@@ -6,10 +6,13 @@ import type {
 } from "@vivd-catalyst/api-client";
 import type { ReasoningEffort } from "../workspace/agent-model-selection";
 
+/** The two operations that start an agent run. */
+export interface RunStartingClient {
+  conversations: { runs: Pick<ApiClient["conversations"]["runs"], "create" | "start"> };
+}
+
 export interface ProductRunTransportOptions {
-  client: {
-    runs: Pick<ApiClient["runs"], "create" | "start">;
-  };
+  client: RunStartingClient;
   collaborationWorkspaceId?: string;
   selectedConversationId?: string;
   locale: LocaleCode;
@@ -104,9 +107,7 @@ export async function startProductConversationRun({
   agentName?: string;
   modelBindingId?: string;
   reasoningEffort?: ReasoningEffort;
-  client: {
-    runs: Pick<ApiClient["runs"], "create" | "start">;
-  };
+  client: RunStartingClient;
   collaborationWorkspaceId?: string;
   conversationId?: string;
   idempotencyKey: string;
@@ -125,15 +126,17 @@ export async function startProductConversationRun({
   };
 
   if (conversationId) {
-    return client.runs.start(conversationId, request);
+    return client.conversations.runs.start({ params: { conversationId }, body: request });
   }
 
-  return client.runs.create({
-    ...request,
-    conversation: {
-      title: firstLineTitle(text),
-      locale,
-      ...(collaborationWorkspaceId ? { collaborationWorkspaceId } : {})
+  return client.conversations.runs.create({
+    body: {
+      ...request,
+      conversation: {
+        title: firstLineTitle(text),
+        locale,
+        ...(collaborationWorkspaceId ? { collaborationWorkspaceId } : {})
+      }
     }
   });
 }

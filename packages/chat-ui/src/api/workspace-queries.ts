@@ -1,14 +1,15 @@
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  ApiClient,
-  Conversation,
-  ConversationListItem,
-  ConversationThreadSnapshot,
-  DraftAttachment,
-  LocaleCode,
-  RunObservation,
-  StartConversationRunResponse
+import {
+  listAll,
+  type ApiClient,
+  type Conversation,
+  type ConversationListItem,
+  type ConversationThreadSnapshot,
+  type DraftAttachment,
+  type LocaleCode,
+  type RunObservation,
+  type StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
 import { approvalRequestQueryKeys } from "../approvals/approval-request-api";
 import { workspaceQueryKeys } from "./workspace-query-keys";
@@ -35,14 +36,14 @@ export function useWorkspaceModelPreferenceQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.modelPreference(input.apiBaseUrl),
-    queryFn: () => input.client.account.modelPreference.get(),
+    queryFn: () => input.client.me.model_preference.get(),
     enabled: input.enabled,
     staleTime: Infinity
   });
 }
 
 export async function getCurrentUserWithinDeadline(
-  client: { account: Pick<ApiClient["account"], "get"> },
+  client: { me: Pick<ApiClient["me"], "get"> },
   querySignal: AbortSignal,
   deadlineMs = CURRENT_USER_DEADLINE_MS
 ) {
@@ -57,7 +58,7 @@ export async function getCurrentUserWithinDeadline(
   }
 
   try {
-    return await client.account.get(controller.signal);
+    return await client.me.get({ signal: controller.signal });
   } finally {
     globalThis.clearTimeout(timeout);
     querySignal.removeEventListener("abort", abortRequest);
@@ -72,7 +73,7 @@ export function useWorkspaceConfigQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.config(input.apiBaseUrl, input.authScope, input.localePreference),
-    queryFn: () => input.client.configuration.get(input.localePreference),
+    queryFn: () => input.client.config.get({ query: { locale: input.localePreference } }),
     enabled: input.enabled
   });
 }
@@ -91,8 +92,13 @@ export function workspaceConversationsQueryOptions(
   return {
     queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope, cacheWorkspaceId),
     queryFn: () =>
-      input.client.conversations.list(
-        input.collaborationWorkspacesAvailable ? (collaborationWorkspaceId ?? "") : undefined
+      listAll((paging) =>
+        input.client.conversations.list({
+          query: {
+            ...(input.collaborationWorkspacesAvailable ? { collaborationWorkspaceId } : {}),
+            ...paging
+          }
+        })
       ),
     enabled:
       input.enabled &&
@@ -113,7 +119,7 @@ export function useCollaborationWorkspacesQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.collaborationWorkspaces(input.apiBaseUrl, input.authScope),
-    queryFn: () => listCollaborationWorkspacesWithPersonal(input.client.collaborationWorkspaces),
+    queryFn: () => listCollaborationWorkspacesWithPersonal(input.client.workspaces),
     enabled: input.enabled
   });
 }
@@ -125,15 +131,18 @@ export function useCollaborationWorkspacesQuery(
 export async function listCollaborationWorkspacesWithPersonal<
   Workspace extends { kind: string }
 >(workspaces: {
-  list(): Promise<Workspace[]>;
-  ensurePersonal(): Promise<unknown>;
+  list(input: {
+    query: { limit: number; cursor?: string };
+  }): Promise<{ items: Workspace[]; nextCursor?: string }>;
+  ensure_personal(): Promise<unknown>;
 }): Promise<Workspace[]> {
-  const listed = await workspaces.list();
+  const list = () => listAll((paging) => workspaces.list({ query: paging }));
+  const listed = await list();
   if (listed.some((workspace) => workspace.kind === "personal")) {
     return listed;
   }
-  await workspaces.ensurePersonal();
-  return workspaces.list();
+  await workspaces.ensure_personal();
+  return list();
 }
 
 /**
@@ -155,11 +164,18 @@ export function useCollaborationWorkspaceAgentsQuery(
       input.collaborationWorkspaceId,
       input.localePreference
     ),
-    queryFn: () =>
-      input.client.collaborationWorkspaces.listAgents(
-        input.collaborationWorkspaceId ?? "",
-        input.localePreference
-      ),
+    queryFn: async () => {
+      let defaultAgentName: string | undefined;
+      const items = await listAll(async (paging) => {
+        const page = await input.client.workspaces.agents.list({
+          params: { collaborationWorkspaceId: input.collaborationWorkspaceId ?? "" },
+          query: { locale: input.localePreference, ...paging }
+        });
+        defaultAgentName = page.defaultAgentName;
+        return page;
+      });
+      return { defaultAgentName, items };
+    },
     placeholderData: (previousData) => previousData,
     enabled: input.enabled && Boolean(input.collaborationWorkspaceId)
   });
@@ -172,7 +188,7 @@ export function useCollaborationWorkspaceDirectoryQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.collaborationWorkspaceDirectory(input.apiBaseUrl, input.authScope),
-    queryFn: () => input.client.collaborationWorkspaces.browseDirectory(),
+    queryFn: () => listAll((paging) => input.client.workspaces.directory.list({ query: paging })),
     enabled: input.enabled
   });
 }
@@ -190,7 +206,12 @@ export function useCollaborationWorkspaceMembersQuery(
       input.collaborationWorkspaceId
     ),
     queryFn: () =>
-      input.client.collaborationWorkspaces.members.list(input.collaborationWorkspaceId),
+      listAll((paging) =>
+        input.client.workspaces.members.list({
+          params: { collaborationWorkspaceId: input.collaborationWorkspaceId },
+          query: paging
+        })
+      ),
     enabled: input.enabled
   });
 }
@@ -215,9 +236,11 @@ export function useCollaborationWorkspaceMemberCandidatesQuery(
       input.query
     ),
     queryFn: () =>
-      input.client.collaborationWorkspaces.members.searchCandidates(
-        input.collaborationWorkspaceId,
-        input.query
+      listAll((paging) =>
+        input.client.workspaces.member_candidates.list({
+          params: { collaborationWorkspaceId: input.collaborationWorkspaceId },
+          query: { q: input.query, ...paging }
+        })
       ),
     placeholderData: (previousData) => previousData,
     enabled: input.enabled
@@ -237,7 +260,12 @@ export function useCollaborationWorkspaceAccessRequestsQuery(
       input.collaborationWorkspaceId
     ),
     queryFn: () =>
-      input.client.collaborationWorkspaces.accessRequests.list(input.collaborationWorkspaceId),
+      listAll((paging) =>
+        input.client.workspaces.access_requests.list({
+          params: { collaborationWorkspaceId: input.collaborationWorkspaceId },
+          query: paging
+        })
+      ),
     enabled: input.enabled
   });
 }
@@ -255,7 +283,9 @@ export function useCollaborationWorkspaceDeletionImpactQuery(
       input.collaborationWorkspaceId
     ),
     queryFn: () =>
-      input.client.collaborationWorkspaces.deletionImpact(input.collaborationWorkspaceId),
+      input.client.workspaces.deletion_impact.get({
+        params: { collaborationWorkspaceId: input.collaborationWorkspaceId }
+      }),
     // The counts are only meaningful at the moment the owner reads them.
     staleTime: 0,
     gcTime: 0,
@@ -271,7 +301,10 @@ export function useWorkspaceThreadQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.thread(input.apiBaseUrl, input.authScope, input.conversationId),
-    queryFn: () => input.client.conversations.getThread(input.conversationId ?? ""),
+    queryFn: () =>
+      input.client.conversations.thread.get({
+        params: { conversationId: input.conversationId ?? "" }
+      }),
     enabled: input.enabled
   });
 }
@@ -288,7 +321,13 @@ export function useConversationResourcesQuery(
       input.authScope,
       input.conversationId
     ),
-    queryFn: () => input.client.conversations.resources.list(input.conversationId ?? ""),
+    queryFn: () =>
+      listAll((paging) =>
+        input.client.conversations.resources.list({
+          params: { conversationId: input.conversationId ?? "" },
+          query: paging
+        })
+      ),
     enabled: input.enabled
   });
 }
@@ -307,10 +346,12 @@ export function useStructuredDataResourceQuery(
       input.structuredDataResourceId
     ),
     queryFn: () =>
-      input.client.conversations.resources.getStructuredData(
-        input.conversationId,
-        input.structuredDataResourceId
-      )
+      input.client.conversations.structured_data.get({
+        params: {
+          conversationId: input.conversationId,
+          structuredDataResourceId: input.structuredDataResourceId
+        }
+      })
   });
 }
 
@@ -321,7 +362,7 @@ export function useWorkspaceUsageQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.usage(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.governance.getUsageSummary,
+    queryFn: () => input.client.usage.get_summary(),
     enabled: input.enabled
   });
 }
@@ -335,7 +376,7 @@ export function useWorkspaceAuditActivitiesQuery(
     // `auditEvents` is the historical cache namespace; it now holds the
     // projected activity timeline served from /api/v1/instance/audit-activities.
     queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.governance.listAuditActivities,
+    queryFn: async () => (await input.client.audit_activities.list()).items,
     enabled: input.enabled
   });
 }
@@ -347,7 +388,7 @@ export function useWorkspaceUsersQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.users.list,
+    queryFn: () => listAll((paging) => input.client.users.list({ query: paging })),
     enabled: input.enabled
   });
 }
@@ -359,7 +400,7 @@ export function useServicePrincipalsQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.servicePrincipals(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.apiAccess.listServicePrincipals,
+    queryFn: () => listAll((paging) => input.client.service_principals.list({ query: paging })),
     enabled: input.enabled
   });
 }
@@ -371,7 +412,7 @@ export function useConfigAssetsOverviewQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
-    queryFn: input.client.configAssets.getOverview,
+    queryFn: () => input.client.config_assets.get_overview(),
     enabled: input.enabled
   });
 }
@@ -386,7 +427,7 @@ export function useAdministeredCollaborationWorkspacesQuery(
       input.apiBaseUrl,
       input.authScope
     ),
-    queryFn: input.client.configAssets.listAdministeredWorkspaces,
+    queryFn: () => listAll((paging) => input.client.instance.workspaces.list({ query: paging })),
     enabled: input.enabled
   });
 }
@@ -401,7 +442,7 @@ export function useConfigAssetsExportQuery(
       ...workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
       "export"
     ] as const,
-    queryFn: input.client.configAssets.export,
+    queryFn: () => input.client.config_assets.export(),
     enabled: input.enabled
   });
 }
@@ -524,7 +565,7 @@ export function useWorkspaceCacheActions(
     (conversationId: string) =>
       queryClient.fetchQuery({
         queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId),
-        queryFn: () => client.conversations.getThread(conversationId),
+        queryFn: () => client.conversations.thread.get({ params: { conversationId } }),
         staleTime: 0
       }),
     [apiBaseUrl, authScope, client, queryClient]
@@ -618,8 +659,8 @@ export function useWorkspaceCacheActions(
   const handleRunRequestAccepted = useCallback(
     (conversationId: string) => {
       invalidateConversations();
-      void client.conversations
-        .generateTitle(conversationId)
+      void client.conversations.title
+        .generate({ params: { conversationId } })
         .then((updatedConversation) => {
           queryClient.setQueryData<ConversationListItem[]>(
             conversationListCacheKey(
