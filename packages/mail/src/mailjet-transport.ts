@@ -1,7 +1,9 @@
 import type { MailSendResult, MailSenderIdentity, MailTransport, RenderedMail } from "./types";
 
 const MAILJET_SEND_URL = "https://api.mailjet.com/v3.1/send";
-const SEND_TIMEOUT_MS = 10_000;
+// Protects the sender from a mail provider that never answers. Past it the send fails as
+// "provider_unreachable" and the mail is not delivered.
+const MAILJET_SEND_TIMEOUT_MS = 30_000;
 
 export interface MailjetTransportOptions {
   apiKey: string;
@@ -45,7 +47,7 @@ export class MailjetTransport implements MailTransport {
             }
           ]
         }),
-        signal: AbortSignal.timeout(SEND_TIMEOUT_MS)
+        signal: AbortSignal.timeout(MAILJET_SEND_TIMEOUT_MS)
       });
     } catch {
       return { ok: false, reason: "provider_unreachable" };
