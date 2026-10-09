@@ -1,15 +1,6 @@
-import {
-  CalendarDays,
-  Cloud,
-  CloudRain,
-  CloudSun,
-  MapPin,
-  Sun,
-  ThermometerSun,
-  Wind
-} from "lucide-react";
+import { CalendarDays, Cloud, CloudRain, CloudSun, MapPin, Sun, Wind } from "lucide-react";
 import { defineToolDisplayWidget, type ToolDisplayRenderInput } from "@vivd-catalyst/chat-ui/shell";
-import { Badge, Card, CardContent } from "@vivd-catalyst/ui";
+import { Badge, Card, List, ListRow } from "@vivd-catalyst/ui";
 import {
   weatherForecastOutputSchema,
   type WeatherForecastDay,
@@ -70,44 +61,25 @@ function WeatherForecastPreview({
           {forecast.advisory}
         </p>
       ) : null}
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        {forecast.days.map((day) => {
-          const DayIcon = weatherIconFor(day.condition);
-          return (
-            <Card key={day.date} padding="md" className="min-w-0">
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2">
-                  <DayIcon size={16} className="shrink-0 text-primary" aria-hidden="true" />
-                  <p className="truncate text-sm font-medium">
-                    {formatForecastDate(day.date, locale)}
-                  </p>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-sm">
-                  <ThermometerSun
-                    size={15}
-                    className="shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {day.low}-{day.high} {unitLabel}
-                  </span>
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                  <CloudRain size={14} className="shrink-0" aria-hidden="true" />
-                  <span>{t(locale, "precipitation", { chance: day.precipitationChance })}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                  <Wind size={14} className="shrink-0" aria-hidden="true" />
-                  <span>{t(locale, "wind", { speed: day.windKph })}</span>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-                  {day.summary}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <Card padding="md" className="mt-3 min-w-0 p-1">
+        <List>
+          {forecast.days.map((day) => {
+            const DayIcon = weatherIconFor(day.condition);
+            return (
+              <ListRow
+                key={day.date}
+                expandable
+                leading={<DayIcon className="size-4 text-muted-foreground" aria-hidden="true" />}
+                title={formatForecastDate(day.date, locale)}
+                description={`${t(locale, "precipitation", { chance: day.precipitationChance })} · ${t(locale, "wind", { speed: day.windKph })}`}
+                time={`${day.low}-${day.high} ${unitLabel}`}
+              >
+                <p className="text-muted-foreground [overflow-wrap:anywhere]">{day.summary}</p>
+              </ListRow>
+            );
+          })}
+        </List>
+      </Card>
     </div>
   );
 }
