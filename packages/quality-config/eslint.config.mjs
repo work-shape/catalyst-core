@@ -227,6 +227,55 @@ const isTestCaller = (filename) => {
   return path.startsWith("tests/") && !path.startsWith("tests/support/");
 };
 
+const routeMethods = ["get", "head", "post", "put", "patch", "delete", "options", "all", "route"];
+
+/**
+ * The paths a file may register on the HTTP server itself. Every product route goes through
+ * the route helper; the sign-in library's mount and the document worker's private transport
+ * are the two exemptions, each held to its own paths.
+ * A path is undefined when the call does not write it out, or when the method is not called.
+ * @type {{ directory: string, file: string, allows: (path: string | undefined) => boolean }[]}
+ */
+const routeRegistrars = [
+  { directory: "packages/chat-server", file: "src/http/route.ts", allows: () => true },
+  {
+    directory: "packages/chat-server",
+    file: "src/routes/better-auth-routes.ts",
+    allows: (path) => path?.startsWith("/api/auth/") ?? false
+  },
+  {
+    directory: "packages/document-worker",
+    file: "src/index.ts",
+    allows: (path) => path === "/health" || (path?.startsWith("/internal/") ?? false)
+  }
+];
+
+/**
+ * @param {import("typescript").Type} type
+ * @returns {boolean}
+ */
+const isHttpServer = (type) =>
+  type.isUnionOrIntersection()
+    ? type.types.some(isHttpServer)
+    : [type.getSymbol()?.name, type.aliasSymbol?.name].includes("FastifyInstance");
+
+/**
+ * The path a registration call names, when it is written out in the call.
+ * @param {import("estree").CallExpression} call
+ * @param {string | undefined} method
+ */
+const registeredPath = (call, method) => {
+  const first = call.arguments[0];
+  const path =
+    method === "route" && first?.type === "ObjectExpression"
+      ? first.properties.find(
+          (item) => item.type === "Property" && keyName(item.key, item.computed) === "url"
+        )
+      : first;
+  const value = path?.type === "Property" ? path.value : path;
+  return value?.type === "Literal" && typeof value.value === "string" ? value.value : undefined;
+};
+
 /** @type {import("eslint").ESLint.Plugin} */
 const plugin = {
   rules: {
@@ -326,6 +375,50 @@ const plugin = {
         };
       }
     },
+    // The receiver's type decides, so no variable name and no alias hides a registration.
+    "route-registration": rule(
+      "Routes are registered through the route helper in chat-server/src/http/route.ts",
+      (filename) => packageAt(filename) !== undefined,
+      (context, report) => {
+        const services = context.sourceCode.parserServices;
+        if (!services?.program) return {};
+        const registrar = routeRegistrars.find(
+          ({ directory, file }) =>
+            packageAt(context.filename)?.directory === directory &&
+            isPackageFile(context.filename, file)
+        );
+        /** @param {AnyNode} node */
+        const onServer = (node) => isHttpServer(services.getTypeAtLocation(node));
+        return {
+          MemberExpression: (node) => {
+            const method = keyName(node.property, node.computed);
+            if (method !== undefined && !routeMethods.includes(method)) return;
+            if (node.object.type === "Super" || !onServer(node.object)) return;
+            // Outside the helper, the only allowed form is a call that writes out a path the
+            // file may register.
+            const { parent } = node;
+            const path =
+              parent.type === "CallExpression" && parent.callee === node
+                ? registeredPath(parent, method)
+                : undefined;
+            if (!registrar?.allows(path)) report(node);
+          },
+          VariableDeclarator: (node) => {
+            if (
+              node.id.type === "ObjectPattern" &&
+              node.init &&
+              onServer(node.init) &&
+              node.id.properties.some(
+                (item) =>
+                  item.type !== "Property" ||
+                  routeMethods.includes(keyName(item.key, item.computed) ?? "route")
+              )
+            )
+              report(node);
+          }
+        };
+      }
+    ),
     "test-api-path": rule(
       "Test callers name catalog operations; API paths belong in tests/support",
       isTestCaller,

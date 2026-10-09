@@ -13,6 +13,16 @@ const source = "packages/alpha/src";
 // Written in two parts so that this file does not carry the comment it tests.
 const formatIgnore = ["prettier", "ignore"].join("-");
 
+// The rule reads the receiver's type, so the fixture needs the type's name and nothing else.
+const httpServer = `interface FastifyInstance {
+  get(path: string, handler: () => void): void;
+  post(path: string, handler: () => void): void;
+  route(options: { method: string; url: string; handler: () => void }): void;
+}
+declare const app: FastifyInstance;
+const handler = () => {};
+`;
+
 const project: Record<string, string> = {
   ".gitignore": "node_modules\n",
   "package.json": JSON.stringify({ name: "fixture", private: true, workspaces: ["packages/*"] }),
@@ -51,7 +61,9 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
     "@fixture/gamma": ["@fixture/beta"],
     "@fixture/delta": [],
     "@fixture/config-cli": [],
-    "@fixture/ghost": []
+    "@fixture/ghost": [],
+    "@fixture/chat-server": [],
+    "@fixture/document-worker": []
   }),
   "packages/alpha/package.json": JSON.stringify({
     name: "@fixture/alpha",
@@ -194,6 +206,26 @@ export const a: number = b;
 `,
   [`${source}/cycle-b.ts`]: `import { a } from "./cycle-a";
 export const b: number = a;
+`,
+
+  // Route registration: refused wherever the server is reached, however it is reached, and
+  // allowed in the route helper and, for their own paths only, in the two exemptions.
+  [`${source}/route-direct.ts`]: `${httpServer}app.get("/api/things", handler);\n`,
+  [`${source}/route-options.ts`]: `${httpServer}app.route({ method: "GET", url: "/health", handler });\n`,
+  [`${source}/route-alias.ts`]: `${httpServer}export const register = app.post;\n`,
+  [`${source}/route-destructured.ts`]: `${httpServer}export const { route } = app;\n`,
+  [`${source}/route-computed.ts`]: `${httpServer}app["get"]("/api/things", handler);\n`,
+  [`${source}/route-renamed.ts`]: `${httpServer}const server = app;\nserver.get("/api/things", handler);\n`,
+  "packages/chat-server/package.json": JSON.stringify({ name: "@fixture/chat-server" }),
+  "packages/chat-server/src/http/route.ts": `${httpServer}export const register = (url: string) => app.route({ method: "GET", url, handler });\n`,
+  "packages/chat-server/src/routes/better-auth-routes.ts": `${httpServer}app.route({ method: "GET", url: "/api/auth/*", handler });
+app.route({ method: "GET", url: "/api/users", handler });
+`,
+  "packages/document-worker/package.json": JSON.stringify({ name: "@fixture/document-worker" }),
+  "packages/document-worker/src/index.ts": `${httpServer}app.get("/health", handler);
+app.get("/internal/pages", handler);
+app.get("/api/pages", handler);
+export const register = (path: string) => app.get(path, handler);
 `,
 
   // Size, retired stores and database skips
@@ -421,6 +453,15 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/literal-text ${source}/screens/asserted.tsx`,
         `@typescript-eslint/no-non-null-assertion ${source}/screens/asserted.tsx`,
         `@typescript-eslint/no-unnecessary-type-assertion ${source}/screens/asserted.tsx`,
+        `catalyst/route-registration ${source}/route-direct.ts`,
+        `catalyst/route-registration ${source}/route-options.ts`,
+        `catalyst/route-registration ${source}/route-alias.ts`,
+        `catalyst/route-registration ${source}/route-destructured.ts`,
+        `catalyst/route-registration ${source}/route-computed.ts`,
+        `catalyst/route-registration ${source}/route-renamed.ts`,
+        "catalyst/route-registration packages/chat-server/src/routes/better-auth-routes.ts",
+        "catalyst/route-registration packages/document-worker/src/index.ts",
+        "catalyst/route-registration packages/document-worker/src/index.ts",
         `max-lines ${source}/large.ts`,
         `catalyst/memory-store ${source}/memory-store.ts`,
         "catalyst/test-api-path tests/api-path.test.ts",
