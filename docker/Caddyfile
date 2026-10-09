@@ -1,3 +1,13 @@
+# This Caddy is the outermost proxy: it passes the client's own address to the API, which
+# counts sign-in attempts by it. Behind another proxy or load balancer, add
+#
+#   {
+#       servers {
+#           trusted_proxies static private_ranges
+#       }
+#   }
+#
+# at the top of this file. Without it every client reaches the API as that proxy's address.
 :80 {
 	encode zstd gzip
 
