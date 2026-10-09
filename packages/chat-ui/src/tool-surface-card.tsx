@@ -1,7 +1,7 @@
 import { Database, LayoutDashboard, PanelRightOpen } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { STRUCTURED_DATA_RESOURCE_DISPLAY_KIND, type LocaleCode } from "@vivd-catalyst/core";
-import { cn } from "@vivd-catalyst/ui";
+import { Button, cn } from "@vivd-catalyst/ui";
 import {
   isToolDisplayPayload,
   ToolDisplayWidgetNode,
@@ -117,8 +117,8 @@ function ToolSurfaceCard({
   return (
     <div
       className={cn(
-        "flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-md border bg-background px-3 py-2.5 text-left text-sm text-foreground shadow-xs transition-colors",
-        "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+        "flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg border bg-background px-3 py-2.5 text-left text-sm text-foreground transition-colors",
+        "hover:bg-state-hover focus-visible:focus-ring"
       )}
       role="button"
       tabIndex={0}
@@ -133,7 +133,7 @@ function ToolSurfaceCard({
       }}
     >
       <span
-        className="grid size-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"
+        className="grid size-10 shrink-0 place-items-center rounded-md bg-primary-soft text-primary-soft-foreground"
         aria-hidden="true"
       >
         <SurfaceIcon size={19} />
@@ -141,20 +141,18 @@ function ToolSurfaceCard({
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{title}</span>
       </span>
-      <button
-        type="button"
-        className={cn(
-          "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border bg-background px-3 text-xs font-medium text-foreground transition-colors",
-          "hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-        )}
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
         onClick={(event) => {
           event.stopPropagation();
           openPanel();
         }}
       >
-        <PanelRightOpen size={14} aria-hidden="true" />
-        <span>{t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}</span>
-      </button>
+        <PanelRightOpen aria-hidden="true" />
+        {t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}
+      </Button>
     </div>
   );
 }
