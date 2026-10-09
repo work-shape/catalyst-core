@@ -467,10 +467,10 @@ export class CollaborationWorkspaceWorkflow {
               identity.email?.toLocaleLowerCase("en-US") === normalizedEmail
           ))
     );
-    if (matches.length !== 1) {
+    const [target] = matches;
+    if (matches.length !== 1 || !target) {
       throw new AppError("VALIDATION_FAILED", CANNOT_ADD_MEMBER_MESSAGE);
     }
-    const target = matches[0]!;
     const existing = await this.options.userStore.getMembership({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,

@@ -160,7 +160,7 @@ export function defaultCollaborationWorkspaceAccentColor(
 ): CollaborationWorkspaceAccentColor {
   let hash = 0;
   for (const character of name.trim().toLocaleLowerCase()) {
-    hash = (hash * 31 + character.codePointAt(0)!) % 1_000_003;
+    hash = (hash * 31 + (character.codePointAt(0) ?? 0)) % 1_000_003;
   }
   const index = hash % originalAccentPool.length;
   return originalAccentPool[index] ?? "teal";

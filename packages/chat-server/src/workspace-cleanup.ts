@@ -162,10 +162,9 @@ export async function cleanupExecutionWorkspaceForConversation(
   if (pending.fileObjectKeys.length > 0 && !cleanup.objects) {
     throw new Error("Execution workspace object deletion is not configured");
   }
-  if (cleanup.objects) {
-    await Promise.all(
-      pending.fileObjectKeys.map((objectKey) => cleanup.objects!.deleteObject(objectKey))
-    );
+  const objects = cleanup.objects;
+  if (objects) {
+    await Promise.all(pending.fileObjectKeys.map((objectKey) => objects.deleteObject(objectKey)));
   }
   const deleted = await cleanup.store.markExecutionWorkspaceDeleted({
     clientInstanceId: options.clientInstanceId,

@@ -57,9 +57,10 @@ export async function workbookToUniverPreview(
   const sheetOrder = workbook.worksheets.map((worksheet, index) => sheetId(worksheet.name, index));
   const sheets: IWorkbookData["sheets"] = {};
   workbook.worksheets.forEach((worksheet, index) => {
-    sheets[sheetOrder[index]!] = worksheetToUniverSnapshot(
+    const id = sheetId(worksheet.name, index);
+    sheets[id] = worksheetToUniverSnapshot(
       worksheet,
-      sheetOrder[index]!,
+      id,
       workbook.properties.date1904 === true,
       styleRegistry
     );
@@ -173,8 +174,8 @@ function worksheetCellData(
         return;
       }
       const rowIndex = rowNumber - 1;
-      cells[rowIndex] ??= {};
-      cells[rowIndex]![columnNumber - 1] = converted;
+      const rowCells = (cells[rowIndex] ??= {});
+      rowCells[columnNumber - 1] = converted;
     });
   });
   return cells;
@@ -430,11 +431,11 @@ function decodeCellAddress(
   address: string | undefined
 ): { row: number; column: number } | undefined {
   const match = address?.replaceAll("$", "").match(/^([A-Z]+)([1-9][0-9]*)$/iu);
-  if (!match) {
+  if (!match?.[1]) {
     return undefined;
   }
   let column = 0;
-  for (const character of match[1]!.toUpperCase()) {
+  for (const character of match[1].toUpperCase()) {
     column = column * 26 + character.charCodeAt(0) - 64;
   }
   return { row: Number(match[2]) - 1, column: column - 1 };
@@ -495,14 +496,15 @@ async function legacyWorkbookToUniverSnapshot(buffer: ArrayBuffer): Promise<IWor
           if (cell.v === undefined && !cell.f) {
             continue;
           }
-          cells[row] ??= {};
-          cells[row]![column] = cell;
+          const rowCells = (cells[row] ??= {});
+          rowCells[column] = cell;
         }
       }
     }
 
-    sheets[sheetOrder[index]!] = {
-      id: sheetOrder[index]!,
+    const id = sheetId(name, index);
+    sheets[id] = {
+      id,
       name,
       tabColor: "",
       hidden: BooleanNumber.FALSE,

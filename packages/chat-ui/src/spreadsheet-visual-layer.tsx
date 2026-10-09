@@ -66,7 +66,7 @@ function SpreadsheetChart({ visual }: { visual: Extract<SpreadsheetVisual, { kin
       }
       if (!chart) {
         chart = echarts.init(container, undefined, { renderer: "svg" });
-        chart.setOption(chartOption(visual));
+        chart.setOption(spreadsheetChartOption(visual));
       } else {
         chart.resize();
       }
@@ -90,7 +90,7 @@ function SpreadsheetChart({ visual }: { visual: Extract<SpreadsheetVisual, { kin
   );
 }
 
-function chartOption(
+export function spreadsheetChartOption(
   visual: Extract<SpreadsheetVisual, { kind: "chart" }>
 ): echarts.EChartsCoreOption {
   const colors = visual.series
@@ -110,7 +110,8 @@ function chartOption(
   };
 
   if (visual.chartType === "pie" || visual.chartType === "doughnut") {
-    const series = visual.series[0]!;
+    const series = visual.series[0];
+    if (!series) return base;
     return {
       ...base,
       legend: { bottom: 4, type: "scroll" },

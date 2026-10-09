@@ -116,7 +116,7 @@ export function modelUsageTierFromRates(
   const blended =
     (3 * rates.uncachedInputPricePerMillionTokens + rates.outputPricePerMillionTokens) / 4;
   const tier = MODEL_USAGE_TIER_BOUNDS.findIndex((bound) => blended < bound);
-  return MODEL_USAGE_TIERS[tier === -1 ? MODEL_USAGE_TIERS.length - 1 : tier]!;
+  return MODEL_USAGE_TIERS[tier === -1 ? MODEL_USAGE_TIERS.length - 1 : tier] ?? "very_high";
 }
 
 /** Offered for a model whose binding does not say which efforts users may pick. */

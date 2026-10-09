@@ -776,8 +776,8 @@ function claimedCommandWhere(
     eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
     eq(workspaceCommands.id, input.commandId),
     eq(workspaceCommands.leaseToken, input.leaseToken),
-    statuses.length === 1
-      ? eq(workspaceCommands.status, statuses[0]!)
+    statuses.length === 1 && statuses[0] !== undefined
+      ? eq(workspaceCommands.status, statuses[0])
       : drizzleSql`${workspaceCommands.status} in (${drizzleSql.join(
           statuses.map((status) => drizzleSql`${status}`),
           drizzleSql`, `

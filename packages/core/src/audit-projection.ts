@@ -295,7 +295,7 @@ function buildActivity(events: AuditEvent[]): BuiltActivity {
   const actor = resolveActor(actorSource?.actor);
   const target = resolveTarget(headline) ?? ascending.map(resolveTarget).find(Boolean);
   const reason = reasonForEvent(headline) ?? ascending.map(reasonForEvent).find(Boolean);
-  const at = ascending[ascending.length - 1]!.createdAt;
+  const at = ascending.at(-1)?.createdAt ?? headline.createdAt;
 
   return {
     activity: {
@@ -329,8 +329,8 @@ function collapseRepeatedReads(built: BuiltActivity[]): AuditActivity[] {
       current.headlineType === previous.headlineType &&
       current.actorKey === previous.actorKey;
 
-    if (isRepeat) {
-      const last = result[result.length - 1]!;
+    const last = result.at(-1);
+    if (isRepeat && last) {
       last.repeatCount += 1;
       last.eventCount += current.activity.eventCount;
       continue;

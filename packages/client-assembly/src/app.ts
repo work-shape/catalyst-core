@@ -148,7 +148,9 @@ export async function createClientInstanceApp(
           store,
           objects: {
             deleteObject(key) {
-              return workspaceFileByteStore.deleteObject!(key);
+              const deleteObject = workspaceFileByteStore.deleteObject;
+              if (!deleteObject) throw new Error("Workspace object deletion is not configured");
+              return deleteObject.call(workspaceFileByteStore, key);
             }
           },
           jobOptions: {
@@ -253,12 +255,13 @@ export async function createClientInstanceExecutionAssembly(
         .map((binding) => binding.id),
       modelBindings: config.modelBindings
         .filter((binding) => binding.agentSelectable !== false)
-        .map((binding) => ({
-          id: binding.id,
-          model:
+        .map((binding) => {
+          const model =
             binding.model ??
-            config.modelProviders.find((provider) => provider.id === binding.providerId)!.model
-        })),
+            config.modelProviders.find((provider) => provider.id === binding.providerId)?.model;
+          if (model === undefined) throw new Error(`Model binding ${binding.id} has no model`);
+          return { id: binding.id, model };
+        }),
       fastModeModelBindingIds: fastModeModelBindingIds(config),
       reasoningEfforts: [...REASONING_EFFORTS],
       enabledToolNames: [...getEnabledToolNames(config)]

@@ -212,11 +212,12 @@ function parseChart(
   const chartEntries = Object.entries(plotArea ?? {}).filter(([key]) => key.endsWith("Chart"));
   const title = xmlText(chart?.title) || name;
 
-  if (chartEntries.length !== 1) {
+  const entry = chartEntries[0];
+  if (chartEntries.length !== 1 || !entry) {
     return unsupported(sheetName, id, "Combined chart", anchor, title);
   }
 
-  const [rawType, rawChart] = chartEntries[0]!;
+  const [rawType, rawChart] = entry;
   const chartNode = object(rawChart);
   const chartType = supportedChartType(rawType, chartNode);
   if (!chartType) {
@@ -432,7 +433,7 @@ async function readRelationships(zip: JSZip, partPath: string): Promise<Map<stri
 
 function relationshipsPath(partPath: string): string {
   const segments = partPath.split("/");
-  const filename = segments.pop()!;
+  const filename = segments.pop() ?? "";
   return [...segments, "_rels", `${filename}.rels`].join("/");
 }
 
@@ -510,11 +511,11 @@ function formulaResult(value: unknown): unknown {
 
 function cellAddress(address: string | undefined): { row: number; column: number } | undefined {
   const match = address?.replaceAll("$", "").match(/^([A-Z]+)([1-9][0-9]*)$/iu);
-  if (!match) {
+  if (!match?.[1]) {
     return undefined;
   }
   let column = 0;
-  for (const character of match[1]!.toUpperCase()) {
+  for (const character of match[1].toUpperCase()) {
     column = column * 26 + character.charCodeAt(0) - 64;
   }
   return { row: Number(match[2]), column };

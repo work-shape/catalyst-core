@@ -616,8 +616,7 @@ export class InMemoryPlatformStore
       )
       .map((user) => {
         const verifiedIdentityEmails = this.getIdentitiesForUser(user)
-          .filter((identity) => identity.emailVerified && identity.email)
-          .map((identity) => identity.email!)
+          .flatMap((identity) => (identity.emailVerified && identity.email ? [identity.email] : []))
           .sort((left, right) => left.localeCompare(right));
         return {
           user,

@@ -258,15 +258,15 @@ function resolvePatchOperation(
   oldPath: string | undefined,
   newPath: string | undefined
 ): ValidationResult<{ operation: WorkspacePatchChange["operation"]; path: string }> {
-  if (oldPath === undefined && newPath === undefined) {
-    return validationFailed("Workspace patch cannot have both old and new paths as /dev/null");
-  }
   if (oldPath === undefined) {
+    if (newPath === undefined) {
+      return validationFailed("Workspace patch cannot have both old and new paths as /dev/null");
+    }
     return {
       status: "success",
       value: {
         operation: "create",
-        path: newPath!
+        path: newPath
       }
     };
   }

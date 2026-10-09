@@ -9,7 +9,8 @@ export function registerBetterAuthRoutes(
   app: FastifyInstance,
   options: Pick<ChatServerOptions, "standaloneAuth">
 ): void {
-  if (!options.standaloneAuth) {
+  const standaloneAuth = options.standaloneAuth;
+  if (!standaloneAuth) {
     return;
   }
 
@@ -23,8 +24,8 @@ export function registerBetterAuthRoutes(
           "Standalone auth endpoints do not accept explicit credential headers"
         );
       }
-      const response = await options.standaloneAuth!.handleRequest(
-        new Request(toAuthRequestUrl(request.url, options), {
+      const response = await standaloneAuth.handleRequest(
+        new Request(toAuthRequestUrl(request.url, standaloneAuth.baseUrl), {
           method: request.method,
           headers: toRequestHeaders(request.headers),
           body: request.method === "GET" ? undefined : toRequestBody(request.body)
@@ -55,11 +56,8 @@ export function sendWebResponse(reply: FastifyReply, response: Response): Fastif
   return reply.send(Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>));
 }
 
-function toAuthRequestUrl(
-  requestUrl: string,
-  options: Pick<ChatServerOptions, "standaloneAuth">
-): string {
-  const origin = new URL(options.standaloneAuth!.baseUrl).origin;
+function toAuthRequestUrl(requestUrl: string, baseUrl: string): string {
+  const origin = new URL(baseUrl).origin;
   return new URL(requestUrl, origin).toString();
 }
 

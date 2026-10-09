@@ -445,11 +445,14 @@ export async function searchMemberCandidates(
       asc(productUsers.id)
     )
     .limit(input.limit);
-  return rows.map((row) => ({
-    displayLabel: row.displayLabel,
-    email: row.email!,
-    hasPendingAccessRequest: row.hasPendingAccessRequest
-  }));
+  return rows.map((row) => {
+    if (row.email === null) throw new Error("Workspace candidate email is missing");
+    return {
+      displayLabel: row.displayLabel,
+      email: row.email,
+      hasPendingAccessRequest: row.hasPendingAccessRequest
+    };
+  });
 }
 
 export async function getMembership(
@@ -670,8 +673,9 @@ async function createWorkspaceRecords(
       updatedAt: now
     })
     .returning();
+  if (!row) throw new Error("Workspace insert returned no row");
   await db.insert(collaborationWorkspaceMemberships).values({
-    collaborationWorkspaceId: row!.id,
+    collaborationWorkspaceId: row.id,
     clientInstanceId: input.clientInstanceId,
     userId: input.creatorUserId,
     role: "owner",

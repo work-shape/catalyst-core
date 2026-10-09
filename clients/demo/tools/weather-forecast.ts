@@ -142,7 +142,7 @@ function addDays(date: Date, days: number): Date {
 
 function hashLocation(location: string): number {
   return [...location.trim().toLowerCase()].reduce(
-    (hash, char) => (hash * 31 + char.codePointAt(0)!) % 997,
+    (hash, char) => (hash * 31 + (char.codePointAt(0) ?? 0)) % 997,
     17
   );
 }

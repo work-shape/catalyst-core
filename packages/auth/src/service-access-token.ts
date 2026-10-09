@@ -181,7 +181,10 @@ function deriveEffectiveServiceGrants(resolved: ResolvedApiCredential): Effectiv
   ) as AuthScope[];
   return {
     scopes,
-    permissions: scopes.map((scope) => principalScopes.get(scope)!).filter(Boolean)
+    permissions: scopes.flatMap((scope) => {
+      const permission = principalScopes.get(scope);
+      return permission === undefined ? [] : [permission];
+    })
   };
 }
 

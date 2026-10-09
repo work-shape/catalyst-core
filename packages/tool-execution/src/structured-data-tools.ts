@@ -369,8 +369,10 @@ function mapSources(
   sources: Array<{ fileId: string; page?: number }> | undefined,
   attachmentIds: ReadonlyMap<string, StructuredDataFieldSource["attachmentId"]>
 ): StructuredDataFieldSource[] | undefined {
-  return sources?.map((source) => ({
-    attachmentId: attachmentIds.get(source.fileId)!,
-    page: source.page
-  }));
+  return sources?.map((source) => {
+    const attachmentId = attachmentIds.get(source.fileId);
+    if (attachmentId === undefined)
+      throw new Error(`Source attachment ${source.fileId} is missing`);
+    return { attachmentId, page: source.page };
+  });
 }

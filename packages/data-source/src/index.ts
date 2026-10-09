@@ -571,7 +571,10 @@ function resolveRelation(
       `Relation '${requestedRelation}' exists in multiple schemas; use a schema-qualified name`
     );
   }
-  return matches[0]!;
+  const [match] = matches;
+  if (!match)
+    throw new AppError("NOT_FOUND", `Readable relation '${requestedRelation}' was not found`);
+  return match;
 }
 
 function createAllowedSearchPath(allowedSchemas: readonly string[]): string | undefined {
