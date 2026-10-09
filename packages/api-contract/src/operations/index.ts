@@ -8,6 +8,7 @@ import { conversationOperations } from "./conversations";
 import { credentialOperations } from "./credentials";
 import { governanceOperations } from "./governance";
 import { instanceOperations } from "./instance";
+import { referenceOperations } from "./reference";
 import { systemOperations } from "./system";
 import { userOperations } from "./users";
 
@@ -24,6 +25,7 @@ export const apiOperations = {
   ...userOperations,
   ...apiAccessOperations,
   ...credentialOperations,
+  ...referenceOperations,
   ...systemOperations
 } as const;
 

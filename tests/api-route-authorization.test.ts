@@ -102,20 +102,29 @@ describe("every operation of the catalog", () => {
     );
   });
 
-  it.each(authenticated)("$name refuses a credential without its scope", async (entry) => {
-    const { name } = entry;
-    const { scope } = entry.operation;
-    const scopes = FIRST_PARTY_AUTH_SCOPES.filter((other) => other !== "*" && other !== scope);
-    const response = await call(name, asCaller({ ...everyRight, scopes }));
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toEqual({
-      error: {
-        correlationId: expect.any(String),
-        code: "FORBIDDEN",
-        message: `Missing auth scope '${scope}'`
-      }
-    });
+  // The reference of the instance asks no scope: whoever is signed in may read what it offers.
+  const unscoped = authenticated.filter(({ operation }) => operation.scope === null);
+  it("asks a scope of every operation but the two of the reference", () => {
+    expect(unscoped.map(({ name }) => name)).toEqual(["openapi.get", "docs.get"]);
   });
+
+  it.each(authenticated.filter((entry) => !unscoped.includes(entry)))(
+    "$name refuses a credential without its scope",
+    async (entry) => {
+      const { name } = entry;
+      const { scope } = entry.operation;
+      const scopes = FIRST_PARTY_AUTH_SCOPES.filter((other) => other !== "*" && other !== scope);
+      const response = await call(name, asCaller({ ...everyRight, scopes }));
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({
+        error: {
+          correlationId: expect.any(String),
+          code: "FORBIDDEN",
+          message: `Missing auth scope '${scope}'`
+        }
+      });
+    }
+  );
 
   const requiring = authenticated.flatMap(({ name, operation }) =>
     operation.requires.map((action) => [name, action] as const)

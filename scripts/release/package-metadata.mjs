@@ -26,6 +26,8 @@ export const UNPUBLISHED = {
 // Everything else under packages/ is published with `files: ["dist"]` and
 // `sideEffects: false` unless listed here.
 const OVERRIDES = {
+  // The OpenAPI document of the release, for consumers that are not written in TypeScript.
+  "api-contract": { files: ["dist", "openapi.json"] },
   // Ships src/ so Tailwind `@source` scanning and the `./vite` and `./styles.css` exports
   // work from node_modules. Imports CSS and Univer facades for their side effects.
   "chat-ui": { files: ["dist", "src"], sideEffects: undefined },

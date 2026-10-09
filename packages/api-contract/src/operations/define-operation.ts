@@ -27,7 +27,7 @@ export type OperationResponse =
       readonly descending: boolean;
     }
   | { readonly kind: "sse"; readonly schema: z.ZodType }
-  | { readonly kind: "blob" };
+  | { readonly kind: "blob"; readonly contentType: string };
 
 export function json<Schema extends z.ZodType>(schema: Schema) {
   return { kind: "json", schema } as const;
@@ -47,22 +47,32 @@ export function sse<Schema extends z.ZodType>(schema: Schema) {
   return { kind: "sse", schema } as const;
 }
 
-export function blob() {
-  return { kind: "blob" } as const;
+/** A body the handler sends itself: a file, or a page. */
+export function blob(contentType = "application/octet-stream") {
+  return { kind: "blob", contentType } as const;
 }
 
 export type OperationQuerySchema = z.ZodObject<Record<string, z.ZodType>>;
 
 type OperationAccess =
   | {
-      readonly auth: "public" | "serverCredential";
+      readonly auth: "serverCredential";
       readonly scope?: never;
       readonly requires?: never;
+      readonly credential?: never;
+    }
+  | {
+      readonly auth: "public";
+      readonly scope?: never;
+      readonly requires?: never;
+      /** The credential the handler reads and authenticates itself; the route helper does not. */
+      readonly credential?: "apiKey";
     }
   | {
       readonly auth: "user" | "principal";
-      /** The one credential scope the caller's credential must carry. */
-      readonly scope: OperationScope;
+      /** The one credential scope the caller's credential must carry; `null` asks for none. */
+      readonly scope: OperationScope | null;
+      readonly credential?: never;
       /** Actions the holder must be allowed at instance level, all of them. */
       readonly requires: readonly PlatformAction[];
     };

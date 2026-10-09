@@ -89,7 +89,13 @@ type RouteHandler<Op extends Operation> = (
   call: RouteCall<Op>
 ) => RouteResult<Op> | Promise<RouteResult<Op>>;
 
-export type Route = <const Op extends Operation>(operation: Op, handler: RouteHandler<Op>) => void;
+export interface Route {
+  <const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
+  /** Every operation registered on this server so far, through whichever helper. */
+  readonly registered: readonly Operation[];
+}
+
+const registeredOperations = new WeakMap<FastifyInstance, Operation[]>();
 
 /** The call as the helper assembles it, before the registration's types narrow it. */
 interface AssembledCall {
@@ -110,11 +116,14 @@ interface AssembledCall {
  * holder's rights for every action in `requires`, runs the handler and validates what it returns.
  */
 export function createRoute(app: FastifyInstance, options: RouteServerOptions): Route {
+  const registered = registeredOperations.get(app) ?? [];
+  registeredOperations.set(app, registered);
   // The overload is what a route module sees: its handler is typed from its operation. The
   // implementation serves every operation with one body, and what it hands the handler is
   // what the operation's schemas parsed at run time.
   function route<const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
   function route(operation: Operation, handler: (call: AssembledCall) => unknown): void {
+    registered.push(operation);
     app.route({
       method: operation.method,
       url: operation.path,
@@ -165,7 +174,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       }
     });
   }
-  return route;
+  return Object.assign(route, { registered });
 }
 
 async function authenticate(

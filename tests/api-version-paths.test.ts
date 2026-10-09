@@ -100,6 +100,7 @@ describe("the operation catalog", () => {
         "conversations.structured_data.get  GET /api/v1/conversations/:conversationId/structured-data/:structuredDataResourceId",
         "conversations.thread.get  GET /api/v1/conversations/:conversationId/thread",
         "conversations.title.generate  POST /api/v1/conversations/:conversationId/title",
+        "docs.get  GET /api/v1/docs",
         "health.get  GET /health",
         "instance.workspaces.list  GET /api/v1/instance/workspaces",
         "me.delete  DELETE /api/v1/me",
@@ -108,6 +109,7 @@ describe("the operation catalog", () => {
         "me.model_preference.set  PUT /api/v1/me/model-preference",
         "me.password.change  POST /api/v1/me/password",
         "me.update  PATCH /api/v1/me",
+        "openapi.get  GET /api/v1/openapi.json",
         "password_reset.request  POST /api/v1/password-reset",
         "password_setup.complete  POST /api/v1/password-setup",
         "service_principals.create  POST /api/v1/instance/service-principals",
@@ -175,8 +177,10 @@ describe("the operation catalog", () => {
       "auth",
       "conversations",
       "dev",
+      "docs",
       "instance",
       "me",
+      "openapi.json",
       "password-reset",
       "password-setup",
       "workspaces"
@@ -281,8 +285,10 @@ describe("a running instance", () => {
     for (const [method, path] of retiredApiPaths) {
       expect(current.has(`${method} ${path}`), `${method} ${path}`).toBe(false);
     }
-    // Each operation moved; none was dropped beside the alias and none was added.
-    expect(retiredApiPaths.length).toBe(versioned.length + 1);
+    // Each operation moved; none was dropped beside the alias. The reference of the instance
+    // is the one addition since: it never had an unversioned path.
+    const added: readonly ApiOperationName[] = ["openapi.get", "docs.get"];
+    expect(retiredApiPaths.length).toBe(versioned.length - added.length + 1);
   });
 });
 

@@ -6,8 +6,11 @@
   "scripts": {
     "build": "pnpm -r --filter './packages/*' build && pnpm -r --filter './clients/*' build",
     "build:demo": "pnpm -r --filter './packages/*' build && pnpm --filter @vivd-catalyst/demo build",
-    "check": "pnpm build && pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:migrations && pnpm test && pnpm test:upgrade && pnpm check:browser:cb-1b",
+    "check": "pnpm build && pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:openapi && pnpm check:contract && pnpm check:migrations && pnpm test && pnpm test:upgrade && pnpm check:browser:cb-1b",
     "check:local": "node scripts/check-local.mjs",
+    "check:contract": "pnpm --filter @vivd-catalyst/api-contract check:contract",
+    "check:openapi": "pnpm --filter @vivd-catalyst/api-contract check:openapi",
+    "generate:openapi": "pnpm --filter @vivd-catalyst/api-contract generate:openapi",
     "check:migrations": "node scripts/migrations/check.mjs",
     "db:preflight:collaboration-workspaces": "node scripts/preflight-collaboration-workspaces.mjs",
     "db:generate": "drizzle-kit generate",

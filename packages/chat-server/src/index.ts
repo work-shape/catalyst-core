@@ -9,6 +9,7 @@ import { createRoute } from "./http/route";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
+import { registerApiReferenceRoutes } from "./routes/api-reference-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerDevMailRoutes } from "./routes/dev-mail-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
@@ -123,6 +124,7 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
   registerAuditRoutes(route, options);
   registerApiAccessAdministrationRoutes(route, options);
   registerSuperadminRoutes(route, options);
+  registerApiReferenceRoutes(route, options);
 
   return app;
 }

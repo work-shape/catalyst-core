@@ -6,7 +6,7 @@ import {
   apiOperations,
   assistantFinalMessageMetadataSchema,
   buildApiPath,
-  openApiDocument
+  createOpenApiDocument
 } from "@vivd-catalyst/api-contract";
 import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 
@@ -94,24 +94,13 @@ describe("api operation catalog and client", () => {
     expect(parsed.success).toBe(true);
   });
 
-  // Registered by the server and absent from the released document.
-  const undocumentedOperationIds = ["health.get", "view_runtime.files.get", "captured_mail.list"];
-
+  // Which operations the document lists is the inventory of tests/api-version-paths.test.ts.
   it("keeps the OpenAPI artifact generated from the operation catalog", async () => {
-    const artifact = JSON.parse(
+    const artifact: unknown = JSON.parse(
       await readFile("packages/api-contract/openapi.json", "utf8")
-    ) as unknown;
-
-    expect(artifact).toEqual(openApiDocument);
-    for (const operation of Object.values(apiOperations)) {
-      const openApiPath = operation.path.replaceAll(/:([A-Za-z][A-Za-z0-9_]*)/gu, "{$1}");
-      const pathItem = (
-        openApiDocument.paths as Record<string, Record<string, { operationId: string }>>
-      )[openApiPath];
-      const documented = pathItem?.[operation.method.toLowerCase()]?.operationId;
-      if (documented !== undefined) expect(documented).toBe(operation.id);
-      else expect(undocumentedOperationIds).toContain(operation.id);
-    }
+    );
+    // Stale after a catalog change: `pnpm generate:openapi` writes it again.
+    expect(artifact).toEqual(JSON.parse(JSON.stringify(createOpenApiDocument())));
   });
 
   it("keeps Collaboration Workspace create and update request contracts aligned", () => {

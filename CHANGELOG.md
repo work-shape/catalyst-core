@@ -7,6 +7,22 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **API reference:** an instance serves the OpenAPI document of the operations it runs at
+  `GET /api/v1/openapi.json` and the same document as a page at `GET /api/v1/docs`. Both
+  answer any signed-in person and any access token, whatever its scopes, and refuse a caller
+  without a credential. The page holds no script and loads nothing from another host. The
+  docs site has an "API Reference" section written from the release's document at build time.
+- **API contract:** `openapi.json` is an OpenAPI 3.1 document with the release version, named
+  schemas, the credentials each operation accepts with the scope it needs, an answer for every
+  error code, `text/event-stream` and 204 for a stream, and the effect, rights and rate class
+  of each operation as `x-catalyst-*` fields. It ships in `@vivd-catalyst/api-contract` as
+  `@vivd-catalyst/api-contract/openapi.json`. `pnpm generate:openapi` writes it;
+  `pnpm check:openapi` fails when it is stale or has a lint finding; `pnpm check:contract`
+  fails on a change that breaks a caller of the newest release whose document has `/api/v1`
+  paths, and passes with a notice while no such release exists. Both run in `pnpm check`.
+  The package also exports `findBreakingChanges`, `describeApiReference` and
+  `renderApiReferencePage`.
+
 - **Chat:** the composer's model selector is a model picker. It opens as a short menu with the
   model and its reasoning effort; the model list shows each model's provider logo and an EU
   mark for providers with `compliance.residency: eu`, and a model under the pointer brings up a
@@ -31,6 +47,12 @@ contain breaking changes; a patch version does not.
   which is what the caller may do.
 
 ### Changed
+
+- **API contract (breaking):** `@vivd-catalyst/api-contract` no longer exports the constant
+  `openApiDocument`; call `createOpenApiDocument()`. `createOpenApiDocumentFromOperations`
+  takes the operations alone: title and version are those of the release. An operation that
+  answers a file states its content type (`blob("text/html")`), and an operation of a
+  signed-in caller may state `scope: null` when it asks for no scope.
 
 - **Platform store (breaking):** Postgres is the only platform store. The `STORE` environment
   variable is no longer read, so `STORE=memory` no longer starts an instance without a

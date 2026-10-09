@@ -9,7 +9,8 @@ export type AppErrorCode =
   | "RATE_LIMITED"
   | "INTERNAL";
 
-const statusByCode: Record<AppErrorCode, number> = {
+/** The HTTP status every error code answers with. */
+export const APP_ERROR_STATUS_CODES: Record<AppErrorCode, number> = {
   BAD_REQUEST: 400,
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
@@ -36,7 +37,7 @@ export class AppError extends Error {
     super(message);
     this.name = "AppError";
     this.code = code;
-    this.statusCode = statusByCode[code];
+    this.statusCode = APP_ERROR_STATUS_CODES[code];
     this.details = details;
     this.exposeMessage = options?.exposeMessage ?? this.statusCode < 500;
   }

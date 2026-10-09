@@ -187,7 +187,20 @@ export function openApiJsonOperation(operation: keyof typeof apiOperations): {
   const descriptor = apiOperations[operation];
   const path = descriptor.path.replaceAll(/:([A-Za-z][\w]*)/gu, "{$1}");
   const document = createOpenApiDocument();
-  return openApiJsonOperationSchema.parse(document.paths[path]?.[descriptor.method.toLowerCase()]);
+  // A named schema stands in the document as a reference; a test reads the schema itself.
+  const resolved: unknown = JSON.parse(
+    JSON.stringify(document.paths[path]?.[descriptor.method.toLowerCase()]),
+    (_key, value: unknown) => {
+      const reference = z.object({ $ref: z.string() }).safeParse(value);
+      if (!reference.success) return value;
+      const name = reference.data.$ref.split("/").at(-1) ?? "";
+      // An error answer is a shared response of the document; a test here reads successes.
+      return reference.data.$ref.includes("/schemas/")
+        ? document.components.schemas[name]
+        : undefined;
+    }
+  );
+  return openApiJsonOperationSchema.parse(resolved);
 }
 
 const jsonContentSchema = z.object({

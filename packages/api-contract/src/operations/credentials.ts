@@ -26,6 +26,7 @@ export const credentialOperations = {
     summary: "Exchange an API key for a short-lived access token",
     tag: "Credentials",
     auth: "public",
+    credential: "apiKey",
     effect: "changing",
     response: json(exchangeApiKeyResponseSchema),
     errors: ["NOT_FOUND"],

@@ -12,6 +12,20 @@ export const appErrorCodeSchema = z.enum([
   "INTERNAL"
 ]);
 
+/** What each error code tells a caller, as the reference states it. */
+export const API_ERROR_MEANINGS: Record<z.infer<typeof appErrorCodeSchema>, string> = {
+  BAD_REQUEST: "The request cannot be read.",
+  UNAUTHENTICATED: "No credential was presented, or the credential is not valid.",
+  FORBIDDEN: "The caller lacks the scope or the right this operation requires.",
+  NOT_FOUND:
+    "The resource does not exist, is not visible to the caller, or the instance runs without this operation.",
+  CONFLICT: "The request conflicts with the current state of the resource.",
+  TIMEOUT: "The instance did not finish the work in time.",
+  VALIDATION_FAILED: "Path, query or body do not match the operation's schema.",
+  RATE_LIMITED: "The caller sent too many requests of this operation's rate class.",
+  INTERNAL: "The instance failed. The message never carries details."
+};
+
 export const apiErrorResponseSchema = z.object({
   error: z.object({
     code: appErrorCodeSchema,

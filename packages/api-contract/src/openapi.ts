@@ -1,65 +1,186 @@
+import { APP_ERROR_STATUS_CODES } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { version as releaseVersion } from "../package.json";
+import { API_ERROR_MEANINGS, appErrorCodeSchema, type ApiErrorCode } from "./errors";
+import type {
+  OpenApiDocument,
+  OpenApiJsonSchema,
+  OpenApiOperation,
+  OpenApiResponse
+} from "./openapi-document";
+import { apiOperations } from "./operations";
 import {
   API_VERSION_PREFIX,
+  COMMON_OPERATION_ERRORS,
   operationPathParamNames,
   type Operation
 } from "./operations/define-operation";
-
-export interface OpenApiDocumentOptions {
-  title?: string;
-  version?: string;
-}
+import * as contractSchemas from "./schemas";
 
 export type ApiOperationCatalog = Record<string, Operation>;
 
-type OpenApiSchema = Record<string, unknown>;
-type OpenApiParameter = {
-  name: string;
-  in: "path" | "query";
-  required?: boolean;
-  schema: OpenApiSchema;
-};
-type OpenApiPathItem = Record<string, unknown>;
+/** The document of the release: every versioned operation of the catalog. */
+export function createOpenApiDocument(): OpenApiDocument {
+  return createOpenApiDocumentFromOperations(apiOperations);
+}
 
+/**
+ * The document of the given operations. An instance passes the operations it registered, so
+ * what it runs without is absent. The unversioned health probe and operations of development
+ * instances are registered without being part of any document.
+ */
 export function createOpenApiDocumentFromOperations(
-  operations: ApiOperationCatalog,
-  options: OpenApiDocumentOptions = {}
-) {
-  const paths: Record<string, OpenApiPathItem> = {};
+  operations: ApiOperationCatalog
+): OpenApiDocument {
+  const documented = Object.values(operations)
+    .filter(
+      (operation) => !operation.devOnly && operation.path.startsWith(`${API_VERSION_PREFIX}/`)
+    )
+    .sort(
+      (left, right) =>
+        compareText(toOpenApiPath(left.path), toOpenApiPath(right.path)) ||
+        METHOD_ORDER.indexOf(left.method) - METHOD_ORDER.indexOf(right.method)
+    );
 
-  for (const operation of Object.values(operations)) {
-    // The document describes the versioned API. The unversioned health probe and operations
-    // of development instances are registered without being part of it.
-    if (operation.devOnly || !operation.path.startsWith(`${API_VERSION_PREFIX}/`)) {
-      continue;
-    }
-    const path = toOpenApiPath(operation.path);
-    paths[path] ??= {};
-    paths[path][operation.method.toLowerCase()] = createOpenApiOperation(operation);
+  const paths: OpenApiDocument["paths"] = {};
+  const errorCodes = new Set<ApiErrorCode>();
+  for (const operation of documented) {
+    const codes = operationErrorCodes(operation);
+    codes.forEach((code) => errorCodes.add(code));
+    (paths[toOpenApiPath(operation.path)] ??= {})[operation.method.toLowerCase()] =
+      createOpenApiOperation(operation, codes);
   }
+
+  const responses = Object.fromEntries(
+    API_ERROR_CODE_ORDER.filter((code) => errorCodes.has(code)).map((code) => [
+      errorResponseName(code),
+      {
+        description: `\`${code}\`: ${API_ERROR_MEANINGS[code]}`,
+        content: { "application/json": { schema: schemaFor(errorResponseSchema, "output") } }
+      }
+    ])
+  );
 
   return {
     openapi: "3.1.0",
     info: {
-      title: options.title ?? "Vivd Catalyst API",
-      version: options.version ?? "0.1.0"
+      title: "Workshape Catalyst API",
+      version: releaseVersion,
+      description: `Every operation under \`${API_VERSION_PREFIX}\` of release ${releaseVersion}. Every error answers with the envelope \`ApiErrorResponse\`; its \`code\` is the stable part, its \`correlationId\` names the request in the instance's log.`
     },
-    paths
-  } as const;
+    servers: [{ url: "/", description: "The instance that serves this document" }],
+    tags: [...new Set(documented.map((operation) => operation.tag))]
+      .sort(compareText)
+      .map((name) => ({ name })),
+    paths,
+    components: {
+      securitySchemes: SECURITY_SCHEMES,
+      responses,
+      schemas: usedComponents({ paths, responses })
+    }
+  };
 }
 
-function createOpenApiOperation(operation: Operation) {
+const METHOD_ORDER: readonly Operation["method"][] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+const API_ERROR_CODE_ORDER: readonly ApiErrorCode[] = appErrorCodeSchema.options;
+const errorResponseSchema = contractSchemas.apiErrorResponseSchema;
+
+const SECURITY_SCHEMES = {
+  sessionCookie: {
+    type: "apiKey",
+    in: "cookie",
+    name: "better-auth.session_token",
+    description:
+      "The session of a person signed in through `/api/auth`, the mount owned by the sign-in library. Over HTTPS the browser carries the cookie as `__Secure-better-auth.session_token`. A changing request with this cookie must come from the instance's own origin or an allowed one."
+  },
+  sessionToken: {
+    type: "http",
+    scheme: "bearer",
+    description:
+      "A session token a trusted backend obtained for one of its users from `session_tokens.issue`."
+  },
+  accessToken: {
+    type: "http",
+    scheme: "bearer",
+    description:
+      "A short-lived access token of a service principal, obtained from `access_tokens.exchange` with an API key."
+  },
+  apiKey: {
+    type: "http",
+    scheme: "bearer",
+    description:
+      "An API key of a service principal. It is presented only to `access_tokens.exchange`."
+  },
+  serverCredential: {
+    type: "apiKey",
+    in: "header",
+    name: "x-server-credential",
+    description: "The instance's server credential, held by a trusted backend."
+  }
+} as const satisfies OpenApiDocument["components"]["securitySchemes"];
+
+type SecuritySchemeName = keyof typeof SECURITY_SCHEMES;
+
+/** The credentials an operation accepts, each with the scope it must carry. */
+function createSecurity(operation: Operation): OpenApiOperation["security"] {
+  const schemes: readonly SecuritySchemeName[] =
+    operation.auth === "user"
+      ? ["sessionCookie", "sessionToken"]
+      : operation.auth === "principal"
+        ? ["sessionCookie", "sessionToken", "accessToken"]
+        : operation.auth === "serverCredential"
+          ? ["serverCredential"]
+          : operation.credential
+            ? [operation.credential]
+            : [];
+  return schemes.map((scheme) => ({ [scheme]: operation.scope ? [operation.scope] : [] }));
+}
+
+/**
+ * The common errors and the declared ones. An operation that authenticates nobody answers
+ * neither UNAUTHENTICATED nor FORBIDDEN unless it declares them.
+ */
+function operationErrorCodes(operation: Operation): ApiErrorCode[] {
+  const anonymous = createSecurity(operation).length === 0;
+  const codes = new Set<ApiErrorCode>([
+    ...COMMON_OPERATION_ERRORS.filter(
+      (code) => !anonymous || (code !== "UNAUTHENTICATED" && code !== "FORBIDDEN")
+    ),
+    ...operation.errors
+  ]);
+  return API_ERROR_CODE_ORDER.filter((code) => codes.has(code));
+}
+
+function createOpenApiOperation(
+  operation: Operation,
+  errorCodes: readonly ApiErrorCode[]
+): OpenApiOperation {
+  const requestBody = createRequestBody(operation);
   return {
     operationId: operation.id,
-    ...createParameters(operation),
-    ...createRequestBody(operation),
-    ...createResponse(operation)
+    summary: operation.summary,
+    tags: [operation.tag],
+    security: createSecurity(operation),
+    parameters: createParameters(operation),
+    ...(requestBody ? { requestBody } : {}),
+    responses: Object.fromEntries(
+      [
+        ...Object.entries(createSuccessResponses(operation)),
+        ...errorCodes.map((code): [string, { $ref: string }] => [
+          String(APP_ERROR_STATUS_CODES[code]),
+          { $ref: `#/components/responses/${errorResponseName(code)}` }
+        ])
+      ].sort(([left], [right]) => compareText(left, right))
+    ),
+    "x-catalyst-effect": operation.effect,
+    ...(operation.requires?.length ? { "x-catalyst-requires": [...operation.requires] } : {}),
+    "x-catalyst-rate-class": operation.rateClass
   };
 }
 
 // Query constraints include the list limit default and maximum from the sole schema.
-function createParameters(operation: Operation): { parameters: OpenApiParameter[] } {
-  const parameters: OpenApiParameter[] = [
+function createParameters(operation: Operation): OpenApiOperation["parameters"] {
+  return [
     ...operationPathParamNames(operation.path).map((name) => ({
       name,
       in: "path" as const,
@@ -70,90 +191,249 @@ function createParameters(operation: Operation): { parameters: OpenApiParameter[
       name,
       in: "query" as const,
       required: !schema.safeParse(undefined).success,
-      schema: toOpenApiSchema(schema)
+      schema: schemaFor(schema, "input")
     }))
   ];
-
-  return { parameters };
 }
 
-function createRequestBody(operation: Operation) {
+function createRequestBody(operation: Operation): OpenApiOperation["requestBody"] {
   if (operation.body) {
     return {
-      requestBody: {
-        required: true,
-        content: {
-          "application/json": {
-            schema: toOpenApiSchema(operation.body)
-          }
-        }
-      }
+      required: true,
+      content: { "application/json": { schema: schemaFor(operation.body, "input") } }
     };
   }
-
   if (operation.multipart) {
     return {
-      requestBody: {
-        required: true,
-        content: {
-          "multipart/form-data": {
-            schema: {
-              type: "object",
-              properties: {
-                file: {
-                  type: "string",
-                  format: "binary"
-                }
-              },
-              required: ["file"]
-            }
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: {
+            type: "object",
+            properties: { file: { type: "string", format: "binary" } },
+            required: ["file"]
           }
         }
       }
     };
   }
-
-  return {};
+  return undefined;
 }
 
-// An event stream is documented by the schema of one event until CB-5 owns the document.
-function createResponse(operation: Operation) {
-  if (operation.response.kind === "blob") {
-    return {
-      responses: {
+function createSuccessResponses(operation: Operation): Record<string, OpenApiResponse> {
+  const { response } = operation;
+  switch (response.kind) {
+    case "json":
+    case "page":
+      return {
         "200": {
-          description: "Binary response",
+          description: response.kind === "page" ? "One page of the list" : "The result",
+          content: { "application/json": { schema: schemaFor(response.schema, "output") } }
+        }
+      };
+    case "sse":
+      // OpenAPI 3.1 has no notation for an event stream, so the schema is that of one event.
+      return {
+        "200": {
+          description:
+            "A stream of server-sent events. The `data` of every event is one JSON value of the schema; `id` is the position to resume from.",
+          content: { "text/event-stream": { schema: schemaFor(response.schema, "output") } }
+        },
+        "204": {
+          description: "The stream has ended and holds no event after the position asked for"
+        }
+      };
+    case "blob":
+      return {
+        "200": {
+          description: "The content itself",
           content: {
-            "application/octet-stream": {
-              schema: {
-                type: "string",
-                format: "binary"
-              }
+            [response.contentType]: {
+              schema: response.contentType.startsWith("text/")
+                ? { type: "string" }
+                : { type: "string", format: "binary" }
             }
           }
         }
-      }
-    };
+      };
+  }
+}
+
+// --- Named schemas ---------------------------------------------------------------------------
+
+type SchemaDirection = "input" | "output";
+
+const COMPONENT_PREFIX = "#/components/schemas/";
+
+interface NamedSchemas {
+  registry: ReturnType<typeof z.registry<{ id: string }>>;
+  components: Record<string, OpenApiJsonSchema>;
+}
+
+let namedSchemas: NamedSchemas | undefined;
+
+/** Built on first use: a caller that never asks for a document pays nothing for it. */
+function named(): NamedSchemas {
+  return (namedSchemas ??= createNamedSchemas());
+}
+
+/**
+ * A component describes a value as the instance answers it. Where a request accepts a wider
+ * form of the same schema, because a field has a default, that form is the component
+ * `<Name>Input`.
+ */
+function createNamedSchemas(): NamedSchemas {
+  const registry = z.registry<{ id: string }>();
+  for (const [exportName, schema] of Object.entries(contractSchemas).sort(([left], [right]) =>
+    compareText(left, right)
+  )) {
+    if (schema instanceof z.ZodType && exportName.endsWith("Schema") && !registry.has(schema)) {
+      const name = exportName.slice(0, -"Schema".length);
+      registry.add(schema, { id: `${name.charAt(0).toUpperCase()}${name.slice(1)}` });
+    }
   }
 
-  return {
-    responses: {
-      "200": {
-        description: "Successful response",
-        content: {
-          "application/json": {
-            schema: toOpenApiSchema(operation.response.schema)
-          }
-        }
+  const convert = (io: SchemaDirection) =>
+    Object.entries(
+      z.toJSONSchema(registry, { io, uri: (id) => `${COMPONENT_PREFIX}${id}` }).schemas
+    ).map(([name, schema]): [string, OpenApiJsonSchema] => {
+      const { $schema: _dialect, $id: _id, ...component } = schema;
+      return [name, io === "output" ? openObjects(component) : component];
+    });
+  const output = new Map(convert("output"));
+  const input = new Map(convert("input"));
+
+  // A schema is wider on input when it differs itself or refers to one that does.
+  const wider = new Set<string>();
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [name, schema] of input) {
+      if (wider.has(name)) continue;
+      const differs = JSON.stringify(openObjects(schema)) !== JSON.stringify(output.get(name));
+      if (differs || referencedNames(schema).some((referenced) => wider.has(referenced))) {
+        wider.add(name);
+        grew = true;
       }
     }
+  }
+  const inputName = (name: string) => (wider.has(name) ? `${name}Input` : name);
+  return {
+    registry,
+    components: Object.fromEntries([
+      ...output,
+      ...[...wider].map((name): [string, OpenApiJsonSchema] => [
+        inputName(name),
+        renameReferences(input.get(name) ?? {}, inputName)
+      ])
+    ])
   };
 }
 
-function toOpenApiSchema(schema: z.ZodType): OpenApiSchema {
-  const jsonSchema = z.toJSONSchema(schema) as OpenApiSchema;
-  const { $schema: _schema, ...openApiSchema } = jsonSchema;
-  return openApiSchema;
+/** The schema as an operation states it: a reference where it is named, inline otherwise. */
+function schemaFor(schema: z.ZodType, io: SchemaDirection): OpenApiJsonSchema {
+  const { registry, components } = named();
+  const inputName = (name: string) =>
+    io === "input" && `${name}Input` in components ? `${name}Input` : name;
+  const name = registry.get(schema)?.id;
+  if (name) {
+    return { $ref: `${COMPONENT_PREFIX}${inputName(name)}` };
+  }
+  const {
+    $schema: _dialect,
+    $defs: definitions = {},
+    ...inline
+  } = z.toJSONSchema(schema, { io, metadata: registry });
+  const unnamed = Object.keys(definitions).filter((name) => !(name in components));
+  if (unnamed.length > 0) {
+    throw new Error(
+      `A schema that refers to itself needs a name: export it as "<name>Schema" (${unnamed.join(", ")})`
+    );
+  }
+  const renamed = renameReferences(inline, inputName);
+  return io === "output" ? openObjects(renamed) : renamed;
+}
+
+/** The components the given part of a document refers to, directly or through one another. */
+function usedComponents(root: unknown): Record<string, OpenApiJsonSchema> {
+  const { components } = named();
+  const used = new Set<string>();
+  const pending = referencedNames(root);
+  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+    if (used.has(name)) continue;
+    used.add(name);
+    pending.push(...referencedNames(components[name]));
+  }
+  return Object.fromEntries(
+    [...used].sort(compareText).map((name) => [name, components[name] ?? {}])
+  );
+}
+
+function referencedNames(node: unknown): string[] {
+  const names: string[] = [];
+  visit(node, (key, value) => {
+    if (key === "$ref" && typeof value === "string" && value.startsWith(COMPONENT_PREFIX)) {
+      names.push(value.slice(COMPONENT_PREFIX.length));
+    }
+    return value;
+  });
+  return names;
+}
+
+function renameReferences(
+  schema: OpenApiJsonSchema,
+  rename: (name: string) => string
+): OpenApiJsonSchema {
+  return jsonObject(
+    visit(schema, (key, value) =>
+      key === "$ref" && typeof value === "string"
+        ? `${COMPONENT_PREFIX}${rename(value.slice(value.lastIndexOf("/") + 1))}`
+        : value
+    )
+  );
+}
+
+/**
+ * An answer may gain fields in a later release without breaking its readers, so the document
+ * does not call an answered object closed.
+ */
+function openObjects(schema: OpenApiJsonSchema): OpenApiJsonSchema {
+  return jsonObject(
+    visit(schema, (key, value) =>
+      key === "additionalProperties" && value === false ? undefined : value
+    )
+  );
+}
+
+/** Copies a JSON value, passing every object entry through `map`; `undefined` drops the entry. */
+function visit(node: unknown, map: (key: string, value: unknown) => unknown): unknown {
+  if (Array.isArray(node)) {
+    return node.map((item) => visit(item, map));
+  }
+  if (typeof node !== "object" || node === null) {
+    return node;
+  }
+  return Object.fromEntries(
+    Object.entries(node).flatMap(([key, value]) => {
+      const mapped = map(key, value);
+      return mapped === undefined ? [] : [[key, visit(mapped, map)]];
+    })
+  );
+}
+
+function jsonObject(value: unknown): OpenApiJsonSchema {
+  return z.record(z.string(), z.unknown()).parse(value);
+}
+
+function errorResponseName(code: ApiErrorCode): string {
+  return code
+    .toLowerCase()
+    .split("_")
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join("");
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function toOpenApiPath(path: string): string {
