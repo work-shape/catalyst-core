@@ -348,7 +348,7 @@ describe("api client derived from the operation catalog", () => {
     // A query carries the descriptor's parameters and nothing else, all of them optional here.
     expectTypeOf<keyof Listing>().toEqualTypeOf<"query" | "signal">();
     expectTypeOf<keyof NonNullable<Listing["query"]>>().toEqualTypeOf<
-      "limit" | "cursor" | "collaborationWorkspaceId"
+      "limit" | "cursor" | "collaborationWorkspaceId" | "query"
     >();
     expectTypeOf<NonNullable<Listing["query"]>["limit"]>().toEqualTypeOf<number | undefined>();
     expectTypeOf(client.conversations.list).toBeCallableWith();
