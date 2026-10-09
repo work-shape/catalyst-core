@@ -1443,7 +1443,7 @@ export function createWorkspaceToolDefinitions(
     defineTool({
       name: "workspace.preview_images",
       description:
-        "Load bounded rendered preview images into model-visible visual context without promoting preview files to the user. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached.",
+        "Load bounded rendered preview images into model-visible visual context without promoting preview files to the user. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
       inputSchema: workspacePreviewImagesInputSchema,
       outputSchema: workspacePreviewImagesOutputSchema,
       inputJsonSchema: workspacePreviewImagesInputJsonSchema,

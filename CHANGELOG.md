@@ -399,6 +399,13 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   left out of the request to an OpenAI-compatible provider, and the model reads a note in its
   place that an image was too large to include. Such an image used to fail the run with 400
   `string_above_max_length` on every message of the conversation.
+- **Models:** images a tool loaded for the model, such as rendered document pages, are sent only
+  during the run that loaded them. In later runs the tool result names what each image showed
+  (file, page, slide, sheet or range) and the model repeats the tool call to see it again. Every
+  request used to carry every such image of the conversation again, which made requests of tens
+  of megabytes and provider compaction items above the provider's string limit. Images a user
+  attached to a message are still sent in later runs. One request carries at most 32 MiB of image
+  bytes (`MODEL_INPUT_IMAGES_MAX_BYTES`); above that the oldest images are named instead of sent.
 - **Models:** a run waits out a provider's per-minute rate limit. On HTTP 429, or the same
   refusal inside a stream, a model call waits about 4 s, 8 s, 16 s and 32 s, up to 60 s in
   total, and never sooner than the provider's `Retry-After`; a `Retry-After` beyond what is

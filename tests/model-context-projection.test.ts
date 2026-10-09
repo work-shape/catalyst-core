@@ -451,6 +451,7 @@ describe("model context projection", () => {
             mimeType: "image/png"
           },
           metadata: {
+            fileId: "file_contract",
             pageNumber: 2,
             dpi: 160
           }
@@ -492,7 +493,12 @@ describe("model context projection", () => {
 
     expect(modelContentText(modelOutput.content)).toContain("[Visual context loaded]");
     expect(modelContentImages(modelOutput.content)).toHaveLength(1);
-    expect(modelContentImages(projected[1]?.content ?? "")[0]?.data).toEqual(imageBytes);
+    // History is what earlier runs left: it names the image instead of loading it again.
+    expect(modelContentImages(projected[1]?.content ?? "")).toEqual([]);
+    expect(modelContentText(projected[1]?.content ?? "")).toContain(
+      `fileId: file_contract, artifactId: ${artifactId}, mimeType: image/png, page: 2, dpi: 160`
+    );
+    expect(modelContentText(projected[1]?.content ?? "")).toContain("[Visual context not loaded:");
     expect(JSON.stringify(metadata)).not.toContain("iVBOR");
   });
 });

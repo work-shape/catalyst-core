@@ -68,6 +68,10 @@ import {
   type ModelContextProjectionOptions,
   type StoredReasoningSummary
 } from "./model-context-projection";
+import {
+  applyModelInputImageBudget,
+  MODEL_INPUT_IMAGES_MAX_BYTES
+} from "./model-input-image-budget";
 import { materializeModelTools, type ModelToolRegistryView } from "./model-tool-materialization";
 
 export interface ModelCallGovernance extends ModelUsageRecorder {
@@ -380,8 +384,21 @@ export class LocalAgentRuntime implements AgentRuntime {
     // True until the first answer: only then does a request carry a continuation from an earlier run.
     let carriesEarlierContinuation = providerContinuation !== undefined;
     let runCompacted = false;
-    const callModel = () =>
-      this.withTransientModelRetry(context, state, (attempt) =>
+    const callModel = () => {
+      const withinImageBudget = applyModelInputImageBudget(messages);
+      if (withinImageBudget.omittedImageCount > 0) {
+        this.options.logger?.warn(
+          {
+            type: "model_input.images_omitted",
+            runId,
+            conversationId: input.conversationId,
+            omittedImageCount: withinImageBudget.omittedImageCount,
+            maxBytes: MODEL_INPUT_IMAGES_MAX_BYTES
+          },
+          "Older images left out of the model request"
+        );
+      }
+      return this.withTransientModelRetry(context, state, (attempt) =>
         this.beforeEffect("provider_request", runId).then(() =>
           this.options.usageGovernance.runModelCall(context.clientInstanceId, () =>
             this.completeWithProvider(
@@ -391,7 +408,7 @@ export class LocalAgentRuntime implements AgentRuntime {
                 reasoningEffort: modelSelection.reasoningEffort,
                 fastMode: modelSelection.fastMode,
                 continuation: providerContinuation,
-                messages,
+                messages: withinImageBudget.messages,
                 tools
               },
               context,
@@ -402,6 +419,7 @@ export class LocalAgentRuntime implements AgentRuntime {
           )
         )
       );
+    };
 
     for (let step = 0; step < maxSteps; step += 1) {
       const modelResult = await callModel().catch(async (error: unknown) => {

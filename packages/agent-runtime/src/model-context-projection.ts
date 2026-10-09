@@ -32,6 +32,7 @@ import type {
 } from "@vivd-catalyst/model-provider";
 import {
   projectModelVisibleArtifacts,
+  summarizeModelVisibleArtifactsNotLoaded,
   type ModelContextArtifactReader
 } from "./model-visible-artifacts";
 
@@ -73,6 +74,12 @@ export interface ModelOutputProjection {
   notice?: JsonObject;
 }
 
+/**
+ * The messages of earlier runs as the model sees them. Images a tool loaded in an earlier run are
+ * not loaded again: each is replaced by a line naming what it showed, and the model repeats the
+ * tool call when it needs the image. Images the user attached stay, because no tool can load them
+ * again.
+ */
 export async function projectAgentVisibleHistory(
   messages: ChatMessage[],
   options: ModelContextProjectionOptions
@@ -142,7 +149,8 @@ export function selectRecentCompleteHistory(
 
 export async function createModelVisibleToolOutput(
   result: ToolExecutionResult,
-  options: ModelContextProjectionOptions
+  options: ModelContextProjectionOptions,
+  images: "loaded" | "not_loaded" = "loaded"
 ): Promise<ModelOutputProjection> {
   // Data-critical boundary: privateOutput and private rendered display data must never be
   // serialized into model-visible history. Private render-view tools return only a zero-data
@@ -152,6 +160,14 @@ export async function createModelVisibleToolOutput(
       ? stringifyForModel(result.output ?? { status: "success" })
       : stringifyForModel(result.error);
   const bounded = boundModelOutput(content, options);
+  if (images === "not_loaded") {
+    const summary = summarizeModelVisibleArtifactsNotLoaded(result);
+    if (!summary) {
+      return bounded;
+    }
+    const text = `${bounded.text}\n\n${summary}`;
+    return { ...bounded, text, content: text };
+  }
   const visualArtifacts = await projectModelVisibleArtifacts(result, options);
   if (visualArtifacts.parts.length === 0) {
     return bounded;
@@ -247,7 +263,7 @@ async function toModelHistoryMessage(
     }
     const result = readToolExecutionResult(metadata.result);
     const projected = result
-      ? (await createModelVisibleToolOutput(result, options)).content
+      ? (await createModelVisibleToolOutput(result, options, "not_loaded")).content
       : typeof metadata.modelOutput === "string"
         ? metadata.modelOutput
         : message.text;

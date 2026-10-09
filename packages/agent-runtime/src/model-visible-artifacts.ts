@@ -4,7 +4,7 @@ import type {
   SupportedImageMimeType,
   ToolExecutionResult
 } from "@vivd-catalyst/core";
-import type { ModelContentPart } from "@vivd-catalyst/model-provider";
+import type { ModelContent, ModelContentPart } from "@vivd-catalyst/model-provider";
 
 export interface ModelContextArtifactReader {
   readArtifact(input: {
@@ -22,6 +22,13 @@ export interface ModelVisibleArtifactProjectionOptions {
   artifactReader?: ModelContextArtifactReader;
 }
 
+const VISUAL_CONTEXT_LOADED_HEADER = "[Visual context loaded]";
+// Stands where images were: a tool result of an earlier run, or one a request had no room for.
+const VISUAL_CONTEXT_NOT_LOADED_HEADER =
+  "[Visual context not loaded: older images are not kept in model context. To see one again, repeat the tool call that produced it with the values below.]";
+const ATTACHED_IMAGES_NOT_LOADED_NOTE =
+  "[Attached images not loaded: older images are not kept in model context. Ask for the image again if it is needed.]";
+
 export interface ModelVisibleArtifactProjection {
   parts: ModelContentPart[];
   summary?: string;
@@ -34,8 +41,36 @@ export async function projectModelVisibleArtifacts(
   const parts = await readModelVisibleImages(result, options);
   return {
     parts,
-    summary: parts.length > 0 ? createVisualArtifactSummary(result) : undefined
+    summary:
+      parts.length > 0
+        ? createVisualArtifactSummary(result, VISUAL_CONTEXT_LOADED_HEADER)
+        : undefined
   };
+}
+
+/**
+ * What a tool result of an earlier run shows in place of its images: which document, page,
+ * slide or range each one was, so the model can ask for it again. Reads no image bytes.
+ */
+export function summarizeModelVisibleArtifactsNotLoaded(
+  result: ToolExecutionResult
+): string | undefined {
+  return createVisualArtifactSummary(result, VISUAL_CONTEXT_NOT_LOADED_HEADER);
+}
+
+/** The same content without its images, saying in their place that they are not loaded. */
+export function withoutModelVisibleImages(content: ModelContent): ModelContent {
+  if (typeof content === "string" || !content.some((part) => part.type === "image")) {
+    return content;
+  }
+  const text = content
+    .filter((part): part is Extract<ModelContentPart, { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+  if (text.includes(VISUAL_CONTEXT_LOADED_HEADER)) {
+    return text.replace(VISUAL_CONTEXT_LOADED_HEADER, VISUAL_CONTEXT_NOT_LOADED_HEADER);
+  }
+  return text ? `${text}\n\n${ATTACHED_IMAGES_NOT_LOADED_NOTE}` : ATTACHED_IMAGES_NOT_LOADED_NOTE;
 }
 
 async function readModelVisibleImages(
@@ -94,7 +129,10 @@ function isSupportedImageMimeType(value: string): value is SupportedImageMimeTyp
   );
 }
 
-function createVisualArtifactSummary(result: ToolExecutionResult): string | undefined {
+function createVisualArtifactSummary(
+  result: ToolExecutionResult,
+  header: string
+): string | undefined {
   if (result.status !== "success" || !result.artifacts?.length) {
     return undefined;
   }
@@ -103,6 +141,7 @@ function createVisualArtifactSummary(result: ToolExecutionResult): string | unde
     .map((artifact) => {
       const metadata = artifact.metadata ?? {};
       const details = [
+        typeof metadata.fileId === "string" ? `fileId: ${metadata.fileId}` : undefined,
         `artifactId: ${artifact.artifactId}`,
         `mimeType: ${artifact.modelVisibility?.mimeType ?? artifact.mimeType ?? "image/png"}`,
         typeof metadata.pageNumber === "number" ? `page: ${metadata.pageNumber}` : undefined,
@@ -116,5 +155,5 @@ function createVisualArtifactSummary(result: ToolExecutionResult): string | unde
       ].filter((value): value is string => value !== undefined);
       return `- ${details.join(", ")}`;
     });
-  return lines.length > 0 ? ["[Visual context loaded]", ...lines].join("\n") : undefined;
+  return lines.length > 0 ? [header, ...lines].join("\n") : undefined;
 }

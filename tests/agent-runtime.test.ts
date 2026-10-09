@@ -29,6 +29,7 @@ import {
 import {
   OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
+  modelContentImages,
   modelContentText,
   type ModelCompletionStreamEvent,
   type ModelMessage,
@@ -2935,6 +2936,62 @@ describe("local agent runtime", () => {
       category: "app_error"
     });
   });
+
+  it("sends the page images of the current run and names those of an earlier run instead", async () => {
+    const f = await pageImageFixture("page-images-earlier-run");
+
+    await f.runToEnd("Check pages one and two", [1, 2]);
+    await f.runToEnd("And what about the signature?", []);
+
+    // The second request of the first run answers the two tool calls of that run.
+    expect(f.imageSizes(1)).toEqual([8, 8]);
+    expect(f.text(1)).toContain("[Visual context loaded]");
+    // The next run carries no image and read none from storage.
+    expect(f.imageSizes(2)).toEqual([]);
+    expect(f.artifactReads()).toBe(2);
+    const marker = f.text(2);
+    expect(marker).toContain("[Visual context not loaded:");
+    expect(marker).not.toContain("[Visual context loaded]");
+    expect(marker).toContain(
+      "fileId: file_contract, artifactId: art_page_1, mimeType: image/png, page: 1"
+    );
+    expect(marker).toContain(
+      "fileId: file_contract, artifactId: art_page_2, mimeType: image/png, page: 2"
+    );
+  });
+
+  it("leaves the oldest images out of a request once its image bytes pass the budget", async () => {
+    const twelveMiB = 12 * 1024 * 1024;
+    const f = await pageImageFixture("page-images-budget", { imageBytes: twelveMiB });
+
+    await f.runToEnd("Check pages one to three", [1, 2, 3]);
+
+    // Three images of 12 MiB are above the budget of 32 MiB; the two newest stay.
+    expect(f.imageSizes(1)).toEqual([twelveMiB, twelveMiB]);
+    const text = f.text(1);
+    expect(text).toContain("[Visual context not loaded:");
+    expect(text.slice(text.indexOf("[Visual context not loaded:"))).toContain("page: 1");
+    expect(text.match(/\[Visual context loaded\]/gu)).toHaveLength(2);
+  });
+
+  it("answers from a stored checkpoint whose later tool results held page images", async () => {
+    const f = await pageImageFixture("page-images-checkpoint", { compactOnToolCalls: true });
+
+    await f.runToEnd("Check page one", [1]);
+    await f.runToEnd("Go on", []);
+
+    expect(await f.storedContinuation()).toBeDefined();
+    expect(f.requests[2]?.continuation).toEqual(f.continuation);
+    expect(f.requests[2]?.messages.map((message) => message.role)).toEqual([
+      "system",
+      "assistant",
+      "tool",
+      "assistant",
+      "user"
+    ]);
+    expect(f.imageSizes(2)).toEqual([]);
+    expect(f.text(2)).toContain("fileId: file_contract, artifactId: art_page_1");
+  });
 });
 
 async function createConversationWithMessages(
@@ -3274,4 +3331,176 @@ async function rateLimitFixture(name: string) {
     usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
   });
   return fixture;
+}
+
+/**
+ * A runtime whose agent views document pages: each run first calls the page tool for the given
+ * pages and then answers. Requests to the model are recorded in order.
+ */
+async function pageImageFixture(
+  name: string,
+  options: { imageBytes?: number; compactOnToolCalls?: boolean } = {}
+) {
+  const clientInstanceId = asClientInstanceId(`${name}-client`);
+  const context: RuntimeCallContext = {
+    clientInstanceId,
+    correlationId: `corr-${name}`,
+    user: {
+      id: "user-1",
+      externalUserId: "user-1",
+      displayLabel: "User",
+      roles: ["user"],
+      permissionRefs: [],
+      clientInstanceId,
+      authSource: "test"
+    }
+  };
+  const store = (await createTestInstance()).stores;
+  const conversationId = await createConversationWithMessages(store, {
+    clientInstanceId,
+    messages: []
+  });
+  const providerConfig: ModelProviderConfig = {
+    id: "test-provider",
+    type: "openai-compatible",
+    api: "responses",
+    model: "test-model",
+    contextManagement: { compaction: { compactThresholdTokens: 270_000 } }
+  };
+  const continuation = {
+    providerId: providerConfig.id,
+    state: { compaction: { type: "compaction", encrypted_content: "opaque-checkpoint" } }
+  };
+  const requests: Parameters<ModelProvider["complete"]>[0][] = [];
+  let pagesToView: number[] = [];
+  let artifactReads = 0;
+  const runtime = new LocalAgentRuntime({
+    assetSource: createStaticConfigAssetSource({
+      agents: [
+        {
+          skillNames: [],
+          name: "page_agent",
+          displayName: "Page Agent",
+          instructions: "Help the user.",
+          modelProviderId: providerConfig.id,
+          toolNames: ["view_document_page"],
+          initialPrompts: []
+        }
+      ]
+    }),
+    modelProviders: [providerConfig],
+    defaultModelProvider: providerConfig,
+    conversationHistory: store.conversations,
+    modelProviderContinuationStore: store.conversations,
+    modelProvider: {
+      id: providerConfig.id,
+      async complete(request) {
+        // The runtime goes on appending to the list it passed, so keep what this request held.
+        requests.push({ ...request, messages: [...request.messages] });
+        const pages = pagesToView;
+        pagesToView = [];
+        if (pages.length === 0) {
+          return { text: "Done.", toolCalls: [], usage: noReportedUsage() };
+        }
+        return {
+          text: "",
+          toolCalls: pages.map((pageNumber) => ({
+            toolCallId: `call_${requests.length}_${pageNumber}`,
+            toolName: "view_document_page",
+            input: { fileId: "file_contract", pageNumber }
+          })),
+          ...(options.compactOnToolCalls
+            ? { continuation, contextManagement: { compacted: true } }
+            : {}),
+          usage: noReportedUsage()
+        };
+      }
+    },
+    toolRegistry: new ToolRegistry({
+      tools: [
+        defineTool({
+          name: "view_document_page",
+          description: "View a document page.",
+          inputSchema: z.object({ fileId: z.string(), pageNumber: z.number() }),
+          async execute() {
+            throw new Error("Tool registry execution should not be used by this test");
+          }
+        })
+      ]
+    }),
+    toolExecution: {
+      async authorize() {
+        return { status: "allowed" };
+      },
+      async execute(request) {
+        const pageNumber = z.object({ pageNumber: z.number() }).parse(request.input).pageNumber;
+        return {
+          status: "success",
+          output: { fileId: "file_contract", pageNumber },
+          artifacts: [
+            {
+              artifactId: asManagedArtifactId(`art_page_${pageNumber}`),
+              kind: "document.page_image",
+              mimeType: "image/png",
+              modelVisibility: { type: "image", mimeType: "image/png" },
+              metadata: { fileId: "file_contract", pageNumber }
+            }
+          ]
+        };
+      }
+    },
+    artifactReader: {
+      async readArtifact() {
+        artifactReads += 1;
+        return { bytes: new Uint8Array(options.imageBytes ?? 8), mimeType: "image/png" };
+      }
+    },
+    usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
+  });
+  const requestMessages = (index: number) => requests[index]?.messages ?? [];
+  return {
+    requests,
+    continuation,
+    artifactReads: () => artifactReads,
+    /** The byte sizes of the images of one recorded request, in order. */
+    imageSizes: (index: number) =>
+      requestMessages(index).flatMap((message) =>
+        modelContentImages(message.content).map((image) => image.data.byteLength)
+      ),
+    /** The text of every tool message of one recorded request. */
+    text: (index: number) =>
+      requestMessages(index)
+        .filter((message) => message.role === "tool")
+        .map((message) => modelContentText(message.content))
+        .join("\n"),
+    storedContinuation: () =>
+      store.conversations.getModelProviderContinuation({
+        clientInstanceId,
+        conversationId,
+        providerId: providerConfig.id
+      }),
+    async runToEnd(text: string, pages: number[]) {
+      pagesToView = pages;
+      const userMessage = await store.conversations.appendMessage({
+        clientInstanceId,
+        conversationId,
+        role: "user",
+        text
+      });
+      const run = await runtime.start(
+        {
+          agentName: "page_agent",
+          conversationId,
+          inputMessageId: userMessage.id,
+          message: { text }
+        },
+        context
+      );
+      for await (const event of runtime.observe(run.runId, context)) {
+        if (event.type === "run_failed") {
+          throw new Error("The run failed");
+        }
+      }
+    }
+  };
 }
