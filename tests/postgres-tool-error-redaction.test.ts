@@ -69,7 +69,6 @@ describe("tool handler error boundary on Postgres", () => {
           stack: expect.stringMatching(/^\s+at /u),
           database: {
             sqlState: "23503",
-            message: expect.stringContaining("violates foreign key constraint"),
             constraint: expect.stringContaining("execution_workspace_files_last_command_id"),
             table: "execution_workspace_files"
           }

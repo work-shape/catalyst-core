@@ -1,9 +1,11 @@
 import type { ToolExecutionContext, ToolExecutionRequest } from "@vivd-catalyst/core";
 
-/** What the log keeps of a database error: its own fields, without statement or parameters. */
+/**
+ * What the log keeps of a database error: its class and code and the names it reports. Its
+ * message is not kept, since the database quotes rejected values in it.
+ */
 interface ToolFailureDatabaseError {
   sqlState: string;
-  message: string;
   constraint?: string;
   table?: string;
 }
@@ -24,7 +26,7 @@ interface ToolFailureLogRecord {
  * wraps a database error in one whose message holds the statement and its parameter values,
  * and parameters hold user content. The record therefore takes no message from the thrown
  * error: its name, the frames of its stack and, where a database error is in its cause chain,
- * that error's SQLSTATE code, constraint, table and short message.
+ * that error's SQLSTATE code, constraint and table. No message text of any error is kept.
  */
 export function toolFailureLogRecord(
   error: unknown,
@@ -75,7 +77,6 @@ function findDatabaseError(error: unknown): ToolFailureDatabaseError | undefined
       const table = stringField(current, "table_name");
       return {
         sqlState,
-        message: current.message,
         ...(constraint ? { constraint } : {}),
         ...(table ? { table } : {})
       };
