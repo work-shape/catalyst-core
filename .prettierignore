@@ -7,3 +7,4 @@ packages/api-client/src/generated/**
 packages/api-contract/openapi.json
 packages/postgres-store/migrations/**
 skills-lock.json
+pnpm-lock.yaml

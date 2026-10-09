@@ -1,0 +1,29 @@
+{
+  "name": "@vivd-catalyst/quality-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./eslint.config.mjs",
+    "./baseline": "./baseline.mjs"
+  },
+  "bin": {
+    "catalyst-quality": "./check.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "eslint": "9.39.5",
+    "eslint-import-resolver-typescript": "4.4.5",
+    "eslint-plugin-import-x": "4.17.1",
+    "knip": "6.40.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1"
+  },
+  "devDependencies": {
+    "@types/estree": "^1.0.8",
+    "@types/node": "^24.0.0"
+  }
+}

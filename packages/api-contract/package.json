@@ -40,6 +40,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@vivd-catalyst/core": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

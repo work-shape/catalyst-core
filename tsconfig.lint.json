@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["packages", "clients", "tests", "e2e", "*.config.ts"],
+  "exclude": ["node_modules", "**/dist/**", "**/vendor/**", "**/generated/**", "**/migrations/**"],
+  "compilerOptions": {
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}

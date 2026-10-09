@@ -1,0 +1,999 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "target": "format",
+      "rule": "prettier",
+      "scope": "clients/demo",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "format",
+      "rule": "prettier",
+      "scope": "root",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/ban-ts-comment",
+      "scope": "tests",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-floating-promises",
+      "scope": "packages/chat-ui",
+      "count": 64,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-floating-promises",
+      "scope": "packages/client-assembly",
+      "count": 1,
+      "owner": "CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-floating-promises",
+      "scope": "packages/tool-execution",
+      "count": 2,
+      "owner": "EW-1"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-misused-promises",
+      "scope": "packages/chat-ui",
+      "count": 16,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-non-null-assertion",
+      "scope": "e2e",
+      "count": 2,
+      "owner": "CB-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-non-null-assertion",
+      "scope": "packages/config-cli",
+      "count": 20,
+      "owner": "PA-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-non-null-assertion",
+      "scope": "tests",
+      "count": 183,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unnecessary-type-assertion",
+      "scope": "packages/agent-runtime",
+      "count": 1,
+      "owner": "CB-7c"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unnecessary-type-assertion",
+      "scope": "packages/api-contract",
+      "count": 1,
+      "owner": "CB-4a"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unnecessary-type-assertion",
+      "scope": "packages/chat-ui",
+      "count": 14,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unnecessary-type-assertion",
+      "scope": "packages/client-assembly",
+      "count": 1,
+      "owner": "CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unnecessary-type-assertion",
+      "scope": "packages/core",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unnecessary-type-assertion",
+      "scope": "tests",
+      "count": 129,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "e2e",
+      "count": 10,
+      "owner": "CB-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/agent-runtime",
+      "count": 6,
+      "owner": "CB-7c"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/auth",
+      "count": 3,
+      "owner": "AP-1"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/chat-server",
+      "count": 33,
+      "owner": "CB-4d"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/chat-ui",
+      "count": 34,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/client-assembly",
+      "count": 2,
+      "owner": "CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/config-cli",
+      "count": 2,
+      "owner": "PA-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/core",
+      "count": 28,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/document-execution",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/model-provider",
+      "count": 4,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/postgres-store",
+      "count": 49,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/tool-execution",
+      "count": 5,
+      "owner": "EW-1"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "packages/web-access",
+      "count": 3,
+      "owner": "CS-2"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/no-unsafe-type-assertion",
+      "scope": "tests",
+      "count": 119,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "@typescript-eslint/return-await",
+      "scope": "packages/config-cli",
+      "count": 1,
+      "owner": "PA-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/console-boundary",
+      "scope": "clients/demo",
+      "count": 1,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/console-boundary",
+      "scope": "packages/agent-runtime",
+      "count": 3,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/console-boundary",
+      "scope": "packages/client-assembly",
+      "count": 6,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/console-boundary",
+      "scope": "packages/deployment-kit",
+      "count": 12,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/console-boundary",
+      "scope": "packages/postgres-store",
+      "count": 2,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/console-boundary",
+      "scope": "packages/tool-execution",
+      "count": 1,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/database-skip",
+      "scope": "tests",
+      "count": 10,
+      "owner": "CB-3b"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/env-boundary",
+      "scope": "packages/chat-ui",
+      "count": 2,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/env-boundary",
+      "scope": "packages/client-assembly",
+      "count": 7,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/env-boundary",
+      "scope": "packages/config-cli",
+      "count": 1,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/env-boundary",
+      "scope": "packages/deployment-kit",
+      "count": 3,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/env-boundary",
+      "scope": "packages/document-execution",
+      "count": 1,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/env-boundary",
+      "scope": "packages/tool-execution",
+      "count": 1,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/fetch-boundary",
+      "scope": "packages/chat-ui",
+      "count": 3,
+      "owner": "CB-6a, CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/fetch-boundary",
+      "scope": "packages/config-cli",
+      "count": 7,
+      "owner": "PA-3"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/fetch-boundary",
+      "scope": "packages/mail",
+      "count": 3,
+      "owner": "CB-6a, CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/fetch-boundary",
+      "scope": "packages/model-provider",
+      "count": 2,
+      "owner": "CB-6a, CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/memory-store",
+      "scope": "packages/client-assembly",
+      "count": 2,
+      "owner": "CB-3b"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/memory-store",
+      "scope": "packages/core",
+      "count": 1,
+      "owner": "CB-3b"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/memory-store",
+      "scope": "tests",
+      "count": 75,
+      "owner": "CB-3b"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/module-cycle",
+      "scope": "packages/chat-server",
+      "count": 1,
+      "owner": "CB-4d"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/module-cycle",
+      "scope": "packages/chat-ui",
+      "count": 1,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "catalyst/module-cycle",
+      "scope": "packages/core",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "eslint/inline-config",
+      "scope": "packages/chat-ui",
+      "count": 1,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "import-x/no-relative-packages",
+      "scope": "scripts",
+      "count": 3,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "import-x/no-relative-packages",
+      "scope": "tests",
+      "count": 219,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/dependencies",
+      "scope": "clients/demo",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/dependencies",
+      "scope": "packages/api-contract",
+      "count": 1,
+      "owner": "CB-4a"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/dependencies",
+      "scope": "packages/chat-server",
+      "count": 1,
+      "owner": "CB-4d"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/dependencies",
+      "scope": "packages/chat-standalone",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/devDependencies",
+      "scope": "clients/demo",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/devDependencies",
+      "scope": "packages/chat-standalone",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/devDependencies",
+      "scope": "packages/docs",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/devDependencies",
+      "scope": "root",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/duplicates",
+      "scope": "packages/api-contract",
+      "count": 2,
+      "owner": "CB-4a"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/duplicates",
+      "scope": "packages/data-source",
+      "count": 1,
+      "owner": "CS-5"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/exports",
+      "scope": "clients/demo",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/exports",
+      "scope": "packages/agent-runtime",
+      "count": 2,
+      "owner": "CB-7c"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/exports",
+      "scope": "packages/api-client",
+      "count": 18,
+      "owner": "CB-4b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/exports",
+      "scope": "packages/chat-server",
+      "count": 2,
+      "owner": "CB-4d"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/exports",
+      "scope": "packages/chat-ui",
+      "count": 16,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/exports",
+      "scope": "packages/model-provider",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/exports",
+      "scope": "packages/postgres-store",
+      "count": 2,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/files",
+      "scope": "packages/api-client",
+      "count": 1,
+      "owner": "CB-4b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/types",
+      "scope": "packages/agent-runtime",
+      "count": 1,
+      "owner": "CB-7c"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/types",
+      "scope": "packages/api-client",
+      "count": 105,
+      "owner": "CB-4b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/types",
+      "scope": "packages/chat-server",
+      "count": 2,
+      "owner": "CB-4d"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/types",
+      "scope": "packages/chat-ui",
+      "count": 26,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/types",
+      "scope": "packages/client-assembly",
+      "count": 3,
+      "owner": "CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/types",
+      "scope": "packages/model-provider",
+      "count": 2,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/types",
+      "scope": "packages/tool-execution",
+      "count": 1,
+      "owner": "EW-1"
+    },
+    {
+      "target": "lint",
+      "rule": "knip/unlisted",
+      "scope": "tests",
+      "count": 63,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "e2e/chat-standalone.spec.ts",
+      "count": 1,
+      "owner": "CB-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/agent-runtime/src/local-agent-runtime.ts",
+      "count": 1,
+      "owner": "CB-7c"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-server/src/collaboration-workspace-workflow.ts",
+      "count": 1,
+      "owner": "AP-3"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-server/src/config-asset-workflow.ts",
+      "count": 1,
+      "owner": "PA-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-server/src/conversation-workflow.ts",
+      "count": 1,
+      "owner": "CB-9"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/approvals/approval-request-card.tsx",
+      "count": 1,
+      "owner": "EW-1"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/assistant/assistant-message.tsx",
+      "count": 1,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/assistant/assistant-ui-adapter.ts",
+      "count": 1,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-settings-dialog.tsx",
+      "count": 1,
+      "owner": "AP-3"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/control-plane/config-asset-editors.tsx",
+      "count": 1,
+      "owner": "PA-1a"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/i18n.tsx",
+      "count": 1,
+      "owner": "CB-8a"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/tool-call.tsx",
+      "count": 1,
+      "owner": "G-5c"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/chat-ui/src/workspace/workspace-chat-model.ts",
+      "count": 1,
+      "owner": "NL-1"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/config-cli/src/commands.ts",
+      "count": 1,
+      "owner": "PA-1b"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/config-schema/src/schemas.ts",
+      "count": 1,
+      "owner": "MD-1"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/core/src/testing-in-memory-file-store.ts",
+      "count": 1,
+      "owner": "CB-3b"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/core/src/testing.ts",
+      "count": 1,
+      "owner": "CB-3b"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/postgres-store/src/index.ts",
+      "count": 1,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
+      "count": 1,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/postgres-store/src/postgres-file-store.ts",
+      "count": 1,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/postgres-store/src/schema.ts",
+      "count": 1,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/tool-execution/src/workspace-command-runner.ts",
+      "count": 1,
+      "owner": "CB-10a"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/tool-execution/src/workspace-tools.ts",
+      "count": 1,
+      "owner": "EW-1"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "packages/usage-governance/src/index.ts",
+      "count": 1,
+      "owner": "LU-1"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/agent-runtime.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/api-contract-client.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/artifact-preview-worker.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/chat-server-agent-runs.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/chat-server-collaboration-workspaces.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/chat-server-retention.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/chat-server-users.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/chat-ui-approval-requests.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/chat-ui-collaboration-workspace-dialogs.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/chat-ui-tool-projection.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/client-assembly-workspace-source-attachments.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/config-asset-routes.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/config-cli.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/conversation-resources.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/model-provider.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/workspace-command-runner.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/workspace-preview-images.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "lint",
+      "rule": "max-lines",
+      "scope": "tests/workspace-tools.test.ts",
+      "count": 1,
+      "owner": "CB-2"
+    },
+    {
+      "target": "types:packages",
+      "rule": "typescript/unused",
+      "scope": "clients/demo",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "types:packages",
+      "rule": "typescript/unused",
+      "scope": "packages/agent-runtime",
+      "count": 1,
+      "owner": "CB-7c"
+    },
+    {
+      "target": "types:packages",
+      "rule": "typescript/unused",
+      "scope": "packages/chat-server",
+      "count": 2,
+      "owner": "CB-4d"
+    },
+    {
+      "target": "types:packages",
+      "rule": "typescript/unused",
+      "scope": "packages/chat-ui",
+      "count": 5,
+      "owner": "G-5c"
+    },
+    {
+      "target": "types:packages",
+      "rule": "typescript/unused",
+      "scope": "packages/client-assembly",
+      "count": 1,
+      "owner": "CB-10a"
+    },
+    {
+      "target": "types:packages",
+      "rule": "typescript/unused",
+      "scope": "packages/postgres-store",
+      "count": 2,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "types:packages",
+      "rule": "typescript/unused",
+      "scope": "packages/tool-execution",
+      "count": 3,
+      "owner": "EW-1"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/test-errors",
+      "scope": "packages/chat-ui",
+      "count": 1,
+      "owner": "CB-2b"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/test-errors",
+      "scope": "tests",
+      "count": 215,
+      "owner": "CB-2b"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "clients/demo",
+      "count": 1,
+      "owner": "CB-8b"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "packages/agent-runtime",
+      "count": 1,
+      "owner": "CB-7c"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "packages/chat-server",
+      "count": 2,
+      "owner": "CB-4d"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "packages/chat-ui",
+      "count": 5,
+      "owner": "G-5c"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "packages/client-assembly",
+      "count": 1,
+      "owner": "CB-10a"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "packages/postgres-store",
+      "count": 2,
+      "owner": "CB-3a"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "packages/tool-execution",
+      "count": 3,
+      "owner": "EW-1"
+    },
+    {
+      "target": "types:tests",
+      "rule": "typescript/unused",
+      "scope": "tests",
+      "count": 3,
+      "owner": "CB-2"
+    }
+  ]
+}

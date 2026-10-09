@@ -1,0 +1,73 @@
+{
+  "@vivd-catalyst/agent-runtime": ["@vivd-catalyst/core", "@vivd-catalyst/model-provider"],
+  "@vivd-catalyst/api-client": ["@vivd-catalyst/api-contract"],
+  "@vivd-catalyst/api-contract": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/auth": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/capability-sdk": [
+    "@vivd-catalyst/core",
+    "@vivd-catalyst/data-source",
+    "@vivd-catalyst/tool-sdk"
+  ],
+  "@vivd-catalyst/chat-server": [
+    "@vivd-catalyst/api-contract",
+    "@vivd-catalyst/auth",
+    "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/core",
+    "@vivd-catalyst/mail",
+    "@vivd-catalyst/model-provider",
+    "@vivd-catalyst/usage-governance"
+  ],
+  "@vivd-catalyst/chat-standalone": ["@vivd-catalyst/chat-ui"],
+  "@vivd-catalyst/chat-ui": [
+    "@vivd-catalyst/api-client",
+    "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/core"
+  ],
+  "@vivd-catalyst/chat-widget": ["@vivd-catalyst/chat-ui"],
+  "@vivd-catalyst/client-assembly": [
+    "@vivd-catalyst/agent-runtime",
+    "@vivd-catalyst/auth",
+    "@vivd-catalyst/capability-sdk",
+    "@vivd-catalyst/chat-server",
+    "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/core",
+    "@vivd-catalyst/data-source",
+    "@vivd-catalyst/mail",
+    "@vivd-catalyst/model-provider",
+    "@vivd-catalyst/postgres-store",
+    "@vivd-catalyst/tool-execution",
+    "@vivd-catalyst/tool-sdk",
+    "@vivd-catalyst/usage-governance",
+    "@vivd-catalyst/web-access"
+  ],
+  "@vivd-catalyst/config-cli": [
+    "@vivd-catalyst/api-client",
+    "@vivd-catalyst/api-contract",
+    "@vivd-catalyst/config-schema"
+  ],
+  "@vivd-catalyst/config-schema": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/core": [],
+  "@vivd-catalyst/data-source": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
+  "@vivd-catalyst/deployment-kit": [],
+  "@vivd-catalyst/docs": [],
+  "@vivd-catalyst/document-execution": [],
+  "@vivd-catalyst/mail": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/model-provider": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/postgres-store": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/quality-config": [],
+  "@vivd-solutions/registry-canary": [],
+  "@vivd-catalyst/tool-execution": [
+    "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/core",
+    "@vivd-catalyst/document-execution",
+    "@vivd-catalyst/tool-sdk"
+  ],
+  "@vivd-catalyst/tool-sdk": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/usage-governance": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/web-access": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
+  "@vivd-catalyst/demo": [
+    "@vivd-catalyst/chat-ui",
+    "@vivd-catalyst/client-assembly",
+    "@vivd-catalyst/tool-sdk"
+  ]
+}

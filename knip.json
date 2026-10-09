@@ -1,0 +1,66 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    "packages/*": {
+      "entry": [
+        "src/index.{ts,tsx}",
+        "src/{shell,admin}.tsx",
+        "src/vite.js",
+        "src/testing.ts",
+        "scripts/**/*.{ts,mjs,js}",
+        "*.config.{ts,js,mjs}"
+      ],
+      "project": ["src/**/*.{ts,tsx,js}", "scripts/**/*.{ts,mjs,js}", "*.{ts,js,mjs}"],
+      "vite": false
+    },
+    "packages/quality-config": {
+      "entry": ["check.mjs", "eslint.config.mjs", "baseline.mjs"],
+      "project": ["*.mjs"],
+      "vite": false
+    },
+    "packages/deployment-kit": {
+      "entry": ["{dev,verify}/*.mjs"],
+      "project": ["{dev,verify}/**/*.mjs"],
+      "vite": false
+    },
+    "clients/*": {
+      "entry": [
+        "src/chat-main.tsx",
+        "src/server.ts",
+        "src/seed-auth.ts",
+        "src/*worker*.ts",
+        "*.config.{ts,js,mjs}"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "widgets/**/*.{ts,tsx}",
+        "tools/**/*.ts",
+        "*.config.{ts,js,mjs}"
+      ],
+      "vite": false
+    },
+    "packages/chat-standalone": {
+      "entry": ["src/main.tsx", "vite.config.ts"],
+      "project": ["src/**/*.{ts,tsx}", "vite.config.ts"],
+      "vite": false
+    },
+    ".": {
+      "entry": [
+        "tests/**/*.test.ts",
+        "e2e/**/*.ts",
+        "scripts/**/*.mjs",
+        "*.config.ts",
+        "eslint.config.mjs"
+      ],
+      "project": [
+        "tests/**/*.ts",
+        "e2e/**/*.ts",
+        "scripts/**/*.mjs",
+        "*.config.ts",
+        "eslint.config.mjs"
+      ],
+      "vite": false
+    }
+  },
+  "vite": false
+}
