@@ -27,7 +27,7 @@ import { Tabs, TabsContent, TabsLink, TabsList, TabsNav, TabsTrigger } from "../
 import { Page } from "../structure/page";
 import { Section } from "../structure/section";
 import { Samples, type GalleryGroup } from "./entry";
-import { AvatarPlaceholder } from "./placeholders";
+import { Avatar } from "../status/avatar";
 import type { GalleryText } from "./text";
 
 /** A link of the gallery: it changes what a sample shows and leaves the address alone. */
@@ -146,7 +146,7 @@ function SidebarSampleHeader({
   }
   return (
     <div className="flex min-w-0 items-center gap-2 pl-2">
-      <AvatarPlaceholder kind="thing">{text.navWorkspaceInitials}</AvatarPlaceholder>
+      <Avatar kind="workspace" size="sm" name={text.navWorkspace} />
       <span className="min-w-0 flex-1 truncate text-label">{text.navWorkspace}</span>
       {toggle}
     </div>
@@ -165,14 +165,14 @@ function SidebarSampleFooter({ text }: { text: GalleryText }) {
       <div className="grid justify-items-center gap-1">
         {settings}
         <span className="grid size-8 place-items-center">
-          <AvatarPlaceholder kind="person">{text.navAccountInitials}</AvatarPlaceholder>
+          <Avatar kind="person" size="sm" name={text.navAccount} />
         </span>
       </div>
     );
   }
   return (
     <div className="flex min-w-0 items-center gap-2 pl-2">
-      <AvatarPlaceholder kind="person">{text.navAccountInitials}</AvatarPlaceholder>
+      <Avatar kind="person" size="sm" name={text.navAccount} />
       <span className="min-w-0 flex-1 truncate text-body">{text.navAccount}</span>
       {settings}
     </div>

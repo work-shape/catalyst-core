@@ -11,7 +11,8 @@ import { Select } from "../forms/select";
 import { Badge } from "../status/badge";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
 import { Samples, type GalleryGroup } from "./entry";
-import { AvatarPlaceholder, EmptyStatePlaceholder } from "./placeholders";
+import { EmptyState } from "../feedback/empty-state";
+import { Avatar } from "../status/avatar";
 import type { GalleryText } from "./text";
 
 const rowSizes: readonly ListRowSize[] = ["default", "compact"];
@@ -34,13 +35,12 @@ function ListRowSamples({ text }: { text: GalleryText }) {
   const [selected, setSelected] = useState("agent");
   return (
     <>
-      <p className="text-caption text-muted-foreground">{text.placeholderNote}</p>
       {rowSizes.map((size) => (
         <Samples key={size} label={rowSizeLabel(size, text)}>
           <List className="w-full" aria-label={text.rowListLabel}>
             <ListRow
               size={size}
-              leading={<AvatarPlaceholder kind="thing">{text.rowAgentInitials}</AvatarPlaceholder>}
+              leading={<Avatar kind="agent" size="sm" name={text.rowAgent} />}
               title={text.rowAgent}
               description={size === "default" ? text.rowAgentStatus : undefined}
               chips={<Badge size="sm">{text.rowScopeInstance}</Badge>}
@@ -49,9 +49,7 @@ function ListRowSamples({ text }: { text: GalleryText }) {
             />
             <ListRow
               size={size}
-              leading={
-                <AvatarPlaceholder kind="person">{text.rowPersonInitials}</AvatarPlaceholder>
-              }
+              leading={<Avatar kind="person" size="sm" name={text.rowPerson} />}
               title={text.rowPerson}
               description={size === "default" ? text.rowPersonStatus : undefined}
               time={text.yesterday}
@@ -65,9 +63,7 @@ function ListRowSamples({ text }: { text: GalleryText }) {
         <List className="w-full" aria-label={text.rowListLabel}>
           <ListRow
             link={<a href="#" onClick={(event) => event.preventDefault()} />}
-            leading={
-              <AvatarPlaceholder kind="thing">{text.rowKnowledgeInitials}</AvatarPlaceholder>
-            }
+            leading={<Avatar kind="app" size="sm" name={text.rowKnowledge} />}
             title={text.rowKnowledge}
             description={text.rowKnowledgeStatus}
             time={text.yesterday}
@@ -79,23 +75,21 @@ function ListRowSamples({ text }: { text: GalleryText }) {
         <List className="w-full" aria-label={text.rowListLabel}>
           <ListRow
             selected={selected === "agent"}
-            leading={<AvatarPlaceholder kind="thing">{text.rowAgentInitials}</AvatarPlaceholder>}
+            leading={<Avatar kind="agent" size="sm" name={text.rowAgent} />}
             title={text.rowAgent}
             description={text.rowAgentStatus}
             onClick={() => setSelected("agent")}
           />
           <ListRow
             selected={selected === "workflow"}
-            leading={<AvatarPlaceholder kind="thing">{text.rowWorkflowInitials}</AvatarPlaceholder>}
+            leading={<Avatar kind="agent" size="sm" name={text.rowWorkflow} />}
             title={text.rowWorkflow}
             description={text.rowWorkflowStatus}
             onClick={() => setSelected("workflow")}
           />
           <ListRow
             disabled
-            leading={
-              <AvatarPlaceholder kind="thing">{text.rowKnowledgeInitials}</AvatarPlaceholder>
-            }
+            leading={<Avatar kind="app" size="sm" name={text.rowKnowledge} />}
             title={text.rowKnowledge}
             description={text.disabled}
             onClick={() => setSelected("knowledge")}
@@ -136,13 +130,13 @@ function AssetTable({ text }: { text: GalleryText }) {
         <TableRow>
           <TableCell>
             <span className="flex items-center gap-2">
-              <AvatarPlaceholder kind="thing">{text.rowAgentInitials}</AvatarPlaceholder>
+              <Avatar kind="agent" size="sm" name={text.rowAgent} />
               {text.rowAgent}
             </span>
           </TableCell>
           <TableCell>
             <span className="flex items-center gap-2">
-              <AvatarPlaceholder kind="person">{text.rowPersonInitials}</AvatarPlaceholder>
+              <Avatar kind="person" size="sm" name={text.rowPerson} />
               {text.rowPerson}
             </span>
           </TableCell>
@@ -154,13 +148,13 @@ function AssetTable({ text }: { text: GalleryText }) {
         <TableRow>
           <TableCell>
             <span className="flex items-center gap-2">
-              <AvatarPlaceholder kind="thing">{text.rowWorkflowInitials}</AvatarPlaceholder>
+              <Avatar kind="agent" size="sm" name={text.rowWorkflow} />
               {text.rowWorkflow}
             </span>
           </TableCell>
           <TableCell>
             <span className="flex items-center gap-2">
-              <AvatarPlaceholder kind="person">{text.rowPersonInitials}</AvatarPlaceholder>
+              <Avatar kind="person" size="sm" name={text.rowPerson} />
               {text.rowPerson}
             </span>
           </TableCell>
@@ -172,13 +166,13 @@ function AssetTable({ text }: { text: GalleryText }) {
         <TableRow>
           <TableCell>
             <span className="flex items-center gap-2">
-              <AvatarPlaceholder kind="thing">{text.rowKnowledgeInitials}</AvatarPlaceholder>
+              <Avatar kind="app" size="sm" name={text.rowKnowledge} />
               {text.rowKnowledge}
             </span>
           </TableCell>
           <TableCell>
             <span className="flex items-center gap-2">
-              <AvatarPlaceholder kind="person">{text.rowPersonInitials}</AvatarPlaceholder>
+              <Avatar kind="person" size="sm" name={text.rowPerson} />
               {text.rowPerson}
             </span>
           </TableCell>
@@ -210,7 +204,6 @@ function FilterBarSamples({ text }: { text: GalleryText }) {
   );
   return (
     <>
-      <p className="text-caption text-muted-foreground">{text.placeholderNote}</p>
       <div className="grid gap-4" data-gallery-sample="filter-table">
         <FilterBar
           search={search}
@@ -222,15 +215,16 @@ function FilterBarSamples({ text }: { text: GalleryText }) {
       </div>
       <div className="grid gap-4" data-gallery-sample="filter-empty">
         <FilterBar search={search} filters={filters} count={text.filterNoResults} />
-        <EmptyStatePlaceholder
+        <EmptyState
           icon={<SearchX aria-hidden="true" />}
-          sentence={text.filterEmpty}
           action={
             <Button variant="outline" size="sm">
               {text.filterClear}
             </Button>
           }
-        />
+        >
+          {text.filterEmpty}
+        </EmptyState>
       </div>
     </>
   );
