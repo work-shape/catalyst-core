@@ -1,4 +1,8 @@
-import { contractPathFixtures, openApiJsonOperation } from "./support/operations";
+import {
+  contractPathFixtures,
+  openApiJsonOperation,
+  registeredTestOperations
+} from "./support/operations";
 import { required } from "./support/assertions";
 import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, expectTypeOf, it } from "vitest";
@@ -13,11 +17,14 @@ import {
 import {
   ApiError,
   createApiClient,
+  createApiClientFor,
   listAll,
   type AdministeredUser,
   type ApiClientOptions,
   type ConversationThreadSnapshot,
   type OperationInput,
+  type OperationOutcome,
+  type OperationRunResource,
   type RunObservation
 } from "@vivd-catalyst/api-client";
 
@@ -711,6 +718,131 @@ describe("api client derived from the operation catalog", () => {
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     await expect(pending).rejects.not.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("api client for operations of the registry", () => {
+  const run: OperationRunResource = {
+    id: "oprun_1",
+    operation: "testRunChange",
+    effect: "changing",
+    status: "pending_approval",
+    actor: { kind: "user", id: "usr_1", label: "One" },
+    origin: { kind: "user" },
+    approvalRequestId: "apr_1",
+    inputHash: "a".repeat(64),
+    attempt: 1,
+    correlationId: "corr_1",
+    createdAt,
+    expiresAt: createdAt,
+    href: "/runs/oprun_1"
+  };
+  function registryClient(answer: (request: Request) => Response) {
+    const requests: Request[] = [];
+    const client = createApiClientFor(registeredTestOperations, {
+      baseUrl: "https://chat.example/",
+      fetchImpl: (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        return Promise.resolve(answer(request));
+      }
+    });
+    return { client, requests };
+  }
+
+  it("types a changing call as its outcome and a reading call as its output", () => {
+    const { client } = registryClient(() => Response.json({}));
+    expectTypeOf(client.testRunChange).returns.resolves.toEqualTypeOf<
+      OperationOutcome<{ name: string; filler?: string | undefined }, OperationRunResource>
+    >();
+    expectTypeOf(client.testRunRead).returns.resolves.toEqualTypeOf<{
+      itemId: string;
+      view?: string | undefined;
+    }>();
+    expectTypeOf(client.testRunChange).parameter(0).toHaveProperty("idempotencyKey");
+    expectTypeOf(client.testRunRead).parameter(0).not.toHaveProperty("idempotencyKey");
+    // The release's own client keeps the type it had.
+    expectTypeOf(createApiClient).returns.toEqualTypeOf<
+      ReturnType<typeof createApiClientFor<typeof apiOperations>>
+    >();
+  });
+
+  it("answers the output of a completed call with the run that recorded it", async () => {
+    const { client } = registryClient(() =>
+      Response.json({ name: "one" }, { headers: { "operation-run-id": "oprun_1" } })
+    );
+    await expect(client.testRunChange({ body: { name: "one" } })).resolves.toEqual({
+      status: "done",
+      output: { name: "one" },
+      operationRunId: "oprun_1",
+      replayed: false
+    });
+  });
+
+  it("answers a waiting call as pending, with its run and where to read it", async () => {
+    const { client } = registryClient(() =>
+      Response.json(run, {
+        status: 202,
+        headers: {
+          "operation-run-id": run.id,
+          location: run.href,
+          "idempotent-replayed": "true"
+        }
+      })
+    );
+    const outcome = await client.testRunChange({ body: { name: "one" } });
+    expect(outcome).toEqual({
+      status: "pending_approval",
+      run,
+      location: run.href,
+      operationRunId: run.id,
+      replayed: true
+    });
+    // The 202 body is the run and is checked against the run's schema, not the output's.
+    const wrong = registryClient(() => Response.json({ name: "one" }, { status: 202 }));
+    await expect(wrong.client.testRunChange({ body: { name: "one" } })).rejects.toThrow(
+      "API response does not match the contract"
+    );
+  });
+
+  it("throws a refusal as an ApiError with its code, as for every operation", async () => {
+    const { client } = registryClient(() =>
+      Response.json(
+        {
+          error: {
+            code: "POLICY_DENIED",
+            message: "Refused",
+            correlationId: "corr_1",
+            details: { operation: "testRunChange" }
+          }
+        },
+        { status: 403 }
+      )
+    );
+    const refusal = await client.testRunChange({ body: { name: "one" } }).catch((error) => error);
+    expect(refusal).toBeInstanceOf(ApiError);
+    expect(refusal).toMatchObject({ status: 403, code: "POLICY_DENIED" });
+  });
+
+  it("sends a new Idempotency-Key with every changing call unless the caller names one", async () => {
+    const { client, requests } = registryClient((request) =>
+      Response.json(request.method === "POST" ? { name: "one" } : { itemId: "i" })
+    );
+    await client.testRunChange({ body: { name: "one" } });
+    await client.testRunChange({ body: { name: "one" } });
+    await client.testRunChange({ body: { name: "one" }, idempotencyKey: "mine" });
+    await client.testRunRead({ params: { itemId: "i" } });
+
+    const keys = requests.map((request) => request.headers.get("idempotency-key"));
+    expect(keys[0]).toMatch(/^[0-9a-f]{32}$/u);
+    expect(keys[1]).toMatch(/^[0-9a-f]{32}$/u);
+    expect(keys[1]).not.toBe(keys[0]);
+    expect(keys.slice(2)).toEqual(["mine", null]);
+
+    // An operation that takes no key gets none, also from the release's own client.
+    const released = recordingClient(() => Response.json({ items: [] }));
+    await released.client.conversations.list();
+    expect(released.requests[0]?.headers.get("idempotency-key")).toBeNull();
   });
 });
 

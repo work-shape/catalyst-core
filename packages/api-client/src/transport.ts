@@ -29,6 +29,7 @@ export interface OperationRequest {
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;
   file?: Blob;
+  idempotencyKey?: string;
   signal?: AbortSignal;
   onCaughtUp?: () => void;
 }
@@ -66,6 +67,9 @@ export function createApiTransport(options: ApiClientOptions) {
         headers.set("content-type", "application/json");
         body = JSON.stringify(operation.body.parse(request.body));
       }
+      if (operation.headers?.request?.includes("Idempotency-Key")) {
+        headers.set("idempotency-key", request.idempotencyKey ?? createIdempotencyKey());
+      }
       const token = await options.getToken?.();
       if (token) {
         headers.set("authorization", `Bearer ${token}`);
@@ -93,6 +97,12 @@ export function createApiTransport(options: ApiClientOptions) {
       throw refusal;
     }
   };
+}
+
+/** A key no other call has: 128 random bits, from the source every runtime of the client has. */
+function createIdempotencyKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export type ApiTransport = ReturnType<typeof createApiTransport>;
