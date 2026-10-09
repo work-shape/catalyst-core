@@ -12581,17 +12581,6 @@
                   "enabled"
                 ]
               },
-              "collaborationWorkspaces": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "enabled"
-                ]
-              },
               "configAssets": {
                 "type": "object",
                 "properties": {
@@ -12668,7 +12657,6 @@
             "required": [
               "attachments",
               "resources",
-              "collaborationWorkspaces",
               "configAssets",
               "userInvitations"
             ]
