@@ -4,6 +4,7 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
+  ProviderRegistry,
   type Logger,
   type ModelProviderConfig,
   type ModelUsageEventInput
@@ -11,8 +12,10 @@ import {
 import {
   MODEL_PROVIDER_MESSAGE_MAX_CHARS,
   ModelProviderError,
+  createInstanceModelGateway,
   createModelGateway,
   isModelProviderContinuationRejected,
+  modelProviderDefinitions,
   type ModelAdapter,
   type ModelAdapterRequest,
   type ModelCall,
@@ -22,6 +25,7 @@ import {
   type ModelCompletion,
   type ModelCompletionStreamEvent
 } from "@vivd-catalyst/model-provider";
+import { createFakeSecrets } from "./support/fixtures";
 import { ALL_MODEL_CAPABILITIES } from "./support/model-gateway";
 
 const provider: ModelProviderConfig = {
@@ -33,6 +37,7 @@ const provider: ModelProviderConfig = {
 const clientInstanceId = asClientInstanceId("gateway-test");
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -337,6 +342,76 @@ describe("model gateway", () => {
     });
     expect(f.requests).toHaveLength(1);
     expect(f.recorded).toHaveLength(1);
+  });
+
+  // Without the gateway's check of the caller's signal this fails: the transport reports the cut
+  // response body as a lost connection, which was logged as a provider's error and thrown.
+  it("treats a stream stopped with a plain reason as a stop, through the real adapter", async () => {
+    const stop = new AbortController();
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const signal = init?.signal;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode('data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n')
+            );
+            // As the platform's fetch does: the body fails with the reason the caller gave.
+            signal?.addEventListener("abort", () => controller.error(signal.reason), {
+              once: true
+            });
+          }
+        }),
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logged: unknown[] = [];
+    const logger: Logger = {
+      debug() {},
+      info() {},
+      warn: (input) => void logged.push(input),
+      error: (input) => void logged.push(input),
+      child: () => logger
+    };
+    const recorded: ModelUsageEventInput[] = [];
+    const gateway = await createInstanceModelGateway({
+      registry: new ProviderRegistry(modelProviderDefinitions),
+      providers: [{ id: "main", type: "openai-compatible", model: "test-model" }],
+      entries: {
+        main: {
+          provider: "openai-compatible",
+          region: "eu",
+          model: "test-model",
+          baseUrl: "https://models.example.test/v1",
+          credentialSecret: "MODEL_KEY"
+        }
+      },
+      context: { logger, secrets: createFakeSecrets({ MODEL_KEY: "model-key-value" }) },
+      bindings: [],
+      governance: {
+        runModelCall: (_admission, execute) => execute(),
+        async recordModelUsage(input) {
+          recorded.push(input);
+        }
+      }
+    });
+    const seen: ModelCallStreamEvent[] = [];
+
+    const error: unknown = await (async () => {
+      for await (const event of gateway.stream(call({ signal: stop.signal }))) {
+        seen.push(event);
+        stop.abort("Agent run was cancelled");
+      }
+    })().catch((thrown: unknown) => thrown);
+
+    expect(seen).toEqual([{ type: "text_delta", delta: "Hel" }]);
+    expect(error).not.toBeInstanceOf(ModelProviderError);
+    expect(error).toMatchObject({ name: "AbortError", message: "Agent run was cancelled" });
+    expect(logged).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(recorded).toEqual([expect.objectContaining({ totalTokens: 0 })]);
   });
 
   it("clears the wait and fails when the call is stopped while it waits", async () => {

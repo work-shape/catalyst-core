@@ -29,6 +29,7 @@ const verdictSchema = z
 export interface ApprovalCheckRunnerOptions {
   clientInstanceId: ClientInstanceId;
   config: ClientInstanceConfig;
+  // Part 2 of CB-6a (S3-08): the check calls `gateway.complete` with system attribution instead.
   modelProvider: UnsettledModelCompletion;
   usageGovernance: Pick<ModelUsageGovernance, "runModelCall" | "recordModelUsage">;
 }

@@ -228,6 +228,11 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         }
         return;
       } catch (thrown) {
+        if (call.signal?.aborted) {
+          // A stopped call is a stop, whatever the adapter made of the cut connection: it is
+          // neither logged as a provider's error nor sent again.
+          throw stopOf(call.signal, thrown);
+        }
         const error = normalizeModelAdapterError(thrown);
         if (error instanceof ModelProviderError) {
           logProviderError(error, target, call.attribution);
@@ -420,4 +425,22 @@ async function holdAdmission(
       await held;
     }
   };
+}
+
+/**
+ * What a stopped call throws: the adapter's own abort where it threw one, else the reason the
+ * caller stopped with, as an abort.
+ */
+function stopOf(signal: AbortSignal, thrown: unknown): unknown {
+  if (!(thrown instanceof ModelProviderError)) {
+    return thrown;
+  }
+  const reason: unknown = signal.reason;
+  if (reason instanceof Error) {
+    return reason;
+  }
+  return new DOMException(
+    typeof reason === "string" ? reason : "The model call was stopped",
+    "AbortError"
+  );
 }
