@@ -65,6 +65,10 @@ contain breaking changes; a patch version does not.
   failure names the limit. A preview embedded in a message is read up to 500 pages (was 200),
   the same ceiling the preview worker uses, exported as `ARTIFACT_PREVIEW_MAX_PAGES` from
   `@vivd-catalyst/core`. A Mailjet send may take 30 s (was 10 s).
+  A provider's `Retry-After` replaces the fixed wait up to 60 s; a longer one fails the run at
+  once, and no attempt or wait starts past a run's deadline. The preview renderer version is
+  `preview-contract-v2`, so every stored preview, including sheets that failed under the old
+  cell limit, is rendered once more the next time it is opened.
 - **API contract (breaking):** `@vivd-catalyst/api-contract` no longer exports the constant
   `openApiDocument`; call `createOpenApiDocument()`. `createOpenApiDocumentFromOperations`
   takes the operations alone: title and version are those of the release. An operation that
