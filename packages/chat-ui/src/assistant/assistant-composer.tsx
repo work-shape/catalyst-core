@@ -9,6 +9,7 @@ import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
 import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../i18n";
+import type { SendBlock } from "./send-block";
 import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
 
 export interface LocalUploadingAttachment {
@@ -22,7 +23,8 @@ export interface LocalUploadingAttachment {
 export function AssistantComposer({
   attachments,
   localUploadingAttachments,
-  sendBlockedReason,
+  sendBlock,
+  sendQueued,
   conversationRunning,
   optimisticPending,
   attachmentsEnabled,
@@ -39,11 +41,14 @@ export function AssistantComposer({
   onFilesSelected,
   onRemoveAttachment,
   onRetryAttachment,
+  onQueueSend,
   onSubmitMessage
 }: {
   attachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
-  sendBlockedReason?: string;
+  sendBlock?: SendBlock;
+  /** A send is waiting for a loading block to lift. */
+  sendQueued: boolean;
   conversationRunning?: boolean;
   optimisticPending?: boolean;
   attachmentsEnabled: boolean;
@@ -66,6 +71,8 @@ export function AssistantComposer({
   onFilesSelected: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onRetryAttachment: (attachmentId: string) => void;
+  /** Remembers a send asked for during a loading block; it goes out once the block lifts. */
+  onQueueSend: (text: string) => void;
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
@@ -78,8 +85,13 @@ export function AssistantComposer({
   const composerLayoutAnimationsRef = useRef<Animation[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasAttachments = attachments.length > 0 || localUploadingAttachments.length > 0;
-  const submitBlocked = Boolean(sendBlockedReason);
+  const submitBlocked = Boolean(sendBlock);
   const [composerExpanded, setComposerExpanded] = useState(false);
+  const queueSend = useCallback(() => {
+    if (shouldQueueSend({ sendBlock, sendQueued, text: currentText })) {
+      onQueueSend(currentText);
+    }
+  }, [currentText, onQueueSend, sendBlock, sendQueued]);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       if (submitBlocked) {
@@ -109,6 +121,7 @@ export function AssistantComposer({
 
       if (submitBlocked) {
         event.preventDefault();
+        queueSend();
         return;
       }
       if (!onSubmitMessage) {
@@ -118,7 +131,7 @@ export function AssistantComposer({
       event.preventDefault();
       onSubmitMessage(currentText);
     },
-    [currentText, onSubmitMessage, submitBlocked]
+    [currentText, onSubmitMessage, queueSend, submitBlocked]
   );
 
   useLayoutEffect(() => {
@@ -319,12 +332,13 @@ export function AssistantComposer({
               onSelectReasoningEffort={onSelectReasoningEffort}
             />
             <ComposerAction
-              disabled={Boolean(sendBlockedReason)}
-              disabledReason={sendBlockedReason}
+              sendBlock={sendBlock}
+              sendQueued={sendQueued}
               conversationRunning={conversationRunning}
               optimisticPending={optimisticPending}
               currentText={currentText}
               onCancelRun={onCancelRun}
+              onQueueSend={queueSend}
               onSubmitMessage={onSubmitMessage}
             />
           </div>
@@ -577,21 +591,32 @@ function attachmentStatusLabel(
   }
 }
 
+/** A send waits only for a loading block, needs text, and is remembered once. */
+export function shouldQueueSend(input: {
+  sendBlock: SendBlock | undefined;
+  sendQueued: boolean;
+  text: string;
+}): boolean {
+  return Boolean(input.sendBlock?.loading) && !input.sendQueued && input.text.trim().length > 0;
+}
+
 function ComposerAction({
-  disabled,
-  disabledReason,
+  sendBlock,
+  sendQueued,
   conversationRunning,
   optimisticPending,
   currentText,
   onCancelRun,
+  onQueueSend,
   onSubmitMessage
 }: {
-  disabled: boolean;
-  disabledReason?: string;
+  sendBlock: SendBlock | undefined;
+  sendQueued: boolean;
   conversationRunning?: boolean;
   optimisticPending?: boolean;
   currentText: string;
   onCancelRun: () => void;
+  onQueueSend: () => void;
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
@@ -603,9 +628,13 @@ function ComposerAction({
     threadRunning
   });
   const effectiveDisabledReason =
-    disabledReason ?? (activeRunBlocked ? t("conversationStillRunning") : undefined);
-  const sendDisabled =
-    disabled || activeRunBlocked || Boolean(onSubmitMessage && currentText.trim().length === 0);
+    sendBlock?.reason ?? (activeRunBlocked ? t("conversationStillRunning") : undefined);
+  // During a loading block the control stays usable: a click is remembered like an Enter.
+  const queuesSend = Boolean(sendBlock?.loading) && !activeRunBlocked;
+  const emptyText = currentText.trim().length === 0;
+  const sendDisabled = queuesSend
+    ? emptyText
+    : Boolean(sendBlock) || activeRunBlocked || Boolean(onSubmitMessage && emptyText);
   const handleSendClick = useCallback(() => {
     onSubmitMessage?.(currentText);
   }, [currentText, onSubmitMessage]);
@@ -629,6 +658,19 @@ function ComposerAction({
         ) : (
           cancelButton
         )
+      ) : queuesSend ? (
+        <Button
+          type="button"
+          size="icon"
+          className="absolute inset-0 size-9 rounded-xl"
+          aria-label={t("sendMessage")}
+          title={effectiveDisabledReason}
+          disabled={sendDisabled}
+          loading={sendQueued}
+          onClick={onQueueSend}
+        >
+          <Send size={17} aria-hidden="true" />
+        </Button>
       ) : onSubmitMessage ? (
         <Button
           type="button"

@@ -24,6 +24,12 @@ import {
   ProductConversationRunTransport,
   startProductConversationRun
 } from "./product-run-transport";
+import {
+  createQueuedSendSettler,
+  resolveSendBlock,
+  type QueuedSend,
+  type SendBlock
+} from "./send-block";
 
 export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
   const { activeRun, completedRunProjections, messages, selectedConversationId } = chat;
@@ -88,7 +94,7 @@ function AssistantRuntimePane({
     localUploadingAttachments,
     conversationRunning,
     activeRun,
-    sendBlockedReason,
+    sendBlock: workspaceBlock,
     attachmentsEnabled,
     attachmentAccept,
     changeDraft: onDraftChange,
@@ -110,12 +116,25 @@ function AssistantRuntimePane({
     config && config.agents.length === 0 && !agentsLoading
       ? t(agentsWorkspaceScoped ? "workspaceNoAgents" : "instanceNotConfigured")
       : undefined;
-  const baseSendDisabledReason = conversationRunning
-    ? t("conversationStillRunning")
-    : (sendBlockedReason ??
-      (!messagesLoaded ? t("loadingConversation") : undefined) ??
-      noAgentsMessage);
-  const sendDisabledReason = rootSubmitPending ? t("loadingConversation") : baseSendDisabledReason;
+  const sendBlock = useMemo(
+    () =>
+      resolveSendBlock({
+        sending: rootSubmitPending,
+        conversationRunning,
+        workspaceBlock,
+        messagesLoaded,
+        noAgentsMessage,
+        t
+      }),
+    [conversationRunning, messagesLoaded, noAgentsMessage, rootSubmitPending, t, workspaceBlock]
+  );
+  const sendDisabledReason = sendBlock?.reason;
+  const [queuedSend, setQueuedSend] = useState<QueuedSend | undefined>(undefined);
+  const queueSend = useCallback(
+    (text: string) => setQueuedSend({ text, collaborationWorkspaceId }),
+    [collaborationWorkspaceId]
+  );
+  const settleQueuedSend = useCallback(() => setQueuedSend(undefined), []);
   const visibleNotice = rootSubmitError ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
 
@@ -146,7 +165,7 @@ function AssistantRuntimePane({
       }
 
       const trimmedText = text.trim();
-      if (!trimmedText || rootSubmitPendingRef.current || baseSendDisabledReason) {
+      if (!trimmedText || rootSubmitPendingRef.current || sendDisabledReason) {
         return true;
       }
 
@@ -183,7 +202,6 @@ function AssistantRuntimePane({
       return true;
     },
     [
-      baseSendDisabledReason,
       client,
       collaborationWorkspaceId,
       locale,
@@ -193,6 +211,7 @@ function AssistantRuntimePane({
       selectedAgentName,
       selectedModelBindingId,
       selectedConversationId,
+      sendDisabledReason,
       setRootSubmitPendingIfActive
     ]
   );
@@ -309,6 +328,13 @@ function AssistantRuntimePane({
           draft={draft}
           onDraftChange={onDraftChange}
         />
+        <QueuedSendBridge
+          queuedSend={queuedSend}
+          sendBlock={sendBlock}
+          collaborationWorkspaceId={collaborationWorkspaceId}
+          onSettled={settleQueuedSend}
+          onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
+        />
         <AssistantThread
           config={config}
           agents={config?.agents ?? []}
@@ -323,7 +349,8 @@ function AssistantRuntimePane({
           newConversationPrivate={newConversationPrivate}
           draftAttachments={draftAttachments}
           localUploadingAttachments={localUploadingAttachments}
-          sendBlockedReason={sendDisabledReason}
+          sendBlock={sendBlock}
+          sendQueued={queuedSend !== undefined}
           attachmentsEnabled={attachmentsEnabled}
           attachmentAccept={attachmentAccept}
           conversationRunning={conversationRunning}
@@ -341,6 +368,7 @@ function AssistantRuntimePane({
           onFilesSelected={onFilesSelected}
           onRemoveDraftAttachment={onRemoveDraftAttachment}
           onRetryDraftAttachment={onRetryDraftAttachment}
+          onQueueSend={queueSend}
           onSubmitMessage={selectedConversationId ? undefined : submitRootDraftMessage}
         />
       </AssistantToolRegistry>
@@ -454,6 +482,68 @@ function DraftBridge({
       onDraftChange(currentText);
     }
   }, [currentText, draft, onDraftChange]);
+
+  return null;
+}
+
+/**
+ * Sends a queued message once its loading block lifts, or forgets it when the user edits the
+ * text, the block turns into a refusal or the workspace changes. A pane lives for one
+ * conversation, so a change of conversation drops the queued send with the pane.
+ */
+function QueuedSendBridge({
+  queuedSend,
+  sendBlock,
+  collaborationWorkspaceId,
+  onSettled,
+  onSubmitMessage
+}: {
+  queuedSend: QueuedSend | undefined;
+  sendBlock: SendBlock | undefined;
+  collaborationWorkspaceId: string | undefined;
+  onSettled: () => void;
+  /** The first-message path; an open conversation sends through the thread runtime instead. */
+  onSubmitMessage: ((text: string) => boolean) | undefined;
+}) {
+  const composer = useComposerRuntime();
+  const composerText = useComposer((state) => state.text);
+  const composerCanSend = useComposer((state) => state.canSend);
+  const [settle] = useState(createQueuedSendSettler);
+
+  useEffect(() => {
+    if (!queuedSend) {
+      return;
+    }
+    const step = settle({
+      queued: queuedSend,
+      block: sendBlock,
+      composerText,
+      collaborationWorkspaceId,
+      runtimeReady: Boolean(onSubmitMessage) || composerCanSend
+    });
+    if (step === "wait") {
+      return;
+    }
+    onSettled();
+    if (step === "drop") {
+      return;
+    }
+    if (onSubmitMessage) {
+      onSubmitMessage(queuedSend.text);
+    } else {
+      composer.send();
+    }
+  }, [
+    collaborationWorkspaceId,
+    composer,
+    composerCanSend,
+    composerText,
+    onSettled,
+    onSubmitMessage,
+    queuedSend,
+    sendBlock,
+    settle
+  ]);
 
   return null;
 }

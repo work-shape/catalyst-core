@@ -4,7 +4,7 @@ import {
   uploadErrorMessage,
   uploadFileWithRetry
 } from "../packages/chat-ui/src/conversation/draft-attachment-controller";
-import { createTranslationContext } from "../packages/chat-ui/src/i18n";
+import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 
 const file = () => new File(["content"], "Perso.pdf", { type: "application/pdf" });
 const { t } = createTranslationContext("de");

@@ -19,6 +19,7 @@ import { AssistantActivityStatus } from "./assistant-activity-status";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "../i18n";
+import type { SendBlock } from "./send-block";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 
 /** How long the composer takes to settle at the bottom after the first message. */
@@ -38,7 +39,8 @@ export function AssistantThread({
   newConversationPrivate,
   draftAttachments,
   localUploadingAttachments,
-  sendBlockedReason,
+  sendBlock,
+  sendQueued,
   attachmentsEnabled,
   attachmentAccept,
   conversationRunning,
@@ -56,6 +58,7 @@ export function AssistantThread({
   onFilesSelected,
   onRemoveDraftAttachment,
   onRetryDraftAttachment,
+  onQueueSend,
   onSubmitMessage
 }: {
   config: SafeConfig | undefined;
@@ -78,7 +81,8 @@ export function AssistantThread({
   newConversationPrivate?: boolean;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
-  sendBlockedReason?: string;
+  sendBlock?: SendBlock;
+  sendQueued: boolean;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
   conversationRunning?: boolean;
@@ -102,6 +106,7 @@ export function AssistantThread({
   onFilesSelected: (files: File[]) => void;
   onRemoveDraftAttachment: (attachmentId: string) => void;
   onRetryDraftAttachment: (attachmentId: string) => void;
+  onQueueSend: (text: string) => void;
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
@@ -214,7 +219,9 @@ export function AssistantThread({
                   <AssistantComposer
                     attachments={draftAttachments}
                     localUploadingAttachments={localUploadingAttachments}
-                    sendBlockedReason={sendBlockedReason}
+                    sendBlock={sendBlock}
+                    sendQueued={sendQueued}
+                    onQueueSend={onQueueSend}
                     conversationRunning={conversationRunning}
                     optimisticPending={optimisticPending}
                     attachmentsEnabled={attachmentsEnabled}

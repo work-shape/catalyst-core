@@ -15,7 +15,7 @@ import {
 } from "../packages/chat-ui/src/conversation/conversation-button";
 import { withoutDraftAttachment } from "../packages/chat-ui/src/conversation/draft-attachment-controller";
 import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
-import { workspaceSendBlockedReason } from "../packages/chat-ui/src/workspace/workspace-send-blocked-reason";
+import { workspaceSendBlock } from "../packages/chat-ui/src/workspace/workspace-send-block";
 import {
   activeAgentNameFor,
   isAbandonedDraftConversation,
@@ -36,18 +36,19 @@ describe.each<{ locale: LocaleCode; loadingReason: string; failedReason: string 
     failedReason: "Arbeitsbereiche konnten nicht geladen werden."
   }
 ])("workspace send guard ($locale)", ({ locale, loadingReason, failedReason }) => {
-  const pending: Parameters<typeof workspaceSendBlockedReason>[0] = {
+  const pending: Parameters<typeof workspaceSendBlock>[0] = {
     attachmentBlockedReason: undefined,
     selectedConversationId: undefined,
     collaborationWorkspacesAvailable: true,
     activeCollaborationWorkspaceId: undefined,
     loading: true,
     loadFailed: false,
+    workspacesListed: false,
     locale
   };
   const cases: {
     name: string;
-    input: Partial<Parameters<typeof workspaceSendBlockedReason>[0]>;
+    input: Partial<Parameters<typeof workspaceSendBlock>[0]>;
     expected: string | undefined;
   }[] = [
     { name: "pending", input: {}, expected: loadingReason },
@@ -62,6 +63,16 @@ describe.each<{ locale: LocaleCode; loadingReason: string; failedReason: string 
       expected: failedReason
     },
     { name: "empty", input: { loading: false }, expected: failedReason },
+    {
+      name: "listed before the page opens one",
+      input: { loading: false, workspacesListed: true },
+      expected: loadingReason
+    },
+    {
+      name: "failed with an earlier list",
+      input: { loading: false, loadFailed: true, workspacesListed: true },
+      expected: failedReason
+    },
     {
       name: "existing conversation while pending",
       input: { selectedConversationId: "conv_existing" },
@@ -126,7 +137,21 @@ describe.each<{ locale: LocaleCode; loadingReason: string; failedReason: string 
   ];
 
   it.each(cases)("$name", ({ input, expected }) => {
-    expect(workspaceSendBlockedReason({ ...pending, ...input })).toBe(expected);
+    expect(workspaceSendBlock({ ...pending, ...input })?.reason).toBe(expected);
+  });
+
+  it("lets a send wait only while the workspaces load", () => {
+    expect(workspaceSendBlock(pending)?.loading).toBe(true);
+    expect(workspaceSendBlock({ ...pending, loading: false, loadFailed: true })?.loading).toBe(
+      false
+    );
+    expect(workspaceSendBlock({ ...pending, loading: false })?.loading).toBe(false);
+    expect(
+      workspaceSendBlock({ ...pending, loading: false, workspacesListed: true })?.loading
+    ).toBe(true);
+    expect(
+      workspaceSendBlock({ ...pending, attachmentBlockedReason: "attachment blocked" })?.loading
+    ).toBe(false);
   });
 });
 

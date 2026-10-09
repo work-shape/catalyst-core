@@ -22,6 +22,7 @@ import {
   startProductConversationRun
 } from "../assistant/product-run-transport";
 import { resolveContextUsage } from "../assistant/context-usage";
+import type { SendBlock } from "../assistant/send-block";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   useCancelRunMutation,
@@ -83,7 +84,7 @@ import {
   useWorkspaceTheme
 } from "./workspace-ui-state";
 import { createTranslationContext } from "../i18n";
-import { workspaceSendBlockedReason } from "./workspace-send-blocked-reason";
+import { workspaceSendBlock } from "./workspace-send-block";
 
 export const WORKSPACE_AUTH_SCOPE = "standalone";
 
@@ -285,7 +286,7 @@ export interface SelectedChatModel {
   localUploadingAttachments: LocalUploadingAttachment[];
   conversationRunning: boolean;
   activeRun: ConversationControllerState["activeRun"];
-  sendBlockedReason: string | undefined;
+  sendBlock: SendBlock | undefined;
   attachmentsEnabled: boolean;
   attachmentAccept: string;
   fileDropzone: ChatFileDropzoneController;
@@ -950,13 +951,14 @@ export function useWorkspaceChatModel({
       localUploadingAttachments: draftAttachmentController.visibleUploadingAttachments,
       conversationRunning: selectedConversationRunning,
       activeRun: controller.activeRun,
-      sendBlockedReason: workspaceSendBlockedReason({
+      sendBlock: workspaceSendBlock({
         attachmentBlockedReason: draftAttachmentController.sendBlockedReason,
         selectedConversationId,
         collaborationWorkspacesAvailable,
         activeCollaborationWorkspaceId,
         loading: collaborationWorkspace.loading,
         loadFailed: collaborationWorkspace.loadFailed,
+        workspacesListed: collaborationWorkspace.collaborationWorkspaces.length > 0,
         locale: activeLocale
       }),
       attachmentsEnabled,
