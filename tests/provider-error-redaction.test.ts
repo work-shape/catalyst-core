@@ -1,9 +1,11 @@
+import { addTestRoute, createTestInstance } from "./support/test-instance";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppError, asClientInstanceId } from "@vivd-catalyst/core";
 import { OpenAiCompatibleChatProvider } from "@vivd-catalyst/model-provider";
 import { readProviderErrorMetadata } from "../packages/model-provider/src/provider-error";
-import { createClientInstanceApp, createTestConfig, createTestUser } from "./chat-server-harness";
-import { drainRunEvents, injectStartConversationRun } from "./chat-server-run-harness";
+import { createTestConfig, createTestUser } from "./support/fixtures";
+import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 
 const marker = "PRIVATE_DOCUMENT_CONTENT must never escape";
 const providerBody = {
@@ -206,7 +208,7 @@ describe("provider error boundary", () => {
       vi.fn(async () => new Response(JSON.stringify(providerBody), { status: 400 }))
     );
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         modelProviders: [
           {
@@ -219,7 +221,6 @@ describe("provider error boundary", () => {
         ]
       }),
       env: { TEST_PROVIDER_KEY: "test" },
-      storeMode: "memory",
       tools: []
     });
     const provider = new OpenAiCompatibleChatProvider({
@@ -228,11 +229,11 @@ describe("provider error boundary", () => {
       baseUrl: "https://provider.test/v1",
       apiKey: "test"
     });
-    app.server.get("/test-provider-error", () => provider.complete(request, context));
-    app.server.get("/test-internal-error", () => {
+    addTestRoute(app, "/test-provider-error", () => provider.complete(request, context));
+    addTestRoute(app, "/test-internal-error", () => {
       throw new AppError("INTERNAL", marker, { document: marker });
     });
-    app.server.get("/test-exposed-error", () => {
+    addTestRoute(app, "/test-exposed-error", () => {
       throw new AppError(
         "INTERNAL",
         "A fixed user-facing failure",
@@ -240,28 +241,24 @@ describe("provider error boundary", () => {
         { exposeMessage: true }
       );
     });
-    app.server.get("/test-validation-error", () => {
+    addTestRoute(app, "/test-validation-error", () => {
       throw new AppError("VALIDATION_FAILED", "Choose a valid name", { field: "name" });
     });
     try {
-      const exposed = await app.server.inject({ method: "GET", url: "/test-exposed-error" });
+      const exposed = await app.call("testExposedError", {});
       expect(exposed.statusCode).toBe(500);
       expect(exposed.json()).toEqual({
         error: { code: "INTERNAL", message: "A fixed user-facing failure" }
       });
-      const created = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
-        payload: { title: "hello" }
-      });
+      const created = await app.call("createConversation", { payload: { title: "hello" } });
       expect(created.statusCode).toBe(200);
       const { id } = created.json() as { id: string };
-      const started = await injectStartConversationRun(app.server, id, "hello", {
+      const started = await injectStartConversationRun(app, id, "hello", {
         idempotencyKey: "redaction-test"
       });
-      await drainRunEvents(app.server, id, started.run.id);
-      await app.server.inject({ method: "POST", url: `/api/conversations/${id}/title` });
-      const audit = await app.server.inject({ method: "GET", url: "/api/audit-events" });
+      await drainRunEvents(app, id, started.run.id);
+      await app.call("generateConversationTitle", { params: { conversationId: id } });
+      const audit = await app.call("listAuditEvents", {});
       const events = audit.json() as Array<{ type: string; metadata: Record<string, unknown> }>;
       const titleFailures = events.filter(
         (event) => event.type === "conversation.title_generation_failed"
@@ -276,15 +273,15 @@ describe("provider error boundary", () => {
         logged.mock.calls.some(([payload]) => String(payload).includes("agent_runtime.run_failed"))
       ).toBe(true);
       expect(JSON.stringify(logged.mock.calls)).not.toContain(marker);
-      for (const url of ["/test-provider-error", "/test-internal-error"]) {
-        const response = await app.server.inject({ method: "GET", url });
+      for (const operation of ["testProviderError", "testInternalError"] as const) {
+        const response = await app.call(operation);
         expect(response.statusCode).toBe(500);
         expect(response.json()).toEqual({
           error: { code: "INTERNAL", message: "Internal server error" }
         });
         expect(response.body).not.toContain(marker);
       }
-      const validation = await app.server.inject({ method: "GET", url: "/test-validation-error" });
+      const validation = await app.call("testValidationError", {});
       expect(validation.statusCode).toBe(422);
       expect(validation.json()).toEqual({
         error: {

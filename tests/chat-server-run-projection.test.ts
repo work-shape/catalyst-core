@@ -1,6 +1,11 @@
+import {
+  fetchTestOperation,
+  listenTestInstance,
+  createTestInstance
+} from "./support/test-instance";
+
 import { describe, expect, it } from "vitest";
-import type { AddressInfo } from "net";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+
 import {
   NoopAuditRecorder,
   asToolCallId,
@@ -8,38 +13,33 @@ import {
   createAssistantFinalMetadata,
   createPlatformId
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createTestConfig, createClientInstanceApp, createTestUser } from "./chat-server-harness";
+import { createTestConfig, createTestUser } from "./support/fixtures";
 import {
   createMissingRuntime,
   createUnusedModelProvider,
   fetchStartConversationRun,
   fetchRunEvents,
   parseSseChunks
-} from "./chat-server-run-harness";
+} from "./support/chat-server-run-harness";
 
 describe("client instance app vertical slice", () => {
   it("exposes a thread snapshot with active run projection", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Thread snapshot test" }
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const baseUrl = await listenTestInstance(app);
 
     const started = await fetchStartConversationRun(
       baseUrl,
@@ -48,7 +48,9 @@ describe("client instance app vertical slice", () => {
     );
     const runId = started.run.id;
 
-    const snapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
+    const snapshot = await fetchTestOperation(baseUrl, "getConversationThread", {
+      params: { conversationId: conversation.id }
+    });
     expect(snapshot.status).toBe(200);
     expect(await snapshot.json()).toMatchObject({
       conversation: {
@@ -75,7 +77,9 @@ describe("client instance app vertical slice", () => {
 
     await fetchRunEvents(baseUrl, conversation.id, runId);
 
-    const completedSnapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
+    const completedSnapshot = await fetchTestOperation(baseUrl, "getConversationThread", {
+      params: { conversationId: conversation.id }
+    });
     expect(completedSnapshot.status).toBe(200);
     const completedBody = (await completedSnapshot.json()) as {
       activeRun?: unknown;
@@ -104,7 +108,7 @@ describe("client instance app vertical slice", () => {
   it("keeps the latest failed run in the thread snapshot after refresh", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const owner = createTestUser("user-1", clientInstanceId);
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store,
@@ -151,7 +155,7 @@ describe("client instance app vertical slice", () => {
     const error = {
       code: "FORBIDDEN",
       message: "Daily customer billable cost is incomplete",
-      category: "app_error"
+      category: "app_error" as const
     };
     await store.appendRunObservation({
       clientInstanceId,
@@ -176,33 +180,34 @@ describe("client instance app vertical slice", () => {
       error
     });
 
-    const server = await createChatServer({
-      config,
-      clientInstanceId,
-      authAdapter: {
-        credentialMode: "ambient",
-        id: "test-auth",
-        async authenticate() {
-          return owner;
+    const server = await createTestInstance({
+      server: {
+        config,
+        clientInstanceId,
+        authAdapter: {
+          credentialMode: "ambient",
+          id: "test-auth",
+          async authenticate() {
+            return owner;
+          }
+        },
+        conversationStore: store,
+        auditEventStore: store,
+        userStore: store,
+        usageGovernance,
+        auditRecorder: new NoopAuditRecorder(),
+        agentRuntime: createMissingRuntime(),
+        modelProvider: createUnusedModelProvider(),
+        runRecovery: {
+          staleActiveRunMs: 60_000,
+          runOnStartup: false,
+          watchdogIntervalMs: 60_000
         }
-      },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      usageGovernance,
-      auditRecorder: new NoopAuditRecorder(),
-      agentRuntime: createMissingRuntime(),
-      modelProvider: createUnusedModelProvider(),
-      runRecovery: {
-        staleActiveRunMs: 60_000,
-        runOnStartup: false,
-        watchdogIntervalMs: 60_000
       }
     });
 
-    const snapshot = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/thread`
+    const snapshot = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id }
     });
 
     expect(snapshot.statusCode).toBe(200);
@@ -226,7 +231,7 @@ describe("client instance app vertical slice", () => {
   it("exposes completed run projections in recorded observation order", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const owner = createTestUser("user-1", clientInstanceId);
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store,
@@ -508,33 +513,34 @@ describe("client instance app vertical slice", () => {
       })
     });
 
-    const server = await createChatServer({
-      config,
-      clientInstanceId,
-      authAdapter: {
-        credentialMode: "ambient",
-        id: "test-auth",
-        async authenticate() {
-          return owner;
+    const server = await createTestInstance({
+      server: {
+        config,
+        clientInstanceId,
+        authAdapter: {
+          credentialMode: "ambient",
+          id: "test-auth",
+          async authenticate() {
+            return owner;
+          }
+        },
+        conversationStore: store,
+        auditEventStore: store,
+        userStore: store,
+        usageGovernance,
+        auditRecorder: new NoopAuditRecorder(),
+        agentRuntime: createMissingRuntime(),
+        modelProvider: createUnusedModelProvider(),
+        runRecovery: {
+          staleActiveRunMs: 60_000,
+          runOnStartup: false,
+          watchdogIntervalMs: 60_000
         }
-      },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      usageGovernance,
-      auditRecorder: new NoopAuditRecorder(),
-      agentRuntime: createMissingRuntime(),
-      modelProvider: createUnusedModelProvider(),
-      runRecovery: {
-        staleActiveRunMs: 60_000,
-        runOnStartup: false,
-        watchdogIntervalMs: 60_000
       }
     });
 
-    const snapshot = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/thread`
+    const snapshot = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id }
     });
 
     expect(snapshot.statusCode).toBe(200);
@@ -585,7 +591,7 @@ describe("client instance app vertical slice", () => {
   it("skips completed run projections when observations lack final completion text", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const owner = createTestUser("user-1", clientInstanceId);
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store,
@@ -659,33 +665,34 @@ describe("client instance app vertical slice", () => {
       })
     });
 
-    const server = await createChatServer({
-      config,
-      clientInstanceId,
-      authAdapter: {
-        credentialMode: "ambient",
-        id: "test-auth",
-        async authenticate() {
-          return owner;
+    const server = await createTestInstance({
+      server: {
+        config,
+        clientInstanceId,
+        authAdapter: {
+          credentialMode: "ambient",
+          id: "test-auth",
+          async authenticate() {
+            return owner;
+          }
+        },
+        conversationStore: store,
+        auditEventStore: store,
+        userStore: store,
+        usageGovernance,
+        auditRecorder: new NoopAuditRecorder(),
+        agentRuntime: createMissingRuntime(),
+        modelProvider: createUnusedModelProvider(),
+        runRecovery: {
+          staleActiveRunMs: 60_000,
+          runOnStartup: false,
+          watchdogIntervalMs: 60_000
         }
-      },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      usageGovernance,
-      auditRecorder: new NoopAuditRecorder(),
-      agentRuntime: createMissingRuntime(),
-      modelProvider: createUnusedModelProvider(),
-      runRecovery: {
-        staleActiveRunMs: 60_000,
-        runOnStartup: false,
-        watchdogIntervalMs: 60_000
       }
     });
 
-    const snapshot = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/thread`
+    const snapshot = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id }
     });
 
     expect(snapshot.statusCode).toBe(200);
@@ -707,24 +714,19 @@ describe("client instance app vertical slice", () => {
   });
 
   it("streams product run observations from a sequence cursor", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Product event stream test" }
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const baseUrl = await listenTestInstance(app);
 
     const started = await fetchStartConversationRun(
       baseUrl,
@@ -734,9 +736,10 @@ describe("client instance app vertical slice", () => {
     const runId = started.run.id;
     await fetchRunEvents(baseUrl, conversation.id, runId);
 
-    const events = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events?after=1`
-    );
+    const events = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      params: { conversationId: conversation.id, runId: runId },
+      query: { after: "1" }
+    });
     expect(events.status).toBe(200);
     const observations = parseSseChunks(await events.text());
     expect(observations.length).toBeGreaterThan(0);

@@ -1,3 +1,4 @@
+import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import {
@@ -9,38 +10,38 @@ import {
   type ManagedFileRecord,
   type PlatformStore
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
-
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const postgresIt = databaseUrl ? it : it.skip;
-
 describe("artifact preview store adapters", () => {
   it("ensures one deterministic attachment preview source in memory", async () => {
-    await expectManagedArtifactEnsureContract(new InMemoryPlatformStore());
+    await expectManagedArtifactEnsureContract(createTestInstance().stores);
   });
 
   it("keeps in-memory preview job idempotency scoped to renderer settings identity", async () => {
-    await expectPreviewJobIdentityContract(new InMemoryPlatformStore());
+    await expectPreviewJobIdentityContract(createTestInstance().stores);
   });
 
   it("claims preview jobs and guards terminal updates by lease in memory", async () => {
-    await expectPreviewJobLeaseContract(new InMemoryPlatformStore());
+    await expectPreviewJobLeaseContract(createTestInstance().stores);
   });
 
   it("creates preview artifacts inside lease-guarded completion in memory", async () => {
-    await expectPreviewArtifactCompletionContract(new InMemoryPlatformStore());
+    await expectPreviewArtifactCompletionContract(createTestInstance().stores);
   });
 
   it("recovers stale preview job leases in memory", async () => {
-    await expectPreviewJobStaleRecoveryContract(new InMemoryPlatformStore());
+    await expectPreviewJobStaleRecoveryContract(createTestInstance().stores);
   });
 
   postgresIt("ensures one deterministic attachment preview source in Postgres", async () => {
-    const store = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    });
+    const store = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: true
+        }
+      })
+    ).stores;
     try {
       await expectManagedArtifactEnsureContract(store);
     } finally {
@@ -51,10 +52,14 @@ describe("artifact preview store adapters", () => {
   postgresIt(
     "keeps Postgres preview job idempotency scoped to renderer settings identity",
     async () => {
-      const store = await PostgresPlatformStore.connect({
-        databaseUrl: databaseUrl!,
-        runMigrations: true
-      });
+      const store = (
+        await createTestInstance({
+          postgres: {
+            databaseUrl: databaseUrl!,
+            runMigrations: true
+          }
+        })
+      ).stores;
       try {
         await expectPreviewJobIdentityContract(store);
       } finally {
@@ -64,10 +69,14 @@ describe("artifact preview store adapters", () => {
   );
 
   postgresIt("claims preview jobs and guards terminal updates by lease in Postgres", async () => {
-    const store = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    });
+    const store = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: true
+        }
+      })
+    ).stores;
     try {
       await expectPreviewJobLeaseContract(store);
     } finally {
@@ -76,10 +85,14 @@ describe("artifact preview store adapters", () => {
   });
 
   postgresIt("creates preview artifacts inside lease-guarded completion in Postgres", async () => {
-    const store = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    });
+    const store = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: true
+        }
+      })
+    ).stores;
     try {
       await expectPreviewArtifactCompletionContract(store);
     } finally {
@@ -88,10 +101,14 @@ describe("artifact preview store adapters", () => {
   });
 
   postgresIt("recovers stale preview job leases in Postgres", async () => {
-    const store = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    });
+    const store = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: true
+        }
+      })
+    ).stores;
     try {
       await expectPreviewJobStaleRecoveryContract(store);
     } finally {
@@ -102,10 +119,14 @@ describe("artifact preview store adapters", () => {
   postgresIt(
     "does not clear a processing lease when retry replacement races with worker claim in Postgres",
     async () => {
-      const store = await PostgresPlatformStore.connect({
-        databaseUrl: databaseUrl!,
-        runMigrations: true
-      });
+      const store = (
+        await createTestInstance({
+          postgres: {
+            databaseUrl: databaseUrl!,
+            runMigrations: true
+          }
+        })
+      ).stores;
       const rawSql = postgres(databaseUrl!, { max: 5 });
       try {
         await expectPreviewJobRetryReplacementRaceContract(store, rawSql);
@@ -607,7 +628,7 @@ async function expectPreviewJobStaleRecoveryContract(
 }
 
 async function expectPreviewJobRetryReplacementRaceContract(
-  store: PostgresPlatformStore,
+  store: TestPostgresStore,
   rawSql: Sql
 ): Promise<void> {
   const fixture = await createPreviewFixture(store);
@@ -647,7 +668,7 @@ async function expectPreviewJobRetryReplacementRaceContract(
     failedAt: "2026-07-01T12:30:02.000Z"
   });
 
-  let replacement: ReturnType<PostgresPlatformStore["enqueueArtifactPreviewJob"]> | undefined;
+  let replacement: ReturnType<TestPostgresStore["enqueueArtifactPreviewJob"]> | undefined;
   await rawSql.begin(async (tx) => {
     await tx`select id from artifact_preview_jobs where id = ${job.id} for update`;
     replacement = store.enqueueArtifactPreviewJob({

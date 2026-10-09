@@ -1,11 +1,13 @@
+import { rejectInvalidOrigins, createTestInstance } from "./support/test-instance";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createChatServer, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+
 import { DevelopmentAuthAdapter } from "@vivd-catalyst/auth";
-import { createClientInstanceApp, createTestConfig } from "./chat-server-harness";
+import { createTestConfig } from "./support/fixtures";
 import {
   createMultipartFilePayload,
   createTestAttachmentCapability
-} from "./chat-server-attachment-harness";
+} from "./support/chat-server-attachment-harness";
 
 const allowedOrigin = "https://ui.example.test";
 const foreignOrigin = "https://foreign.test";
@@ -21,14 +23,13 @@ async function createCookieApp(configureOrigins = true) {
   ) {
     return { ...(await authenticate.call(this, request)), authenticationMethod: "session-cookie" };
   });
-  return createClientInstanceApp({
+  return createTestInstance({
     config: createTestConfig({ sessionToken: { issuer: "test", ttlSeconds: 900 } }),
     env: {
       ...(configureOrigins ? { CHAT_UI_ORIGIN: allowedOrigin } : {}),
       CHAT_SESSION_TOKEN_SECRET: "test-session-token-secret-long-enough",
       CHAT_SERVER_CREDENTIAL: "test-server-credential"
     },
-    storeMode: "memory",
     tools: [],
     capabilities: [createTestAttachmentCapability()]
   });
@@ -53,18 +54,12 @@ describe("browser origin policy", () => {
   ])(
     "rejects runtime-invalid allowed origins at direct server and assembly startup: %s",
     async (allowedOrigins) => {
-      await expect(
-        createChatServer({ allowedOrigins } as unknown as ChatServerOptions)
-      ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
-      await expect(
-        createClientInstanceApp({
-          config: createTestConfig(),
-          env: {},
-          storeMode: "memory",
-          tools: [],
-          allowedOrigins: allowedOrigins as unknown as string[]
-        })
-      ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      await expect(rejectInvalidOrigins(allowedOrigins, "server")).rejects.toMatchObject({
+        code: "VALIDATION_FAILED"
+      });
+      await expect(rejectInvalidOrigins(allowedOrigins, "assembly")).rejects.toMatchObject({
+        code: "VALIDATION_FAILED"
+      });
     }
   );
 
@@ -99,24 +94,19 @@ describe("browser origin policy", () => {
             : {}),
           ...(fetchSite ? { "sec-fetch-site": fetchSite } : {})
         };
-        const created = await app.server.inject({
-          method: "POST",
-          url: "/api/conversations",
+        const created = await app.call("createConversation", {
           headers: { cookie: "test-session=present", origin: allowedOrigin },
           payload: { title: "Origin checks" }
         });
         expect(created.statusCode).toBe(200);
         const { id } = created.json() as { id: string };
-        const json = await app.server.inject({
-          method: "POST",
-          url: "/api/conversations",
+        const json = await app.call("createConversation", {
           headers,
           remoteAddress: "127.0.0.1",
           payload: { title: "New conversation" }
         });
-        const bodyless = await app.server.inject({
-          method: "POST",
-          url: `/api/conversations/${id}/title`,
+        const bodyless = await app.call("generateConversationTitle", {
+          params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers
         });
@@ -126,23 +116,20 @@ describe("browser origin policy", () => {
           contentType: "text/plain",
           content: "Upload content"
         });
-        const multipart = await app.server.inject({
-          method: "POST",
-          url: `/api/conversations/${id}/draft-attachments`,
+        const multipart = await app.call("uploadDraftAttachment", {
+          params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers: { ...headers, ...upload.headers },
           payload: upload.payload
         });
-        const patch = await app.server.inject({
-          method: "PATCH",
-          url: `/api/conversations/${id}/title`,
+        const patch = await app.call("renameConversation", {
+          params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers,
           payload: { title: "Renamed conversation" }
         });
-        const deleted = await app.server.inject({
-          method: "DELETE",
-          url: `/api/conversations/${id}`,
+        const deleted = await app.call("deleteConversation", {
+          params: { conversationId: id },
           remoteAddress: "127.0.0.1",
           headers
         });
@@ -163,9 +150,7 @@ describe("browser origin policy", () => {
   it("refuses invalid explicit credentials on the config-asset identity path", async () => {
     const app = await createCookieApp();
     try {
-      const response = await app.server.inject({
-        method: "POST",
-        url: "/api/admin/config/validate",
+      const response = await app.call("validateConfigAssets", {
         headers: {
           cookie: "test-session=present",
           origin: foreignOrigin,
@@ -186,29 +171,25 @@ describe("browser origin policy", () => {
     const app = await createCookieApp();
     try {
       for (const origin of [allowedOrigin, foreignOrigin, siblingOrigin, undefined]) {
-        const response = await app.server.inject({
-          method: "GET",
-          url: "/api/me",
+        const response = await app.call("getCurrentUser", {
           headers: { ...(origin ? { origin } : {}), cookie: "test-session=present" }
         });
         expect(response.statusCode).toBe(200);
         expect(response.headers["access-control-allow-origin"]).toBe(
           origin === allowedOrigin ? origin : undefined
         );
-        const head = await app.server.inject({
-          method: "HEAD",
-          url: "/api/me",
-          headers: { ...(origin ? { origin } : {}), cookie: "test-session=present" }
+        const head = await app.call("getCurrentUser", {
+          headers: { ...(origin ? { origin } : {}), cookie: "test-session=present" },
+          method: "HEAD"
         });
         expect(head.statusCode).toBe(200);
-        const preflight = await app.server.inject({
-          method: "OPTIONS",
-          url: "/api/conversations",
+        const preflight = await app.call("listConversations", {
           headers: {
             ...(origin ? { origin } : {}),
             "access-control-request-method": "POST",
             "access-control-request-headers": "authorization,content-type"
-          }
+          },
+          method: "OPTIONS"
         });
         expect(preflight.headers["access-control-allow-origin"]).toBe(
           origin === allowedOrigin ? origin : undefined
@@ -222,18 +203,14 @@ describe("browser origin policy", () => {
   it("accepts widget bearer requests and server-credential exchange independently of origin", async () => {
     const app = await createCookieApp();
     try {
-      const issued = await app.server.inject({
-        method: "POST",
-        url: "/api/superadmin/session-tokens",
+      const issued = await app.call("issueSessionToken", {
         headers: { origin: foreignOrigin, "x-server-credential": "test-server-credential" },
         payload: { externalUserId: "widget-user", displayLabel: "Widget User" }
       });
       expect(issued.statusCode).toBe(200);
       const { chatSessionToken } = issued.json() as { chatSessionToken: string };
       for (const origin of [foreignOrigin, allowedOrigin]) {
-        const response = await app.server.inject({
-          method: "POST",
-          url: "/api/conversations",
+        const response = await app.call("createConversation", {
           headers: {
             cookie: "test-session=present",
             origin,
@@ -257,21 +234,16 @@ describe("browser origin policy", () => {
       const config = createTestConfig({ sessionToken: { issuer: "test", ttlSeconds: 900 } });
       config.clientInstance.environment = environment;
       config.auth.development = undefined;
-      const app = await createClientInstanceApp({
+      const app = await createTestInstance({
         config,
         env: {
           CHAT_SESSION_TOKEN_SECRET: "test-session-token-secret-long-enough",
           CHAT_SERVER_CREDENTIAL: "test-server-credential"
         },
-        storeMode: "memory",
         tools: []
       });
       try {
-        const response = await app.server.inject({
-          method: "GET",
-          url: "/health",
-          headers: { origin: foreignOrigin }
-        });
+        const response = await app.call("health", { headers: { origin: foreignOrigin } });
         expect(response.headers["access-control-allow-origin"]).toBeUndefined();
       } finally {
         await app.close();
@@ -282,9 +254,7 @@ describe("browser origin policy", () => {
   it("allows same-origin cookie writes without any configured CORS origins", async () => {
     const app = await createCookieApp(false);
     try {
-      const response = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const response = await app.call("createConversation", {
         headers: { origin: "http://localhost", cookie: "test-session=present" },
         payload: { title: "Same origin" }
       });
@@ -296,10 +266,9 @@ describe("browser origin policy", () => {
   });
 
   it("preserves development loopback aliases for CORS", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: { CHAT_UI_ORIGIN: "http://localhost:5173" },
-      storeMode: "memory",
       tools: []
     });
     try {
@@ -308,11 +277,7 @@ describe("browser origin policy", () => {
         "http://127.0.0.1:5173",
         "http://[::1]:5173"
       ]) {
-        const response = await app.server.inject({
-          method: "GET",
-          url: "/api/me",
-          headers: { origin }
-        });
+        const response = await app.call("getCurrentUser", { headers: { origin } });
         expect(response.statusCode).toBe(200);
         expect(response.headers["access-control-allow-origin"]).toBe(origin);
       }

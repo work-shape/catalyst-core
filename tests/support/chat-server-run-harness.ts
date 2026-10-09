@@ -1,5 +1,12 @@
+import {
+  type TestInstance as TestServer,
+  createTestInstance,
+  type TestMemoryStore,
+  completeServerOptions
+} from "./test-instance";
+
 import { expect } from "vitest";
-import { createChatServer, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+
 import {
   AppError,
   NoopAuditRecorder,
@@ -11,10 +18,10 @@ import {
   type ChatMessage,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createTestConfig, createTestUser, type TestServer } from "./chat-server-harness";
+import { createTestConfig, createTestUser } from "./fixtures";
 
 export async function createStaleRunRecoveryFixture(
   input: {
@@ -23,7 +30,7 @@ export async function createStaleRunRecoveryFixture(
 ) {
   const clientInstanceId = asClientInstanceId("demo-local");
   const owner = createTestUser("user-1", clientInstanceId);
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const config = createTestConfig();
   const usageGovernance = new ModelUsageGovernance({
     store,
@@ -31,31 +38,34 @@ export async function createStaleRunRecoveryFixture(
     safeguards: config.usage.safeguards,
     costs: config.usage.costs
   });
-  const options: ChatServerOptions = {
-    config,
-    clientInstanceId,
-    authAdapter: {
-      credentialMode: "ambient",
-      id: "test-auth",
-      async authenticate(request) {
-        const rawUserId = request.headers["x-test-user"];
-        const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
-        return createTestUser(userId ?? owner.id, clientInstanceId);
+  const options = completeServerOptions(
+    {
+      config,
+      clientInstanceId,
+      authAdapter: {
+        credentialMode: "ambient",
+        id: "test-auth",
+        async authenticate(request) {
+          const rawUserId = request.headers["x-test-user"];
+          const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+          return createTestUser(userId ?? owner.id, clientInstanceId);
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new NoopAuditRecorder(),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      runRecovery: {
+        staleActiveRunMs: input.staleActiveRunMs ?? 1,
+        runOnStartup: false,
+        watchdogIntervalMs: 60_000
       }
     },
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    usageGovernance,
-    auditRecorder: new NoopAuditRecorder(),
-    agentRuntime: createMissingRuntime(),
-    modelProvider: createUnusedModelProvider(),
-    runRecovery: {
-      staleActiveRunMs: input.staleActiveRunMs ?? 1,
-      runOnStartup: false,
-      watchdogIntervalMs: 60_000
-    }
-  };
+    store
+  );
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: owner.id,
@@ -75,7 +85,7 @@ export async function createStaleRunRecoveryFixture(
       status: "running"
     }
   );
-  const server = await createChatServer(options);
+  const server = await createTestInstance({ server: options });
   return {
     clientInstanceId,
     conversation,
@@ -90,7 +100,7 @@ export async function createStaleRunRecoveryFixture(
 
 export async function createPersistedRecoveryRun(
   fixture: {
-    store: InMemoryPlatformStore;
+    store: TestMemoryStore;
     clientInstanceId: ReturnType<typeof asClientInstanceId>;
     owner: AuthenticatedUser;
     conversation?: { id: AgentRun["conversationId"] };
@@ -168,7 +178,7 @@ export async function createPersistedRecoveryRun(
 }
 
 export async function expectRunStatus(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   clientInstanceId: ReturnType<typeof asClientInstanceId>,
   runId: AgentRun["id"],
   status: AgentRun["status"]
@@ -221,9 +231,8 @@ export async function injectStartConversationRun(
     idempotencyKey?: string;
   } = {}
 ): Promise<StartedRunBody> {
-  const response = await server.inject({
-    method: "POST",
-    url: `/api/conversations/${conversationId}/runs`,
+  const response = await server.call("startConversationRun", {
+    params: { conversationId: conversationId },
     headers: options.headers,
     payload: {
       idempotencyKey: options.idempotencyKey ?? `test-run-${Math.random().toString(36).slice(2)}`,
@@ -233,7 +242,7 @@ export async function injectStartConversationRun(
     }
   });
   expect(response.statusCode).toBe(200);
-  return response.json() as StartedRunBody;
+  return response.json<StartedRunBody>();
 }
 
 export async function drainRunEvents(
@@ -245,11 +254,9 @@ export async function drainRunEvents(
     afterSequence?: number;
   } = {}
 ): Promise<string> {
-  const response = await server.inject({
-    method: "GET",
-    url: `/api/conversations/${conversationId}/runs/${runId}/events${
-      options.afterSequence === undefined ? "" : `?after=${options.afterSequence}`
-    }`,
+  const response = await server.call("observeConversationRun", {
+    params: { conversationId, runId },
+    query: { after: options.afterSequence },
     headers: options.headers
   });
   expect(response.statusCode).toBe(200);

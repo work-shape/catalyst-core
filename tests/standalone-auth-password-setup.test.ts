@@ -1,8 +1,9 @@
+import { createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { hashPassword } from "../packages/auth/node_modules/better-auth/dist/crypto/index.mjs";
 import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
 import { asClientInstanceId } from "@vivd-catalyst/core";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
+
 import postgres from "postgres";
 
 vi.mock(
@@ -26,10 +27,14 @@ describePostgres("standalone auth password setup tokens", () => {
   const email = `setup-${Date.now()}@example.test`;
 
   beforeAll(async () => {
-    const store = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    });
+    const store = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: true
+        }
+      })
+    ).stores;
     await store.close();
     sql = postgres(databaseUrl!, { max: 1 });
     auth = await createStandaloneAuthRuntime({

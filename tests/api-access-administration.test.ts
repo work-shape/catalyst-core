@@ -1,8 +1,9 @@
-import type { AddressInfo } from "node:net";
+import { listenTestInstance, createTestInstance, type TestInstance } from "./support/test-instance";
+
 import { afterEach, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
+
 import { createApiClient } from "@vivd-catalyst/api-client";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+
 import {
   AppError,
   StoreBackedAuditRecorder,
@@ -12,12 +13,12 @@ import {
   type AuthenticatedUser,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
-const servers: FastifyInstance[] = [];
+const servers: TestInstance[] = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
@@ -103,16 +104,13 @@ describe("API Access administration", () => {
   it("denies default admin and user access and still requires superadmin for key lifecycle", async () => {
     const fixture = await createFixture();
     for (const token of ["admin", "user"]) {
-      const response = await fixture.server.inject({
-        method: "GET",
-        url: "/api/superadmin/api-access/service-principals",
+      const response = await fixture.server.call("listServicePrincipals", {
         headers: { authorization: `Bearer ${token}` }
       });
       expect(response.statusCode).toBe(403);
     }
-    const selfGrant = await fixture.server.inject({
-      method: "PATCH",
-      url: `/api/superadmin/users/${fixture.users.admin.id}`,
+    const selfGrant = await fixture.server.call("updateAdministeredUser", {
+      params: { userId: fixture.users.admin.id },
       headers: { authorization: "Bearer admin" },
       payload: { permissions: ["api_access.manage"] }
     });
@@ -170,9 +168,7 @@ describe("API Access administration", () => {
     ["unknown permission", ["unknown.permission"]]
   ])("rejects %s grants", async (_label, permissions) => {
     const fixture = await createFixture();
-    const response = await fixture.server.inject({
-      method: "POST",
-      url: "/api/superadmin/api-access/service-principals",
+    const response = await fixture.server.call("createServicePrincipal", {
       headers: { authorization: "Bearer superadmin" },
       payload: { displayLabel: "Invalid", permissions }
     });
@@ -186,19 +182,16 @@ describe("API Access administration", () => {
       displayLabel: "Validation principal",
       permissions: ["config_assets.read"]
     });
-    const path = `/api/superadmin/api-access/service-principals/${principal.principal.id}/credentials`;
 
-    const invalidScope = await fixture.server.inject({
-      method: "POST",
-      url: path,
+    const invalidScope = await fixture.server.call("createApiCredential", {
+      params: { servicePrincipalId: principal.principal.id },
       headers: { authorization: "Bearer superadmin" },
       payload: { name: "Invalid", scopes: ["governance:read"] }
     });
     expect(invalidScope.statusCode).toBe(422);
 
-    const expired = await fixture.server.inject({
-      method: "POST",
-      url: path,
+    const expired = await fixture.server.call("createApiCredential", {
+      params: { servicePrincipalId: principal.principal.id },
       headers: { authorization: "Bearer superadmin" },
       payload: { name: "Expired", expiresAt: "2020-01-01T00:00:00.000Z" }
     });
@@ -211,7 +204,7 @@ describe("API Access administration", () => {
 
 async function createFixture() {
   const clientInstanceId = asClientInstanceId("api-access-admin-test");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const records = {
     superadmin: await store.createUser({
       clientInstanceId,
@@ -259,64 +252,63 @@ async function createFixture() {
     tools: []
   });
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store });
-  const server = await createChatServer({
-    config,
-    clientInstanceId,
-    authAdapter: {
-      credentialMode: "explicit",
-      id: "api-access-admin-test",
-      async authenticate(request) {
-        const authorization = request.headers.authorization;
-        const value = Array.isArray(authorization) ? authorization[0] : authorization;
-        const token = value?.replace(/^Bearer /u, "") as keyof typeof users | undefined;
-        const user = token ? users[token] : undefined;
-        if (!user) {
-          throw new AppError("UNAUTHENTICATED", "Unknown test user");
-        }
-        return { ...user, correlationId: request.correlationId };
-      }
-    },
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    apiAccessStore: store,
-    usageGovernance: new ModelUsageGovernance({
-      store,
-      budget: config.usage.budget,
-      safeguards: config.usage.safeguards,
-      costs: config.usage.costs
-    }),
-    auditRecorder,
-    configAssets: {
-      store,
-      source: {
-        async getSnapshot() {
-          return { version: 0, agents: [], skills: [] };
+  const server = await createTestInstance({
+    server: {
+      config,
+      clientInstanceId,
+      authAdapter: {
+        credentialMode: "explicit",
+        id: "api-access-admin-test",
+        async authenticate(request) {
+          const authorization = request.headers.authorization;
+          const value = Array.isArray(authorization) ? authorization[0] : authorization;
+          const token = value?.replace(/^Bearer /u, "") as keyof typeof users | undefined;
+          const user = token ? users[token] : undefined;
+          if (!user) {
+            throw new AppError("UNAUTHENTICATED", "Unknown test user");
+          }
+          return { ...user, correlationId: request.correlationId };
         }
       },
-      validationRefs: {
-        modelProviderIds: ["local"],
-        modelBindingIds: [],
-        modelBindings: [],
-        fastModeModelBindingIds: [],
-        reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-        enabledToolNames: []
-      }
-    },
-    agentRuntime: unusedAgentRuntime(),
-    modelProvider: unusedModelProvider()
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      apiAccessStore: store,
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: config.usage.budget,
+        safeguards: config.usage.safeguards,
+        costs: config.usage.costs
+      }),
+      auditRecorder,
+      configAssets: {
+        store,
+        source: {
+          async getSnapshot() {
+            return { version: 0, agents: [], skills: [] };
+          }
+        },
+        validationRefs: {
+          modelProviderIds: ["local"],
+          modelBindingIds: [],
+          modelBindings: [],
+          fastModeModelBindingIds: [],
+          reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+          enabledToolNames: []
+        }
+      },
+      agentRuntime: unusedAgentRuntime(),
+      modelProvider: unusedModelProvider()
+    }
   });
   servers.push(server);
   return { clientInstanceId, server, store, users };
 }
 
-async function createClient(server: FastifyInstance, token: string) {
-  if (!server.server.listening) {
-    await server.listen({ host: "127.0.0.1", port: 0 });
-  }
-  const address = server.server.address() as AddressInfo;
+async function createClient(server: TestInstance, token: string) {
+  const baseUrl = await listenTestInstance(server);
   return createApiClient({
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl,
     getToken: () => token
   });
 }

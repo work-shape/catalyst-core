@@ -1,9 +1,10 @@
+import { createTestInstance } from "./support/test-instance";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { asClientInstanceId, asManagedFileId, type RuntimeCallContext } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource, InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { modelContentText, type ModelProvider } from "@vivd-catalyst/model-provider";
 import {
@@ -22,7 +23,7 @@ describe("agent workspace file e2e", () => {
     const rootDirectory = await mkdtemp(join(tmpdir(), "agent-workspace-file-e2e-"));
     try {
       const clientInstanceId = asClientInstanceId("agent-workspace-file-e2e-client");
-      const store = new InMemoryPlatformStore();
+      const store = createTestInstance().stores;
       const conversation = await store.createConversationForTesting({
         clientInstanceId,
         createdByUserId: "user-1",
@@ -76,7 +77,7 @@ describe("agent workspace file e2e", () => {
         sourceFileReader: {
           async readSourceFile(input) {
             expect(input.fileId).toBe(sourceFile.fileId);
-            return sourceFile;
+            return { ...sourceFile, byteSize: sourceFile.bytes.byteLength };
           }
         },
         commandResults: new LocalWorkspaceCommandResultSource(runner),
@@ -161,6 +162,7 @@ describe("agent workspace file e2e", () => {
         assetSource: createStaticConfigAssetSource({
           agents: [
             {
+              skillNames: [],
               name: "workspace_file_agent",
               displayName: "Workspace File Agent",
               instructions:

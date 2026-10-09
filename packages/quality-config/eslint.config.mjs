@@ -221,6 +221,12 @@ const isLiteralText = (node) => {
   }
 };
 
+/** @param {string} filename */
+const isTestCaller = (filename) => {
+  const path = relative(root, filename).replaceAll("\\", "/");
+  return path.startsWith("tests/") && !path.startsWith("tests/support/");
+};
+
 /** @type {import("eslint").ESLint.Plugin} */
 const plugin = {
   rules: {
@@ -312,6 +318,65 @@ const plugin = {
         };
       }
     },
+    "test-api-path": rule(
+      "Test callers name catalog operations; API paths belong in tests/support",
+      isTestCaller,
+      (_context, report) => ({
+        Literal: (node) => {
+          if (typeof node.value === "string" && node.value.startsWith("/api/")) report(node);
+        },
+        TemplateElement: (node) => {
+          if (node.value.raw.startsWith("/api/")) report(node);
+        }
+      })
+    ),
+    "test-injection": rule(
+      "HTTP injection belongs in tests/support; use instance.call",
+      isTestCaller,
+      (_context, report) => ({
+        MemberExpression: (node) => {
+          if (keyName(node.property, node.computed) === "inject") report(node);
+        },
+        VariableDeclarator: (node) => {
+          if (
+            node.id.type === "ObjectPattern" &&
+            node.id.properties.some(
+              (item) => item.type === "Property" && keyName(item.key, item.computed) === "inject"
+            )
+          )
+            report(node);
+        }
+      })
+    ),
+    "test-store": rule(
+      "Platform store classes belong in tests/support; use createTestInstance().stores",
+      isTestCaller,
+      (_context, report) => ({
+        ImportSpecifier: (node) => {
+          if (
+            /^(?:InMemoryPlatformStore|PostgresPlatformStore)$/.test(
+              keyName(node.imported, false) ?? ""
+            )
+          )
+            report(node);
+        },
+        NewExpression: (node) => {
+          if (
+            node.callee.type === "Identifier" &&
+            /^(?:InMemoryPlatformStore|PostgresPlatformStore)$/.test(node.callee.name)
+          )
+            report(node);
+        },
+        MemberExpression: (node) => {
+          if (
+            /^(?:InMemoryPlatformStore|PostgresPlatformStore)$/.test(
+              keyName(node.property, node.computed) ?? ""
+            )
+          )
+            report(node);
+        }
+      })
+    ),
     "memory-store": rule(
       "CB-3b removes STORE=memory and the in-memory platform store",
       () => true,

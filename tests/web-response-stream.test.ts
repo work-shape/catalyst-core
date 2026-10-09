@@ -1,20 +1,27 @@
+import {
+  fetchTestOperation,
+  addTestRoute,
+  listenTestInstance,
+  createTestInstance
+} from "./support/test-instance";
+
+import { setTestAgent } from "./support/fixtures";
+
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { sendWebResponse } from "../packages/chat-server/src/routes/better-auth-routes";
 
 describe("web response bridge", () => {
   it("streams response bodies without buffering them first", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
-    app.server.get("/stream", async (_request, reply) => {
+    addTestRoute(app, "/stream", async (_request, reply) => {
       return sendWebResponse(
         reply,
         new Response(createDelayedStream(), {
@@ -25,15 +32,10 @@ describe("web response bridge", () => {
       );
     });
 
-    await app.listen({ host: "127.0.0.1", port: 0 });
+    const baseUrl = await listenTestInstance(app);
     try {
-      const address = app.server.server.address();
-      if (!address || typeof address === "string") {
-        throw new Error("Expected Fastify to listen on a TCP port");
-      }
-
       const streamed = await Promise.race([
-        openStreamAndReadFirstChunk(`http://127.0.0.1:${address.port}/stream`),
+        openStreamAndReadFirstChunk(`${baseUrl}/stream`),
         delay(250).then(() => undefined)
       ]);
 
@@ -55,47 +57,46 @@ describe("web response bridge", () => {
         return toolSuccess({ text: input.text });
       }
     });
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         toolNames: ["demo.echo"],
         tools: [{ name: "demo.echo", enabled: true }]
       }),
       env: {},
-      storeMode: "memory",
       tools: [tool]
     });
 
-    await app.listen({ host: "127.0.0.1", port: 0 });
+    const baseUrl = await listenTestInstance(app);
     try {
-      const address = app.server.server.address();
-      if (!address || typeof address === "string") {
-        throw new Error("Expected Fastify to listen on a TCP port");
-      }
-      const baseUrl = `http://127.0.0.1:${address.port}`;
-      const conversationResponse = await fetch(`${baseUrl}/api/conversations`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: "Streaming test" })
+      const conversationResponse = await fetchTestOperation(baseUrl, "createConversation", {
+        ...{
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: "Streaming test" })
+        }
       });
       expect(conversationResponse.ok).toBe(true);
       const conversation = (await conversationResponse.json()) as { id: string };
 
-      const startResponse = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          idempotencyKey: "streaming-deltas-run",
-          message: {
-            text: "hello streaming one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
-          }
-        })
+      const startResponse = await fetchTestOperation(baseUrl, "startConversationRun", {
+        params: { conversationId: conversation.id },
+        ...{
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            idempotencyKey: "streaming-deltas-run",
+            message: {
+              text: "hello streaming one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
+            }
+          })
+        }
       });
 
       expect(startResponse.ok).toBe(true);
       const started = (await startResponse.json()) as { run: { id: string } };
-      const eventsResponse = await fetch(
-        `${baseUrl}/api/conversations/${conversation.id}/runs/${started.run.id}/events`
-      );
+      const eventsResponse = await fetchTestOperation(baseUrl, "observeConversationRun", {
+        params: { conversationId: conversation.id, runId: started.run.id }
+      });
       expect(eventsResponse.ok).toBe(true);
       const reader = eventsResponse.body?.getReader();
       expect(reader).toBeDefined();
@@ -123,47 +124,46 @@ describe("web response bridge", () => {
         return toolSuccess({ text: input.text });
       }
     });
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         toolNames: ["demo.echo"],
         tools: [{ name: "demo.echo", enabled: true }]
       }),
       env: {},
-      storeMode: "memory",
       tools: [tool]
     });
 
-    await app.listen({ host: "127.0.0.1", port: 0 });
+    const baseUrl = await listenTestInstance(app);
     try {
-      const address = app.server.server.address();
-      if (!address || typeof address === "string") {
-        throw new Error("Expected Fastify to listen on a TCP port");
-      }
-      const baseUrl = `http://127.0.0.1:${address.port}`;
-      const conversationResponse = await fetch(`${baseUrl}/api/conversations`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: "Tool streaming test" })
+      const conversationResponse = await fetchTestOperation(baseUrl, "createConversation", {
+        ...{
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title: "Tool streaming test" })
+        }
       });
       expect(conversationResponse.ok).toBe(true);
       const conversation = (await conversationResponse.json()) as { id: string };
 
-      const startResponse = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          idempotencyKey: "streaming-tool-run",
-          message: {
-            text: '/tool demo.echo {"text":"hello"}'
-          }
-        })
+      const startResponse = await fetchTestOperation(baseUrl, "startConversationRun", {
+        params: { conversationId: conversation.id },
+        ...{
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            idempotencyKey: "streaming-tool-run",
+            message: {
+              text: '/tool demo.echo {"text":"hello"}'
+            }
+          })
+        }
       });
 
       expect(startResponse.ok).toBe(true);
       const started = (await startResponse.json()) as { run: { id: string } };
-      const eventsResponse = await fetch(
-        `${baseUrl}/api/conversations/${conversation.id}/runs/${started.run.id}/events`
-      );
+      const eventsResponse = await fetchTestOperation(baseUrl, "observeConversationRun", {
+        params: { conversationId: conversation.id, runId: started.run.id }
+      });
       expect(eventsResponse.ok).toBe(true);
       const reader = eventsResponse.body?.getReader();
       expect(reader).toBeDefined();
@@ -225,38 +225,14 @@ function createTestConfig(
     modelProviders: [{ id: "local", type: "deterministic", model: "deterministic-local" }],
     tools: input.tools ?? []
   });
-  testAgentToolNamesByConfig.set(config, input.toolNames ?? []);
+  setTestAgent(config, {
+    name: "test_agent",
+    displayName: "Test Agent",
+    instructions: "Test.",
+    modelProviderId: "local",
+    toolNames: input.toolNames ?? []
+  });
   return config;
-}
-
-const testAgentToolNamesByConfig = new WeakMap<object, string[]>();
-
-async function createClientInstanceApp(
-  input: Parameters<typeof createUnseededClientInstanceApp>[0]
-): Promise<Awaited<ReturnType<typeof createUnseededClientInstanceApp>>> {
-  const app = await createUnseededClientInstanceApp(input);
-  const toolNames = testAgentToolNamesByConfig.get(app.config);
-  if (toolNames) {
-    await app.store.applyConfigAssetMutations({
-      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
-      mutations: [
-        {
-          type: "upsert",
-          kind: "agent",
-          name: "test_agent",
-          config: {
-            name: "test_agent",
-            displayName: "Test Agent",
-            instructions: "Test.",
-            modelProviderId: "local",
-            toolNames
-          }
-        },
-        { type: "setDefaultAgent", agentName: "test_agent" }
-      ]
-    });
-  }
-  return app;
 }
 
 async function openStreamAndReadFirstChunk(url: string): Promise<{

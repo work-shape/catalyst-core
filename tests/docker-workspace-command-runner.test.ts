@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +14,7 @@ import {
   type Conversation,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import {
   createDockerRunInvocation,
   createLocalWorkspaceFileByteStore,
@@ -179,7 +180,7 @@ describe("docker workspace command runner", () => {
     });
     const command = await harness.store.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
-      commandId: result.output!.commandId
+      commandId: asWorkspaceCommandId(result.output!.commandId)
     });
     expect(command?.error).toMatchObject({
       code: "WORKSPACE_COMMAND_TIMEOUT",
@@ -234,7 +235,7 @@ async function createDockerHarness(input: {
 }) {
   const clientInstanceId = asClientInstanceId(`docker_runner_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: ownerUserId,

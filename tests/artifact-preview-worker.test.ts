@@ -1,3 +1,4 @@
+import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -15,15 +16,15 @@ import {
   createArtifactPreviewSettingsHash,
   type DeletableWorkspaceObjectStorage
 } from "@vivd-catalyst/tool-execution";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import type {
-  ArtifactPreviewFailureCode,
-  ClientInstanceId,
-  Conversation,
-  ManagedArtifactRecord,
-  ManagedFileRecord
+
+import {
+  type ArtifactPreviewFailureCode,
+  type ClientInstanceId,
+  type Conversation,
+  type ManagedArtifactRecord,
+  type ManagedFileRecord,
+  asClientInstanceId
 } from "@vivd-catalyst/core";
-import { asClientInstanceId } from "@vivd-catalyst/core";
 
 describe("ArtifactPreviewWorker", () => {
   it("renders a queued document job into managed preview image artifacts and a ready manifest", async () => {
@@ -746,7 +747,7 @@ async function createWorkerFixture(
   } = {}
 ): Promise<WorkerFixture> {
   const clientInstanceId = asClientInstanceId(`preview_worker_${globalThis.crypto.randomUUID()}`);
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const objectStore = new MemoryObjectStorage();
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
@@ -798,7 +799,7 @@ async function createWorkerFixture(
 
 interface WorkerFixture {
   clientInstanceId: ClientInstanceId;
-  store: InMemoryPlatformStore;
+  store: TestMemoryStore;
   objectStore: MemoryObjectStorage;
   conversation: Conversation;
   sourceFile: ManagedFileRecord;

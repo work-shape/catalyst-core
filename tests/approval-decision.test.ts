@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import {
   StoreBackedAuditRecorder,
@@ -14,7 +15,7 @@ import {
   type AuthenticatedUser,
   type ModelProviderConfig
 } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource, InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
 import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { type ModelProvider } from "@vivd-catalyst/model-provider";
@@ -53,7 +54,7 @@ const usage = {
 };
 
 async function fixture() {
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: owner.id,

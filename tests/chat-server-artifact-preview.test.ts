@@ -1,5 +1,6 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+
 import {
   AppError,
   ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF,
@@ -12,7 +13,7 @@ import {
   type ClientInstanceId,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
@@ -56,13 +57,11 @@ describe("artifact preview routes", () => {
       });
 
       const [first, concurrent] = await Promise.all([
-        server.inject({
-          method: "GET",
-          url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+        server.call("getConversationAttachmentPreview", {
+          params: { conversationId: conversation.id, attachmentId: attachment.id }
         }),
-        server.inject({
-          method: "GET",
-          url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+        server.call("getConversationAttachmentPreview", {
+          params: { conversationId: conversation.id, attachmentId: attachment.id }
         })
       ]);
       expect(first.statusCode).toBe(200);
@@ -95,9 +94,8 @@ describe("artifact preview routes", () => {
         previewSourceId
       );
 
-      const second = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+      const second = await server.call("getConversationAttachmentPreview", {
+        params: { conversationId: conversation.id, attachmentId: attachment.id }
       });
       expect(second.json()).toMatchObject({ artifactId: previewSourceId });
       await expect(
@@ -150,9 +148,8 @@ describe("artifact preview routes", () => {
         claimedAt: "2026-08-03T10:00:00.000Z"
       });
 
-      const response = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/attachments/${attachment.id}/preview`
+      const response = await server.call("getConversationAttachmentPreview", {
+        params: { conversationId: conversation.id, attachmentId: attachment.id }
       });
 
       expect(response.statusCode).toBe(422);
@@ -370,9 +367,8 @@ describe("artifact preview routes", () => {
         }
       });
 
-      const ready = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${readyArtifact.id}/preview`
+      const ready = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: readyArtifact.id }
       });
       expect(ready.statusCode).toBe(200);
       expect(ready.headers["cache-control"]).toBe("private, no-store, max-age=0");
@@ -397,9 +393,8 @@ describe("artifact preview routes", () => {
       expect(ready.payload).not.toContain("artifact-previews/private");
       expect(ready.payload).not.toContain("renderer");
 
-      const emptyReadyRetry = await server.inject({
-        method: "POST",
-        url: `/api/conversations/${conversation.id}/artifacts/${emptyReadyArtifact.id}/preview/retry`
+      const emptyReadyRetry = await server.call("retryConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: emptyReadyArtifact.id }
       });
       expect(emptyReadyRetry.statusCode).toBe(200);
       expect(emptyReadyRetry.json()).toMatchObject({
@@ -414,9 +409,8 @@ describe("artifact preview routes", () => {
         })
       ).resolves.toMatchObject({ status: "pending" });
 
-      const pending = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${pendingArtifact.id}/preview`
+      const pending = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: pendingArtifact.id }
       });
       expect(pending.statusCode).toBe(200);
       expect(pending.headers["cache-control"]).toBe("private, no-store, max-age=0");
@@ -426,9 +420,8 @@ describe("artifact preview routes", () => {
         queuedAt: "2026-07-01T12:00:00.000Z"
       });
       await expect(
-        server.inject({
-          method: "GET",
-          url: `/api/conversations/${conversation.id}/artifacts/${failedArtifact.id}/preview`
+        server.call("getConversationArtifactPreview", {
+          params: { conversationId: conversation.id, artifactId: failedArtifact.id }
         })
       ).resolves.toMatchObject({
         statusCode: 200,
@@ -439,9 +432,8 @@ describe("artifact preview routes", () => {
           retryable: true
         })
       });
-      const failedRetry = await server.inject({
-        method: "POST",
-        url: `/api/conversations/${conversation.id}/artifacts/${failedArtifact.id}/preview/retry`
+      const failedRetry = await server.call("retryConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: failedArtifact.id }
       });
       expect(failedRetry.statusCode).toBe(200);
       const failedRetryJson = failedRetry.json() as { queuedAt: string };
@@ -461,9 +453,8 @@ describe("artifact preview routes", () => {
       });
       expect(retriedJob?.errorCode).toBeUndefined();
       await expect(
-        server.inject({
-          method: "POST",
-          url: `/api/conversations/${conversation.id}/artifacts/${failedArtifact.id}/preview/retry`
+        server.call("retryConversationArtifactPreview", {
+          params: { conversationId: conversation.id, artifactId: failedArtifact.id }
         })
       ).resolves.toMatchObject({
         statusCode: 200,
@@ -478,9 +469,8 @@ describe("artifact preview routes", () => {
         id: retriedJob?.id
       });
       await expect(
-        server.inject({
-          method: "GET",
-          url: `/api/conversations/${conversation.id}/artifacts/${failedArtifact.id}/preview`
+        server.call("getConversationArtifactPreview", {
+          params: { conversationId: conversation.id, artifactId: failedArtifact.id }
         })
       ).resolves.toMatchObject({
         statusCode: 200,
@@ -491,9 +481,8 @@ describe("artifact preview routes", () => {
         })
       });
       await expect(
-        server.inject({
-          method: "GET",
-          url: `/api/conversations/${conversation.id}/artifacts/${unsupportedManifestArtifact.id}/preview`
+        server.call("getConversationArtifactPreview", {
+          params: { conversationId: conversation.id, artifactId: unsupportedManifestArtifact.id }
         })
       ).resolves.toMatchObject({
         statusCode: 200,
@@ -504,9 +493,8 @@ describe("artifact preview routes", () => {
         })
       });
       await expect(
-        server.inject({
-          method: "POST",
-          url: `/api/conversations/${conversation.id}/artifacts/${unsupportedManifestArtifact.id}/preview/retry`
+        server.call("retryConversationArtifactPreview", {
+          params: { conversationId: conversation.id, artifactId: unsupportedManifestArtifact.id }
         })
       ).resolves.toMatchObject({
         statusCode: 200,
@@ -517,9 +505,8 @@ describe("artifact preview routes", () => {
         })
       });
       await expect(
-        server.inject({
-          method: "POST",
-          url: `/api/conversations/${conversation.id}/artifacts/${unsupportedWithoutCodeArtifact.id}/preview/retry`
+        server.call("retryConversationArtifactPreview", {
+          params: { conversationId: conversation.id, artifactId: unsupportedWithoutCodeArtifact.id }
         })
       ).resolves.toMatchObject({
         statusCode: 200,
@@ -546,9 +533,8 @@ describe("artifact preview routes", () => {
         status: "failed",
         errorCode: "source_too_large"
       });
-      const increasedLimitRetry = await server.inject({
-        method: "POST",
-        url: `/api/conversations/${conversation.id}/artifacts/${nonRetryableArtifact.id}/preview/retry`
+      const increasedLimitRetry = await server.call("retryConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: nonRetryableArtifact.id }
       });
       expect(increasedLimitRetry.statusCode).toBe(200);
       expect(increasedLimitRetry.json()).toMatchObject({
@@ -579,9 +565,8 @@ describe("artifact preview routes", () => {
         status: "failed",
         errorCode: "conversion_failed"
       });
-      const oldRendererPreview = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${oldRendererFailureArtifact.id}/preview`
+      const oldRendererPreview = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: oldRendererFailureArtifact.id }
       });
       expect(oldRendererPreview.statusCode).toBe(200);
       expect(oldRendererPreview.json()).toMatchObject({
@@ -589,9 +574,8 @@ describe("artifact preview routes", () => {
         artifactId: oldRendererFailureArtifact.id,
         queuedAt: expect.any(String)
       });
-      const spreadsheetPending = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${spreadsheetArtifact.id}/preview`
+      const spreadsheetPending = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: spreadsheetArtifact.id }
       });
       expect(spreadsheetPending.statusCode).toBe(200);
       expect(spreadsheetPending.json()).toMatchObject({
@@ -600,9 +584,8 @@ describe("artifact preview routes", () => {
         queuedAt: expect.any(String)
       });
 
-      const embedded = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${embeddedArtifact.id}/preview`
+      const embedded = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: embeddedArtifact.id }
       });
       expect(embedded.statusCode).toBe(200);
       expect(embedded.json()).toEqual({
@@ -626,9 +609,8 @@ describe("artifact preview routes", () => {
       expect(embedded.payload).not.toContain("wcmd_secret");
       expect(embedded.payload).not.toContain("document.preview_page_image");
 
-      const embeddedGif = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${embeddedGifWithoutFormatArtifact.id}/preview`
+      const embeddedGif = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: embeddedGifWithoutFormatArtifact.id }
       });
       expect(embeddedGif.statusCode).toBe(200);
       expect(embeddedGif.json()).toMatchObject({
@@ -637,9 +619,8 @@ describe("artifact preview routes", () => {
         queuedAt: expect.any(String)
       });
 
-      const wrongConversation = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${otherConversation.id}/artifacts/${readyArtifact.id}/preview`
+      const wrongConversation = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: otherConversation.id, artifactId: readyArtifact.id }
       });
       expect(wrongConversation.statusCode).toBe(404);
     } finally {
@@ -673,15 +654,13 @@ describe("artifact preview routes", () => {
         checksum: "sha256:forbidden-docx"
       });
 
-      const preview = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${artifact.id}/preview`
+      const preview = await server.call("getConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: artifact.id }
       });
 
       expect(preview.statusCode).toBe(403);
-      const retry = await server.inject({
-        method: "POST",
-        url: `/api/conversations/${conversation.id}/artifacts/${artifact.id}/preview/retry`
+      const retry = await server.call("retryConversationArtifactPreview", {
+        params: { conversationId: conversation.id, artifactId: artifact.id }
       });
       expect(retry.statusCode).toBe(403);
     } finally {
@@ -697,7 +676,7 @@ async function createPreviewServer(
   } = {}
 ) {
   const clientInstanceId = input.clientInstanceId ?? asClientInstanceId("demo-local");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const config = createPreviewConfig(clientInstanceId);
   const owner = input.owner ?? createTestUser("user-1", clientInstanceId);
   const usageGovernance = new ModelUsageGovernance({
@@ -706,23 +685,25 @@ async function createPreviewServer(
     safeguards: config.usage.safeguards,
     costs: config.usage.costs
   });
-  const server = await createChatServer({
-    config,
-    clientInstanceId,
-    authAdapter: {
-      credentialMode: "ambient",
-      id: "test-auth",
-      async authenticate() {
-        return owner;
-      }
-    },
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    usageGovernance,
-    auditRecorder: new NoopAuditRecorder(),
-    agentRuntime: createMissingRuntime(),
-    modelProvider: createUnusedModelProvider()
+  const server = await createTestInstance({
+    server: {
+      config,
+      clientInstanceId,
+      authAdapter: {
+        credentialMode: "ambient",
+        id: "test-auth",
+        async authenticate() {
+          return owner;
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance,
+      auditRecorder: new NoopAuditRecorder(),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider()
+    }
   });
   return { clientInstanceId, owner, server, store };
 }

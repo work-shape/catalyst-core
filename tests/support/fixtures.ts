@@ -1,4 +1,4 @@
-import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
+import type { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
 import {
   asClientInstanceId,
   asConversationId,
@@ -163,26 +163,18 @@ export function createTestConfig(
 
 const testAssetsByConfig = new WeakMap<object, { defaultAgentName: string; agent: JsonObject }>();
 
-export async function createClientInstanceApp(
-  input: Parameters<typeof createUnseededClientInstanceApp>[0]
-): Promise<Awaited<ReturnType<typeof createUnseededClientInstanceApp>>> {
-  const app = await createUnseededClientInstanceApp(input);
+export async function seedTestAssets(
+  app: Awaited<ReturnType<typeof createUnseededClientInstanceApp>>
+): Promise<void> {
   const assets = testAssetsByConfig.get(app.config);
-  if (assets) {
-    await app.store.applyConfigAssetMutations({
-      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
-      mutations: [
-        {
-          type: "upsert",
-          kind: "agent",
-          name: assets.defaultAgentName,
-          config: assets.agent
-        },
-        { type: "setDefaultAgent", agentName: assets.defaultAgentName }
-      ]
-    });
-  }
-  return app;
+  if (!assets) return;
+  await app.store.applyConfigAssetMutations({
+    clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+    mutations: [
+      { type: "upsert", kind: "agent", name: assets.defaultAgentName, config: assets.agent },
+      { type: "setDefaultAgent", agentName: assets.defaultAgentName }
+    ]
+  });
 }
 
 function toJsonObject(input: object): JsonObject {
@@ -209,23 +201,28 @@ export async function seedConversationMessage(
   });
 }
 
-export type TestServer = Awaited<ReturnType<typeof createClientInstanceApp>>["server"];
+type TestServer = {
+  call(
+    operation: "listCollaborationWorkspaces",
+    input: { headers: Record<string, string> }
+  ): Promise<{ statusCode: number; json<T>(): T }>;
+};
 
-export async function personalConversationListUrl(
+export async function personalConversationListInput(
   server: TestServer,
   headers: Record<string, string> = {}
-): Promise<string> {
-  const response = await server.inject({
-    method: "GET",
-    url: "/api/collaboration-workspaces",
-    headers
-  });
+): Promise<import("./operations").TestCallInput> {
+  const response = await server.call("listCollaborationWorkspaces", { headers });
   if (response.statusCode !== 200) {
     throw new Error(`Could not resolve Personal Workspace: ${response.statusCode}`);
   }
-  const personal = (response.json() as Array<{ id: string; kind: string }>).find(
-    (workspace) => workspace.kind === "personal"
-  );
+  const personal = response
+    .json<Array<{ id: string; kind: string }>>()
+    .find((workspace) => workspace.kind === "personal");
   if (!personal) throw new Error("Personal Workspace is not available");
-  return `/api/conversations?collaborationWorkspaceId=${encodeURIComponent(personal.id)}`;
+  return { query: { collaborationWorkspaceId: personal.id }, headers };
+}
+
+export function setTestAgent(config: object, agent: JsonObject): void {
+  testAssetsByConfig.set(config, { defaultAgentName: String(agent.name), agent });
 }

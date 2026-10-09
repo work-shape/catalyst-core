@@ -1,21 +1,22 @@
+import { createTestInstance, getTestConfig } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { asClientInstanceId } from "@vivd-catalyst/core";
-import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
+
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { createTestConfig, createClientInstanceApp } from "./chat-server-harness";
-import { injectStartConversationRun, drainRunEvents } from "./chat-server-run-harness";
+import { createTestConfig } from "./support/fixtures";
+import { injectStartConversationRun, drainRunEvents } from "./support/chat-server-run-harness";
 
 describe("client instance app vertical slice", () => {
   it("boots and exposes safe config with zero stored assets", async () => {
-    const app = await createUnseededClientInstanceApp({
+    const app = await createTestInstance({
+      seedAssets: false,
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const response = await app.server.inject({ method: "GET", url: "/api/config" });
+    const response = await app.call("getConfig", {});
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ agents: [] });
@@ -23,7 +24,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("offers and accepts only the agent's own model and its user-selectable models", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         agentModelBindingId: "own",
         // "retired" no longer exists and agents may no longer use "internal": both are ignored.
@@ -37,19 +38,16 @@ describe("client instance app vertical slice", () => {
         ]
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
-    const config = await app.server.inject({ method: "GET", url: "/api/config" });
+    const config = await app.call("getConfig", {});
     expect(config.json().agents[0].selectableModels).toEqual([
       { bindingId: "own", model: "own-model", selectableReasoningEfforts: [] },
       { bindingId: "offered", model: "offered-model", selectableReasoningEfforts: [] }
     ]);
 
     const start = (modelBindingId: string) =>
-      app.server.inject({
-        method: "POST",
-        url: "/api/conversations/runs",
+      app.call("createConversationRun", {
         payload: {
           idempotencyKey: `start-${modelBindingId}`,
           modelBindingId,
@@ -65,7 +63,7 @@ describe("client instance app vertical slice", () => {
       );
     }
     // A rejected model leaves no conversation behind.
-    const conversations = await app.server.inject({ method: "GET", url: "/api/conversations" });
+    const conversations = await app.call("listConversations", {});
     expect(conversations.json()).toEqual([]);
 
     for (const modelBindingId of ["own", "offered"]) {
@@ -75,13 +73,13 @@ describe("client instance app vertical slice", () => {
         conversation: { id: string };
         run: { id: string };
       };
-      await drainRunEvents(app.server, conversation.id, run.id);
+      await drainRunEvents(app, conversation.id, run.id);
     }
     await app.close();
   });
 
   it("remembers a user's model preference and what each conversation last ran on", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         agentModelBindingId: "own",
         agentUserSelectableModelBindingIds: ["offered"],
@@ -97,34 +95,24 @@ describe("client instance app vertical slice", () => {
         ]
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
-    const preferenceUrl = "/api/me/model-preference";
 
-    const initial = await app.server.inject({ method: "GET", url: preferenceUrl });
+    const initial = await app.call("getCurrentUserModelPreference");
     expect(initial.json()).toEqual({ reasoningEfforts: {} });
     const preference = { modelBindingId: "offered", reasoningEfforts: { own: "high" } };
-    const stored = await app.server.inject({
-      method: "PUT",
-      url: preferenceUrl,
+    const stored = await app.call("setCurrentUserModelPreference", {
       payload: preference
     });
     expect(stored.statusCode).toBe(200);
-    expect((await app.server.inject({ method: "GET", url: preferenceUrl })).json()).toEqual(
-      preference
-    );
-    const invalid = await app.server.inject({
-      method: "PUT",
-      url: preferenceUrl,
+    expect((await app.call("getCurrentUserModelPreference")).json()).toEqual(preference);
+    const invalid = await app.call("setCurrentUserModelPreference", {
       payload: { reasoningEfforts: { own: "maximal" } }
     });
     expect(invalid.statusCode).toBe(422);
 
     const threadAfterRun = async (payload: Record<string, unknown>) => {
-      const started = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations/runs",
+      const started = await app.call("createConversationRun", {
         payload: { ...payload, message: { text: "Hello" } }
       });
       expect(started.statusCode).toBe(200);
@@ -132,10 +120,9 @@ describe("client instance app vertical slice", () => {
         conversation: { id: string };
         run: { id: string };
       };
-      await drainRunEvents(app.server, conversation.id, run.id);
-      const thread = await app.server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/thread`
+      await drainRunEvents(app, conversation.id, run.id);
+      const thread = await app.call("getConversationThread", {
+        params: { conversationId: conversation.id }
       });
       return thread.json() as { modelSelection?: unknown };
     };
@@ -152,7 +139,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("accepts only the reasoning efforts the model that runs offers to users", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         agentModelBindingId: "own",
         agentUserSelectableModelBindingIds: ["offered"],
@@ -168,10 +155,9 @@ describe("client instance app vertical slice", () => {
         ]
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
-    const config = await app.server.inject({ method: "GET", url: "/api/config" });
+    const config = await app.call("getConfig", {});
     expect(config.json().agents[0].selectableModels).toEqual([
       {
         bindingId: "own",
@@ -184,9 +170,7 @@ describe("client instance app vertical slice", () => {
     ]);
 
     const start = (reasoningEffort: string, modelBindingId?: string) =>
-      app.server.inject({
-        method: "POST",
-        url: "/api/conversations/runs",
+      app.call("createConversationRun", {
         payload: {
           idempotencyKey: `start-${modelBindingId ?? "own"}-${reasoningEffort}`,
           modelBindingId,
@@ -199,7 +183,7 @@ describe("client instance app vertical slice", () => {
       expect(rejected.statusCode).toBe(422);
       expect(rejected.json().error.message).toMatch(/is not available for user selection$/u);
     }
-    const conversations = await app.server.inject({ method: "GET", url: "/api/conversations" });
+    const conversations = await app.call("listConversations", {});
     expect(conversations.json()).toEqual([]);
 
     for (const reasoningEffort of ["high", "medium"]) {
@@ -209,13 +193,13 @@ describe("client instance app vertical slice", () => {
         conversation: { id: string };
         run: { id: string };
       };
-      await drainRunEvents(app.server, conversation.id, run.id);
+      await drainRunEvents(app, conversation.id, run.id);
     }
     await app.close();
   });
 
   it("rejects model bindings that are not available for user selection", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         agentModelBindingId: "selectable",
         modelBindings: [
@@ -234,19 +218,13 @@ describe("client instance app vertical slice", () => {
         ]
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: "Model selection" }
-    });
+    const created = await app.call("createConversation", { payload: { title: "Model selection" } });
     const conversation = created.json() as { id: string };
 
-    const rejected = await app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/runs`,
+    const rejected = await app.call("startConversationRun", {
+      params: { conversationId: conversation.id },
       payload: {
         idempotencyKey: "reject-internal-model",
         modelBindingId: "internal",
@@ -255,9 +233,8 @@ describe("client instance app vertical slice", () => {
     });
 
     expect(rejected.statusCode).toBe(422);
-    const messages = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/messages`
+    const messages = await app.call("listConversationMessages", {
+      params: { conversationId: conversation.id }
     });
     expect(messages.json()).toEqual([]);
     await app.close();
@@ -277,31 +254,25 @@ describe("client instance app vertical slice", () => {
         return toolSuccess({ echoed: input.text });
       }
     });
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config,
       env: {},
-      storeMode: "memory",
       tools: [tool]
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: "Tool test" }
-    });
+    const created = await app.call("createConversation", { payload: { title: "Tool test" } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
     const started = await injectStartConversationRun(
-      app.server,
+      app,
       conversation.id,
       '/tool demo.echo {"text":"hello"}'
     );
-    await drainRunEvents(app.server, conversation.id, started.run.id);
+    await drainRunEvents(app, conversation.id, started.run.id);
 
-    const messages = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/messages`
+    const messages = await app.call("listConversationMessages", {
+      params: { conversationId: conversation.id }
     });
     expect(messages.statusCode).toBe(200);
     const persistedMessages = messages.json() as Array<{ role: string; text: string }>;
@@ -314,19 +285,13 @@ describe("client instance app vertical slice", () => {
       ])
     );
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect(
       (audit.json() as Array<{ type: string }>).some((event) => event.type === "tool.completed")
     ).toBe(true);
 
-    const usage = await app.server.inject({
-      method: "GET",
-      url: "/api/superadmin/usage"
-    });
+    const usage = await app.call("getUsageSummary", {});
     expect(usage.statusCode).toBe(200);
     const usageBody = usage.json() as {
       today: { modelCallCount: number; totalTokens: number };
@@ -340,7 +305,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("shows admins billable usage without internal rate-card policy", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         developmentAuth: {
           enabled: true,
@@ -381,13 +346,10 @@ describe("client instance app vertical slice", () => {
         }
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const adminUsage = await app.server.inject({
-      method: "GET",
-      url: "/api/superadmin/usage",
+    const adminUsage = await app.call("getUsageSummary", {
       headers: {
         "x-dev-user-id": "admin-1"
       }
@@ -426,9 +388,7 @@ describe("client instance app vertical slice", () => {
     expect(JSON.stringify(adminUsageBody)).not.toContain("totalCostMicros");
     expect(JSON.stringify(adminUsageBody)).not.toContain("budgetedCostMicros");
 
-    const adminConfig = await app.server.inject({
-      method: "GET",
-      url: "/api/config",
+    const adminConfig = await app.call("getConfig", {
       headers: {
         "x-dev-user-id": "admin-1"
       }
@@ -437,9 +397,7 @@ describe("client instance app vertical slice", () => {
     expect(JSON.stringify(adminConfig.json())).not.toContain("monthlySpendLimit");
     expect(JSON.stringify(adminConfig.json())).not.toContain("costSafetyMultiplier");
 
-    const superadminUsage = await app.server.inject({
-      method: "GET",
-      url: "/api/superadmin/usage",
+    const superadminUsage = await app.call("getUsageSummary", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -476,7 +434,7 @@ describe("client instance app vertical slice", () => {
 
     await app.close();
 
-    const webSearchApp = await createClientInstanceApp({
+    const webSearchApp = await createTestInstance({
       config: createTestConfig({
         developmentAuth: {
           enabled: true,
@@ -516,12 +474,9 @@ describe("client instance app vertical slice", () => {
         }
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
-    const webSearchUsage = await webSearchApp.server.inject({
-      method: "GET",
-      url: "/api/superadmin/usage",
+    const webSearchUsage = await webSearchApp.call("getUsageSummary", {
       headers: {
         "x-dev-user-id": "admin-1"
       }
@@ -547,17 +502,13 @@ describe("client instance app vertical slice", () => {
       }
     ];
     const welcomeMessage = "What should we review first?";
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({ welcomeMessage, initialPrompts }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const response = await app.server.inject({
-      method: "GET",
-      url: "/api/config"
-    });
+    const response = await app.call("getConfig", {});
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
@@ -574,22 +525,22 @@ describe("client instance app vertical slice", () => {
   });
 
   it("limits safe config agents to those available in Personal Workspaces", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
     try {
-      const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
+      const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
       const names = ["personal", "restricted"];
-      await app.store.applyConfigAssetMutations({
+      await app.stores.applyConfigAssetMutations({
         clientInstanceId,
         mutations: names.map((name) => ({
           type: "upsert" as const,
           kind: "agent" as const,
           name,
           config: {
+            skillNames: [],
             name,
             displayName: name,
             instructions: "Use configured tools only.",
@@ -601,18 +552,18 @@ describe("client instance app vertical slice", () => {
       });
       const readAgentNames = async () =>
         (
-          (await app.server.inject({ method: "GET", url: "/api/config" })).json() as {
+          (await app.call("getConfig", {})).json() as {
             agents: Array<{ name: string }>;
           }
         ).agents.map((agent) => agent.name);
       expect(await readAgentNames()).toEqual(["personal", "restricted", "test_agent"]);
 
-      await app.store.setAgentAvailability({
+      await app.stores.setAgentAvailability({
         clientInstanceId,
         agentName: "personal",
         availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
       });
-      await app.store.setAgentAvailability({
+      await app.stores.setAgentAvailability({
         clientInstanceId,
         agentName: "restricted",
         availability: { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] }
@@ -624,7 +575,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("resolves localized agent content in safe config", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         displayName: {
           en: "Application Assistant",
@@ -648,14 +599,10 @@ describe("client instance app vertical slice", () => {
         ]
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const response = await app.server.inject({
-      method: "GET",
-      url: "/api/config?locale=de"
-    });
+    const response = await app.call("getConfig", { query: { locale: "de" } });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
@@ -683,13 +630,12 @@ describe("client instance app vertical slice", () => {
 
   it("rejects startup when an agent references an unregistered tool implementation", async () => {
     await expect(
-      createClientInstanceApp({
+      createTestInstance({
         config: createTestConfig({
           tools: [{ name: "demo.echo", enabled: true }],
           toolNames: ["demo.echo"]
         }),
         env: {},
-        storeMode: "memory",
         tools: []
       })
     ).rejects.toMatchObject({
@@ -707,7 +653,7 @@ describe("client instance app vertical slice", () => {
       "workspace.promote_artifact",
       "workspace.preview_images"
     ];
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         tools: workspaceToolNames.map((name) => ({ name, enabled: true })),
         toolNames: workspaceToolNames,
@@ -718,18 +664,18 @@ describe("client instance app vertical slice", () => {
       env: {
         EXECUTION_WORKSPACE_OBJECT_ROOT: "/tmp/vivd-catalyst-test-workspace-objects"
       },
-      storeMode: "memory",
       tools: []
     });
 
     await app.close();
   });
 
-  it("rejects startup without DATABASE_URL unless memory mode is explicit", async () => {
+  it("rejects Postgres startup without DATABASE_URL", async () => {
     await expect(
-      createClientInstanceApp({
+      createTestInstance({
         config: createTestConfig(),
         env: {},
+        storeMode: "postgres",
         tools: []
       })
     ).rejects.toMatchObject({
@@ -754,13 +700,12 @@ describe("client instance app vertical slice", () => {
     });
 
     await expect(
-      createClientInstanceApp({
+      createTestInstance({
         config: createTestConfig({
           tools: [{ name: "demo.approval", enabled: true }],
           toolNames: ["demo.approval"]
         }),
         env: {},
-        storeMode: "memory",
         tools: [approvalTool]
       })
     ).rejects.toMatchObject({

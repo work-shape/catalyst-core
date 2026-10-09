@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
   asClientInstanceId,
@@ -8,7 +9,6 @@ import {
   type ChatMessage,
   type StructuredResultPublication
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 
 describe("structured result projection", () => {
   it("keeps the first kind for a key and ignores later conflicting publications", () => {
@@ -86,7 +86,7 @@ describe("structured result projection", () => {
     try {
       vi.setSystemTime(new Date("2026-08-06T10:00:00.000Z"));
       const clientInstanceId = asClientInstanceId("client_test");
-      const store = new InMemoryPlatformStore();
+      const store = createTestInstance().stores;
       const conversation = await store.createConversationForTesting({
         clientInstanceId,
         createdByUserId: "user_test",

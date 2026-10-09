@@ -1,10 +1,10 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import { asClientInstanceId } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 
-describe("InMemoryPlatformStore Collaboration Workspaces", () => {
+describe("TestMemoryStore Collaboration Workspaces", () => {
   it("provisions exactly one private Personal Workspace and owner membership", async () => {
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-personal");
     const user = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
 
@@ -36,7 +36,7 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
   });
 
   it("protects Personal Workspace membership, name, visibility, and lifecycle", async () => {
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-invariants");
     const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
     const other = await store.createUser({ clientInstanceId, displayLabel: "Other" });
@@ -73,7 +73,7 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
   });
 
   it("updates Shared Workspace roles and keeps one pending access request per user", async () => {
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-shared");
     const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
     const member = await store.createUser({ clientInstanceId, displayLabel: "Member" });
@@ -128,7 +128,7 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
   });
 
   it("moves only from the expected workspace and finalizes cleaned shared workspaces", async () => {
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-lifecycle");
     const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });
     const requester = await store.createUser({ clientInstanceId, displayLabel: "Requester" });
@@ -191,7 +191,7 @@ describe("InMemoryPlatformStore Collaboration Workspaces", () => {
   });
 
   it("scopes conversation listings by visibility and keeps Personal Workspaces open", async () => {
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("workspace-unit-visibility");
     const author = await store.createUser({ clientInstanceId, displayLabel: "Author" });
     const colleague = await store.createUser({ clientInstanceId, displayLabel: "Colleague" });

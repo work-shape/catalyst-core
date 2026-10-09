@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import postgres from "postgres";
 import {
@@ -7,17 +8,20 @@ import {
   type ApprovalCheckResult,
   readApprovalDecisionMetadata
 } from "@vivd-catalyst/core";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 
 describePostgres("Postgres approval request store", () => {
   it("scopes and bounds reads and atomically allows only one pending transition", async () => {
-    const store = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    });
+    const store = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: true
+        }
+      })
+    ).stores;
     const sql = postgres(databaseUrl!, { max: 1 });
     const clientInstanceId = asClientInstanceId(`approval_${globalThis.crypto.randomUUID()}`);
     const owner = await store.createUser({ clientInstanceId, displayLabel: "Owner" });

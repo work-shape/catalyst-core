@@ -95,6 +95,16 @@ export const address = globalThis.location;
 export type Handler = (event: globalThis.Event) => void;
 `,
 
+  // Test callers cannot hide HTTP paths, injection or store construction behind aliases.
+  "tests/api-path.test.ts": `const path = "/api/conversations"; export { path };\n`,
+  "tests/api-template.test.ts": "export const path = `/api/conversations/${String(1)}`;\n",
+  "tests/injection.test.ts": `declare const server: { inject(): void }; server.inject();\n`,
+  "tests/computed-injection.test.ts": `declare const server: { inject(): void }; server["inject"]();\n`,
+  "tests/aliased-injection.test.ts": `declare const server: { inject(): void }; const { inject: send } = server; send();\n`,
+  "tests/store-class.test.ts": `declare class PostgresPlatformStore {} new PostgresPlatformStore();\n`,
+  "tests/store-alias.test.ts": `import { PostgresPlatformStore as Store } from "@fixture/beta"; export { Store };\n`,
+  "tests/support/allowed.ts": `declare const server: { inject(): void }; server.inject(); export const path = "/api/conversations"; declare class PostgresPlatformStore {} new PostgresPlatformStore();\n`,
+
   // typescript-eslint
   [`${source}/floating.ts`]: `Promise.resolve(1);\n`,
   [`${source}/misused.ts`]: `export const callback: () => void = async () => {};\n`,
@@ -409,6 +419,13 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `@typescript-eslint/no-unnecessary-type-assertion ${source}/screens/asserted.tsx`,
         `max-lines ${source}/large.ts`,
         `catalyst/memory-store ${source}/memory-store.ts`,
+        "catalyst/test-api-path tests/api-path.test.ts",
+        "catalyst/test-api-path tests/api-template.test.ts",
+        "catalyst/test-injection tests/injection.test.ts",
+        "catalyst/test-injection tests/computed-injection.test.ts",
+        "catalyst/test-injection tests/aliased-injection.test.ts",
+        "catalyst/test-store tests/store-class.test.ts",
+        "catalyst/test-store tests/store-alias.test.ts",
         `catalyst/database-skip tests/database.test.ts`,
         "catalyst/package-cycle quality-package-graph.json",
         "catalyst/package-cycle quality-package-graph.json",

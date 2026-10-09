@@ -110,7 +110,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unnecessary-type-assertion",
       "scope": "tests",
-      "count": 129,
+      "count": 128,
       "owner": "CB-2"
     },
     {
@@ -208,7 +208,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 119,
+      "count": 97,
       "owner": "CB-2"
     },
     {
@@ -369,7 +369,7 @@
       "target": "lint",
       "rule": "catalyst/memory-store",
       "scope": "tests",
-      "count": 75,
+      "count": 3,
       "owner": "CB-3b"
     },
     {
@@ -411,7 +411,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 219,
+      "count": 218,
       "owner": "CB-2"
     },
     {
@@ -593,7 +593,7 @@
       "target": "lint",
       "rule": "knip/unlisted",
       "scope": "tests",
-      "count": 63,
+      "count": 59,
       "owner": "CB-2"
     },
     {
@@ -943,7 +943,7 @@
       "target": "types:tests",
       "rule": "typescript/test-errors",
       "scope": "tests",
-      "count": 215,
+      "count": 101,
       "owner": "CB-2b"
     },
     {
@@ -994,13 +994,6 @@
       "scope": "packages/tool-execution",
       "count": 3,
       "owner": "EW-1"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/unused",
-      "scope": "tests",
-      "count": 3,
-      "owner": "CB-2"
     }
   ]
 }

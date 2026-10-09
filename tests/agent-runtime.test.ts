@@ -1,3 +1,4 @@
+import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -18,7 +19,7 @@ import {
   type ToolExecution,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
-import { createStaticConfigAssetSource, InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
 import {
   LocalAgentRuntime,
   type LocalAgentRunFailureReport,
@@ -43,7 +44,7 @@ import {
 
 describe("local agent runtime", () => {
   it("reclaims stale pending run-start idempotency commands", async () => {
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("run-start-reclaim-client");
     const baseInput = {
       clientInstanceId,
@@ -104,7 +105,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -207,7 +208,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -221,6 +222,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "cursor_agent",
             displayName: "Cursor Agent",
             instructions: "Help the user.",
@@ -300,7 +302,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -318,6 +320,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "cancel_prefix_agent",
             displayName: "Cancel Prefix Agent",
             instructions: "Help the user.",
@@ -453,7 +456,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -476,6 +479,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "cancel_tool_agent",
             displayName: "Cancel Tool Agent",
             instructions: "Use the tool.",
@@ -587,7 +591,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: [
@@ -628,6 +632,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "history_agent",
             displayName: "History Agent",
             instructions: "Use conversation history.",
@@ -692,7 +697,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -720,6 +725,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "observation_failure_agent",
             displayName: "Observation Failure Agent",
             instructions: "Help the user.",
@@ -799,7 +805,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -825,6 +831,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "binding_agent",
             displayName: "Binding Agent",
             instructions: "Use the configured model binding.",
@@ -970,7 +977,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1076,7 +1083,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const runId = asAgentRunId("run_tool_history");
     const toolCall = {
       toolCallId: "call_old_page",
@@ -1140,6 +1147,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "tool_history_agent",
             displayName: "Tool History Agent",
             instructions: "Use conversation history.",
@@ -1207,7 +1215,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1239,6 +1247,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "locale_agent",
             displayName: "Locale Agent",
             instructions: "Help the user.",
@@ -1306,7 +1315,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1370,6 +1379,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "tool_stream_agent",
             displayName: "Tool Stream Agent",
             instructions: "Use tools when useful.",
@@ -1488,7 +1498,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1537,6 +1547,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "provider_tool_stream_agent",
             displayName: "Provider Tool Stream Agent",
             instructions: "Use provider tools when useful.",
@@ -1622,7 +1633,7 @@ describe("local agent runtime", () => {
           authSource: "test"
         }
       };
-      const store = new InMemoryPlatformStore();
+      const store = createTestInstance().stores;
       const conversationId = await createConversationWithMessages(store, {
         clientInstanceId,
         messages: []
@@ -1725,7 +1736,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1772,6 +1783,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "provider_stream_retry_agent",
             displayName: "Provider Stream Retry Agent",
             instructions: "Help the user.",
@@ -1853,7 +1865,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -1893,6 +1905,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "usage_persistence_failure_agent",
             displayName: "Usage Persistence Failure Agent",
             instructions: "Help the user.",
@@ -1943,7 +1956,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversation = await store.createConversationForTesting({
       clientInstanceId,
       createdByUserId: "user-1",
@@ -2000,6 +2013,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "artifact_agent",
             displayName: "Artifact Agent",
             instructions: "Use tools when useful.",
@@ -2067,8 +2081,7 @@ describe("local agent runtime", () => {
 
     const observations = await store.listRunObservations({
       clientInstanceId,
-      runId: run.runId,
-      ownerUserId: "user-1"
+      runId: run.runId
     });
     const toolObservation = observations.find(
       (observation) => observation.type === "tool_call_completed"
@@ -2108,7 +2121,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -2194,6 +2207,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "invalid_tool_json_agent",
             displayName: "Invalid Tool JSON Agent",
             instructions: "Use tools when useful.",
@@ -2255,7 +2269,7 @@ describe("local agent runtime", () => {
     const completedMessages: string[] = [];
     for await (const event of runtime.observe(run.runId, context)) {
       if (event.type === "tool_call_failed") {
-        failedToolErrors.push(event.result.error);
+        if (event.result.status !== "success") failedToolErrors.push(event.result.error);
       }
       if (event.type === "message_completed") {
         completedMessages.push(event.message.text);
@@ -2299,7 +2313,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: [
@@ -2312,7 +2326,7 @@ describe("local agent runtime", () => {
       type: "openai-compatible",
       api: "responses",
       baseUrl: "https://example.test/openai/v1",
-      apiKey: "test-key",
+      apiKeyEnvName: "TEST_API_KEY",
       model: "test-model",
       contextManagement: {
         compaction: {
@@ -2363,6 +2377,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "compaction_agent",
             displayName: "Compaction Agent",
             instructions: "Help the user.",
@@ -2535,7 +2550,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -2559,6 +2574,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "error_agent",
             displayName: "Error Agent",
             instructions: "Help the user.",
@@ -2622,7 +2638,7 @@ describe("local agent runtime", () => {
         authSource: "test"
       }
     };
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversationId = await createConversationWithMessages(store, {
       clientInstanceId,
       messages: []
@@ -2642,6 +2658,7 @@ describe("local agent runtime", () => {
       assetSource: createStaticConfigAssetSource({
         agents: [
           {
+            skillNames: [],
             name: "app_error_agent",
             displayName: "App Error Agent",
             instructions: "Help the user.",
@@ -2686,7 +2703,7 @@ describe("local agent runtime", () => {
 });
 
 async function createConversationWithMessages(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   input: {
     clientInstanceId: ChatMessage["clientInstanceId"];
     messages: Array<{ role: ChatMessage["role"]; text: string; metadata?: JsonObject }>;
@@ -2754,7 +2771,7 @@ async function firstRunFailedEvent(
 }
 
 async function waitForPersistedRunStatus(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   input: {
     clientInstanceId: ReturnType<typeof asClientInstanceId>;
     runId: ReturnType<typeof asAgentRunId>;

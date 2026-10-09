@@ -5,17 +5,16 @@ import {
   createPersistedRecoveryRun,
   expectRunStatus,
   parseSseChunks
-} from "./chat-server-run-harness";
-import { personalConversationListUrl } from "./chat-server-harness";
+} from "./support/chat-server-run-harness";
+import { personalConversationListInput } from "./support/fixtures";
 
 describe("client instance app vertical slice", () => {
   it("recovers a stale durable active run in thread snapshots without duplicate terminal observations", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
 
-    const snapshot = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/thread`
+    const snapshot = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id }
     });
     expect(snapshot.statusCode).toBe(200);
     expect(snapshot.json()).toMatchObject({
@@ -38,14 +37,10 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/thread`
-    });
+    await server.call("getConversationThread", { params: { conversationId: conversation.id } });
     const observations = await store.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
-      runId: run.id,
-      ownerUserId: fixture.owner.id
+      runId: run.id
     });
     expect(observations.map((observation) => observation.type)).toEqual([
       "message_delta",
@@ -60,10 +55,10 @@ describe("client instance app vertical slice", () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
 
-    const listed = await server.inject({
-      method: "GET",
-      url: await personalConversationListUrl(server)
-    });
+    const listed = await server.call(
+      "listConversations",
+      await personalConversationListInput(server)
+    );
     expect(listed.statusCode).toBe(200);
     const listedConversation = (listed.json() as Array<{ id: string; activeRun?: unknown }>).find(
       (item) => item.id === conversation.id
@@ -91,9 +86,9 @@ describe("client instance app vertical slice", () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
 
-    const events = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/runs/${run.id}/events?after=1`
+    const events = await server.call("observeConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      query: { after: "1" }
     });
     expect(events.statusCode).toBe(200);
     const chunks = parseSseChunks(events.payload);
@@ -119,9 +114,9 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const replay = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/runs/${run.id}/events?after=1`
+    const replay = await server.call("observeConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      query: { after: "1" }
     });
     expect(replay.statusCode).toBe(200);
     expect(parseSseChunks(replay.payload)).toEqual([
@@ -147,9 +142,9 @@ describe("client instance app vertical slice", () => {
       lastSequence: 1
     });
 
-    const events = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/runs/${run.id}/events?after=1`
+    const events = await server.call("observeConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      query: { after: "1" }
     });
     expect(events.statusCode).toBe(200);
     expect(parseSseChunks(events.payload)).toEqual([
@@ -184,9 +179,8 @@ describe("client instance app vertical slice", () => {
       lastSequence: 1
     });
 
-    const cancelled = await server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/runs/${run.id}/cancel`,
+    const cancelled = await server.call("cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
       payload: { reason: "User stopped a missing local run" }
     });
     expect(cancelled.statusCode).toBe(200);
@@ -204,8 +198,7 @@ describe("client instance app vertical slice", () => {
 
     const replay = await store.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
-      runId: run.id,
-      ownerUserId: fixture.owner.id
+      runId: run.id
     });
     expect(replay.map((observation) => observation.type)).toEqual(["message_delta", "run_failed"]);
     await server.close();
@@ -232,15 +225,14 @@ describe("client instance app vertical slice", () => {
       leaseExpiresAt: new Date(now + 10 * 60 * 1000).toISOString()
     });
 
-    const events = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/runs/${run.id}/events?after=1`
+    const events = await server.call("observeConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      query: { after: "1" }
     });
     expect(parseSseChunks(events.payload).map((chunk) => chunk.type)).not.toContain("run_failed");
 
-    const cancelled = await server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/runs/${run.id}/cancel`,
+    const cancelled = await server.call("cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
       payload: { reason: "Stop" }
     });
     expect(cancelled.statusCode).toBe(404);
@@ -253,18 +245,17 @@ describe("client instance app vertical slice", () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
 
-    const wrongOwnerEvents = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/runs/${run.id}/events?after=1`,
+    const wrongOwnerEvents = await server.call("observeConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      query: { after: "1" },
       headers: {
         "x-test-user": "other-user"
       }
     });
     expect(wrongOwnerEvents.statusCode).toBe(404);
 
-    const wrongOwnerSnapshot = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/thread`,
+    const wrongOwnerSnapshot = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id },
       headers: {
         "x-test-user": "other-user"
       }
@@ -281,8 +272,7 @@ describe("client instance app vertical slice", () => {
     });
     const observations = await store.listRunObservations({
       clientInstanceId: fixture.clientInstanceId,
-      runId: run.id,
-      ownerUserId: fixture.owner.id
+      runId: run.id
     });
     expect(observations).toHaveLength(1);
 

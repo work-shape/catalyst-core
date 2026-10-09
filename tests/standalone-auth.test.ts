@@ -1,6 +1,9 @@
+import { bindTestTransport, createTestInstance } from "./support/test-instance";
+import { testOperations } from "./support/operations";
+
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { asClientInstanceId } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import {
   CompositeAuthAdapter,
   DevelopmentAuthAdapter,
@@ -29,8 +32,10 @@ const { authDatabase, closeDatabase } = vi.hoisted(() => ({
 vi.mock(
   "../packages/auth/node_modules/better-auth/dist/adapters/drizzle-adapter/index.mjs",
   async () => {
-    const { memoryAdapter } =
+    const adapterModule =
       await import("../packages/auth/node_modules/better-auth/dist/adapters/memory-adapter/index.mjs");
+    const memoryAdapter: unknown = Reflect.get(adapterModule, "memoryAdapter");
+    if (typeof memoryAdapter !== "function") throw new Error("Memory auth adapter is unavailable");
     return {
       drizzleAdapter: () => memoryAdapter(authDatabase)
     };
@@ -103,7 +108,7 @@ describe("standalone auth email routes", () => {
   });
 
   it("rejects public email sign-up without creating a user", async () => {
-    const response = await postAuth("/api/auth/sign-up/email", {
+    const response = await postAuth(testOperations.authSignUp.buildPath({}), {
       name: "Public User",
       email: "public@example.test",
       password: "public-password"
@@ -117,7 +122,7 @@ describe("standalone auth email routes", () => {
   });
 
   it("still signs in a provisioned user", async () => {
-    const response = await postAuth("/api/auth/sign-in/email", { email, password });
+    const response = await postAuth(testOperations.authSignIn.buildPath({}), { email, password });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -126,7 +131,7 @@ describe("standalone auth email routes", () => {
   });
 
   it("marks successful session-cookie authentication on the adapter result", async () => {
-    const response = await postAuth("/api/auth/sign-in/email", { email, password });
+    const response = await postAuth(testOperations.authSignIn.buildPath({}), { email, password });
     expect(response.status).toBe(200);
     const cookie = response.headers
       .getSetCookie()
@@ -221,18 +226,17 @@ describe("standalone auth email routes", () => {
         request: { clientInstanceId }
       } = await createMixedCredentials();
       const authAdapter = wrapped
-        ? new IdentityResolvingAuthAdapter(auth.authAdapter, new InMemoryPlatformStore())
+        ? new IdentityResolvingAuthAdapter(auth.authAdapter, createTestInstance().stores)
         : auth.authAdapter;
       const authenticate = vi.spyOn(auth.authAdapter, "authenticate");
-      const server = Fastify();
-      installErrorHandler(server);
-      server.get("/identity", async (request) =>
+      const httpServer = Fastify();
+      const server = bindTestTransport(httpServer, () => httpServer.close());
+      installErrorHandler(httpServer);
+      httpServer.get("/identity", async (request) =>
         authenticateRequest({ clientInstanceId, authAdapter }, request)
       );
       try {
-        const response = await server.inject({
-          method: "GET",
-          url: "/identity",
+        const response = await server.call("testIdentity", {
           headers: { cookie, authorization: "Bearer invalid" }
         });
         expect(response.statusCode).toBe(401);
@@ -246,24 +250,23 @@ describe("standalone auth email routes", () => {
   );
 
   it.each([
-    ["authorization", "GET", "/api/auth/get-session"],
-    ["authorization", "POST", "/api/auth/sign-out"],
-    ["x-server-credential", "GET", "/api/auth/get-session"],
-    ["x-server-credential", "POST", "/api/auth/sign-out"]
-  ] as const)("refuses %s on %s %s without changing the session", async (header, method, url) => {
+    ["authorization", "authSession"],
+    ["authorization", "authSignOut"],
+    ["x-server-credential", "authSession"],
+    ["x-server-credential", "authSignOut"]
+  ] as const)("refuses %s on %s without changing the session", async (header, operation) => {
     const { cookie, chatSessionToken } = await createMixedCredentials();
-    const server = Fastify();
-    installErrorHandler(server);
-    registerBetterAuthRoutes(server, { standaloneAuth: auth });
+    const httpServer = Fastify();
+    const server = bindTestTransport(httpServer, () => httpServer.close());
+    installErrorHandler(httpServer);
+    registerBetterAuthRoutes(httpServer, { standaloneAuth: auth });
     try {
       const sessionBefore = structuredClone(authDatabase.session);
       for (const value of [
         header === "authorization" ? `Bearer ${chatSessionToken}` : "invalid",
         ""
       ]) {
-        const response = await server.inject({
-          method,
-          url,
+        const response = await server.call(operation, {
           headers: { cookie, origin: baseUrl, [header]: value }
         });
         expect(response.statusCode).toBe(401);
@@ -272,25 +275,13 @@ describe("standalone auth email routes", () => {
         expect(authDatabase.session).toEqual(sessionBefore);
       }
 
-      const session = await server.inject({
-        method: "GET",
-        url: "/api/auth/get-session",
-        headers: { cookie }
-      });
+      const session = await server.call("authSession", { headers: { cookie } });
       expect(session.statusCode).toBe(200);
       expect(session.json()).toMatchObject({ user: { id: "usr_provisioned" } });
-      const signedOut = await server.inject({
-        method: "POST",
-        url: "/api/auth/sign-out",
-        headers: { cookie, origin: baseUrl }
-      });
+      const signedOut = await server.call("authSignOut", { headers: { cookie, origin: baseUrl } });
       expect(signedOut.statusCode).toBe(200);
       expect(authDatabase.session).toHaveLength(sessionBefore.length - 1);
-      const afterSignOut = await server.inject({
-        method: "GET",
-        url: "/api/auth/get-session",
-        headers: { cookie }
-      });
+      const afterSignOut = await server.call("authSession", { headers: { cookie } });
       expect(afterSignOut.statusCode).toBe(200);
       expect(afterSignOut.json()).toBeNull();
     } finally {
@@ -299,7 +290,7 @@ describe("standalone auth email routes", () => {
   });
 
   async function createMixedCredentials() {
-    const response = await postAuth("/api/auth/sign-in/email", { email, password });
+    const response = await postAuth(testOperations.authSignIn.buildPath({}), { email, password });
     expect(response.status).toBe(200);
     const cookie = response.headers
       .getSetCookie()

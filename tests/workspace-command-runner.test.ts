@@ -1,3 +1,5 @@
+import { required } from "./support/assertions";
+import { createTestInstance } from "./support/test-instance";
 import { createHash } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,7 +20,7 @@ import {
   type ToolExecutionContext,
   type WorkspaceCommandLimits
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import {
   createLocalWorkspaceFileByteStore,
   createObjectStoreWorkspaceFileByteStore,
@@ -181,7 +183,7 @@ describe("local workspace command runner", () => {
       status: "completed",
       changedFiles: [expect.objectContaining({ path: "profile-check.txt" })]
     });
-    expect(next.output.changedFiles).not.toEqual(
+    expect(required(next.output).changedFiles).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ path: "nested/profile-check.txt" })])
     );
 
@@ -479,7 +481,7 @@ describe("local workspace command runner", () => {
     });
     const command = await harness.store.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
-      commandId: result.output!.commandId
+      commandId: asWorkspaceCommandId(result.output!.commandId)
     });
     expect(command).toMatchObject({
       status: "failed",
@@ -590,7 +592,7 @@ describe("local workspace command runner", () => {
     });
     const symlinkCommand = await symlink.store.getWorkspaceCommand({
       clientInstanceId: symlink.clientInstanceId,
-      commandId: symlinkResult.output!.commandId
+      commandId: asWorkspaceCommandId(symlinkResult.output!.commandId)
     });
     expect(symlinkCommand).toMatchObject({
       error: {
@@ -645,7 +647,7 @@ describe("local workspace command runner", () => {
     });
     const wallClockCommand = await wallClock.store.getWorkspaceCommand({
       clientInstanceId: wallClock.clientInstanceId,
-      commandId: wallClockResult.output!.commandId
+      commandId: asWorkspaceCommandId(wallClockResult.output!.commandId)
     });
     expect(wallClockCommand?.error).toMatchObject({
       code: "WORKSPACE_COMMAND_TIMEOUT",
@@ -667,7 +669,7 @@ describe("local workspace command runner", () => {
     }
     const idleCommand = await idle.store.getWorkspaceCommand({
       clientInstanceId: idle.clientInstanceId,
-      commandId: idleResult.output!.commandId
+      commandId: asWorkspaceCommandId(idleResult.output!.commandId)
     });
     expect(idleCommand?.error).toMatchObject({
       code: "WORKSPACE_COMMAND_IDLE_TIMEOUT",
@@ -750,7 +752,7 @@ describe("local workspace command runner", () => {
     expect(listed.output?.files).toEqual([]);
     const command = await harness.store.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
-      commandId: result.output!.commandId
+      commandId: asWorkspaceCommandId(result.output!.commandId)
     });
     expect(command?.error).toMatchObject({
       code: "WORKSPACE_SIZE_LIMIT_EXCEEDED"
@@ -799,16 +801,16 @@ describe("local workspace command runner", () => {
       ],
       promotedArtifacts: [expect.objectContaining({ path: "deck.pptx", kind: "presentation.pptx" })]
     });
-    expect(result.output.changedFiles[0]).not.toHaveProperty("objectKey");
+    expect(required(result.output).changedFiles[0]).not.toHaveProperty("objectKey");
     const workspaceFiles = await harness.store.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
-      workspaceId: asExecutionWorkspaceId(result.output.workspaceId)
+      workspaceId: asExecutionWorkspaceId(required(result.output).workspaceId)
     });
     const deckFile = workspaceFiles.find((file) => file.path === "deck.pptx");
     expect(deckFile).toBeDefined();
     const artifact = await harness.store.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
-      artifactId: result.output!.promotedArtifacts[0]!.artifactId
+      artifactId: asManagedArtifactId(result.output!.promotedArtifacts[0]!.artifactId)
     });
     expect(artifact).toMatchObject({
       kind: "presentation.pptx",
@@ -817,13 +819,13 @@ describe("local workspace command runner", () => {
         source: "execution_workspace",
         workspaceId: workspace.id,
         workspacePath: "deck.pptx",
-        commandId: result.output.commandId
+        commandId: required(result.output).commandId
       }
     });
     expect(artifact?.metadata).not.toHaveProperty("preview");
     const previewJob = await harness.store.getArtifactPreviewJob({
       clientInstanceId: harness.clientInstanceId,
-      sourceArtifactId: result.output!.promotedArtifacts[0]!.artifactId
+      sourceArtifactId: asManagedArtifactId(result.output!.promotedArtifacts[0]!.artifactId)
     });
     expect(previewJob).toMatchObject({
       status: "pending",
@@ -859,8 +861,8 @@ describe("local workspace command runner", () => {
     if (promoted.status !== "success") {
       throw new Error("Expected promote_artifact result");
     }
-    const workspaceId = asExecutionWorkspaceId(created.output.workspaceId);
-    const artifactId = promoted.output.artifactId;
+    const workspaceId = asExecutionWorkspaceId(required(created.output).workspaceId);
+    const artifactId = required(promoted.output).artifactId;
     const artifact = await harness.store.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       artifactId: asManagedArtifactId(artifactId)
@@ -1046,7 +1048,7 @@ async function createRunnerHarness(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const owner = await store.resolveUserIdentity({
     clientInstanceId,
     authSource: "test",
@@ -1121,7 +1123,16 @@ async function createRunnerHarness(
       timeoutSeconds?: number;
       expectedOutputs?: Array<{ path: string; kind?: string; promote?: boolean }>;
     }) {
-      return service.exec(input, context);
+      return service.exec(
+        {
+          ...input,
+          expectedOutputs: input.expectedOutputs?.map((output) => ({
+            ...output,
+            promote: output.promote ?? false
+          }))
+        },
+        context
+      );
     },
     async workspace() {
       return ensureWorkspace();

@@ -1,6 +1,7 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import { AppError, asClientInstanceId, type AuthenticatedUser } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { CompositeAuthAdapter, IdentityResolvingAuthAdapter } from "@vivd-catalyst/auth";
 
 const request = {
@@ -40,7 +41,7 @@ describe("composite auth credential modes", () => {
       const authenticate = vi.fn(async () => user);
       const wrapped = new IdentityResolvingAuthAdapter(
         { id: "custom", credentialMode, authenticate },
-        new InMemoryPlatformStore()
+        createTestInstance().stores
       );
       expect(wrapped.credentialMode).toBe(credentialMode);
       const composite = new CompositeAuthAdapter([wrapped]);

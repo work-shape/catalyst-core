@@ -1,9 +1,12 @@
+import { createTestFetch, createTestInstance, type TestInstance } from "./support/test-instance";
+import { testOperations } from "./support/operations";
+
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
+
 import {
   ApiKeyAccessTokenExchange,
   CompositeAuthAdapter,
@@ -12,7 +15,7 @@ import {
   HmacSessionTokenIssuer,
   IdentityResolvingAuthAdapter
 } from "@vivd-catalyst/auth";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+
 import {
   AppError,
   StoreBackedAuditRecorder,
@@ -20,7 +23,7 @@ import {
   type AgentRuntime,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
@@ -47,7 +50,7 @@ import {
   updateManifestDefaultAgent
 } from "../packages/config-cli/src/index";
 
-const servers: FastifyInstance[] = [];
+const servers: TestInstance[] = [];
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -423,19 +426,19 @@ skills:
         CATALYST_API_KEY: fixture.apiKey,
         CATALYST_SERVER_CREDENTIAL: "server-credential"
       },
-      fetchImpl: recordFetch(createFastifyFetch(fixture.server), requests),
+      fetchImpl: recordFetch(createTestFetch(fixture.server), requests),
       stdout: (text: string) => stdout.push(text),
       stderr: (text: string) => stderr.push(text)
     };
 
     expect(await runConfigCommand("pull", commandOptions)).toBe(0);
-    expect(requests[0]?.url).toBe(`${url}/api/auth/access-token`);
+    expect(requests[0]?.url).toBe(`${url}${testOperations.exchangeApiKey.path}`);
     expect(requests[0]?.init?.method).toBe("POST");
     expect(new Headers(requests[0]?.init?.headers).get("authorization")).toBe(
       `Bearer ${fixture.apiKey}`
     );
     expect(requests[0]?.init?.body).toBeUndefined();
-    expect(requests[1]?.url).toBe(`${url}/api/admin/config/export`);
+    expect(requests[1]?.url).toBe(`${url}${testOperations.exportConfigAssets.path}`);
     expect(new Headers(requests[1]?.init?.headers).get("authorization")).toMatch(/^Bearer /u);
     expect(new Headers(requests[1]?.init?.headers).get("authorization")).not.toBe(
       `Bearer ${fixture.apiKey}`
@@ -543,7 +546,7 @@ skills:
       await runConfigCommand("pull", {
         cwd: directory,
         env: { CATALYST_SERVER_CREDENTIAL: "server-credential" },
-        fetchImpl: createFastifyFetch(fixture.server),
+        fetchImpl: createTestFetch(fixture.server),
         stderr: (text: string) => stderr.push(text)
       })
     ).toBe(1);
@@ -710,7 +713,8 @@ skills:
         stdout: (text) => stdout.push(text),
         fetchImpl: async (input, init) => {
           const url = new URL(input instanceof Request ? input.url : String(input));
-          return hiddenAgentNames && url.pathname.endsWith("/api/admin/config/import")
+          return hiddenAgentNames &&
+            url.pathname.endsWith(testOperations.replaceConfigAssets.buildPath({}))
             ? jsonResponse(200, { version: 4, hiddenAgentNames })
             : fallback(input, init);
         }
@@ -802,7 +806,7 @@ skills:
       })
     ).toBe(1);
     expect(errors.join("")).toContain("Upgrade the server before pushing");
-    expect(requests).not.toContain("/api/admin/config/import");
+    expect(requests).not.toContain(testOperations.replaceConfigAssets.buildPath({}));
   });
 
   it("prints all conflicts and an exact scoped pull command with the selected instance and directory", async () => {
@@ -895,7 +899,7 @@ skills:
     const options = {
       cwd: directory,
       env: { CATALYST_API_KEY: fixture.apiKey },
-      fetchImpl: createFastifyFetch(fixture.server),
+      fetchImpl: createTestFetch(fixture.server),
       stdout: (text: string) => output.push(text),
       stderr: (text: string) => errors.push(text)
     };
@@ -981,7 +985,7 @@ skills:
     const options = {
       cwd: directory,
       env: { CATALYST_API_KEY: fixture.apiKey },
-      fetchImpl: createFastifyFetch(fixture.server),
+      fetchImpl: createTestFetch(fixture.server),
       stdout: (text: string) => output.push(text)
     };
     expect(await runConfigCommand("pull", options)).toBe(0);
@@ -1025,7 +1029,7 @@ skills:
     const options = {
       cwd: directory,
       env: { CATALYST_API_KEY: fixture.apiKey },
-      fetchImpl: createFastifyFetch(fixture.server),
+      fetchImpl: createTestFetch(fixture.server),
       stdout: () => {},
       stderr: (text: string) => errors.push(text)
     };
@@ -1076,7 +1080,7 @@ skills:
     const options = {
       cwd: directory,
       env: { CATALYST_API_KEY: fixture.apiKey },
-      fetchImpl: createFastifyFetch(fixture.server),
+      fetchImpl: createTestFetch(fixture.server),
       stderr: (text: string) => errors.push(text),
       stdout: () => {}
     };
@@ -1116,7 +1120,7 @@ skills:
     const options = {
       cwd: directory,
       env: { CATALYST_API_KEY: fixture.apiKey },
-      fetchImpl: createFastifyFetch(fixture.server),
+      fetchImpl: createTestFetch(fixture.server),
       stdout: () => {},
       stderr: () => {}
     };
@@ -1286,7 +1290,7 @@ skills:
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = input instanceof Request ? input.url : String(input);
       requests.push({ url, ...(init === undefined ? {} : { init }) });
-      return url.endsWith("/api/auth/access-token")
+      return url.endsWith(testOperations.exchangeApiKey.buildPath({}))
         ? jsonResponse(200, {
             accessToken: "direct-url-access-token",
             expiresAt: "2030-01-01T00:00:00.000Z"
@@ -1347,7 +1351,7 @@ skills:
           fetchImpl: async (input) => {
             const url = input instanceof Request ? input.url : String(input);
             requests.push(url);
-            return url.endsWith("/api/auth/access-token")
+            return url.endsWith(testOperations.exchangeApiKey.buildPath({}))
               ? jsonResponse(200, {
                   accessToken: "loopback-access-token",
                   expiresAt: "2030-01-01T00:00:00.000Z"
@@ -1358,8 +1362,8 @@ skills:
       ).toBe(0);
       const baseUrl = instance.replace(/\/$/u, "");
       expect(requests).toEqual([
-        `${baseUrl}/api/auth/access-token`,
-        `${baseUrl}/api/admin/config/export`
+        `${baseUrl}${testOperations.exchangeApiKey.path}`,
+        `${baseUrl}${testOperations.exportConfigAssets.path}`
       ]);
     }
   );
@@ -1446,7 +1450,7 @@ async function createTemporaryDirectory(): Promise<string> {
 
 async function createFixture() {
   const clientInstanceId = asClientInstanceId("config-cli-test");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -1482,42 +1486,44 @@ async function createFixture() {
     scopes: ["config_assets:read", "config_assets:release"]
   });
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store });
-  const server = await createChatServer({
-    config,
-    clientInstanceId,
-    authAdapter: new IdentityResolvingAuthAdapter(
-      new CompositeAuthAdapter([
-        new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
-        new HmacSessionTokenAuthAdapter(authOptions)
-      ]),
-      store
-    ),
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    usageGovernance: new ModelUsageGovernance({
-      store,
-      budget: config.usage.budget,
-      safeguards: config.usage.safeguards,
-      costs: config.usage.costs
-    }),
-    auditRecorder,
-    configAssets: {
-      store,
-      validationRefs: {
-        modelProviderIds: ["local"],
-        modelBindingIds: [],
-        modelBindings: [],
-        fastModeModelBindingIds: [],
-        reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-        enabledToolNames: ["known.tool"]
+  const server = await createTestInstance({
+    server: {
+      config,
+      clientInstanceId,
+      authAdapter: new IdentityResolvingAuthAdapter(
+        new CompositeAuthAdapter([
+          new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
+          new HmacSessionTokenAuthAdapter(authOptions)
+        ]),
+        store
+      ),
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: config.usage.budget,
+        safeguards: config.usage.safeguards,
+        costs: config.usage.costs
+      }),
+      auditRecorder,
+      configAssets: {
+        store,
+        validationRefs: {
+          modelProviderIds: ["local"],
+          modelBindingIds: [],
+          modelBindings: [],
+          fastModeModelBindingIds: [],
+          reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+          enabledToolNames: ["known.tool"]
+        }
+      },
+      agentRuntime: createUnusedAgentRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      sessionToken: { issuer, serverCredential: "server-credential" },
+      serviceAccessToken: {
+        exchange: new ApiKeyAccessTokenExchange(serviceAccessOptions)
       }
-    },
-    agentRuntime: createUnusedAgentRuntime(),
-    modelProvider: createUnusedModelProvider(),
-    sessionToken: { issuer, serverCredential: "server-credential" },
-    serviceAccessToken: {
-      exchange: new ApiKeyAccessTokenExchange(serviceAccessOptions)
     }
   });
   servers.push(server);
@@ -1581,13 +1587,13 @@ function configApiFetch(
   return async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
-    if (url.pathname.endsWith("/api/auth/access-token")) {
+    if (url.pathname.endsWith(testOperations.exchangeApiKey.buildPath({}))) {
       return jsonResponse(200, {
         accessToken: "short-lived-access-token",
         expiresAt: "2030-01-01T00:00:00.000Z"
       });
     }
-    if (url.pathname.endsWith("/api/admin/config/export")) {
+    if (url.pathname.endsWith(testOperations.exportConfigAssets.buildPath({}))) {
       return jsonResponse(200, {
         ...remote,
         perAssetConcurrency: true,
@@ -1597,7 +1603,7 @@ function configApiFetch(
         ])
       });
     }
-    if (url.pathname.endsWith("/api/admin/config/import")) {
+    if (url.pathname.endsWith(testOperations.replaceConfigAssets.buildPath({}))) {
       requests.push(JSON.parse(await request.clone().text()));
       return jsonResponse(200, { version: pushedVersion });
     }
@@ -1670,31 +1676,5 @@ function createUnusedModelProvider(): ModelProvider {
     async complete(_request, _context: RuntimeCallContext) {
       throw new AppError("INTERNAL", "Model provider should not be used by config CLI tests");
     }
-  };
-}
-
-function createFastifyFetch(server: FastifyInstance): typeof fetch {
-  return async (input, init) => {
-    const request = input instanceof Request ? input : undefined;
-    const url = new URL(request?.url ?? String(input));
-    const headers = new Headers(request?.headers);
-    new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
-    const body = init?.body ?? (request?.body === null ? undefined : await request?.clone().text());
-    const response = await server.inject({
-      method: (init?.method ?? request?.method ?? "GET") as "GET" | "POST" | "PUT",
-      url: `${url.pathname}${url.search}`,
-      headers: Object.fromEntries(headers),
-      ...(typeof body === "string" ? { payload: body } : {})
-    });
-    const responseHeaders = new Headers();
-    for (const [name, value] of Object.entries(response.headers)) {
-      if (value !== undefined) {
-        responseHeaders.set(name, Array.isArray(value) ? value.join(", ") : String(value));
-      }
-    }
-    return new Response(response.body, {
-      status: response.statusCode,
-      headers: responseHeaders
-    });
   };
 }

@@ -1,3 +1,4 @@
+import { type TestMemoryStore, createTestInstance } from "./test-instance";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -10,7 +11,7 @@ import {
   type JsonObject,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import {
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
@@ -32,7 +33,7 @@ export async function createWorkspaceHarness(
     >[0]["execResultPollIntervalMs"];
     limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
     serviceStore?: (
-      store: InMemoryPlatformStore
+      store: TestMemoryStore
     ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
     telemetry?: WorkspaceCommandTelemetry;
     withAuditRecorder?: boolean;
@@ -47,7 +48,7 @@ export async function createWorkspaceHarness(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`);
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const owner = await store.resolveUserIdentity({
     clientInstanceId,
     authSource: "test",

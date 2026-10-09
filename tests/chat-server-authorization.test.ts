@@ -1,5 +1,6 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+
 import {
   FIRST_PARTY_AUTH_SCOPES,
   StoreBackedAuditRecorder,
@@ -8,20 +9,14 @@ import {
   asUserId,
   type AuthenticatedUser
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import {
-  createTestConfig,
-  createClientInstanceApp,
-  createTestUser,
-  personalConversationListUrl,
-  seedConversationMessage
-} from "./chat-server-harness";
-import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
+import { createTestConfig, createTestUser, seedConversationMessage } from "./support/fixtures";
+import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
 
 describe("client instance app vertical slice", () => {
   it("keeps chat session tokens scoped away from governance routes despite elevated roles", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         sessionToken: {
           issuer: "demo-client-instance",
@@ -45,13 +40,10 @@ describe("client instance app vertical slice", () => {
         CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
         CHAT_SERVER_CREDENTIAL: "server-credential"
       },
-      storeMode: "memory",
       tools: []
     });
 
-    const issued = await app.server.inject({
-      method: "POST",
-      url: "/api/superadmin/session-tokens",
+    const issued = await app.call("issueSessionToken", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -65,9 +57,7 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const workspaceListing = await app.server.inject({
-      method: "GET",
-      url: "/api/collaboration-workspaces",
+    const workspaceListing = await app.call("listCollaborationWorkspaces", {
       headers: {
         authorization: `Bearer ${token}`
       }
@@ -77,9 +67,7 @@ describe("client instance app vertical slice", () => {
       "Missing auth scope 'collaboration_workspace:read'"
     );
 
-    const workspaceCreation = await app.server.inject({
-      method: "POST",
-      url: "/api/collaboration-workspaces",
+    const workspaceCreation = await app.call("createCollaborationWorkspace", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -90,9 +78,7 @@ describe("client instance app vertical slice", () => {
       "Missing auth scope 'collaboration_workspace:manage'"
     );
 
-    const createdConversation = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const createdConversation = await app.call("createConversation", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -104,41 +90,33 @@ describe("client instance app vertical slice", () => {
       collaborationWorkspaceId: string;
       createdByUserId: string;
     };
-    await seedConversationMessage(app.store, personalConversation.id);
+    await seedConversationMessage(app.stores, personalConversation.id);
 
-    const firstPartyListing = await app.server.inject({
-      method: "GET",
-      url: "/api/collaboration-workspaces",
+    const firstPartyListing = await app.call("listCollaborationWorkspaces", {
       headers: { "x-dev-user-id": "superadmin-1" }
     });
     expect(firstPartyListing.statusCode).toBe(200);
-    const firstPartyCreation = await app.server.inject({
-      method: "POST",
-      url: "/api/collaboration-workspaces",
+    const firstPartyCreation = await app.call("createCollaborationWorkspace", {
       headers: { "x-dev-user-id": "superadmin-1" },
       payload: { name: "First-party workspace" }
     });
     expect(firstPartyCreation.statusCode).toBe(200);
     const sharedWorkspaceId = (firstPartyCreation.json() as { id: string }).id;
-    await app.store.addMembership({
+    await app.stores.addMembership({
       clientInstanceId: asClientInstanceId("demo-local"),
       collaborationWorkspaceId: asCollaborationWorkspaceId(sharedWorkspaceId),
       userId: asUserId(personalConversation.createdByUserId),
       role: "member"
     });
-    const sharedConversation = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const sharedConversation = await app.call("createConversation", {
       headers: { "x-dev-user-id": "superadmin-1" },
       payload: { title: "Shared conversation", collaborationWorkspaceId: sharedWorkspaceId }
     });
     expect(sharedConversation.statusCode).toBe(200);
     const sharedConversationId = (sharedConversation.json() as { id: string }).id;
-    await seedConversationMessage(app.store, sharedConversationId);
+    await seedConversationMessage(app.stores, sharedConversationId);
 
-    const personalConversations = await app.server.inject({
-      method: "GET",
-      url: "/api/conversations",
+    const personalConversations = await app.call("listConversations", {
       headers: { authorization: `Bearer ${token}` }
     });
     expect(personalConversations.statusCode).toBe(200);
@@ -146,9 +124,8 @@ describe("client instance app vertical slice", () => {
       personalConversation.id
     ]);
 
-    const sharedConversations = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations?collaborationWorkspaceId=${sharedWorkspaceId}`,
+    const sharedConversations = await app.call("listConversations", {
+      query: { collaborationWorkspaceId: sharedWorkspaceId },
       headers: { authorization: `Bearer ${token}` }
     });
     expect(sharedConversations.statusCode).toBe(200);
@@ -156,9 +133,7 @@ describe("client instance app vertical slice", () => {
       sharedConversationId
     ]);
 
-    const usage = await app.server.inject({
-      method: "GET",
-      url: "/api/superadmin/usage",
+    const usage = await app.call("getUsageSummary", {
       headers: {
         authorization: `Bearer ${token}`
       }
@@ -168,9 +143,7 @@ describe("client instance app vertical slice", () => {
       "Missing auth scope 'governance:read'"
     );
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events",
+    const audit = await app.call("listAuditEvents", {
       headers: {
         authorization: `Bearer ${token}`
       }
@@ -182,7 +155,7 @@ describe("client instance app vertical slice", () => {
 
   it("grants standalone users workspace read and manage scopes", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const config = createTestConfig();
     const profile = await store.createUser({
       clientInstanceId,
@@ -211,33 +184,30 @@ describe("client instance app vertical slice", () => {
       safeguards: config.usage.safeguards,
       costs: config.usage.costs
     });
-    const server = await createChatServer({
-      config,
-      clientInstanceId,
-      authAdapter: {
-        credentialMode: "ambient",
-        id: "better-auth-test",
-        async authenticate() {
-          return standaloneUser;
-        }
-      },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      usageGovernance,
-      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
-      agentRuntime: createMissingRuntime(),
-      modelProvider: createUnusedModelProvider()
+    const server = await createTestInstance({
+      server: {
+        config,
+        clientInstanceId,
+        authAdapter: {
+          credentialMode: "ambient",
+          id: "better-auth-test",
+          async authenticate() {
+            return standaloneUser;
+          }
+        },
+        conversationStore: store,
+        auditEventStore: store,
+        userStore: store,
+        usageGovernance,
+        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+        agentRuntime: createMissingRuntime(),
+        modelProvider: createUnusedModelProvider()
+      }
     });
 
-    const listed = await server.inject({
-      method: "GET",
-      url: "/api/collaboration-workspaces"
-    });
+    const listed = await server.call("listCollaborationWorkspaces", {});
     expect(listed.statusCode).toBe(200);
-    const created = await server.inject({
-      method: "POST",
-      url: "/api/collaboration-workspaces",
+    const created = await server.call("createCollaborationWorkspace", {
       payload: { name: "Standalone workspace" }
     });
     expect(created.statusCode).toBe(200);
@@ -246,7 +216,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("honors explicit chat session token scopes for conversation writes", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         sessionToken: {
           issuer: "demo-client-instance",
@@ -257,13 +227,10 @@ describe("client instance app vertical slice", () => {
         CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
         CHAT_SERVER_CREDENTIAL: "server-credential"
       },
-      storeMode: "memory",
       tools: []
     });
 
-    const issued = await app.server.inject({
-      method: "POST",
-      url: "/api/superadmin/session-tokens",
+    const issued = await app.call("issueSessionToken", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -278,18 +245,14 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const conversations = await app.server.inject({
-      method: "GET",
-      url: "/api/conversations",
+    const conversations = await app.call("listConversations", {
       headers: {
         authorization: `Bearer ${token}`
       }
     });
     expect(conversations.statusCode).toBe(200);
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -306,7 +269,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("audits delegated service-principal conversation actions for the subject user", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         sessionToken: {
           issuer: "demo-client-instance",
@@ -330,13 +293,10 @@ describe("client instance app vertical slice", () => {
         CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
         CHAT_SERVER_CREDENTIAL: "server-credential"
       },
-      storeMode: "memory",
       tools: []
     });
 
-    const issued = await app.server.inject({
-      method: "POST",
-      url: "/api/superadmin/session-tokens",
+    const issued = await app.call("issueSessionToken", {
       headers: {
         "x-server-credential": "server-credential"
       },
@@ -356,9 +316,7 @@ describe("client instance app vertical slice", () => {
     expect(issued.statusCode).toBe(200);
     const token = (issued.json() as { chatSessionToken: string }).chatSessionToken;
 
-    const createdConversation = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const createdConversation = await app.call("createConversation", {
       headers: {
         authorization: `Bearer ${token}`
       },
@@ -375,9 +333,7 @@ describe("client instance app vertical slice", () => {
     expect(conversation.createdByExternalUserId).toBe("customer-jane");
     expect(conversation.createdByUserId).not.toBe("svc-customer-api");
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events",
+    const audit = await app.call("listAuditEvents", {
       headers: {
         "x-dev-user-id": "superadmin-1"
       }
@@ -407,7 +363,7 @@ describe("client instance app vertical slice", () => {
 
   it("binds a private conversation to the delegated subject, not the service principal", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         sessionToken: {
           issuer: "demo-client-instance",
@@ -418,13 +374,10 @@ describe("client instance app vertical slice", () => {
         CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
         CHAT_SERVER_CREDENTIAL: "server-credential"
       },
-      storeMode: "memory",
       tools: []
     });
     const issueFor = async (externalUserId: string) => {
-      const issued = await app.server.inject({
-        method: "POST",
-        url: "/api/superadmin/session-tokens",
+      const issued = await app.call("issueSessionToken", {
         headers: { "x-server-credential": "server-credential" },
         payload: {
           externalUserId,
@@ -441,33 +394,27 @@ describe("client instance app vertical slice", () => {
       });
       expect(issued.statusCode).toBe(200);
       const authorization = `Bearer ${(issued.json() as { chatSessionToken: string }).chatSessionToken}`;
-      const me = await app.server.inject({
-        method: "GET",
-        url: "/api/me",
-        headers: { authorization }
-      });
+      const me = await app.call("getCurrentUser", { headers: { authorization } });
       expect(me.statusCode).toBe(200);
       return { authorization, userId: asUserId((me.json() as { id: string }).id) };
     };
     const jane = await issueFor("customer-jane");
     const john = await issueFor("customer-john");
-    const workspace = await app.store.createWorkspace({
+    const workspace = await app.stores.createWorkspace({
       clientInstanceId,
       kind: "shared",
       name: "Delegated",
       defaultConversationVisibility: "private",
       creatorUserId: john.userId
     });
-    await app.store.addMembership({
+    await app.stores.addMembership({
       clientInstanceId,
       collaborationWorkspaceId: workspace.id,
       userId: jane.userId,
       role: "member"
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       headers: { authorization: jane.authorization },
       payload: { title: "Jane only", collaborationWorkspaceId: workspace.id }
     });
@@ -476,9 +423,8 @@ describe("client instance app vertical slice", () => {
     const conversationId = (created.json() as { id: string }).id;
 
     const thread = (authorization: string) =>
-      app.server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversationId}/thread`,
+      app.call("getConversationThread", {
+        params: { conversationId: conversationId },
         headers: { authorization }
       });
     expect((await thread(jane.authorization)).statusCode).toBe(200);
@@ -487,9 +433,8 @@ describe("client instance app vertical slice", () => {
     expect(sameServiceOtherSubject.json()).toEqual({
       error: { code: "NOT_FOUND", message: "Conversation is not available" }
     });
-    const listed = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations?collaborationWorkspaceId=${workspace.id}`,
+    const listed = await app.call("listConversations", {
+      query: { collaborationWorkspaceId: workspace.id },
       headers: { authorization: john.authorization }
     });
     expect(listed.json()).toEqual([]);
@@ -499,7 +444,7 @@ describe("client instance app vertical slice", () => {
 
   it("creates and resets standalone password sign-ins from superadmin user administration", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const config = createTestConfig();
     const usageGovernance = new ModelUsageGovernance({
       store,
@@ -514,54 +459,63 @@ describe("client instance app vertical slice", () => {
     }> = [];
     const resetPasswords: Array<{ externalUserId: string; password: string }> = [];
     const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
-    const server = await createChatServer({
-      config,
-      clientInstanceId,
-      authAdapter: {
-        credentialMode: "ambient",
-        id: "test-auth",
-        async authenticate() {
-          return createTestUser("superadmin-1", clientInstanceId);
-        }
-      },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      usageGovernance,
-      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
-      agentRuntime: createMissingRuntime(),
-      modelProvider: createUnusedModelProvider(),
-      standaloneAuth: {
-        baseUrl: "http://127.0.0.1:4100/api/auth",
-        async handleRequest() {
-          return new Response(null, { status: 404 });
+    const server = await createTestInstance({
+      server: {
+        config,
+        clientInstanceId,
+        authAdapter: {
+          credentialMode: "ambient",
+          id: "test-auth",
+          async authenticate() {
+            return createTestUser("superadmin-1", clientInstanceId);
+          }
         },
-        async setOrCreatePasswordSignIn(input) {
-          createdPasswordSignIns.push({
-            email: input.email,
-            displayLabel: input.displayLabel,
-            password: input.password
-          });
-          return {
-            externalUserId: `auth-${input.email}`,
-            displayLabel: input.displayLabel,
-            email: input.email.toLowerCase(),
-            emailVerified: true
-          };
-        },
-        async setPassword(input) {
-          resetPasswords.push(input);
-        },
-        async changePassword() {},
-        async deletePasswordSignIn(input) {
-          deletedPasswordSignIns.push(input);
+        conversationStore: store,
+        auditEventStore: store,
+        userStore: store,
+        usageGovernance,
+        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+        agentRuntime: createMissingRuntime(),
+        modelProvider: createUnusedModelProvider(),
+        standaloneAuth: {
+          async findPasswordSignIn() {
+            return undefined;
+          },
+          async createPasswordSetupToken() {
+            throw new Error("Password setup is unused in this fixture");
+          },
+          async completePasswordSetup() {
+            throw new Error("Password setup is unused in this fixture");
+          },
+          baseUrl: "http://127.0.0.1:4100/api/auth",
+          async handleRequest() {
+            return new Response(null, { status: 404 });
+          },
+          async setOrCreatePasswordSignIn(input) {
+            createdPasswordSignIns.push({
+              email: input.email,
+              displayLabel: input.displayLabel,
+              password: input.password
+            });
+            return {
+              externalUserId: `auth-${input.email}`,
+              displayLabel: input.displayLabel,
+              email: input.email.toLowerCase(),
+              emailVerified: true
+            };
+          },
+          async setPassword(input) {
+            resetPasswords.push(input);
+          },
+          async changePassword() {},
+          async deletePasswordSignIn(input) {
+            deletedPasswordSignIns.push(input);
+          }
         }
       }
     });
 
-    const created = await server.inject({
-      method: "POST",
-      url: "/api/superadmin/users",
+    const created = await server.call("createAdministeredUser", {
       payload: {
         displayLabel: "Jane Reviewer",
         email: "Jane@Example.Test",
@@ -592,9 +546,8 @@ describe("client instance app vertical slice", () => {
       })
     ]);
 
-    const reset = await server.inject({
-      method: "POST",
-      url: `/api/superadmin/users/${createdUser.id}/password`,
+    const reset = await server.call("resetAdministeredUserPassword", {
+      params: { userId: createdUser.id },
       payload: {
         password: "replacement-password"
       }
@@ -607,9 +560,7 @@ describe("client instance app vertical slice", () => {
       }
     ]);
 
-    const profileOnly = await server.inject({
-      method: "POST",
-      url: "/api/superadmin/users",
+    const profileOnly = await server.call("createAdministeredUser", {
       payload: {
         displayLabel: "Sam Reviewer",
         email: "sam@example.test",
@@ -619,9 +570,8 @@ describe("client instance app vertical slice", () => {
     expect(profileOnly.statusCode).toBe(200);
     const profileOnlyUser = profileOnly.json() as { id: string };
 
-    const setFirstPassword = await server.inject({
-      method: "POST",
-      url: `/api/superadmin/users/${profileOnlyUser.id}/password`,
+    const setFirstPassword = await server.call("resetAdministeredUserPassword", {
+      params: { userId: profileOnlyUser.id },
       payload: {
         password: "first-password"
       }
@@ -633,10 +583,7 @@ describe("client instance app vertical slice", () => {
       password: "first-password"
     });
 
-    const listed = await server.inject({
-      method: "GET",
-      url: "/api/superadmin/users"
-    });
+    const listed = await server.call("listAdministeredUsers", {});
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toEqual(
       expect.arrayContaining([
@@ -652,26 +599,19 @@ describe("client instance app vertical slice", () => {
       ])
     );
 
-    const audit = await server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await server.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
       expect.arrayContaining(["user.password_sign_in_created", "user.password_reset"])
     );
 
-    const deleted = await server.inject({
-      method: "DELETE",
-      url: `/api/superadmin/users/${createdUser.id}`
+    const deleted = await server.call("deleteAdministeredUser", {
+      params: { userId: createdUser.id }
     });
     expect(deleted.statusCode).toBe(200);
     expect(deletedPasswordSignIns).toEqual([{ externalUserId: "auth-Jane@Example.Test" }]);
 
-    const listedAfterDelete = await server.inject({
-      method: "GET",
-      url: "/api/superadmin/users"
-    });
+    const listedAfterDelete = await server.call("listAdministeredUsers", {});
     expect(listedAfterDelete.statusCode).toBe(200);
     expect(listedAfterDelete.json()).not.toContainEqual(
       expect.objectContaining({
@@ -679,10 +619,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const auditAfterDelete = await server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const auditAfterDelete = await server.call("listAuditEvents", {});
     expect(auditAfterDelete.statusCode).toBe(200);
     expect((auditAfterDelete.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
       expect.arrayContaining(["governance.user_delete_authorized", "user.deleted"])
@@ -692,16 +629,13 @@ describe("client instance app vertical slice", () => {
   });
 
   it("rejects password resets when standalone auth is not enabled", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/superadmin/users",
+    const created = await app.call("createAdministeredUser", {
       payload: {
         displayLabel: "Jane Reviewer",
         roles: ["user"]
@@ -710,9 +644,8 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const administeredUser = created.json() as { id: string };
 
-    const reset = await app.server.inject({
-      method: "POST",
-      url: `/api/superadmin/users/${administeredUser.id}/password`,
+    const reset = await app.call("resetAdministeredUserPassword", {
+      params: { userId: administeredUser.id },
       payload: {
         password: "replacement-password"
       }

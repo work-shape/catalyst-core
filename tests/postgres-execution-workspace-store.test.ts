@@ -1,3 +1,4 @@
+import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import {
@@ -7,25 +8,32 @@ import {
   type ExecutionWorkspace,
   type WorkspaceCommandOutput
 } from "@vivd-catalyst/core";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 
 describePostgres("Postgres execution workspace store", () => {
-  let store: PostgresPlatformStore;
-  let secondStore: PostgresPlatformStore;
+  let store: TestPostgresStore;
+  let secondStore: TestPostgresStore;
   let rawSql: Sql;
 
   beforeAll(async () => {
-    store = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    });
-    secondStore = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: false
-    });
+    store = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: true
+        }
+      })
+    ).stores;
+    secondStore = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: false
+        }
+      })
+    ).stores;
     rawSql = postgres(databaseUrl!, { max: 5 });
   });
 
@@ -494,7 +502,7 @@ describePostgres("Postgres execution workspace store", () => {
     });
 
     let cancellation:
-      ReturnType<PostgresPlatformStore["requestWorkspaceCommandCancellation"]> | undefined;
+      ReturnType<TestPostgresStore["requestWorkspaceCommandCancellation"]> | undefined;
     await rawSql.begin(async (tx) => {
       await tx`select id from workspace_commands where id = ${command.id} for update`;
       cancellation = store.requestWorkspaceCommandCancellation({
@@ -549,9 +557,7 @@ describePostgres("Postgres execution workspace store", () => {
       | Promise<
           | {
               status: "resolved";
-              value: Awaited<
-                ReturnType<PostgresPlatformStore["requestWorkspaceCommandCancellation"]>
-              >;
+              value: Awaited<ReturnType<TestPostgresStore["requestWorkspaceCommandCancellation"]>>;
             }
           | {
               status: "rejected";
@@ -653,10 +659,10 @@ describePostgres("Postgres execution workspace store", () => {
   });
 });
 
-async function createWorkspaceFixture(store: PostgresPlatformStore): Promise<{
+async function createWorkspaceFixture(store: TestPostgresStore): Promise<{
   clientInstanceId: ClientInstanceId;
   ownerUserId: string;
-  conversation: Awaited<ReturnType<PostgresPlatformStore["createConversation"]>>;
+  conversation: Awaited<ReturnType<TestPostgresStore["createConversation"]>>;
   workspace: ExecutionWorkspace;
 }> {
   const clientInstanceId = asClientInstanceId(`client_${globalThis.crypto.randomUUID()}`);
@@ -690,7 +696,7 @@ async function createWorkspaceFixture(store: PostgresPlatformStore): Promise<{
 }
 
 async function enqueueAndClaim(
-  store: PostgresPlatformStore,
+  store: TestPostgresStore,
   fixture: {
     clientInstanceId: ClientInstanceId;
     ownerUserId: string;

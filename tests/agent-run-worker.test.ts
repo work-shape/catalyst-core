@@ -1,3 +1,4 @@
+import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
   AppError,
@@ -13,7 +14,7 @@ import {
   type ModelProviderConfig,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore, createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
 import {
   AgentRunWorker,
   StoreBackedAgentRuntime,
@@ -256,7 +257,7 @@ describe("agent run worker", () => {
   it("dispatches the stored model binding and locale", async () => {
     const fixture = await createQueuedRun("dispatch-data", {
       modelBindingId: "binding-fast",
-      locale: "de-DE"
+      locale: "de"
     });
     let seen: { modelBindingId?: string; locale?: string } | undefined;
     const worker = createWorker(fixture, async function* (input, context) {
@@ -264,7 +265,7 @@ describe("agent run worker", () => {
       yield completedEvent(input.preparedRun!.id, 1, "2026-09-02T12:01:00.000Z");
     });
     await worker.runOnce();
-    expect(seen).toEqual({ modelBindingId: "binding-fast", locale: "de-DE" });
+    expect(seen).toEqual({ modelBindingId: "binding-fast", locale: "de" });
   });
 
   it("preserves the original scopes and delegated principal while loading the current user", async () => {
@@ -556,7 +557,7 @@ describe("agent run worker", () => {
 });
 
 interface Fixture {
-  store: InMemoryPlatformStore;
+  store: TestMemoryStore;
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   run: AgentRun;
@@ -568,11 +569,11 @@ async function createQueuedRun(
   suffix: string,
   options: {
     modelBindingId?: string;
-    locale?: "de-DE";
+    locale?: "de";
     authorization?: AgentRunAuthorization | null;
   } = {}
 ): Promise<Fixture> {
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const clientInstanceId = asClientInstanceId(`worker-${suffix}`);
   const user: AuthenticatedUser = {
     id: `user-${suffix}`,
@@ -637,10 +638,7 @@ async function createQueuedRun(
 
 function createWorker(
   fixture: Fixture,
-  execute: (
-    input: Parameters<ConstructorParameters<typeof AgentRunWorker>[0]["execute"]>[0],
-    context: RuntimeCallContext
-  ) => AsyncIterable<AgentRuntimeEvent>,
+  execute: ConstructorParameters<typeof AgentRunWorker>[0]["execute"],
   options: Partial<ConstructorParameters<typeof AgentRunWorker>[0]> = {}
 ): AgentRunWorker {
   return new AgentRunWorker({

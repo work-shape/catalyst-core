@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
@@ -7,25 +8,26 @@ import {
   type ApiAccessStore,
   type UserStore
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
+
 import postgres from "postgres";
 
 interface ApiAccessStoreFixture extends ApiAccessStore, Pick<UserStore, "createUser"> {
   close?: () => Promise<void>;
 }
 
-runApiAccessStoreSuite("In-memory API access store", async () => new InMemoryPlatformStore());
+runApiAccessStoreSuite("In-memory API access store", async () => createTestInstance().stores);
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 runApiAccessStoreSuite(
   "Postgres API access store",
   async () =>
-    PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    }),
+    createTestInstance({
+      postgres: {
+        databaseUrl: databaseUrl!,
+        runMigrations: true
+      }
+    }).then((instance) => instance.stores),
   describePostgres,
   async () => {
     const sql = postgres(databaseUrl!, { max: 1 });
@@ -66,7 +68,8 @@ runApiAccessStoreSuite(
 function runApiAccessStoreSuite(
   label: string,
   createStore: () => Promise<ApiAccessStoreFixture>,
-  describeSuite: typeof describe = describe,
+  describeSuite: Pick<typeof describe, "each"> &
+    ((name: string, body: () => void) => void) = describe,
   verifyDatabaseConstraints?: () => Promise<void>
 ): void {
   describeSuite(label, () => {

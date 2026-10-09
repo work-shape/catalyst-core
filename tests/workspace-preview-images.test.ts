@@ -1,9 +1,11 @@
+import { text, jsonObject } from "./support/assertions";
+
 import { describe, expect, it } from "vitest";
 import { asManagedArtifactId } from "@vivd-catalyst/core";
 import { createExecutionWorkspaceManagedObjectReader } from "@vivd-catalyst/client-assembly";
 import { createArtifactPreviewSettingsHash } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
-import { createWorkspaceHarness, encode } from "./workspace-tools-harness";
+import { createWorkspaceHarness, encode } from "./support/workspace-tools-harness";
 
 describe("workspace.preview_images", () => {
   it("loads ready preview images as model-visible artifacts without exposing internal storage", async () => {
@@ -517,8 +519,8 @@ describe("workspace.preview_images", () => {
       maxImages: 1,
       images: [
         {
-          sourceArtifactId: result.output.artifactId,
-          imageArtifactId: result.output.artifactId,
+          sourceArtifactId: jsonObject(result.output).artifactId,
+          imageArtifactId: jsonObject(result.output).artifactId,
           mimeType: "image/png",
           status: "ready"
         }
@@ -527,7 +529,7 @@ describe("workspace.preview_images", () => {
     });
     expect(result.artifacts).toEqual([
       {
-        artifactId: result.output.artifactId,
+        artifactId: jsonObject(result.output).artifactId,
         kind: "image.png",
         filename: "page-1.png",
         mimeType: "image/png",
@@ -536,7 +538,7 @@ describe("workspace.preview_images", () => {
           mimeType: "image/png"
         },
         metadata: {
-          sourceArtifactId: result.output.artifactId,
+          sourceArtifactId: jsonObject(result.output).artifactId,
           status: "ready",
           workspacePath: "previews/report/page-1.png"
         }
@@ -547,7 +549,7 @@ describe("workspace.preview_images", () => {
 
     const storedArtifact = await harness.store.getManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
-      artifactId: asManagedArtifactId(result.output.artifactId)
+      artifactId: asManagedArtifactId(text(jsonObject(result.output).artifactId))
     });
     expect(storedArtifact?.metadata.source).toBe("execution_workspace");
     if (!storedArtifact) {

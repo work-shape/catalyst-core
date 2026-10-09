@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import {
   CompositeAuthAdapter,
@@ -6,7 +7,6 @@ import {
   IdentityResolvingAuthAdapter
 } from "@vivd-catalyst/auth";
 import { asClientInstanceId, requireAuthScope } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
 
 const secret = "a-test-service-access-token-secret-with-enough-length";
 
@@ -113,7 +113,7 @@ describe("service access tokens", () => {
   });
 
   it("enforces the dedicated token-secret and TTL constraints", () => {
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const clientInstanceId = asClientInstanceId("service-auth-test");
     expect(
       () =>
@@ -143,7 +143,7 @@ async function createFixture(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("service-auth-test");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const servicePrincipal = await store.createServicePrincipal({
     clientInstanceId,
     displayLabel: "Catalyst CLI",

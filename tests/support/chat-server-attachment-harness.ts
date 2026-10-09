@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect } from "vitest";
 import type { ClientInstanceCapability } from "@vivd-catalyst/client-assembly";
 import {
@@ -7,10 +8,9 @@ import {
   type DraftAttachment,
   type FileAttachmentFormat,
   type ImageFileFormat,
-  type ManagedFileId,
-  type SupportedImageMimeType
+  type ManagedFileId
 } from "@vivd-catalyst/core";
-import type { TestServer } from "./chat-server-harness";
+import type { TestInstance as TestServer } from "./test-instance";
 
 export function createMultipartFilePayload(input: {
   fieldName: string;
@@ -55,7 +55,12 @@ export function createManagedObjectTestAttachmentCapability(): {
         const managedObjects = context.managedObjectAccess.createAccess({
           byteStore: {
             async putObject(input) {
-              objects.set(input.key, input.body);
+              if (input.body instanceof Uint8Array) objects.set(input.key, input.body);
+              else {
+                const chunks: Uint8Array[] = [];
+                for await (const chunk of input.body) chunks.push(chunk);
+                objects.set(input.key, Buffer.concat(chunks));
+              }
             },
             async getObject(key) {
               const bytes = objects.get(key);
@@ -313,13 +318,13 @@ function manifestEntryForAttachment(attachment: ConversationAttachment): Attachm
         fileId: attachment.fileId,
         attachmentId: attachment.id,
         filename: attachment.filename,
-        mimeType: "image/gif" as SupportedImageMimeType,
+        mimeType: "image/gif",
         byteSize: attachment.byteSize,
         status: "ready" as const,
         readable: false as const,
         modelVisibility: {
           type: "image" as const,
-          mimeType: "image/gif" as SupportedImageMimeType
+          mimeType: "image/gif"
         },
         modelContext: {
           section: "Attached images",
@@ -328,7 +333,7 @@ function manifestEntryForAttachment(attachment: ConversationAttachment): Attachm
         metadata: {
           fileId: attachment.fileId,
           filename: attachment.filename,
-          mimeType: "image/gif" as SupportedImageMimeType,
+          mimeType: "image/gif",
           byteSize: attachment.byteSize,
           format: "gif" as ImageFileFormat,
           checksum: attachment.checksum
@@ -378,12 +383,11 @@ export async function waitForReadyDraftAttachment(
   conversationId: string
 ): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const response = await server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversationId}/draft-attachments`
+    const response = await server.call("listDraftAttachments", {
+      params: { conversationId: conversationId }
     });
     expect(response.statusCode).toBe(200);
-    const attachments = response.json() as Array<{ status: string }>;
+    const attachments = response.json<Array<{ status: string }>>();
     if (attachments.some((attachment) => attachment.status === "ready")) {
       return;
     }
@@ -413,4 +417,17 @@ async function readUploadBytes(input: {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
+}
+
+export function uploadContent(
+  bytes: Uint8Array
+): import("@vivd-catalyst/capability-sdk").UploadFileContent {
+  return {
+    byteSize: bytes.byteLength,
+    checksum: createHash("sha256").update(bytes).digest("hex"),
+    headerBytes: bytes.slice(0, 4096),
+    async *openStream() {
+      yield bytes;
+    }
+  };
 }

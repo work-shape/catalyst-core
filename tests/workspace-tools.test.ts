@@ -1,3 +1,5 @@
+import { text, array, jsonObject } from "./support/assertions";
+
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +15,7 @@ import {
   WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
-import { createWorkspaceHarness, encode } from "./workspace-tools-harness";
+import { createWorkspaceHarness, encode } from "./support/workspace-tools-harness";
 
 describe("workspace tools", () => {
   it("describes safe shell command shape to the model", async () => {
@@ -412,7 +414,7 @@ describe("workspace tools", () => {
       if (read.status !== "success") {
         throw new Error("Expected read_file to succeed");
       }
-      expect(read.output.contentPreview).toBe("ready");
+      expect(jsonObject(read.output).contentPreview).toBe("ready");
 
       const verified = await harness.runTool("workspace.exec", {
         command: "printf 'verified\\n'",
@@ -437,7 +439,7 @@ describe("workspace tools", () => {
       if (directoryPostcondition.status !== "success") {
         throw new Error("Expected directory expected output to satisfy postcondition");
       }
-      expect(directoryPostcondition.output.changedFiles).toEqual([
+      expect(jsonObject(directoryPostcondition.output).changedFiles).toEqual([
         expect.objectContaining({ path: "previews/deck/slide-1.png" })
       ]);
 
@@ -566,12 +568,12 @@ describe("workspace tools", () => {
     if (result.status !== "cancelled") {
       throw new Error("Expected queued workspace command cancellation");
     }
-    const commandId = result.error.details?.commandId;
+    const commandId = jsonObject(result.error.details).commandId;
     expect(typeof commandId).toBe("string");
     await expect(
       harness.store.getWorkspaceCommand({
         clientInstanceId: harness.clientInstanceId,
-        commandId: asWorkspaceCommandId(commandId as string)
+        commandId: asWorkspaceCommandId(text(commandId))
       })
     ).resolves.toMatchObject({
       status: "cancelled",
@@ -595,11 +597,11 @@ describe("workspace tools", () => {
     expect(result.error.details).toMatchObject({
       status: "cancelled"
     });
-    const commandId = result.error.details?.commandId;
+    const commandId = jsonObject(result.error.details).commandId;
     expect(typeof commandId).toBe("string");
     const command = await harness.store.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
-      commandId: asWorkspaceCommandId(commandId as string)
+      commandId: asWorkspaceCommandId(text(commandId))
     });
     expect(command?.status).toBe("cancelled");
   });
@@ -669,7 +671,7 @@ describe("workspace tools", () => {
     });
     const command = await harness.store.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,
-      commandId: asWorkspaceCommandId(result.output.commandId)
+      commandId: asWorkspaceCommandId(text(jsonObject(result.output).commandId))
     });
     expect(command?.status).toBe("completed");
   });
@@ -844,7 +846,7 @@ describe("workspace tools", () => {
       if (listed.status !== "success") {
         throw new Error("Expected list_files to succeed");
       }
-      expect(listed.output.files).toEqual([]);
+      expect(jsonObject(listed.output).files).toEqual([]);
 
       const readDeleted = await harness.runTool("workspace.read_file", {
         path: "scripts/build.py"
@@ -935,7 +937,7 @@ describe("workspace tools", () => {
     if (read.status !== "success") {
       throw new Error("Expected partial delete rejection to leave file readable");
     }
-    expect(read.output.contentPreview).toBe("delete-me\nkeep-me\n");
+    expect(jsonObject(read.output).contentPreview).toBe("delete-me\nkeep-me\n");
   });
 
   it("imports uploaded managed files into workspace storage without leaking object keys", async () => {
@@ -974,7 +976,7 @@ describe("workspace tools", () => {
 
     const workspaceFiles = await harness.store.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
-      workspaceId: asExecutionWorkspaceId(imported.output.workspaceId)
+      workspaceId: asExecutionWorkspaceId(text(jsonObject(imported.output).workspaceId))
     });
     expect(workspaceFiles).toEqual([
       expect.objectContaining({
@@ -1012,7 +1014,7 @@ describe("workspace tools", () => {
     if (imported.status !== "success") {
       throw new Error("Expected import_files to succeed");
     }
-    expect(imported.output.importedFiles[0]).toMatchObject({
+    expect(array(jsonObject(imported.output).importedFiles)[0]).toMatchObject({
       fileId: "file_boardingpass_pdf",
       path: "inputs/Boardingpass-YCX5CS.pdf",
       filename: "Boardingpass - YCX5CS.pdf",
@@ -1021,7 +1023,7 @@ describe("workspace tools", () => {
 
     const workspaceFiles = await harness.store.listWorkspaceFiles({
       clientInstanceId: harness.clientInstanceId,
-      workspaceId: asExecutionWorkspaceId(imported.output.workspaceId)
+      workspaceId: asExecutionWorkspaceId(text(jsonObject(imported.output).workspaceId))
     });
     expect(workspaceFiles[0]).toMatchObject({
       path: "inputs/Boardingpass-YCX5CS.pdf",
@@ -1069,7 +1071,7 @@ describe("workspace tools", () => {
     if (executed.status !== "success") {
       throw new Error("Expected exec to succeed");
     }
-    expect(executed.output.changedFiles).toEqual([
+    expect(jsonObject(executed.output).changedFiles).toEqual([
       {
         path: "reports/final.csv",
         byteSize: 12,
@@ -1110,7 +1112,7 @@ describe("workspace tools", () => {
     }
     expect(promoted.artifacts).toHaveLength(1);
     expect(promoted.artifacts?.[0]).toMatchObject({
-      artifactId: promoted.output?.artifactId,
+      artifactId: jsonObject(promoted.output).artifactId,
       kind: "document.docx",
       filename: "final.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -1157,7 +1159,7 @@ describe("workspace tools", () => {
       throw new Error("Expected list_files to succeed");
     }
     expect(listed.artifacts).toBeUndefined();
-    expect(listed.output?.files).toEqual([
+    expect(jsonObject(listed.output).files).toEqual([
       expect.objectContaining({
         path: "reports/draft.pdf",
         promotedArtifacts: undefined
@@ -1166,7 +1168,7 @@ describe("workspace tools", () => {
         path: "reports/final.docx",
         promotedArtifacts: [
           expect.objectContaining({
-            artifactId: promoted.output?.artifactId,
+            artifactId: jsonObject(promoted.output).artifactId,
             kind: "document.docx"
           })
         ]
@@ -1243,7 +1245,7 @@ describe("workspace tools", () => {
     });
     expect(promoted.artifacts).toEqual([
       expect.objectContaining({
-        artifactId: promoted.output.artifactId,
+        artifactId: jsonObject(promoted.output).artifactId,
         kind: "document.docx",
         filename: "final-report.docx",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -1257,10 +1259,12 @@ describe("workspace tools", () => {
     if (listed.status !== "success") {
       throw new Error("Expected list_files to succeed");
     }
-    expect(listed.output?.files).toEqual([
+    expect(jsonObject(listed.output).files).toEqual([
       expect.objectContaining({
         path: "artifacts/final-report.docx",
-        promotedArtifacts: [expect.objectContaining({ artifactId: promoted.output.artifactId })]
+        promotedArtifacts: [
+          expect.objectContaining({ artifactId: jsonObject(promoted.output).artifactId })
+        ]
       }),
       expect.objectContaining({
         path: "previews/final-report/page-1.png",

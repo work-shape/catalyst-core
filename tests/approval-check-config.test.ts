@@ -5,7 +5,7 @@ import {
   parseClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import { assertClientAssemblyValid } from "../packages/client-assembly/src/assembly-validation";
-import { createClientInstanceExecutionAssembly } from "../packages/client-assembly/src/app";
+import { createTestInstance, getTestExecution } from "./support/test-instance";
 
 const rule: ApprovalCheckConfig = {
   id: "no_personal_data",
@@ -125,16 +125,17 @@ describe("approval check configuration", () => {
 
   it("validates against the effective assembly registry, including the platform-owned skill handler", async () => {
     const config = parseClientInstanceConfig({ ...baseConfig, approvalChecks: [rule] });
-    await expect(
-      createClientInstanceExecutionAssembly({ config, tools: [], env: {}, storeMode: "memory" })
-    ).rejects.toThrow("Client instance assembly is invalid");
+    await expect(createTestInstance({ execution: { config, tools: [], env: {} } })).rejects.toThrow(
+      "Client instance assembly is invalid"
+    );
     config.administration.agentConfiguration.agentSkillChanges.enabled = true;
-    const assembly = await createClientInstanceExecutionAssembly({
-      config,
-      tools: [],
-      env: {},
-      storeMode: "memory"
-    });
+    const assembly = await createTestInstance({
+      execution: {
+        config,
+        tools: [],
+        env: {}
+      }
+    }).then(getTestExecution);
     try {
       expect(assembly.approvalRequestHandlers.has("skill_change")).toBe(true);
     } finally {

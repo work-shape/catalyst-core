@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
   AppError,
@@ -8,7 +9,7 @@ import {
   type AuthenticatedUser,
   type JsonObject
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
 
 const clientInstanceId = asClientInstanceId("approval_test");
@@ -30,7 +31,7 @@ const reviewer: AuthenticatedUser = {
 };
 
 function fixture() {
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const apply = vi.fn(
     async (_payload: JsonObject, actor: AuthenticatedUser): Promise<JsonObject> => ({
       actorId: actor.id

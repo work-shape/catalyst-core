@@ -1,3 +1,5 @@
+import { setTestAgent } from "./support/fixtures";
+import { createTestInstance } from "./support/test-instance";
 import { Buffer } from "node:buffer";
 import { createServer } from "node:http";
 import { describe, expect, it } from "vitest";
@@ -5,10 +7,9 @@ import {
   findModelToolMaterializationIssues,
   materializeModelTools
 } from "@vivd-catalyst/agent-runtime";
-import { createClientInstanceApp as createUnseededClientInstanceApp } from "@vivd-catalyst/client-assembly";
+
 import {
   AppError,
-  asClientInstanceId,
   isJsonObject,
   unknownToJsonValue,
   type AgentConfig,
@@ -330,7 +331,7 @@ describe("web access app assembly", () => {
   });
 
   it("registers web_fetch when enabled by app config", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         webAccess: {
           enabled: true,
@@ -342,7 +343,6 @@ describe("web access app assembly", () => {
         tools: [{ name: "web_fetch", enabled: true }]
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
@@ -432,7 +432,7 @@ describe("web access app assembly", () => {
   });
 
   it("accepts native web_search for OpenAI-compatible Responses providers without a local tool", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         webAccess: {
           enabled: true,
@@ -456,7 +456,6 @@ describe("web access app assembly", () => {
         tools: [{ name: "web_search", enabled: true }]
       }),
       env: { OPENAI_API_KEY: "test-key" },
-      storeMode: "memory",
       tools: []
     });
 
@@ -533,10 +532,9 @@ async function expectAppAssemblyInvalid(
   message: string
 ) {
   try {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config,
       env: {},
-      storeMode: "memory",
       tools: []
     });
     await app.close();
@@ -612,6 +610,18 @@ function createTestConfig(
     ],
     tools: input.tools ?? []
   });
+  setTestAgent(
+    config,
+    toJsonObject(
+      agentConfigSchema.parse({
+        name: "test_agent",
+        displayName: "Test Agent",
+        instructions: "Test web access.",
+        modelProviderId: input.modelProviderId ?? "local",
+        toolNames: input.toolNames ?? []
+      })
+    )
+  );
   testAgentsByConfig.set(
     config,
     agentConfigSchema.parse({
@@ -626,28 +636,6 @@ function createTestConfig(
 }
 
 const testAgentsByConfig = new WeakMap<object, AgentConfig>();
-
-async function createClientInstanceApp(
-  input: Parameters<typeof createUnseededClientInstanceApp>[0]
-): Promise<Awaited<ReturnType<typeof createUnseededClientInstanceApp>>> {
-  const app = await createUnseededClientInstanceApp(input);
-  const agent = testAgentsByConfig.get(app.config);
-  if (agent) {
-    await app.store.applyConfigAssetMutations({
-      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
-      mutations: [
-        {
-          type: "upsert",
-          kind: "agent",
-          name: agent.name,
-          config: toJsonObject(agent)
-        },
-        { type: "setDefaultAgent", agentName: agent.name }
-      ]
-    });
-  }
-  return app;
-}
 
 function expectModelToolInvalid(
   config: ReturnType<typeof createTestConfig>,

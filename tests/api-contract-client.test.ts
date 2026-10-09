@@ -1,3 +1,5 @@
+import { contractPathFixtures, openApiJsonOperation } from "./support/operations";
+import { required } from "./support/assertions";
 import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
@@ -106,7 +108,7 @@ describe("api operation catalog and client", () => {
   });
 
   it("keeps Collaboration Workspace create and update request contracts aligned", () => {
-    const createOperation = openApiDocument.paths["/api/collaboration-workspaces"].post;
+    const createOperation = openApiJsonOperation("createCollaborationWorkspace");
     const createSchema = createOperation.requestBody.content["application/json"].schema;
 
     expect(createSchema.required).toEqual(["name"]);
@@ -177,17 +179,18 @@ describe("api operation catalog and client", () => {
     expect(requests).toEqual([
       {
         method: "PUT",
-        path: "/api/admin/config/agents/kai/availability",
+        path: contractPathFixtures.agentAvailability,
         body: { mode: "selected", collaborationWorkspaceIds: ["cws_1"] }
       },
-      { method: "GET", path: "/api/admin/collaboration-workspaces" },
-      { method: "GET", path: "/api/collaboration-workspaces/cws_1/agents?locale=de" }
+      { method: "GET", path: contractPathFixtures.adminWorkspaces },
+      { method: "GET", path: contractPathFixtures.workspaceAgents }
     ]);
   });
 
   it("carries conversation visibility through the workspace, conversation and move contracts", async () => {
-    const moveOperation = openApiDocument.paths["/api/conversations/{conversationId}/move"].post;
-    const conversationSchema = moveOperation.responses["200"].content["application/json"].schema;
+    const moveOperation = openApiJsonOperation("moveConversation");
+    const conversationSchema = required(moveOperation.responses["200"]).content["application/json"]
+      .schema;
     expect(moveOperation.requestBody.content["application/json"].schema.required).toEqual([
       "collaborationWorkspaceId"
     ]);
@@ -254,22 +257,22 @@ describe("api operation catalog and client", () => {
       apiOperations.listConversationMessages.buildPath({
         params: { conversationId: "conversation 1/2" }
       })
-    ).toBe("/api/conversations/conversation%201%2F2/messages");
+    ).toBe(contractPathFixtures.encodedMessages);
     expect(apiOperations.getConfig.buildPath({ query: { locale: "de" } })).toBe(
-      "/api/config?locale=de"
+      contractPathFixtures.localizedConfig
     );
     expect(
       apiOperations.listConversations.buildPath({
         query: { collaborationWorkspaceId: "workspace/one" }
       })
-    ).toBe("/api/conversations?collaborationWorkspaceId=workspace%2Fone");
-    expect(apiOperations.listConversations.buildPath()).toBe("/api/conversations");
+    ).toBe(contractPathFixtures.encodedWorkspaceConversations);
+    expect(apiOperations.listConversations.buildPath()).toBe(contractPathFixtures.conversations);
     expect(
-      buildApiPath("/api/example/:exampleId", {
+      buildApiPath(contractPathFixtures.exampleTemplate, {
         params: { exampleId: "value/with spaces" },
         query: { view: "full" }
       })
-    ).toBe("/api/example/value%2Fwith%20spaces?view=full");
+    ).toBe(contractPathFixtures.exampleValue);
     expect(() => apiOperations.listConversationMessages.buildPath()).toThrow(
       /Missing path parameter "conversationId"/u
     );
@@ -847,6 +850,6 @@ describe("api operation catalog and client", () => {
     expect(contractSource).not.toContain("chatStreamRoutePath");
     expect(contractSource).not.toContain("chatStreamRequestSchema");
     expect(contractSource).not.toContain("chatStreamChunkSchema");
-    expect(routeSource).not.toContain("/api/chat");
+    expect(routeSource).not.toContain(contractPathFixtures.retiredChat);
   });
 });

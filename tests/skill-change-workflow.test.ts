@@ -1,3 +1,4 @@
+import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
   asAgentRunId,
@@ -11,7 +12,7 @@ import {
   type JsonObject,
   type SkillConfig
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import {
   agentConfigSchema,
   createSkillChangePreview,
@@ -25,11 +26,11 @@ import {
   createProposeSkillChangeTool,
   createSkillSourceVersion
 } from "@vivd-catalyst/tool-execution";
-import { createClientInstanceExecutionAssembly } from "../packages/client-assembly/src/app";
+
 import { createConfigAssetSource } from "../packages/client-assembly/src/config-asset-source";
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
 import { createSystemInstructions } from "../packages/agent-runtime/src/system-instructions";
-import { createTestConfig } from "./chat-server-harness";
+import { createTestConfig } from "./support/fixtures";
 
 const clientInstanceId = asClientInstanceId("test-client");
 const requester: AuthenticatedUser = {
@@ -79,7 +80,7 @@ async function fixture() {
     enabled: true,
     allowSkillCreation: true
   };
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const agent = agentConfigSchema.parse({
     name: "assistant",
     displayName: "Assistant",
@@ -579,12 +580,13 @@ describe("skill change tool and wiring policy", () => {
       tools: [{ name: "read_skill" }, { name: "propose_skill_change" }]
     });
     config.administration.agentConfiguration.agentSkillChanges.enabled = true;
-    const assembly = await createClientInstanceExecutionAssembly({
-      config,
-      tools: [],
-      storeMode: "memory",
-      env: {}
-    });
+    const assembly = await createTestInstance({
+      execution: {
+        config,
+        tools: [],
+        env: {}
+      }
+    }).then(getTestExecution);
     try {
       expect(assembly.approvalRequestHandlers.get("skill_change")?.requiredPermission).toBe(
         "agent_skills.approve"

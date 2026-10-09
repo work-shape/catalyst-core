@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   StoreBackedAuditRecorder,
@@ -14,7 +15,7 @@ import {
   type JsonObject,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import {
   ApprovalCheckRunner,
   ApprovalRequestWorkflow,
@@ -26,7 +27,7 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createProposeSkillChangeTool } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
 import { createConfigAssetSource } from "../packages/client-assembly/src/config-asset-source";
-import { createTestConfig } from "./chat-server-harness";
+import { createTestConfig } from "./support/fixtures";
 
 const clientInstanceId = asClientInstanceId("test-client");
 const user: AuthenticatedUser = {
@@ -99,7 +100,7 @@ function fixture(checks: ApprovalCheckConfig[] = [rule]) {
     ]
   });
   config.approvalChecks = checks;
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const complete = vi
     .fn<ModelProvider["complete"]>()
     .mockResolvedValue(completion('{"violates":false,"reason":"Keine personenbezogenen Daten."}'));

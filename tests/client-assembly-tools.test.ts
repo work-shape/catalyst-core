@@ -1,7 +1,8 @@
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { createClientInstanceApp, createToolDefinitions } from "@vivd-catalyst/client-assembly";
+import { createToolDefinitions } from "@vivd-catalyst/client-assembly";
 import { defineConfiguredTool, defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 
 describe("client assembly configured tools", () => {
@@ -54,7 +55,7 @@ describe("client assembly configured tools", () => {
 
   it("rejects capability config without a registered implementation", async () => {
     await expect(
-      createClientInstanceApp({
+      createTestInstance({
         config: createTestConfig({
           tools: [],
           capabilities: {
@@ -63,7 +64,6 @@ describe("client assembly configured tools", () => {
         }),
         tools: [],
         capabilities: [],
-        storeMode: "memory",
         env: {}
       })
     ).rejects.toMatchObject({

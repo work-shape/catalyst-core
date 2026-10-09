@@ -1,3 +1,8 @@
+import { required } from "./support/assertions";
+
+import { uploadContent } from "./support/chat-server-attachment-harness";
+import { type TestInstance, createTestInstance } from "./support/test-instance";
+
 import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,10 +18,9 @@ import {
   type FileAttachmentFormat,
   type ManagedFileId
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
-  createClientInstanceApp,
   createExecutionWorkspaceSourceAttachmentHandler,
   detectWorkspaceSourceFileFormat,
   type ClientInstanceCapability,
@@ -55,7 +59,7 @@ describe("execution workspace source attachments", () => {
         ownerUserId: "user-1",
         filename: "analysis.xlsx",
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        bytes
+        content: uploadContent(bytes)
       });
 
       expect(attachment).toMatchObject({
@@ -117,7 +121,7 @@ describe("execution workspace source attachments", () => {
           ownerUserId: "user-1",
           filename: "archive.zip",
           mimeType: "application/zip",
-          bytes: new TextEncoder().encode("zip")
+          content: uploadContent(new TextEncoder().encode("zip"))
         })
       ).rejects.toMatchObject({
         code: "VALIDATION_FAILED",
@@ -130,7 +134,7 @@ describe("execution workspace source attachments", () => {
           ownerUserId: "user-1",
           filename: "large.csv",
           mimeType: "text/csv",
-          bytes: new TextEncoder().encode("too-large")
+          content: uploadContent(new TextEncoder().encode("too-large"))
         })
       ).rejects.toMatchObject({
         code: "VALIDATION_FAILED",
@@ -192,20 +196,16 @@ describe("execution workspace source attachments", () => {
 
   it("advertises and uploads workspace source, PDF, and image formats through the chat attachment API", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-app-"));
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createWorkspaceAttachmentConfig(),
       env: {
         EXECUTION_WORKSPACE_OBJECT_ROOT: root
       },
-      storeMode: "memory",
       capabilities: [createStrictUploadCapability()],
       tools: []
     });
     try {
-      const config = await app.server.inject({
-        method: "GET",
-        url: "/api/config"
-      });
+      const config = await app.call("getConfig", {});
       expect(config.statusCode).toBe(200);
       const accept = (config.json() as { features: { attachments: { accept: string } } }).features
         .attachments.accept;
@@ -213,34 +213,32 @@ describe("execution workspace source attachments", () => {
       expect(accept).toContain("application/pdf");
       expect(accept).toContain("image/png");
 
-      const created = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const created = await app.call("createConversation", {
         payload: { title: "Dropzone source artifact test" }
       });
       expect(created.statusCode).toBe(200);
       const conversation = created.json() as { id: string };
 
-      await expectUpload(app.server, conversation.id, {
+      await expectUpload(app, conversation.id, {
         filename: "analysis.xlsx",
         contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         content: "spreadsheet",
         expectedFormat: "xlsx"
       });
-      await expectUpload(app.server, conversation.id, {
+      await expectUpload(app, conversation.id, {
         filename: "scan.pdf",
         contentType: "application/pdf",
         content: "%PDF-1.4",
         expectedFormat: "pdf"
       });
-      await expectUpload(app.server, conversation.id, {
+      await expectUpload(app, conversation.id, {
         filename: "photo.png",
         contentType: "image/png",
         content: "png",
         expectedFormat: "png"
       });
 
-      const unsupported = await uploadFile(app.server, conversation.id, {
+      const unsupported = await uploadFile(app, conversation.id, {
         filename: "archive.zip",
         contentType: "application/zip",
         content: "zip"
@@ -253,7 +251,7 @@ describe("execution workspace source attachments", () => {
         }
       });
 
-      const oversized = await uploadFile(app.server, conversation.id, {
+      const oversized = await uploadFile(app, conversation.id, {
         filename: "large.pdf",
         contentType: "application/pdf",
         content: "too-large"
@@ -274,12 +272,11 @@ describe("execution workspace source attachments", () => {
   it("deletes workspace bytes before broad cleanup handlers mark records deleted", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-cleanup-app-"));
     const expectedDeletedObjectKeys: string[] = [];
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createWorkspaceAttachmentConfig(),
       env: {
         EXECUTION_WORKSPACE_OBJECT_ROOT: root
       },
-      storeMode: "memory",
       capabilities: [
         createWorkspaceArtifactSeedingCapability(root),
         createBroadCleanupMarkerCapability(root, expectedDeletedObjectKeys)
@@ -287,16 +284,14 @@ describe("execution workspace source attachments", () => {
       tools: []
     });
     try {
-      const created = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const created = await app.call("createConversation", {
         payload: { title: "Workspace cleanup ordering test" }
       });
       expect(created.statusCode).toBe(200);
       const conversation = created.json() as { id: string };
 
       const sourceContent = "source,total\nAda,42\n";
-      const uploadedSource = await uploadFile(app.server, conversation.id, {
+      const uploadedSource = await uploadFile(app, conversation.id, {
         filename: "source.csv",
         contentType: "text/csv",
         content: sourceContent
@@ -310,7 +305,7 @@ describe("execution workspace source attachments", () => {
       });
 
       const artifactContent = "name,total\nAda,42\n";
-      const uploadedArtifact = await uploadFile(app.server, conversation.id, {
+      const uploadedArtifact = await uploadFile(app, conversation.id, {
         filename: "source.seed",
         contentType: "text/x-workspace-artifact-test",
         content: artifactContent
@@ -327,9 +322,8 @@ describe("execution workspace source attachments", () => {
       await expect(access(objectPath(root, sourceObjectKey))).resolves.toBeUndefined();
       await expect(access(objectPath(root, artifactObjectKey))).resolves.toBeUndefined();
 
-      const deleted = await app.server.inject({
-        method: "DELETE",
-        url: `/api/conversations/${conversation.id}`
+      const deleted = await app.call("deleteConversation", {
+        params: { conversationId: conversation.id }
       });
       expect(deleted.statusCode).toBe(200);
       await expect(access(objectPath(root, sourceObjectKey))).rejects.toMatchObject({
@@ -346,12 +340,11 @@ describe("execution workspace source attachments", () => {
 
   it("serves promoted workspace artifacts before broad managed-object readers", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-app-"));
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createWorkspaceAttachmentConfig(),
       env: {
         EXECUTION_WORKSPACE_OBJECT_ROOT: root
       },
-      storeMode: "memory",
       capabilities: [
         createWorkspaceArtifactSeedingCapability(root),
         createBroadManagedObjectReaderCapability()
@@ -359,15 +352,13 @@ describe("execution workspace source attachments", () => {
       tools: []
     });
     try {
-      const created = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const created = await app.call("createConversation", {
         payload: { title: "Workspace artifact dispatch test" }
       });
       expect(created.statusCode).toBe(200);
       const conversation = created.json() as { id: string };
 
-      const uploaded = await uploadFile(app.server, conversation.id, {
+      const uploaded = await uploadFile(app, conversation.id, {
         filename: "source.seed",
         contentType: "text/x-workspace-artifact-test",
         content: "name,total\nAda,42\n"
@@ -377,9 +368,8 @@ describe("execution workspace source attachments", () => {
         .attachment.artifactRefs.final;
       expect(artifactId).toEqual(expect.any(String));
 
-      const downloaded = await app.server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${artifactId}/content`
+      const downloaded = await app.call("getConversationArtifactContent", {
+        params: { conversationId: conversation.id, artifactId: required(artifactId) }
       });
       expect(downloaded.statusCode).toBe(200);
       expect(downloaded.payload).toBe("name,total\nAda,42\n");
@@ -392,12 +382,11 @@ describe("execution workspace source attachments", () => {
 
   it("serves managed artifact-preview image artifacts before broad managed-object readers", async () => {
     const root = await mkdtemp(join(tmpdir(), "vivd-workspace-preview-app-"));
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createWorkspaceAttachmentConfig(),
       env: {
         EXECUTION_WORKSPACE_OBJECT_ROOT: root
       },
-      storeMode: "memory",
       capabilities: [
         createWorkspacePreviewArtifactSeedingCapability(root),
         createBroadManagedObjectReaderCapability()
@@ -405,15 +394,13 @@ describe("execution workspace source attachments", () => {
       tools: []
     });
     try {
-      const created = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const created = await app.call("createConversation", {
         payload: { title: "Workspace preview artifact dispatch test" }
       });
       expect(created.statusCode).toBe(200);
       const conversation = created.json() as { id: string };
 
-      const uploaded = await uploadFile(app.server, conversation.id, {
+      const uploaded = await uploadFile(app, conversation.id, {
         filename: "deck.preview-seed",
         contentType: "text/x-workspace-preview-test",
         content: "PNG-preview"
@@ -424,9 +411,8 @@ describe("execution workspace source attachments", () => {
       ).attachment.artifactRefs.preview;
       expect(previewArtifactId).toEqual(expect.any(String));
 
-      const downloaded = await app.server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${previewArtifactId}/content`
+      const downloaded = await app.call("getConversationArtifactContent", {
+        params: { conversationId: conversation.id, artifactId: required(previewArtifactId) }
       });
       expect(downloaded.statusCode).toBe(200);
       expect(downloaded.payload).toBe("PNG-preview");
@@ -443,7 +429,7 @@ describe("execution workspace source attachments", () => {
 async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = {}) {
   const root = await mkdtemp(join(tmpdir(), "vivd-workspace-source-"));
   const clientInstanceId = asClientInstanceId(`workspace_source_${globalThis.crypto.randomUUID()}`);
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: "user-1",
@@ -1094,7 +1080,7 @@ function formatForMimeType(mimeType: string | undefined): FileAttachmentFormat |
 }
 
 async function expectUpload(
-  server: Awaited<ReturnType<typeof createClientInstanceApp>>["server"],
+  server: TestInstance,
   conversationId: string,
   input: {
     filename: string;
@@ -1116,7 +1102,7 @@ async function expectUpload(
 }
 
 async function uploadFile(
-  server: Awaited<ReturnType<typeof createClientInstanceApp>>["server"],
+  server: TestInstance,
   conversationId: string,
   input: {
     filename: string;
@@ -1128,9 +1114,8 @@ async function uploadFile(
     fieldName: "file",
     ...input
   });
-  return server.inject({
-    method: "POST",
-    url: `/api/conversations/${conversationId}/draft-attachments`,
+  return server.call("uploadDraftAttachment", {
+    params: { conversationId: conversationId },
     headers: multipart.headers,
     payload: multipart.payload
   });

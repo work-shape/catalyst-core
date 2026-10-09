@@ -1,3 +1,11 @@
+import {
+  completeServerOptions,
+  type TestMemoryStore,
+  createTestInstance
+} from "./support/test-instance";
+import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+
 import { describe, expect, it } from "vitest";
 import {
   ConversationRetentionJob,
@@ -12,6 +20,8 @@ import {
   type ManagedObjectByteStore
 } from "@vivd-catalyst/capability-sdk";
 import {
+  unknownToJsonValue,
+  isJsonObject,
   StoreBackedAuditRecorder,
   asClientInstanceId,
   asExecutionWorkspaceId,
@@ -24,13 +34,13 @@ import {
   type ManagedFileRecord,
   type PlatformFileStore
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 
 describe("conversation retention expiration", () => {
   it("expires due conversations on startup and periodically with object cleanup and audit", async () => {
     const clientInstanceId = asClientInstanceId("retention-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const byteStore = new RecordingByteStore();
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
@@ -164,7 +174,7 @@ describe("conversation retention expiration", () => {
 
   it("expires abandoned draft conversations after the grace period", async () => {
     const clientInstanceId = asClientInstanceId("retention-abandoned-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
       files: store,
@@ -251,7 +261,7 @@ describe("conversation retention expiration", () => {
 
   it("keeps overdue conversations while expiry is turned off", async () => {
     const clientInstanceId = asClientInstanceId("retention-off-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const jobInput = {
       logger: {
         error(error: unknown) {
@@ -300,7 +310,7 @@ describe("conversation retention expiration", () => {
 
   it("expires only abandoned drafts while expiry is turned off", async () => {
     const clientInstanceId = asClientInstanceId("retention-off-abandoned-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
       files: store,
@@ -368,7 +378,7 @@ describe("conversation retention expiration", () => {
 
   it("keeps deletion metadata retryable when object byte deletion fails", async () => {
     const clientInstanceId = asClientInstanceId("retention-retry-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const byteStore = new RecordingByteStore();
     const managedObjects = createManagedObjectAccess({
       clientInstanceId,
@@ -455,7 +465,7 @@ describe("conversation retention expiration", () => {
 
   it("sanitizes workspace object keys in direct retention cleanup failure audit", async () => {
     const clientInstanceId = asClientInstanceId("retention-workspace-failure-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const byteStore = new RecordingByteStore();
     const options = createRetentionOptions({
       clientInstanceId,
@@ -500,7 +510,7 @@ describe("conversation retention expiration", () => {
 
   it("sanitizes workspace object keys in periodic workspace cleanup failure audit", async () => {
     const clientInstanceId = asClientInstanceId("workspace-cleanup-failure-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const byteStore = new RecordingByteStore();
     const options = createRetentionOptions({
       clientInstanceId,
@@ -552,7 +562,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 function createOrphanFixture(name: string, keyPrefix = "files") {
   const clientInstanceId = asClientInstanceId(name);
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const byteStore = new RecordingByteStore();
   const managedObjects = createManagedObjectAccess({
     clientInstanceId,
@@ -773,7 +783,7 @@ describe("orphaned managed file cleanup", () => {
 
 function createRetentionOptions(input: {
   clientInstanceId: ClientInstanceId;
-  store: InMemoryPlatformStore;
+  store: TestMemoryStore;
   attachments?: ChatAttachmentService;
   workspaceObjects?: { deleteObject(key: string): Promise<void> };
   expireConversations?: boolean;
@@ -782,52 +792,61 @@ function createRetentionOptions(input: {
     clientInstanceId: input.clientInstanceId,
     store: input.store
   });
-  return {
-    config: parseClientInstanceConfig({
-      version: 1,
-      clientInstance: {
-        id: input.clientInstanceId,
-        displayName: "Retention Test",
-        environment: "development"
-      },
-      auth: {
-        development: {
-          enabled: true
-        }
-      },
-      retention: {
-        conversationDays: 30,
-        expireConversations: input.expireConversations,
-        auditDays: 365,
-        allowUserDelete: true
-      },
-      modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
-      tools: []
-    }),
-    clientInstanceId: input.clientInstanceId,
-    authAdapter: {} as ChatServerOptions["authAdapter"],
-    conversationStore: input.store,
-    auditEventStore: input.store,
-    userStore: input.store,
-    usageGovernance: {} as ChatServerOptions["usageGovernance"],
-    auditRecorder,
-    agentRuntime: {} as ChatServerOptions["agentRuntime"],
-    attachments: input.attachments,
-    executionWorkspaceCleanup: input.workspaceObjects
-      ? {
-          store: input.store,
-          objects: input.workspaceObjects,
-          jobOptions: {
-            runOnStartup: false
+  return completeServerOptions(
+    {
+      config: parseClientInstanceConfig({
+        version: 1,
+        clientInstance: {
+          id: input.clientInstanceId,
+          displayName: "Retention Test",
+          environment: "development"
+        },
+        auth: {
+          development: {
+            enabled: true
           }
+        },
+        retention: {
+          conversationDays: 30,
+          expireConversations: input.expireConversations,
+          auditDays: 365,
+          allowUserDelete: true
+        },
+        modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+        tools: []
+      }),
+      clientInstanceId: input.clientInstanceId,
+      authAdapter: {
+        id: "unused",
+        credentialMode: "ambient",
+        async authenticate() {
+          throw new Error("Unused auth fixture");
         }
-      : undefined,
-    modelProvider: {} as ChatServerOptions["modelProvider"]
-  };
+      },
+      conversationStore: input.store,
+      auditEventStore: input.store,
+      userStore: input.store,
+      usageGovernance: new ModelUsageGovernance({ store: input.store, budget: {}, safeguards: {} }),
+      auditRecorder,
+      agentRuntime: createMissingRuntime(),
+      attachments: input.attachments,
+      executionWorkspaceCleanup: input.workspaceObjects
+        ? {
+            store: input.store,
+            objects: input.workspaceObjects,
+            jobOptions: {
+              runOnStartup: false
+            }
+          }
+        : undefined,
+      modelProvider: createUnusedModelProvider()
+    },
+    input.store
+  );
 }
 
 async function createExpiredConversation(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
   title: string
 ): Promise<Conversation> {
@@ -848,7 +867,7 @@ async function createExpiredConversation(
 }
 
 async function createAttachedObjects(input: {
-  store: InMemoryPlatformStore;
+  store: TestMemoryStore;
   managedObjects: ReturnType<typeof createManagedObjectAccess>;
   clientInstanceId: ClientInstanceId;
   conversation: Conversation;
@@ -894,7 +913,7 @@ async function createAttachedObjects(input: {
 }
 
 async function createWorkspaceObjects(input: {
-  store: InMemoryPlatformStore;
+  store: TestMemoryStore;
   byteStore: RecordingByteStore;
   clientInstanceId: ClientInstanceId;
   conversation: Conversation;
@@ -950,6 +969,8 @@ async function createWorkspaceObjects(input: {
     const bytes = new TextEncoder().encode(file.body);
     objectKeys.push(objectKey);
     await input.byteStore.putObject({ key: objectKey, body: bytes });
+    const metadata = unknownToJsonValue(file.metadata);
+    if (!isJsonObject(metadata)) throw new Error("Expected workspace file metadata");
     await input.store.upsertWorkspaceFile({
       clientInstanceId: input.clientInstanceId,
       workspaceId: workspace.id,
@@ -958,7 +979,7 @@ async function createWorkspaceObjects(input: {
       byteSize: bytes.byteLength,
       checksum: `sha256:${file.path}`,
       mimeType: file.mimeType,
-      metadata: file.metadata,
+      metadata,
       lastCommandId: asWorkspaceCommandId("wcmd_retention_seed"),
       updatedAt: "2023-12-31T23:01:00.000Z"
     });
@@ -1061,7 +1082,7 @@ function createManagedObjectAttachmentService(input: {
 }
 
 async function expectConversationStatus(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
   conversationId: ConversationId,
   status: Conversation["status"]
@@ -1107,7 +1128,7 @@ async function expectDeletedManagedObjects(
 }
 
 async function expectDeletedWorkspaceObjects(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   byteStore: RecordingByteStore,
   clientInstanceId: ClientInstanceId,
   objects: {

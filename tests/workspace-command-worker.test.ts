@@ -1,3 +1,4 @@
+import { type TestMemoryStore, createTestInstance } from "./support/test-instance";
 import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,11 +7,10 @@ import {
   StoreBackedAuditRecorder,
   asClientInstanceId,
   type ClientInstanceId,
-  type Conversation,
   type WorkspaceCommand,
   type WorkspaceCommandLimits
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import {
   createLocalWorkspaceFileByteStore,
   LocalWorkspaceCommandRunner,
@@ -257,7 +257,7 @@ async function createWorkerHarness(
 ) {
   const clientInstanceId = asClientInstanceId(`worker_${globalThis.crypto.randomUUID()}`);
   const ownerUserId = "user-1";
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const auditRecorder = input.withAuditRecorder
     ? new StoreBackedAuditRecorder({ clientInstanceId, store })
     : undefined;
@@ -383,7 +383,7 @@ function successProcessResult(input: Partial<ProcessResult> = {}): ProcessResult
 async function waitForCommand(
   harness: {
     clientInstanceId: ClientInstanceId;
-    store: InMemoryPlatformStore;
+    store: TestMemoryStore;
   },
   commandId: WorkspaceCommand["id"],
   predicate: (command: WorkspaceCommand) => WorkspaceCommand | undefined

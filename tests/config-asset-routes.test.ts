@@ -1,5 +1,8 @@
+import type { TestOperationName, TestCallInput } from "./support/operations";
+
+import { createTestInstance, type TestInstance } from "./support/test-instance";
 import { afterEach, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
+
 import {
   ApiKeyAccessTokenExchange,
   CompositeAuthAdapter,
@@ -8,7 +11,7 @@ import {
   HmacSessionTokenIssuer,
   IdentityResolvingAuthAdapter
 } from "@vivd-catalyst/auth";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+
 import {
   AppError,
   StoreBackedAuditRecorder,
@@ -17,13 +20,13 @@ import {
   type AgentRuntime,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
 
-const servers: FastifyInstance[] = [];
+const servers: TestInstance[] = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
@@ -34,9 +37,9 @@ describe("config asset admin routes", () => {
     const fixture = await createFixture();
 
     await expect(mintToken(fixture.server)).resolves.toEqual(expect.any(String));
-    await expect(mintToken(fixture.server, { endpoint: "/auth/session-token" })).resolves.toEqual(
-      expect.any(String)
-    );
+    await expect(
+      mintToken(fixture.server, { operation: "legacyIssueSessionToken" })
+    ).resolves.toEqual(expect.any(String));
   });
 
   it("exchanges an API key for subjectless config access without creating a product user", async () => {
@@ -45,9 +48,7 @@ describe("config asset admin routes", () => {
       []
     );
 
-    const exchange = await fixture.server.inject({
-      method: "POST",
-      url: "/api/auth/access-token",
+    const exchange = await fixture.server.call("exchangeApiKey", {
       headers: { authorization: `Bearer ${fixture.apiKey}` }
     });
     expect(exchange.statusCode).toBe(200);
@@ -57,9 +58,7 @@ describe("config asset admin routes", () => {
     });
     const token = (exchange.json() as { accessToken: string }).accessToken;
 
-    const imported = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const imported = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         defaultAgentName: "assistant",
@@ -68,24 +67,17 @@ describe("config asset admin routes", () => {
       }
     });
     expect(imported.statusCode).toBe(200);
-    const exported = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
+    const exported = await request(fixture.server, token, "exportConfigAssets", {});
     expect(exported.statusCode).toBe(200);
 
-    const humanRoute = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/conversations"
-    });
+    const humanRoute = await request(fixture.server, token, "listConversations", {});
     expect(humanRoute.statusCode).toBe(403);
     expect(await fixture.store.listUsers({ clientInstanceId: fixture.clientInstanceId })).toEqual(
       []
     );
 
-    const revisions = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets/agent/assistant/revisions"
+    const revisions = await request(fixture.server, token, "listConfigAssetRevisions", {
+      params: { kind: "agent", name: "assistant" }
     });
     expect(revisions.json()).toMatchObject([
       {
@@ -110,17 +102,15 @@ describe("config asset admin routes", () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
 
-    const created = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const created = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config: agentConfig("Original instructions") }
     });
     expect(created.statusCode).toBe(200);
     expect(created.json()).toEqual({ version: 1, revision: 1 });
 
-    const fetched = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets/agent/assistant"
+    const fetched = await request(fixture.server, token, "getConfigAsset", {
+      params: { kind: "agent", name: "assistant" }
     });
     expect(fetched.statusCode).toBe(200);
     expect(fetched.json()).toMatchObject({
@@ -130,10 +120,7 @@ describe("config asset admin routes", () => {
       config: { instructions: "Original instructions" }
     });
 
-    const overview = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets"
-    });
+    const overview = await request(fixture.server, token, "getConfigAssetsOverview", {});
     expect(overview.statusCode).toBe(200);
     expect(overview.json()).toMatchObject({
       version: 1,
@@ -148,16 +135,14 @@ describe("config asset admin routes", () => {
       }
     });
 
-    const updated = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const updated = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config: agentConfig("Changed instructions"), baseVersion: 1 }
     });
     expect(updated.json()).toEqual({ version: 2, revision: 2 });
 
-    const revisionsBeforeRevert = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets/agent/assistant/revisions"
+    const revisionsBeforeRevert = await request(fixture.server, token, "listConfigAssetRevisions", {
+      params: { kind: "agent", name: "assistant" }
     });
     expect(revisionsBeforeRevert.statusCode).toBe(200);
     expect(revisionsBeforeRevert.json()).toMatchObject([
@@ -173,31 +158,24 @@ describe("config asset admin routes", () => {
       }
     ]);
 
-    const reverted = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/assets/agent/assistant/revert",
+    const reverted = await request(fixture.server, token, "revertConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { revision: 1, baseVersion: 2 }
     });
     expect(reverted.json()).toEqual({ version: 3, revision: 3 });
-    const fetchedAfterRevert = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets/agent/assistant"
+    const fetchedAfterRevert = await request(fixture.server, token, "getConfigAsset", {
+      params: { kind: "agent", name: "assistant" }
     });
     expect(fetchedAfterRevert.json()).toMatchObject({
       revision: 3,
       config: { instructions: "Original instructions" }
     });
 
-    const defaultAgent = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/default-agent",
+    const defaultAgent = await request(fixture.server, token, "setDefaultConfigAgent", {
       payload: { agentName: "assistant", baseVersion: 3 }
     });
     expect(defaultAgent.json()).toEqual({ version: 4 });
-    const exported = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
+    const exported = await request(fixture.server, token, "exportConfigAssets", {});
     expect(exported.statusCode).toBe(200);
     const bundle = exported.json() as {
       defaultAgentName?: string;
@@ -210,16 +188,13 @@ describe("config asset admin routes", () => {
       skills: []
     });
 
-    const deleted = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/assets/agent/assistant/delete",
+    const deleted = await request(fixture.server, token, "deleteConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { baseVersion: 4 }
     });
     expect(deleted.json()).toEqual({ version: 5 });
 
-    const imported = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const imported = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: 5,
         defaultAgentName: bundle.defaultAgentName,
@@ -228,10 +203,7 @@ describe("config asset admin routes", () => {
       }
     });
     expect(imported.json()).toEqual({ version: 6 });
-    const roundTripped = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
+    const roundTripped = await request(fixture.server, token, "exportConfigAssets", {});
     expect(roundTripped.json()).toMatchObject({
       version: 6,
       defaultAgentName: "assistant",
@@ -257,9 +229,7 @@ describe("config asset admin routes", () => {
   it("merges provided assets when requested and defaults old clients to mirror mode", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    const initial = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const initial = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         defaultAgentName: "assistant",
@@ -272,9 +242,7 @@ describe("config asset admin routes", () => {
     });
     expect(initial.json()).toEqual({ version: 1 });
 
-    const merged = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const merged = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: 1,
         mode: "merge",
@@ -283,10 +251,7 @@ describe("config asset admin routes", () => {
       }
     });
     expect(merged.json()).toEqual({ version: 2 });
-    const afterMerge = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
+    const afterMerge = await request(fixture.server, token, "exportConfigAssets", {});
     expect(afterMerge.json()).toMatchObject({
       version: 2,
       defaultAgentName: "assistant",
@@ -296,9 +261,7 @@ describe("config asset admin routes", () => {
       ]
     });
 
-    const mirrored = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const mirrored = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: 2,
         defaultAgentName: "assistant",
@@ -307,10 +270,7 @@ describe("config asset admin routes", () => {
       }
     });
     expect(mirrored.json()).toEqual({ version: 3 });
-    const afterMirror = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
+    const afterMirror = await request(fixture.server, token, "exportConfigAssets", {});
     expect(afterMirror.json()).toMatchObject({
       version: 3,
       agents: [{ name: "assistant", instructions: "Mirrored" }]
@@ -338,9 +298,7 @@ describe("config asset admin routes", () => {
             ? [{ type: "delete", kind: "skill", name: "research" }]
             : [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("Remote") }]
       });
-      const response = await request(fixture.server, token, {
-        method: "POST",
-        url: "/api/admin/config/import",
+      const response = await request(fixture.server, token, "replaceConfigAssets", {
         payload: {
           baseVersion: null,
           mode: "merge",
@@ -387,17 +345,12 @@ describe("config asset admin routes", () => {
         { type: "upsert", kind: "skill", name: "research", config: skillConfig("Remote") }
       ]
     });
-    const exported = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
+    const exported = await request(fixture.server, token, "exportConfigAssets", {});
     expect(exported.json()).toMatchObject({
       perAssetConcurrency: true,
       revisions: { "agent:assistant": 1, "skill:research": 1 }
     });
-    const response = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const response = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: 0,
         mode: "merge",
@@ -414,9 +367,7 @@ describe("config asset admin routes", () => {
         name: "research"
       })
     ).toMatchObject({ revision: 1, config: skillConfig("Remote") });
-    const staleDefault = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const staleDefault = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         mode: "merge",
@@ -427,9 +378,7 @@ describe("config asset admin routes", () => {
       }
     });
     expect(staleDefault.statusCode).toBe(409);
-    const oldRequest = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const oldRequest = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: 0,
         mode: "merge",
@@ -446,15 +395,13 @@ describe("config asset admin routes", () => {
   it("returns 409 for a stale base version", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config: agentConfig("Current") }
     });
 
-    const stale = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const stale = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config: agentConfig("Stale"), baseVersion: 0 }
     });
     expect(stale.statusCode).toBe(409);
@@ -464,9 +411,8 @@ describe("config asset admin routes", () => {
   it("rejects broken skill references without advancing the config version", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    const skill = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/skill/review",
+    const skill = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "skill", name: "review" },
       payload: {
         config: {
           name: "review",
@@ -477,9 +423,8 @@ describe("config asset admin routes", () => {
       }
     });
     expect(skill.json()).toEqual({ version: 1, revision: 1 });
-    const agent = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const agent = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         baseVersion: 1,
         config: agentConfig("Uses the review skill", {
@@ -490,9 +435,8 @@ describe("config asset admin routes", () => {
     });
     expect(agent.json()).toEqual({ version: 2, revision: 1 });
 
-    const referencedDelete = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/assets/skill/review/delete",
+    const referencedDelete = await request(fixture.server, token, "deleteConfigAsset", {
+      params: { kind: "skill", name: "review" },
       payload: { baseVersion: 2 }
     });
     expect(referencedDelete.statusCode).toBe(422);
@@ -505,9 +449,8 @@ describe("config asset admin routes", () => {
       }
     });
 
-    const missingReadSkill = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const missingReadSkill = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         baseVersion: 2,
         config: agentConfig("Uses the review skill", { skillNames: ["review"] })
@@ -527,10 +470,7 @@ describe("config asset admin routes", () => {
       }
     });
 
-    const overview = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets"
-    });
+    const overview = await request(fixture.server, token, "getConfigAssetsOverview", {});
     expect(overview.json()).toMatchObject({ version: 2 });
   });
 
@@ -541,9 +481,8 @@ describe("config asset admin routes", () => {
       permissions: ["config_assets.write"],
       delegatedActor: undefined
     });
-    const missingScope = await request(fixture.server, chatToken, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const missingScope = await request(fixture.server, chatToken, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config: agentConfig("Denied") }
     });
     expect(missingScope.statusCode).toBe(403);
@@ -552,9 +491,8 @@ describe("config asset admin routes", () => {
       scopes: ["config_assets:read", "config_assets:write"],
       permissions: ["config_assets.read"]
     });
-    const missingPermission = await request(fixture.server, readOnlyToken, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const missingPermission = await request(fixture.server, readOnlyToken, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config: agentConfig("Denied") }
     });
     expect(missingPermission.statusCode).toBe(403);
@@ -572,9 +510,7 @@ describe("config asset admin routes", () => {
     });
     const token = await mintToken(fixture.server);
     const initial = agentConfig("Release-managed instructions");
-    const imported = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const imported = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         defaultAgentName: "assistant",
@@ -584,9 +520,8 @@ describe("config asset admin routes", () => {
     });
     expect(imported.statusCode).toBe(200);
 
-    const displayNameUpdate = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const displayNameUpdate = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         baseVersion: 1,
         config: { ...initial, displayName: "Renamed Assistant" }
@@ -594,9 +529,8 @@ describe("config asset admin routes", () => {
     });
     expect(displayNameUpdate.statusCode).toBe(200);
 
-    const protectedUpdate = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const protectedUpdate = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         baseVersion: 2,
         config: {
@@ -623,9 +557,7 @@ describe("config asset admin routes", () => {
     });
     const initial = { ...boundAgentConfig("fast"), reasoningEffort: "low" };
     const releaseToken = await mintToken(fixture.server);
-    const imported = await request(fixture.server, releaseToken, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const imported = await request(fixture.server, releaseToken, "replaceConfigAssets", {
       payload: { baseVersion: null, defaultAgentName: "assistant", agents: [initial], skills: [] }
     });
     expect(imported.statusCode).toBe(200);
@@ -653,9 +585,8 @@ describe("config asset admin routes", () => {
       userSelectableModelBindingIds: { userSelectableModelBindingIds: ["other"] }
     };
     const put = (token: string, config: Record<string, unknown>) =>
-      request(fixture.server, token, {
-        method: "PUT",
-        url: "/api/admin/config/assets/agent/assistant",
+      request(fixture.server, token, "putConfigAsset", {
+        params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
 
@@ -689,22 +620,16 @@ describe("config asset admin routes", () => {
     });
     expect(fastNow.statusCode).toBe(200);
     const revert = (token: string) =>
-      request(fixture.server, token, {
-        method: "POST",
-        url: "/api/admin/config/assets/agent/assistant/revert",
+      request(fixture.server, token, "revertConfigAsset", {
+        params: { kind: "agent", name: "assistant" },
         payload: { revision: 1 }
       });
     expect((await revert(adminToken)).statusCode).toBe(403);
     expect((await revert(superadminToken)).statusCode).toBe(200);
 
     // Release sync is unchanged: the service principal has no agent_models.manage.
-    const exported = await request(fixture.server, releaseToken, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
-    const pushed = await request(fixture.server, releaseToken, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const exported = await request(fixture.server, releaseToken, "exportConfigAssets", {});
+    const pushed = await request(fixture.server, releaseToken, "replaceConfigAssets", {
       payload: {
         baseVersion: exported.json().version,
         defaultAgentName: "assistant",
@@ -722,23 +647,18 @@ describe("config asset admin routes", () => {
       permissions: ["config_assets.release"]
     });
     const put = (config: Record<string, unknown>) =>
-      request(fixture.server, token, {
-        method: "PUT",
-        url: "/api/admin/config/assets/agent/assistant",
+      request(fixture.server, token, "putConfigAsset", {
+        params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
     const stored = async () =>
       (
-        await request(fixture.server, token, {
-          method: "GET",
-          url: "/api/admin/config/assets/agent/assistant"
+        await request(fixture.server, token, "getConfigAsset", {
+          params: { kind: "agent", name: "assistant" }
         })
       ).json().config as Record<string, unknown>;
 
-    const overview = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets"
-    });
+    const overview = await request(fixture.server, token, "getConfigAssetsOverview", {});
     expect(overview.json().references.fastModeModelBindingIds).toEqual(["fast"]);
 
     expect((await put({ ...boundAgentConfig("fast"), fastMode: true })).statusCode).toBe(200);
@@ -756,17 +676,12 @@ describe("config asset admin routes", () => {
       "Agent 'assistant' enables fastMode, but model binding 'plain' does not support fast mode"
     );
 
-    const exported = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/export"
-    });
+    const exported = await request(fixture.server, token, "exportConfigAssets", {});
     for (const agent of [
       { ...boundAgentConfig("plain"), fastMode: true },
       { ...agentConfig("No binding"), fastMode: true }
     ]) {
-      const pushed = await request(fixture.server, token, {
-        method: "POST",
-        url: "/api/admin/config/import",
+      const pushed = await request(fixture.server, token, "replaceConfigAssets", {
         payload: {
           baseVersion: exported.json().version,
           defaultAgentName: "assistant",
@@ -819,9 +734,8 @@ describe("config asset admin routes", () => {
       permissions: []
     });
     const put = (config: Record<string, unknown>) =>
-      request(fixture.server, token, {
-        method: "PUT",
-        url: "/api/admin/config/assets/agent/assistant",
+      request(fixture.server, token, "putConfigAsset", {
+        params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
 
@@ -847,19 +761,15 @@ describe("config asset admin routes", () => {
       permissions: ["config_assets.release"]
     });
     const put = (config: Record<string, unknown>) =>
-      request(fixture.server, token, {
-        method: "PUT",
-        url: "/api/admin/config/assets/agent/assistant",
+      request(fixture.server, token, "putConfigAsset", {
+        params: { kind: "agent", name: "assistant" },
         payload: { config }
       });
     const push = async (agent: Record<string, unknown>) =>
-      request(fixture.server, token, {
-        method: "POST",
-        url: "/api/admin/config/import",
+      request(fixture.server, token, "replaceConfigAssets", {
         payload: {
-          baseVersion: (
-            await request(fixture.server, token, { method: "GET", url: "/api/admin/config/export" })
-          ).json().version,
+          baseVersion: (await request(fixture.server, token, "exportConfigAssets", {})).json()
+            .version,
           defaultAgentName: "assistant",
           agents: [agent],
           skills: []
@@ -867,16 +777,12 @@ describe("config asset admin routes", () => {
       });
     const stored = async () =>
       (
-        await request(fixture.server, token, {
-          method: "GET",
-          url: "/api/admin/config/assets/agent/assistant"
+        await request(fixture.server, token, "getConfigAsset", {
+          params: { kind: "agent", name: "assistant" }
         })
       ).json().config as Record<string, unknown>;
 
-    const overview = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/config/assets"
-    });
+    const overview = await request(fixture.server, token, "getConfigAssetsOverview", {});
     // The eligible bindings are the ones an agent may use; `userSelectable` is not consulted.
     expect(overview.json().references.modelBindingIds).toEqual(["plain", "other", "fast"]);
 
@@ -926,9 +832,8 @@ describe("config asset admin routes", () => {
       roles: ["admin"],
       permissions: []
     });
-    const denied = await request(fixture.server, adminToken, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const denied = await request(fixture.server, adminToken, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config: { ...offered, modelReasoningEfforts: { other: "high" } } }
     });
     expect(denied.statusCode).toBe(403);
@@ -983,9 +888,7 @@ describe("config asset admin routes", () => {
         await store.createUser({ clientInstanceId: foreignInstanceId, displayLabel: "Foreign" })
       ).id
     });
-    const imported = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const imported = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         defaultAgentName: "assistant",
@@ -997,9 +900,9 @@ describe("config asset admin routes", () => {
     const everywhere = { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] };
     const readAssets = async () =>
       (
-        (
-          await request(fixture.server, token, { method: "GET", url: "/api/admin/config/assets" })
-        ).json() as { assets: Array<{ kind: string; name: string; availability?: unknown }> }
+        (await request(fixture.server, token, "getConfigAssetsOverview", {})).json() as {
+          assets: Array<{ kind: string; name: string; availability?: unknown }>;
+        }
       ).assets.map(({ kind, name, availability }) => ({ kind, name, availability }));
     expect(await readAssets()).toEqual([
       { kind: "agent", name: "assistant", availability: everywhere },
@@ -1007,17 +910,18 @@ describe("config asset admin routes", () => {
       { kind: "skill", name: "research", availability: undefined }
     ]);
 
-    const workspaces = await request(fixture.server, token, {
-      method: "GET",
-      url: "/api/admin/collaboration-workspaces"
-    });
+    const workspaces = await request(
+      fixture.server,
+      token,
+      "listAdministeredCollaborationWorkspaces",
+      {}
+    );
     expect(workspaces.statusCode).toBe(200);
     expect(workspaces.json()).toEqual([{ id: shared.id, name: "KAI" }]);
 
     const setKai = (payload: unknown, name = "kai") =>
-      request(fixture.server, token, {
-        method: "PUT",
-        url: `/api/admin/config/agents/${name}/availability`,
+      request(fixture.server, token, "setConfigAgentAvailability", {
+        params: { name: name },
         payload
       });
     const selected = await setKai({
@@ -1067,25 +971,19 @@ describe("config asset admin routes", () => {
         message: "Default agent 'assistant' must be available in all workspaces"
       }
     });
-    const defaultToRestricted = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/default-agent",
+    const defaultToRestricted = await request(fixture.server, token, "setDefaultConfigAgent", {
       payload: { agentName: "kai" }
     });
     expect(defaultToRestricted.statusCode).toBe(422);
     expect(defaultToRestricted.json()).toMatchObject({
       error: { message: "Default agent 'kai' must be available in all workspaces" }
     });
-    const pushedDefault = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const pushedDefault = await request(fixture.server, token, "replaceConfigAssets", {
       payload: { baseVersion: null, mode: "merge", defaultAgentName: "kai", agents: [], skills: [] }
     });
     expect(pushedDefault.statusCode).toBe(422);
     expect(
-      (
-        await request(fixture.server, token, { method: "GET", url: "/api/admin/config/assets" })
-      ).json()
+      (await request(fixture.server, token, "getConfigAssetsOverview", {})).json()
     ).toMatchObject({ version: 1, defaultAgentName: "assistant" });
 
     // `all` clears the selection.
@@ -1100,9 +998,7 @@ describe("config asset admin routes", () => {
   it("requires the config write permission and scope for availability administration", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         defaultAgentName: "assistant",
@@ -1121,21 +1017,21 @@ describe("config asset admin routes", () => {
       })
     ];
     for (const deniedToken of denied) {
-      const set = await request(fixture.server, deniedToken, {
-        method: "PUT",
-        url: "/api/admin/config/agents/kai/availability",
+      const set = await request(fixture.server, deniedToken, "setConfigAgentAvailability", {
+        params: { name: "kai" },
         payload: { mode: "selected" }
       });
       expect(set.statusCode).toBe(403);
-      const list = await request(fixture.server, deniedToken, {
-        method: "GET",
-        url: "/api/admin/collaboration-workspaces"
-      });
+      const list = await request(
+        fixture.server,
+        deniedToken,
+        "listAdministeredCollaborationWorkspaces",
+        {}
+      );
       expect(list.statusCode).toBe(403);
     }
-    const unauthenticated = await fixture.server.inject({
-      method: "PUT",
-      url: "/api/admin/config/agents/kai/availability",
+    const unauthenticated = await fixture.server.call("setConfigAgentAvailability", {
+      params: { name: "kai" },
       payload: { mode: "selected" }
     });
     expect(unauthenticated.statusCode).toBe(401);
@@ -1147,11 +1043,12 @@ describe("config asset admin routes", () => {
 
     const disabled = await createFixture({ agentConfiguration: { enabled: false } });
     const disabledToken = await mintToken(disabled.server);
-    const whileDisabled = await request(disabled.server, disabledToken, {
-      method: "PUT",
-      url: "/api/admin/config/agents/kai/availability",
-      payload: { mode: "all" }
-    });
+    const whileDisabled = await request(
+      disabled.server,
+      disabledToken,
+      "setConfigAgentAvailability",
+      { params: { name: "kai" }, payload: { mode: "all" } }
+    );
     expect(whileDisabled.statusCode).toBe(403);
   });
 
@@ -1159,9 +1056,7 @@ describe("config asset admin routes", () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
     const push = (payload: Record<string, unknown>) =>
-      request(fixture.server, token, {
-        method: "POST",
-        url: "/api/admin/config/import",
+      request(fixture.server, token, "replaceConfigAssets", {
         payload: { baseVersion: null, mode: "merge", skills: [], ...payload }
       });
     await push({
@@ -1220,9 +1115,7 @@ describe("config asset admin routes", () => {
       scopes: ["config_assets:read", "config_assets:write"],
       permissions: ["config_assets.read", "config_assets.write"]
     });
-    const response = await request(fixture.server, interactiveToken, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const response = await request(fixture.server, interactiveToken, "replaceConfigAssets", {
       payload: { baseVersion: null, agents: [], skills: [] }
     });
 
@@ -1233,9 +1126,8 @@ describe("config asset admin routes", () => {
   it("requires pricing for every non-deterministic agent model when spend budgets are enabled", async () => {
     const fixture = await createFixture({ pricingCoverage: true });
     const token = await mintToken(fixture.server);
-    const unpriced = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const unpriced = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         config: agentConfig("Unpriced", { modelProviderId: "provider-b" })
       }
@@ -1249,9 +1141,8 @@ describe("config asset admin routes", () => {
       }
     });
 
-    const priced = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const priced = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         config: agentConfig("Priced", { modelProviderId: "provider-a" })
       }
@@ -1262,9 +1153,8 @@ describe("config asset admin routes", () => {
   it("rejects web_search when materialization or customer pricing is missing", async () => {
     const disabledFixture = await createFixture({ webSearch: "disabled" });
     const disabledToken = await mintToken(disabledFixture.server);
-    const disabled = await request(disabledFixture.server, disabledToken, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const disabled = await request(disabledFixture.server, disabledToken, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         config: agentConfig("Search", {
           modelProviderId: "openai",
@@ -1288,9 +1178,8 @@ describe("config asset admin routes", () => {
 
     const enabledFixture = await createFixture({ webSearch: "enabled" });
     const enabledToken = await mintToken(enabledFixture.server);
-    const enabled = await request(enabledFixture.server, enabledToken, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const enabled = await request(enabledFixture.server, enabledToken, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         config: agentConfig("Search", {
           modelProviderId: "openai",
@@ -1315,9 +1204,8 @@ describe("config asset admin routes", () => {
 
     const pricedFixture = await createFixture({ webSearch: "enabled", webSearchPricing: true });
     const pricedToken = await mintToken(pricedFixture.server);
-    const priced = await request(pricedFixture.server, pricedToken, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const priced = await request(pricedFixture.server, pricedToken, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: {
         config: agentConfig("Search", {
           modelProviderId: "openai",
@@ -1335,9 +1223,8 @@ describe("config asset admin routes", () => {
   ])("rejects an agent with an %s reference", async (_label, config) => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    const response = await request(fixture.server, token, {
-      method: "PUT",
-      url: "/api/admin/config/assets/agent/assistant",
+    const response = await request(fixture.server, token, "putConfigAsset", {
+      params: { kind: "agent", name: "assistant" },
       payload: { config }
     });
     expect(response.statusCode).toBe(422);
@@ -1349,9 +1236,7 @@ describe("config asset admin routes", () => {
   it("rejects duplicate import names and a missing default agent", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    const duplicate = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const duplicate = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         agents: [agentConfig("One"), agentConfig("Two")],
@@ -1363,9 +1248,7 @@ describe("config asset admin routes", () => {
       error: { code: "VALIDATION_FAILED" }
     });
 
-    const missingDefault = await request(fixture.server, token, {
-      method: "POST",
-      url: "/api/admin/config/import",
+    const missingDefault = await request(fixture.server, token, "replaceConfigAssets", {
       payload: {
         baseVersion: null,
         defaultAgentName: "missing",
@@ -1391,7 +1274,7 @@ async function createFixture(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("config-routes-test");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const modelProviders = input.pricingCoverage
     ? [
         {
@@ -1564,63 +1447,65 @@ async function createFixture(
   const agentSelectableBindings = config.modelBindings.filter(
     (binding) => binding.agentSelectable !== false
   );
-  const server = await createChatServer({
-    config,
-    clientInstanceId,
-    authAdapter: serviceAccessOptions
-      ? new IdentityResolvingAuthAdapter(
-          new CompositeAuthAdapter([
-            new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
-            new HmacSessionTokenAuthAdapter(authOptions)
-          ]),
-          store
-        )
-      : new HmacSessionTokenAuthAdapter(authOptions),
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    usageGovernance: new ModelUsageGovernance({
-      store,
-      budget: config.usage.budget,
-      safeguards: config.usage.safeguards,
-      costs: config.usage.costs
-    }),
-    auditRecorder,
-    configAssets: {
-      store,
-      validationRefs: {
-        modelProviderIds: modelProviders.map((provider) => provider.id),
-        modelBindingIds: agentSelectableBindings.map((binding) => binding.id),
-        modelBindings: agentSelectableBindings.map((binding) => ({
-          id: binding.id,
-          model: "local"
-        })),
-        fastModeModelBindingIds: config.modelBindings
-          .filter((binding) => binding.supportsFastMode)
-          .map((binding) => binding.id),
-        reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-        enabledToolNames: ["known.tool", "read_skill", ...(input.webSearch ? ["web_search"] : [])]
+  const server = await createTestInstance({
+    server: {
+      config,
+      clientInstanceId,
+      authAdapter: serviceAccessOptions
+        ? new IdentityResolvingAuthAdapter(
+            new CompositeAuthAdapter([
+              new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
+              new HmacSessionTokenAuthAdapter(authOptions)
+            ]),
+            store
+          )
+        : new HmacSessionTokenAuthAdapter(authOptions),
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: config.usage.budget,
+        safeguards: config.usage.safeguards,
+        costs: config.usage.costs
+      }),
+      auditRecorder,
+      configAssets: {
+        store,
+        validationRefs: {
+          modelProviderIds: modelProviders.map((provider) => provider.id),
+          modelBindingIds: agentSelectableBindings.map((binding) => binding.id),
+          modelBindings: agentSelectableBindings.map((binding) => ({
+            id: binding.id,
+            model: "local"
+          })),
+          fastModeModelBindingIds: config.modelBindings
+            .filter((binding) => binding.supportsFastMode)
+            .map((binding) => binding.id),
+          reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+          enabledToolNames: ["known.tool", "read_skill", ...(input.webSearch ? ["web_search"] : [])]
+        },
+        ...(input.webSearch
+          ? {
+              validateAgents: (agents: AgentConfig[]) =>
+                findConfigAssetAgentValidationIssues(config, agents)
+            }
+          : {})
       },
-      ...(input.webSearch
+      agentRuntime: createUnusedAgentRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      sessionToken: {
+        issuer,
+        serverCredential: "server-credential"
+      },
+      ...(serviceAccessOptions
         ? {
-            validateAgents: (agents: AgentConfig[]) =>
-              findConfigAssetAgentValidationIssues(config, agents)
+            serviceAccessToken: {
+              exchange: new ApiKeyAccessTokenExchange(serviceAccessOptions)
+            }
           }
         : {})
-    },
-    agentRuntime: createUnusedAgentRuntime(),
-    modelProvider: createUnusedModelProvider(),
-    sessionToken: {
-      issuer,
-      serverCredential: "server-credential"
-    },
-    ...(serviceAccessOptions
-      ? {
-          serviceAccessToken: {
-            exchange: new ApiKeyAccessTokenExchange(serviceAccessOptions)
-          }
-        }
-      : {})
+    }
   });
   servers.push(server);
   return {
@@ -1633,9 +1518,9 @@ async function createFixture(
 }
 
 async function mintToken(
-  server: FastifyInstance,
+  server: TestInstance,
   overrides: {
-    endpoint?: string;
+    operation?: TestOperationName;
     roles?: string[];
     scopes?: string[];
     permissions?: string[];
@@ -1672,9 +1557,7 @@ async function mintToken(
           }
         })
   };
-  const response = await server.inject({
-    method: "POST",
-    url: overrides.endpoint ?? "/api/superadmin/session-tokens",
+  const response = await server.call(overrides.operation ?? "issueSessionToken", {
     headers: { "x-server-credential": "server-credential" },
     payload
   });
@@ -1683,14 +1566,12 @@ async function mintToken(
 }
 
 function request(
-  server: FastifyInstance,
+  server: TestInstance,
   token: string,
-  input: { method: "GET" | "POST" | "PUT"; url: string; payload?: unknown }
+  operation: TestOperationName,
+  input: TestCallInput = {}
 ) {
-  return server.inject({
-    ...input,
-    headers: { authorization: `Bearer ${token}` }
-  });
+  return server.call(operation, { ...input, headers: { authorization: `Bearer ${token}` } });
 }
 
 function skillConfig(content: string) {

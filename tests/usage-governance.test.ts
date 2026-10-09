@@ -1,3 +1,5 @@
+import { deferred } from "./support/assertions";
+import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -5,7 +7,7 @@ import {
   asConversationId,
   type UsageRateCardConfig
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { ModelUsageGovernance, calculateUsageCost } from "@vivd-catalyst/usage-governance";
 
 const customerRateCard: UsageRateCardConfig = {
@@ -344,8 +346,8 @@ describe("model usage governance", () => {
     "holds admission until a call settles: %s",
     async (outcome) => {
       const { governance, clientInstanceId } = createGovernance({}, { modelCallsPerDay: 1 });
-      const started = Promise.withResolvers<void>();
-      const execution = Promise.withResolvers<string>();
+      const started = deferred<void>();
+      const execution = deferred<string>();
       const first = governance.runModelCall(clientInstanceId, () => {
         started.resolve();
         return execution.promise;
@@ -407,7 +409,7 @@ function createGovernance(
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("client-usage-test");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   return {
     clientInstanceId,
     store,

@@ -1,3 +1,4 @@
+import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -6,21 +7,26 @@ import {
   type AgentRun,
   type ClientInstanceId
 } from "@vivd-catalyst/core";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 
 describePostgres("Postgres agent run worker store", () => {
-  let store: PostgresPlatformStore;
-  let secondStore: PostgresPlatformStore;
+  let store: TestPostgresStore;
+  let secondStore: TestPostgresStore;
 
   beforeAll(async () => {
-    store = await PostgresPlatformStore.connect({ databaseUrl: databaseUrl!, runMigrations: true });
-    secondStore = await PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: false
-    });
+    store = (
+      await createTestInstance({ postgres: { databaseUrl: databaseUrl!, runMigrations: true } })
+    ).stores;
+    secondStore = (
+      await createTestInstance({
+        postgres: {
+          databaseUrl: databaseUrl!,
+          runMigrations: false
+        }
+      })
+    ).stores;
   });
 
   afterAll(async () => {
@@ -172,7 +178,7 @@ describePostgres("Postgres agent run worker store", () => {
   });
 });
 
-async function createQueuedRun(store: PostgresPlatformStore): Promise<{
+async function createQueuedRun(store: TestPostgresStore): Promise<{
   clientInstanceId: ClientInstanceId;
   run: AgentRun;
 }> {
@@ -205,7 +211,7 @@ async function createQueuedRun(store: PostgresPlatformStore): Promise<{
     inputMessageId,
     agentName: "worker-test",
     modelBindingId: "binding-test",
-    locale: "de-DE",
+    locale: "de",
     authorization: {
       principal: {
         kind: "user",

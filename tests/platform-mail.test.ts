@@ -1,5 +1,7 @@
+import { addTestRoute, createTestInstance } from "./support/test-instance";
+
 import { describe, expect, it, vi } from "vitest";
-import { createChatServer, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+import { type ChatServerOptions } from "@vivd-catalyst/chat-server";
 import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   AppError,
@@ -7,7 +9,7 @@ import {
   asClientInstanceId,
   type AuthenticatedUser
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { createClientBranding, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   CaptureMailTransport,
@@ -17,8 +19,8 @@ import {
   type MailSenderIdentity
 } from "@vivd-catalyst/mail";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
-import { createTestConfig } from "./chat-server-harness";
-import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
+import { createTestConfig } from "./support/fixtures";
+import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
 
 const identity: MailSenderIdentity = {
   fromAddress: "noreply@mail.example.test",
@@ -211,17 +213,13 @@ describe("password setup by email", () => {
     expect(mail!.to.email).toBe("ada@example.test");
     const token = readToken(mail!.text);
 
-    const completed = await harness.server.inject({
-      method: "POST",
-      url: "/api/password-setup",
+    const completed = await harness.server.call("completePasswordSetup", {
       payload: { token, password: "a-new-password" }
     });
     expect(completed.statusCode).toBe(200);
     expect(harness.passwords.get(known.externalUserId)).toBe("a-new-password");
 
-    const replayed = await harness.server.inject({
-      method: "POST",
-      url: "/api/password-setup",
+    const replayed = await harness.server.call("completePasswordSetup", {
       payload: { token, password: "another-password" }
     });
     expect(replayed.statusCode).toBe(422);
@@ -250,9 +248,7 @@ describe("password setup by email", () => {
     const harness = await createMailHarness();
     await harness.addPasswordUser("ada@example.test", "Ada");
     const reset = (remoteAddress: string, forwardedFor: string, email: string) =>
-      harness.server.inject({
-        method: "POST",
-        url: "/api/password-reset",
+      harness.server.call("requestPasswordReset", {
         remoteAddress,
         headers: { "x-forwarded-for": forwardedFor },
         payload: { email }
@@ -279,12 +275,10 @@ describe("password setup by email", () => {
 
   it("resolves request.ip to the forwarded client only for a private peer", async () => {
     const harness = await createMailHarness();
-    harness.server.get("/test/ip", async (request) => ({ ip: request.ip }));
+    addTestRoute(harness.server, "/test/ip", async (request) => ({ ip: request.ip }));
     const ip = async (remoteAddress: string) =>
       (
-        await harness.server.inject({
-          method: "GET",
-          url: "/test/ip",
+        await harness.server.call("testIp", {
           remoteAddress,
           headers: { "x-forwarded-for": "203.0.113.7" }
         })
@@ -304,12 +298,8 @@ describe("password setup by email", () => {
     const capturing = await createMailHarness({ listCaptured: true });
     const delivering = await createMailHarness();
 
-    expect(
-      (await capturing.server.inject({ method: "GET", url: "/api/dev/captured-mail" })).statusCode
-    ).toBe(200);
-    expect(
-      (await delivering.server.inject({ method: "GET", url: "/api/dev/captured-mail" })).statusCode
-    ).toBe(404);
+    expect((await capturing.server.call("capturedMail", {})).statusCode).toBe(200);
+    expect((await delivering.server.call("capturedMail", {})).statusCode).toBe(404);
   });
 
   it("records an anonymous reset request without an actor and keeps the user as subject", async () => {
@@ -332,26 +322,24 @@ describe("password setup by email", () => {
 
   it("refuses to re-invite a user whose email no longer matches their password sign-in", async () => {
     const harness = await createMailHarness();
-    const created = await harness.server.inject({
-      method: "POST",
-      url: "/api/superadmin/users",
+    const created = await harness.server.call("createAdministeredUser", {
       payload: { displayLabel: "Grace", email: "grace@example.test" }
     });
     const user = created.json<{ id: string }>();
-    const invitation = {
-      method: "POST",
-      url: `/api/superadmin/users/${user.id}/invitation`
-    } as const;
-    expect((await harness.server.inject(invitation)).statusCode).toBe(200);
+    expect(
+      (await harness.server.call("sendAdministeredUserInvitation", { params: { userId: user.id } }))
+        .statusCode
+    ).toBe(200);
 
-    const updated = await harness.server.inject({
-      method: "PATCH",
-      url: `/api/superadmin/users/${user.id}`,
+    const updated = await harness.server.call("updateAdministeredUser", {
+      params: { userId: user.id },
       payload: { email: "grace.hopper@example.test" }
     });
     expect(updated.statusCode).toBe(200);
 
-    const reinvited = await harness.server.inject(invitation);
+    const reinvited = await harness.server.call("sendAdministeredUserInvitation", {
+      params: { userId: user.id }
+    });
     expect(reinvited.statusCode).toBe(409);
     expect(reinvited.json()).toMatchObject({
       error: { message: expect.stringContaining("password sign-in") }
@@ -366,15 +354,12 @@ describe("password setup by email", () => {
       reason: "private transport failure"
     });
     try {
-      const created = await harness.server.inject({
-        method: "POST",
-        url: "/api/superadmin/users",
+      const created = await harness.server.call("createAdministeredUser", {
         payload: { displayLabel: "Grace", email: "grace@example.test" }
       });
       expect(created.statusCode).toBe(200);
-      const invited = await harness.server.inject({
-        method: "POST",
-        url: `/api/superadmin/users/${created.json<{ id: string }>().id}/invitation`
+      const invited = await harness.server.call("sendAdministeredUserInvitation", {
+        params: { userId: created.json<{ id: string }>().id }
       });
       expect(invited.statusCode).toBe(500);
       expect(invited.json()).toEqual({
@@ -387,26 +372,21 @@ describe("password setup by email", () => {
 
   it("lets a superadmin invite a user who then sets their own password", async () => {
     const harness = await createMailHarness();
-    const created = await harness.server.inject({
-      method: "POST",
-      url: "/api/superadmin/users",
+    const created = await harness.server.call("createAdministeredUser", {
       payload: { displayLabel: "Grace", email: "grace@example.test" }
     });
     expect(created.statusCode).toBe(200);
     const userId = created.json<{ id: string }>().id;
 
-    const invited = await harness.server.inject({
-      method: "POST",
-      url: `/api/superadmin/users/${userId}/invitation`
+    const invited = await harness.server.call("sendAdministeredUserInvitation", {
+      params: { userId: userId }
     });
     expect(invited.statusCode).toBe(200);
 
     const [mail] = harness.transport.list();
     expect(mail!.to.email).toBe("grace@example.test");
     expect(mail!.text).toContain("Admin has invited you to Demo");
-    const completed = await harness.server.inject({
-      method: "POST",
-      url: "/api/password-setup",
+    const completed = await harness.server.call("completePasswordSetup", {
       payload: { token: readToken(mail!.text), password: "graces-password" }
     });
     expect(completed.statusCode).toBe(200);
@@ -427,13 +407,14 @@ function readToken(text: string): string {
 
 async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: boolean } = {}) {
   const clientInstanceId = asClientInstanceId("demo-local");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const config = createTestConfig();
   const transport = new CaptureMailTransport();
   const passwords = new Map<string, string>();
   const signIns = new Map<string, { externalUserId: string; displayLabel: string }>();
   const tokens = new Map<string, string>();
   const admin: AuthenticatedUser = await store.resolveUserIdentity({
+    permissions: [],
     clientInstanceId,
     authSource: "development",
     externalUserId: "admin",
@@ -484,51 +465,53 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
     }
   };
 
-  const server = await createChatServer({
-    config,
-    clientInstanceId,
-    authAdapter: {
-      credentialMode: "ambient",
-      id: "test-auth",
-      async authenticate() {
-        return { ...admin, scopes: ["*"] };
-      }
-    },
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    apiAccessStore: store,
-    usageGovernance: new ModelUsageGovernance({
-      store,
-      budget: config.usage.budget,
-      safeguards: config.usage.safeguards,
-      costs: config.usage.costs
-    }),
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
-    agentRuntime: createMissingRuntime(),
-    modelProvider: createUnusedModelProvider(),
-    standaloneAuth,
-    mail:
-      input.mailEnabled === false
-        ? undefined
-        : {
-            sender: new TemplateMailSender(transport, { ...identity, productName: "Demo" }),
-            appUrl: "https://chat.example.test/",
-            ...(input.listCaptured ? { listCaptured: () => transport.list() } : {})
-          }
-  } as ChatServerOptions);
+  const server = await createTestInstance({
+    server: {
+      config,
+      clientInstanceId,
+      authAdapter: {
+        credentialMode: "ambient",
+        id: "test-auth",
+        async authenticate() {
+          return { ...admin, scopes: ["*"] };
+        }
+      },
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      apiAccessStore: store,
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: config.usage.budget,
+        safeguards: config.usage.safeguards,
+        costs: config.usage.costs
+      }),
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+      agentRuntime: createMissingRuntime(),
+      modelProvider: createUnusedModelProvider(),
+      standaloneAuth,
+      mail:
+        input.mailEnabled === false
+          ? undefined
+          : {
+              sender: new TemplateMailSender(transport, { ...identity, productName: "Demo" }),
+              appUrl: "https://chat.example.test/",
+              ...(input.listCaptured ? { listCaptured: () => transport.list() } : {})
+            }
+    }
+  });
 
   return {
     server,
     transport,
     passwords,
-    requestReset: (email: string) =>
-      server.inject({ method: "POST", url: "/api/password-reset", payload: { email } }),
+    requestReset: (email: string) => server.call("requestPasswordReset", { payload: { email } }),
     listAuditEvents: () => store.listAuditEvents({ clientInstanceId }),
     async addPasswordUser(email: string, displayLabel: string) {
       const externalUserId = `auth-${email}`;
       signIns.set(email, { externalUserId, displayLabel });
       await store.resolveUserIdentity({
+        permissions: [],
         clientInstanceId,
         authSource: STANDALONE_AUTH_SOURCE,
         externalUserId,

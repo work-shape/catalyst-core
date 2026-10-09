@@ -1,7 +1,14 @@
+import type { TestOperationName, TestCallInput } from "./support/operations";
+
+import {
+  createTestInstance,
+  type TestMemoryStore,
+  type TestInstance
+} from "./support/test-instance";
 import { describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
+
 import { HmacSessionTokenAuthAdapter, HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
-import { createChatServer, type ChatAttachmentService } from "@vivd-catalyst/chat-server";
+import { type ChatAttachmentService } from "@vivd-catalyst/chat-server";
 import {
   AppError,
   NoopAuditRecorder,
@@ -14,7 +21,7 @@ import {
   type RuntimeCallContext,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ModelProvider } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
@@ -22,7 +29,7 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 describe("conversation resource store queries", () => {
   it("lists sent attachments and available conversation artifacts newest-first", async () => {
     const clientInstanceId = asClientInstanceId("conversation-resource-store-test");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const conversation = await createConversation(store, clientInstanceId, "owner");
     const otherConversation = await createConversation(store, clientInstanceId, "owner");
 
@@ -139,7 +146,8 @@ describe("conversation resource routes", () => {
       const resources = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/resources`
+        "listConversationResources",
+        { params: { conversationId: conversation.id } }
       );
       expect(resources.statusCode).toBe(200);
       expect(resources.json()).toEqual({
@@ -165,7 +173,8 @@ describe("conversation resource routes", () => {
       const detail = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/structured-data/${resource.id}`
+        "getStructuredDataResource",
+        { params: { conversationId: conversation.id, structuredDataResourceId: resource.id } }
       );
       expect(detail.statusCode).toBe(200);
       expect(detail.json()).toEqual({
@@ -201,7 +210,8 @@ describe("conversation resource routes", () => {
       const otherUser = await request(
         fixture.server,
         fixture.otherToken,
-        `/api/conversations/${conversation.id}/structured-data/${resource.id}`
+        "getStructuredDataResource",
+        { params: { conversationId: conversation.id, structuredDataResourceId: resource.id } }
       );
       expect(otherUser.statusCode).toBe(404);
     } finally {
@@ -263,7 +273,8 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/resources`
+        "listConversationResources",
+        { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
@@ -350,7 +361,8 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/resources`
+        "listConversationResources",
+        { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
@@ -405,7 +417,8 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/resources`
+        "listConversationResources",
+        { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
@@ -493,7 +506,8 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/resources`
+        "listConversationResources",
+        { params: { conversationId: conversation.id } }
       );
 
       expect(response.statusCode).toBe(200);
@@ -508,7 +522,8 @@ describe("conversation resource routes", () => {
       const inline = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/files/${file.id}/content`
+        "getConversationFileContent",
+        { params: { conversationId: conversation.id, fileId: file.id } }
       );
       expect(inline.statusCode).toBe(200);
       expect(inline.headers["content-disposition"]).toContain('inline; filename="input.pdf"');
@@ -608,7 +623,8 @@ describe("conversation resource routes", () => {
       const response = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/resources`
+        "listConversationResources",
+        { params: { conversationId: conversation.id } }
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
@@ -656,7 +672,11 @@ describe("conversation resource routes", () => {
       const download = await request(
         fixture.server,
         fixture.ownerToken,
-        `/api/conversations/${conversation.id}/files/${file.id}/content?download=true`
+        "getConversationFileContent",
+        {
+          params: { conversationId: conversation.id, fileId: file.id },
+          query: { download: "true" }
+        }
       );
       expect(download.statusCode).toBe(200);
       expect(download.headers["content-disposition"]).toContain(
@@ -667,7 +687,8 @@ describe("conversation resource routes", () => {
       const otherUser = await request(
         fixture.server,
         fixture.otherToken,
-        `/api/conversations/${conversation.id}/resources`
+        "listConversationResources",
+        { params: { conversationId: conversation.id } }
       );
       expect(otherUser.statusCode).toBe(404);
     } finally {
@@ -678,7 +699,7 @@ describe("conversation resource routes", () => {
 
 async function createFixture() {
   const clientInstanceId = asClientInstanceId("conversation-resource-route-test");
-  const store = new InMemoryPlatformStore();
+  const store = createTestInstance().stores;
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
@@ -741,40 +762,42 @@ async function createFixture() {
       return false;
     }
   };
-  const server = await createChatServer({
-    config,
-    clientInstanceId,
-    authAdapter: new HmacSessionTokenAuthAdapter(authOptions),
-    conversationStore: store,
-    auditEventStore: store,
-    userStore: store,
-    apiAccessStore: store,
-    usageGovernance: new ModelUsageGovernance({
-      store,
-      budget: config.usage.budget,
-      safeguards: config.usage.safeguards,
-      costs: config.usage.costs
-    }),
-    auditRecorder: new NoopAuditRecorder(),
-    configAssets: {
-      store,
-      source: {
-        async getSnapshot() {
-          return { version: 0, agents: [], skills: [] };
+  const server = await createTestInstance({
+    server: {
+      config,
+      clientInstanceId,
+      authAdapter: new HmacSessionTokenAuthAdapter(authOptions),
+      conversationStore: store,
+      auditEventStore: store,
+      userStore: store,
+      apiAccessStore: store,
+      usageGovernance: new ModelUsageGovernance({
+        store,
+        budget: config.usage.budget,
+        safeguards: config.usage.safeguards,
+        costs: config.usage.costs
+      }),
+      auditRecorder: new NoopAuditRecorder(),
+      configAssets: {
+        store,
+        source: {
+          async getSnapshot() {
+            return { version: 0, agents: [], skills: [] };
+          }
+        },
+        validationRefs: {
+          modelProviderIds: ["local"],
+          modelBindingIds: [],
+          modelBindings: [],
+          fastModeModelBindingIds: [],
+          reasoningEfforts: [],
+          enabledToolNames: []
         }
       },
-      validationRefs: {
-        modelProviderIds: ["local"],
-        modelBindingIds: [],
-        modelBindings: [],
-        fastModeModelBindingIds: [],
-        reasoningEfforts: [],
-        enabledToolNames: []
-      }
-    },
-    agentRuntime: createMissingRuntime(),
-    attachments,
-    modelProvider: createUnusedModelProvider()
+      agentRuntime: createMissingRuntime(),
+      attachments,
+      modelProvider: createUnusedModelProvider()
+    }
   });
   return {
     clientInstanceId,
@@ -787,7 +810,7 @@ async function createFixture() {
 }
 
 async function createConversation(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
   ownerUserId: string
 ) {
@@ -801,11 +824,11 @@ async function createConversation(
 }
 
 async function createAttachment(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   input: {
     clientInstanceId: ClientInstanceId;
     conversationId: Parameters<
-      InMemoryPlatformStore["createConversationAttachment"]
+      TestMemoryStore["createConversationAttachment"]
     >[0]["conversationId"];
     filename: string;
   }
@@ -833,9 +856,9 @@ async function createAttachment(
 }
 
 function createArtifact(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
-  conversationId: Parameters<InMemoryPlatformStore["createManagedArtifact"]>[0]["conversationId"],
+  conversationId: Parameters<TestMemoryStore["createManagedArtifact"]>[0]["conversationId"],
   filename: string,
   metadata: Record<string, string> = {}
 ) {
@@ -853,9 +876,9 @@ function createArtifact(
 }
 
 function appendToolResult(
-  store: InMemoryPlatformStore,
+  store: TestMemoryStore,
   clientInstanceId: ClientInstanceId,
-  conversationId: Parameters<InMemoryPlatformStore["appendMessage"]>[0]["conversationId"],
+  conversationId: Parameters<TestMemoryStore["appendMessage"]>[0]["conversationId"],
   result: ToolExecutionResult
 ) {
   return store.appendMessage({
@@ -887,12 +910,13 @@ function analysisDisplay(key: string, title: string, value: string) {
   };
 }
 
-function request(server: FastifyInstance, token: string, url: string) {
-  return server.inject({
-    method: "GET",
-    url,
-    headers: { authorization: `Bearer ${token}` }
-  });
+function request(
+  server: TestInstance,
+  token: string,
+  operation: TestOperationName,
+  input: TestCallInput = {}
+) {
+  return server.call(operation, { ...input, headers: { authorization: `Bearer ${token}` } });
 }
 
 function tick() {

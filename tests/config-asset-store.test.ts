@@ -1,3 +1,4 @@
+import { createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
@@ -6,31 +7,32 @@ import {
   type ConfigAssetStore,
   type UserStore
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
 interface ConfigAssetStoreFixture extends ConfigAssetStore, CollaborationWorkspaceStore, UserStore {
   close?: () => Promise<void>;
 }
 
-runConfigAssetStoreSuite("In-memory config asset store", async () => new InMemoryPlatformStore());
+runConfigAssetStoreSuite("In-memory config asset store", async () => createTestInstance().stores);
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 runConfigAssetStoreSuite(
   "Postgres config asset store",
   async () =>
-    PostgresPlatformStore.connect({
-      databaseUrl: databaseUrl!,
-      runMigrations: true
-    }),
+    createTestInstance({
+      postgres: {
+        databaseUrl: databaseUrl!,
+        runMigrations: true
+      }
+    }).then((instance) => instance.stores),
   describePostgres
 );
 
 function runConfigAssetStoreSuite(
   label: string,
   createStore: () => Promise<ConfigAssetStoreFixture>,
-  describeSuite: typeof describe = describe
+  describeSuite: Pick<typeof describe, "each"> &
+    ((name: string, body: () => void) => void) = describe
 ): void {
   describeSuite(label, () => {
     let store: ConfigAssetStoreFixture;

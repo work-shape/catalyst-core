@@ -1,61 +1,55 @@
+import { createTestInstance } from "./support/test-instance";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createChatServer } from "@vivd-catalyst/chat-server";
+
 import {
   StoreBackedAuditRecorder,
   asConversationId,
   asClientInstanceId,
   asManagedFileId
 } from "@vivd-catalyst/core";
-import { InMemoryPlatformStore } from "@vivd-catalyst/core/testing";
+
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
   createTestConfig,
-  createClientInstanceApp,
   createTestUser,
-  personalConversationListUrl
-} from "./chat-server-harness";
+  personalConversationListInput
+} from "./support/fixtures";
 import {
   createMissingRuntime,
   createUnusedModelProvider,
   injectStartConversationRun,
   drainRunEvents
-} from "./chat-server-run-harness";
+} from "./support/chat-server-run-harness";
 import {
   createMultipartFilePayload,
   createManagedObjectTestAttachmentCapability,
   createTestAttachmentCapability,
   waitForReadyDraftAttachment
-} from "./chat-server-attachment-harness";
+} from "./support/chat-server-attachment-harness";
 
 describe("client instance app vertical slice", () => {
   it("generates a short conversation headline from the first user message", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [createTestAttachmentCapability()],
       tools: []
     });
     const firstMessage = "Please summarize the release notes";
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: firstMessage }
-    });
+    const created = await app.call("createConversation", { payload: { title: firstMessage } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    const sent = await injectStartConversationRun(app.server, conversation.id, firstMessage, {
+    const sent = await injectStartConversationRun(app, conversation.id, firstMessage, {
       idempotencyKey: "title-generation-run"
     });
-    await drainRunEvents(app.server, conversation.id, sent.run.id);
+    await drainRunEvents(app, conversation.id, sent.run.id);
 
-    const generatedTitle = await app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/title`
+    const generatedTitle = await app.call("generateConversationTitle", {
+      params: { conversationId: conversation.id }
     });
     expect(generatedTitle.statusCode).toBe(200);
     expect(generatedTitle.json()).toMatchObject({
@@ -63,10 +57,7 @@ describe("client instance app vertical slice", () => {
       title: "Please Summarize The Release Notes"
     });
 
-    const listed = await app.server.inject({
-      method: "GET",
-      url: await personalConversationListUrl(app.server)
-    });
+    const listed = await app.call("listConversations", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toContainEqual(
       expect.objectContaining({
@@ -75,10 +66,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect(
       (audit.json() as Array<{ type: string }>).some(
@@ -90,22 +78,16 @@ describe("client instance app vertical slice", () => {
   });
 
   it("lets a user rename an owned conversation", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: "Temporary title" }
-    });
+    const created = await app.call("createConversation", { payload: { title: "Temporary title" } });
     const conversation = created.json() as { id: string };
 
-    const renamed = await app.server.inject({
-      method: "PATCH",
-      url: `/api/conversations/${conversation.id}/title`,
+    const renamed = await app.call("renameConversation", {
+      params: { conversationId: conversation.id },
       payload: { title: "  Lars Schmitt – Finanzierung  " }
     });
 
@@ -115,17 +97,13 @@ describe("client instance app vertical slice", () => {
       title: "Lars Schmitt – Finanzierung"
     });
 
-    const invalid = await app.server.inject({
-      method: "PATCH",
-      url: `/api/conversations/${conversation.id}/title`,
+    const invalid = await app.call("renameConversation", {
+      params: { conversationId: conversation.id },
       payload: { title: "   " }
     });
     expect(invalid.statusCode).toBe(422);
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.json()).toContainEqual(
       expect.objectContaining({
         type: "conversation.renamed",
@@ -141,19 +119,14 @@ describe("client instance app vertical slice", () => {
   });
 
   it("replaces a file-drop placeholder title from the first user message", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [createTestAttachmentCapability()],
       tools: []
     });
     const filenameTitle = "Theo - Boardingpass - Y123.txt";
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: filenameTitle }
-    });
+    const created = await app.call("createConversation", { payload: { title: filenameTitle } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
@@ -165,30 +138,26 @@ describe("client instance app vertical slice", () => {
     });
     expect(
       (
-        await app.server.inject({
-          method: "POST",
-          url: `/api/conversations/${conversation.id}/draft-attachments`,
+        await app.call("uploadDraftAttachment", {
+          params: { conversationId: conversation.id },
           headers: upload.headers,
           payload: upload.payload
         })
       ).statusCode
     ).toBe(200);
-    await waitForReadyDraftAttachment(app.server, conversation.id);
+    await waitForReadyDraftAttachment(app, conversation.id);
 
     const sent = await injectStartConversationRun(
-      app.server,
+      app,
       conversation.id,
       "Please summarize this boarding pass",
       {
         idempotencyKey: "attachment-title-generation-run"
       }
     );
-    await drainRunEvents(app.server, conversation.id, sent.run.id);
+    await drainRunEvents(app, conversation.id, sent.run.id);
 
-    const listed = await app.server.inject({
-      method: "GET",
-      url: await personalConversationListUrl(app.server)
-    });
+    const listed = await app.call("listConversations", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toContainEqual(
       expect.objectContaining({
@@ -201,18 +170,13 @@ describe("client instance app vertical slice", () => {
   });
 
   it("serves authenticated inline content for ready image attachments", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [createTestAttachmentCapability()],
       tools: []
     });
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: "Image upload" }
-    });
+    const created = await app.call("createConversation", { payload: { title: "Image upload" } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
     const upload = createMultipartFilePayload({
@@ -222,9 +186,8 @@ describe("client instance app vertical slice", () => {
       content: "GIF89a"
     });
 
-    const uploaded = await app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/draft-attachments`,
+    const uploaded = await app.call("uploadDraftAttachment", {
+      params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
     });
@@ -237,9 +200,8 @@ describe("client instance app vertical slice", () => {
       format: "gif"
     });
 
-    const content = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/files/${body.attachment.fileId}/content`
+    const content = await app.call("getConversationFileContent", {
+      params: { conversationId: conversation.id, fileId: body.attachment.fileId }
     });
 
     expect(content.statusCode).toBe(200);
@@ -251,7 +213,7 @@ describe("client instance app vertical slice", () => {
 
   it("serves promoted managed artifacts as conversation-scoped downloads", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
-    const store = new InMemoryPlatformStore();
+    const store = createTestInstance().stores;
     const config = createTestConfig();
     const owner = createTestUser("user-1", clientInstanceId);
     const usageGovernance = new ModelUsageGovernance({
@@ -261,30 +223,32 @@ describe("client instance app vertical slice", () => {
       costs: config.usage.costs
     });
     const readArtifacts: Array<{ clientInstanceId: string; artifactId: string }> = [];
-    const server = await createChatServer({
-      config,
-      clientInstanceId,
-      authAdapter: {
-        credentialMode: "ambient",
-        id: "test-auth",
-        async authenticate() {
-          return owner;
-        }
-      },
-      conversationStore: store,
-      auditEventStore: store,
-      userStore: store,
-      usageGovernance,
-      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
-      agentRuntime: createMissingRuntime(),
-      modelProvider: createUnusedModelProvider(),
-      managedObjects: {
-        async readArtifact(input) {
-          readArtifacts.push(input);
-          return {
-            bytes: new TextEncoder().encode("final,report\n"),
-            mimeType: "text/csv"
-          };
+    const server = await createTestInstance({
+      server: {
+        config,
+        clientInstanceId,
+        authAdapter: {
+          credentialMode: "ambient",
+          id: "test-auth",
+          async authenticate() {
+            return owner;
+          }
+        },
+        conversationStore: store,
+        auditEventStore: store,
+        userStore: store,
+        usageGovernance,
+        auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store }),
+        agentRuntime: createMissingRuntime(),
+        modelProvider: createUnusedModelProvider(),
+        managedObjects: {
+          async readArtifact(input) {
+            readArtifacts.push(input);
+            return {
+              bytes: new TextEncoder().encode("final,report\n"),
+              mimeType: "text/csv"
+            };
+          }
         }
       }
     });
@@ -317,9 +281,8 @@ describe("client instance app vertical slice", () => {
         }
       });
 
-      const content = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${conversation.id}/artifacts/${artifact.id}/content`
+      const content = await server.call("getConversationArtifactContent", {
+        params: { conversationId: conversation.id, artifactId: artifact.id }
       });
 
       expect(content.statusCode).toBe(200);
@@ -336,9 +299,8 @@ describe("client instance app vertical slice", () => {
         }
       ]);
 
-      const wrongConversation = await server.inject({
-        method: "GET",
-        url: `/api/conversations/${otherConversation.id}/artifacts/${artifact.id}/content`
+      const wrongConversation = await server.call("getConversationArtifactContent", {
+        params: { conversationId: otherConversation.id, artifactId: artifact.id }
       });
       expect(wrongConversation.statusCode).toBe(404);
       expect(readArtifacts).toHaveLength(1);
@@ -349,10 +311,9 @@ describe("client instance app vertical slice", () => {
 
   it("deletes attachment bytes when deleting a conversation", async () => {
     const deletedFileObjectKeys: string[] = [];
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [
         createTestAttachmentCapability({
           onConversationAttachmentsDeleted(deletion) {
@@ -362,14 +323,12 @@ describe("client instance app vertical slice", () => {
       ],
       tools: []
     });
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Attachment retention" }
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
-    const structuredData = await app.store.publishStructuredDataResource({
+    const structuredData = await app.stores.publishStructuredDataResource({
       clientInstanceId: asClientInstanceId("demo-local"),
       conversationId: asConversationId(conversation.id),
       resourceKey: "retention_data",
@@ -383,36 +342,30 @@ describe("client instance app vertical slice", () => {
       content: "GIF89a"
     });
 
-    const uploaded = await app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/draft-attachments`,
+    const uploaded = await app.call("uploadDraftAttachment", {
+      params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
     });
     expect(uploaded.statusCode).toBe(200);
     const body = uploaded.json() as { attachment: { fileId: string } };
-    const contentBeforeDelete = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/files/${body.attachment.fileId}/content`
+    const contentBeforeDelete = await app.call("getConversationFileContent", {
+      params: { conversationId: conversation.id, fileId: body.attachment.fileId }
     });
     expect(contentBeforeDelete.statusCode).toBe(200);
 
-    const deleted = await app.server.inject({
-      method: "DELETE",
-      url: `/api/conversations/${conversation.id}`
+    const deleted = await app.call("deleteConversation", {
+      params: { conversationId: conversation.id }
     });
     expect(deleted.statusCode).toBe(200);
     await expect(
-      app.store.getStructuredDataResource({
+      app.stores.getStructuredDataResource({
         clientInstanceId: asClientInstanceId("demo-local"),
         conversationId: asConversationId(conversation.id),
         structuredDataResourceId: structuredData.id
       })
     ).resolves.toBeUndefined();
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect(audit.json()).toContainEqual(
       expect.objectContaining({
@@ -425,9 +378,8 @@ describe("client instance app vertical slice", () => {
     );
     expect(deletedFileObjectKeys).toEqual([body.attachment.fileId]);
 
-    const contentAfterDelete = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/files/${body.attachment.fileId}/content`
+    const contentAfterDelete = await app.call("getConversationFileContent", {
+      params: { conversationId: conversation.id, fileId: body.attachment.fileId }
     });
     expect(contentAfterDelete.statusCode).toBe(404);
 
@@ -436,16 +388,13 @@ describe("client instance app vertical slice", () => {
 
   it("deletes composer-removed draft bytes when deleting a conversation", async () => {
     const fixture = createManagedObjectTestAttachmentCapability();
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [fixture.capability],
       tools: []
     });
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Removed attachment retention" }
     });
     const conversation = created.json() as { id: string };
@@ -455,9 +404,8 @@ describe("client instance app vertical slice", () => {
       contentType: "text/plain",
       content: "delete these bytes"
     });
-    const uploaded = await app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/draft-attachments`,
+    const uploaded = await app.call("uploadDraftAttachment", {
+      params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
     });
@@ -467,31 +415,26 @@ describe("client instance app vertical slice", () => {
     const [objectKey] = [...fixture.objects.keys()];
     expect(objectKey).toBeDefined();
 
-    const removed = await app.server.inject({
-      method: "DELETE",
-      url: `/api/conversations/${conversation.id}/draft-attachments/${attachment.id}`
+    const removed = await app.call("deleteDraftAttachment", {
+      params: { conversationId: conversation.id, attachmentId: attachment.id }
     });
     expect(removed.statusCode).toBe(200);
     expect(fixture.objects.has(objectKey!)).toBe(true);
 
-    const deleted = await app.server.inject({
-      method: "DELETE",
-      url: `/api/conversations/${conversation.id}`
+    const deleted = await app.call("deleteConversation", {
+      params: { conversationId: conversation.id }
     });
     expect(deleted.statusCode).toBe(200);
     expect(fixture.objects.has(objectKey!)).toBe(false);
     expect(fixture.deletedObjectKeys).toContain(objectKey);
     await expect(
-      app.store.getManagedFile({
+      app.stores.getManagedFile({
         clientInstanceId: asClientInstanceId("demo-local"),
         fileId: asManagedFileId(attachment.fileId)
       })
     ).resolves.toBeUndefined();
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.json()).toContainEqual(
       expect.objectContaining({
         type: "conversation.deleted",
@@ -506,16 +449,13 @@ describe("client instance app vertical slice", () => {
 
   it("stores no bytes when the conversation is deleted while an upload is still arriving", async () => {
     const fixture = createManagedObjectTestAttachmentCapability();
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [fixture.capability],
       tools: []
     });
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Deleted during upload" }
     });
     const conversation = created.json() as { id: string };
@@ -544,16 +484,14 @@ describe("client instance app vertical slice", () => {
       })()
     );
 
-    const uploading = app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/draft-attachments`,
+    const uploading = app.call("uploadDraftAttachment", {
+      params: { conversationId: conversation.id },
       headers: { "content-type": upload.headers["content-type"]! },
       payload: slowBody
     });
     await bodyRead;
-    const deleted = await app.server.inject({
-      method: "DELETE",
-      url: `/api/conversations/${conversation.id}`
+    const deleted = await app.call("deleteConversation", {
+      params: { conversationId: conversation.id }
     });
     expect(deleted.statusCode).toBe(200);
     sendRest();
@@ -577,30 +515,22 @@ describe("client instance app vertical slice", () => {
         return toolSuccess({ echoed: input.text });
       }
     });
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config,
       env: {},
-      storeMode: "memory",
       tools: [tool]
     });
     const firstMessage = '/tool demo.echo {"text":"boarding pass"}';
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: firstMessage }
-    });
+    const created = await app.call("createConversation", { payload: { title: firstMessage } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    const sent = await injectStartConversationRun(app.server, conversation.id, firstMessage, {
+    const sent = await injectStartConversationRun(app, conversation.id, firstMessage, {
       idempotencyKey: "tool-title-generation-run"
     });
-    await drainRunEvents(app.server, conversation.id, sent.run.id);
+    await drainRunEvents(app, conversation.id, sent.run.id);
 
-    const listed = await app.server.inject({
-      method: "GET",
-      url: await personalConversationListUrl(app.server)
-    });
+    const listed = await app.call("listConversations", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toContainEqual(
       expect.objectContaining({

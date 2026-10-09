@@ -1,17 +1,19 @@
+import { type TestPostgresStore, createTestInstance } from "./support/test-instance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 import { asClientInstanceId, type ClientInstanceId } from "@vivd-catalyst/core";
-import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
 
 const databaseUrl = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 const describePostgres = databaseUrl ? describe : describe.skip;
 
 describePostgres("Postgres Collaboration Workspace store", () => {
-  let store: PostgresPlatformStore;
+  let store: TestPostgresStore;
   let sql: Sql;
 
   beforeAll(async () => {
-    store = await PostgresPlatformStore.connect({ databaseUrl: databaseUrl!, runMigrations: true });
+    store = (
+      await createTestInstance({ postgres: { databaseUrl: databaseUrl!, runMigrations: true } })
+    ).stores;
     sql = postgres(databaseUrl!, { max: 1 });
   });
 

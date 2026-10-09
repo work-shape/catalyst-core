@@ -1,44 +1,50 @@
+import {
+  type TestInstance as TestServer,
+  fetchTestOperation,
+  listenTestInstance,
+  createTestInstance,
+  getTestConfig
+} from "./support/test-instance";
+
+import { testOperations } from "./support/operations";
+
 import { describe, expect, it } from "vitest";
-import type { AddressInfo } from "net";
+
 import {
   asAgentRunId,
   asClientInstanceId,
   asCollaborationWorkspaceId,
   type AgentAvailability
 } from "@vivd-catalyst/core";
-import { createTestConfig, createClientInstanceApp, type TestServer } from "./chat-server-harness";
+import { createTestConfig } from "./support/fixtures";
 import {
   injectStartConversationRun,
   drainRunEvents,
   fetchStartConversationRun,
   fetchRunEvents,
   parseSseChunks
-} from "./chat-server-run-harness";
+} from "./support/chat-server-run-harness";
 import {
   createMultipartFilePayload,
   createTestAttachmentCapability,
   waitForReadyDraftAttachment
-} from "./chat-server-attachment-harness";
+} from "./support/chat-server-attachment-harness";
 
 describe("client instance app vertical slice", () => {
   it("queues prepared runs when the API uses the worker runtime", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       agentRuntimeMode: "worker",
       tools: []
     });
     try {
-      const created = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const created = await app.call("createConversation", {
         payload: { title: "Worker dispatch" }
       });
       const conversation = created.json() as { id: string };
-      const started = await app.server.inject({
-        method: "POST",
-        url: `/api/conversations/${conversation.id}/runs`,
+      const started = await app.call("startConversationRun", {
+        params: { conversationId: conversation.id },
         payload: {
           idempotencyKey: "worker-dispatch-key",
           message: { text: "Queue this run" }
@@ -49,8 +55,8 @@ describe("client instance app vertical slice", () => {
       const result = started.json() as { run: { id: string; status: string } };
       expect(result.run.status).toBe("queued");
       expect(
-        await app.store.listRunObservations({
-          clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+        await app.stores.listRunObservations({
+          clientInstanceId: asClientInstanceId(getTestConfig(app).clientInstance.id),
           runId: asAgentRunId(result.run.id),
           afterSequence: 0,
           limit: 10
@@ -62,47 +68,48 @@ describe("client instance app vertical slice", () => {
   });
 
   it("exposes idempotent public Agent Runs start APIs and product SSE ids", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [createTestAttachmentCapability()],
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Public runs API test" }
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const baseUrl = await listenTestInstance(app);
 
-    const missingIdempotency = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        message: { text: "missing idempotency key" }
-      })
+    const missingIdempotency = await fetchTestOperation(baseUrl, "startConversationRun", {
+      params: { conversationId: conversation.id },
+      ...{
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          message: { text: "missing idempotency key" }
+        })
+      }
     });
     expect(missingIdempotency.status).toBe(422);
     await missingIdempotency.text();
 
-    const firstStart = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        idempotencyKey: "public-existing-run-key",
-        message: { text: "start through public run API" }
-      })
+    const firstStart = await fetchTestOperation(baseUrl, "startConversationRun", {
+      params: { conversationId: conversation.id },
+      ...{
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-existing-run-key",
+          message: { text: "start through public run API" }
+        })
+      }
     });
     expect(firstStart.status).toBe(200);
     const firstStartBody = (await firstStart.json()) as {
@@ -120,18 +127,23 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(firstStartBody.eventsUrl).toContain(
-      `/api/conversations/${conversation.id}/runs/${firstStartBody.run.id}/events`
+      testOperations.observeConversationRun.buildPath({
+        params: { conversationId: conversation.id, runId: firstStartBody.run.id }
+      })
     );
 
-    const retryStart = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        idempotencyKey: "public-existing-run-key",
-        message: { text: "this retry must not append" }
-      })
+    const retryStart = await fetchTestOperation(baseUrl, "startConversationRun", {
+      params: { conversationId: conversation.id },
+      ...{
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-existing-run-key",
+          message: { text: "this retry must not append" }
+        })
+      }
     });
     expect(retryStart.status).toBe(200);
     expect(await retryStart.json()).toMatchObject({
@@ -143,9 +155,9 @@ describe("client instance app vertical slice", () => {
       run: { id: firstStartBody.run.id }
     });
 
-    const events = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${firstStartBody.run.id}/events`
-    );
+    const events = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      params: { conversationId: conversation.id, runId: firstStartBody.run.id }
+    });
     expect(events.status).toBe(200);
     const eventPayload = await events.text();
     expect(eventPayload).toContain("id: 1\n");
@@ -167,25 +179,31 @@ describe("client instance app vertical slice", () => {
     );
 
     const [concurrentStartA, concurrentStartB] = await Promise.all([
-      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-existing-run-concurrent-key",
-          message: { text: "concurrent public run start should append once" }
-        })
+      fetchTestOperation(baseUrl, "startConversationRun", {
+        params: { conversationId: conversation.id },
+        ...{
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            idempotencyKey: "public-existing-run-concurrent-key",
+            message: { text: "concurrent public run start should append once" }
+          })
+        }
       }),
-      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-existing-run-concurrent-key",
-          message: { text: "duplicate concurrent public run start" }
-        })
+      fetchTestOperation(baseUrl, "startConversationRun", {
+        params: { conversationId: conversation.id },
+        ...{
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            idempotencyKey: "public-existing-run-concurrent-key",
+            message: { text: "duplicate concurrent public run start" }
+          })
+        }
       })
     ]);
     expect(concurrentStartA.status).toBe(200);
@@ -212,13 +230,15 @@ describe("client instance app vertical slice", () => {
       "duplicate concurrent public run start"
     ]).toContain(concurrentStartBodyA.userMessage.text);
 
-    const concurrentEvents = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${concurrentStartBodyA.run.id}/events`
-    );
+    const concurrentEvents = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      params: { conversationId: conversation.id, runId: concurrentStartBodyA.run.id }
+    });
     expect(concurrentEvents.status).toBe(200);
     await concurrentEvents.text();
 
-    const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
+    const messages = await fetchTestOperation(baseUrl, "listConversationMessages", {
+      params: { conversationId: conversation.id }
+    });
     expect(messages.status).toBe(200);
     const userMessages = ((await messages.json()) as Array<{ role: string; text: string }>).filter(
       (message) => message.role === "user"
@@ -238,36 +258,41 @@ describe("client instance app vertical slice", () => {
       contentType: "text/plain",
       content: "This draft should only be claimed by the accepted run start."
     });
-    const uploaded = await app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/draft-attachments`,
+    const uploaded = await app.call("uploadDraftAttachment", {
+      params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
     });
     expect(uploaded.statusCode).toBe(200);
     const uploadedBody = uploaded.json() as { attachment: { id: string } };
-    await waitForReadyDraftAttachment(app.server, conversation.id);
+    await waitForReadyDraftAttachment(app, conversation.id);
 
     const differentKeyStarts = await Promise.all([
-      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-existing-run-different-key-a",
-          message: { text: "different key start accepted" }
-        })
+      fetchTestOperation(baseUrl, "startConversationRun", {
+        params: { conversationId: conversation.id },
+        ...{
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            idempotencyKey: "public-existing-run-different-key-a",
+            message: { text: "different key start accepted" }
+          })
+        }
       }),
-      fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-existing-run-different-key-b",
-          message: { text: "different key start rejected" }
-        })
+      fetchTestOperation(baseUrl, "startConversationRun", {
+        params: { conversationId: conversation.id },
+        ...{
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            idempotencyKey: "public-existing-run-different-key-b",
+            message: { text: "different key start rejected" }
+          })
+        }
       })
     ]);
     const acceptedDifferentKeyStarts = differentKeyStarts.filter(
@@ -283,14 +308,16 @@ describe("client instance app vertical slice", () => {
       run: { id: string };
     };
     await rejectedDifferentKeyStarts[0]?.text();
-    const differentKeyEvents = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${acceptedDifferentKeyStart.run.id}/events`
-    );
+    const differentKeyEvents = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      params: { conversationId: conversation.id, runId: acceptedDifferentKeyStart.run.id }
+    });
     expect(differentKeyEvents.status).toBe(200);
     await differentKeyEvents.text();
 
-    const afterDifferentKeyMessages = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/messages`
+    const afterDifferentKeyMessages = await fetchTestOperation(
+      baseUrl,
+      "listConversationMessages",
+      { params: { conversationId: conversation.id } }
     );
     expect(afterDifferentKeyMessages.status).toBe(200);
     const afterDifferentKeyUserMessages = (
@@ -324,16 +351,18 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const firstCreateAndStart = await fetch(`${baseUrl}/api/conversations/runs`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        idempotencyKey: "public-create-run-key",
-        conversation: { title: "Created through run command" },
-        message: { text: "create and start through public run API" }
-      })
+    const firstCreateAndStart = await fetchTestOperation(baseUrl, "createConversationRun", {
+      ...{
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-create-run-key",
+          conversation: { title: "Created through run command" },
+          message: { text: "create and start through public run API" }
+        })
+      }
     });
     expect(firstCreateAndStart.status).toBe(200);
     const firstCreateAndStartBody = (await firstCreateAndStart.json()) as {
@@ -342,16 +371,18 @@ describe("client instance app vertical slice", () => {
       run: { id: string };
     };
 
-    const retryCreateAndStart = await fetch(`${baseUrl}/api/conversations/runs`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        idempotencyKey: "public-create-run-key",
-        conversation: { title: "Should not create another conversation" },
-        message: { text: "this retry must not create another run" }
-      })
+    const retryCreateAndStart = await fetchTestOperation(baseUrl, "createConversationRun", {
+      ...{
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "public-create-run-key",
+          conversation: { title: "Should not create another conversation" },
+          message: { text: "this retry must not create another run" }
+        })
+      }
     });
     expect(retryCreateAndStart.status).toBe(200);
     expect(await retryCreateAndStart.json()).toMatchObject({
@@ -361,27 +392,31 @@ describe("client instance app vertical slice", () => {
     });
 
     const [concurrentCreateA, concurrentCreateB] = await Promise.all([
-      fetch(`${baseUrl}/api/conversations/runs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-create-run-concurrent-key",
-          conversation: { title: "Concurrent create run" },
-          message: { text: "concurrent create and start should create once" }
-        })
+      fetchTestOperation(baseUrl, "createConversationRun", {
+        ...{
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            idempotencyKey: "public-create-run-concurrent-key",
+            conversation: { title: "Concurrent create run" },
+            message: { text: "concurrent create and start should create once" }
+          })
+        }
       }),
-      fetch(`${baseUrl}/api/conversations/runs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          idempotencyKey: "public-create-run-concurrent-key",
-          conversation: { title: "Duplicate concurrent create run" },
-          message: { text: "duplicate concurrent create and start" }
-        })
+      fetchTestOperation(baseUrl, "createConversationRun", {
+        ...{
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            idempotencyKey: "public-create-run-concurrent-key",
+            conversation: { title: "Duplicate concurrent create run" },
+            message: { text: "duplicate concurrent create and start" }
+          })
+        }
       })
     ]);
     expect(concurrentCreateA.status).toBe(200);
@@ -409,16 +444,16 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const command = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${firstStartBody.run.id}/commands`,
-      {
+    const command = await fetchTestOperation(baseUrl, "commandConversationRun", {
+      params: { conversationId: conversation.id, runId: firstStartBody.run.id },
+      ...{
         method: "POST",
         headers: {
           "content-type": "application/json"
         },
         body: JSON.stringify({ command: { type: "continue" } })
       }
-    );
+    });
     expect(command.status).toBe(409);
     await command.text();
 
@@ -426,7 +461,7 @@ describe("client instance app vertical slice", () => {
   });
 
   it("does not disclose or mutate product run routes for the wrong owner", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         developmentAuth: {
           enabled: true,
@@ -450,13 +485,10 @@ describe("client instance app vertical slice", () => {
         }
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       headers: {
         "x-dev-user-id": "user-1"
       },
@@ -465,9 +497,7 @@ describe("client instance app vertical slice", () => {
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const baseUrl = await listenTestInstance(app);
 
     const started = await fetchStartConversationRun(
       baseUrl,
@@ -481,19 +511,19 @@ describe("client instance app vertical slice", () => {
     );
     const runId = started.run.id;
 
-    const wrongOwnerEvents = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events`,
-      {
+    const wrongOwnerEvents = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      params: { conversationId: conversation.id, runId: runId },
+      ...{
         headers: {
           "x-dev-user-id": "user-2"
         }
       }
-    );
+    });
     expect(wrongOwnerEvents.status).toBe(404);
 
-    const wrongOwnerCancel = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`,
-      {
+    const wrongOwnerCancel = await fetchTestOperation(baseUrl, "cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: runId },
+      ...{
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -501,7 +531,7 @@ describe("client instance app vertical slice", () => {
         },
         body: JSON.stringify({ reason: "wrong owner must not cancel" })
       }
-    );
+    });
     expect(wrongOwnerCancel.status).toBe(404);
     await wrongOwnerCancel.text();
 
@@ -510,10 +540,7 @@ describe("client instance app vertical slice", () => {
         (chunk) => chunk.type === "run_completed"
       )
     ).toBe(true);
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect(audit.json()).not.toContainEqual(
       expect.objectContaining({
@@ -528,24 +555,17 @@ describe("client instance app vertical slice", () => {
   });
 
   it("cancels a backend run through the cancel route and records cancellation", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
-      payload: { title: "Cancel test" }
-    });
+    const created = await app.call("createConversation", { payload: { title: "Cancel test" } });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const baseUrl = await listenTestInstance(app);
 
     const started = await fetchStartConversationRun(
       baseUrl,
@@ -553,9 +573,9 @@ describe("client instance app vertical slice", () => {
       "cancel this deliberately long enough response"
     );
     const runId = started.run.id;
-    const events = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/events`
-    );
+    const events = await fetchTestOperation(baseUrl, "observeConversationRun", {
+      params: { conversationId: conversation.id, runId: runId }
+    });
     expect(events.status).toBe(200);
     const sentReader = events.body?.getReader();
     expect(sentReader).toBeDefined();
@@ -567,16 +587,16 @@ describe("client instance app vertical slice", () => {
       sentPayload += sentDecoder.decode(next.value, { stream: true });
     }
 
-    const cancelled = await fetch(
-      `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`,
-      {
+    const cancelled = await fetchTestOperation(baseUrl, "cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: runId },
+      ...{
         method: "POST",
         headers: {
           "content-type": "application/json"
         },
         body: JSON.stringify({ reason: "test cancellation" })
       }
-    );
+    });
     expect(cancelled.status).toBe(200);
     expect((await cancelled.json()) as { run: { status: string } }).toMatchObject({
       run: {
@@ -592,7 +612,7 @@ describe("client instance app vertical slice", () => {
       sentPayload += sentDecoder.decode(next.value, { stream: true });
     }
 
-    const auditEvents = await waitForAuditEvents(app.server, "message.cancelled");
+    const auditEvents = await waitForAuditEvents(app, "message.cancelled");
     expect(auditEvents).toContainEqual(
       expect.objectContaining({
         type: "message.cancelled",
@@ -608,7 +628,9 @@ describe("client instance app vertical slice", () => {
       .map((chunk) => chunk.payload?.delta ?? "")
       .join("");
     expect(streamedPrefix.length).toBeGreaterThan(0);
-    const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
+    const messages = await fetchTestOperation(baseUrl, "listConversationMessages", {
+      params: { conversationId: conversation.id }
+    });
     expect(messages.status).toBe(200);
     const assistantMessages = (
       (await messages.json()) as Array<{
@@ -630,7 +652,9 @@ describe("client instance app vertical slice", () => {
       }
     });
 
-    const snapshot = await fetch(`${baseUrl}/api/conversations/${conversation.id}/thread`);
+    const snapshot = await fetchTestOperation(baseUrl, "getConversationThread", {
+      params: { conversationId: conversation.id }
+    });
     expect(snapshot.status).toBe(200);
     expect(await snapshot.json()).toMatchObject({
       messages: [
@@ -648,25 +672,20 @@ describe("client instance app vertical slice", () => {
   });
 
   it("rejects a second send during an active run before appending a user message or claiming drafts", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       capabilities: [createTestAttachmentCapability()],
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Active run guard" }
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    await app.server.listen({ host: "127.0.0.1", port: 0 });
-    const address = app.server.server.address() as AddressInfo;
-    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const baseUrl = await listenTestInstance(app);
 
     const activePrompt = Array.from({ length: 40 }, (_, index) => `token-${index}`).join(" ");
     const firstRun = await fetchStartConversationRun(baseUrl, conversation.id, activePrompt, {
@@ -679,35 +698,36 @@ describe("client instance app vertical slice", () => {
       contentType: "text/plain",
       content: "This draft must remain unclaimed when the send is rejected."
     });
-    const uploaded = await app.server.inject({
-      method: "POST",
-      url: `/api/conversations/${conversation.id}/draft-attachments`,
+    const uploaded = await app.call("uploadDraftAttachment", {
+      params: { conversationId: conversation.id },
       headers: upload.headers,
       payload: upload.payload
     });
     expect(uploaded.statusCode).toBe(200);
     const uploadedBody = uploaded.json() as { attachment: { id: string } };
-    await waitForReadyDraftAttachment(app.server, conversation.id);
+    await waitForReadyDraftAttachment(app, conversation.id);
 
-    const rejectedSend = await fetch(`${baseUrl}/api/conversations/${conversation.id}/runs`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        idempotencyKey: "active-run-second",
-        message: {
-          text: "this second send should not be persisted"
-        }
-      })
+    const rejectedSend = await fetchTestOperation(baseUrl, "startConversationRun", {
+      params: { conversationId: conversation.id },
+      ...{
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          idempotencyKey: "active-run-second",
+          message: {
+            text: "this second send should not be persisted"
+          }
+        })
+      }
     });
     expect(rejectedSend.status).toBe(409);
     await rejectedSend.text();
     await fetchRunEvents(baseUrl, conversation.id, firstRun.run.id);
 
-    const messages = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/messages`
+    const messages = await app.call("listConversationMessages", {
+      params: { conversationId: conversation.id }
     });
     expect(messages.statusCode).toBe(200);
     const persistedMessages = messages.json() as Array<{ role: string; text: string }>;
@@ -721,9 +741,8 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const drafts = await app.server.inject({
-      method: "GET",
-      url: `/api/conversations/${conversation.id}/draft-attachments`
+    const drafts = await app.call("listDraftAttachments", {
+      params: { conversationId: conversation.id }
     });
     expect(drafts.statusCode).toBe(200);
     expect(drafts.json()).toContainEqual(
@@ -733,10 +752,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     const messageCreatedEvents = (
       audit.json() as Array<{ type: string; metadata?: { conversationId?: string } }>
@@ -750,25 +766,20 @@ describe("client instance app vertical slice", () => {
   });
 
   it("cancels the current conversation run instead of letting the stream complete in the background", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
     try {
-      const created = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const created = await app.call("createConversation", {
         payload: { title: "Cancel stream test" }
       });
       expect(created.statusCode).toBe(200);
       const conversation = created.json() as { id: string };
 
-      await app.server.listen({ host: "127.0.0.1", port: 0 });
-      const address = app.server.server.address() as AddressInfo;
-      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const baseUrl = await listenTestInstance(app);
       const messageTokens = Array.from({ length: 240 }, (_, index) => `cancel-token-${index}`);
       const lateToken = messageTokens.at(-1) ?? "";
 
@@ -779,16 +790,16 @@ describe("client instance app vertical slice", () => {
       );
       const runId = started.run.id;
 
-      const cancelled = await fetch(
-        `${baseUrl}/api/conversations/${conversation.id}/runs/${runId}/cancel`,
-        {
+      const cancelled = await fetchTestOperation(baseUrl, "cancelConversationRun", {
+        params: { conversationId: conversation.id, runId: runId },
+        ...{
           method: "POST",
           headers: {
             "content-type": "application/json"
           },
           body: JSON.stringify({ reason: "test cancellation" })
         }
-      );
+      });
       expect(cancelled.status).toBe(200);
       expect(await cancelled.json()).toMatchObject({
         run: {
@@ -805,7 +816,9 @@ describe("client instance app vertical slice", () => {
         setTimeout(resolve, 6_000);
       });
 
-      const messages = await fetch(`${baseUrl}/api/conversations/${conversation.id}/messages`);
+      const messages = await fetchTestOperation(baseUrl, "listConversationMessages", {
+        params: { conversationId: conversation.id }
+      });
       expect(messages.status).toBe(200);
       const persistedMessages = (await messages.json()) as Array<{ role: string; text: string }>;
       const assistantText = persistedMessages
@@ -819,40 +832,32 @@ describe("client instance app vertical slice", () => {
   }, 12_000);
 
   it("rejects messages after the configured daily model call limit is reached", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         usageSafeguards: {
           modelCallsPerDay: 1
         }
       }),
       env: {},
-      storeMode: "memory",
       tools: []
     });
 
-    const created = await app.server.inject({
-      method: "POST",
-      url: "/api/conversations",
+    const created = await app.call("createConversation", {
       payload: { title: "Usage limit test" }
     });
     expect(created.statusCode).toBe(200);
     const conversation = created.json() as { id: string };
 
-    const firstMessage = await injectStartConversationRun(app.server, conversation.id, "hello", {
+    const firstMessage = await injectStartConversationRun(app, conversation.id, "hello", {
       idempotencyKey: "usage-limit-first"
     });
-    await drainRunEvents(app.server, conversation.id, firstMessage.run.id);
+    await drainRunEvents(app, conversation.id, firstMessage.run.id);
 
-    const secondMessage = await injectStartConversationRun(
-      app.server,
-      conversation.id,
-      "hello again",
-      {
-        idempotencyKey: "usage-limit-second"
-      }
-    );
+    const secondMessage = await injectStartConversationRun(app, conversation.id, "hello again", {
+      idempotencyKey: "usage-limit-second"
+    });
     const failedEvents = parseSseChunks(
-      await drainRunEvents(app.server, conversation.id, secondMessage.run.id)
+      await drainRunEvents(app, conversation.id, secondMessage.run.id)
     );
     expect(failedEvents).toContainEqual(
       expect.objectContaining({
@@ -865,10 +870,7 @@ describe("client instance app vertical slice", () => {
       })
     );
 
-    const audit = await app.server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect(audit.json()).toContainEqual(
       expect.objectContaining({
@@ -889,10 +891,7 @@ async function waitForAuditEvents(
   type: string
 ): Promise<Array<{ type: string; metadata?: Record<string, unknown> }>> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const audit = await server.inject({
-      method: "GET",
-      url: "/api/audit-events"
-    });
+    const audit = await server.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     const events = audit.json() as Array<{ type: string; metadata?: Record<string, unknown> }>;
     if (events.some((event) => event.type === type)) {
@@ -921,9 +920,8 @@ describe("agent availability per Collaboration Workspace", () => {
         expect(rejected.statusCode).toBe(404);
         expect(rejected.json()).toMatchObject(notDefined(agentName));
       }
-      const messages = await app.server.inject({
-        method: "GET",
-        url: `/api/conversations/${shared}/messages`
+      const messages = await app.call("listConversationMessages", {
+        params: { conversationId: shared }
       });
       expect(messages.json()).toEqual([]);
       const allowed = await fixture.startRun(shared, "shared_only");
@@ -941,14 +939,12 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(allowedPersonal.json()).toMatchObject({ run: { agentName: "personal_only" } });
 
       // The create-and-run entry point applies the same rule before creating anything.
-      const listUrl = (workspaceId: string) =>
-        `/api/conversations?collaborationWorkspaceId=${workspaceId}`;
       const personalBefore = (
-        await app.server.inject({ method: "GET", url: listUrl(personalWorkspaceId) })
+        await app.call("listConversations", {
+          query: { collaborationWorkspaceId: personalWorkspaceId }
+        })
       ).json() as unknown[];
-      const createRejected = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations/runs",
+      const createRejected = await app.call("createConversationRun", {
         payload: {
           agentName: "shared_only",
           idempotencyKey: "create-rejected",
@@ -958,11 +954,13 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(createRejected.statusCode).toBe(404);
       expect(createRejected.json()).toMatchObject(notDefined("shared_only"));
       expect(
-        (await app.server.inject({ method: "GET", url: listUrl(personalWorkspaceId) })).json()
+        (
+          await app.call("listConversations", {
+            query: { collaborationWorkspaceId: personalWorkspaceId }
+          })
+        ).json()
       ).toHaveLength(personalBefore.length);
-      const createAllowed = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations/runs",
+      const createAllowed = await app.call("createConversationRun", {
         payload: {
           agentName: "shared_only",
           idempotencyKey: "create-allowed",
@@ -990,7 +988,7 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(withDefault.json()).toMatchObject({ run: { agentName: "test_agent" } });
 
       // Without an instance default available here, the first available agent is used.
-      await app.store.applyConfigAssetMutations({
+      await app.stores.applyConfigAssetMutations({
         clientInstanceId,
         mutations: [{ type: "setDefaultAgent", agentName: undefined }]
       });
@@ -1025,7 +1023,7 @@ describe("agent availability per Collaboration Workspace", () => {
       await fixture.setAvailability("shared_only", SELECTED_NOWHERE);
 
       await expect(
-        app.store.getAgentRun({ clientInstanceId, runId: asAgentRunId(run.id) })
+        app.stores.getAgentRun({ clientInstanceId, runId: asAgentRunId(run.id) })
       ).resolves.toMatchObject({ agentName: "shared_only", status: "queued" });
       const next = await fixture.startRun(
         await fixture.createConversation(sharedWorkspaceId),
@@ -1041,9 +1039,8 @@ describe("agent availability per Collaboration Workspace", () => {
     const fixture = await createAvailabilityFixture();
     const { app, sharedWorkspaceId, personalWorkspaceId } = fixture;
     try {
-      const shared = await app.server.inject({
-        method: "GET",
-        url: `/api/collaboration-workspaces/${sharedWorkspaceId}/agents`
+      const shared = await app.call("listCollaborationWorkspaceAgents", {
+        params: { collaborationWorkspaceId: sharedWorkspaceId }
       });
       expect(shared.statusCode).toBe(200);
       expect(shared.json()).toMatchObject({
@@ -1057,29 +1054,27 @@ describe("agent availability per Collaboration Workspace", () => {
         "selectableModels"
       ]);
 
-      const personal = await app.server.inject({
-        method: "GET",
-        url: `/api/collaboration-workspaces/${personalWorkspaceId}/agents`
+      const personal = await app.call("listCollaborationWorkspaceAgents", {
+        params: { collaborationWorkspaceId: personalWorkspaceId }
       });
       expect(
         (personal.json() as { agents: Array<{ name: string }> }).agents.map((agent) => agent.name)
       ).toEqual(["personal_only", "test_agent"]);
 
       // The instance-wide list is the caller's Personal Workspace view.
-      const config = await app.server.inject({ method: "GET", url: "/api/config" });
+      const config = await app.call("getConfig", {});
       expect(config.json()).toMatchObject({ defaultAgentName: "test_agent" });
       expect(
         (config.json() as { agents: Array<{ name: string }> }).agents.map((agent) => agent.name)
       ).toEqual(["personal_only", "test_agent"]);
 
-      for (const url of [
-        `/api/collaboration-workspaces/${sharedWorkspaceId}/agents`,
-        `/api/collaboration-workspaces/${personalWorkspaceId}/agents`,
-        "/api/collaboration-workspaces/cws_missing/agents"
+      for (const collaborationWorkspaceId of [
+        sharedWorkspaceId,
+        personalWorkspaceId,
+        "cws_missing"
       ]) {
-        const outsider = await app.server.inject({
-          method: "GET",
-          url,
+        const outsider = await app.call("listCollaborationWorkspaceAgents", {
+          params: { collaborationWorkspaceId },
           headers: { "x-dev-user-id": "outsider" }
         });
         expect(outsider.statusCode).toBe(404);
@@ -1111,7 +1106,7 @@ async function createAvailabilityFixture() {
     roles,
     permissionRefs: []
   });
-  const app = await createClientInstanceApp({
+  const app = await createTestInstance({
     config: createTestConfig({
       developmentAuth: {
         enabled: true,
@@ -1120,33 +1115,30 @@ async function createAvailabilityFixture() {
       }
     }),
     env: {},
-    storeMode: "memory",
     agentRuntimeMode: "worker",
     tools: []
   });
-  const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
-  const created = await app.server.inject({
-    method: "POST",
-    url: "/api/collaboration-workspaces",
-    payload: { name: "KAI" }
-  });
+  const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
+  const created = await app.call("createCollaborationWorkspace", { payload: { name: "KAI" } });
   expect(created.statusCode).toBe(200);
   const sharedWorkspaceId = (created.json() as { id: string }).id;
-  const workspaces = (
-    await app.server.inject({ method: "GET", url: "/api/collaboration-workspaces" })
-  ).json() as Array<{ id: string; kind: string }>;
+  const workspaces = (await app.call("listCollaborationWorkspaces", {})).json() as Array<{
+    id: string;
+    kind: string;
+  }>;
   const personalWorkspaceId = workspaces.find((workspace) => workspace.kind === "personal")!.id;
 
   const setAvailability = (agentName: string, availability: AgentAvailability) =>
-    app.store.setAgentAvailability({ clientInstanceId, agentName, availability });
+    app.stores.setAgentAvailability({ clientInstanceId, agentName, availability });
   const names = ["shared_only", "personal_only", "hidden"];
-  await app.store.applyConfigAssetMutations({
+  await app.stores.applyConfigAssetMutations({
     clientInstanceId,
     mutations: names.map((name) => ({
       type: "upsert" as const,
       kind: "agent" as const,
       name,
       config: {
+        skillNames: [],
         name,
         displayName: name,
         instructions: "Use configured tools only.",
@@ -1171,9 +1163,7 @@ async function createAvailabilityFixture() {
     personalWorkspaceId,
     setAvailability,
     async createConversation(collaborationWorkspaceId?: string): Promise<string> {
-      const response = await app.server.inject({
-        method: "POST",
-        url: "/api/conversations",
+      const response = await app.call("createConversation", {
         payload: { title: "Availability", collaborationWorkspaceId }
       });
       expect(response.statusCode).toBe(200);
@@ -1181,9 +1171,8 @@ async function createAvailabilityFixture() {
     },
     startRun(conversationId: string, agentName?: string) {
       runCount += 1;
-      return app.server.inject({
-        method: "POST",
-        url: `/api/conversations/${conversationId}/runs`,
+      return app.call("startConversationRun", {
+        params: { conversationId: conversationId },
         payload: {
           agentName,
           idempotencyKey: `availability-run-${runCount}`,

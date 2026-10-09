@@ -1,3 +1,6 @@
+import type { TestOperationName, TestCallInput } from "./support/operations";
+import { createTestFetch, createTestInstance, getTestConfig } from "./support/test-instance";
+
 import { describe, expect, it } from "vitest";
 import { createApiClient } from "@vivd-catalyst/api-client";
 import { approvalRequestSchema } from "@vivd-catalyst/api-contract";
@@ -10,7 +13,7 @@ import {
   type ApprovalRequest,
   type ApprovalRequestHandler
 } from "@vivd-catalyst/core";
-import { createClientInstanceApp, createTestConfig } from "./chat-server-harness";
+import { createTestConfig } from "./support/fixtures";
 
 const fakeHandler: ApprovalRequestHandler = {
   kind: "fake",
@@ -23,7 +26,7 @@ const fakeHandler: ApprovalRequestHandler = {
 };
 
 async function fixture(empty = false) {
-  const app = await createClientInstanceApp({
+  const app = await createTestInstance({
     config: createTestConfig({
       developmentAuth: {
         enabled: true,
@@ -54,26 +57,13 @@ async function fixture(empty = false) {
       }
     }),
     env: {},
-    storeMode: "memory",
     tools: [],
     ...(empty ? {} : { approvalRequestHandlers: new Map([[fakeHandler.kind, fakeHandler]]) })
   });
   function client(user: string) {
     return createApiClient({
       baseUrl: "https://approval.example",
-      fetchImpl: async (input, init) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        const response = await app.server.inject({
-          method: request.method as "GET" | "POST",
-          url: new URL(request.url).pathname + new URL(request.url).search,
-          headers: { ...Object.fromEntries(request.headers), "x-dev-user-id": user },
-          ...(request.method === "POST" && request.body ? { payload: await request.text() } : {})
-        });
-        return new Response(response.body, {
-          status: response.statusCode,
-          headers: { "content-type": "application/json" }
-        });
-      }
+      fetchImpl: createTestFetch(app, { "x-dev-user-id": user })
     });
   }
   const requester = client("requester");
@@ -81,8 +71,8 @@ async function fixture(empty = false) {
   const stranger = client("stranger");
   const requesterUser = await requester.account.get();
   const create = (origin?: ApprovalRequest["origin"]) =>
-    app.store.createApprovalRequest({
-      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+    app.stores.createApprovalRequest({
+      clientInstanceId: asClientInstanceId(getTestConfig(app).clientInstance.id),
       kind: "fake",
       summary: "Proposed",
       origin,
@@ -124,8 +114,8 @@ describe("approval routes and generated instance client", () => {
       });
       expect(thread.activeRun).toBeUndefined();
       expect(
-        await f.app.store.getLatestConversationAgentRun({
-          clientInstanceId: asClientInstanceId(f.app.config.clientInstance.id),
+        await f.app.stores.getLatestConversationAgentRun({
+          clientInstanceId: asClientInstanceId(getTestConfig(f.app).clientInstance.id),
           conversationId: asConversationId(conversation.id)
         })
       ).toBeUndefined();
@@ -164,16 +154,14 @@ describe("approval routes and generated instance client", () => {
       expect(await f.reviewer.approvalRequests.list("pending")).toMatchObject([
         { id: request.id, canDecide: true }
       ]);
-      const invalid = await f.app.server.inject({
-        method: "POST",
-        url: `/api/approval-requests/${request.id}/decide`,
+      const invalid = await f.app.call("decideApprovalRequest", {
+        params: { requestId: request.id },
         headers: { "x-dev-user-id": "reviewer" },
         payload: { decision: "request_changes", comment: " " }
       });
       expect(invalid.statusCode).toBe(422);
-      const invalidFilter = await f.app.server.inject({
-        method: "GET",
-        url: "/api/approval-requests?status=invalid",
+      const invalidFilter = await f.app.call("listApprovalRequests", {
+        query: { status: "invalid" },
         headers: { "x-dev-user-id": "reviewer" }
       });
       expect(invalidFilter.statusCode).toBe(422);
@@ -246,7 +234,7 @@ describe("approval routes and generated instance client", () => {
   });
 
   it("keeps chat-scoped session tokens out of the review queue and decisions", async () => {
-    const app = await createClientInstanceApp({
+    const app = await createTestInstance({
       config: createTestConfig({
         sessionToken: { issuer: "demo-client-instance", ttlSeconds: 900 }
       }),
@@ -254,14 +242,11 @@ describe("approval routes and generated instance client", () => {
         CHAT_SESSION_TOKEN_SECRET: "a-development-session-token-secret",
         CHAT_SERVER_CREDENTIAL: "server-credential"
       },
-      storeMode: "memory",
       tools: [],
       approvalRequestHandlers: new Map([[fakeHandler.kind, fakeHandler]])
     });
     try {
-      const issued = await app.server.inject({
-        method: "POST",
-        url: "/api/superadmin/session-tokens",
+      const issued = await app.call("issueSessionToken", {
         headers: { "x-server-credential": "server-credential" },
         payload: {
           externalUserId: "embedded-admin",
@@ -272,11 +257,11 @@ describe("approval routes and generated instance client", () => {
       const headers = {
         authorization: `Bearer ${issued.json<{ chatSessionToken: string }>().chatSessionToken}`
       };
-      const me = await app.server.inject({ method: "GET", url: "/api/me", headers });
+      const me = await app.call("getCurrentUser", { headers });
       const admin = me.json<{ id: string; displayLabel: string }>();
-      const clientInstanceId = asClientInstanceId(app.config.clientInstance.id);
+      const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
       const create = () =>
-        app.store.createApprovalRequest({
+        app.stores.createApprovalRequest({
           clientInstanceId,
           kind: "fake",
           summary: "Proposed",
@@ -284,34 +269,35 @@ describe("approval routes and generated instance client", () => {
           requestedBy: { id: admin.id, displayLabel: admin.displayLabel }
         });
       const pending = await create();
-      const call = (method: "GET" | "POST", url: string, payload?: object) =>
-        app.server.inject({ method, url, headers, ...(payload ? { payload } : {}) });
+      const call = (operation: TestOperationName, input: TestCallInput = {}) =>
+        app.call(operation, { ...input, headers });
 
-      const card = await call("GET", `/api/approval-requests/${pending.id}`);
+      const card = await call("getApprovalRequest", { params: { requestId: pending.id } });
       expect(card.statusCode).toBe(200);
       expect(card.json()).toMatchObject({ canDecide: false, canRevert: false, canWithdraw: true });
-      expect((await call("GET", "/api/approval-requests/pending-count")).statusCode).toBe(200);
-      const listed = await call("GET", "/api/approval-requests");
+      expect((await call("countPendingApprovalRequests", {})).statusCode).toBe(200);
+      const listed = await call("listApprovalRequests", {});
       expect(listed.statusCode).toBe(403);
       expect(listed.json()).toMatchObject({
         error: { message: "Missing auth scope 'governance:read'" }
       });
-      const decided = await call("POST", `/api/approval-requests/${pending.id}/decide`, {
-        decision: "approve"
+      const decided = await call("decideApprovalRequest", {
+        params: { requestId: pending.id },
+        payload: { decision: "approve" }
       });
       expect(decided.statusCode).toBe(403);
       expect(decided.json()).toMatchObject({
         error: { message: "Missing auth scope 'governance:write'" }
       });
-      expect((await call("POST", `/api/approval-requests/${pending.id}/revert`)).statusCode).toBe(
-        403
-      );
       expect(
-        await app.store.getApprovalRequest({ clientInstanceId, requestId: pending.id })
+        (await call("revertApprovalRequest", { params: { requestId: pending.id } })).statusCode
+      ).toBe(403);
+      expect(
+        await app.stores.getApprovalRequest({ clientInstanceId, requestId: pending.id })
       ).toMatchObject({ status: "pending" });
-      expect((await call("POST", `/api/approval-requests/${pending.id}/withdraw`)).statusCode).toBe(
-        200
-      );
+      expect(
+        (await call("withdrawApprovalRequest", { params: { requestId: pending.id } })).statusCode
+      ).toBe(200);
     } finally {
       await app.close();
     }
