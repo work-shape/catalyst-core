@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   createApiClient,
   type ConversationResourceListItem,
@@ -157,7 +157,7 @@ describe("Resources panel model", () => {
       file: conversationFileFromResource(workbookResource)
     });
     const markup = renderToStaticMarkup(
-      createElement(TranslationProvider, { locale: "de" }, entry.node)
+      createElement(TranslationProvider, { children: null, locale: "de" }, entry.node)
     );
 
     expect(markup).toContain("animate-spin");
@@ -308,7 +308,7 @@ describe("Resources panel rendering", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(StructuredDataView, { resource: structuredData })
       )
     );
@@ -347,7 +347,7 @@ describe("Resources panel rendering", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(StructuredDataView, {
           resource,
           onSourceOpen() {}
@@ -365,7 +365,7 @@ describe("Resources panel rendering", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(SourceFilePreview, {
           client,
           conversationId: "conversation/1",
@@ -389,7 +389,7 @@ describe("Resources panel rendering", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(SourceFilePreview, {
           client,
           conversationId: "conversation/1",
@@ -413,7 +413,7 @@ function renderResourcesPanel(items: ConversationResourceListItem[]): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "de" },
+      { children: null, locale: "de" },
       createElement(
         ToolDisplayPanelProvider,
         null,

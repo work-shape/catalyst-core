@@ -264,5 +264,14 @@ async function executeReadSkill(
   if (decision.status !== "allowed") {
     throw new Error("Expected read_skill tool authorization");
   }
-  return execution.execute({ ...toolRequest, authorization: decision }, context);
+  const result = await execution.execute({ ...toolRequest, authorization: decision }, context);
+  if (result.status !== "success") return result;
+  if (!isRecord(result.output)) {
+    throw new Error("Expected read_skill to return an object");
+  }
+  return { ...result, output: result.output };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

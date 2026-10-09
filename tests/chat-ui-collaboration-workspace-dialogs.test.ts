@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type {
   CollaborationWorkspaceDirectoryItem,
   CollaborationWorkspaceWithRole,
@@ -45,7 +45,9 @@ import {
 const noop = () => undefined;
 
 function render(locale: "de" | "en", element: ReturnType<typeof createElement>): string {
-  return renderToStaticMarkup(createElement(TranslationProvider, { locale }, element));
+  return renderToStaticMarkup(
+    createElement(TranslationProvider, { children: null, locale }, element)
+  );
 }
 
 const sharedCollaborationWorkspace: CollaborationWorkspaceWithRole = {
@@ -1165,7 +1167,6 @@ describe("collaboration workspace dialog chrome", () => {
       createElement(CollaborationWorkspaceMemberCandidateList, {
         candidates: [
           {
-            userId: "user_9",
             email: "neu@example.com",
             displayLabel: "Neue Person",
             hasPendingAccessRequest: false

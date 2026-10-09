@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@vivd-catalyst/api-client";
 import { UsageView } from "../packages/chat-ui/src/control-plane/usage-view";

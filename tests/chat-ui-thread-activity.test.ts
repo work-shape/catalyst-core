@@ -3,8 +3,8 @@ import {
   formatElapsedSeconds,
   formatWorkHistoryLabel
 } from "../packages/chat-ui/src/assistant/elapsed-time";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { AssistantActivityStatus } from "../packages/chat-ui/src/assistant/assistant-activity-status";
 import {
   acknowledgeRecentlyActiveAssistantRunId,
@@ -184,10 +184,11 @@ function renderActivityStatus(props: Parameters<typeof AssistantActivityStatus>[
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "de" },
+      { children: null, locale: "de" },
       createElement(
         ToolActivityLabelsProvider,
         {
+          children: null,
           labels: {
             "documents.check": { de: "Unterlagenprüfung", en: "document check" },
             "structured_data.publish": { de: "Kundendaten", en: "customer data" }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Message } from "@vivd-catalyst/api-client";
 import {
+  asManagedArtifactId,
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata
@@ -80,7 +81,7 @@ describe("chat UI artifact history projection", () => {
             },
             artifacts: [
               {
-                artifactId: "art_final",
+                artifactId: asManagedArtifactId("art_final"),
                 kind: "application/pdf",
                 filename: "final-report.pdf",
                 mimeType: "application/pdf",
@@ -204,7 +205,7 @@ describe("chat UI artifact history projection", () => {
             },
             artifacts: [
               {
-                artifactId: "art_ducks",
+                artifactId: asManagedArtifactId("art_ducks"),
                 kind: "presentation.pptx",
                 filename: "ducks.pptx",
                 mimeType:
@@ -340,13 +341,13 @@ describe("chat UI artifact history projection", () => {
             output: {
               pageNumber: 1,
               image: {
-                artifactId: "art_page",
+                artifactId: asManagedArtifactId("art_page"),
                 mimeType: "image/png"
               }
             },
             artifacts: [
               {
-                artifactId: "art_page",
+                artifactId: asManagedArtifactId("art_page"),
                 kind: "document.page_image",
                 filename: "document-page-1.png",
                 mimeType: "image/png"

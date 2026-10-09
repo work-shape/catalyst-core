@@ -373,6 +373,9 @@ function extractDockerStage(dockerfile: string, stageName: string): string {
   const block = [lines[start]];
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index];
+    if (line === undefined) {
+      throw new Error("Expected a line within the fixture bounds");
+    }
     if (/^FROM .* AS /u.test(line)) {
       break;
     }
@@ -390,6 +393,9 @@ function extractComposeService(compose: string, serviceName: string): string {
   const block = [lines[start]];
   for (let index = start + 1; index < lines.length; index += 1) {
     const line = lines[index];
+    if (line === undefined) {
+      throw new Error("Expected a line within the fixture bounds");
+    }
     if (/^  [A-Za-z0-9_.-]+:/u.test(line)) {
       break;
     }

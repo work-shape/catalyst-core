@@ -16,7 +16,7 @@ import {
   canManageApiAccess,
   canViewAdministrationPanel
 } from "../packages/chat-ui/src/control-plane/governance";
-import { resolveAdministrationRoute } from "../packages/chat-ui/src/control-plane/superadmin-panel";
+import { resolveAdministrationRoute as resolveAdministrationRouteWithSkillChanges } from "../packages/chat-ui/src/control-plane/superadmin-panel";
 import {
   workspaceRouteFromPath,
   workspaceRouteNavigation
@@ -216,3 +216,22 @@ describe("API key copy result", () => {
     expect(copyStateFor(undefined, "cat_live_first")).toEqual({});
   });
 });
+
+// Route cases predate skill-change settings; supply the disabled defaults.
+type AdministrationRouteInput = Parameters<typeof resolveAdministrationRouteWithSkillChanges>[0];
+type ConfigAssetManagement = NonNullable<AdministrationRouteInput["configAssetManagement"]>;
+function resolveAdministrationRoute(
+  input: Omit<AdministrationRouteInput, "configAssetManagement"> & {
+    configAssetManagement?: Omit<ConfigAssetManagement, "agentSkillChanges">;
+  }
+) {
+  return resolveAdministrationRouteWithSkillChanges({
+    ...input,
+    configAssetManagement: input.configAssetManagement
+      ? {
+          ...input.configAssetManagement,
+          agentSkillChanges: { enabled: false, allowSkillCreation: false }
+        }
+      : undefined
+  });
+}

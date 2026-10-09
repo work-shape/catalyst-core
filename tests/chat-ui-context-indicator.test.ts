@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { ContextIndicator } from "../packages/chat-ui/src/assistant/context-indicator";
 import { resolveContextUsage } from "../packages/chat-ui/src/assistant/context-usage";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
@@ -34,7 +34,7 @@ describe("chat context indicator", () => {
     const settingsMarkup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(UserSettingsPanel, {
           user: {
             id: "user",
@@ -66,7 +66,7 @@ describe("chat context indicator", () => {
     const indicatorMarkup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(ContextIndicator, {
           inputTokens: 135_000,
           compactThresholdTokens: 270_000
@@ -166,7 +166,7 @@ describe("chat context indicator", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(ContextIndicator, {
           inputTokens: 4_050,
           compactThresholdTokens: 270_000

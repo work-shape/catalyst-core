@@ -23,6 +23,10 @@ describe("built-in platform tools", () => {
       throw new Error("Expected show_view to succeed");
     }
 
+    if (!result.display || typeof result.display.data?.html !== "string") {
+      throw new Error("Expected show_view to return rendered HTML");
+    }
+
     expect(JSON.stringify(result.output)).not.toContain("<section>");
     expect(result.display).toMatchObject({
       kind: "html.rendered",
@@ -54,6 +58,10 @@ describe("built-in platform tools", () => {
       throw new Error("Expected show_view to succeed");
     }
 
+    if (!result.display || typeof result.display.data?.html !== "string") {
+      throw new Error("Expected show_view to return rendered HTML");
+    }
+
     expect(readCsp(result.display.data?.html)).toContain(
       "script-src https://cdn.tailwindcss.com https://unpkg.com https:"
     );
@@ -62,7 +70,8 @@ describe("built-in platform tools", () => {
 
   it("can be configured to keep third-party chart CDNs out of the HTML display CSP", async () => {
     const configuredTool = showViewToolDefinition.create({
-      allowedScriptSrc: []
+      allowedScriptSrc: [],
+      externalRuntime: true
     });
 
     const result = await configuredTool.execute(
@@ -76,6 +85,10 @@ describe("built-in platform tools", () => {
     expect(result.status).toBe("success");
     if (result.status !== "success") {
       throw new Error("Expected show_view to succeed");
+    }
+
+    if (!result.display || typeof result.display.data?.html !== "string") {
+      throw new Error("Expected show_view to return rendered HTML");
     }
 
     const scriptSrc = readCspDirective(result.display.data?.html, "script-src");
@@ -106,7 +119,8 @@ describe("built-in platform tools", () => {
 
   it("adds configured script sources to the HTML display CSP", async () => {
     const configuredTool = showViewToolDefinition.create({
-      allowedScriptSrc: ["https://cdn.jsdelivr.net"]
+      allowedScriptSrc: ["https://cdn.jsdelivr.net"],
+      externalRuntime: true
     });
 
     const result = await configuredTool.execute(
@@ -120,6 +134,10 @@ describe("built-in platform tools", () => {
     expect(result.status).toBe("success");
     if (result.status !== "success") {
       throw new Error("Expected configured show_view to succeed");
+    }
+
+    if (!result.display || typeof result.display.data?.html !== "string") {
+      throw new Error("Expected show_view to return rendered HTML");
     }
 
     expect(readCsp(result.display.data?.html)).toContain(
@@ -151,6 +169,10 @@ describe("built-in platform tools", () => {
       throw new Error("Expected wildcard configured show_view to succeed");
     }
 
+    if (!result.display || typeof result.display.data?.html !== "string") {
+      throw new Error("Expected show_view to return rendered HTML");
+    }
+
     expect(readCsp(result.display.data?.html)).toContain("https:");
     expect(configuredTool.description).toContain("External HTTPS script sources are configured");
   });
@@ -168,6 +190,10 @@ describe("built-in platform tools", () => {
     expect(result.status).toBe("success");
     if (result.status !== "success") {
       throw new Error("Expected show_view to succeed");
+    }
+
+    if (!result.display || typeof result.display.data?.html !== "string") {
+      throw new Error("Expected show_view to return rendered HTML");
     }
 
     const html = result.display.data?.html ?? "";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { createApiClient, type ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
 import {
   ArtifactPreview,
@@ -33,7 +33,7 @@ describe("chat UI artifact preview state", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(ArtifactPreview, {
           artifact: file.preview.artifact,
           client: createApiClient({ baseUrl: "https://example.test" }),

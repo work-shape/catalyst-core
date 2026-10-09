@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { approvalRequestReverter } from "../packages/chat-ui/src/approvals/approval-request-api";
@@ -87,7 +87,7 @@ function renderCard(
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale },
+      { children: null, locale },
       createElement(ApprovalRequestCardView, { state, actions })
     )
   );
@@ -258,7 +258,7 @@ describe("compact approval request card in the thread", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: options.locale ?? "de" },
+        { children: null, locale: options.locale ?? "de" },
         createElement(ApprovalRequestCardView, {
           state: { status: "ready", request: request(overrides) },
           actions: idleActions,
@@ -372,7 +372,7 @@ describe("withdraw next to the decisions", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(ApprovalRequestCardView, {
           state: { status: "ready", request: request(overrides) },
           actions: idleActions,
@@ -409,7 +409,7 @@ describe("approval request details panel", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale },
+        { children: null, locale },
         createElement(ApprovalRequestDetailsView, {
           state: { status: "ready", request: request(overrides) },
           actions
@@ -470,7 +470,7 @@ describe("approval request details panel", () => {
       renderToStaticMarkup(
         createElement(
           TranslationProvider,
-          { locale: "de" },
+          { children: null, locale: "de" },
           createElement(ApprovalRequestDetailsView, { state, actions: idleActions })
         )
       );
@@ -753,7 +753,7 @@ describe("history row of the review queue", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale },
+        { children: null, locale },
         createElement(ApprovalHistoryRow, { request: decided, actions: idleActions, defaultOpen })
       )
     );
@@ -802,7 +802,7 @@ describe("approvals view", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(ApprovalRequestList, {
           requests: [],
           loading: input.loading ?? false,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { createApiClient, type Message } from "@vivd-catalyst/api-client";
 import {
   asManagedArtifactId,
@@ -15,6 +15,7 @@ import {
   artifactDownloadFilename,
   getArtifactFileType,
   getArtifactPreviewKind,
+  isWorkspacePromotedArtifactsData,
   readArtifactImagePagesPreview,
   readSurfacedToolArtifactRefs,
   readToolArtifactRefs
@@ -333,6 +334,9 @@ describe("chat UI artifact download cards", () => {
       .at(-1)
       ?.parts.find((part) => part.type === WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE);
     const data = artifactPart && "data" in artifactPart ? artifactPart.data : undefined;
+    if (!isWorkspacePromotedArtifactsData(data)) {
+      throw new Error("Expected promoted artifact data");
+    }
     const projectedArtifact =
       data?.kind === "workspace.promoted_artifacts" ? data.artifacts[0] : undefined;
 

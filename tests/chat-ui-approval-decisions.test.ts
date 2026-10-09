@@ -1,6 +1,6 @@
-import { fromThreadMessageLike } from "../packages/chat-ui/node_modules/@assistant-ui/react";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { fromThreadMessageLike } from "@assistant-ui/react";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { Message } from "@vivd-catalyst/api-client";
 import {
   createAssistantFinalMetadata,
@@ -113,7 +113,7 @@ function renderLine(
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale },
+      { children: null, locale },
       createElement(ApprovalDecisionLine, { decision, showSummary: decision.ambiguous })
     )
   );

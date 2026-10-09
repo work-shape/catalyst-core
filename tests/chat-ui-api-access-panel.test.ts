@@ -1,5 +1,5 @@
-import { createElement, type ComponentProps } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement, type ComponentProps } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { ServicePrincipalDetail } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import {
@@ -43,7 +43,7 @@ describe("API access panel", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(ApiAccessPanel, {
           canMutate: true,
           principals: [detail],
@@ -77,7 +77,7 @@ describe("API access panel", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(ApiAccessPanel, {
           canMutate: true,
           principals: [],
@@ -104,7 +104,7 @@ describe("API access panel", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(ApiAccessPanel, {
           canMutate: false,
           principals: [detail],
@@ -134,7 +134,7 @@ describe("API access panel", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(ApiAccessPanel, {
           canMutate: true,
           principals: [detail],
@@ -175,7 +175,7 @@ describe("API access panel", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale },
+        { children: null, locale },
         createElement(SecretFields, {
           secret,
           copyState,

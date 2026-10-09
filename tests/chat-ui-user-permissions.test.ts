@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { AdministeredUser } from "@vivd-catalyst/api-client";
 import { resolveEffectivePermissions, type Permission } from "@vivd-catalyst/core";
 import { describe, expect, it } from "vitest";
@@ -124,7 +124,7 @@ describe("user rights in the administration", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(UserPermissionsCard, {
           user: user({ roles: ["user", "admin"], permissions: ["!audit.view"] }),
           canManageSuperadminAccess: false,
@@ -147,7 +147,7 @@ describe("user rights in the administration", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(UserPermissionOverview, {
           users: [
             user({ id: "admin", displayLabel: "Felix Pahlke", roles: ["user", "admin"] }),

@@ -603,6 +603,8 @@ function createSnapshot({
     conversation: {
       id: "conv_1",
       clientInstanceId: "client_1",
+      collaborationWorkspaceId: "cw_test",
+      visibility: "workspace",
       createdByUserId: "user_1",
       createdByExternalUserId: "external_1",
       title: "Test",

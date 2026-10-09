@@ -1,5 +1,5 @@
-import { createElement, type ReactNode } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { ConversationListItem, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
@@ -172,7 +172,7 @@ describe("workspace rail branding", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(WorkspaceRail, {
           config,
           collaborationWorkspaceSelector: null,
@@ -188,6 +188,8 @@ describe("workspace rail branding", () => {
           onCreateConversation: noop,
           onSelectConversation: noop,
           onRenameConversation: async () => undefined,
+          canMoveConversation: false,
+          onMoveConversation: noop,
           onDeleteConversation: noop
         })
       )
@@ -210,7 +212,7 @@ describe("workspace rail branding", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(WorkspaceRail, {
           config,
           collaborationWorkspaceSelector: null,
@@ -226,6 +228,8 @@ describe("workspace rail branding", () => {
           onCreateConversation: noop,
           onSelectConversation: noop,
           onRenameConversation: async () => undefined,
+          canMoveConversation: false,
+          onMoveConversation: noop,
           onDeleteConversation: noop
         })
       )
@@ -249,7 +253,7 @@ function renderRail(
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "en" },
+      { children: null, locale: "en" },
       createElement(WorkspaceRail, {
         config: railConfig,
         collaborationWorkspaceSelector,
@@ -563,7 +567,7 @@ describe("workspace rail conversation rows", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale },
+        { children: null, locale },
         createElement(WorkspaceRail, {
           config: { ...railConfig, retention: { expireConversations } } as SafeConfig,
           conversations,

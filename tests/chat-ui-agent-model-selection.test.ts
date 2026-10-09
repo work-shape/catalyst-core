@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { ModelPicker } from "../packages/chat-ui/src/assistant/model-picker";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import {
@@ -99,7 +99,7 @@ function renderPicker(models: AgentSelectableModel[]) {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "en" as const },
+      { children: null, locale: "en" as const },
       createElement(ModelPicker, {
         models,
         selectedModelBindingId: models[0]?.bindingId,

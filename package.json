@@ -33,16 +33,25 @@
     "typecheck:docs": "pnpm --filter @vivd-catalyst/docs typecheck"
   },
   "devDependencies": {
+    "@assistant-ui/react": "^0.14.26",
     "@playwright/test": "^1.60.0",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@univerjs/core": "0.25.1",
     "@vitejs/plugin-react": "^6.0.2",
     "@vivd-catalyst/quality-config": "workspace:*",
     "drizzle-kit": "^0.31.10",
+    "exceljs": "4.4.0",
+    "jszip": "3.10.1",
     "postgres": "^3.4.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
+    "xlsx": "0.18.5",
     "zod": "^4.4.3"
   }
 }

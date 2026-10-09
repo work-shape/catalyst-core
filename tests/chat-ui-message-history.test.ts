@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { fromThreadMessageLike } from "../packages/chat-ui/node_modules/@assistant-ui/react";
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { fromThreadMessageLike } from "@assistant-ui/react";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentRunProjection, Message } from "@vivd-catalyst/api-client";
 import {
   createAssistantFinalMetadata,
@@ -445,11 +445,15 @@ describe("chat UI message history projection", () => {
         runDurationMs: 102_000
       }
     });
+    const metadata = projected[0]?.metadata;
+    if (!isRecord(metadata) || !isRecord(metadata.custom)) {
+      throw new Error("Expected completed-run custom metadata");
+    }
     const normalizedMessage = fromThreadMessageLike(
       {
         role: "assistant",
         content: [],
-        metadata: projected[0]?.metadata
+        metadata: { custom: metadata.custom }
       },
       "msg_web_answer",
       { type: "complete", reason: "stop" }
@@ -631,10 +635,7 @@ describe("chat UI message history projection", () => {
             }
           },
           modelOutput: {
-            status: "success",
-            output: {
-              ok: true
-            }
+            text: JSON.stringify({ ok: true })
           }
         })
       },
@@ -758,3 +759,7 @@ describe("chat UI message history projection", () => {
     });
   });
 });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

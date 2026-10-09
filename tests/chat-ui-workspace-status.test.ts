@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import {
@@ -12,7 +12,7 @@ describe("workspace config status", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(ConfigCheckPanel, { className: undefined, error: undefined })
       )
     );
@@ -26,7 +26,7 @@ describe("workspace config status", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(ConfigCheckPanel, { className: undefined, error: "" })
       )
     );
@@ -41,7 +41,7 @@ describe("workspace session status", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(SessionCheckPanel, {
           className: undefined,
           unavailable: true,
@@ -61,7 +61,7 @@ describe("workspace session status", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(SessionCheckPanel, {
           className: undefined,
           unavailable: false,

@@ -228,7 +228,7 @@ describe("chat UI product run transport", () => {
     };
     const transport = new ProductConversationRunTransport({
       client,
-      conversationId: "conv_existing",
+      selectedConversationId: "conv_existing",
       locale: "en",
       isSendDisabled: () => "Conversation is still running"
     });
@@ -285,6 +285,8 @@ function createStartResponse({
     conversation: {
       id: conversationId,
       clientInstanceId: "client_1",
+      collaborationWorkspaceId: "cw_test",
+      visibility: "workspace",
       createdByUserId: "user_1",
       createdByExternalUserId: "external_1",
       title: "Test",
@@ -318,6 +320,8 @@ function createStartResponse({
       conversation: {
         id: conversationId,
         clientInstanceId: "client_1",
+        collaborationWorkspaceId: "cw_test",
+        visibility: "workspace",
         createdByUserId: "user_1",
         createdByExternalUserId: "external_1",
         title: "Test",

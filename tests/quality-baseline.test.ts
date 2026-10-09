@@ -181,7 +181,7 @@ describe("quality baseline", () => {
     });
   });
 
-  it("holds test type errors to the count that CB-2b owns", () => {
+  it("holds a recorded test type error count in both directions", () => {
     const errors = {
       target: "types:tests",
       rule: "typescript/test-errors",
@@ -200,17 +200,14 @@ describe("quality baseline", () => {
     ]);
   });
 
-  it("names CB-2b as the owner of every recorded test type error", async () => {
+  it("records no exception for test type errors", async () => {
     const recorded: unknown = JSON.parse(
       await readFile(new URL("../quality-baseline.json", import.meta.url), "utf8")
     );
     const { entries } = z
       .object({ entries: z.array(z.object({ rule: z.string(), owner: z.string().min(1) })) })
       .parse(recorded);
-    const owners = entries
-      .filter((item) => item.rule === "typescript/test-errors")
-      .map((item) => item.owner);
-    expect(owners.length).toBeGreaterThan(0);
-    expect(new Set(owners)).toEqual(new Set(["CB-2b"]));
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.filter((item) => item.rule === "typescript/test-errors")).toEqual([]);
   });
 });

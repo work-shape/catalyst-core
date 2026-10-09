@@ -5,6 +5,7 @@ import {
   asManagedArtifactId,
   resolveArtifactPreviewLifecycle,
   type ArtifactPreviewJobRecord,
+  type JsonObject,
   type ArtifactPreviewManifest
 } from "@vivd-catalyst/core";
 
@@ -103,7 +104,7 @@ function readyManifest(): Extract<ArtifactPreviewManifest, { status: "ready" }> 
   };
 }
 
-function failedManifest(): Extract<ArtifactPreviewManifest, { status: "failed" }> {
+function failedManifest(): Extract<ArtifactPreviewManifest, { status: "failed" | "unsupported" }> {
   return {
     status: "failed",
     clientInstanceId,
@@ -118,7 +119,7 @@ function failedManifest(): Extract<ArtifactPreviewManifest, { status: "failed" }
   };
 }
 
-function embeddedMetadata() {
+function embeddedMetadata(): JsonObject {
   return {
     preview: {
       type: "image_pages",

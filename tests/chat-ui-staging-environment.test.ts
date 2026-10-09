@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { WorkspaceChrome } from "../packages/chat-ui/src/workspace/workspace-chrome";
@@ -15,7 +15,7 @@ function renderWorkspaceChrome(
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale },
+      { children: null, locale },
       createElement(WorkspaceChrome, {
         agentDisplay: { showName: false, showDescriptions: false },
         agents: [],

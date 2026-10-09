@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { MarkdownArtifact } from "../packages/chat-ui/src/markdown-text";
@@ -27,7 +27,7 @@ function renderMarkdown(markdown: string): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "en" },
+      { children: null, locale: "en" },
       createElement(MarkdownArtifact, null, markdown)
     )
   );

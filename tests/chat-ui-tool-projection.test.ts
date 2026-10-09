@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Message } from "@vivd-catalyst/api-client";
 import {
+  asManagedArtifactId,
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,
   createToolResultMetadata,
@@ -392,7 +393,7 @@ describe("chat UI message history projection", () => {
         },
         artifacts: [
           {
-            artifactId: "art_final",
+            artifactId: asManagedArtifactId("art_final"),
             kind: "document.pdf",
             filename: "final-report.pdf",
             mimeType: "application/pdf",

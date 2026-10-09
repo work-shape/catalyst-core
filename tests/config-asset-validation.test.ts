@@ -217,6 +217,7 @@ function refs() {
   return {
     modelProviderIds: ["provider-1"],
     modelBindingIds: ["binding-1"],
+    fastModeModelBindingIds: [],
     enabledToolNames: ["search", "read_skill"]
   };
 }

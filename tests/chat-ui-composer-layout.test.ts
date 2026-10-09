@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { shouldExpandComposer } from "../packages/chat-ui/src/assistant/assistant-composer";
 import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
@@ -10,11 +10,13 @@ const agents = [
     name: "application_assistant",
     displayName: "Application Assistant",
     description: "Help with application review.",
+    selectableModels: [],
     initialPrompts: []
   },
   {
     name: "research_assistant",
     displayName: "Research Assistant",
+    selectableModels: [],
     initialPrompts: []
   }
 ];
@@ -23,7 +25,7 @@ function renderWelcomeHeading(availableAgents: typeof agents) {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "en" as const },
+      { children: null, locale: "en" as const },
       createElement(ThreadWelcomeHeading, {
         agent: availableAgents.at(-1),
         agentDisplay: { showName: true, showDescriptions: false },

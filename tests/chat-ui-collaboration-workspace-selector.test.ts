@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { CollaborationWorkspaceWithRole, SafeConfig } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
@@ -20,6 +20,7 @@ function collaborationWorkspace(
     name: "Workspace",
     description: null,
     visibility: "discoverable",
+    defaultConversationVisibility: "workspace",
     emoji: null,
     accentColor: null,
     personalUserId: null,
@@ -48,7 +49,7 @@ function renderMenu(
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "de" },
+      { children: null, locale: "de" },
       createElement(CollaborationWorkspaceSelectorMenu, {
         collaborationWorkspaces,
         activeCollaborationWorkspaceId,
@@ -184,7 +185,7 @@ describe("collaboration workspace selector", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(CollaborationWorkspaceSelectorMenu, {
           collaborationWorkspaces: [],
           activeCollaborationWorkspaceId: undefined,
@@ -218,7 +219,7 @@ describe("collaboration workspace selector", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { children: null, locale: "en" },
         createElement(CollaborationWorkspaceSelector, {
           collaborationWorkspaces: [personal],
           activeCollaborationWorkspaceId: "cw_personal",
@@ -245,7 +246,7 @@ describe("collaboration workspace selector client branding", () => {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "de" },
+        { children: null, locale: "de" },
         createElement(CollaborationWorkspaceSelectorMenu, {
           collaborationWorkspaces: [personal],
           activeCollaborationWorkspaceId: "cw_personal",

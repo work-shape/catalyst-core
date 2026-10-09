@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { isJsonObject } from "@vivd-catalyst/core";
 import { defineTool } from "@vivd-catalyst/tool-sdk";
 
 describe("tool SDK", () => {
@@ -67,8 +68,11 @@ describe("tool SDK", () => {
       }
     });
 
-    const labels = (tool.inputJsonSchema.properties as Record<string, Record<string, unknown>>)
-      .labels;
+    const properties = tool.inputJsonSchema.properties;
+    if (!isJsonObject(properties) || !isJsonObject(properties.labels)) {
+      throw new Error("Expected an object schema for labels");
+    }
+    const labels = properties.labels;
     expect(labels.type).toBe("object");
     expect(labels.additionalProperties).toEqual({ type: "string" });
     expect(tool.inputJsonSchema.additionalProperties).toBe(false);

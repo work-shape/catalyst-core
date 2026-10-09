@@ -110,7 +110,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unnecessary-type-assertion",
       "scope": "tests",
-      "count": 128,
+      "count": 126,
       "owner": "CB-2"
     },
     {
@@ -208,7 +208,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 97,
+      "count": 93,
       "owner": "CB-2"
     },
     {
@@ -411,7 +411,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 218,
+      "count": 170,
       "owner": "CB-2"
     },
     {
@@ -593,7 +593,7 @@
       "target": "lint",
       "rule": "knip/unlisted",
       "scope": "tests",
-      "count": 59,
+      "count": 3,
       "owner": "CB-2"
     },
     {
@@ -931,20 +931,6 @@
       "scope": "packages/tool-execution",
       "count": 3,
       "owner": "EW-1"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/test-errors",
-      "scope": "packages/chat-ui",
-      "count": 1,
-      "owner": "CB-2b"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/test-errors",
-      "scope": "tests",
-      "count": 101,
-      "owner": "CB-2b"
     },
     {
       "target": "types:tests",

@@ -162,6 +162,7 @@ describe("conversation list cache targeting", () => {
       id: "conv_2",
       clientInstanceId: "client_1",
       collaborationWorkspaceId,
+      visibility: "workspace",
       createdByUserId: "user_1",
       createdByExternalUserId: "external_1",
       title: "Moved conversation",

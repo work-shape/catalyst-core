@@ -1,5 +1,5 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
-import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
@@ -13,14 +13,16 @@ const oneAgent = [
     name: "catalyst_assistant",
     displayName: "Catalyst Assistant",
     description: "Answers questions about Catalyst.",
+    selectableModels: [],
     initialPrompts: []
   }
-];
+] satisfies [Parameters<typeof WorkspaceChrome>[0]["agents"][number]];
 const severalAgents = [
   ...oneAgent,
   {
     name: "research_assistant",
     displayName: "Research Assistant",
+    selectableModels: [],
     initialPrompts: []
   }
 ];
@@ -44,7 +46,7 @@ function renderHeader({
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale },
+      { children: null, locale },
       createElement(WorkspaceChrome, {
         agentDisplay: display({ showAgentName }),
         agents,
@@ -67,7 +69,7 @@ function renderStartPage(agents: typeof severalAgents, showAgentName = true, sho
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { locale: "en" as const },
+      { children: null, locale: "en" as const },
       createElement(ThreadWelcomeHeading, {
         agent: agents[0],
         agentDisplay: display({ showAgentName }),
@@ -213,13 +215,17 @@ describe("agent chip on the start page without the name", () => {
 
 describe("agent list", () => {
   function renderList(showAgentDescriptions: boolean | undefined) {
+    const selectedAgent = severalAgents[0];
+    if (!selectedAgent) {
+      throw new Error("Expected an agent fixture");
+    }
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" as const },
+        { children: null, locale: "en" as const },
         createElement(AgentList, {
           agents: severalAgents,
-          selectedAgent: severalAgents[0],
+          selectedAgent,
           showDescriptions: display({ showAgentDescriptions }).showDescriptions,
           onSelectAgent: noop
         })
