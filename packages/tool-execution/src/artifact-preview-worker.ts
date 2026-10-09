@@ -15,6 +15,7 @@ import {
 import { readArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import {
   LibreOfficeArtifactPreviewRenderer,
+  type ArtifactPreviewRenderedModelImage,
   type ArtifactPreviewRenderedPage,
   type ArtifactPreviewRenderResult,
   type ArtifactPreviewRenderer
@@ -30,6 +31,7 @@ import type { DeletableWorkspaceObjectStorage } from "./workspace-file-bytes";
 export {
   LibreOfficeArtifactPreviewRenderer,
   SPREADSHEET_PREVIEW_MAX_CELLS,
+  type ArtifactPreviewRenderedModelImage,
   type ArtifactPreviewRenderedPage,
   type ArtifactPreviewRenderInput,
   type ArtifactPreviewRenderResult,
@@ -454,6 +456,9 @@ export class ArtifactPreviewWorker {
           input.rendered.format
         );
         const previewRole = previewRoleForPage(input.sourceKind, page);
+        const modelImage = page.modelImage
+          ? await this.stageModelImage(page.modelImage, objectKey, filename, objectKeys)
+          : undefined;
         previewArtifacts.push({
           sourceFileId: input.source.sourceFileId,
           kind: previewArtifactKind(input.sourceKind, page),
@@ -476,7 +481,8 @@ export class ArtifactPreviewWorker {
           ...(page.sheet ? { sheet: page.sheet } : {}),
           ...(page.range ? { range: page.range } : {}),
           ...(page.width ? { width: page.width } : {}),
-          ...(page.height ? { height: page.height } : {})
+          ...(page.height ? { height: page.height } : {}),
+          ...(modelImage ? { modelImage } : {})
         });
       }
       return { previewArtifacts, objectKeys };
@@ -484,6 +490,32 @@ export class ArtifactPreviewWorker {
       await this.deleteStagedObjects(objectKeys);
       throw previewFailure("storage_failed", true);
     }
+  }
+
+  /** Stores the model's rendition of a page beside the page image and records its key. */
+  private async stageModelImage(
+    image: ArtifactPreviewRenderedModelImage,
+    pageObjectKey: string,
+    pageFilename: string,
+    objectKeys: string[]
+  ): Promise<NonNullable<ArtifactPreviewImageArtifactInput["modelImage"]>> {
+    const extension = imageExtension(image.mimeType);
+    const objectKey = `${withoutExtension(pageObjectKey)}.model.${extension}`;
+    objectKeys.push(objectKey);
+    await this.objectStore.putObject({
+      key: objectKey,
+      body: image.bytes,
+      contentType: image.mimeType
+    });
+    return {
+      objectKey,
+      filename: `${withoutExtension(pageFilename)}.model.${extension}`,
+      mimeType: image.mimeType,
+      byteSize: image.bytes.byteLength,
+      checksum: checksumBytes(image.bytes),
+      ...(image.width ? { width: image.width } : {}),
+      ...(image.height ? { height: image.height } : {})
+    };
   }
 
   private async deleteStagedObjects(objectKeys: string[]): Promise<void> {
@@ -593,6 +625,14 @@ function previewRoleForSourceKind(sourceKind: ArtifactPreviewSourceKind): string
     return "sheet";
   }
   return "page";
+}
+
+function withoutExtension(name: string): string {
+  return name.slice(0, name.length - extname(name).length);
+}
+
+function imageExtension(mimeType: ArtifactPreviewRenderedModelImage["mimeType"]): string {
+  return mimeType === "image/jpeg" ? "jpg" : mimeType.slice("image/".length);
 }
 
 function checksumBytes(bytes: Uint8Array): string {

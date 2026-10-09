@@ -8,8 +8,12 @@ import type {
   ArtifactPreviewSourceKind
 } from "@vivd-catalyst/core";
 import {
+  boundedPdfPageResolution,
   convertOfficeDocument,
   inspectPdf,
+  MODEL_PAGE_IMAGE_FORMAT,
+  MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS,
+  MODEL_PAGE_IMAGE_MIME_TYPE,
   NativeProcessError,
   renderPdfPage
 } from "@vivd-catalyst/document-execution";
@@ -51,6 +55,15 @@ export interface ArtifactPreviewRenderedPage {
   slideNumber?: number;
   sheet?: string;
   range?: string;
+  width?: number;
+  height?: number;
+  /** The same page encoded for a model to read; the page image above is the one a person sees. */
+  modelImage?: ArtifactPreviewRenderedModelImage;
+}
+
+export interface ArtifactPreviewRenderedModelImage {
+  bytes: Uint8Array;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
   width?: number;
   height?: number;
 }
@@ -121,13 +134,10 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       const pages: ArtifactPreviewRenderedPage[] = [];
       let outputBytes = 0;
       for (const pageNumber of pageNumbers) {
-        const bytes = await this.rasterizePdfPage({
-          input,
-          outputDirectory,
-          pageNumber,
-          pdfPath
-        });
-        outputBytes += bytes.byteLength;
+        const rasterInput = { input, outputDirectory, pageNumber, pdfPath };
+        const bytes = await this.rasterizePdfPage(rasterInput);
+        const modelImage = await this.rasterizeModelImage(rasterInput);
+        outputBytes += bytes.byteLength + modelImage.bytes.byteLength;
         if (outputBytes > input.maxOutputBytes) {
           throw previewFailure("output_too_large", false);
         }
@@ -136,7 +146,8 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
           mimeType: "image/png",
           ...(input.sourceKind === "document" || input.sourceKind === "pdf" ? { pageNumber } : {}),
           ...(input.sourceKind === "presentation" ? { slideNumber: pageNumber } : {}),
-          ...readPngDimensions(bytes)
+          ...readPngDimensions(bytes),
+          modelImage
         });
       }
       return { format: "png", pages, pageCount };
@@ -177,13 +188,10 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       if (pageCount <= 0) {
         throw previewFailure("page_limit_exceeded", false);
       }
-      const bytes = await this.rasterizePdfPage({
-        input,
-        outputDirectory,
-        pageNumber: 1,
-        pdfPath
-      });
-      outputBytes += bytes.byteLength;
+      const rasterInput = { input, outputDirectory, pageNumber: 1, pdfPath };
+      const bytes = await this.rasterizePdfPage(rasterInput);
+      const modelImage = await this.rasterizeModelImage(rasterInput);
+      outputBytes += bytes.byteLength + modelImage.bytes.byteLength;
       if (outputBytes > input.maxOutputBytes) {
         throw previewFailure("output_too_large", false);
       }
@@ -192,7 +200,8 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
         mimeType: "image/png",
         sheet: selection.sheetName,
         ...(selection.metadataRange ? { range: selection.metadataRange } : {}),
-        ...readPngDimensions(bytes)
+        ...readPngDimensions(bytes),
+        modelImage
       });
     }
 
@@ -222,6 +231,43 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
         throw previewFailure("output_too_large", false);
       }
       return bytes;
+    } catch (error) {
+      throw mapNativePreviewFailure(error, "rasterization_failed", "rasterization_failed");
+    }
+  }
+
+  /** A second, smaller rendering of the page for the model; the page image is left as it is. */
+  private async rasterizeModelImage(input: {
+    input: ArtifactPreviewRenderInput;
+    outputDirectory: string;
+    pageNumber: number;
+    pdfPath: string;
+  }): Promise<ArtifactPreviewRenderedModelImage> {
+    try {
+      const { pageSize } = await inspectPdf({
+        command: this.pdfInfoCommand,
+        pdfPath: input.pdfPath,
+        pageNumber: input.pageNumber,
+        timeoutMs: input.input.rasterizationTimeoutMs,
+        signal: input.input.signal
+      });
+      const bytes = await renderPdfPage({
+        command: this.pdfToPpmCommand,
+        pdfPath: input.pdfPath,
+        outputDirectory: input.outputDirectory,
+        pageNumber: input.pageNumber,
+        resolution: pageSize
+          ? boundedPdfPageResolution({
+              pageSize,
+              dpi: input.input.previewDpi,
+              maxLongEdgePixels: MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS
+            })
+          : { maxLongEdgePixels: MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS },
+        format: MODEL_PAGE_IMAGE_FORMAT,
+        timeoutMs: input.input.rasterizationTimeoutMs,
+        signal: input.input.signal
+      });
+      return { bytes, mimeType: MODEL_PAGE_IMAGE_MIME_TYPE, ...readJpegDimensions(bytes) };
     } catch (error) {
       throw mapNativePreviewFailure(error, "rasterization_failed", "rasterization_failed");
     }
@@ -564,4 +610,20 @@ function readPngDimensions(bytes: Uint8Array): { width?: number; height?: number
     width: view.getUint32(16),
     height: view.getUint32(20)
   };
+}
+
+/** Width and height from the frame header of a JPEG; nothing when the bytes hold none. */
+function readJpegDimensions(bytes: Uint8Array): { width?: number; height?: number } {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 2;
+  while (offset + 9 <= bytes.byteLength && view.getUint8(offset) === 0xff) {
+    const marker = view.getUint8(offset + 1);
+    const isFrameHeader =
+      marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (isFrameHeader) {
+      return { width: view.getUint16(offset + 7), height: view.getUint16(offset + 5) };
+    }
+    offset += 2 + view.getUint16(offset + 2);
+  }
+  return {};
 }

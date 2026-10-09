@@ -610,10 +610,7 @@ describe("ArtifactPreviewWorker", () => {
       const pdfInfo = join(bin, "fake-pdfinfo");
       const pdfToPpm = join(bin, "fake-pdftoppm");
       await writeExecutable(pdfInfo, `#!/usr/bin/env node\nconsole.log("Pages: 1");\n`);
-      await writeExecutable(
-        pdfToPpm,
-        `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst prefix = process.argv[process.argv.length - 1];\nfs.writeFileSync(prefix + ".png", Buffer.from("${onePixelPngHex()}", "hex"));\n`
-      );
+      await writeExecutable(pdfToPpm, fakePdfToPpmScript());
 
       const renderer = new LibreOfficeArtifactPreviewRenderer({
         tempRootDirectory: missingTempRoot,
@@ -645,6 +642,126 @@ describe("ArtifactPreviewWorker", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("renders each page a second time for the model and leaves the page image as it was", async () => {
+    const root = await mkdtemp(join(tmpdir(), "artifact-preview-renderer-model-image-"));
+    try {
+      const pdfInfo = join(root, "fake-pdfinfo");
+      const pdfToPpm = join(root, "fake-pdftoppm");
+      const argumentLog = join(root, "pdftoppm-arguments.log");
+      await writeExecutable(
+        pdfInfo,
+        `#!/usr/bin/env node\nconsole.log("Pages: 1\\nPage    1 size: 595 x 842 pts (A4)");\n`
+      );
+      await writeExecutable(pdfToPpm, fakePdfToPpmScript(argumentLog));
+
+      const result = await new LibreOfficeArtifactPreviewRenderer({
+        pdfInfoCommand: pdfInfo,
+        pdfToPpmCommand: pdfToPpm
+      }).render({
+        sourceKind: "pdf",
+        filename: "source.pdf",
+        mimeType: "application/pdf",
+        bytes: bytes("%PDF fake"),
+        maxPages: 1,
+        maxConvertedPdfBytes: 1024 * 1024,
+        maxOutputBytes: 1024 * 1024,
+        maxRasterDimension: 4096,
+        previewDpi: 144,
+        outputFormat: "png",
+        conversionTimeoutMs: 1000,
+        rasterizationTimeoutMs: 1000
+      });
+
+      const [page] = result.pages;
+      if (!page || result.pages.length !== 1) {
+        throw new Error("Expected one rendered page");
+      }
+      expect(Buffer.from(page.bytes).toString("hex")).toBe(onePixelPngHex());
+      expect(page).toMatchObject({ mimeType: "image/png", pageNumber: 1, width: 1, height: 1 });
+      expect(page.modelImage).toMatchObject({ mimeType: "image/jpeg", width: 1109, height: 1568 });
+      const calls = (await readFile(argumentLog, "utf8")).trim().split("\n");
+      expect(calls.map((line): unknown => JSON.parse(line))).toEqual([
+        ["-png", "-singlefile", "-r", "144", "-scale-to", "4096", "-f", "1", "-l", "1"],
+        [
+          "-jpeg",
+          "-jpegopt",
+          "quality=80",
+          "-singlefile",
+          "-scale-to",
+          "1568",
+          "-f",
+          "1",
+          "-l",
+          "1"
+        ]
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("stores the model's rendition beside the page image a person sees", async () => {
+    const fixture = await createWorkerFixture();
+    const renderer = new FakeRenderer({
+      result: {
+        format: "png",
+        pages: [
+          {
+            bytes: bytes("page-one-for-a-person"),
+            mimeType: "image/png",
+            pageNumber: 1,
+            width: 2895,
+            height: 4096,
+            modelImage: {
+              bytes: bytes("page-one-for-the-model"),
+              mimeType: "image/jpeg",
+              width: 1109,
+              height: 1568
+            }
+          }
+        ]
+      }
+    });
+
+    await createWorker(fixture, renderer).runOnce();
+
+    const manifest = await fixture.store.files.getArtifactPreviewManifest({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
+    });
+    const page = manifest?.status === "ready" ? manifest.pages[0] : undefined;
+    if (!page?.modelImage) {
+      throw new Error("Expected a ready preview page with a model image");
+    }
+    expect(page).toMatchObject({ mimeType: "image/png", pageNumber: 1, width: 2895, height: 4096 });
+    expect(page.modelImage).toMatchObject({ mimeType: "image/jpeg", width: 1109, height: 1568 });
+    const read = async (artifactId: ManagedArtifactRecord["id"]) => {
+      const artifact = await fixture.store.files.getManagedArtifact({
+        clientInstanceId: fixture.clientInstanceId,
+        artifactId
+      });
+      if (!artifact) {
+        throw new Error("Expected a stored preview artifact");
+      }
+      return { artifact, bytes: await fixture.objectStore.getObject(artifact.objectKey) };
+    };
+    const forPerson = await read(page.artifactId);
+    expect(forPerson.bytes).toEqual(bytes("page-one-for-a-person"));
+    expect(forPerson.artifact).toMatchObject({
+      mimeType: "image/png",
+      filename: expect.stringMatching(/\.png$/u)
+    });
+    expect(forPerson.artifact.metadata).not.toHaveProperty("previewRendition");
+    const forModel = await read(page.modelImage.artifactId);
+    expect(forModel.bytes).toEqual(bytes("page-one-for-the-model"));
+    expect(forModel.artifact).toMatchObject({
+      kind: "document.preview_page_image",
+      mimeType: "image/jpeg",
+      filename: expect.stringMatching(/\.model\.jpg$/u),
+      metadata: { sourceArtifactId: fixture.source.id, previewRendition: "model", pageNumber: 1 }
+    });
   });
 
   it("fails without retrying when the source artifact exceeds the size limit", async () => {
@@ -999,10 +1116,7 @@ async function writeFakeRendererCommands(root: string): Promise<{
     `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst path = require("node:path");\nconst args = process.argv.slice(2);\nconst source = args[args.length - 1];\nconst outdir = args[args.indexOf("--outdir") + 1];\nfs.copyFileSync(source, ${JSON.stringify(convertedSourcePath)});\nfs.writeFileSync(path.join(outdir, path.basename(source, path.extname(source)) + ".pdf"), "%PDF-1.4");\n`
   );
   await writeExecutable(options.pdfInfoCommand, `#!/usr/bin/env node\nconsole.log("Pages: 1");\n`);
-  await writeExecutable(
-    options.pdfToPpmCommand,
-    `#!/usr/bin/env node\nconst fs = require("node:fs");\nconst prefix = process.argv[process.argv.length - 1];\nfs.writeFileSync(prefix + ".png", Buffer.from("${onePixelPngHex()}", "hex"));\n`
-  );
+  await writeExecutable(options.pdfToPpmCommand, fakePdfToPpmScript());
   return { convertedSourcePath, options };
 }
 
@@ -1022,6 +1136,46 @@ function imageDigest(bytes: Uint8Array): string {
 async function writeExecutable(path: string, content: string): Promise<void> {
   await writeFile(path, content, "utf8");
   await chmod(path, 0o755);
+}
+
+/**
+ * Stands in for pdftoppm: a one-pixel PNG, or for a JPEG call a frame header of 1109 by 1568
+ * pixels. With a log path it appends the arguments of each call as one JSON line.
+ */
+function fakePdfToPpmScript(argumentLogPath?: string): string {
+  return [
+    "#!/usr/bin/env node",
+    'const fs = require("node:fs");',
+    "const args = process.argv.slice(2);",
+    ...(argumentLogPath
+      ? [
+          `fs.appendFileSync(${JSON.stringify(argumentLogPath)}, JSON.stringify(args.slice(0, -2)) + "\\n");`
+        ]
+      : []),
+    'if (args.includes("-jpeg")) {',
+    `  fs.writeFileSync(args.at(-1) + ".jpg", Buffer.from("${modelJpegHex()}", "hex"));`,
+    "} else {",
+    `  fs.writeFileSync(args.at(-1) + ".png", Buffer.from("${onePixelPngHex()}", "hex"));`,
+    "}",
+    ""
+  ].join("\n");
+}
+
+function modelJpegHex(): string {
+  // Start of image, a baseline frame header (height 0x0620, width 0x0455, three components), end.
+  return [
+    "ffd8",
+    "ffc0",
+    "0011",
+    "08",
+    "0620",
+    "0455",
+    "03",
+    "012200",
+    "021101",
+    "031101",
+    "ffd9"
+  ].join("");
 }
 
 function onePixelPngHex(): string {

@@ -1,9 +1,11 @@
 import { and, eq, inArray, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
+  type ArtifactPreviewImageArtifactInput,
   type ArtifactPreviewImagePageRef,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
+  type ArtifactPreviewModelImageRef,
   type ClaimNextArtifactPreviewJobInput,
   type ClientInstanceId,
   type CompleteClaimedArtifactPreviewJobInput,
@@ -14,6 +16,7 @@ import {
   type RecoverStaleArtifactPreviewJobsInput,
   type RenewClaimedArtifactPreviewJobLeaseInput,
   type WriteArtifactPreviewManifestInput,
+  asManagedArtifactId,
   createPlatformId,
   normalizeArtifactPreviewIdentity
 } from "@vivd-catalyst/core";
@@ -589,6 +592,14 @@ async function createPreviewArtifacts(
     if (!artifact) {
       throw new AppError("INTERNAL", "Artifact preview image artifact could not be created");
     }
+    const modelImage = artifactInput.modelImage
+      ? await createPreviewModelImageArtifact(tx, {
+          job: input.job,
+          completedAt: input.completedAt,
+          page: artifactInput,
+          image: artifactInput.modelImage
+        })
+      : undefined;
     pages.push({
       artifactId: artifact.id as ArtifactPreviewImagePageRef["artifactId"],
       mimeType: artifactInput.mimeType,
@@ -598,10 +609,51 @@ async function createPreviewArtifacts(
       ...(artifactInput.sheet ? { sheet: artifactInput.sheet } : {}),
       ...(artifactInput.range ? { range: artifactInput.range } : {}),
       ...(artifactInput.width ? { width: artifactInput.width } : {}),
-      ...(artifactInput.height ? { height: artifactInput.height } : {})
+      ...(artifactInput.height ? { height: artifactInput.height } : {}),
+      ...(modelImage ? { modelImage } : {})
     });
   }
   return pages;
+}
+
+/** The model's rendition of a page: an artifact of the page's kind, marked by its rendition. */
+async function createPreviewModelImageArtifact(
+  tx: PreviewTransaction,
+  input: {
+    job: ArtifactPreviewJobRow;
+    completedAt: Date;
+    page: ArtifactPreviewImageArtifactInput;
+    image: NonNullable<ArtifactPreviewImageArtifactInput["modelImage"]>;
+  }
+): Promise<ArtifactPreviewModelImageRef> {
+  const { image } = input;
+  const [artifact] = await tx
+    .insert(managedArtifacts)
+    .values({
+      id: createPlatformId<"ManagedArtifactId">("art"),
+      clientInstanceId: input.job.clientInstanceId,
+      conversationId: input.job.conversationId,
+      sourceFileId: input.page.sourceFileId ?? null,
+      kind: input.page.kind,
+      objectKey: image.objectKey,
+      filename: image.filename ?? null,
+      mimeType: image.mimeType,
+      byteSize: image.byteSize,
+      checksum: image.checksum,
+      metadata: { ...input.page.metadata, previewRendition: "model" },
+      status: "available",
+      createdAt: input.completedAt
+    })
+    .returning();
+  if (!artifact) {
+    throw new AppError("INTERNAL", "Artifact preview model image artifact could not be created");
+  }
+  return {
+    artifactId: asManagedArtifactId(artifact.id),
+    mimeType: image.mimeType,
+    ...(image.width ? { width: image.width } : {}),
+    ...(image.height ? { height: image.height } : {})
+  };
 }
 
 async function writeTerminalPreviewManifest(

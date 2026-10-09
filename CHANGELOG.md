@@ -422,6 +422,15 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   of megabytes and provider compaction items above the provider's string limit. Images a user
   attached to a message are still sent in later runs. One request carries at most 32 MiB of image
   bytes (`MODEL_INPUT_IMAGES_MAX_BYTES`); above that the oldest images are named instead of sent.
+- **Models:** the image of a page, slide or sheet that the model reads is a rendition of its
+  own: JPEG at quality 80 with a long edge of at most 1568 pixels
+  (`MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS`), 0.06 to 0.45 MB a page. The preview worker renders
+  it beside each preview page and `workspace.preview_images` gives it to the model; the PNG a
+  person sees in a preview is unchanged. The model used to be given that PNG, which the
+  renderer scales to 4096 pixels: 0.9 MB for a text page and 17 MB for a colour scan. A preview
+  rendered before this release has no such rendition, and the model is given its PNG, counted
+  at its real size against the image budget. The artifact preview worker must run this release
+  for new previews to carry the rendition.
 - **Models:** a run waits out a provider's per-minute rate limit. On HTTP 429, or the same
   refusal inside a stream, a model call waits about 4 s, 8 s, 16 s and 32 s, up to 60 s in
   total, and never sooner than the provider's `Retry-After`; a `Retry-After` beyond what is

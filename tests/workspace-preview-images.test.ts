@@ -8,6 +8,7 @@ import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/mode
 import { createWorkspaceHarness, encode } from "./support/workspace-tools-harness";
 
 describe("workspace.preview_images", () => {
+  // The page here was rendered before the model's rendition existed: its PNG still reaches the model.
   it("loads ready preview images as model-visible artifacts without exposing internal storage", async () => {
     const harness = await createWorkspaceHarness();
     const source = await harness.store.files.createManagedArtifact({
@@ -140,6 +141,134 @@ describe("workspace.preview_images", () => {
     expect(modelOutput.text).toContain("[Visual context loaded]");
     expect(modelOutput.text).toContain("page: 1");
     expect(modelOutput.text).toContain("size: 640x480");
+  });
+
+  it("gives the model the smaller rendition of a page and keeps naming the page image a person sees", async () => {
+    const harness = await createWorkspaceHarness();
+    const source = await harness.store.files.createManagedArtifact({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      kind: "document.pdf",
+      objectKey: "execution-workspaces/private/contract.pdf",
+      filename: "contract.pdf",
+      mimeType: "application/pdf",
+      byteSize: 128,
+      checksum: "sha256:contract"
+    });
+    const personBytes = encode("page-1-png-for-a-person");
+    const modelBytes = encode("page-1-jpeg-for-the-model");
+    const createPreviewImage = (
+      objectKey: string,
+      mimeType: string,
+      imageBytes: Uint8Array,
+      rendition: { previewRendition?: string }
+    ) => {
+      harness.objectStore.putObject(objectKey, imageBytes);
+      return harness.store.files.createManagedArtifact({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id,
+        kind: "document.preview_page_image",
+        objectKey,
+        filename: objectKey.slice(objectKey.lastIndexOf("/") + 1),
+        mimeType,
+        byteSize: imageBytes.byteLength,
+        checksum: `sha256:${objectKey}`,
+        metadata: { sourceArtifactId: source.id, previewRole: "page", pageNumber: 1, ...rendition }
+      });
+    };
+    const personImage = await createPreviewImage(
+      "artifact-previews/private/contract-page-1.png",
+      "image/png",
+      personBytes,
+      {}
+    );
+    const modelImage = await createPreviewImage(
+      "artifact-previews/private/contract-page-1.model.jpg",
+      "image/jpeg",
+      modelBytes,
+      { previewRendition: "model" }
+    );
+    await harness.store.files.writeArtifactPreviewManifest({
+      status: "ready",
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      sourceArtifactId: source.id,
+      settingsHash: createArtifactPreviewSettingsHash({ pages: [1], maxImages: 1 }),
+      type: "image_pages",
+      format: "png",
+      pages: [
+        {
+          artifactId: personImage.id,
+          mimeType: "image/png",
+          pageNumber: 1,
+          width: 2895,
+          height: 4096,
+          modelImage: {
+            artifactId: modelImage.id,
+            mimeType: "image/jpeg",
+            width: 1109,
+            height: 1568
+          }
+        }
+      ],
+      writtenAt: "2026-10-10T08:00:00.000Z"
+    });
+
+    const result = await harness.runTool("workspace.preview_images", {
+      artifactId: source.id,
+      pages: [1],
+      maxImages: 1
+    });
+
+    if (result.status !== "success") {
+      throw new Error("Expected preview_images to succeed");
+    }
+    // The answer of the tool still names the page image a person sees.
+    expect(jsonObject(result.output).images).toEqual([
+      {
+        sourceArtifactId: source.id,
+        imageArtifactId: personImage.id,
+        mimeType: "image/png",
+        status: "ready",
+        pageNumber: 1,
+        width: 2895,
+        height: 4096
+      }
+    ]);
+    expect(result.artifacts).toEqual([
+      {
+        artifactId: modelImage.id,
+        kind: "document.preview_page_image",
+        filename: "contract-page-1.model.jpg",
+        mimeType: "image/jpeg",
+        modelVisibility: { type: "image", mimeType: "image/jpeg" },
+        metadata: {
+          sourceArtifactId: source.id,
+          status: "ready",
+          pageNumber: 1,
+          width: 1109,
+          height: 1568
+        }
+      }
+    ]);
+
+    const modelOutput = await createModelVisibleToolOutput(result, {
+      clientInstanceId: harness.clientInstanceId,
+      toolOutput: { maxTokens: 60_000 },
+      artifactReader: createExecutionWorkspaceManagedObjectReader({
+        clientInstanceId: harness.clientInstanceId,
+        files: harness.store.files,
+        byteStore: harness.objectStore
+      })
+    });
+    const imageParts = Array.isArray(modelOutput.content)
+      ? modelOutput.content.filter((part) => part.type === "image")
+      : [];
+    expect(imageParts).toMatchObject([{ type: "image", mimeType: "image/jpeg", data: modelBytes }]);
+    expect(modelOutput.text).toContain(`artifactId: ${source.id}, mimeType: image/jpeg, page: 1`);
+    expect(modelOutput.text).toContain("size: 1109x1568");
+    // The image a person is shown is untouched.
+    expect(await harness.objectStore.getObject(personImage.objectKey)).toEqual(personBytes);
   });
 
   it("loads ready spreadsheet sheet and range previews as model-visible artifacts", async () => {

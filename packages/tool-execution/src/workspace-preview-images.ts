@@ -4,6 +4,7 @@ import {
   detectArtifactPreviewSourceKind,
   readArtifactPreviewLifecycle,
   type ArtifactPreviewLifecyclePageRef,
+  type ArtifactPreviewModelImageRef,
   type ClientInstanceId,
   type JsonObject,
   type ManagedArtifactId,
@@ -52,6 +53,7 @@ interface PreviewImageCandidate {
   range?: string;
   width?: number;
   height?: number;
+  modelImage?: ArtifactPreviewModelImageRef;
 }
 
 type PreviewWarning = WorkspacePreviewImagesOutput["warnings"][number];
@@ -292,7 +294,8 @@ function previewCandidates(pages: ArtifactPreviewLifecyclePageRef[]): PreviewIma
     sheet: page.sheet,
     range: page.range,
     width: page.width,
-    height: page.height
+    height: page.height,
+    modelImage: page.modelImage
   }));
 }
 
@@ -376,17 +379,32 @@ async function previewStateFromReadyImages(
       ...(candidate.width ? { width: candidate.width } : {}),
       ...(candidate.height ? { height: candidate.height } : {})
     });
-    artifacts.push({
-      artifactId: imageArtifact.id,
-      kind: imageArtifact.kind,
-      mimeType,
-      filename: imageArtifact.filename,
-      modelVisibility: {
-        type: "image",
-        mimeType
-      },
-      metadata
-    });
+    const modelImage = await readModelImage(candidate, source, clientInstanceId, store);
+    artifacts.push(
+      modelImage
+        ? {
+            artifactId: modelImage.artifact.id,
+            kind: modelImage.artifact.kind,
+            mimeType: modelImage.mimeType,
+            filename: modelImage.artifact.filename,
+            modelVisibility: { type: "image", mimeType: modelImage.mimeType },
+            metadata: imageMetadata(source.id, {
+              ...candidate,
+              width: modelImage.width,
+              height: modelImage.height
+            })
+          }
+        : {
+            // A page rendered before the model's rendition existed: the model is given the image
+            // a person sees, at its real size, and the request's image budget counts it so.
+            artifactId: imageArtifact.id,
+            kind: imageArtifact.kind,
+            mimeType,
+            filename: imageArtifact.filename,
+            modelVisibility: { type: "image", mimeType },
+            metadata
+          }
+    );
   }
 
   if (candidates.length > 0 && images.length === 0) {
@@ -401,6 +419,47 @@ async function previewStateFromReadyImages(
     warnings,
     artifacts
   });
+}
+
+/**
+ * The rendition of a page made for the model, when the page has one that can still be read.
+ * The output of the tool keeps naming the page image a person sees.
+ */
+async function readModelImage(
+  candidate: PreviewImageCandidate,
+  source: ManagedArtifactRecord,
+  clientInstanceId: ClientInstanceId,
+  store: WorkspacePreviewImagesStore
+): Promise<
+  | {
+      artifact: ManagedArtifactRecord;
+      mimeType: SupportedImageMimeType;
+      width?: number;
+      height?: number;
+    }
+  | undefined
+> {
+  if (!candidate.modelImage) {
+    return undefined;
+  }
+  const artifact = await store.getManagedArtifact({
+    clientInstanceId,
+    artifactId: candidate.modelImage.artifactId
+  });
+  if (
+    !artifact ||
+    artifact.conversationId !== source.conversationId ||
+    artifact.status !== "available" ||
+    artifact.mimeType !== candidate.modelImage.mimeType
+  ) {
+    return undefined;
+  }
+  return {
+    artifact,
+    mimeType: candidate.modelImage.mimeType,
+    width: candidate.modelImage.width,
+    height: candidate.modelImage.height
+  };
 }
 
 function success(

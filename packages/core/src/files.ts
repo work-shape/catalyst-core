@@ -6,6 +6,10 @@ import type {
   ManagedFileId,
   MessageId
 } from "./ids";
+import type {
+  ArtifactPreviewImagePageRef,
+  ArtifactPreviewModelImageInput
+} from "./artifact-preview-pages";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 
@@ -92,18 +96,6 @@ export function isRetryableArtifactPreviewErrorCode(errorCode: string | undefine
     errorCode === "stale_lease" ||
     errorCode === "preview_manifest_missing"
   );
-}
-
-export interface ArtifactPreviewImagePageRef {
-  artifactId: ManagedArtifactId;
-  mimeType: "image/png" | "image/jpeg" | "image/webp";
-  filename?: string;
-  pageNumber?: number;
-  slideNumber?: number;
-  sheet?: string;
-  range?: string;
-  width?: number;
-  height?: number;
 }
 
 export type ArtifactPreviewManifest =
@@ -403,6 +395,7 @@ export interface ArtifactPreviewImageArtifactInput {
   range?: string;
   width?: number;
   height?: number;
+  modelImage?: ArtifactPreviewModelImageInput;
 }
 
 export interface EnqueueArtifactPreviewJobInput {

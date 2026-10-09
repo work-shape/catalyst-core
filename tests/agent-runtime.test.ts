@@ -2976,6 +2976,34 @@ describe("local agent runtime", () => {
     expect(text.match(/\[Visual context loaded\]/gu)).toHaveLength(2);
   });
 
+  it("keeps every page of a run that views fifteen pages in the model's rendition, four times over", async () => {
+    // The largest page measured in the model's rendition on 2026-10-10: a rough colour scan.
+    const roughScanJpegBytes = 446_005;
+    const f = await pageImageFixture("page-images-fifteen-pages", {
+      imageBytes: roughScanJpegBytes
+    });
+    const pages = Array.from({ length: 4 * 15 }, (_, index) => index + 1);
+
+    await f.runToEnd("Read the whole contract", pages);
+
+    expect(f.imageSizes(1)).toEqual(pages.map(() => roughScanJpegBytes));
+    expect(f.text(1)).not.toContain("[Visual context not loaded:");
+  });
+
+  it("counts a page stored as PNG before the model's rendition at its real size", async () => {
+    // The same rough scan as the 160 DPI PNG that pages were stored as before.
+    const roughScanPngBytes = 5_438_051;
+    const f = await pageImageFixture("page-images-old-png", { imageBytes: roughScanPngBytes });
+    const pages = Array.from({ length: 15 }, (_, index) => index + 1);
+
+    await f.runToEnd("Read the whole contract", pages);
+
+    // Six of them fit 32 MiB; the nine oldest are named for loading again.
+    expect(f.imageSizes(1)).toEqual(Array.from({ length: 6 }, () => roughScanPngBytes));
+    expect(f.text(1).match(/\[Visual context not loaded:/gu)).toHaveLength(9);
+    expect(f.text(1).match(/\[Visual context loaded\]/gu)).toHaveLength(6);
+  });
+
   it("drops the images a tool loaded before those the user attached, image by image", async () => {
     const sevenMiB = 7 * 1024 * 1024;
     const f = await pageImageFixture("page-images-user-attached", {

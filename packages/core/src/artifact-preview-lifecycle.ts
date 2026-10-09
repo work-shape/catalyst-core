@@ -6,11 +6,12 @@ import {
   type ArtifactPreviewImagePageRef,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
+  type ArtifactPreviewModelImageRef,
   type ArtifactPreviewStore,
   type ImageFileFormat,
   type SupportedImageMimeType
 } from "./types";
-import type { ClientInstanceId, ManagedArtifactId } from "./ids";
+import { asManagedArtifactId, type ClientInstanceId, type ManagedArtifactId } from "./ids";
 import type { JsonObject } from "./json";
 
 export type ArtifactPreviewLifecycleState =
@@ -37,6 +38,7 @@ export interface ArtifactPreviewLifecyclePageRef {
   range?: string;
   width?: number;
   height?: number;
+  modelImage?: ArtifactPreviewModelImageRef;
 }
 
 export interface ArtifactPreviewContractReady {
@@ -172,6 +174,7 @@ function sanitizePreviewPage(value: unknown): ArtifactPreviewLifecyclePageRef | 
   const slideNumber = readPositiveInteger(page?.slideNumber);
   const width = readPositiveInteger(page?.width);
   const height = readPositiveInteger(page?.height);
+  const modelImage = sanitizeModelImage(page?.modelImage);
   return {
     artifactId: artifactId as ManagedArtifactId,
     mimeType,
@@ -180,6 +183,24 @@ function sanitizePreviewPage(value: unknown): ArtifactPreviewLifecyclePageRef | 
     ...(slideNumber ? { slideNumber } : {}),
     ...(sheet ? { sheet } : {}),
     ...(range ? { range } : {}),
+    ...(width ? { width } : {}),
+    ...(height ? { height } : {}),
+    ...(modelImage ? { modelImage } : {})
+  };
+}
+
+function sanitizeModelImage(value: unknown): ArtifactPreviewModelImageRef | undefined {
+  const image = isRecord(value) ? value : undefined;
+  const artifactId = readShortString(image?.artifactId, 200);
+  const mimeType = readPreviewMimeType(image?.mimeType);
+  if (!artifactId || !mimeType || mimeType === "image/gif") {
+    return undefined;
+  }
+  const width = readPositiveInteger(image?.width);
+  const height = readPositiveInteger(image?.height);
+  return {
+    artifactId: asManagedArtifactId(artifactId),
+    mimeType,
     ...(width ? { width } : {}),
     ...(height ? { height } : {})
   };

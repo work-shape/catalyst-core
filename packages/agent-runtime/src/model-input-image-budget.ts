@@ -10,11 +10,14 @@ type ModelImagePart = Extract<ModelContentPart, { type: "image" }>;
 // The most image bytes one model request carries. It keeps a request body bounded: measured on
 // production on 2026-10-09, one run loaded 96 MB of page images and resent them on every step.
 // The newest images stay; where an older one was, a line names what it showed, and the model
-// repeats the tool call to see it again. Of 198 runs that viewed pages in 30 days,
-// half loaded under 6 MB, nine in ten under 18 MB, and 3 loaded more than this.
+// repeats the tool call to see it again.
 // It does not keep a provider compaction item under the provider's string limit of 20,971,520
-// characters: such an item measured 2.2 times (at worst 2.5 times) the image bytes it covers,
-// which asks for 8 MiB, and 72 of those 198 runs loaded more than that.
+// characters: such an item measured 2.2 times (at worst 2.5 times) the image bytes it covers, so
+// the guarantee asks for less than 8 MiB, about 6 MiB with a margin. Measured on 2026-10-10, a
+// page in the model's rendition (MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS) weighs 0.27 to 0.45 MB,
+// so a run that views 15 pages carries about 5.6 MB: it would fit 6 MiB once, not several times,
+// and the model would lose pages it is still reading. The budget therefore stays where 15 pages
+// fit six times, and a run above about 22 viewed pages can still pass the provider's limit.
 export const MODEL_INPUT_IMAGES_MAX_BYTES = 32 * 1024 * 1024;
 
 export interface ModelInputImageBudgetResult {
