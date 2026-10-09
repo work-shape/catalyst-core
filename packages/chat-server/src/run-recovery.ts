@@ -56,9 +56,11 @@ export class RunRecoveryWatchdog {
       return;
     }
     if (this.runOnStartup) {
-      void this.sweep().catch((error: unknown) => {
-        this.logger?.warn({ err: error }, "Agent run recovery startup sweep failed");
-      });
+      void this.recoverRunsLostWithProcess()
+        .then(() => this.sweep())
+        .catch((error: unknown) => {
+          this.logger?.warn({ err: error }, "Agent run recovery startup sweep failed");
+        });
     }
     this.timer = setInterval(() => {
       void this.sweep().catch((error: unknown) => {
@@ -74,6 +76,45 @@ export class RunRecoveryWatchdog {
     }
     clearInterval(this.timer);
     this.timer = undefined;
+  }
+
+  /**
+   * A runtime that keeps runs in its own process lost them all when the last process ended.
+   * Every run the store still calls active from before this start, and that this process does
+   * not hold, is recovered at once: its conversation would otherwise refuse new messages until
+   * the stale cutoff. A runtime whose runs live with workers is left to their leases.
+   * This assumes one process per instance, which is what such a runtime supports: a second
+   * process started on the same database would end the first one's live runs here.
+   */
+  async recoverRunsLostWithProcess(startedAt = new Date()): Promise<RunRecoverySweepSummary> {
+    const { agentRuntime } = this.options;
+    if (!agentRuntime.holdsRun) {
+      return { recovered: 0, checked: 0 };
+    }
+    let recovered = 0;
+    let checked = 0;
+    for (;;) {
+      const candidates = await this.options.stores.agentRuns.listStaleActiveAgentRuns({
+        clientInstanceId: this.options.clientInstanceId,
+        staleUpdatedBefore: startedAt.toISOString(),
+        limit: this.batchSize
+      });
+      let recoveredInBatch = 0;
+      for (const run of candidates) {
+        if (agentRuntime.holdsRun(run.id)) continue;
+        if (await recoverInterruptedRun(this.options, run, { now: startedAt })) {
+          recoveredInBatch += 1;
+        }
+      }
+      checked += candidates.length;
+      recovered += recoveredInBatch;
+      // A batch that changed nothing would be listed again unchanged.
+      if (candidates.length < this.batchSize || recoveredInBatch === 0) break;
+    }
+    if (recovered > 0) {
+      this.logger?.warn({ recovered, checked }, "Recovered agent runs lost with the last process");
+    }
+    return { recovered, checked };
   }
 
   async sweep(now = new Date()): Promise<RunRecoverySweepSummary> {

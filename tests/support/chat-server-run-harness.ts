@@ -16,6 +16,7 @@ import {
   type AgentRuntime,
   type AuthenticatedUser,
   type ChatMessage,
+  type ConfigAssetSource,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
@@ -26,11 +27,19 @@ import { createTestConfig, createTestUser } from "./fixtures";
 export async function createStaleRunRecoveryFixture(
   input: {
     staleActiveRunMs?: number;
+    /** Runs the watchdog's startup recovery when the server starts. */
+    runOnStartup?: boolean;
+    /** Replaces the runtime that has lost every run, and the assets a real runtime reads. */
+    runtime?: (store: TestMemoryStore) => {
+      agentRuntime: AgentRuntime;
+      assetSource: ConfigAssetSource;
+    };
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId("demo-local");
   const owner = createTestUser("user-1", clientInstanceId);
   const store = createTestInstance().stores;
+  const runtime = input.runtime?.(store);
   const config = createTestConfig();
   const usageGovernance = new ModelUsageGovernance({
     store: store.usage,
@@ -54,11 +63,27 @@ export async function createStaleRunRecoveryFixture(
       stores: store,
       usageGovernance,
       auditRecorder: new NoopAuditRecorder(),
-      agentRuntime: createMissingRuntime(),
+      agentRuntime: runtime?.agentRuntime ?? createMissingRuntime(),
+      ...(runtime
+        ? {
+            configAssets: {
+              store: store.configAssets,
+              source: runtime.assetSource,
+              validationRefs: {
+                modelProviderIds: [],
+                modelBindingIds: [],
+                modelBindings: [],
+                fastModeModelBindingIds: [],
+                reasoningEfforts: [],
+                enabledToolNames: []
+              }
+            }
+          }
+        : {}),
       modelProvider: createUnusedModelProvider(),
       runRecovery: {
         staleActiveRunMs: input.staleActiveRunMs ?? 1,
-        runOnStartup: false,
+        runOnStartup: input.runOnStartup ?? false,
         watchdogIntervalMs: 60_000
       }
     },
@@ -241,7 +266,7 @@ export async function injectStartConversationRun(
       }
     }
   });
-  expect(response.statusCode).toBe(200);
+  expect(response.statusCode, response.body).toBe(200);
   return response.json<StartedRunBody>();
 }
 

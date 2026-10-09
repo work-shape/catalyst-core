@@ -61,6 +61,8 @@ contain breaking changes; a patch version does not.
 - **Document worker (breaking):** the worker answers errors in the same envelope,
   `{ error: { code, message, correlationId } }`, instead of the flat `{ code, message }`.
   Deploy the worker and the application of one release together.
+- **Chat:** after a restart, an instance that runs agents in its own process ends the runs the
+  last process left open, so their conversations accept new messages at once.
 - **Chat:** the conversation list is a compact single-line list without the last-updated date.
   A conversation within seven days of its retention date carries an amber clock, on instances
   with `retention.expireConversations` enabled. Its hint names the deletion date; it opens on

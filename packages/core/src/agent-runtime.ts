@@ -321,6 +321,11 @@ export interface AgentRuntime {
     context: RuntimeCallContext
   ): Promise<void>;
   cancel(runId: AgentRunId, reason: string | undefined, context: RuntimeCallContext): Promise<void>;
+  /**
+   * Whether this process holds the state of the run. Only a runtime that keeps runs in its own
+   * process implements it; a runtime whose runs live in the store with their workers does not.
+   */
+  holdsRun?(runId: AgentRunId): boolean;
 }
 
 export interface CreateAgentRunInput {

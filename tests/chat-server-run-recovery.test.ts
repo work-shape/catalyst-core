@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { RunRecoveryWatchdog } from "@vivd-catalyst/chat-server";
+import { createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
   createStaleRunRecoveryFixture,
   createPersistedRecoveryRun,
+  drainRunEvents,
   expectRunStatus,
+  injectStartConversationRun,
   parseSseChunks
 } from "./support/chat-server-run-harness";
 import { personalConversationListInput } from "./support/fixtures";
@@ -248,6 +254,95 @@ describe("client instance app vertical slice", () => {
       runId: run.id
     });
     expect(replay.map((observation) => observation.type)).toEqual(["message_delta", "run_failed"]);
+    await server.close();
+  });
+
+  it("recovers a run the last process left active when a local runtime starts, and accepts a new message", async () => {
+    const agent = {
+      name: "test_agent",
+      displayName: "Test Agent",
+      instructions: "Answer.",
+      modelProviderId: "test-provider",
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: []
+    };
+    const assetSource = createStaticConfigAssetSource({
+      defaultAgentName: agent.name,
+      agents: [agent]
+    });
+    const provider = { id: "test-provider", type: "deterministic" as const, model: "test-model" };
+    // Far from the stale cutoff: only the startup recovery can end this run.
+    const fixture = await createStaleRunRecoveryFixture({
+      staleActiveRunMs: 100 * 365 * 24 * 60 * 60 * 1000,
+      runOnStartup: true,
+      runtime: (store) => ({
+        assetSource,
+        agentRuntime: new LocalAgentRuntime({
+          assetSource,
+          modelProviders: [provider],
+          defaultModelProvider: provider,
+          conversationHistory: store.conversations,
+          agentRunStore: store.agentRuns,
+          runObservationStore: store.agentRuns,
+          modelProvider: {
+            id: provider.id,
+            async complete() {
+              return {
+                text: "Done.",
+                toolCalls: [],
+                usage: {
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  totalTokens: 0,
+                  source: "not_reported",
+                  webSearchCallCount: 0
+                }
+              };
+            }
+          },
+          toolRegistry: new ToolRegistry({ tools: [] }),
+          toolExecution: {
+            async authorize() {
+              throw new Error("No tool is configured");
+            },
+            async execute() {
+              throw new Error("No tool is configured");
+            }
+          },
+          usageGovernance: new ModelUsageGovernance({
+            store: store.usage,
+            budget: {},
+            safeguards: {}
+          })
+        })
+      })
+    });
+    const { server, store, conversation, run } = fixture;
+    await store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "agent", name: agent.name, config: agent },
+        { type: "setDefaultAgent", agentName: agent.name }
+      ]
+    });
+
+    // The first request starts the server, and with it the watchdog.
+    expect(
+      (await server.call("getConversationThread", { params: { conversationId: conversation.id } }))
+        .statusCode
+    ).toBe(200);
+    await vi.waitFor(() => expectRunStatus(store, fixture.clientInstanceId, run.id, "failed"));
+
+    const next = await injectStartConversationRun(server, conversation.id, "after the restart");
+    expect(next.run.id).not.toBe(run.id);
+    await drainRunEvents(server, conversation.id, next.run.id);
+    expect(
+      (await server.call("getConversationThread", { params: { conversationId: conversation.id } }))
+        .json<{ messages: Array<{ role: string; text: string }> }>()
+        .messages.at(-1)
+    ).toMatchObject({ role: "assistant", text: "Done." });
+
     await server.close();
   });
 

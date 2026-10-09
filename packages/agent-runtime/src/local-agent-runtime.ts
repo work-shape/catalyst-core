@@ -244,6 +244,10 @@ export class LocalAgentRuntime implements AgentRuntime {
     return state.observe(options);
   }
 
+  holdsRun(runId: AgentRunId): boolean {
+    return this.runs.has(runId);
+  }
+
   async getStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {
     const state = this.runs.get(runId);
     if (state) {
