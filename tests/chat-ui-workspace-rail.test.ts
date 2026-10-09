@@ -5,11 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
 import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
 import {
-  RETENTION_WARNING_DAYS,
   retentionHintAfter,
   retentionHintClosed,
   retentionHintOpen,
-  retentionWarningDate,
   type RetentionHintEvent
 } from "../packages/chat-ui/src/conversation/conversation-button";
 import { withoutDraftAttachment } from "../packages/chat-ui/src/conversation/draft-attachment-controller";
@@ -601,17 +599,13 @@ describe("workspace rail conversation rows", () => {
   }
 
   it("warns from exactly seven days before the retention date", () => {
-    expect(RETENTION_WARNING_DAYS).toBe(7);
-    expect(retentionWarningDate(retainedIn(7 * day), now)).toEqual(new Date(now + 7 * day));
-    expect(retentionWarningDate(retainedIn(7 * day + 1), now)).toBeUndefined();
-    expect(retentionWarningDate(retainedIn(-day), now)).toEqual(new Date(now - day));
-
     const [atBoundary, justOutside] = retentionMarksOf(
       renderRows(true, "en", [
         { ...conversation, retainedUntil: retainedIn(7 * day) },
         { ...later, retainedUntil: retainedIn(7 * day + 1) }
       ])
     );
+    expect(atBoundary?.clockName).toBe("will be deleted soon");
     expect(atBoundary?.description).toBe("Will be deleted automatically on Thursday, October 15");
     expect(justOutside?.clockName).toBeUndefined();
     expect(justOutside?.description).toBeUndefined();

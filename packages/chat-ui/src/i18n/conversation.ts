@@ -9,6 +9,8 @@ export const conversation = defineTranslations({
     conversationFailed: "Failed",
     conversationOptions: "Conversation options for {title}",
     conversationPrivate: "Private, only you can open it",
+    conversationRetentionNotice: "{hint}.",
+    conversationRetentionNoticeKeptByMessage: "{hint}. A new message keeps this conversation.",
     conversationUnread: "New response",
     renameConversationField: "Conversation title",
     renameConversationMenuItem: "Rename conversation",
@@ -26,6 +28,9 @@ export const conversation = defineTranslations({
     conversationFailed: "Fehlgeschlagen",
     conversationOptions: "Optionen für Unterhaltung {title}",
     conversationPrivate: "Privat, nur du kannst sie öffnen",
+    conversationRetentionNotice: "{hint}.",
+    conversationRetentionNoticeKeptByMessage:
+      "{hint}. Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten.",
     conversationUnread: "Neue Antwort",
     renameConversationField: "Titel der Unterhaltung",
     renameConversationMenuItem: "Unterhaltung umbenennen",

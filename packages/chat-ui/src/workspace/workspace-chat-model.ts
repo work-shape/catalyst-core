@@ -259,6 +259,8 @@ export interface SelectedChatModel {
   /** No conversation yet, and the Shared Workspace would start one as private. */
   newConversationPrivate: boolean;
   selectedConversationId: string | undefined;
+  /** The open conversation's retention date, once its thread has loaded. */
+  selectedConversationRetainedUntil: string | undefined;
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
   messagesLoaded: boolean;
@@ -940,6 +942,7 @@ export function useWorkspaceChatModel({
         collaborationWorkspace.activeCollaborationWorkspace.defaultConversationVisibility ===
           "private",
       selectedConversationId,
+      selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
       messages,
       completedRunProjections: controller.completedRunProjections,
       messagesLoaded,

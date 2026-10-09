@@ -50,6 +50,25 @@ describe("interface translations", () => {
     expect(de.t("settings.copyValue", { label: "Server-URL" })).toBe("Server-URL kopieren");
   });
 
+  it("says when the open conversation is deleted, and what keeps it only where that is true", () => {
+    const hint = (context: typeof en) =>
+      context.t("conversationExpiresOn", {
+        date: context.locale === "de" ? "Dienstag, 13. Oktober" : "Tuesday, October 13"
+      });
+    expect(en.t("conversationRetentionNotice", { hint: hint(en) })).toBe(
+      "Will be deleted automatically on Tuesday, October 13."
+    );
+    expect(en.t("conversationRetentionNoticeKeptByMessage", { hint: hint(en) })).toBe(
+      "Will be deleted automatically on Tuesday, October 13. A new message keeps this conversation."
+    );
+    expect(de.t("conversationRetentionNotice", { hint: hint(de) })).toBe(
+      "Wird am Dienstag, 13. Oktober automatisch gelöscht."
+    );
+    expect(de.t("conversationRetentionNoticeKeptByMessage", { hint: hint(de) })).toBe(
+      "Wird am Dienstag, 13. Oktober automatisch gelöscht. Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten."
+    );
+  });
+
   it("puts values into their placeholders", () => {
     expect(en.t("attachmentsShowMore", { count: 3 })).toBe("+ 3 more");
     expect(de.t("attachmentsSummary", { count: 2, size: "4 MB" })).toBe("2 Dateien · 4 MB");

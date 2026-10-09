@@ -16,6 +16,7 @@ import {
   type AgentChipDisplay
 } from "../workspace/agent-selector";
 import { AssistantActivityStatus } from "./assistant-activity-status";
+import { RetentionNotice } from "../conversation/retention-notice";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "../i18n";
@@ -37,6 +38,7 @@ export function AssistantThread({
   contextSnapshot,
   notice,
   newConversationPrivate,
+  retainedUntil,
   draftAttachments,
   localUploadingAttachments,
   sendBlock,
@@ -79,6 +81,8 @@ export function AssistantThread({
     | undefined;
   notice: string | undefined;
   newConversationPrivate?: boolean;
+  /** The open conversation's retention date. */
+  retainedUntil?: string;
   draftAttachments: DraftAttachment[];
   localUploadingAttachments: LocalUploadingAttachment[];
   sendBlock?: SendBlock;
@@ -210,6 +214,7 @@ export function AssistantThread({
                     <span>{t("newConversationPrivateHint")}</span>
                   </p>
                 ) : null}
+                <RetentionNotice retention={config?.retention} retainedUntil={retainedUntil} />
                 <div className="relative">
                   {messagesEnabled ? (
                     <AuiIf condition={(state) => !state.thread.isEmpty}>

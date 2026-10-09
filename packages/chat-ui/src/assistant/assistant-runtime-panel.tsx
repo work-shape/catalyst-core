@@ -76,6 +76,7 @@ function AssistantRuntimePane({
     collaborationWorkspaceId,
     newConversationPrivate,
     selectedConversationId,
+    selectedConversationRetainedUntil,
     messagesLoaded,
     snapshotStatus,
     notice,
@@ -354,6 +355,7 @@ function AssistantRuntimePane({
           contextSnapshot={contextSnapshot}
           notice={visibleNotice}
           newConversationPrivate={newConversationPrivate}
+          retainedUntil={selectedConversationRetainedUntil}
           draftAttachments={draftAttachments}
           localUploadingAttachments={localUploadingAttachments}
           sendBlock={sendBlock}

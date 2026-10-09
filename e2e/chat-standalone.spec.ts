@@ -2066,6 +2066,153 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   await expect(page.getByTestId("conversation-expiry-menu-hint")).toHaveText(sentence);
 });
 
+for (const text of [
+  {
+    locale: "en",
+    deletion: /^Will be deleted automatically on [A-Z][a-z]+day, [A-Z][a-z]+ \d+\./u,
+    kept: "A new message keeps this conversation.",
+    placeholder: "Message",
+    darkTheme: "Switch to dark theme"
+  },
+  {
+    locale: "de",
+    deletion: /^Wird am [A-Z][a-z]+, \d+\. [A-Z][a-zä]+ automatisch gelöscht\./u,
+    kept: "Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten.",
+    placeholder: "Nachricht",
+    darkTheme: "Zum dunklen Design wechseln"
+  }
+] as const) {
+  test(`the open conversation says when it is deleted, and a new message keeps it (${text.locale})`, async ({
+    page
+  }) => {
+    await page.addInitScript((locale) => {
+      window.localStorage.setItem("vivd-catalyst:locale", locale);
+    }, text.locale);
+    await signInViaApi(page, normalUser);
+    const title = `Retention notice ${text.locale} ${Date.now()}`;
+    const { id } = await createListedConversation(page, title);
+    await showRetentionDates(page, id, { extendOnActivity: true });
+
+    await page.goto("/");
+    const row = page.getByTestId("conversation-row").filter({ hasText: title });
+    const clock = row.getByTestId("conversation-expiry-warning");
+    const notice = page.getByTestId("conversation-retention-notice");
+    // The line belongs to the open conversation: the start page has none.
+    await expect(clock).toBeVisible();
+    await expect(notice).toHaveCount(0);
+
+    await row.getByRole("button").first().click();
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveText(text.deletion);
+    await expect(notice).toContainText(text.kept);
+    await expect(notice.getByRole("button")).toHaveCount(0);
+    // One quiet line above the composer: no fill, no border, and only the clock in colour.
+    const input = page.getByPlaceholder(text.placeholder);
+    const look = () =>
+      notice.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const icon = element.querySelector("svg")?.parentElement;
+        return {
+          fill: style.backgroundColor,
+          border: style.borderTopWidth,
+          sameColour: icon ? getComputedStyle(icon).color === style.color : true,
+          bottom: element.getBoundingClientRect().bottom
+        };
+      });
+    const light = await look();
+    expect(light).toMatchObject({ fill: "rgba(0, 0, 0, 0)", border: "0px", sameColour: false });
+    expect(light.bottom).toBeLessThanOrEqual((await input.boundingBox())?.y ?? 0);
+
+    await page.getByRole("button", { name: text.darkTheme }).click();
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText(text.kept);
+    expect(await look()).toMatchObject({
+      fill: "rgba(0, 0, 0, 0)",
+      border: "0px",
+      sameColour: false
+    });
+
+    await input.fill("Still needed");
+    await input.press("Enter");
+    // The server moved the date with the message: the line and the rail's clock are gone.
+    await expect(notice).toHaveCount(0);
+    await expect(clock).toHaveCount(0);
+  });
+}
+
+test("the line makes no promise where a message does not move the date", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  const title = `Retention fixed age ${Date.now()}`;
+  const { id } = await createListedConversation(page, title);
+  await showRetentionDates(page, id, { extendOnActivity: false });
+
+  await page.goto("/");
+  const row = page.getByTestId("conversation-row").filter({ hasText: title });
+  await row.getByRole("button").first().click();
+  const notice = page.getByTestId("conversation-retention-notice");
+  const deletion = /^Will be deleted automatically on [A-Z][a-z]+day, [A-Z][a-z]+ \d+\.$/u;
+  await expect(notice).toHaveText(deletion);
+
+  const input = page.getByPlaceholder("Message");
+  await input.fill("Still needed");
+  await input.press("Enter");
+  await expect(page.getByText("Still needed").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send message" })).toBeVisible({ timeout: 10_000 });
+  await expect(notice).toHaveText(deletion);
+  await expect(row.getByTestId("conversation-expiry-warning")).toBeVisible();
+});
+
+/**
+ * The fixture keeps conversations for one day, so every date is near and stays near after a
+ * message. This shows one conversation as an instance with a long period would: three days from
+ * its date until the server moves the date, and far from it afterwards. With `extendOnActivity`
+ * off it shows an instance that keeps the date set at creation.
+ */
+async function showRetentionDates(
+  page: Page,
+  conversationId: string,
+  retention: { extendOnActivity: boolean }
+): Promise<void> {
+  const day = 24 * 60 * 60 * 1000;
+  const near = new Date(Date.now() + 3 * day).toISOString();
+  let stamped: string | undefined;
+  const shown = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value.map(shown);
+    }
+    if (typeof value !== "object" || value === null) {
+      return value;
+    }
+    const entries = Object.entries(value).map(([key, entry]) => [key, shown(entry)] as const);
+    const record = Object.fromEntries(entries);
+    if (typeof record.conversationDays === "number") {
+      return { ...record, extendOnActivity: retention.extendOnActivity };
+    }
+    if (record.id !== conversationId || typeof record.retainedUntil !== "string") {
+      return record;
+    }
+    stamped ??= record.retainedUntil;
+    const moved = retention.extendOnActivity && record.retainedUntil !== stamped;
+    return {
+      ...record,
+      retainedUntil: moved
+        ? new Date(Date.parse(record.retainedUntil) + 30 * day).toISOString()
+        : near
+    };
+  };
+  await page.route(
+    ({ pathname }) => /\/api\/v1\/.*(?:\/config|\/conversations|\/thread|\/runs)$/u.test(pathname),
+    async (route) => {
+      const response = await route.fetch();
+      if (!response.headers()["content-type"]?.includes("application/json")) {
+        await route.fulfill({ response });
+        return;
+      }
+      await route.fulfill({ response, json: shown(await response.json()) });
+    }
+  );
+}
+
 test("conversation rail deletes a conversation", async ({ page }) => {
   await signInViaApi(page, normalUser);
   let deleteConversationRequests = 0;

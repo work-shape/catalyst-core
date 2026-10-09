@@ -12,9 +12,7 @@ import {
   TooltipTrigger
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-
-/** How long before its retention date a conversation is marked as about to be deleted. */
-export const RETENTION_WARNING_DAYS = 7;
+import { retentionWarningDate, retentionWarningText } from "./retention-warning";
 
 export function ConversationButton({
   conversation,
@@ -49,12 +47,7 @@ export function ConversationButton({
   const running = Boolean(conversation.activeRun);
   const unread = Boolean(conversation.unread && !selected);
   const expiresAt = expires ? retentionWarningDate(conversation.retainedUntil) : undefined;
-  // The hourly retention job may not have reached a conversation whose date has passed.
-  const expiryLabel = !expiresAt
-    ? undefined
-    : expiresAt.getTime() <= Date.now()
-      ? t("conversationExpiresShortly")
-      : t("conversationExpiresOn", { date: formatDeletionDate(expiresAt, locale) });
+  const expiryLabel = expiresAt ? retentionWarningText(expiresAt, { locale, t }) : undefined;
   const expiryHintId = useId();
   // The clock opens its hint under the pointer; the row's button opens it for the keyboard.
   const [expiryHint, setExpiryHint] = useState(retentionHintClosed);
@@ -513,18 +506,5 @@ function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
-}
-
-/** The retention date, once it is close enough to warn about. */
-export function retentionWarningDate(retainedUntil: string, now = Date.now()): Date | undefined {
-  const date = new Date(retainedUntil);
-  const remaining = date.getTime() - now;
-  return remaining <= RETENTION_WARNING_DAYS * 24 * 60 * 60 * 1000 ? date : undefined;
-}
-
-function formatDeletionDate(date: Date, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { weekday: "long", month: "long", day: "numeric" }).format(
-    date
   );
 }
