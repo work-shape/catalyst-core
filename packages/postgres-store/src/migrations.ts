@@ -109,7 +109,7 @@ export interface MigrationState {
 export async function readMigrationState(sql: Queries): Promise<MigrationState> {
   const lastApplied = await readLastAppliedMigration(sql);
   const state: MigrationState = { applied: [], missing: [] };
-  for (const migration of readCommittedMigrations()) {
+  for (const migration of releaseMigrations()) {
     const isApplied = lastApplied !== undefined && migration.when <= lastApplied;
     (isApplied ? state.applied : state.missing).push(migration.name);
   }
@@ -192,6 +192,13 @@ async function readLastAppliedMigration(sql: Queries): Promise<number | undefine
     "select created_at from drizzle.__drizzle_migrations order by created_at desc limit 1"
   );
   return last?.created_at ? Number(last.created_at) : undefined;
+}
+
+let committedWithRelease: CommittedMigration[] | undefined;
+
+/** The migrations committed with this package. Read once: a release's files do not change. */
+function releaseMigrations(): CommittedMigration[] {
+  return (committedWithRelease ??= readCommittedMigrations());
 }
 
 function readCommittedMigrations(directory = committedMigrationsDirectory): CommittedMigration[] {

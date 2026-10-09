@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { createOpenApiDocument } from "@vivd-catalyst/api-contract";
+import type { Logger } from "@vivd-catalyst/core";
 import { READINESS_DATABASE_TIMEOUT_MS } from "@vivd-catalyst/postgres-store";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
@@ -104,12 +105,46 @@ describe("GET /ready", () => {
         const elapsed = Date.now() - started;
         expect(elapsed).toBeGreaterThanOrEqual(READINESS_DATABASE_TIMEOUT_MS - 50);
         expect(elapsed).toBeLessThan(READINESS_DATABASE_TIMEOUT_MS + 1_500);
+
+        // Ten more probes, after one already gave up: all wait on the one read under way.
+        const again = Date.now();
+        const answers = await Promise.all(Array.from({ length: 10 }, () => ready(instance)));
+        expect(answers.map((answer) => answer.status)).toEqual(Array(10).fill(503));
+        expect(Date.now() - again).toBeLessThan(READINESS_DATABASE_TIMEOUT_MS + 1_500);
+        const [waiting] = await session<{ count: number }[]>`
+          select count(*)::int as count from pg_stat_activity
+          where datname = current_database() and wait_event_type = 'Lock'
+        `;
+        expect(waiting?.count).toBe(1);
       } finally {
         await session`rollback`;
         session.release();
       }
     });
     expect((await ready(instance)).status).toBe(200);
+  });
+
+  it("logs the class and code of a failed read, and nothing of the connection", async () => {
+    const logged: unknown[] = [];
+    const logger: Logger = {
+      debug() {},
+      info() {},
+      warn: (input, message) => void logged.push({ input, message }),
+      error() {},
+      child: () => logger
+    };
+    const { stores } = await createTestInstance({ postgres: { logger } });
+    await stores.close();
+    expect(await stores.readiness()).toEqual({
+      status: "not_ready",
+      reason: "database_unreachable"
+    });
+    expect(logged).toEqual([
+      {
+        input: { errorClass: "Error", code: "CONNECTION_ENDED" },
+        message: "Readiness check could not read the database"
+      }
+    ]);
   });
 
   it("is listed in the document unversioned, without security, with both answers", () => {

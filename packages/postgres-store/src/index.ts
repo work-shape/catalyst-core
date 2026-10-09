@@ -3,7 +3,7 @@ import postgres, { type Notice } from "postgres";
 import type { DatabaseReadiness, Logger, PlatformStores } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
 import { assertDatabaseMigrated } from "./migrations";
-import { checkDatabaseReadiness } from "./readiness";
+import { createDatabaseReadinessCheck } from "./readiness";
 import { schema } from "./schema";
 import { createPostgresConversationsStore } from "./stores/conversations";
 import { createPostgresAgentRunsStore } from "./stores/agentRuns";
@@ -99,7 +99,7 @@ export async function createPostgresStores(
   const stores: PostgresStores = {
     ...bindStores(db),
     close: () => sql.end(),
-    readiness: () => checkDatabaseReadiness(sql)
+    readiness: createDatabaseReadinessCheck(sql, options.logger)
   };
   try {
     await assertDatabaseMigrated(sql);

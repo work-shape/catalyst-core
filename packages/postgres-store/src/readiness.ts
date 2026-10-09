@@ -1,4 +1,4 @@
-import type { DatabaseReadiness } from "@vivd-catalyst/core";
+import type { DatabaseReadiness, Logger } from "@vivd-catalyst/core";
 import { readMigrationState, type Queries } from "./migrations";
 
 /**
@@ -11,21 +11,43 @@ export const READINESS_DATABASE_TIMEOUT_MS = 2_000;
 const unreachable: DatabaseReadiness = { status: "not_ready", reason: "database_unreachable" };
 
 /**
- * Asks the database whether it can serve this release. It never rejects, and what the driver
- * reported stays here: an error of the driver can repeat the connection string.
+ * The check whether the database behind `sql` can serve this release. It never rejects, and
+ * what the driver reported stays here: an error of the driver can repeat the connection string.
+ * Every caller waits on the one read that is under way, so probes against a database that does
+ * not answer hold one connection of the pool, however many arrive and however often.
  */
-export async function checkDatabaseReadiness(sql: Queries): Promise<DatabaseReadiness> {
-  let timer: NodeJS.Timeout | undefined;
-  const timedOut = new Promise<DatabaseReadiness>((resolve) => {
-    timer = setTimeout(() => resolve(unreachable), READINESS_DATABASE_TIMEOUT_MS);
-  });
-  try {
-    // A query the timeout leaves behind ends by itself: the driver gives up on a connection
-    // that does not open, and a query that was only slow returns its connection to the pool.
-    return await Promise.race([readReadiness(sql).catch(() => unreachable), timedOut]);
-  } finally {
-    clearTimeout(timer);
-  }
+export function createDatabaseReadinessCheck(
+  sql: Queries,
+  logger?: Logger
+): () => Promise<DatabaseReadiness> {
+  let underWay: Promise<DatabaseReadiness> | undefined;
+  const read = (): Promise<DatabaseReadiness> =>
+    (underWay ??= readReadiness(sql)
+      .catch((error: unknown) => {
+        logger?.warn(describeWithoutMessage(error), "Readiness check could not read the database");
+        return unreachable;
+      })
+      .finally(() => {
+        underWay = undefined;
+      }));
+
+  return async () => {
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<DatabaseReadiness>((resolve) => {
+      timer = setTimeout(() => {
+        logger?.warn(
+          { timeoutMs: READINESS_DATABASE_TIMEOUT_MS },
+          "Readiness check got no answer from the database in time"
+        );
+        resolve(unreachable);
+      }, READINESS_DATABASE_TIMEOUT_MS);
+    });
+    try {
+      return await Promise.race([read(), timedOut]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 }
 
 async function readReadiness(sql: Queries): Promise<DatabaseReadiness> {
@@ -35,4 +57,14 @@ async function readReadiness(sql: Queries): Promise<DatabaseReadiness> {
   if (missing.length > 0 || newest === undefined)
     return { status: "not_ready", reason: "database_behind", missing };
   return { status: "ready", migration: newest };
+}
+
+/** The class and the code of an error. Its message can name the host and the account. */
+function describeWithoutMessage(error: unknown): { errorClass: string; code?: string } {
+  const errorClass = error instanceof Error ? error.name : typeof error;
+  const code =
+    typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+      ? error.code
+      : undefined;
+  return code === undefined ? { errorClass } : { errorClass, code };
 }
