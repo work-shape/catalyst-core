@@ -194,7 +194,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 85,
+      "count": 84,
       "owner": "CB-2"
     },
     {
