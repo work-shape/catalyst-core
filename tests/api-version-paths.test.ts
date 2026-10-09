@@ -112,11 +112,19 @@ describe("the operation catalog", () => {
         "me.model_preference.set  PUT /api/v1/me/model-preference",
         "me.password.change  POST /api/v1/me/password",
         "me.update  PATCH /api/v1/me",
+        "namespaces.create  POST /api/v1/instance/access/namespaces",
+        "namespaces.delete  DELETE /api/v1/instance/access/namespaces/:prefix",
+        "namespaces.list  GET /api/v1/instance/access/namespaces",
+        "namespaces.update  PATCH /api/v1/instance/access/namespaces/:prefix",
         "openapi.get  GET /api/v1/openapi.json",
         "operations.get_run  GET /api/v1/operations/runs/:runId",
         "operations.list_runs  GET /api/v1/operations/runs",
         "password_reset.request  POST /api/v1/password-reset",
         "password_setup.complete  POST /api/v1/password-setup",
+        "permissions.effective  GET /api/v1/instance/access/effective",
+        "permissions.grant  POST /api/v1/instance/access/grants",
+        "permissions.list  GET /api/v1/instance/access/grants",
+        "permissions.revoke  DELETE /api/v1/instance/access/grants/:grantId",
         "ready.get  GET /ready",
         "service_principals.create  POST /api/v1/instance/service-principals",
         "service_principals.list  GET /api/v1/instance/service-principals",
@@ -298,13 +306,21 @@ describe("a running instance", () => {
     }
     // Each operation moved. Two were dropped: the alias, and the title generation, which is
     // the job conversation.generate_title now. The reference of the instance was the one
-    // addition of that release: it never had an unversioned path. The Operation Runs came
-    // after it.
+    // addition of that release: it never had an unversioned path. The Operation Runs, grants
+    // and Namespaces came after it.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
       "operations.get_run",
-      "operations.list_runs"
+      "operations.list_runs",
+      "permissions.grant",
+      "permissions.revoke",
+      "permissions.list",
+      "permissions.effective",
+      "namespaces.create",
+      "namespaces.update",
+      "namespaces.list",
+      "namespaces.delete"
     ];
     expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });

@@ -311,6 +311,9 @@ export const EVENTS = {
   "message.completed": { ...LEGACY_AUDIT, name: "message.completed", subject: "message" },
   "message.created": { ...LEGACY_AUDIT, name: "message.created", subject: "message" },
   "message.failed": { ...LEGACY_AUDIT, name: "message.failed", subject: "message" },
+  "namespace.created": { ...LEGACY_AUDIT, name: "namespace.created", subject: "namespace" },
+  "namespace.deleted": { ...LEGACY_AUDIT, name: "namespace.deleted", subject: "namespace" },
+  "namespace.updated": { ...LEGACY_AUDIT, name: "namespace.updated", subject: "namespace" },
   "operation.authorization_checked": {
     ...OPERATION_AUDIT,
     name: "operation.authorization_checked"
@@ -327,6 +330,16 @@ export const EVENTS = {
   "operation.denied": { ...OPERATION_AUDIT, name: "operation.denied" },
   "operation.failed": { ...OPERATION_AUDIT, name: "operation.failed" },
   "operation.started": { ...OPERATION_AUDIT, name: "operation.started" },
+  "permission.granted": {
+    ...LEGACY_AUDIT,
+    name: "permission.granted",
+    subject: "permission_grant"
+  },
+  "permission.revoked": {
+    ...LEGACY_AUDIT,
+    name: "permission.revoked",
+    subject: "permission_grant"
+  },
   "storage.orphaned_file_cleanup_failed": {
     ...LEGACY_AUDIT,
     name: "storage.orphaned_file_cleanup_failed",
