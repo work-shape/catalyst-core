@@ -22,7 +22,7 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-Platform database tests need Postgres via `POSTGRES_STORE_TEST_DATABASE_URL`. Its HTTP tests also open local ports. Both workflows provide Postgres and invoke the same local commands. On a pull request they first run the baseline guard described under [Baselines](#baselines).
+Platform database tests need Postgres via `POSTGRES_STORE_TEST_DATABASE_URL`. Its HTTP tests also open local ports. Both workflows provide Postgres and invoke the same local commands. On a pull request they first run the baseline guard described under [Baselines](#baselines). After `pnpm check` the platform workflow runs two more steps in the same job: `pnpm test:compatibility`, the database tests of the previous and the oldest supported release against the schema of the commit, and `pnpm release:check --skip-build`, which packs and inspects every publishable package. Both run locally against the same database variable; neither is part of `pnpm check`.
 
 `pnpm check:local`, in either repository, is `pnpm check` with its own database. It starts a Postgres 17 container under a unique name on a free local port, points `POSTGRES_STORE_TEST_DATABASE_URL` at it, runs the check and removes the container when the check ends, fails or is interrupted. It needs a running Docker and says so when there is none.
 

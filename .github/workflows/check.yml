@@ -31,7 +31,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-          # The baseline guard needs the history back to where the pull request left its base.
+          # The baseline guard needs the history back to where the pull request left its base,
+          # and the compatibility step needs the release tags and their trees.
           fetch-depth: 0
       - name: Baseline counts may only fall
         if: github.event_name == 'pull_request'
@@ -46,4 +47,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # Installs the previous and the oldest supported release from their tags and runs their
+      # database tests against the schema of this commit, on the Postgres service above. The
+      # install reads the pnpm store that setup-node restored and fetches the rest.
+      - name: Released database tests against this schema
+        timeout-minutes: 10
+        run: pnpm test:compatibility
+      # Packs every publishable package, inspects the tarballs and installs them in a scratch
+      # consumer. `pnpm check` built the packages in this job, so the build is not repeated.
+      - name: Packages are fit to publish
+        timeout-minutes: 5
+        run: pnpm release:check --skip-build
   # CB-1b adds the browser job and its browser installation here.
