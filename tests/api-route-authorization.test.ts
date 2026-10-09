@@ -63,12 +63,24 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "users.create": { displayLabel: "Person" },
   "users.update": { displayLabel: "Person" },
   "users.identities.upsert": { authSource: "test", externalUserId: "person" },
-  "users.password.reset": { password: "long-enough-password" }
+  "users.password.reset": { password: "long-enough-password" },
+  "permissions.grant": {
+    holderKind: "user",
+    holderId: "missing",
+    action: "agent.write",
+    scopeKind: "instance"
+  },
+  "namespaces.create": { prefix: "team-", displayName: "Team" },
+  "namespaces.update": { displayName: "Team" }
+};
+const acceptedQueries: Partial<Record<ApiOperationName, Record<string, string>>> = {
+  "permissions.effective": { holderKind: "user", holderId: "missing" }
 };
 
 function call(name: ApiOperationName, as: ReturnType<typeof asCaller>, headers = {}) {
   const operation = descriptor(name);
   const payload = acceptedBodies[name];
+  const query = acceptedQueries[name];
   return instance.call(
     name,
     {
@@ -76,6 +88,7 @@ function call(name: ApiOperationName, as: ReturnType<typeof asCaller>, headers =
         operationPathParamNames(operation.path).map((param) => [param, "missing"])
       ),
       headers,
+      ...(query === undefined ? {} : { query }),
       ...(payload === undefined ? {} : { payload })
     },
     as

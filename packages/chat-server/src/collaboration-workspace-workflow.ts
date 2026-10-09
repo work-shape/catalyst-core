@@ -1,6 +1,7 @@
 import {
   type ISODateString,
   AppError,
+  isSuperadmin,
   WORKSPACE_ACCENT_COLORS,
   asUserId,
   auditActorFromUser,
@@ -902,10 +903,6 @@ export class CollaborationWorkspaceWorkflow {
       metadata
     });
   }
-}
-
-function isSuperadmin(user: AuthenticatedUser): boolean {
-  return user.roles.includes("superadmin");
 }
 
 /** Membership decides, except that a superadmin is Owner of every Shared Workspace. */

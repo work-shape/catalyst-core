@@ -1,6 +1,6 @@
 import type { HttpRuntime, Logger } from "@vivd-catalyst/core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
-import { legacyAuthorizer, normalizeAllowedOrigins } from "@vivd-catalyst/core";
+import { createAuthorizer, normalizeAllowedOrigins } from "@vivd-catalyst/core";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -12,6 +12,7 @@ import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerOperationRunRoutes } from "./routes/operation-run-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
+import { registerAccessRoutes } from "./routes/access-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerApiReferenceRoutes } from "./routes/api-reference-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
@@ -75,7 +76,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
     ...input,
     allowedOrigins,
     rateLimiter: input.rateLimiter ?? createInProcessRateLimiter(),
-    authorizer: input.authorizer ?? legacyAuthorizer
+    authorizer: input.authorizer ?? createAuthorizer(input.stores.access)
   };
   const app = Fastify({
     loggerInstance: adaptLogger(options.logger),
@@ -126,6 +127,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerOperationRunRoutes(route, options);
   registerApiAccessAdministrationRoutes(route, options);
   registerSuperadminRoutes(route, options);
+  registerAccessRoutes(route, options);
   registerApiReferenceRoutes(route, options);
 
   const runtime = createHttpRuntime(app);

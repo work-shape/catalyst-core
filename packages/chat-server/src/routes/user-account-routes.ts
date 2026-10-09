@@ -1,5 +1,5 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { asUserId, getSubjectUserId, resolveEffectivePermissions } from "@vivd-catalyst/core";
+import { asUserId, getSubjectUserId, allowedLegacyPermissions } from "@vivd-catalyst/core";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "../request-context";
 import type { ResolvedChatServerOptions } from "../types";
@@ -31,13 +31,14 @@ export function registerUserAccountRoutes(route: Route, options: ResolvedChatSer
     );
   });
 
-  route(apiOperations["me.update"], async ({ user, context, body }) => {
+  route(apiOperations["me.update"], async ({ user, access, context, body }) => {
     const updated = await userAccount.updateCurrentUser(user, context, {
       displayLabel: body.displayLabel
     });
     return {
       ...updated,
-      permissions: [...resolveEffectivePermissions(updated)]
+      // A profile change moves no right, so the answer loaded for this request still holds.
+      permissions: allowedLegacyPermissions(access)
     };
   });
 

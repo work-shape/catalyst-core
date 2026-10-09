@@ -15,6 +15,7 @@ import {
   isAuthenticatedServicePrincipal,
   normalizeAuthenticatedUser,
   requireAuthScope,
+  type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ClientInstanceId,
@@ -56,10 +57,14 @@ interface RequestContext {
   correlationId: string;
 }
 
+/**
+ * `access` answers every rights check of this request for its caller. It is loaded once, when
+ * the caller is known, and belongs to the request, never to the actor.
+ */
 type Caller<Auth extends Operation["auth"]> = Auth extends "user"
-  ? { user: AuthenticatedUser; context: RuntimeCallContext }
+  ? { user: AuthenticatedUser; access: ActorAccess; context: RuntimeCallContext }
   : Auth extends "principal"
-    ? { identity: AuthenticatedIdentity; context: RequestContext }
+    ? { identity: AuthenticatedIdentity; access: ActorAccess; context: RequestContext }
     : { context: RequestContext };
 
 type Parsed<Schema> = Schema extends z.ZodType ? z.output<Schema> : undefined;
@@ -169,6 +174,7 @@ const registeredOperations = new WeakMap<FastifyInstance, Operation[]>();
 interface AssembledCall {
   user?: AuthenticatedUser;
   identity?: AuthenticatedIdentity;
+  access?: ActorAccess;
   context: RequestContext | RuntimeCallContext;
   params: Record<string, string>;
   query: unknown;
@@ -202,11 +208,12 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           request,
           reply
         );
-        if (caller.identity) {
-          const access = await options.authorizer.forActor(caller.identity);
-          for (const action of operation.requires ?? []) {
-            access.require(action);
-          }
+        // One load per request: a grant revoked now refuses the next call.
+        const access = caller.identity
+          ? await options.authorizer.forActor(caller.identity)
+          : undefined;
+        for (const action of operation.requires ?? []) {
+          requireAccess(access).require(action);
         }
         const paging =
           operation.response.kind === "page"
@@ -215,7 +222,16 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
         const result = await runHandler();
         async function runHandler(): Promise<unknown> {
           try {
-            return await handler({ ...caller, params, paging, query, body, request, reply });
+            return await handler({
+              ...caller,
+              access,
+              params,
+              paging,
+              query,
+              body,
+              request,
+              reply
+            });
           } catch (error) {
             if (takesCredential && isAppError(error) && error.code === "UNAUTHENTICATED") {
               // A key or token this operation refused, counted under the address that sent it.
@@ -340,6 +356,14 @@ function readIdempotencyKey(request: FastifyRequest): string | undefined {
     throw new AppError("VALIDATION_FAILED", "A call takes one Idempotency-Key");
   }
   return key;
+}
+
+/** An operation that names rights authenticates a caller, so a missing answer is a wiring fault. */
+function requireAccess(access: ActorAccess | undefined): ActorAccess {
+  if (!access) {
+    throw new AppError("INTERNAL", "A rights check ran without an authenticated caller");
+  }
+  return access;
 }
 
 async function authenticate(

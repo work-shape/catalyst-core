@@ -1,7 +1,10 @@
 import { ZodError } from "zod";
 import {
+  PERMISSION_REF_ACTION_PREFIX,
+  createAuthorizer,
   isAppError,
   toErrorEnvelope,
+  type Authorizer,
   type ApprovedToolExecutionRequest,
   type JsonObject,
   type Logger,
@@ -29,6 +32,11 @@ export interface InProcessToolExecutionOptions {
   usageRecorder?: ModelUsageRecorder;
   /** Receives the full error of a handler whose failure the model only sees as a reference. */
   logger?: Logger;
+  /**
+   * Answers the rights of the user a tool call runs for, loaded once per call. Without one the
+   * user's own record is the only source, which is all a `permissionRefs` check reads.
+   */
+  authorizer?: Authorizer;
 }
 
 export class InProcessToolExecution implements ToolExecution {
@@ -39,6 +47,7 @@ export class InProcessToolExecution implements ToolExecution {
   private readonly auditRecorder?: AuditRecorder;
   private readonly usageRecorder?: ModelUsageRecorder;
   private readonly logger?: Logger;
+  private readonly authorizer: Authorizer;
 
   constructor(options: InProcessToolExecutionOptions) {
     this.registry = options.registry;
@@ -46,6 +55,7 @@ export class InProcessToolExecution implements ToolExecution {
     this.auditRecorder = options.auditRecorder;
     this.usageRecorder = options.usageRecorder;
     this.logger = options.logger;
+    this.authorizer = options.authorizer ?? createAuthorizer();
   }
 
   async authorize(
@@ -73,8 +83,14 @@ export class InProcessToolExecution implements ToolExecution {
       );
     }
 
-    const missingPermission = tool.permission?.requiredPermissionRefs?.find(
-      (permissionRef) => !context.user.permissionRefs.includes(permissionRef)
+    // A tool's reference `x` is the action `ref:x`, so a tool definition can never ask for a
+    // registered action through this field.
+    const requiredPermissionRefs = tool.permission?.requiredPermissionRefs ?? [];
+    const access =
+      requiredPermissionRefs.length > 0 ? await this.authorizer.forActor(context.user) : undefined;
+    const missingPermission = requiredPermissionRefs.find(
+      (permissionRef) =>
+        !access?.authorize(`${PERMISSION_REF_ACTION_PREFIX}${permissionRef}`).allowed
     );
     if (missingPermission) {
       return this.auditAuthorizationDecision(

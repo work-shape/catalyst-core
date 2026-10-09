@@ -3,8 +3,7 @@ import {
   AppError,
   auditActorFromUser,
   hasAuthScope,
-  hasPermission,
-  requirePermission,
+  type ActorAccess,
   type ApprovalRequest,
   type ApprovalRequestContext,
   type ApprovalRequestCreator,
@@ -88,19 +87,21 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   async getRequest(
     user: AuthenticatedUser,
+    access: ActorAccess,
     context: CallContext,
     requestId: string
   ): Promise<ApprovalRequestView> {
-    const request = await this.visibleRequest(user, requestId);
-    return this.view(user, context, request);
+    const request = await this.visibleRequest(user, access, requestId);
+    return this.view(user, access, context, request);
   }
 
   async listRequests(
     user: AuthenticatedUser,
+    access: ActorAccess,
     context: CallContext,
     filter: { status?: ApprovalRequestStatus; page?: StorePage } = {}
   ): Promise<ApprovalRequestView[]> {
-    const kinds = this.reviewableKinds(user);
+    const kinds = this.reviewableKinds(user, access);
     if (kinds.length === 0) {
       throw new AppError("FORBIDDEN", "Approval review requires a registered kind's permission");
     }
@@ -109,11 +110,14 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       kinds,
       ...filter
     });
-    return Promise.all(requests.map((request) => this.view(user, context, request)));
+    return Promise.all(requests.map((request) => this.view(user, access, context, request)));
   }
 
-  async pendingCount(user: AuthenticatedUser): Promise<{ count: number; canReview: boolean }> {
-    const kinds = this.reviewableKinds(user);
+  async pendingCount(
+    user: AuthenticatedUser,
+    access: ActorAccess
+  ): Promise<{ count: number; canReview: boolean }> {
+    const kinds = this.reviewableKinds(user, access);
     if (kinds.length === 0) return { count: 0, canReview: false };
     return {
       canReview: true,
@@ -126,6 +130,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   async decideRequest(
     user: AuthenticatedUser,
+    access: ActorAccess,
     context: CallContext,
     command: {
       requestId: string;
@@ -133,9 +138,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       comment?: string;
     }
   ): Promise<ApprovalRequest> {
-    const request = await this.visibleRequest(user, command.requestId);
+    const request = await this.visibleRequest(user, access, command.requestId);
     const handler = this.handler(request.kind);
-    requirePermission(user, handler.requiredPermission);
+    access.require(handler.requiredPermission);
     const comment = command.comment?.trim();
     if (command.decision === "request_changes" && !comment) {
       throw new AppError("VALIDATION_FAILED", "Requesting changes requires a comment");
@@ -174,10 +179,11 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   async withdrawRequest(
     user: AuthenticatedUser,
+    access: ActorAccess,
     context: CallContext,
     requestId: string
   ): Promise<ApprovalRequest> {
-    const request = await this.visibleRequest(user, requestId);
+    const request = await this.visibleRequest(user, access, requestId);
     if (request.requestedBy.id !== user.id) {
       throw new AppError("FORBIDDEN", "Only the requester can withdraw an approval request");
     }
@@ -204,12 +210,13 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   async revertRequest(
     user: AuthenticatedUser,
+    access: ActorAccess,
     context: CallContext,
     requestId: string
   ): Promise<ApprovalRequest> {
-    const request = await this.visibleRequest(user, requestId);
+    const request = await this.visibleRequest(user, access, requestId);
     const handler = this.handler(request.kind);
-    requirePermission(user, handler.requiredPermission);
+    access.require(handler.requiredPermission);
     const revert = handler.revert?.bind(handler);
     if (!revert)
       throw new AppError("CONFLICT", "This approval request kind does not support revert");
@@ -251,6 +258,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   private async visibleRequest(
     user: AuthenticatedUser,
+    access: ActorAccess,
     requestId: string
   ): Promise<ApprovalRequest> {
     this.assertClientInstance(user);
@@ -262,7 +270,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     if (
       !request ||
       (request.requestedBy.id !== user.id &&
-        (!handler || !hasPermission(user, handler.requiredPermission)))
+        (!handler || !access.authorize(handler.requiredPermission).allowed))
     ) {
       throw new AppError("NOT_FOUND", "Approval request was not found");
     }
@@ -271,6 +279,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   private async view(
     user: AuthenticatedUser,
+    access: ActorAccess,
     context: CallContext,
     request: ApprovalRequest
   ): Promise<ApprovalRequestView> {
@@ -287,11 +296,11 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         request.status === "approved" &&
         Boolean(handler.revert) &&
         canDecideWithToken &&
-        hasPermission(user, handler.requiredPermission),
+        access.authorize(handler.requiredPermission).allowed,
       canDecide:
         request.status === "pending" &&
         canDecideWithToken &&
-        hasPermission(user, handler.requiredPermission),
+        access.authorize(handler.requiredPermission).allowed,
       canWithdraw:
         request.status === "pending" &&
         request.requestedBy.id === user.id &&
@@ -299,10 +308,10 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     };
   }
 
-  private reviewableKinds(user: AuthenticatedUser): string[] {
+  private reviewableKinds(user: AuthenticatedUser, access: ActorAccess): string[] {
     this.assertClientInstance(user);
     const kinds = [...this.options.handlers.values()]
-      .filter((handler) => hasPermission(user, handler.requiredPermission))
+      .filter((handler) => access.authorize(handler.requiredPermission).allowed)
       .map((handler) => handler.kind);
     return kinds;
   }

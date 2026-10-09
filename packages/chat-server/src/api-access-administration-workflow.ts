@@ -1,6 +1,7 @@
 import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  isSuperadmin,
   asApiCredentialId,
   asServicePrincipalId,
   asUserId,
@@ -212,7 +213,7 @@ export class ApiAccessAdministrationWorkflow {
   }
 
   private requireSuperadmin(actor: AuthenticatedUser, operation: string): void {
-    if (!actor.roles.includes("superadmin")) {
+    if (!isSuperadmin(actor)) {
       throw new AppError("FORBIDDEN", `${operation} requires a superadmin role`);
     }
   }

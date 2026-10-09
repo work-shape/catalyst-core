@@ -200,6 +200,8 @@ export const administeredCollaborationWorkspaceSchema = z.object({
 });
 
 export const configAssetSummarySchema = z.object({
+  /** What an asset-scoped grant names as its `scopeId`. */
+  id: z.string().optional(),
   kind: configAssetKindSchema,
   name: z.string(),
   revision: z.number().int().positive(),

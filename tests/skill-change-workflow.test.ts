@@ -1,4 +1,5 @@
 import { builtInModelCapabilities } from "./support/model-gateway";
+import { accessOf } from "./support/access";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -136,7 +137,10 @@ async function fixture() {
       })
     });
   const approve = (requestId: string) =>
-    workflow.decideRequest(reviewer, context, { requestId, decision: "approve" });
+    workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+      requestId,
+      decision: "approve"
+    });
   const revisions = (name = skill.name, kind: "agent" | "skill" = "skill") =>
     store.configAssets.listConfigAssetRevisions({ clientInstanceId, kind, name });
   const tool = createProposeSkillChangeTool({
@@ -188,17 +192,28 @@ describe("skill change approval workflow", () => {
       origin: { kind: "approval_request", requestId: request.id, summary: request.summary },
       config: { content: "Verify facts.\n\nKeep evidence." }
     });
-    expect(await f.workflow.getRequest(reviewer, context, request.id)).toMatchObject({
+    expect(
+      await f.workflow.getRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).toMatchObject({
       canRevert: true,
       preview: request.payload.preview
     });
-    expect(await f.workflow.getRequest(requester, context, request.id)).toMatchObject({
+    expect(
+      await f.workflow.getRequest(requester, accessOf(requester), context, request.id)
+    ).toMatchObject({
       canRevert: false
     });
-    await expect(f.workflow.revertRequest(requester, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.revertRequest(requester, accessOf(requester), context, request.id)
+    ).rejects.toMatchObject({
       code: "FORBIDDEN"
     });
-    const reverted = await f.workflow.revertRequest(reviewer, context, request.id);
+    const reverted = await f.workflow.revertRequest(
+      reviewer,
+      accessOf(reviewer),
+      context,
+      request.id
+    );
     expect(reverted).toMatchObject({
       status: "reverted",
       reversion: { revertedBy: reviewer.id, revertedByLabel: reviewer.displayLabel },
@@ -219,7 +234,9 @@ describe("skill change approval workflow", () => {
       type: "approval_request.reverted",
       metadata: { requestId: request.id, kind: "skill_change", status: "reverted" }
     });
-    await expect(f.workflow.revertRequest(reviewer, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).rejects.toMatchObject({
       code: "CONFLICT"
     });
   });
@@ -242,7 +259,9 @@ describe("skill change approval workflow", () => {
     ]);
     const second = await f.propose();
     await f.approve(first.id);
-    expect(await f.workflow.getRequest(reviewer, context, second.id)).toMatchObject({
+    expect(
+      await f.workflow.getRequest(reviewer, accessOf(reviewer), context, second.id)
+    ).toMatchObject({
       preview: { changes: [{ before: "Check sources.", after: "Verify sources." }] }
     });
     expect(await f.approve(second.id)).toMatchObject({ status: "approved" });
@@ -256,7 +275,9 @@ describe("skill change approval workflow", () => {
       { type: "replace_text", target: "root", oldText: "Check", newText: "Examine" }
     ]);
     await f.approve(first.id);
-    expect(await f.workflow.getRequest(reviewer, context, second.id)).toMatchObject({
+    expect(
+      await f.workflow.getRequest(reviewer, accessOf(reviewer), context, second.id)
+    ).toMatchObject({
       preview: second.payload.preview
     });
     expect(await f.approve(second.id)).toMatchObject({ status: "superseded" });
@@ -286,7 +307,9 @@ describe("skill change approval workflow", () => {
         }
       ]
     });
-    expect(await f.workflow.getRequest(reviewer, context, request.id)).toMatchObject({
+    expect(
+      await f.workflow.getRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).toMatchObject({
       preview: request.payload.preview
     });
     expect(await f.approve(request.id)).toMatchObject({ status: "superseded" });
@@ -353,16 +376,21 @@ describe("skill change approval workflow", () => {
       ]
     });
     await expect(
-      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "reject" })
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+        requestId: request.id,
+        decision: "reject"
+      })
     ).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(
-      f.workflow.decideRequest(reviewer, context, {
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "request_changes",
         comment: "Please shorten"
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    await expect(f.workflow.withdrawRequest(requester, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.withdrawRequest(requester, accessOf(requester), context, request.id)
+    ).rejects.toMatchObject({
       code: "CONFLICT"
     });
     expect(await f.approve(request.id)).toMatchObject({
@@ -383,7 +411,7 @@ describe("skill change approval workflow", () => {
       actor: { userId: reviewer.id },
       origin: { requestId: request.id }
     });
-    await f.workflow.revertRequest(reviewer, context, request.id);
+    await f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id);
     expect((await f.source.getSnapshot()).agents[0]?.skillNames).toEqual([skill.name]);
     expect((await f.source.getSnapshot()).skills.map((candidate) => candidate.name)).toEqual([
       skill.name
@@ -417,7 +445,9 @@ describe("skill change approval workflow", () => {
       throw new Error("Expected an approved request and revert handler");
     }
     await f.handler.revert(approved, reviewer, handlerContext);
-    expect(await f.workflow.revertRequest(reviewer, context, request.id)).toMatchObject({
+    expect(
+      await f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).toMatchObject({
       status: "reverted"
     });
     expect(await f.revisions()).toHaveLength(3);
@@ -467,11 +497,15 @@ describe("skill change approval workflow", () => {
         }
       ]
     });
-    await expect(f.workflow.revertRequest(reviewer, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).rejects.toMatchObject({
       code: "CONFLICT",
       message: expect.stringContaining("newer changes")
     });
-    expect((await f.workflow.getRequest(reviewer, context, request.id)).status).toBe("approved");
+    expect(
+      (await f.workflow.getRequest(reviewer, accessOf(reviewer), context, request.id)).status
+    ).toBe("approved");
   });
   it("does not partially remove a created skill referenced by another agent", async () => {
     const f = await fixture();
@@ -488,7 +522,9 @@ describe("skill change approval workflow", () => {
         }
       ]
     });
-    await expect(f.workflow.revertRequest(reviewer, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).rejects.toMatchObject({
       code: "VALIDATION_FAILED"
     });
     expect(
@@ -502,8 +538,8 @@ describe("skill change approval workflow", () => {
     const request = await f.propose();
     await f.approve(request.id);
     const outcomes = await Promise.allSettled([
-      f.workflow.revertRequest(reviewer, context, request.id),
-      f.workflow.revertRequest(reviewer, context, request.id)
+      f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id),
+      f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id)
     ]);
     expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
     expect(outcomes.filter((outcome) => outcome.status === "rejected")).toHaveLength(1);
@@ -531,7 +567,9 @@ describe("skill change tool and wiring policy", () => {
     if (result.status !== "success") throw new Error("Expected success");
     const requestId = (result.output as { requestId: string }).requestId;
     expect(result.auditSummary?.metadata).toEqual({ skillName: skill.name, requestId });
-    expect(await f.workflow.getRequest(requester, context, requestId)).toMatchObject({
+    expect(
+      await f.workflow.getRequest(requester, accessOf(requester), context, requestId)
+    ).toMatchObject({
       status: "pending",
       origin: {
         agentName: f.agent.name,
@@ -566,7 +604,7 @@ describe("skill change tool and wiring policy", () => {
       status: "failed",
       error: { code: "not_allowed", message: expect.stringContaining("disabled") }
     });
-    expect((await f.workflow.pendingCount(reviewer)).count).toBe(0);
+    expect((await f.workflow.pendingCount(reviewer, accessOf(reviewer))).count).toBe(0);
   });
   it.each([
     [true, true],

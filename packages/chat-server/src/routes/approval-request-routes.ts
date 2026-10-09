@@ -14,23 +14,23 @@ export function registerApprovalRequestRoutes(route: Route, options: ChatServerO
 
   // A card in a thread reads and withdraws with chat scopes; the review queue and every
   // decision are governance actions, which chat session tokens cannot carry.
-  route(apiOperations["approval_requests.get"], ({ user, context, params }) =>
-    workflow.getRequest(user, context, requestId(params))
+  route(apiOperations["approval_requests.get"], ({ user, access, context, params }) =>
+    workflow.getRequest(user, access, context, requestId(params))
   );
-  route(apiOperations["approval_requests.list"], ({ user, context, query, paging }) =>
-    workflow.listRequests(user, context, { status: query.status, page: paging })
+  route(apiOperations["approval_requests.list"], ({ user, access, context, query, paging }) =>
+    workflow.listRequests(user, access, context, { status: query.status, page: paging })
   );
-  route(apiOperations["approval_requests.count_pending"], ({ user }) =>
-    workflow.pendingCount(user)
+  route(apiOperations["approval_requests.count_pending"], ({ user, access }) =>
+    workflow.pendingCount(user, access)
   );
-  route(apiOperations["approval_requests.decide"], ({ user, context, params, body }) =>
-    workflow.decideRequest(user, context, { ...body, requestId: requestId(params) })
+  route(apiOperations["approval_requests.decide"], ({ user, access, context, params, body }) =>
+    workflow.decideRequest(user, access, context, { ...body, requestId: requestId(params) })
   );
-  route(apiOperations["approval_requests.withdraw"], ({ user, context, params }) =>
-    workflow.withdrawRequest(user, context, requestId(params))
+  route(apiOperations["approval_requests.withdraw"], ({ user, access, context, params }) =>
+    workflow.withdrawRequest(user, access, context, requestId(params))
   );
-  route(apiOperations["approval_requests.revert"], ({ user, context, params }) =>
-    workflow.revertRequest(user, context, requestId(params))
+  route(apiOperations["approval_requests.revert"], ({ user, access, context, params }) =>
+    workflow.revertRequest(user, access, context, requestId(params))
   );
 }
 

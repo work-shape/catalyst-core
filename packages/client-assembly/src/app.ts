@@ -21,6 +21,7 @@ import type { ChatAttachmentService, ChatServerOptions } from "@vivd-catalyst/ch
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
+  createAuthorizer,
   type HttpRuntime,
   type JobWorker,
   type PlatformStores,
@@ -405,7 +406,8 @@ export async function createClientInstanceExecutionAssembly(
     },
     auditRecorder,
     usageRecorder: usageGovernance,
-    logger
+    logger,
+    authorizer: createAuthorizer(store.access)
   });
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {

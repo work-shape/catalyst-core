@@ -405,9 +405,6 @@ export function createAuthorizer(accessStore?: AccessStore): Authorizer {
   };
 }
 
-/** The evaluator over the holder's own record alone, until the server wires the access store. */
-export const legacyAuthorizer: Authorizer = createAuthorizer();
-
 /** The legacy keys a caller holds: a key is listed when every action behind it is allowed. */
 export function allowedLegacyPermissions(access: ActorAccess): Permission[] {
   return PERMISSIONS.filter((permission) => access.authorize(permission).allowed);

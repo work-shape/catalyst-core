@@ -1,5 +1,6 @@
 // Every schema of the contract. A schema exported here as `<name>Schema` is a named component
 // of the OpenAPI document; the name is the export's, without the suffix.
+export * from "./access";
 export * from "./approval-requests";
 export * from "./collaboration-workspaces";
 export * from "./configuration";

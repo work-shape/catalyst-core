@@ -1,3 +1,4 @@
+import { accessOf, callerOf } from "./support/access";
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -106,7 +107,7 @@ describe("approval request workflow", () => {
       { ...requester, roles: ["admin"], permissions: ["!agent_skills.approve"] }
     ]) {
       await expect(
-        f.workflow.decideRequest(user, context, {
+        f.workflow.decideRequest(user, accessOf(user), context, {
           requestId: request.id,
           decision: "approve"
         })
@@ -123,7 +124,7 @@ describe("approval request workflow", () => {
         await f.store.approvals.getApprovalRequest({ clientInstanceId, requestId: updated.id })
       ).toEqual(updated);
     });
-    const updated = await f.workflow.decideRequest(reviewer, context, {
+    const updated = await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: request.id,
       decision: "approve",
       comment: "Looks good"
@@ -157,7 +158,7 @@ describe("approval request workflow", () => {
     for (const role of ["admin", "superadmin"]) {
       const request = await f.create();
       await expect(
-        f.workflow.decideRequest({ ...requester, roles: [role] }, context, {
+        f.workflow.decideRequest(...callerOf({ ...requester, roles: [role] }), context, {
           requestId: request.id,
           decision: "approve"
         })
@@ -170,7 +171,7 @@ describe("approval request workflow", () => {
     f.handler.isStale = async () => true;
     const request = await f.create();
     await expect(
-      f.workflow.decideRequest(reviewer, context, {
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "approve"
       })
@@ -183,7 +184,7 @@ describe("approval request workflow", () => {
     const f = await fixture();
     const request = await f.create();
     await expect(
-      f.workflow.decideRequest(reviewer, context, {
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "reject",
         comment: "No"
@@ -202,7 +203,7 @@ describe("approval request workflow", () => {
     const request = await f.create();
     for (const comment of [undefined, "", "   "]) {
       await expect(
-        f.workflow.decideRequest(reviewer, context, {
+        f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
           requestId: request.id,
           decision: "request_changes",
           comment
@@ -210,7 +211,7 @@ describe("approval request workflow", () => {
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
     }
     await expect(
-      f.workflow.decideRequest(reviewer, context, {
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "request_changes",
         comment: " Please revise "
@@ -226,28 +227,39 @@ describe("approval request workflow", () => {
   it("allows withdrawal only by the requester while pending", async () => {
     const f = await fixture();
     const request = await f.create();
-    await expect(f.workflow.withdrawRequest(reviewer, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.withdrawRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).rejects.toMatchObject({
       code: "FORBIDDEN"
     });
-    const withdrawn = await f.workflow.withdrawRequest(requester, context, request.id);
+    const withdrawn = await f.workflow.withdrawRequest(
+      requester,
+      accessOf(requester),
+      context,
+      request.id
+    );
     expect(withdrawn.status).toBe("withdrawn");
     expect(f.onDecided).toHaveBeenCalledWith(withdrawn);
-    await expect(f.workflow.withdrawRequest(requester, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.withdrawRequest(requester, accessOf(requester), context, request.id)
+    ).rejects.toMatchObject({
       code: "CONFLICT"
     });
     await expect(
-      f.workflow.decideRequest(reviewer, context, {
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "approve"
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(f.apply).not.toHaveBeenCalled();
     const decided = await f.create();
-    await f.workflow.decideRequest(reviewer, context, {
+    await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: decided.id,
       decision: "reject"
     });
-    await expect(f.workflow.withdrawRequest(requester, context, decided.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.withdrawRequest(requester, accessOf(requester), context, decided.id)
+    ).rejects.toMatchObject({
       code: "CONFLICT"
     });
   });
@@ -263,17 +275,22 @@ describe("approval request workflow", () => {
       await gate;
       return { applied: true };
     });
-    const first = f.workflow.decideRequest(reviewer, context, {
+    const first = f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: request.id,
       decision: "approve"
     });
     await vi.waitFor(() => expect(f.apply).toHaveBeenCalledTimes(1));
     // The approval holds the row lock until its handler returns, so the other two wait on it.
-    const rejection = f.workflow.decideRequest(reviewer, context, {
+    const rejection = f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: request.id,
       decision: "reject"
     });
-    const withdrawal = f.workflow.withdrawRequest(requester, context, request.id);
+    const withdrawal = f.workflow.withdrawRequest(
+      requester,
+      accessOf(requester),
+      context,
+      request.id
+    );
     release?.();
     const [approved, rejected, withdrawn] = await Promise.allSettled([
       first,
@@ -292,17 +309,19 @@ describe("approval request workflow", () => {
     const request = await f.create();
     f.apply.mockRejectedValueOnce(new Error("Failed"));
     await expect(
-      f.workflow.decideRequest(reviewer, context, {
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "approve"
       })
     ).rejects.toThrow("Failed");
     expect(f.onDecided).not.toHaveBeenCalled();
-    await expect(f.workflow.getRequest(requester, context, request.id)).resolves.toMatchObject({
+    await expect(
+      f.workflow.getRequest(requester, accessOf(requester), context, request.id)
+    ).resolves.toMatchObject({
       status: "pending"
     });
     await expect(
-      f.workflow.decideRequest(reviewer, context, {
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "reject"
       })
@@ -314,14 +333,22 @@ describe("approval request workflow", () => {
     const request = await f.create();
     f.handler.isApplied = async () => true;
     await expect(
-      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "reject" })
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+        requestId: request.id,
+        decision: "reject"
+      })
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    await expect(f.workflow.withdrawRequest(requester, context, request.id)).rejects.toMatchObject({
+    await expect(
+      f.workflow.withdrawRequest(requester, accessOf(requester), context, request.id)
+    ).rejects.toMatchObject({
       code: "CONFLICT"
     });
     expect(f.onDecided).not.toHaveBeenCalled();
     await expect(
-      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "approve" })
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+        requestId: request.id,
+        decision: "approve"
+      })
     ).resolves.toMatchObject({ status: "approved" });
   });
 
@@ -330,21 +357,28 @@ describe("approval request workflow", () => {
     const visible = await f.create();
     await f.create("other");
     const rejected = await f.create();
-    await f.workflow.decideRequest(reviewer, context, {
+    await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: rejected.id,
       decision: "reject"
     });
-    expect((await f.workflow.listRequests(reviewer, context)).map((r) => r.id).sort()).toEqual(
-      [visible.id, rejected.id].sort()
-    );
     expect(
-      (await f.workflow.listRequests(reviewer, context, { status: "pending" })).map((r) => r.id)
+      (await f.workflow.listRequests(reviewer, accessOf(reviewer), context)).map((r) => r.id).sort()
+    ).toEqual([visible.id, rejected.id].sort());
+    expect(
+      (
+        await f.workflow.listRequests(reviewer, accessOf(reviewer), context, { status: "pending" })
+      ).map((r) => r.id)
     ).toEqual([visible.id]);
-    await expect(f.workflow.pendingCount(reviewer)).resolves.toEqual({ count: 1, canReview: true });
-    await expect(f.workflow.listRequests(requester, context)).rejects.toMatchObject({
+    await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
+      count: 1,
+      canReview: true
+    });
+    await expect(
+      f.workflow.listRequests(requester, accessOf(requester), context)
+    ).rejects.toMatchObject({
       code: "FORBIDDEN"
     });
-    await expect(f.workflow.pendingCount(requester)).resolves.toEqual({
+    await expect(f.workflow.pendingCount(requester, accessOf(requester))).resolves.toEqual({
       count: 0,
       canReview: false
     });
@@ -364,7 +398,7 @@ describe("approval request workflow", () => {
       // The store returns the page it is asked for; the route always asks for one.
       expect(
         (
-          await f.workflow.listRequests(reviewer, context, {
+          await f.workflow.listRequests(reviewer, accessOf(reviewer), context, {
             status: "pending",
             page: { limit: 200 }
           })
@@ -375,12 +409,14 @@ describe("approval request workflow", () => {
           .reverse()
           .map((r) => r.id)
       );
-      await expect(f.workflow.pendingCount(reviewer)).resolves.toEqual({
+      await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
         count: 205,
         canReview: true
       });
       await expect(
-        f.workflow.pendingCount({ ...reviewer, permissions: ["!agent_skills.approve"] })
+        f.workflow.pendingCount(
+          ...callerOf({ ...reviewer, permissions: ["!agent_skills.approve"] })
+        )
       ).resolves.toEqual({ count: 0, canReview: false });
     } finally {
       vi.useRealTimers();
@@ -390,37 +426,45 @@ describe("approval request workflow", () => {
   it("shows previews and caller capabilities while hiding unrelated requests", async () => {
     const f = await fixture();
     const request = await f.create();
-    await expect(f.workflow.getRequest(requester, context, request.id)).resolves.toMatchObject({
+    await expect(
+      f.workflow.getRequest(requester, accessOf(requester), context, request.id)
+    ).resolves.toMatchObject({
       preview: { proposed: "new" },
       canDecide: false,
       canWithdraw: true
     });
-    await expect(f.workflow.getRequest(reviewer, context, request.id)).resolves.toMatchObject({
+    await expect(
+      f.workflow.getRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).resolves.toMatchObject({
       canDecide: true,
       canWithdraw: false
     });
     for (const id of [request.id, "missing"]) {
       await expect(
-        f.workflow.getRequest({ ...requester, id: "stranger" }, context, id)
+        f.workflow.getRequest(...callerOf({ ...requester, id: "stranger" }), context, id)
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
     await expect(
       f.workflow.getRequest(
-        { ...reviewer, clientInstanceId: asClientInstanceId("another") },
+        ...callerOf({ ...reviewer, clientInstanceId: asClientInstanceId("another") }),
         context,
         request.id
       )
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     const selfApprover = { ...requester, permissions: ["agent_skills.approve"] };
-    await expect(f.workflow.getRequest(selfApprover, context, request.id)).resolves.toMatchObject({
+    await expect(
+      f.workflow.getRequest(selfApprover, accessOf(selfApprover), context, request.id)
+    ).resolves.toMatchObject({
       canDecide: true,
       canWithdraw: true
     });
-    await f.workflow.decideRequest(selfApprover, context, {
+    await f.workflow.decideRequest(selfApprover, accessOf(selfApprover), context, {
       requestId: request.id,
       decision: "approve"
     });
-    await expect(f.workflow.getRequest(selfApprover, context, request.id)).resolves.toMatchObject({
+    await expect(
+      f.workflow.getRequest(selfApprover, accessOf(selfApprover), context, request.id)
+    ).resolves.toMatchObject({
       canDecide: false,
       canWithdraw: false
     });
@@ -432,25 +476,47 @@ describe("approval request workflow", () => {
     const pending = await f.create();
     const chatScoped = (user: AuthenticatedUser, scopes: string[]) => ({ ...user, scopes });
     await expect(
-      f.workflow.getRequest(chatScoped(reviewer, ["conversation:read"]), context, pending.id)
+      f.workflow.getRequest(
+        ...callerOf(chatScoped(reviewer, ["conversation:read"])),
+        context,
+        pending.id
+      )
     ).resolves.toMatchObject({ canDecide: false });
     await expect(
-      f.workflow.getRequest(chatScoped(requester, ["conversation:read"]), context, pending.id)
+      f.workflow.getRequest(
+        ...callerOf(chatScoped(requester, ["conversation:read"])),
+        context,
+        pending.id
+      )
     ).resolves.toMatchObject({ canWithdraw: false });
     await expect(
-      f.workflow.getRequest(chatScoped(requester, ["conversation:write"]), context, pending.id)
+      f.workflow.getRequest(
+        ...callerOf(chatScoped(requester, ["conversation:write"])),
+        context,
+        pending.id
+      )
     ).resolves.toMatchObject({ canWithdraw: true });
     await expect(
-      f.workflow.getRequest(chatScoped(reviewer, ["governance:write"]), context, pending.id)
+      f.workflow.getRequest(
+        ...callerOf(chatScoped(reviewer, ["governance:write"])),
+        context,
+        pending.id
+      )
     ).resolves.toMatchObject({ canDecide: true });
-    await f.workflow.decideRequest(reviewer, context, {
+    await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: pending.id,
       decision: "approve"
     });
     await expect(
-      f.workflow.getRequest(chatScoped(reviewer, ["conversation:read"]), context, pending.id)
+      f.workflow.getRequest(
+        ...callerOf(chatScoped(reviewer, ["conversation:read"])),
+        context,
+        pending.id
+      )
     ).resolves.toMatchObject({ canRevert: false });
-    await expect(f.workflow.getRequest(reviewer, context, pending.id)).resolves.toMatchObject({
+    await expect(
+      f.workflow.getRequest(reviewer, accessOf(reviewer), context, pending.id)
+    ).resolves.toMatchObject({
       canRevert: true
     });
   });
@@ -458,11 +524,13 @@ describe("approval request workflow", () => {
   it("handles an empty registry without granting queue access", async () => {
     const f = await fixture();
     f.handlers.clear();
-    await expect(f.workflow.pendingCount(reviewer)).resolves.toEqual({
+    await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
       count: 0,
       canReview: false
     });
-    await expect(f.workflow.listRequests(reviewer, context)).rejects.toMatchObject({
+    await expect(
+      f.workflow.listRequests(reviewer, accessOf(reviewer), context)
+    ).rejects.toMatchObject({
       code: "FORBIDDEN"
     });
     await expect(f.create()).rejects.toMatchObject({ code: "NOT_FOUND" });

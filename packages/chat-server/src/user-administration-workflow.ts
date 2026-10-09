@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   AppError,
+  isSuperadmin,
   auditActorFromUser,
   type AuthenticatedUser,
   type RuntimeCallContext,
@@ -79,12 +80,12 @@ export class UserAdministrationWorkflow {
     const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId,
       page,
-      excludeSuperadmins: !this.isSuperadmin(user)
+      excludeSuperadmins: !isSuperadmin(user)
     });
-    if (this.isSuperadmin(user)) {
+    if (isSuperadmin(user)) {
       return users;
     }
-    return users.filter((candidate) => !candidate.roles.includes("superadmin"));
+    return users.filter((candidate) => !isSuperadmin(candidate));
   }
 
   async createUser(
@@ -147,7 +148,7 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: DeleteUserCommand
   ): Promise<UserRecord> {
-    if (!this.isSuperadmin(actor)) {
+    if (!isSuperadmin(actor)) {
       throw new AppError("FORBIDDEN", "User deletion requires a superadmin role");
     }
     await this.recordAccess(actor, context, "governance.user_delete_authorized");
@@ -482,7 +483,7 @@ export class UserAdministrationWorkflow {
   }
 
   private requireAssignableRoles(actor: AuthenticatedUser, roles: UserRole[] | undefined): void {
-    if (roles?.includes("superadmin") && !this.isSuperadmin(actor)) {
+    if (roles && isSuperadmin({ roles }) && !isSuperadmin(actor)) {
       throw new AppError("FORBIDDEN", "Only superadmins can assign superadmin access");
     }
   }
@@ -509,7 +510,7 @@ export class UserAdministrationWorkflow {
     }
     if (
       changedEntries.some((permission) => permission.replace(/^!/u, "") === "api_access.manage") &&
-      !this.isSuperadmin(actor)
+      !isSuperadmin(actor)
     ) {
       throw new AppError(
         "FORBIDDEN",
@@ -520,7 +521,7 @@ export class UserAdministrationWorkflow {
       changedEntries.some(
         (permission) => permission.replace(/^!/u, "") === "agent_models.manage"
       ) &&
-      !this.isSuperadmin(actor)
+      !isSuperadmin(actor)
     ) {
       throw new AppError(
         "FORBIDDEN",
@@ -530,13 +531,9 @@ export class UserAdministrationWorkflow {
   }
 
   private requireManageableUser(actor: AuthenticatedUser, user: UserRecord): void {
-    if (user.roles.includes("superadmin") && !this.isSuperadmin(actor)) {
+    if (isSuperadmin(user) && !isSuperadmin(actor)) {
       throw new AppError("FORBIDDEN", "Only superadmins can manage superadmin users");
     }
-  }
-
-  private isSuperadmin(user: AuthenticatedUser): boolean {
-    return user.roles.includes("superadmin");
   }
 
   private async deleteStandalonePasswordSignIns(user: UserRecord): Promise<void> {
@@ -555,15 +552,14 @@ export class UserAdministrationWorkflow {
   }
 
   private async requireAtLeastOneRemainingSuperadmin(deletedUser: UserRecord): Promise<void> {
-    if (!deletedUser.roles.includes("superadmin")) {
+    if (!isSuperadmin(deletedUser)) {
       return;
     }
     const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
     const remainingActiveSuperadmin = users.some(
-      (user) =>
-        user.id !== deletedUser.id && user.status === "active" && user.roles.includes("superadmin")
+      (user) => user.id !== deletedUser.id && user.status === "active" && isSuperadmin(user)
     );
     if (!remainingActiveSuperadmin) {
       throw new AppError("VALIDATION_FAILED", "At least one active superadmin must remain");

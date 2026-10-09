@@ -118,7 +118,7 @@ export interface ChatServerOptions {
   };
   /** Counts calls per operation and caller. Without one the server counts in its own process. */
   rateLimiter?: RateLimiter;
-  /** Decides what a caller may do. Without one the rights of the roles decide. */
+  /** Decides what a caller may do. Without one the evaluator over the instance's access store decides. */
   authorizer?: Authorizer;
   /** What the calls of registered operations run with beyond the server's own defaults. */
   operations?: {

@@ -12,16 +12,16 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
     workflow.getOverview(identity, context)
   );
 
-  route(apiOperations["config_assets.get"], ({ identity, params }) =>
-    workflow.getAsset(identity, assetParams(params))
+  route(apiOperations["config_assets.get"], ({ access, params }) =>
+    workflow.getAsset(access, assetParams(params))
   );
 
-  route(apiOperations["config_assets.put"], ({ identity, context, params, body }) =>
-    workflow.putAsset(identity, context, { ...assetParams(params), ...body })
+  route(apiOperations["config_assets.put"], ({ identity, access, context, params, body }) =>
+    workflow.putAsset(identity, access, context, { ...assetParams(params), ...body })
   );
 
-  route(apiOperations["config_assets.delete"], ({ identity, context, params, body }) =>
-    workflow.deleteAsset(identity, context, { ...assetParams(params), ...body })
+  route(apiOperations["config_assets.delete"], ({ identity, access, context, params, body }) =>
+    workflow.deleteAsset(identity, access, context, { ...assetParams(params), ...body })
   );
 
   route(apiOperations["config_agents.set_default"], ({ identity, context, body }) =>
@@ -37,12 +37,12 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
 
   route(apiOperations["instance.workspaces.list"], () => workflow.listAdministeredWorkspaces());
 
-  route(apiOperations["config_assets.revisions.list"], ({ identity, params, paging }) =>
-    workflow.listRevisions(identity, { ...assetParams(params), page: paging })
+  route(apiOperations["config_assets.revisions.list"], ({ access, params, paging }) =>
+    workflow.listRevisions(access, { ...assetParams(params), page: paging })
   );
 
-  route(apiOperations["config_assets.revert"], ({ identity, context, params, body }) =>
-    workflow.revertAsset(identity, context, { ...assetParams(params), ...body })
+  route(apiOperations["config_assets.revert"], ({ identity, access, context, params, body }) =>
+    workflow.revertAsset(identity, access, context, { ...assetParams(params), ...body })
   );
 
   route(apiOperations["config_assets.export"], ({ identity, context }) =>

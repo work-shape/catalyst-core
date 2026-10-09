@@ -1,4 +1,5 @@
 import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
+import { accessOf, callerOf } from "./support/access";
 import postgres from "postgres";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance } from "./support/test-instance";
@@ -111,8 +112,8 @@ describe("approval decision history", () => {
     f.handler.isStale = async () => status === "superseded";
     const decided =
       status === "withdrawn"
-        ? await f.workflow.withdrawRequest(owner, context, request.id)
-        : await f.workflow.decideRequest(reviewer, context, {
+        ? await f.workflow.withdrawRequest(owner, accessOf(owner), context, request.id)
+        : await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
             requestId: request.id,
             decision:
               status === "rejected"
@@ -125,7 +126,7 @@ describe("approval decision history", () => {
     const result =
       status === "reverted"
         ? await f.workflow.revertRequest(
-            { ...reviewer, id: "reverter", displayLabel: "Reverter" },
+            ...callerOf({ ...reviewer, id: "reverter", displayLabel: "Reverter" }),
             context,
             request.id
           )
@@ -165,12 +166,17 @@ describe("approval decision history", () => {
   it("lets the origin agent revise only a proposal its own requester sent back", async () => {
     const f = await fixture();
     const ownerWhoApproves = { ...owner, permissions: ["agent_skills.approve" as const] };
-    const own = await f.workflow.decideRequest(ownerWhoApproves, context, {
-      requestId: (await f.create()).id,
-      decision: "request_changes",
-      comment: "Shorter"
-    });
-    const taken = await f.workflow.decideRequest(reviewer, context, {
+    const own = await f.workflow.decideRequest(
+      ownerWhoApproves,
+      accessOf(ownerWhoApproves),
+      context,
+      {
+        requestId: (await f.create()).id,
+        decision: "request_changes",
+        comment: "Shorter"
+      }
+    );
+    const taken = await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: (await f.create()).id,
       decision: "request_changes",
       comment: "Without names"
@@ -229,11 +235,17 @@ describe("approval decision history", () => {
     });
     const request = await f.create();
     await expect(
-      workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "reject" })
+      workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+        requestId: request.id,
+        decision: "reject"
+      })
     ).rejects.toThrow("Hook failed");
     expect(await f.messages()).toHaveLength(1);
     await expect(
-      f.workflow.decideRequest(reviewer, context, { requestId: request.id, decision: "approve" })
+      f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+        requestId: request.id,
+        decision: "approve"
+      })
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await f.messages()).toHaveLength(1);
   });
@@ -246,7 +258,7 @@ describe("approval decision history", () => {
       conversationId: f.conversation.id,
       deletedAt: new Date().toISOString()
     });
-    await f.workflow.decideRequest(reviewer, context, {
+    await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: request.id,
       decision: "reject"
     });
@@ -266,7 +278,7 @@ describe("approval decision history", () => {
       text: "Continue"
     });
     const request = await f.create();
-    await f.workflow.decideRequest(reviewer, context, {
+    await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: request.id,
       decision: "reject"
     });
@@ -287,7 +299,7 @@ describe("approval decision history", () => {
     const f = await fixture();
     for (let index = 0; index < 4; index += 1) {
       const request = await f.create();
-      await f.workflow.decideRequest(reviewer, context, {
+      await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
         requestId: request.id,
         decision: "reject"
       });
@@ -361,7 +373,7 @@ describe("approval decision history", () => {
               expect((await f.messages()).at(-1)?.metadata?.agentRuntime).toMatchObject({
                 kind: "assistant_tool_calls"
               });
-              await f.workflow.decideRequest(reviewer, context, {
+              await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
                 requestId: request.id,
                 decision: "request_changes",
                 comment: "Include the appendix"

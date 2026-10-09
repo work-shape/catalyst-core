@@ -1,3 +1,4 @@
+import { accessOf, callerOf } from "./support/access";
 import { createTestInstance } from "./support/test-instance";
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-clock";
@@ -373,7 +374,9 @@ describe("approval checks at creation", () => {
     const request = await f.workflow.createRequest(user, context, command);
     const checks = [{ id: rule.id, status: "warned", message: "Remove the personal data." }];
     expect(request.checks).toEqual(checks);
-    expect(await f.workflow.getRequest(user, context, request.id)).toMatchObject({ checks });
+    expect(await f.workflow.getRequest(user, accessOf(user), context, request.id)).toMatchObject({
+      checks
+    });
     expect(
       await f.store.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id })
     ).toMatchObject({ checks });
@@ -383,10 +386,14 @@ describe("approval checks at creation", () => {
       status: "pending",
       checks: [{ id: rule.id, status: "warned" }]
     });
-    await f.workflow.decideRequest({ ...user, permissions: ["agent_skills.approve"] }, context, {
-      requestId: request.id,
-      decision: "approve"
-    });
+    await f.workflow.decideRequest(
+      ...callerOf({ ...user, permissions: ["agent_skills.approve"] }),
+      context,
+      {
+        requestId: request.id,
+        decision: "approve"
+      }
+    );
     expect(f.complete).toHaveBeenCalledTimes(1);
   });
 
@@ -409,7 +416,7 @@ describe("approval checks at creation", () => {
     const f = await fixture();
     f.complete.mockRejectedValueOnce(new Error("Unavailable"));
     const request = await f.workflow.createRequest(user, context, command);
-    expect(await f.workflow.getRequest(user, context, request.id)).toMatchObject({
+    expect(await f.workflow.getRequest(user, accessOf(user), context, request.id)).toMatchObject({
       status: "pending",
       checks: [{ id: rule.id, status: "warned", message: "" }]
     });

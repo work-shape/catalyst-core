@@ -1,6 +1,6 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createClientBranding, createSafeConfigView } from "@vivd-catalyst/config-schema";
-import { readDatabaseReadiness, resolveEffectivePermissions } from "@vivd-catalyst/core";
+import { allowedLegacyPermissions, readDatabaseReadiness } from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "../agent-availability";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "../request-context";
@@ -15,9 +15,9 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
 
   route(apiOperations["ready.get"], () => readDatabaseReadiness(options.stores));
 
-  route(apiOperations["me.get"], ({ user }) => ({
+  route(apiOperations["me.get"], ({ user, access }) => ({
     ...user,
-    permissions: [...resolveEffectivePermissions(user)]
+    permissions: allowedLegacyPermissions(access)
   }));
 
   route(apiOperations["branding.get"], ({ request }) =>

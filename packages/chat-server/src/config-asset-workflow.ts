@@ -8,11 +8,9 @@ import {
   type AgentAvailability,
   type ConfigAssetRevisionRecord,
   auditActorFromIdentity,
-  hasPermission,
   isJsonObject,
-  legacyPermissionFor,
-  requirePermission,
   unknownToJsonValue,
+  type ActorAccess,
   type AgentConfig,
   type AgentEditableField,
   type AgentModelSettingField,
@@ -78,6 +76,7 @@ export class ConfigAssetWorkflow {
       version: state.version,
       ...(state.defaultAgentName === undefined ? {} : { defaultAgentName: state.defaultAgentName }),
       assets: assets.map((asset) => ({
+        id: asset.id,
         kind: asset.kind,
         name: asset.name,
         revision: asset.revision,
@@ -90,22 +89,24 @@ export class ConfigAssetWorkflow {
     };
   }
 
-  async getAsset(user: AuthenticatedIdentity, input: { kind: ConfigAssetKind; name: string }) {
-    requirePermission(user, legacyPermissionFor(`${input.kind}.read`));
+  async getAsset(access: ActorAccess, input: { kind: ConfigAssetKind; name: string }) {
+    await this.requireAssetAccess(access, `${input.kind}.read`, input);
     const asset = await this.getActiveAssetOrThrow(input);
     return projectConfigAsset(asset);
   }
 
   async putAsset(
     user: AuthenticatedIdentity,
+    access: ActorAccess,
     context: ConfigAssetCallContext,
     command: PutConfigAssetCommand
   ) {
-    this.requireAssetWrite(user, `${command.kind}.write`);
+    await this.requireAssetAccess(access, `${command.kind}.write`, command);
     await this.authorizeInteractiveWrite(user, context);
     requireMatchingConfigName(command.config, command.name);
     const current = await this.loadCurrentBundle();
     const setInitialDefault = shouldSetInitialDefault(current, command.kind);
+    this.requireDefaultAgentChange(access, setInitialDefault);
     const replaced = replaceBundleAsset(current, {
       ...command,
       config:
@@ -121,9 +122,10 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
+    await this.assertNamespaceAllowlists(current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
-      user,
+      access,
       kind: command.kind,
       name: command.name,
       currentConfig: findBundleConfig(current, command.kind, command.name),
@@ -158,15 +160,17 @@ export class ConfigAssetWorkflow {
 
   async deleteAsset(
     user: AuthenticatedIdentity,
+    access: ActorAccess,
     context: ConfigAssetCallContext,
     command: AssetMutationCommand
   ) {
-    this.requireAssetWrite(user, `${command.kind}.delete`);
+    await this.requireAssetAccess(access, `${command.kind}.delete`, command);
     await this.authorizeInteractiveWrite(user, context);
     this.assertInteractiveDeleteAllowed(command.kind);
     const existing = await this.getActiveAssetOrThrow(command);
     const current = await this.loadCurrentBundle();
     const clearLastDefault = shouldClearLastDefault(current, command);
+    this.requireDefaultAgentChange(access, clearLastDefault);
     const removed = removeBundleAsset(current, command);
     const candidate = clearLastDefault
       ? { agents: removed.agents, skills: removed.skills }
@@ -280,10 +284,10 @@ export class ConfigAssetWorkflow {
   }
 
   async listRevisions(
-    user: AuthenticatedIdentity,
+    access: ActorAccess,
     input: { kind: ConfigAssetKind; name: string; page?: StorePage }
   ) {
-    requirePermission(user, legacyPermissionFor(`${input.kind}.read`));
+    await this.requireAssetAccess(access, `${input.kind}.read`, input);
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,
       ...input
@@ -301,10 +305,11 @@ export class ConfigAssetWorkflow {
 
   async revertAsset(
     user: AuthenticatedIdentity,
+    access: ActorAccess,
     context: ConfigAssetCallContext,
     command: AssetMutationCommand & { revision: number }
   ) {
-    this.requireAssetWrite(user, `${command.kind}.write`);
+    await this.requireAssetAccess(access, `${command.kind}.write`, command);
     await this.authorizeInteractiveWrite(user, context);
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,
@@ -321,6 +326,7 @@ export class ConfigAssetWorkflow {
     requireMatchingConfigName(target.config, command.name);
     const current = await this.loadCurrentBundle();
     const setInitialDefault = shouldSetInitialDefault(current, command.kind);
+    this.requireDefaultAgentChange(access, setInitialDefault);
     const replaced = replaceBundleAsset(current, {
       kind: command.kind,
       name: command.name,
@@ -331,9 +337,10 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
+    await this.assertNamespaceAllowlists(current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
-      user,
+      access,
       kind: command.kind,
       name: command.name,
       currentConfig: findBundleConfig(current, command.kind, command.name),
@@ -486,10 +493,9 @@ export class ConfigAssetWorkflow {
       );
     }
     const validated = this.validateBundle(candidate);
-    this.assertChangedUserSelectableModelsEligible(
-      assetBundle(currentAssets, currentState.defaultAgentName),
-      validated.agents
-    );
+    const currentBundle = assetBundle(currentAssets, currentState.defaultAgentName);
+    this.assertChangedUserSelectableModelsEligible(currentBundle, validated.agents);
+    await this.assertNamespaceAllowlists(currentBundle, validated.agents);
     const providedAgentNames = new Set(command.agents.map(readConfigName));
     const providedSkillNames = new Set(command.skills.map(readConfigName));
     const desiredKeys = new Set([
@@ -561,24 +567,85 @@ export class ConfigAssetWorkflow {
   ): Promise<{ valid: true }> {
     await this.recordAccess(user, context, "governance.config_assets_release_authorized");
     const validated = this.validateBundle(command);
-    this.assertChangedUserSelectableModelsEligible(
-      await this.loadCurrentBundle(),
-      validated.agents
-    );
+    const current = await this.loadCurrentBundle();
+    this.assertChangedUserSelectableModelsEligible(current, validated.agents);
+    await this.assertNamespaceAllowlists(current, validated.agents);
     return { valid: true };
   }
 
-  // Rights that do not depend on the asset kind are the operation's `requires`. A right on
-  // one agent or one skill is checked here, where the kind is known.
-  private requireAssetWrite(
-    user: AuthenticatedIdentity,
-    action: Extract<PlatformAction, `${ConfigAssetKind}.${"write" | "delete"}`>
-  ): void {
-    if (!hasPermission(user, legacyPermissionFor(action))) {
-      throw new AppError(
-        "FORBIDDEN",
-        "Config asset changes require 'config_assets.write' permission"
-      );
+  // Rights that do not depend on the asset are the operation's `requires`, answered at instance
+  // scope. A right on one agent or one skill is checked here, where kind and name are known, so
+  // a grant in a Namespace or on the asset itself can answer it. The refusal is the same
+  // whether or not the asset exists.
+  private async requireAssetAccess(
+    access: ActorAccess,
+    action: Extract<PlatformAction, `${ConfigAssetKind}.${"read" | "write" | "delete"}`>,
+    input: { kind: ConfigAssetKind; name: string }
+  ): Promise<void> {
+    const asset = await this.options.configAssets.store.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: input.kind,
+      name: input.name
+    });
+    access.require(action, {
+      kind: input.kind,
+      name: input.name,
+      ...(asset?.status === "active" ? { assetId: asset.id } : {})
+    });
+  }
+
+  // The first agent becomes the default and the last one takes the default with it. Either is
+  // a default-agent change, which no Namespace or asset grant opens.
+  private requireDefaultAgentChange(access: ActorAccess, changesDefault: boolean): void {
+    if (changesDefault) {
+      access.require("agent.write");
+    }
+  }
+
+  /**
+   * A Namespace's lists bind every writer, an instance administrator and the release sync
+   * included. They are checked for every agent a write creates or changes and only restrict:
+   * a null list allows everything, an empty one nothing.
+   */
+  private async assertNamespaceAllowlists(
+    current: ConfigAssetBundleInput,
+    nextAgents: AgentConfig[]
+  ): Promise<void> {
+    const namespaces = await this.options.stores.access.listNamespaces({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    for (const agent of nextAgents) {
+      const namespace = namespaces.find((candidate) => agent.name.startsWith(candidate.prefix));
+      if (
+        !namespace ||
+        configValuesEqual(findBundleConfig(current, "agent", agent.name), toJsonObject(agent))
+      ) {
+        continue;
+      }
+      const allowedToolNames = namespace.allowedToolNames;
+      const toolName =
+        allowedToolNames && agent.toolNames.find((name) => !allowedToolNames.includes(name));
+      if (toolName !== undefined) {
+        throw new AppError(
+          "FORBIDDEN",
+          `Tool '${toolName}' is not allowed in Namespace '${namespace.prefix}'`,
+          { reason: "tool_not_allowed", toolName, namespace: namespace.prefix }
+        );
+      }
+      const allowedModelBindingIds = namespace.allowedModelBindingIds;
+      const modelBindingId =
+        allowedModelBindingIds &&
+        [
+          ...(agent.modelBindingId === undefined ? [] : [agent.modelBindingId]),
+          ...(agent.userSelectableModelBindingIds ?? [])
+        ].find((id) => !allowedModelBindingIds.includes(id));
+      if (modelBindingId !== undefined) {
+        throw new AppError(
+          "FORBIDDEN",
+          `Model binding '${modelBindingId}' is not allowed in Namespace '${namespace.prefix}'`,
+          { reason: "model_not_allowed", modelBindingId, namespace: namespace.prefix }
+        );
+      }
     }
   }
 
@@ -659,7 +726,7 @@ export class ConfigAssetWorkflow {
   }
 
   private assertInteractiveAssetUpsertAllowed(input: {
-    user: AuthenticatedIdentity;
+    access: ActorAccess;
     kind: ConfigAssetKind;
     name: string;
     currentConfig: AgentConfig | SkillConfig | undefined;
@@ -690,7 +757,7 @@ export class ConfigAssetWorkflow {
           modelSettingValue(nextAgent, field)
         )
     );
-    if (changedModelSettings.length > 0 && !hasPermission(input.user, "agent_models.manage")) {
+    if (changedModelSettings.length > 0 && !input.access.authorize("agent_models.manage").allowed) {
       throw new AppError(
         "FORBIDDEN",
         `Changing agent model settings (${changedModelSettings.join(", ")}) requires 'agent_models.manage' permission`

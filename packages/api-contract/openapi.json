@@ -16,6 +16,9 @@
       "name": "API Access"
     },
     {
+      "name": "Access"
+    },
+    {
       "name": "Account"
     },
     {
@@ -2598,6 +2601,663 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/instance/access/effective": {
+      "get": {
+        "operationId": "permissions.effective",
+        "summary": "List what one holder is allowed and denied, with the source of each entry",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "holderKind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "service_principal"
+              ]
+            }
+          },
+          {
+            "name": "holderId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectivePermissions"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/instance/access/grants": {
+      "get": {
+        "operationId": "permissions.list",
+        "summary": "List grant rows",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "holderKind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/GrantHolderKind"
+            }
+          },
+          {
+            "name": "holderId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "scopeKind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/GrantScopeKind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PermissionGrant"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      },
+      "post": {
+        "operationId": "permissions.grant",
+        "summary": "Allow or deny a user an action in a Namespace or on one asset",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:write"
+            ]
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePermissionGrantRequestInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/instance/access/grants/{grantId}": {
+      "delete": {
+        "operationId": "permissions.revoke",
+        "summary": "Remove a grant row",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/instance/access/namespaces": {
+      "get": {
+        "operationId": "namespaces.list",
+        "summary": "List Namespaces with the grants and assets each one covers",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NamespaceUsage"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      },
+      "post": {
+        "operationId": "namespaces.create",
+        "summary": "Register a name prefix as a Namespace",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:write"
+            ]
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNamespaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Namespace"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/instance/access/namespaces/{prefix}": {
+      "patch": {
+        "operationId": "namespaces.update",
+        "summary": "Change a Namespace's display name and its tool and model lists",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNamespaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Namespace"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      },
+      "delete": {
+        "operationId": "namespaces.delete",
+        "summary": "Delete a Namespace that no grant row names",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Namespace"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "write"
       }
     },
     "/api/v1/instance/api-credentials/{credentialId}/revoke": {
@@ -10204,6 +10864,9 @@
       "ConfigAssetSummary": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string"
+          },
           "kind": {
             "$ref": "#/components/schemas/ConfigAssetKind"
           },
@@ -11070,6 +11733,90 @@
           "message"
         ]
       },
+      "CreateNamespaceRequest": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "$ref": "#/components/schemas/NamespacePrefix"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "allowedToolNames": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowedModelBindingIds": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "prefix",
+          "displayName"
+        ]
+      },
+      "CreatePermissionGrantRequestInput": {
+        "type": "object",
+        "properties": {
+          "holderKind": {
+            "$ref": "#/components/schemas/GrantHolderKind"
+          },
+          "holderId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scopeKind": {
+            "$ref": "#/components/schemas/GrantScopeKind"
+          },
+          "scopeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "namespace": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effect": {
+            "default": "allow",
+            "$ref": "#/components/schemas/GrantEffect"
+          }
+        },
+        "required": [
+          "holderKind",
+          "holderId",
+          "action",
+          "scopeKind"
+        ]
+      },
       "CreateServicePrincipalRequest": {
         "type": "object",
         "properties": {
@@ -11342,6 +12089,56 @@
           "attachments"
         ]
       },
+      "EffectivePermissions": {
+        "type": "object",
+        "properties": {
+          "holderActive": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "effect": {
+                  "$ref": "#/components/schemas/GrantEffect"
+                },
+                "scopeKind": {
+                  "$ref": "#/components/schemas/GrantScopeKind"
+                },
+                "scopeId": {
+                  "type": "string"
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "role",
+                    "legacy",
+                    "legacy_ref",
+                    "grant"
+                  ]
+                }
+              },
+              "required": [
+                "action",
+                "effect",
+                "scopeKind",
+                "source"
+              ]
+            }
+          }
+        },
+        "required": [
+          "holderActive",
+          "items"
+        ]
+      },
       "ExchangeApiKeyResponse": {
         "type": "object",
         "properties": {
@@ -11401,6 +12198,31 @@
           "agents",
           "skills",
           "version"
+        ]
+      },
+      "GrantEffect": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny"
+        ]
+      },
+      "GrantHolderKind": {
+        "type": "string",
+        "enum": [
+          "user",
+          "service_principal",
+          "role",
+          "group"
+        ]
+      },
+      "GrantScopeKind": {
+        "type": "string",
+        "enum": [
+          "instance",
+          "workspace",
+          "namespace",
+          "asset"
         ]
       },
       "IssueSessionTokenRequestInput": {
@@ -11997,6 +12819,134 @@
         },
         "required": [
           "collaborationWorkspaceId"
+        ]
+      },
+      "Namespace": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "allowedToolNames": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowedModelBindingIds": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "prefix",
+          "displayName",
+          "allowedToolNames",
+          "allowedModelBindingIds",
+          "createdBy",
+          "createdAt"
+        ]
+      },
+      "NamespacePrefix": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 32,
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*-$"
+      },
+      "NamespaceUsage": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "allowedToolNames": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowedModelBindingIds": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "grantCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "assetCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "prefix",
+          "displayName",
+          "allowedToolNames",
+          "allowedModelBindingIds",
+          "createdBy",
+          "createdAt",
+          "grantCount",
+          "assetCount"
         ]
       },
       "NotReady": {
@@ -12741,6 +13691,51 @@
         "required": [
           "count",
           "canReview"
+        ]
+      },
+      "PermissionGrant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "holderKind": {
+            "$ref": "#/components/schemas/GrantHolderKind"
+          },
+          "holderId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "effect": {
+            "$ref": "#/components/schemas/GrantEffect"
+          },
+          "scopeKind": {
+            "$ref": "#/components/schemas/GrantScopeKind"
+          },
+          "scopeId": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "grantedBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "holderKind",
+          "holderId",
+          "action",
+          "effect",
+          "scopeKind",
+          "grantedBy",
+          "createdAt"
         ]
       },
       "PutConfigAssetRequest": {
@@ -14058,6 +15053,46 @@
         "required": [
           "displayLabel"
         ]
+      },
+      "UpdateNamespaceRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "allowedToolNames": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowedModelBindingIds": {
+            "anyOf": [
+              {
+                "maxItems": 500,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       },
       "UpdateServicePrincipalRequest": {
         "type": "object",
