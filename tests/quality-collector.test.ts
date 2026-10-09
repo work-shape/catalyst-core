@@ -194,6 +194,48 @@ const url = process.env.POSTGRES_STORE_TEST_DATABASE_URL;
 describe.skip(String(url), () => {});
 `,
 
+  // Literal interface text, in each place the rule reads, and what it leaves alone
+  [`${source}/screens/text.tsx`]: `export const view = <p>Save changes</p>;\n`,
+  [`${source}/screens/expression.tsx`]: `export const view = <p>{"Save changes"}</p>;\n`,
+  [`${source}/screens/condition.tsx`]: `declare const saved: boolean;
+declare const label: string;
+export const view = <p>{saved ? "Saved" : label}</p>;
+`,
+  [`${source}/screens/fallback.tsx`]: `declare const label: string | undefined;
+export const view = <>{label ?? "Untitled"}</>;
+`,
+  [`${source}/screens/template.tsx`]: `declare const count: number;
+export const view = <p>{\`\${count} files\`}</p>;
+`,
+  [`${source}/screens/aria-label.tsx`]: `export const view = <button aria-label="Close" />;\n`,
+  [`${source}/screens/title.tsx`]: `export const view = <button title={"Close"} />;\n`,
+  [`${source}/screens/placeholder.tsx`]: `declare const scope: string;
+export const view = <input placeholder={\`Search \${scope}\`} />;
+`,
+  [`${source}/screens/alt.tsx`]: `export const view = <img alt="Company logo" />;\n`,
+  [`${source}/screens/aria-description.tsx`]: `export const view = <button aria-description="Closes the dialog" />;
+`,
+  [`${source}/screens/aria-roledescription.tsx`]: `export const view = <div aria-roledescription="slide" />;
+`,
+  [`${source}/screens/concatenation.tsx`]: `declare const count: number;
+export const view = <p>{count + " files"}</p>;
+`,
+  [`${source}/screens/typed.tsx`]: `declare const wide: boolean;
+export const view = <p title={"Close" satisfies string}>{(wide ? "Wide" : "Narrow") as string}</p>;
+`,
+  // The assertion is a finding of its own rules as well.
+  [`${source}/screens/asserted.tsx`]: `export const view = <p>{"Saved"!}</p>;\n`,
+  [`${source}/screens/translated.tsx`]: `declare const t: (key: string) => string;
+declare const count: number;
+export const view = (
+  <label className="grid gap-1" title={t("save")} aria-label={t(count > 1 ? "saveAll" : "save")}>
+    {t("save")} · {count} {\`\${count}/3\`} {count + 1} {t("unit") + ":"}
+    <img alt="" src="logo.svg" />
+    <input placeholder={t("name")} type="text" />
+  </label>
+);
+`,
+
   // Knip
   [`${source}/index.ts`]: `export { used } from "./lib/values";\n`,
   [`${source}/lib/values.ts`]: `export const used = 1;
@@ -240,13 +282,13 @@ function collect(...args: string[]) {
   });
 }
 
-/** The measured findings of one target as sorted "rule file" lines. */
-function measure(target: string) {
+/** The measured findings of one target as sorted "rule file" lines, or "rule scope" lines. */
+function measure(target: string, place: "file" | "scope" = "file") {
   const result = collect(target, "--measure");
   expect(result.stderr).toBe("");
   const findings: unknown = JSON.parse(result.stdout);
   if (!Array.isArray(findings)) throw new Error("The collector did not print a list");
-  return findings.map((finding) => `${finding.rule} ${finding.file}`).sort();
+  return findings.map((finding) => `${finding.rule} ${finding[place]}`).sort();
 }
 
 beforeAll(() => {
@@ -348,6 +390,23 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `import-x/no-relative-packages ${source}/relative-require.cjs`,
         `catalyst/module-cycle ${source}/cycle-a.ts`,
         `catalyst/module-cycle ${source}/cycle-b.ts`,
+        `catalyst/literal-text ${source}/screens/text.tsx`,
+        `catalyst/literal-text ${source}/screens/expression.tsx`,
+        `catalyst/literal-text ${source}/screens/condition.tsx`,
+        `catalyst/literal-text ${source}/screens/fallback.tsx`,
+        `catalyst/literal-text ${source}/screens/template.tsx`,
+        `catalyst/literal-text ${source}/screens/aria-label.tsx`,
+        `catalyst/literal-text ${source}/screens/title.tsx`,
+        `catalyst/literal-text ${source}/screens/placeholder.tsx`,
+        `catalyst/literal-text ${source}/screens/alt.tsx`,
+        `catalyst/literal-text ${source}/screens/aria-description.tsx`,
+        `catalyst/literal-text ${source}/screens/aria-roledescription.tsx`,
+        `catalyst/literal-text ${source}/screens/concatenation.tsx`,
+        `catalyst/literal-text ${source}/screens/typed.tsx`,
+        `catalyst/literal-text ${source}/screens/typed.tsx`,
+        `catalyst/literal-text ${source}/screens/asserted.tsx`,
+        `@typescript-eslint/no-non-null-assertion ${source}/screens/asserted.tsx`,
+        `@typescript-eslint/no-unnecessary-type-assertion ${source}/screens/asserted.tsx`,
         `max-lines ${source}/large.ts`,
         `catalyst/memory-store ${source}/memory-store.ts`,
         `catalyst/database-skip tests/database.test.ts`,
@@ -366,6 +425,15 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "knip/dependencies packages/alpha/package.json"
       ])
     );
+  });
+
+  it("counts literal interface text per folder and large files per file", () => {
+    const scopes = measure("lint", "scope");
+    expect(scopes.filter((scope) => scope.startsWith("catalyst/literal-text "))).toEqual(
+      Array.from({ length: 15 }, () => `catalyst/literal-text ${source}/screens`)
+    );
+    expect(scopes).toContain(`max-lines ${source}/large.ts`);
+    expect(scopes).toContain("catalyst/console-boundary packages/alpha");
   });
 
   it("reports compiler errors and unused declarations in packages and tests", () => {

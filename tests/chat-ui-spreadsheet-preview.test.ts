@@ -282,7 +282,7 @@ describe("chat UI spreadsheet preview import", () => {
     });
     expect(visuals[1]).toMatchObject({
       kind: "unsupported",
-      objectType: "Radar chart"
+      objectType: { kind: "chart", chartType: "Radar" }
     });
     expect(visuals[2]).toMatchObject({
       kind: "image",

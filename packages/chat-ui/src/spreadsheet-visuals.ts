@@ -44,10 +44,29 @@ export type SpreadsheetVisual =
       id: string;
       kind: "unsupported";
       sheetName: string;
-      name: string;
+      /** The name the workbook gives the object, when it gives one. */
+      name?: string;
       anchor: SpreadsheetVisualAnchor;
-      objectType: string;
+      objectType: SpreadsheetObjectType;
     };
+
+/** What an object without a preview is. The interface names it in the reader's language. */
+export type SpreadsheetObjectType =
+  | {
+      kind:
+        | "drawing"
+        | "unreadableDrawing"
+        | "linkedChart"
+        | "linkedImage"
+        | "missingImage"
+        | "shape"
+        | "groupedDrawing"
+        | "connector"
+        | "embeddedObject"
+        | "combinedChart";
+    }
+  | { kind: "image"; format: string }
+  | { kind: "chart" | "chartWithoutData"; chartType: string };
 
 type XmlNode = Record<string, unknown>;
 type Relationship = { id: string; target: string; external: boolean };
@@ -87,7 +106,9 @@ export async function extractSpreadsheetVisuals(
     for (const drawingId of drawingIds) {
       const drawingRelationship = worksheetRelationships.get(drawingId);
       if (!drawingRelationship || drawingRelationship.external) {
-        visuals.push(unsupported(sheetName, `drawing-${drawingId}`, "Drawing", defaultAnchor()));
+        visuals.push(
+          unsupported(sheetName, `drawing-${drawingId}`, { kind: "drawing" }, defaultAnchor())
+        );
         continue;
       }
       const drawingPath = resolvePartPath(sheetPath, drawingRelationship.target);
@@ -121,7 +142,12 @@ async function drawingVisuals(
     );
   } catch {
     return [
-      unsupported(sheetName, `drawing-${drawingPath}`, "Unreadable drawing", defaultAnchor())
+      unsupported(
+        sheetName,
+        `drawing-${drawingPath}`,
+        { kind: "unreadableDrawing" },
+        defaultAnchor()
+      )
     ];
   }
 }
@@ -152,30 +178,36 @@ async function drawingVisual(
     if (chartId) {
       const relationship = relationships.get(chartId);
       if (!relationship || relationship.external) {
-        return unsupported(sheetName, id, "Linked chart", anchor, name);
+        return unsupported(sheetName, id, { kind: "linkedChart" }, anchor, name);
       }
       const chartPath = resolvePartPath(drawingPath, relationship.target);
       const chartXml = await readXml(zip, chartPath);
       return parseChart(chartXml, workbook, sheetName, id, name, anchor);
     }
-    return unsupported(sheetName, id, "Drawing", anchor, name);
+    return unsupported(sheetName, id, { kind: "drawing" }, anchor, name);
   }
 
   if (picture) {
     const imageId = attribute(node(picture, "blipFill", "blip"), "embed");
     const relationship = relationships.get(imageId);
     if (!relationship || relationship.external) {
-      return unsupported(sheetName, id, "Linked image", anchor, name);
+      return unsupported(sheetName, id, { kind: "linkedImage" }, anchor, name);
     }
     const imagePath = resolvePartPath(drawingPath, relationship.target);
     const image = zip.file(imagePath);
     if (!image) {
-      return unsupported(sheetName, id, "Missing image", anchor, name);
+      return unsupported(sheetName, id, { kind: "missingImage" }, anchor, name);
     }
     const extension = imagePath.split(".").pop()?.toLowerCase() ?? "";
     const mime = IMAGE_MIME_TYPES[extension];
     if (!mime) {
-      return unsupported(sheetName, id, `${extension.toUpperCase()} image`, anchor, name);
+      return unsupported(
+        sheetName,
+        id,
+        { kind: "image", format: extension.toUpperCase() },
+        anchor,
+        name
+      );
     }
     return {
       id,
@@ -187,16 +219,16 @@ async function drawingVisual(
     };
   }
 
-  const objectType = anchorNode.sp
-    ? "Shape"
+  const kind = anchorNode.sp
+    ? "shape"
     : anchorNode.grpSp
-      ? "Grouped drawing"
+      ? "groupedDrawing"
       : anchorNode.cxnSp
-        ? "Connector"
+        ? "connector"
         : anchorNode.contentPart
-          ? "Embedded object"
-          : "Drawing";
-  return unsupported(sheetName, id, objectType, anchor, name);
+          ? "embeddedObject"
+          : "drawing";
+  return unsupported(sheetName, id, { kind }, anchor, name);
 }
 
 function parseChart(
@@ -214,14 +246,20 @@ function parseChart(
 
   const entry = chartEntries[0];
   if (chartEntries.length !== 1 || !entry) {
-    return unsupported(sheetName, id, "Combined chart", anchor, title);
+    return unsupported(sheetName, id, { kind: "combinedChart" }, anchor, title);
   }
 
   const [rawType, rawChart] = entry;
   const chartNode = object(rawChart);
   const chartType = supportedChartType(rawType, chartNode);
   if (!chartType) {
-    return unsupported(sheetName, id, humanizeChartType(rawType), anchor, title);
+    return unsupported(
+      sheetName,
+      id,
+      { kind: "chart", chartType: chartTypeName(rawType) },
+      anchor,
+      title
+    );
   }
 
   const series = asArray(chartNode?.ser).map((item, index) => chartSeries(item, workbook, index));
@@ -229,7 +267,7 @@ function parseChart(
     return unsupported(
       sheetName,
       id,
-      `${humanizeChartType(rawType)} without preview data`,
+      { kind: "chartWithoutData", chartType: chartTypeName(rawType) },
       anchor,
       title
     );
@@ -392,9 +430,9 @@ function drawingName(value: XmlNode): string | undefined {
 function unsupported(
   sheetName: string,
   id: string,
-  objectType: string,
+  objectType: SpreadsheetObjectType,
   anchor: SpreadsheetVisualAnchor,
-  name = objectType
+  name?: string
 ): SpreadsheetVisual {
   return { id, kind: "unsupported", sheetName, name, anchor, objectType };
 }
@@ -555,12 +593,13 @@ function collectXmlText(value: unknown, texts: string[]): void {
   }
 }
 
-function humanizeChartType(value: string): string {
-  return `${value
+/** The chart type as the workbook names it, spelled as words: "bubbleChart" is "Bubble". */
+function chartTypeName(value: string): string {
+  return value
     .replace(/Chart$/u, "")
     .replaceAll(/([a-z])([A-Z])/gu, "$1 $2")
     .toLowerCase()
-    .replace(/^./u, (character) => character.toUpperCase())} chart`;
+    .replace(/^./u, (character) => character.toUpperCase());
 }
 
 function emusToPixels(value: unknown): number | undefined {

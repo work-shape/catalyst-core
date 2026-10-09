@@ -10,3 +10,4 @@ export type {
   ToolDisplayWidgetRegistry
 } from "./domain-ui-widgets";
 export type { StandaloneChatAppOptions } from "./standalone-chat-app";
+export { createTranslationContext, useTranslation } from "./i18n";

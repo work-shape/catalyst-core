@@ -8,7 +8,7 @@ import type { ChatShellProps } from "./chat-shell";
 import { CollaborationWorkspacePanel } from "./collaboration-workspace/collaboration-workspace-panel";
 import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
-import { TranslationProvider } from "./i18n";
+import { TranslationProvider, useTranslation } from "./i18n";
 import { LoginPanel } from "./login-panel";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
@@ -190,14 +190,7 @@ function ChatWorkspaceContent({
         )}
         style={model.config.workspaceStyle}
       >
-        {model.chrome.sidebarOpen ? (
-          <button
-            type="button"
-            className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px] md:hidden"
-            aria-label="Close sidebar"
-            onClick={model.chrome.closeSidebar}
-          />
-        ) : null}
+        {model.chrome.sidebarOpen ? <SidebarBackdrop onClose={model.chrome.closeSidebar} /> : null}
 
         {model.chrome.sidebarOpen ? (
           <div
@@ -333,4 +326,17 @@ function readPasswordSetupToken(): string | undefined {
   return hash.startsWith(PASSWORD_SETUP_HASH_PREFIX)
     ? hash.slice(PASSWORD_SETUP_HASH_PREFIX.length) || undefined
     : undefined;
+}
+
+/** Covers the chat beside the open sidebar on small screens; a click on it closes the sidebar. */
+function SidebarBackdrop({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px] md:hidden"
+      aria-label={t("closeSidebar")}
+      onClick={onClose}
+    />
+  );
 }

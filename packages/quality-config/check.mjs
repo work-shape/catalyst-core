@@ -53,16 +53,19 @@ const findings = [];
  */
 const report = (rule, file, detail) => {
   const path = relative(root, resolve(root, file)).replaceAll("\\", "/");
-  // Large files are counted per file; everything else per package.
+  // Large files are counted per file and literal interface text per folder, so that a folder
+  // with an owner cannot cover new text elsewhere in its package. Everything else per package.
   const scope =
     rule === "max-lines"
       ? path
-      : (path.match(/^(?:packages|clients)\/[^/]+/)?.[0] ??
-        (path.startsWith("../")
-          ? "platform-source"
-          : path.includes("/")
-            ? path.slice(0, path.indexOf("/"))
-            : "root"));
+      : rule === "catalyst/literal-text"
+        ? dirname(path)
+        : (path.match(/^(?:packages|clients)\/[^/]+/)?.[0] ??
+          (path.startsWith("../")
+            ? "platform-source"
+            : path.includes("/")
+              ? path.slice(0, path.indexOf("/"))
+              : "root"));
   findings.push({ target, rule, scope, file: path, detail });
 };
 

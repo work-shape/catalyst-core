@@ -346,6 +346,13 @@
     },
     {
       "target": "lint",
+      "rule": "catalyst/literal-text",
+      "scope": "packages/chat-ui/src/control-plane",
+      "count": 144,
+      "owner": "NL-4a"
+    },
+    {
+      "target": "lint",
       "rule": "catalyst/memory-store",
       "scope": "packages/client-assembly",
       "count": 2,
@@ -509,7 +516,7 @@
       "target": "lint",
       "rule": "knip/exports",
       "scope": "packages/chat-ui",
-      "count": 16,
+      "count": 15,
       "owner": "G-5c"
     },
     {
@@ -658,13 +665,6 @@
       "scope": "packages/chat-ui/src/control-plane/config-asset-editors.tsx",
       "count": 1,
       "owner": "PA-1a"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
-      "scope": "packages/chat-ui/src/i18n.tsx",
-      "count": 1,
-      "owner": "CB-8a"
     },
     {
       "target": "lint",

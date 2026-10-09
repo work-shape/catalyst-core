@@ -639,6 +639,7 @@ function CopiedState() {
 }
 
 function FilePart() {
+  const { t } = useTranslation();
   const file = useAuiState((state) => (state.part.type === "file" ? state.part : undefined));
   if (!file) {
     return null;
@@ -651,12 +652,13 @@ function FilePart() {
   return (
     <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
       <FileText size={16} aria-hidden="true" className="text-muted-foreground" />
-      <span className="truncate">{file.filename ?? mimeType ?? "file"}</span>
+      <span className="truncate">{file.filename ?? mimeType ?? t("attachmentFallbackName")}</span>
     </div>
   );
 }
 
 function ImagePart() {
+  const { t } = useTranslation();
   const image = useAuiState((state) => (state.part.type === "image" ? state.part : undefined));
   if (!image) {
     return null;
@@ -664,7 +666,7 @@ function ImagePart() {
   return (
     <div className="my-2 overflow-hidden rounded-md border bg-card shadow-xs">
       <MessagePartPrimitive.Image
-        alt={image.filename ?? "Attached image"}
+        alt={image.filename ?? t("attachmentImageFallbackAlt")}
         className="max-h-96 w-auto max-w-full object-contain"
       />
     </div>
@@ -681,6 +683,7 @@ function ImageFilePart({
   mimeType: string;
 }) {
   const attachmentContent = useAttachmentContentContext();
+  const { t } = useTranslation();
   const attachmentClient = attachmentContent?.client;
   const selectedConversationId = attachmentContent?.selectedConversationId;
   const [imageUrl, setImageUrl] = useState<string | undefined>(() =>
@@ -737,7 +740,7 @@ function ImageFilePart({
     <figure className="my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
       <img
         src={imageUrl}
-        alt={filename ?? "Attached image"}
+        alt={filename ?? t("attachmentImageFallbackAlt")}
         className="max-h-96 w-auto max-w-full rounded object-contain"
       />
       {filename ? (

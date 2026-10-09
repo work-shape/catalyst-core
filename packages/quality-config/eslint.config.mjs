@@ -12,6 +12,15 @@ import tseslint from "typescript-eslint";
  * @typedef {{ directory: string, bins: string[] }} WorkspacePackage
  */
 
+/**
+ * The JSX nodes the literal-text rule reads. The estree types end before JSX.
+ * @typedef {{ loc: import("estree").SourceLocation }} Located
+ * @typedef {{ type: "JSXText", value: string }} JsxText
+ * @typedef {{ type: "JSXExpressionContainer", expression: AnyNode | { type: "JSXEmptyExpression" } }} JsxExpression
+ * @typedef {{ type: "JSXAttribute", value: AnyNode | JsxExpression | null }} JsxAttribute
+ * @typedef {{ type: "TSAsExpression" | "TSSatisfiesExpression" | "TSNonNullExpression" | "TSTypeAssertion", expression: AnyNode }} TypeWrapper
+ */
+
 const root = process.cwd();
 
 /** @type {Map<string, WorkspacePackage>} */
@@ -180,6 +189,38 @@ const mayFetch = (filename) =>
   packageAt(filename)?.directory === "packages/api-client" ||
   /[\\/](?:adapters|providers|connectors)[\\/]/.test(filename);
 
+const letter = /\p{L}/u;
+
+/**
+ * Whether an expression is text written in the source: a string, a template with words in
+ * it, or a condition or concatenation that yields one, with or without a type written around
+ * it. A call such as `t("key")` is not, whatever it is given.
+ * @param {AnyNode | JsxExpression | TypeWrapper | { type: "JSXEmptyExpression" } | null} node
+ * @returns {boolean}
+ */
+const isLiteralText = (node) => {
+  switch (node?.type) {
+    case "JSXExpressionContainer":
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
+    case "TSTypeAssertion":
+      return isLiteralText(node.expression);
+    case "Literal":
+      return typeof node.value === "string" && letter.test(node.value);
+    case "TemplateLiteral":
+      return node.quasis.some((quasi) => letter.test(quasi.value.raw));
+    case "ConditionalExpression":
+      return isLiteralText(node.consequent) || isLiteralText(node.alternate);
+    case "LogicalExpression":
+      return isLiteralText(node.left) || isLiteralText(node.right);
+    case "BinaryExpression":
+      return node.operator === "+" && (isLiteralText(node.left) || isLiteralText(node.right));
+    default:
+      return false;
+  }
+};
+
 /** @type {import("eslint").ESLint.Plugin} */
 const plugin = {
   rules: {
@@ -244,6 +285,33 @@ const plugin = {
           ].forEach(report)
       })
     ),
+    "literal-text": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: { violation: "Interface text belongs in the translations" }
+      },
+      create: (context) => {
+        if (!packageAt(context.filename)) return {};
+        /** @param {Located} node */
+        const report = (node) => context.report({ loc: node.loc, messageId: "violation" });
+        return {
+          /** @param {JsxText & Located} node */
+          JSXText: (node) => {
+            if (letter.test(node.value)) report(node);
+          },
+          /** @param {JsxExpression & Located} node */
+          ":matches(JSXElement, JSXFragment) > JSXExpressionContainer": (node) => {
+            if (isLiteralText(node)) report(node);
+          },
+          /** @param {JsxAttribute & Located} node */
+          "JSXAttribute[name.name=/^(aria-label|aria-description|aria-roledescription|title|placeholder|alt)$/]":
+            (node) => {
+              if (isLiteralText(node.value)) report(node);
+            }
+        };
+      }
+    },
     "memory-store": rule(
       "CB-3b removes STORE=memory and the in-memory platform store",
       () => true,

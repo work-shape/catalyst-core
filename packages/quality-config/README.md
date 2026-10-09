@@ -32,10 +32,11 @@ The capabilities lockfile records the platform manifests it was resolved against
 - **ESLint**: `max-lines` at 800 lines. Inline directives are switched off (`noInlineConfig`), so a disable comment suppresses nothing; ESLint warns about each directive and the collector counts that warning as `eslint/inline-config`.
 - **eslint-plugin-import-x**, resolving through `tsconfig.lint.json`: `no-relative-packages` rejects a relative path into another package, in `import`, `import()` and `require()`. `no-unresolved` rejects a path that a package does not export, which is what a deep import is.
 - **Knip**: unused files, exports, types and dependencies, and imports of a package the manifest does not declare (`knip/unlisted`). That last check is what holds imports to the declared package graph. Vite configs are scanned as source because loading them fails on the chat UI plugin.
-- **The `catalyst` ESLint plugin** in `eslint.config.mjs`: console only in a package's CLI entry, environment reads only in a package's `src/env.ts`, global `fetch` only in `api-client` and adapter folders, and the two temporary CB-3b rules for in-memory stores and conditional database skips. Root files such as tests and scripts are outside the boundary rules.
+- **The `catalyst` ESLint plugin** in `eslint.config.mjs`: console only in a package's CLI entry, environment reads only in a package's `src/env.ts`, global `fetch` only in `api-client` and adapter folders, literal interface text, and the two temporary CB-3b rules for in-memory stores and conditional database skips. Root files such as tests and scripts are outside the boundary rules.
   - The boundary rules find every reference to a global through scope analysis and allow only what they can follow. `console` and `fetch` are reported wherever they are referenced. `process` may only be the object of a static read of something other than `env`, as in `process.argv` or `const { platform } = process`; any other use is reported, because an alias such as `const p = process` reaches `env` unseen. Importing the `process` module is reported too.
   - The host objects `globalThis`, `global`, `window` and `self` follow the same pattern. Their members `console`, `process` and `fetch` are reported by the rule that owns each, and `catalyst/host-object-boundary` reports every use of a host object that is not a static read of a named member: an alias, an argument, a computed key, or one host object read from another.
   - A `typeof` test and a name in a type position read nothing and are allowed.
+- **Literal interface text** (`catalyst/literal-text`), in packages and clients: words written directly as JSX text, or as a JSX child or the value of `aria-label`, `aria-description`, `aria-roledescription`, `title`, `placeholder` or `alt`. A value counts when it is a string or a template, a condition, a fallback or a `+` that yields one, with or without a type assertion around it. Text comes from the translations instead, in chat-ui through `t("key")` with the key declared in `src/i18n/<area>.ts`. Text without a letter, such as a separator or a number, is not a finding. The rule reads JSX only and does not follow a value, so it does not find text that reaches the interface through a variable, an object member, a helper call, a `.ts` file, or a custom component prop such as `label`.
 - **The collector** in `check.mjs`: the declared package graph against the manifests in both directions, cycles in the declared graph, and cycles between source modules. Modules that import each other form a group, and each member file is one finding, so a file that joins a group raises the count. A new import between two files that are already in the same group is not detected. The three groups on platform are probably type-only imports: `import-x/no-cycle`, which ignores those, finds none.
 - **TypeScript**: every package project and the test project, with `noUnusedLocals` and `noUnusedParameters`. A file that several projects share reports once. Astro keeps its own `astro check` target.
 - **Prettier**: source and configuration files. A Prettier ignore comment counts as a violation, because it would hide new formatting findings.
@@ -56,7 +57,7 @@ Platform `main` is protected with this check required once the pipeline runs; Fe
 
 ## Baselines
 
-The collector compares the exact measured count with each baseline entry by target, rule and package. Large files are counted per file. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
+The collector compares the exact measured count with each baseline entry by target, rule and package. Large files are counted per file and literal interface text per folder, so the entry for `chat-ui/src/control-plane` cannot cover new text in another folder. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
 
 A rise names the files that hold the findings for that rule and scope, the first ten, with the number in each. An invalid entry is printed in full.
 
@@ -66,11 +67,10 @@ Counts may only fall. On a pull request, `baseline-guard.mjs` compares `quality-
 
 `platform/tests/quality-baseline.test.ts` tests the comparison and the guard. `platform/tests/quality-collector.test.ts` runs the real collector over a small project that breaks every rule once, including each known way around a rule; weakening a rule or the collection fails it.
 
-Owners are recorded per entry. Test compiler errors belong to CB-2b. Other test findings go to CB-2, browser findings to CB-1b, environment, console and host objects to CB-8c, provider fetch to CB-6a and CB-10a, CLI non-null assertions to PA-1b and its fetch to PA-3. Other cleanup findings use CB-8b. See [the measured baseline](BASELINE.md).
+Owners are recorded per entry. Test compiler errors belong to CB-2b. Other test findings go to CB-2, browser findings to CB-1b, environment, console and host objects to CB-8c, provider fetch to CB-6a and CB-10a, CLI non-null assertions to PA-1b and its fetch to PA-3. Literal interface text in `chat-ui/src/control-plane` belongs to NL-4a, which localizes the panels it moves and removes the entry. Other cleanup findings use CB-8b. See [the measured baseline](BASELINE.md).
 
 ## Open points
 
 1. The 16 capabilities artifact-helper files over 800 lines belong to C-126, the backlog item for splitting them.
 2. `rxjs` stays in chat-ui at 7.8.2: the program calls it unused, but the Univer packages require it as a peer. `@ai-sdk/react` was removed.
 3. `api-contract` declares its dependency on `core` in the graph and the manifest before it imports it. Knip reports the unused dependency, and CB-4a, which introduces the import, owns that entry.
-4. Literal interface text is not measured here. CB-8a adds that rule and its baseline entries.

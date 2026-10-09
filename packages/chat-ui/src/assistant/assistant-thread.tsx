@@ -116,7 +116,7 @@ export function AssistantThread({
     return (
       <section
         className="grid h-full min-h-0 place-items-center bg-background px-5"
-        aria-label="Chat"
+        aria-label={t("chatRegionLabel")}
       >
         <div className="inline-flex max-w-md items-center gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
           <CircleAlert size={17} aria-hidden="true" />
@@ -129,7 +129,7 @@ export function AssistantThread({
   return (
     <section
       className="grid h-full min-h-0 min-w-0 overflow-hidden bg-background"
-      aria-label="Chat"
+      aria-label={t("chatRegionLabel")}
     >
       <ThreadPrimitive.Root
         className="grid h-full min-h-0 min-w-0 overflow-hidden"
@@ -350,6 +350,7 @@ export function ThreadWelcomeHeading({
   fallbackWelcomeMessage: string | undefined;
   onSelectAgent: (agentName: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-[2] basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
       {showAgent && agents.length > 0 ? (
@@ -365,7 +366,7 @@ export function ThreadWelcomeHeading({
       ) : null}
       <div className="grid gap-1">
         <h2 className="text-xl font-semibold tracking-normal">
-          {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? "How can I help?"}
+          {agent?.welcomeMessage ?? fallbackWelcomeMessage ?? t("genericWelcome")}
         </h2>
         {agent?.welcomeSubtitle ? (
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">

@@ -8,7 +8,12 @@ import {
 import * as echarts from "echarts/core";
 import { SVGRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
-import type { SpreadsheetChartSeries, SpreadsheetVisual } from "./spreadsheet-visuals";
+import { useTranslation, type TranslationContextValue, type TranslationKey } from "./i18n";
+import type {
+  SpreadsheetChartSeries,
+  SpreadsheetObjectType,
+  SpreadsheetVisual
+} from "./spreadsheet-visuals";
 
 echarts.use([
   BarChart,
@@ -40,15 +45,54 @@ export function SpreadsheetVisualLayer({ data }: { data?: SpreadsheetVisual }) {
     );
   }
   if (data.kind === "unsupported") {
-    return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-slate-600">
-        <strong className="text-sm text-slate-800">{data.name}</strong>
-        <span className="text-xs">{data.objectType} preview unavailable</span>
-        <span className="text-[11px]">Download the workbook to view it.</span>
-      </div>
-    );
+    return <UnsupportedSpreadsheetVisual visual={data} />;
   }
   return <SpreadsheetChart visual={data} />;
+}
+
+const objectTypeKeys = {
+  drawing: "spreadsheetObjectDrawing",
+  unreadableDrawing: "spreadsheetObjectUnreadableDrawing",
+  linkedChart: "spreadsheetObjectLinkedChart",
+  linkedImage: "spreadsheetObjectLinkedImage",
+  missingImage: "spreadsheetObjectMissingImage",
+  shape: "spreadsheetObjectShape",
+  groupedDrawing: "spreadsheetObjectGroupedDrawing",
+  connector: "spreadsheetObjectConnector",
+  embeddedObject: "spreadsheetObjectEmbeddedObject",
+  combinedChart: "spreadsheetObjectCombinedChart"
+} satisfies Record<string, TranslationKey>;
+
+function spreadsheetObjectTypeLabel(
+  t: TranslationContextValue["t"],
+  objectType: SpreadsheetObjectType
+): string {
+  switch (objectType.kind) {
+    case "image":
+      return t("spreadsheetObjectImage", { format: objectType.format });
+    case "chart":
+      return t("spreadsheetObjectChart", { chartType: objectType.chartType });
+    case "chartWithoutData":
+      return t("spreadsheetObjectChartWithoutData", { chartType: objectType.chartType });
+    default:
+      return t(objectTypeKeys[objectType.kind]);
+  }
+}
+
+function UnsupportedSpreadsheetVisual({
+  visual
+}: {
+  visual: Extract<SpreadsheetVisual, { kind: "unsupported" }>;
+}) {
+  const { t } = useTranslation();
+  const objectType = spreadsheetObjectTypeLabel(t, visual.objectType);
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-slate-600">
+      <strong className="text-sm text-slate-800">{visual.name ?? objectType}</strong>
+      <span className="text-xs">{t("spreadsheetVisualUnavailable", { objectType })}</span>
+      <span className="text-[11px]">{t("spreadsheetVisualDownloadHint")}</span>
+    </div>
+  );
 }
 
 function SpreadsheetChart({ visual }: { visual: Extract<SpreadsheetVisual, { kind: "chart" }> }) {

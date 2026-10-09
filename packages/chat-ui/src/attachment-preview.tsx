@@ -59,7 +59,7 @@ export function AttachmentPreview({
           {imageUrl ? (
             <img
               src={imageUrl}
-              alt={attachment.name || "Attached image"}
+              alt={attachment.name || t("attachmentImageFallbackAlt")}
               className="max-h-72 w-auto max-w-full rounded object-contain"
             />
           ) : (
@@ -128,6 +128,7 @@ export function AttachmentPreview({
 }
 
 function RemoveAttachmentButton({ removable }: { removable: boolean }) {
+  const { t } = useTranslation();
   if (!removable) {
     return null;
   }
@@ -137,8 +138,8 @@ function RemoveAttachmentButton({ removable }: { removable: boolean }) {
         "absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full border bg-background text-muted-foreground opacity-0 shadow-xs transition-opacity",
         "group-hover/attachment:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       )}
-      aria-label="Remove attachment"
-      title="Remove attachment"
+      aria-label={t("attachmentRemove")}
+      title={t("attachmentRemove")}
     >
       <X size={12} aria-hidden="true" />
     </AttachmentPrimitive.Remove>

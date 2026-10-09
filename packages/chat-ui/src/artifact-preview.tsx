@@ -26,7 +26,7 @@ import {
   NativeFilePreview
 } from "./artifact-preview-shell";
 import { useConversationFileBlob } from "./conversation-file-content";
-import { useTranslation } from "./i18n";
+import { TranslationProvider, useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
 import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
 import { SPREADSHEET_VISUAL_COMPONENT, SpreadsheetVisualLayer } from "./spreadsheet-visual-layer";
@@ -300,6 +300,7 @@ function UniverReadOnlyWorkbook({
   visuals: SpreadsheetVisual[];
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const { locale } = useTranslation();
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -336,9 +337,14 @@ function UniverReadOnlyWorkbook({
     univer.registerPlugin(UniverSheetsDrawingPlugin);
     univer.registerPlugin(UniverSheetsDrawingUIPlugin);
     const univerAPI = FUniver.newAPI(univer);
+    // Univer renders the visuals in its own React tree, outside the chat's translations.
     const componentDisposable = univerAPI.registerComponent(
       SPREADSHEET_VISUAL_COMPONENT,
-      SpreadsheetVisualLayer
+      (props: { data?: SpreadsheetVisual }) => (
+        <TranslationProvider locale={locale}>
+          <SpreadsheetVisualLayer {...props} />
+        </TranslationProvider>
+      )
     );
     const visualDisposables: Array<{ dispose: () => void }> = [];
     univer.createUnit<IWorkbookData, never>(UniverInstanceType.UNIVER_SHEET, workbookData);
@@ -373,7 +379,7 @@ function UniverReadOnlyWorkbook({
       componentDisposable.dispose();
       univer.dispose();
     };
-  }, [visuals, workbookData]);
+  }, [locale, visuals, workbookData]);
 
   return (
     <div

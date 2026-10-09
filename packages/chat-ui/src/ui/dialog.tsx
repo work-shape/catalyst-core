@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useTranslation } from "../i18n";
 import { Button } from "./button";
 import { cn } from "./cn";
 
@@ -16,6 +17,7 @@ export function Dialog({
   children: ReactNode;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const pointerStartedOnBackdropRef = useRef(false);
   const titleId = useId();
@@ -60,7 +62,7 @@ export function Dialog({
           size="icon"
           variant="ghost"
           className="size-7 text-muted-foreground"
-          aria-label="Close dialog"
+          aria-label={t("closeDialog")}
           onClick={onClose}
         >
           <X size={15} aria-hidden="true" />
