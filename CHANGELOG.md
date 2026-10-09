@@ -58,6 +58,13 @@ contain breaking changes; a patch version does not.
 - **Chat UI:** `ToolDisplayPanel` and `ToolDisplayPanelFrame` are replaced by `SurfaceSlot` and
   the library's `SurfaceFrame`. The standalone app builds its routes from one table,
   `chat-ui/src/routes.ts`; every address keeps its path.
+- **Limits:** five defaults that failed honest use are raised. A model call is tried three
+  times, waiting about 1 s and then about 4 s, so a run survives two rate limit answers in a
+  row. An approval check may take 60 s (was 10 s); a blocking rule that runs out of time says
+  so. A spreadsheet previews up to 50,000 cells per sheet or range (was 5,000), and the stored
+  failure names the limit. A preview embedded in a message is read up to 500 pages (was 200),
+  the same ceiling the preview worker uses, exported as `ARTIFACT_PREVIEW_MAX_PAGES` from
+  `@vivd-catalyst/core`. A Mailjet send may take 30 s (was 10 s).
 - **API contract (breaking):** `@vivd-catalyst/api-contract` no longer exports the constant
   `openApiDocument`; call `createOpenApiDocument()`. `createOpenApiDocumentFromOperations`
   takes the operations alone: title and version are those of the release. An operation that
