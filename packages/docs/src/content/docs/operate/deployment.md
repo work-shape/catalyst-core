@@ -102,13 +102,24 @@ Schema changes expand before they contract. A new migration may hold the additiv
 
 A concurrent index build runs outside a transaction. When it fails, the migration is not recorded and the index stays behind as invalid; repair what stopped it and run the step again, which drops the invalid index and builds it anew.
 
+## Health And Readiness
+
+Two unversioned addresses answer without a credential.
+
+- `GET /health` says the process is up. It reads nothing.
+- `GET /ready` says whether this process can serve, and is the check that puts it into rotation: use it for the container healthcheck, the proxy's upstream check and the wait after a deploy. It answers `200 { "status": "ready", "migration": "<newest migration of the release>" }` when the database answers within two seconds and holds every migration the release was built with. Otherwise it answers `503 { "status": "not_ready", "reason": "database_unreachable" }` or `503 { "status": "not_ready", "reason": "database_behind", "missing": ["<migration>", ...] }`. A database ahead of the release is ready, so the previous release stays in rotation while a newer one is rolled out.
+
+`/ready` checks the database and nothing else. A model or mail provider outage does not take the API out of rotation. The answer names migrations only: no host, no account, no connection string and no driver error. The document worker answers `/ready` on its own port with the same body and status.
+
+The proxy has to forward `/ready` to the API like `/health`; it is outside `/api/*`.
+
 ## Production Readiness Checklist
 
 Before a real deployment:
 
 - release config validates
 - migrations run cleanly
-- health endpoints pass
+- `/health` answers and `/ready` answers `200` on the API and the document worker
 - TLS is configured
 - production secrets are not in Git or images
 - backups run and restore has been tested
