@@ -12,11 +12,15 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   constrainCredentialScopes,
+  copyStateFor,
   DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS,
   expiryInputToIso,
   isCredentialActive,
   optionalTrimmedValue,
-  scopesAllowedByPermissions
+  scopesAllowedByPermissions,
+  type RecordedSecretCopy,
+  type SecretCopyState,
+  type SecretField
 } from "./api-access-model";
 import { ControlPlanePage } from "./control-plane-page";
 import { useTranslation } from "../i18n";
@@ -24,6 +28,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Dialog } from "../ui/dialog";
+import { InlineError } from "../ui/inline-error";
 import { Input, Textarea } from "../ui/input";
 import { Select } from "../ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
@@ -103,14 +108,7 @@ export function ApiAccessPanel({
         ) : undefined
       }
     >
-      {error || actionError ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-        >
-          {actionError ?? error}
-        </p>
-      ) : null}
+      {error || actionError ? <InlineError>{actionError ?? error}</InlineError> : null}
 
       <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(17rem,0.72fr)_minmax(28rem,1.28fr)]">
         <Card>
@@ -651,20 +649,13 @@ function CredentialForm({
   );
 }
 
-type SecretField = "server" | "key";
-
 interface RevealedSecret {
   secret: string;
   serverUrl: string;
   credentialName: string;
 }
 
-export interface SecretCopyState {
-  copied?: SecretField;
-  error?: string;
-}
-
-/** Copies one credential field and reports the copied field, or why copying failed. */
+/** Copies one credential field and reports the copied field, or that copying failed. */
 export function copySecretField(
   field: SecretField,
   value: string,
@@ -673,20 +664,22 @@ export function copySecretField(
 ): void {
   write(value).then(
     () => onResult({ copied: field }),
-    (error: unknown) => onResult({ error: errorMessage(error) })
+    () => onResult({ failed: true })
   );
 }
 
 function SecretDialog({ secret, onClose }: { secret?: RevealedSecret; onClose(): void }) {
   const { t } = useTranslation();
-  const [copyState, setCopyState] = useState<SecretCopyState>({});
+  const [recorded, setRecorded] = useState<RecordedSecretCopy>();
   return (
     <Dialog open={Boolean(secret)} title={t("apiAccessCredentialReady")} onClose={onClose}>
       {secret ? (
         <SecretFields
           secret={secret}
-          copyState={copyState}
-          onCopy={(field, value) => copySecretField(field, value, setCopyState)}
+          copyState={copyStateFor(recorded, secret.secret)}
+          onCopy={(field, value) =>
+            copySecretField(field, value, (state) => setRecorded({ secret: secret.secret, state }))
+          }
           onClose={onClose}
         />
       ) : null}
@@ -724,7 +717,7 @@ export function SecretFields({
         secret
         onCopy={() => onCopy("key", secret.secret)}
       />
-      {copyState.error ? <p role="alert">{copyState.error}</p> : null}
+      {copyState.failed ? <InlineError>{t("apiAccessCopyFailed")}</InlineError> : null}
       <div className="flex justify-end">
         <Button onClick={onClose}>{t("apiAccessDone")}</Button>
       </div>

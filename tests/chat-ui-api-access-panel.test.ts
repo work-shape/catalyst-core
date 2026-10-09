@@ -1,12 +1,11 @@
-import { createElement } from "../packages/chat-ui/node_modules/react";
+import { createElement, type ComponentProps } from "../packages/chat-ui/node_modules/react";
 import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom/server";
 import type { ServicePrincipalDetail } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import {
   ApiAccessPanel,
   copySecretField,
-  SecretFields,
-  type SecretCopyState
+  SecretFields
 } from "../packages/chat-ui/src/control-plane/api-access-panel";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 
@@ -164,17 +163,19 @@ describe("API access panel", () => {
     expect(markup).toContain('data-secret="one-time"');
   });
 
+  type SecretCopyState = ComponentProps<typeof SecretFields>["copyState"];
+
   const secret = {
     secret: "cat_live_secret",
     serverUrl: "https://catalyst.example.test",
     credentialName: "CI production"
   };
 
-  function renderSecretFields(copyState: SecretCopyState): string {
+  function renderSecretFields(copyState: SecretCopyState, locale: "en" | "de" = "en"): string {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
-        { locale: "en" },
+        { locale },
         createElement(SecretFields, {
           secret,
           copyState,
@@ -191,11 +192,18 @@ describe("API access panel", () => {
         Promise.reject(new Error("Clipboard access was denied"))
       );
     });
-    expect(rejected).toEqual({ error: "Clipboard access was denied" });
+    expect(rejected).toEqual({ failed: true });
 
     const markup = renderSecretFields(rejected);
-    expect(markup).toContain('<p role="alert">Clipboard access was denied</p>');
+    expect(markup).toMatch(
+      /<p role="alert" class="[^"]*text-destructive[^"]*">The value could not be copied\. Select it and copy it by hand\.<\/p>/
+    );
+    // The browser's own wording is not shown.
+    expect(markup).not.toContain("Clipboard access was denied");
     expect(markup).not.toContain("lucide-check");
+    expect(renderSecretFields(rejected, "de")).toContain(
+      "Der Wert konnte nicht kopiert werden. Markiere ihn und kopiere ihn von Hand."
+    );
   });
 
   it("marks only the copied field after a successful clipboard write", async () => {

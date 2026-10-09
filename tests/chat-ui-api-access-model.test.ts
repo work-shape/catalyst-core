@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   constrainCredentialScopes,
+  copyStateFor,
   DEFAULT_SERVICE_PRINCIPAL_PERMISSIONS,
   expiryInputToIso,
   isCredentialActive,
@@ -202,5 +203,16 @@ describe("API access model", () => {
         serverUrl: "https://a.example.com"
       })
     ).toBeUndefined();
+  });
+});
+
+describe("API key copy result", () => {
+  it("is dropped when the dialog opens for another credential", () => {
+    for (const state of [{ failed: true }, { copied: "key" as const }]) {
+      const recorded = { secret: "cat_live_first", state };
+      expect(copyStateFor(recorded, "cat_live_first")).toEqual(state);
+      expect(copyStateFor(recorded, "cat_live_next")).toEqual({});
+    }
+    expect(copyStateFor(undefined, "cat_live_first")).toEqual({});
   });
 });

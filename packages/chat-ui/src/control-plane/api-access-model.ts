@@ -53,3 +53,27 @@ export function isCredentialActive(
   }
   return !input.expiresAt || new Date(input.expiresAt).getTime() > now.getTime();
 }
+
+export type SecretField = "server" | "key";
+
+export interface SecretCopyState {
+  copied?: SecretField;
+  failed?: boolean;
+}
+
+/** A copy result together with the secret of the credential it was recorded for. */
+export interface RecordedSecretCopy {
+  secret: string;
+  state: SecretCopyState;
+}
+
+/**
+ * The copy result to show for a credential. A result recorded for another credential is
+ * dropped, so the dialog starts clean when it opens for the next one.
+ */
+export function copyStateFor(
+  recorded: RecordedSecretCopy | undefined,
+  secret: string
+): SecretCopyState {
+  return recorded?.secret === secret ? recorded.state : {};
+}

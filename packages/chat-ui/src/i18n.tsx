@@ -20,6 +20,7 @@ const translations = {
     apiAccessApiKey: "API key",
     apiAccessApiKeys: "API keys",
     apiAccessApiKeysDescription: "Credentials used by the CLI and other automated clients.",
+    apiAccessCopyFailed: "The value could not be copied. Select it and copy it by hand.",
     apiAccessCreateCredential: "Create API key",
     apiAccessCreatePrincipal: "Create service principal",
     apiAccessCreatedAt: "Created",
@@ -701,6 +702,8 @@ const translations = {
     apiAccessApiKey: "API-Schlüssel",
     apiAccessApiKeys: "API-Schlüssel",
     apiAccessApiKeysDescription: "Zugangsdaten für die CLI und andere automatisierte Clients.",
+    apiAccessCopyFailed:
+      "Der Wert konnte nicht kopiert werden. Markiere ihn und kopiere ihn von Hand.",
     apiAccessCreateCredential: "API-Schlüssel erstellen",
     apiAccessCreatePrincipal: "Service Principal erstellen",
     apiAccessCreatedAt: "Erstellt",
