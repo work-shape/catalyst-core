@@ -118,13 +118,16 @@
   --text-code--line-height: 1.5rem;
   --text-code--font-weight: 400;
 
-  /* Layout measures that only Page, PageHeader, Section, SubRail and Sidebar apply. */
+  /* Layout measures that only Page, PageHeader, Section, SubRail, Sidebar and SurfaceFrame
+     apply. `split-min` is what each side of a split keeps: the conversation and the surface
+     beside it. */
   --layout-header: 4rem;
   --layout-gutter: 1.5rem;
   --layout-sidebar: 17.5rem;
   --layout-subrail: 14rem;
   --layout-content-narrow: 44rem;
   --layout-content: 64rem;
+  --layout-split-min: 23.75rem;
 
   /* Layer order. Dialog uses the browser's top layer and needs no entry. */
   --layer-sidebar-edge: 20;

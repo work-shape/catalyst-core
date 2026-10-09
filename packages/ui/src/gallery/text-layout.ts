@@ -90,6 +90,18 @@ export interface LayoutGalleryText {
   saveDiscard: string;
   saveInline: string;
   saveSticky: string;
+  surfaceBeside: string;
+  surfaceFullscreen: string;
+  surfaceCovering: string;
+  surfaceTitle: string;
+  surfaceSubtitle: string;
+  surfaceBody: string;
+  surfaceDownload: string;
+  surfaceShowChat: string;
+  surfaceViewFullscreen: string;
+  surfaceExitFullscreen: string;
+  surfaceClose: string;
+  surfaceNoRenderer: string;
   saveStickyBody: string;
   rowAgentStatus: string;
   rowWorkflowStatus: string;
@@ -217,6 +229,18 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     saveDiscard: "Discard changes",
     saveInline: "Inline",
     saveSticky: "Sticky, with a second action",
+    surfaceBeside: "Beside the conversation",
+    surfaceFullscreen: "Fullscreen",
+    surfaceCovering: "Covering the main area",
+    surfaceTitle: "Quarterly report.pdf",
+    surfaceSubtitle: "PDF, 4 pages",
+    surfaceBody: "The surface's content scrolls under its header.",
+    surfaceDownload: "Download",
+    surfaceShowChat: "Show chat",
+    surfaceViewFullscreen: "View fullscreen",
+    surfaceExitFullscreen: "Exit fullscreen",
+    surfaceClose: "Close",
+    surfaceNoRenderer: "This content cannot be shown yet.",
     saveStickyBody: "Scroll this form: the bar stays at its bottom edge.",
     rowAgentStatus: "Published. Used in 48 conversations this week.",
     rowWorkflowStatus: "Running. Next start tomorrow at 08:00.",
@@ -343,6 +367,18 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     saveDiscard: "Änderungen verwerfen",
     saveInline: "Im Fluss",
     saveSticky: "Haftend, mit zweiter Aktion",
+    surfaceBeside: "Neben der Unterhaltung",
+    surfaceFullscreen: "Vollbild",
+    surfaceCovering: "Über dem Hauptbereich",
+    surfaceTitle: "Quartalsbericht.pdf",
+    surfaceSubtitle: "PDF, 4 Seiten",
+    surfaceBody: "Der Inhalt der Fläche scrollt unter ihrer Kopfzeile.",
+    surfaceDownload: "Herunterladen",
+    surfaceShowChat: "Chat anzeigen",
+    surfaceViewFullscreen: "Im Vollbild anzeigen",
+    surfaceExitFullscreen: "Vollbild schließen",
+    surfaceClose: "Schließen",
+    surfaceNoRenderer: "Dieser Inhalt kann noch nicht angezeigt werden.",
     saveStickyBody: "Scrolle dieses Formular: Die Leiste bleibt am unteren Rand.",
     rowAgentStatus: "Veröffentlicht. Diese Woche in 48 Unterhaltungen genutzt.",
     rowWorkflowStatus: "Läuft. Nächster Start morgen um 08:00.",

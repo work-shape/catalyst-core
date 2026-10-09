@@ -1,7 +1,17 @@
-import { ArrowLeft, Ellipsis, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  Ellipsis,
+  Maximize2,
+  MessageSquare,
+  Minimize2,
+  Plus,
+  X
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
+import { EmptyState } from "../feedback/empty-state";
 import { SaveBar } from "../forms/save-bar";
 import { Input, Textarea } from "../forms/input";
 import { Badge } from "../status/badge";
@@ -15,6 +25,7 @@ import {
 import { Page, type PageWidth } from "../structure/page";
 import { PageHeader } from "../structure/page-header";
 import { Section, type SectionLayout } from "../structure/section";
+import { SurfaceFrame } from "../structure/surface-frame";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -183,6 +194,70 @@ function SaveBarSamples({ text }: { text: GalleryText }) {
   );
 }
 
+function SurfaceFrameSamples({ text }: { text: GalleryText }) {
+  const showChat = (
+    <Button variant="ghost" size="sm">
+      <MessageSquare aria-hidden="true" />
+      {text.surfaceShowChat}
+    </Button>
+  );
+  const close = (
+    <IconButton label={text.surfaceClose}>
+      <X aria-hidden="true" />
+    </IconButton>
+  );
+  return (
+    <>
+      <Samples label={text.surfaceBeside}>
+        <div className="h-56 w-full overflow-hidden rounded-lg border">
+          <SurfaceFrame
+            title={text.surfaceTitle}
+            subtitle={text.surfaceSubtitle}
+            actions={
+              <Button variant="outline" size="sm">
+                <Download aria-hidden="true" />
+                {text.surfaceDownload}
+              </Button>
+            }
+            fullscreen={
+              <IconButton label={text.surfaceViewFullscreen}>
+                <Maximize2 aria-hidden="true" />
+              </IconButton>
+            }
+            close={close}
+          >
+            <p className="text-body text-muted-foreground">{text.surfaceBody}</p>
+          </SurfaceFrame>
+        </div>
+      </Samples>
+      <Samples label={text.surfaceFullscreen}>
+        <div className="h-56 w-full overflow-hidden rounded-lg border">
+          <SurfaceFrame
+            leading={showChat}
+            title={text.surfaceTitle}
+            subtitle={text.surfaceSubtitle}
+            fullscreen={
+              <IconButton label={text.surfaceExitFullscreen}>
+                <Minimize2 aria-hidden="true" />
+              </IconButton>
+            }
+            close={close}
+          >
+            <p className="text-body text-muted-foreground">{text.surfaceBody}</p>
+          </SurfaceFrame>
+        </div>
+      </Samples>
+      <Samples label={text.surfaceCovering}>
+        <div className="h-56 w-full max-w-md overflow-hidden rounded-lg border">
+          <SurfaceFrame leading={showChat} title={text.surfaceTitle}>
+            <EmptyState layout="inline">{text.surfaceNoRenderer}</EmptyState>
+          </SurfaceFrame>
+        </div>
+      </Samples>
+    </>
+  );
+}
+
 function noop(): void {
   // The static samples save nothing.
 }
@@ -216,6 +291,11 @@ export const structureGallery: GalleryGroup = {
       name: "Section",
       components: ["Section"],
       render: (text) => <SectionSamples text={text} />
+    },
+    {
+      name: "SurfaceFrame",
+      components: ["SurfaceFrame"],
+      render: (text) => <SurfaceFrameSamples text={text} />
     },
     {
       name: "Card",

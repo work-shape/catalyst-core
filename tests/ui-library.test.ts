@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -253,6 +255,44 @@ describe("form components", () => {
       expect(avatar(kind, "marketing")).toMatch(/rounded-md[^>]*>MA</u);
     }
     expect(avatar("person", " ")).toContain(">?<");
+  });
+});
+
+describe("SurfaceFrame", () => {
+  it("puts its slots in one order under a header of the shared height", () => {
+    const slot = (text: string) => createElement("span", null, text);
+    const markup = renderToStaticMarkup(
+      createElement(
+        library.SurfaceFrame,
+        {
+          leading: slot("leading"),
+          title: "name",
+          subtitle: "subtitle",
+          actions: slot("actions"),
+          fullscreen: slot("fullscreen"),
+          close: slot("close")
+        },
+        slot("content")
+      )
+    );
+    const order = ["leading", "name", "subtitle", "actions", "fullscreen", "close", "content"];
+    const positions = order.map((text) => markup.indexOf(`>${text}<`));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+    expect(markup).toContain("h-(--layout-header)");
+    expect(markup).toMatch(/<h2 class="[^"]*text-heading[^"]*">name</u);
+    expect(markup).toMatch(/<p class="[^"]*text-caption text-muted-foreground[^"]*">subtitle</u);
+  });
+
+  it("takes product-owned props and no Radix type", () => {
+    const source = readFileSync(
+      fileURLToPath(new URL("../packages/ui/src/structure/surface-frame.tsx", import.meta.url)),
+      "utf8"
+    );
+    const imports = [...source.matchAll(/from "([^"]+)"/gu)].map((match) => match[1]);
+
+    expect(imports).toEqual(["react", "../cn"]);
   });
 });
 
