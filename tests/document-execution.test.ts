@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   convertOfficeDocument,
+  boundedPdfPageResolution,
   inspectPdf,
+  MODEL_PAGE_IMAGE_FORMAT,
+  MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS,
   NativeProcessError,
   renderPdfPage,
   runNativeProcess
@@ -190,6 +193,49 @@ writeFileSync(args.at(-1) + ".png", Buffer.from("rendered page"));
       })
     ).resolves.toEqual(Buffer.from("rendered page"));
     expect((await readdir(directory)).some((entry) => entry.endsWith(".png"))).toBe(false);
+  });
+
+  it("renders a page as JPEG at the stated quality when asked to", async () => {
+    const directory = await temporaryDirectory("pdf-render-jpeg-");
+    const pdfPath = join(directory, "source.pdf");
+    await writeFile(pdfPath, "%PDF fixture");
+    const command = await writeExecutable(
+      directory,
+      "fake-pdftoppm",
+      String.raw`
+const { writeFileSync } = require("node:fs");
+const args = process.argv.slice(2);
+if (args[0] !== "-jpeg" || args[1] !== "-jpegopt" || args.includes("-png")) process.exit(8);
+writeFileSync(args.at(-1) + ".jpg", Buffer.from(args[2] + " scale-to " + args[args.indexOf("-scale-to") + 1]));
+`
+    );
+
+    const rendered = await renderPdfPage({
+      command,
+      pdfPath,
+      outputDirectory: directory,
+      pageNumber: 1,
+      resolution: { maxLongEdgePixels: MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS },
+      format: MODEL_PAGE_IMAGE_FORMAT,
+      timeoutMs: 15_000
+    });
+
+    expect(Buffer.from(rendered).toString("utf8")).toBe("quality=80 scale-to 1568");
+  });
+
+  it("renders at the wanted resolution unless the long edge would pass the limit", () => {
+    const a4 = { widthPoints: 595, heightPoints: 842 };
+    // A4 at 160 DPI is 1871 pixels long, at 96 DPI 1123.
+    expect(boundedPdfPageResolution({ pageSize: a4, dpi: 160, maxLongEdgePixels: 1568 })).toEqual({
+      maxLongEdgePixels: 1568
+    });
+    expect(boundedPdfPageResolution({ pageSize: a4, dpi: 96, maxLongEdgePixels: 1568 })).toEqual({
+      dpi: 96
+    });
+    const slide = { widthPoints: 960, heightPoints: 540 };
+    expect(
+      boundedPdfPageResolution({ pageSize: slide, dpi: 144, maxLongEdgePixels: 1568 })
+    ).toEqual({ maxLongEdgePixels: 1568 });
   });
 
   it("rejects stale render output when the renderer produces no file", async () => {

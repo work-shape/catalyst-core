@@ -182,22 +182,62 @@ export async function inspectPdf(
   };
 }
 
+export type PdfPageImageFormat = { type: "png" } | { type: "jpeg"; qualityPercent: number };
+
+export type PdfPageResolution = { dpi?: number; maxLongEdgePixels?: number };
+
+// The image of a page, slide or sheet that a model reads is encoded for the model, not for a
+// person: JPEG with its long edge at most this many pixels. Measured on 2026-10-10 on six
+// synthetic pages (contract with 7 pt and 6 pt print, clean and rough colour scan of it, 6.5 pt
+// table, slide, spreadsheet): at 1568 px and quality 80 gpt-5.5 read all 38 seeded values, at
+// 1280 px it misread two digits in the 6 pt footnote of the rough scan. A page then weighs 0.06
+// to 0.45 MB (text page 0.32, rough scan 0.45) where the 160 DPI PNG weighed 0.08 to 5.4 MB.
+// A reader who needs more asks view_document_page for 200 DPI.
+export const MODEL_PAGE_IMAGE_MAX_LONG_EDGE_PIXELS = 1568;
+export const MODEL_PAGE_IMAGE_JPEG_QUALITY_PERCENT = 80;
+export const MODEL_PAGE_IMAGE_MIME_TYPE = "image/jpeg";
+export const MODEL_PAGE_IMAGE_FORMAT: PdfPageImageFormat = {
+  type: "jpeg",
+  qualityPercent: MODEL_PAGE_IMAGE_JPEG_QUALITY_PERCENT
+};
+
+/**
+ * The resolution to render a page at: the wanted DPI, or the long-edge limit where that DPI would
+ * pass it. A page is never scaled up to the limit.
+ */
+export function boundedPdfPageResolution(input: {
+  pageSize: { widthPoints: number; heightPoints: number };
+  dpi: number;
+  maxLongEdgePixels: number;
+}): PdfPageResolution {
+  const longEdgePixels =
+    (Math.max(input.pageSize.widthPoints, input.pageSize.heightPoints) * input.dpi) / 72;
+  return longEdgePixels > input.maxLongEdgePixels
+    ? { maxLongEdgePixels: input.maxLongEdgePixels }
+    : { dpi: input.dpi };
+}
+
 export async function renderPdfPage(
   input: NativeCommandInput & {
     pdfPath: string;
     outputDirectory: string;
     pageNumber: number;
-    resolution: { dpi?: number; maxLongEdgePixels?: number };
+    resolution: PdfPageResolution;
+    /** PNG unless stated. */
+    format?: PdfPageImageFormat;
   }
 ): Promise<Uint8Array> {
   const operationOutput = await mkdtemp(join(input.outputDirectory, ".catalyst-pdf-render-"));
   const prefix = join(operationOutput, `page-${input.pageNumber}`);
-  const output = `${prefix}.png`;
+  const format = input.format ?? { type: "png" };
+  const output = `${prefix}.${format.type === "jpeg" ? "jpg" : "png"}`;
   try {
     await runNativeProcess({
       command: input.command,
       args: [
-        "-png",
+        ...(format.type === "jpeg"
+          ? ["-jpeg", "-jpegopt", `quality=${format.qualityPercent}`]
+          : ["-png"]),
         "-singlefile",
         ...(input.resolution.dpi ? ["-r", String(input.resolution.dpi)] : []),
         ...(input.resolution.maxLongEdgePixels
