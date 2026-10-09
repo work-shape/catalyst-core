@@ -5,7 +5,12 @@ import {
   createLogger,
   type CreateClientInstanceAppInput
 } from "@vivd-catalyst/client-assembly";
-import { createChatServer, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+import {
+  createChatServer,
+  createRoute,
+  type ChatServerOptions,
+  type Route
+} from "@vivd-catalyst/chat-server";
 import { asClientInstanceId, NoopAuditRecorder, type PlatformStore } from "@vivd-catalyst/core";
 import { InMemoryPlatformStore, createStaticConfigAssetSource } from "@vivd-catalyst/core/testing";
 import { PostgresPlatformStore } from "@vivd-catalyst/postgres-store";
@@ -88,84 +93,103 @@ export function createTestInstance(
     | { postgres: Parameters<typeof PostgresPlatformStore.connect>[0] }
     | { server: TestServerOptions }
 ): TestInstance<InMemoryPlatformStore> | Promise<TestInstance> {
-  if (!input) {
-    const stores = new InMemoryPlatformStore();
-    const config = createTestConfig();
-    const state: Metadata = {
-      config,
-      closed: false,
-      async cleanup() {
-        await state.server?.close();
-      }
-    };
-    return bindInstance(stores, state, async () => {
-      const clientInstanceId = asClientInstanceId(config.clientInstance.id);
-      return createChatServer(
-        completeServerOptions(
-          {
-            config,
-            clientInstanceId,
-            conversationStore: stores,
-            auditEventStore: stores,
-            userStore: stores,
-            authAdapter: {
-              id: "test",
-              credentialMode: "ambient",
-              async authenticate(request) {
-                const actor = request.headers["x-dev-user-id"];
-                const externalUserId = typeof actor === "string" ? actor : "user-1";
-                return {
-                  ...(await stores.resolveUserIdentity({
-                    clientInstanceId,
-                    authSource: "test",
-                    externalUserId,
-                    displayLabel: externalUserId,
-                    roles: ["user", "admin", "superadmin"],
-                    permissionRefs: ["demo-tools"],
-                    permissions: [],
-                    correlationId: "test"
-                  })),
-                  scopes: ["*"]
-                };
-              }
-            },
-            auditRecorder: new NoopAuditRecorder(),
-            usageGovernance: new ModelUsageGovernance({
-              store: stores,
-              budget: config.usage.budget,
-              safeguards: config.usage.safeguards,
-              costs: config.usage.costs
-            }),
-            agentRuntime: {
-              async start() {
-                throw new Error("No runtime configured");
-              },
-              async *observe() {
-                throw new Error("No runtime configured");
-              },
-              async getStatus() {
-                throw new Error("No runtime configured");
-              },
-              async resume() {
-                throw new Error("No runtime configured");
-              },
-              async cancel() {
-                throw new Error("No runtime configured");
-              }
-            },
-            modelProvider: {
-              id: "unused",
-              async complete() {
-                throw new Error("No provider configured");
-              }
-            }
-          },
-          stores
-        )
-      );
-    });
-  }
+  if (!input) return createDefaultInstance();
   return createConfiguredInstance(input);
+}
+
+/**
+ * The default in-memory instance with some server options replaced: its sign-in, or the
+ * optional parts a default instance runs without.
+ */
+export function createTestInstanceWith(
+  replace: (stores: InMemoryPlatformStore) => Partial<TestServerOptions>,
+  /** Registers fixture operations through the product's route helper, beside the product's. */
+  register?: (route: Route) => void
+): TestInstance<InMemoryPlatformStore> {
+  return createDefaultInstance(replace, register);
+}
+
+function createDefaultInstance(
+  replace: (stores: InMemoryPlatformStore) => Partial<TestServerOptions> = () => ({}),
+  register?: (route: Route) => void
+): TestInstance<InMemoryPlatformStore> {
+  const stores = new InMemoryPlatformStore();
+  const config = createTestConfig();
+  const state: Metadata = {
+    config,
+    closed: false,
+    async cleanup() {
+      await state.server?.close();
+    }
+  };
+  return bindInstance(stores, state, async () => {
+    const clientInstanceId = asClientInstanceId(config.clientInstance.id);
+    const options = completeServerOptions(
+      {
+        config,
+        clientInstanceId,
+        conversationStore: stores,
+        auditEventStore: stores,
+        userStore: stores,
+        authAdapter: {
+          id: "test",
+          credentialMode: "ambient",
+          async authenticate(request) {
+            const actor = request.headers["x-dev-user-id"];
+            const externalUserId = typeof actor === "string" ? actor : "user-1";
+            return {
+              ...(await stores.resolveUserIdentity({
+                clientInstanceId,
+                authSource: "test",
+                externalUserId,
+                displayLabel: externalUserId,
+                roles: ["user", "admin", "superadmin"],
+                permissionRefs: ["demo-tools"],
+                permissions: [],
+                correlationId: "test"
+              })),
+              scopes: ["*"]
+            };
+          }
+        },
+        auditRecorder: new NoopAuditRecorder(),
+        usageGovernance: new ModelUsageGovernance({
+          store: stores,
+          budget: config.usage.budget,
+          safeguards: config.usage.safeguards,
+          costs: config.usage.costs
+        }),
+        agentRuntime: {
+          async start() {
+            throw new Error("No runtime configured");
+          },
+          async *observe() {
+            throw new Error("No runtime configured");
+          },
+          async getStatus() {
+            throw new Error("No runtime configured");
+          },
+          async resume() {
+            throw new Error("No runtime configured");
+          },
+          async cancel() {
+            throw new Error("No runtime configured");
+          }
+        },
+        modelProvider: {
+          id: "unused",
+          async complete() {
+            throw new Error("No provider configured");
+          }
+        },
+        ...replace(stores)
+      },
+      stores
+    );
+    const server = await createChatServer(options);
+    register?.(createRoute(server, options));
+    return server;
+  });
 }
 
 async function createConfiguredInstance(
@@ -334,6 +358,37 @@ export async function listenTestInstance(instance: TestInstance): Promise<string
   const address = server.server.address();
   if (!address || typeof address === "string") throw new Error("Expected TCP address");
   return `http://127.0.0.1:${address.port}`;
+}
+
+/**
+ * Every route the instance's HTTP server has registered, read from the framework's own
+ * listing. A wildcard mount is listed by its method alone, with the path "*".
+ */
+export async function listTestRoutes(
+  instance: TestInstance
+): Promise<{ method: string; path: string }[]> {
+  // The default instance starts its server on the first call.
+  await instance.call("getHealth");
+  const server = getTestServer(instance);
+  const prefixes: string[] = [];
+  const routes: { method: string; path: string }[] = [];
+  for (const line of server.printRoutes({ commonPrefix: false }).split("\n")) {
+    const match = /^((?:[│ ] {3})*)[├└]── (\S+)(?: \(([A-Z, ]+)\))?$/u.exec(line);
+    if (!match) {
+      if (line.trim().length > 0) throw new Error(`Unreadable route listing line: ${line}`);
+      continue;
+    }
+    const depth = (match[1] ?? "").length / 4;
+    const segment = match[2] ?? "";
+    prefixes.length = depth;
+    prefixes.push(segment);
+    const path = segment === "*" ? "*" : prefixes.join("");
+    for (const method of (match[3] ?? "").split(", ").filter(Boolean)) {
+      // The framework answers HEAD for every GET route on its own.
+      if (method !== "HEAD") routes.push({ method, path });
+    }
+  }
+  return routes;
 }
 
 export function addTestRoute(

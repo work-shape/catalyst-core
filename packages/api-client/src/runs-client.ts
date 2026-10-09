@@ -26,17 +26,17 @@ export function createRunsClient(transport: ApiClientTransport) {
         generatedSdk.startConversationRun({
           client: transport.generatedClient,
           path: { conversationId },
-          body: apiOperations.startConversationRun.requestSchema.parse(input)
+          body: apiOperations.startConversationRun.body.parse(input)
         }),
-        apiOperations.startConversationRun.responseSchema
+        apiOperations.startConversationRun.response.schema
       ),
     create: (input: OperationRequestInput<typeof apiOperations.createConversationRun>) =>
       transport.unwrapJson(
         generatedSdk.createConversationRun({
           client: transport.generatedClient,
-          body: apiOperations.createConversationRun.requestSchema.parse(input)
+          body: apiOperations.createConversationRun.body.parse(input)
         }),
-        apiOperations.createConversationRun.responseSchema
+        apiOperations.createConversationRun.response.schema
       ),
     cancel: (
       conversationId: string,
@@ -47,9 +47,9 @@ export function createRunsClient(transport: ApiClientTransport) {
         generatedSdk.cancelConversationRun({
           client: transport.generatedClient,
           path: { conversationId, runId },
-          body: apiOperations.cancelConversationRun.requestSchema.parse(input)
+          body: apiOperations.cancelConversationRun.body.parse(input)
         }),
-        apiOperations.cancelConversationRun.responseSchema
+        apiOperations.cancelConversationRun.response.schema
       ),
     command: (
       conversationId: string,
@@ -60,9 +60,9 @@ export function createRunsClient(transport: ApiClientTransport) {
         generatedSdk.commandConversationRun({
           client: transport.generatedClient,
           path: { conversationId, runId },
-          body: apiOperations.commandConversationRun.requestSchema.parse(input)
+          body: apiOperations.commandConversationRun.body.parse(input)
         }),
-        apiOperations.commandConversationRun.responseSchema
+        apiOperations.commandConversationRun.response.schema
       ),
     observe: (conversationId: string, runId: string, options: ObserveRunEventsOptions = {}) =>
       observeRunEvents(transport, conversationId, runId, options)

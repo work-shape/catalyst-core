@@ -1287,12 +1287,12 @@
                           "config:read",
                           "conversation:read",
                           "conversation:write",
-                          "collaboration_workspace:read",
-                          "collaboration_workspace:manage",
                           "run:start",
                           "run:observe",
                           "run:cancel",
                           "run:command",
+                          "collaboration_workspace:read",
+                          "collaboration_workspace:manage",
                           "me:write",
                           "governance:read",
                           "governance:write",
@@ -1468,12 +1468,12 @@
                           "config:read",
                           "conversation:read",
                           "conversation:write",
-                          "collaboration_workspace:read",
-                          "collaboration_workspace:manage",
                           "run:start",
                           "run:observe",
                           "run:cancel",
                           "run:command",
+                          "collaboration_workspace:read",
+                          "collaboration_workspace:manage",
                           "me:write",
                           "governance:read",
                           "governance:write",
@@ -16297,6 +16297,158 @@
         }
       }
     },
+    "/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}": {
+      "delete": {
+        "operationId": "deleteAdministeredUserIdentity",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authSource",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "externalUserId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "clientInstanceId": {
+                      "type": "string"
+                    },
+                    "displayLabel": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissionRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "disabled"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastAuthenticatedAt": {
+                      "type": "string"
+                    },
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientInstanceId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "authSource": {
+                            "type": "string"
+                          },
+                          "externalUserId": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "emailVerified": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "lastAuthenticatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "clientInstanceId",
+                          "userId",
+                          "authSource",
+                          "externalUserId",
+                          "emailVerified",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientInstanceId",
+                    "displayLabel",
+                    "roles",
+                    "permissionRefs",
+                    "permissions",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "identities"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/superadmin/api-access/service-principals": {
       "get": {
         "operationId": "listServicePrincipals",
@@ -17017,158 +17169,6 @@
         }
       }
     },
-    "/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}": {
-      "delete": {
-        "operationId": "deleteAdministeredUserIdentity",
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "authSource",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "externalUserId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "clientInstanceId": {
-                      "type": "string"
-                    },
-                    "displayLabel": {
-                      "type": "string"
-                    },
-                    "email": {
-                      "type": "string"
-                    },
-                    "roles": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "permissionRefs": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "permissions": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "active",
-                        "disabled"
-                      ]
-                    },
-                    "createdAt": {
-                      "type": "string"
-                    },
-                    "updatedAt": {
-                      "type": "string"
-                    },
-                    "lastAuthenticatedAt": {
-                      "type": "string"
-                    },
-                    "identities": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "clientInstanceId": {
-                            "type": "string"
-                          },
-                          "userId": {
-                            "type": "string"
-                          },
-                          "authSource": {
-                            "type": "string"
-                          },
-                          "externalUserId": {
-                            "type": "string"
-                          },
-                          "displayLabel": {
-                            "type": "string"
-                          },
-                          "email": {
-                            "type": "string"
-                          },
-                          "emailVerified": {
-                            "type": "boolean"
-                          },
-                          "createdAt": {
-                            "type": "string"
-                          },
-                          "updatedAt": {
-                            "type": "string"
-                          },
-                          "lastAuthenticatedAt": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "clientInstanceId",
-                          "userId",
-                          "authSource",
-                          "externalUserId",
-                          "emailVerified",
-                          "createdAt",
-                          "updatedAt"
-                        ],
-                        "additionalProperties": false
-                      }
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "clientInstanceId",
-                    "displayLabel",
-                    "roles",
-                    "permissionRefs",
-                    "permissions",
-                    "status",
-                    "createdAt",
-                    "updatedAt",
-                    "identities"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/superadmin/session-tokens": {
       "post": {
         "operationId": "issueSessionToken",
@@ -17227,12 +17227,12 @@
                         "config:read",
                         "conversation:read",
                         "conversation:write",
-                        "collaboration_workspace:read",
-                        "collaboration_workspace:manage",
                         "run:start",
                         "run:observe",
                         "run:cancel",
                         "run:command",
+                        "collaboration_workspace:read",
+                        "collaboration_workspace:manage",
                         "me:write",
                         "governance:read",
                         "governance:write",

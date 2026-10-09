@@ -1,27 +1,22 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { projectAuditActivities, requireAuthScope } from "@vivd-catalyst/core";
+import { projectAuditActivities } from "@vivd-catalyst/core";
+import { recordGovernanceAccess } from "../governance-actions";
+import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
-import { authorizeGovernanceAction } from "../governance-actions";
-import { authenticateRequest } from "../request-context";
 
 // Raw events are fetched generously so an activity's evidence is not split at
 // the page boundary, then projected down to a bounded set of activities.
 const AUDIT_EVENT_FETCH_LIMIT = 500;
 const AUDIT_ACTIVITY_LIMIT = 100;
 
-export function registerAuditRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerAuditRoutes(route: Route, options: ChatServerOptions): void {
   // Raw, machine-queryable evidence feed.
-  app.get(apiOperations.listAuditEvents.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "governance:read");
-    await authorizeGovernanceAction({
+  route(apiOperations.listAuditEvents, async ({ user, context }) => {
+    await recordGovernanceAccess({
       options,
       user,
       context,
-      requiredPermission: "audit.view",
-      auditType: "governance.audit_events_viewed",
-      deniedMessage: "Audit events require 'audit.view' permission"
+      auditType: "governance.audit_events_viewed"
     });
     return options.auditEventStore.listAuditEvents({
       clientInstanceId: options.clientInstanceId,
@@ -31,16 +26,12 @@ export function registerAuditRoutes(app: FastifyInstance, options: ChatServerOpt
 
   // Curated activity timeline for the admin UI: grouped, labelled, and filtered
   // to governance/workflow plus anything that failed or was denied.
-  app.get(apiOperations.listAuditActivities.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "governance:read");
-    await authorizeGovernanceAction({
+  route(apiOperations.listAuditActivities, async ({ user, context }) => {
+    await recordGovernanceAccess({
       options,
       user,
       context,
-      requiredPermission: "audit.view",
-      auditType: "governance.audit_events_viewed",
-      deniedMessage: "Audit events require 'audit.view' permission"
+      auditType: "governance.audit_events_viewed"
     });
     const events = await options.auditEventStore.listAuditEvents({
       clientInstanceId: options.clientInstanceId,

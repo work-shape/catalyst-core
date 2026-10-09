@@ -1,104 +1,74 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { AppError, type ConfigAssetKind } from "@vivd-catalyst/core";
 import { ConfigAssetWorkflow } from "../config-asset-workflow";
-import { authenticateConfigAssetRequest, parseBody } from "../request-context";
+import type { Route } from "../http/route";
+import { requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
-export function registerConfigAssetRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerConfigAssetRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new ConfigAssetWorkflow({ options });
 
-  app.get(apiOperations.getConfigAssetsOverview.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    return workflow.getOverview(identity, context);
-  });
+  route(apiOperations.getConfigAssetsOverview, ({ identity, context }) =>
+    workflow.getOverview(identity, context)
+  );
 
-  app.get(apiOperations.getConfigAsset.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    return workflow.getAsset(identity, context, getAssetParams(request.params));
-  });
+  route(apiOperations.getConfigAsset, ({ identity, params }) =>
+    workflow.getAsset(identity, assetParams(params))
+  );
 
-  app.put(apiOperations.putConfigAsset.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    const body = parseBody(apiOperations.putConfigAsset.requestSchema, request.body);
-    return workflow.putAsset(identity, context, {
-      ...getAssetParams(request.params),
+  route(apiOperations.putConfigAsset, ({ identity, context, params, body }) =>
+    workflow.putAsset(identity, context, { ...assetParams(params), ...body })
+  );
+
+  route(apiOperations.deleteConfigAsset, ({ identity, context, params, body }) =>
+    workflow.deleteAsset(identity, context, { ...assetParams(params), ...body })
+  );
+
+  route(apiOperations.setDefaultConfigAgent, ({ identity, context, body }) =>
+    workflow.setDefaultAgent(identity, context, body)
+  );
+
+  route(apiOperations.setConfigAgentAvailability, ({ identity, context, params, body }) =>
+    workflow.setAgentAvailability(identity, context, {
+      agentName: requirePathParam(params.name, "Missing config asset name"),
       ...body
-    });
-  });
+    })
+  );
 
-  app.post(apiOperations.deleteConfigAsset.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    const body = parseBody(apiOperations.deleteConfigAsset.requestSchema, request.body);
-    return workflow.deleteAsset(identity, context, {
-      ...getAssetParams(request.params),
-      ...body
-    });
-  });
+  route(apiOperations.listAdministeredCollaborationWorkspaces, () =>
+    workflow.listAdministeredWorkspaces()
+  );
 
-  app.put(apiOperations.setDefaultConfigAgent.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    const body = parseBody(apiOperations.setDefaultConfigAgent.requestSchema, request.body);
-    return workflow.setDefaultAgent(identity, context, body);
-  });
+  route(apiOperations.listConfigAssetRevisions, ({ identity, params }) =>
+    workflow.listRevisions(identity, assetParams(params))
+  );
 
-  app.put(apiOperations.setConfigAgentAvailability.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    const body = parseBody(apiOperations.setConfigAgentAvailability.requestSchema, request.body);
-    const { name } = request.params as { name?: string };
-    if (!name) {
-      throw new AppError("BAD_REQUEST", "Missing config asset name");
-    }
-    return workflow.setAgentAvailability(identity, context, { agentName: name, ...body });
-  });
+  route(apiOperations.revertConfigAsset, ({ identity, context, params, body }) =>
+    workflow.revertAsset(identity, context, { ...assetParams(params), ...body })
+  );
 
-  app.get(apiOperations.listAdministeredCollaborationWorkspaces.path, async (request) => {
-    const { identity } = await authenticateConfigAssetRequest(options, request);
-    return workflow.listAdministeredWorkspaces(identity);
-  });
+  route(apiOperations.exportConfigAssets, ({ identity, context }) =>
+    workflow.exportAssets(identity, context)
+  );
 
-  app.get(apiOperations.listConfigAssetRevisions.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    return workflow.listRevisions(identity, context, getAssetParams(request.params));
-  });
+  route(apiOperations.replaceConfigAssets, ({ identity, context, body }) =>
+    workflow.replaceAssets(identity, context, body)
+  );
 
-  app.post(apiOperations.revertConfigAsset.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    const body = parseBody(apiOperations.revertConfigAsset.requestSchema, request.body);
-    return workflow.revertAsset(identity, context, {
-      ...getAssetParams(request.params),
-      ...body
-    });
-  });
-
-  app.get(apiOperations.exportConfigAssets.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    return workflow.exportAssets(identity, context);
-  });
-
-  app.post(apiOperations.replaceConfigAssets.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    const body = parseBody(apiOperations.replaceConfigAssets.requestSchema, request.body);
-    return workflow.replaceAssets(identity, context, body);
-  });
-
-  app.post(apiOperations.validateConfigAssets.path, async (request) => {
-    const { identity, context } = await authenticateConfigAssetRequest(options, request);
-    const body = parseBody(apiOperations.validateConfigAssets.requestSchema, request.body);
-    return workflow.validateAssets(identity, context, body);
-  });
+  route(apiOperations.validateConfigAssets, ({ identity, context, body }) =>
+    workflow.validateAssets(identity, context, body)
+  );
 }
 
-function getAssetParams(params: unknown): {
+function assetParams(params: { kind: string; name: string }): {
   kind: ConfigAssetKind;
   name: string;
 } {
-  const typedParams = params as { kind?: string; name?: string };
-  if (typedParams.kind !== "agent" && typedParams.kind !== "skill") {
+  if (params.kind !== "agent" && params.kind !== "skill") {
     throw new AppError("VALIDATION_FAILED", "Config asset kind must be 'agent' or 'skill'");
   }
-  if (!typedParams.name) {
-    throw new AppError("BAD_REQUEST", "Missing config asset name");
-  }
-  return { kind: typedParams.kind, name: typedParams.name };
+  return {
+    kind: params.kind,
+    name: requirePathParam(params.name, "Missing config asset name")
+  };
 }

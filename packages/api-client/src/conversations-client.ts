@@ -14,7 +14,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
         client: transport.generatedClient,
         ...(collaborationWorkspaceId === undefined ? {} : { query: { collaborationWorkspaceId } })
       }),
-      apiOperations.listConversations.responseSchema
+      apiOperations.listConversations.response.schema
     );
 
   return {
@@ -26,9 +26,9 @@ export function createConversationsClient(transport: ApiClientTransport) {
       transport.unwrapJson(
         generatedSdk.createConversation({
           client: transport.generatedClient,
-          body: apiOperations.createConversation.requestSchema.parse(input)
+          body: apiOperations.createConversation.body.parse(input)
         }),
-        apiOperations.createConversation.responseSchema
+        apiOperations.createConversation.response.schema
       ),
     getThread: (conversationId: string) =>
       transport.unwrapJson(
@@ -36,7 +36,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { conversationId }
         }),
-        apiOperations.getConversationThread.responseSchema
+        apiOperations.getConversationThread.response.schema
       ),
     listMessages: (conversationId: string) =>
       transport.unwrapJson(
@@ -44,7 +44,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { conversationId }
         }),
-        apiOperations.listConversationMessages.responseSchema
+        apiOperations.listConversationMessages.response.schema
       ),
     generateTitle: (conversationId: string) =>
       transport.unwrapJson(
@@ -52,16 +52,16 @@ export function createConversationsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { conversationId }
         }),
-        apiOperations.generateConversationTitle.responseSchema
+        apiOperations.generateConversationTitle.response.schema
       ),
     rename: (conversationId: string, title: string) =>
       transport.unwrapJson(
         generatedSdk.renameConversation({
           client: transport.generatedClient,
           path: { conversationId },
-          body: apiOperations.renameConversation.requestSchema.parse({ title })
+          body: apiOperations.renameConversation.body.parse({ title })
         }),
-        apiOperations.renameConversation.responseSchema
+        apiOperations.renameConversation.response.schema
       ),
     move: (
       conversationId: string,
@@ -72,12 +72,12 @@ export function createConversationsClient(transport: ApiClientTransport) {
         generatedSdk.moveConversation({
           client: transport.generatedClient,
           path: { conversationId },
-          body: apiOperations.moveConversation.requestSchema.parse({
+          body: apiOperations.moveConversation.body.parse({
             collaborationWorkspaceId,
             visibility
           })
         }),
-        apiOperations.moveConversation.responseSchema
+        apiOperations.moveConversation.response.schema
       ),
     delete: (conversationId: string) =>
       transport.unwrapJson(
@@ -85,7 +85,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { conversationId }
         }),
-        apiOperations.deleteConversation.responseSchema
+        apiOperations.deleteConversation.response.schema
       ),
     resources: {
       list: (conversationId: string) =>
@@ -94,7 +94,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId }
           }),
-          apiOperations.listConversationResources.responseSchema
+          apiOperations.listConversationResources.response.schema
         ),
       getStructuredData: (conversationId: string, structuredDataResourceId: string) =>
         transport.unwrapJson(
@@ -102,7 +102,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId, structuredDataResourceId }
           }),
-          apiOperations.getStructuredDataResource.responseSchema
+          apiOperations.getStructuredDataResource.response.schema
         )
     },
     draftAttachments: {
@@ -112,7 +112,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId }
           }),
-          apiOperations.listDraftAttachments.responseSchema
+          apiOperations.listDraftAttachments.response.schema
         ),
       upload: (conversationId: string, file: File) =>
         transport.unwrapJson(
@@ -121,7 +121,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             path: { conversationId },
             body: { file }
           }),
-          apiOperations.uploadDraftAttachment.responseSchema
+          apiOperations.uploadDraftAttachment.response.schema
         ),
       retry: (conversationId: string, attachmentId: string) =>
         transport.unwrapJson(
@@ -129,7 +129,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId, attachmentId }
           }),
-          apiOperations.retryDraftAttachment.responseSchema
+          apiOperations.retryDraftAttachment.response.schema
         ),
       delete: (conversationId: string, attachmentId: string) =>
         transport.unwrapJson(
@@ -137,7 +137,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId, attachmentId }
           }),
-          apiOperations.deleteDraftAttachment.responseSchema
+          apiOperations.deleteDraftAttachment.response.schema
         )
     },
     files: {
@@ -176,7 +176,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId, artifactId }
           }),
-          apiOperations.getConversationArtifactPreview.responseSchema
+          apiOperations.getConversationArtifactPreview.response.schema
         ),
       getAttachmentPreview: (conversationId: string, attachmentId: string) =>
         transport.unwrapJson(
@@ -184,7 +184,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId, attachmentId }
           }),
-          apiOperations.getConversationAttachmentPreview.responseSchema
+          apiOperations.getConversationAttachmentPreview.response.schema
         ),
       retryPreview: (conversationId: string, artifactId: string) =>
         transport.unwrapJson(
@@ -192,7 +192,7 @@ export function createConversationsClient(transport: ApiClientTransport) {
             client: transport.generatedClient,
             path: { conversationId, artifactId }
           }),
-          apiOperations.retryConversationArtifactPreview.responseSchema
+          apiOperations.retryConversationArtifactPreview.response.schema
         )
     }
   };

@@ -298,8 +298,8 @@ describe("password setup by email", () => {
     const capturing = await createMailHarness({ listCaptured: true });
     const delivering = await createMailHarness();
 
-    expect((await capturing.server.call("capturedMail", {})).statusCode).toBe(200);
-    expect((await delivering.server.call("capturedMail", {})).statusCode).toBe(404);
+    expect((await capturing.server.call("listCapturedMail", {})).statusCode).toBe(200);
+    expect((await delivering.server.call("listCapturedMail", {})).statusCode).toBe(404);
   });
 
   it("records an anonymous reset request without an actor and keeps the user as subject", async () => {

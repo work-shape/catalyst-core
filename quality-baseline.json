@@ -81,13 +81,6 @@
     {
       "target": "lint",
       "rule": "@typescript-eslint/no-unnecessary-type-assertion",
-      "scope": "packages/api-contract",
-      "count": 1,
-      "owner": "CB-4a"
-    },
-    {
-      "target": "lint",
-      "rule": "@typescript-eslint/no-unnecessary-type-assertion",
       "scope": "packages/chat-ui",
       "count": 14,
       "owner": "G-5c"
@@ -138,7 +131,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/chat-server",
-      "count": 33,
+      "count": 10,
       "owner": "CB-4d"
     },
     {
@@ -208,7 +201,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 91,
+      "count": 90,
       "owner": "CB-2"
     },
     {
@@ -354,13 +347,6 @@
     {
       "target": "lint",
       "rule": "knip/dependencies",
-      "scope": "packages/api-contract",
-      "count": 1,
-      "owner": "CB-4a"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/dependencies",
       "scope": "packages/chat-server",
       "count": 1,
       "owner": "CB-4d"
@@ -392,13 +378,6 @@
       "scope": "root",
       "count": 2,
       "owner": "CB-8b"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/duplicates",
-      "scope": "packages/api-contract",
-      "count": 2,
-      "owner": "CB-4a"
     },
     {
       "target": "lint",

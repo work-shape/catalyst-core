@@ -1,24 +1,20 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, asUserId, requireAuthScope } from "@vivd-catalyst/core";
+import { asUserId } from "@vivd-catalyst/core";
+import { recordGovernanceAccess } from "../governance-actions";
+import type { Route } from "../http/route";
+import { requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
-import { authorizeGovernanceAction } from "../governance-actions";
-import { authenticateRequest, parseBody } from "../request-context";
 import { UserAdministrationWorkflow } from "../user-administration-workflow";
 
-export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerSuperadminRoutes(route: Route, options: ChatServerOptions): void {
   const userAdministration = new UserAdministrationWorkflow(options);
 
-  app.get(apiOperations.getUsageSummary.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "governance:read");
-    await authorizeGovernanceAction({
+  route(apiOperations.getUsageSummary, async ({ user, context }) => {
+    await recordGovernanceAccess({
       options,
       user,
       context,
-      requiredPermission: "usage.view",
-      auditType: "governance.usage_viewed",
-      deniedMessage: "Usage governance requires 'usage.view' permission"
+      auditType: "governance.usage_viewed"
     });
 
     return options.usageGovernance.createSafeSummary({
@@ -27,16 +23,11 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.get(apiOperations.listAdministeredUsers.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:read");
+  route(apiOperations.listAdministeredUsers, async ({ user, context }) => {
     return userAdministration.listUsers(user, context);
   });
 
-  app.post(apiOperations.createAdministeredUser.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:write");
-    const body = parseBody(apiOperations.createAdministeredUser.requestSchema, request.body);
+  route(apiOperations.createAdministeredUser, async ({ user, context, body }) => {
     return userAdministration.createUser(user, context, {
       displayLabel: body.displayLabel,
       email: body.email,
@@ -48,11 +39,8 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.patch(apiOperations.updateAdministeredUser.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:write");
-    const body = parseBody(apiOperations.updateAdministeredUser.requestSchema, request.body);
-    const userId = getUserIdParam(request.params);
+  route(apiOperations.updateAdministeredUser, async ({ user, context, params, body }) => {
+    const userId = userIdParam(params);
     return userAdministration.updateUser(user, context, {
       userId,
       displayLabel: body.displayLabel,
@@ -64,23 +52,15 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.delete(apiOperations.deleteAdministeredUser.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:write");
-    const userId = getUserIdParam(request.params);
+  route(apiOperations.deleteAdministeredUser, async ({ user, context, params }) => {
+    const userId = userIdParam(params);
     return userAdministration.deleteUser(user, context, {
       userId
     });
   });
 
-  app.put(apiOperations.upsertAdministeredUserIdentity.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:write");
-    const body = parseBody(
-      apiOperations.upsertAdministeredUserIdentity.requestSchema,
-      request.body
-    );
-    const userId = getUserIdParam(request.params);
+  route(apiOperations.upsertAdministeredUserIdentity, async ({ user, context, params, body }) => {
+    const userId = userIdParam(params);
     return userAdministration.upsertIdentity(user, context, {
       userId,
       authSource: body.authSource,
@@ -91,53 +71,34 @@ export function registerSuperadminRoutes(app: FastifyInstance, options: ChatServ
     });
   });
 
-  app.post(apiOperations.resetAdministeredUserPassword.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:write");
-    const body = parseBody(apiOperations.resetAdministeredUserPassword.requestSchema, request.body);
-    const userId = getUserIdParam(request.params);
+  route(apiOperations.resetAdministeredUserPassword, async ({ user, context, params, body }) => {
+    const userId = userIdParam(params);
     return userAdministration.resetPassword(user, context, {
       userId,
       password: body.password
     });
   });
 
-  app.post(apiOperations.sendAdministeredUserInvitation.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:write");
+  route(apiOperations.sendAdministeredUserInvitation, async ({ user, context, params }) => {
     return userAdministration.sendInvitation(user, context, {
-      userId: getUserIdParam(request.params)
+      userId: userIdParam(params)
     });
   });
 
-  app.delete(apiOperations.deleteAdministeredUserIdentity.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "user_admin:write");
-    const params = getIdentityParams(request.params);
-    return userAdministration.deleteIdentity(user, context, params);
+  route(apiOperations.deleteAdministeredUserIdentity, async ({ user, context, params }) => {
+    return userAdministration.deleteIdentity(user, context, identityParams(params));
   });
 }
 
-function getUserIdParam(params: unknown) {
-  const userId = (params as { userId?: string }).userId;
-  if (!userId) {
-    throw new AppError("BAD_REQUEST", "Missing user id");
-  }
-  return asUserId(userId);
+function userIdParam(params: { userId: string }) {
+  return asUserId(requirePathParam(params.userId, "Missing user id"));
 }
 
-function getIdentityParams(params: unknown) {
-  const typedParams = params as {
-    userId?: string;
-    authSource?: string;
-    externalUserId?: string;
-  };
-  if (!typedParams.userId || !typedParams.authSource || !typedParams.externalUserId) {
-    throw new AppError("BAD_REQUEST", "Missing user identity mapping parameters");
-  }
+function identityParams(params: { userId: string; authSource: string; externalUserId: string }) {
+  const missing = "Missing user identity mapping parameters";
   return {
-    userId: asUserId(typedParams.userId),
-    authSource: typedParams.authSource,
-    externalUserId: typedParams.externalUserId
+    userId: asUserId(requirePathParam(params.userId, missing)),
+    authSource: requirePathParam(params.authSource, missing),
+    externalUserId: requirePathParam(params.externalUserId, missing)
   };
 }

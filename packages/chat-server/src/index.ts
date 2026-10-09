@@ -5,6 +5,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import { installErrorHandler } from "./errors";
+import { createRoute } from "./http/route";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
@@ -55,6 +56,8 @@ export type {
   ExecutionWorkspaceCleanupJobOptions,
   RunRecoveryOptions
 } from "./types";
+export { createRoute } from "./http/route";
+export type { Route } from "./http/route";
 
 export async function createChatServer(options: ChatServerOptions): Promise<FastifyInstance> {
   const allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins);
@@ -99,29 +102,24 @@ export async function createChatServer(options: ChatServerOptions): Promise<Fast
     await retentionJob.stop();
   });
 
-  app.get("/health", async () => ({
-    status: "ok",
-    clientInstanceId: options.clientInstanceId,
-    time: new Date().toISOString()
-  }));
-
   registerBetterAuthRoutes(app, options);
-  registerDevMailRoutes(app, options);
-  registerSessionTokenRoutes(app, options);
-  registerServiceAccessTokenRoutes(app, options);
-  registerAgentRunRoutes(app, options);
-  registerConfigRoutes(app, options);
-  registerCollaborationWorkspaceRoutes(app, options);
-  registerConfigAssetRoutes(app, options);
-  registerApprovalRequestRoutes(app, options);
-  registerUserAccountRoutes(app, options);
-  registerConversationRoutes(app, options);
-  registerConversationResourceRoutes(app, options);
-  registerConversationFileRoutes(app, options);
-  registerDraftAttachmentRoutes(app, options);
-  registerAuditRoutes(app, options);
-  registerApiAccessAdministrationRoutes(app, options);
-  registerSuperadminRoutes(app, options);
+  const route = createRoute(app, options);
+  registerDevMailRoutes(route, options);
+  registerSessionTokenRoutes(route, options);
+  registerServiceAccessTokenRoutes(route, options);
+  registerAgentRunRoutes(route, options, app.log);
+  registerConfigRoutes(route, options);
+  registerCollaborationWorkspaceRoutes(route, options);
+  registerConfigAssetRoutes(route, options);
+  registerApprovalRequestRoutes(route, options);
+  registerUserAccountRoutes(route, options);
+  registerConversationRoutes(route, options);
+  registerConversationResourceRoutes(route, options);
+  registerConversationFileRoutes(route, options);
+  registerDraftAttachmentRoutes(route, options);
+  registerAuditRoutes(route, options);
+  registerApiAccessAdministrationRoutes(route, options);
+  registerSuperadminRoutes(route, options);
 
   return app;
 }

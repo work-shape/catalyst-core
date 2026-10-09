@@ -21,8 +21,8 @@ import {
 import type { ApprovalCheckRunner } from "./approval-check-runner";
 
 /** Scopes the approval routes require; the view flags use the same ones. */
-export const APPROVAL_DECIDE_AUTH_SCOPE = "governance:write";
-export const APPROVAL_WITHDRAW_AUTH_SCOPE = "conversation:write";
+const APPROVAL_DECIDE_AUTH_SCOPE = "governance:write";
+const APPROVAL_WITHDRAW_AUTH_SCOPE = "conversation:write";
 
 type CallContext = Pick<RuntimeCallContext, "correlationId"> &
   Partial<Omit<RuntimeCallContext, "user" | "clientInstanceId" | "correlationId">>;

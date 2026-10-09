@@ -1,0 +1,130 @@
+import { z } from "zod";
+import {
+  administeredUserSchema,
+  createAdministeredUserRequestSchema,
+  resetAdministeredUserPasswordRequestSchema,
+  resetAdministeredUserPasswordResponseSchema,
+  sendAdministeredUserInvitationResponseSchema,
+  updateAdministeredUserRequestSchema,
+  upsertAdministeredUserIdentityRequestSchema
+} from "../identity";
+import { defineOperation, json } from "./define-operation";
+
+export const userOperations = {
+  listAdministeredUsers: defineOperation({
+    id: "listAdministeredUsers",
+    method: "GET",
+    path: "/api/superadmin/users",
+    summary: "List the users of the instance",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:read",
+    requires: ["users.manage"],
+    effect: "reading",
+    response: json(z.array(administeredUserSchema)),
+    errors: [],
+    rateClass: "read"
+  }),
+  createAdministeredUser: defineOperation({
+    id: "createAdministeredUser",
+    method: "POST",
+    path: "/api/superadmin/users",
+    summary: "Create a user",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: createAdministeredUserRequestSchema,
+    response: json(administeredUserSchema),
+    errors: ["CONFLICT"],
+    rateClass: "write"
+  }),
+  updateAdministeredUser: defineOperation({
+    id: "updateAdministeredUser",
+    method: "PATCH",
+    path: "/api/superadmin/users/:userId",
+    summary: "Change a user's profile, roles or status",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: updateAdministeredUserRequestSchema,
+    response: json(administeredUserSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  deleteAdministeredUser: defineOperation({
+    id: "deleteAdministeredUser",
+    method: "DELETE",
+    path: "/api/superadmin/users/:userId",
+    summary: "Delete a user and their data",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    response: json(administeredUserSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  upsertAdministeredUserIdentity: defineOperation({
+    id: "upsertAdministeredUserIdentity",
+    method: "PUT",
+    path: "/api/superadmin/users/:userId/identities",
+    summary: "Link a sign-in identity to a user",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: upsertAdministeredUserIdentityRequestSchema,
+    response: json(administeredUserSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  resetAdministeredUserPassword: defineOperation({
+    id: "resetAdministeredUserPassword",
+    method: "POST",
+    path: "/api/superadmin/users/:userId/password",
+    summary: "Set a user's password",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: resetAdministeredUserPasswordRequestSchema,
+    response: json(resetAdministeredUserPasswordResponseSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  sendAdministeredUserInvitation: defineOperation({
+    id: "sendAdministeredUserInvitation",
+    method: "POST",
+    path: "/api/superadmin/users/:userId/invitation",
+    summary: "Mail a user a link to set their password",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    response: json(sendAdministeredUserInvitationResponseSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  deleteAdministeredUserIdentity: defineOperation({
+    id: "deleteAdministeredUserIdentity",
+    method: "DELETE",
+    path: "/api/superadmin/users/:userId/identities/:authSource/:externalUserId",
+    summary: "Unlink a sign-in identity from a user",
+    tag: "Users",
+    auth: "user",
+    scope: "user_admin:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    response: json(administeredUserSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  })
+} as const;

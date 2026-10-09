@@ -11,22 +11,22 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
     list: () =>
       transport.unwrapJson(
         generatedSdk.listCollaborationWorkspaces({ client: transport.generatedClient }),
-        apiOperations.listCollaborationWorkspaces.responseSchema
+        apiOperations.listCollaborationWorkspaces.response.schema
       ),
     create: (input: OperationRequestInput<typeof apiOperations.createCollaborationWorkspace>) =>
       transport.unwrapJson(
         generatedSdk.createCollaborationWorkspace({
           client: transport.generatedClient,
-          body: apiOperations.createCollaborationWorkspace.requestSchema.parse(input)
+          body: apiOperations.createCollaborationWorkspace.body.parse(input)
         }),
-        apiOperations.createCollaborationWorkspace.responseSchema
+        apiOperations.createCollaborationWorkspace.response.schema
       ),
     browseDirectory: () =>
       transport.unwrapJson(
         generatedSdk.listCollaborationWorkspaceDirectory({
           client: transport.generatedClient
         }),
-        apiOperations.listCollaborationWorkspaceDirectory.responseSchema
+        apiOperations.listCollaborationWorkspaceDirectory.response.schema
       ),
     get: (collaborationWorkspaceId: string) =>
       transport.unwrapJson(
@@ -34,7 +34,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
           client: transport.generatedClient,
           path: { collaborationWorkspaceId }
         }),
-        apiOperations.getCollaborationWorkspace.responseSchema
+        apiOperations.getCollaborationWorkspace.response.schema
       ),
     listAgents: (collaborationWorkspaceId: string, locale?: LocaleCode) =>
       transport.unwrapJson(
@@ -43,7 +43,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
           path: { collaborationWorkspaceId },
           query: { locale }
         }),
-        apiOperations.listCollaborationWorkspaceAgents.responseSchema
+        apiOperations.listCollaborationWorkspaceAgents.response.schema
       ),
     update: (
       collaborationWorkspaceId: string,
@@ -53,9 +53,9 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
         generatedSdk.updateCollaborationWorkspace({
           client: transport.generatedClient,
           path: { collaborationWorkspaceId },
-          body: apiOperations.updateCollaborationWorkspace.requestSchema.parse(input)
+          body: apiOperations.updateCollaborationWorkspace.body.parse(input)
         }),
-        apiOperations.updateCollaborationWorkspace.responseSchema
+        apiOperations.updateCollaborationWorkspace.response.schema
       ),
     deletionImpact: (collaborationWorkspaceId: string) =>
       transport.unwrapJson(
@@ -63,16 +63,16 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
           client: transport.generatedClient,
           path: { collaborationWorkspaceId }
         }),
-        apiOperations.getCollaborationWorkspaceDeletionImpact.responseSchema
+        apiOperations.getCollaborationWorkspaceDeletionImpact.response.schema
       ),
     delete: (collaborationWorkspaceId: string, confirmName: string) =>
       transport.unwrapJson(
         generatedSdk.deleteCollaborationWorkspace({
           client: transport.generatedClient,
           path: { collaborationWorkspaceId },
-          body: apiOperations.deleteCollaborationWorkspace.requestSchema.parse({ confirmName })
+          body: apiOperations.deleteCollaborationWorkspace.body.parse({ confirmName })
         }),
-        apiOperations.deleteCollaborationWorkspace.responseSchema
+        apiOperations.deleteCollaborationWorkspace.response.schema
       ),
     members: {
       list: (collaborationWorkspaceId: string) =>
@@ -81,7 +81,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             client: transport.generatedClient,
             path: { collaborationWorkspaceId }
           }),
-          apiOperations.listCollaborationWorkspaceMembers.responseSchema
+          apiOperations.listCollaborationWorkspaceMembers.response.schema
         ),
       searchCandidates: (collaborationWorkspaceId: string, query: string) =>
         transport.unwrapJson(
@@ -90,16 +90,16 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             path: { collaborationWorkspaceId },
             query: { q: query }
           }),
-          apiOperations.listCollaborationWorkspaceMemberCandidates.responseSchema
+          apiOperations.listCollaborationWorkspaceMemberCandidates.response.schema
         ),
       addByEmail: (collaborationWorkspaceId: string, email: string) =>
         transport.unwrapJson(
           generatedSdk.addCollaborationWorkspaceMember({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId },
-            body: apiOperations.addCollaborationWorkspaceMember.requestSchema.parse({ email })
+            body: apiOperations.addCollaborationWorkspaceMember.body.parse({ email })
           }),
-          apiOperations.addCollaborationWorkspaceMember.responseSchema
+          apiOperations.addCollaborationWorkspaceMember.response.schema
         ),
       changeRole: (
         collaborationWorkspaceId: string,
@@ -110,9 +110,9 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
           generatedSdk.updateCollaborationWorkspaceMemberRole({
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId },
-            body: apiOperations.updateCollaborationWorkspaceMemberRole.requestSchema.parse({ role })
+            body: apiOperations.updateCollaborationWorkspaceMemberRole.body.parse({ role })
           }),
-          apiOperations.updateCollaborationWorkspaceMemberRole.responseSchema
+          apiOperations.updateCollaborationWorkspaceMemberRole.response.schema
         ),
       remove: (collaborationWorkspaceId: string, userId: string) =>
         transport.unwrapJson(
@@ -120,7 +120,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId }
           }),
-          apiOperations.removeCollaborationWorkspaceMember.responseSchema
+          apiOperations.removeCollaborationWorkspaceMember.response.schema
         ),
       leave: (collaborationWorkspaceId: string) =>
         transport.unwrapJson(
@@ -128,7 +128,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             client: transport.generatedClient,
             path: { collaborationWorkspaceId }
           }),
-          apiOperations.leaveCollaborationWorkspace.responseSchema
+          apiOperations.leaveCollaborationWorkspace.response.schema
         )
     },
     accessRequests: {
@@ -138,7 +138,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             client: transport.generatedClient,
             path: { collaborationWorkspaceId }
           }),
-          apiOperations.requestCollaborationWorkspaceAccess.responseSchema
+          apiOperations.requestCollaborationWorkspaceAccess.response.schema
         ),
       list: (collaborationWorkspaceId: string) =>
         transport.unwrapJson(
@@ -146,7 +146,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             client: transport.generatedClient,
             path: { collaborationWorkspaceId }
           }),
-          apiOperations.listCollaborationWorkspaceAccessRequests.responseSchema
+          apiOperations.listCollaborationWorkspaceAccessRequests.response.schema
         ),
       approve: (collaborationWorkspaceId: string, userId: string) =>
         transport.unwrapJson(
@@ -154,7 +154,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId }
           }),
-          apiOperations.approveCollaborationWorkspaceAccessRequest.responseSchema
+          apiOperations.approveCollaborationWorkspaceAccessRequest.response.schema
         ),
       decline: (collaborationWorkspaceId: string, userId: string) =>
         transport.unwrapJson(
@@ -162,7 +162,7 @@ export function createCollaborationWorkspacesClient(transport: ApiClientTranspor
             client: transport.generatedClient,
             path: { collaborationWorkspaceId, userId }
           }),
-          apiOperations.declineCollaborationWorkspaceAccessRequest.responseSchema
+          apiOperations.declineCollaborationWorkspaceAccessRequest.response.schema
         )
     }
   };

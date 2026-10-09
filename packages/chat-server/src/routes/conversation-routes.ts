@@ -1,23 +1,15 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, asCollaborationWorkspaceId, requireAuthScope } from "@vivd-catalyst/core";
+import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
+import type { Route } from "../http/route";
+import { conversationIdParam, withRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
-import {
-  authenticateRequest,
-  getConversationId,
-  parseBody,
-  withRequestLocale
-} from "../request-context";
 
-export function registerConversationRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerConversationRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  app.get(apiOperations.listConversations.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const collaborationWorkspaceId = (request.query as { collaborationWorkspaceId?: string })
-      .collaborationWorkspaceId;
+  route(apiOperations.listConversations, ({ user, query }) => {
+    const { collaborationWorkspaceId } = query;
     if (collaborationWorkspaceId === "") {
       throw new AppError("BAD_REQUEST", "Missing collaborationWorkspaceId query parameter");
     }
@@ -29,11 +21,8 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
     );
   });
 
-  app.post(apiOperations.createConversation.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
-    const body = parseBody(apiOperations.createConversation.requestSchema, request.body);
-    return conversations.createConversation(
+  route(apiOperations.createConversation, ({ user, context, body, request }) =>
+    conversations.createConversation(
       user,
       withRequestLocale(context, options, request, body.locale),
       {
@@ -42,41 +31,29 @@ export function registerConversationRoutes(app: FastifyInstance, options: ChatSe
           ? asCollaborationWorkspaceId(body.collaborationWorkspaceId)
           : undefined
       }
-    );
-  });
+    )
+  );
 
-  app.get(apiOperations.listConversationMessages.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    return conversations.listMessages(getConversationId(request), user);
-  });
+  route(apiOperations.listConversationMessages, ({ user, params }) =>
+    conversations.listMessages(conversationIdParam(params), user)
+  );
 
-  app.get(apiOperations.getConversationThread.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    return conversations.getThreadSnapshot(getConversationId(request), user);
-  });
+  route(apiOperations.getConversationThread, ({ user, params }) =>
+    conversations.getThreadSnapshot(conversationIdParam(params), user)
+  );
 
-  app.patch(apiOperations.renameConversation.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
-    const body = parseBody(apiOperations.renameConversation.requestSchema, request.body);
-    return conversations.renameConversation(getConversationId(request), body.title, user, context);
-  });
+  route(apiOperations.renameConversation, ({ user, context, params, body }) =>
+    conversations.renameConversation(conversationIdParam(params), body.title, user, context)
+  );
 
-  app.post(apiOperations.moveConversation.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
-    const body = parseBody(apiOperations.moveConversation.requestSchema, request.body);
-    return conversations.moveConversation(getConversationId(request), user, context, {
+  route(apiOperations.moveConversation, ({ user, context, params, body }) =>
+    conversations.moveConversation(conversationIdParam(params), user, context, {
       collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId),
       visibility: body.visibility
-    });
-  });
+    })
+  );
 
-  app.delete(apiOperations.deleteConversation.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
-    return conversations.deleteConversation(getConversationId(request), user, context);
-  });
+  route(apiOperations.deleteConversation, ({ user, context, params }) =>
+    conversations.deleteConversation(conversationIdParam(params), user, context)
+  );
 }

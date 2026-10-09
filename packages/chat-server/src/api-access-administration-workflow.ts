@@ -10,7 +10,7 @@ import {
   type RuntimeCallContext,
   type ServicePrincipalRecord
 } from "@vivd-catalyst/core";
-import { authorizeGovernanceAction } from "./governance-actions";
+import { recordGovernanceAccess } from "./governance-actions";
 import type { ChatServerOptions } from "./types";
 
 const SERVICE_PERMISSIONS = new Set<ServicePrincipalPermission>([
@@ -56,7 +56,7 @@ export class ApiAccessAdministrationWorkflow {
     actor: AuthenticatedUser,
     context: RuntimeCallContext
   ): Promise<ServicePrincipalDetail[]> {
-    await this.authorize(actor, context, "api_access.service_principals_viewed");
+    await this.recordAccess(actor, context, "api_access.service_principals_viewed");
     const principals = await this.options.apiAccessStore.listServicePrincipals({
       clientInstanceId: this.options.clientInstanceId
     });
@@ -69,7 +69,7 @@ export class ApiAccessAdministrationWorkflow {
     command: CreateServicePrincipalCommand
   ): Promise<ServicePrincipalDetail> {
     this.requireSuperadmin(actor, "Service principal creation");
-    await this.authorize(actor, context, "api_access.service_principal_create_authorized");
+    await this.recordAccess(actor, context, "api_access.service_principal_create_authorized");
     this.requireServicePermissions(command.permissions);
     const principal = await this.options.apiAccessStore.createServicePrincipal({
       clientInstanceId: this.options.clientInstanceId,
@@ -95,7 +95,7 @@ export class ApiAccessAdministrationWorkflow {
     command: UpdateServicePrincipalCommand
   ): Promise<ServicePrincipalDetail> {
     this.requireSuperadmin(actor, "Service principal updates");
-    await this.authorize(actor, context, "api_access.service_principal_update_authorized");
+    await this.recordAccess(actor, context, "api_access.service_principal_update_authorized");
     this.requireServicePermissions(command.permissions);
     const principal = await this.options.apiAccessStore.updateServicePrincipal({
       clientInstanceId: this.options.clientInstanceId,
@@ -120,7 +120,7 @@ export class ApiAccessAdministrationWorkflow {
     command: CreateApiCredentialCommand
   ): Promise<{ credential: ApiCredentialRecord; secret: string }> {
     this.requireSuperadmin(actor, "API credential creation");
-    await this.authorize(actor, context, "api_access.credential_create_authorized");
+    await this.recordAccess(actor, context, "api_access.credential_create_authorized");
     this.requireCredentialScopes(command.scopes);
     this.requireFutureExpiry(command.expiresAt);
     const created = await this.options.apiAccessStore.createApiCredential({
@@ -153,7 +153,7 @@ export class ApiAccessAdministrationWorkflow {
     credentialId: string
   ): Promise<ApiCredentialRecord> {
     this.requireSuperadmin(actor, "API credential revocation");
-    await this.authorize(actor, context, "api_access.credential_revoke_authorized");
+    await this.recordAccess(actor, context, "api_access.credential_revoke_authorized");
     const credential = await this.options.apiAccessStore.revokeApiCredential({
       clientInstanceId: this.options.clientInstanceId,
       credentialId: asApiCredentialId(credentialId)
@@ -217,19 +217,13 @@ export class ApiAccessAdministrationWorkflow {
     }
   }
 
-  private authorize(
+  // The right itself, `api_access.manage`, is every API access operation's `requires`.
+  private recordAccess(
     actor: AuthenticatedUser,
     context: RuntimeCallContext,
     auditType: string
   ): Promise<void> {
-    return authorizeGovernanceAction({
-      options: this.options,
-      user: actor,
-      context,
-      requiredPermission: "api_access.manage",
-      auditType,
-      deniedMessage: "API Access administration requires 'api_access.manage' permission"
-    });
+    return recordGovernanceAccess({ options: this.options, user: actor, context, auditType });
   }
 
   private async recordPrincipalMutation(

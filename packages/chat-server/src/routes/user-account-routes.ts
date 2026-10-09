@@ -1,28 +1,17 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import {
-  asUserId,
-  getSubjectUserId,
-  requireAuthScope,
-  resolveEffectivePermissions
-} from "@vivd-catalyst/core";
+import { asUserId, getSubjectUserId, resolveEffectivePermissions } from "@vivd-catalyst/core";
+import type { Route } from "../http/route";
+import { resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
-import {
-  authenticateRequest,
-  createCorrelationId,
-  parseBody,
-  resolveRequestLocale
-} from "../request-context";
 import { PasswordSetupWorkflow } from "../password-setup-workflow";
 import { UserAccountWorkflow } from "../user-account-workflow";
 
-export function registerUserAccountRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerUserAccountRoutes(route: Route, options: ChatServerOptions): void {
   const userAccount = new UserAccountWorkflow(options);
   const passwordSetup = new PasswordSetupWorkflow(options);
 
   // Unauthenticated by design: these are the routes a locked-out user can still reach.
-  app.post(apiOperations.requestPasswordReset.path, async (request) => {
-    const body = parseBody(apiOperations.requestPasswordReset.requestSchema, request.body);
+  route(apiOperations.requestPasswordReset, async ({ context, body, request }) => {
     return passwordSetup.requestPasswordReset(
       {
         email: body.email,
@@ -31,22 +20,18 @@ export function registerUserAccountRoutes(app: FastifyInstance, options: ChatSer
         onDeliveryError: (error) =>
           request.log.error({ err: error }, "Password reset email delivery failed")
       },
-      { correlationId: createCorrelationId(request) }
+      { correlationId: context.correlationId }
     );
   });
 
-  app.post(apiOperations.completePasswordSetup.path, async (request) => {
-    const body = parseBody(apiOperations.completePasswordSetup.requestSchema, request.body);
+  route(apiOperations.completePasswordSetup, async ({ context, body }) => {
     return passwordSetup.completePasswordSetup(
       { token: body.token, password: body.password },
-      { correlationId: createCorrelationId(request) }
+      { correlationId: context.correlationId }
     );
   });
 
-  app.patch(apiOperations.updateCurrentUser.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "me:write");
-    const body = parseBody(apiOperations.updateCurrentUser.requestSchema, request.body);
+  route(apiOperations.updateCurrentUser, async ({ user, context, body }) => {
     const updated = await userAccount.updateCurrentUser(user, context, {
       displayLabel: body.displayLabel
     });
@@ -56,9 +41,7 @@ export function registerUserAccountRoutes(app: FastifyInstance, options: ChatSer
     };
   });
 
-  app.get(apiOperations.getCurrentUserModelPreference.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "me:read");
+  route(apiOperations.getCurrentUserModelPreference, async ({ user }) => {
     const preference = await options.userStore.getUserModelPreference({
       clientInstanceId: options.clientInstanceId,
       userId: asUserId(getSubjectUserId(user))
@@ -66,34 +49,23 @@ export function registerUserAccountRoutes(app: FastifyInstance, options: ChatSer
     return preference ?? { reasoningEfforts: {} };
   });
 
-  app.put(apiOperations.setCurrentUserModelPreference.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "me:write");
-    const preference = parseBody(
-      apiOperations.setCurrentUserModelPreference.requestSchema,
-      request.body
-    );
+  route(apiOperations.setCurrentUserModelPreference, async ({ user, body }) => {
     await options.userStore.setUserModelPreference({
       clientInstanceId: options.clientInstanceId,
       userId: asUserId(getSubjectUserId(user)),
-      preference
+      preference: body
     });
-    return preference;
+    return body;
   });
 
-  app.post(apiOperations.changeCurrentUserPassword.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "me:write");
-    const body = parseBody(apiOperations.changeCurrentUserPassword.requestSchema, request.body);
+  route(apiOperations.changeCurrentUserPassword, async ({ user, context, body }) => {
     return userAccount.changeCurrentUserPassword(user, context, {
       currentPassword: body.currentPassword,
       newPassword: body.newPassword
     });
   });
 
-  app.delete(apiOperations.deleteCurrentUser.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "me:delete");
+  route(apiOperations.deleteCurrentUser, async ({ user, context }) => {
     return userAccount.deleteCurrentUser(user, context);
   });
 }

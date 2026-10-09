@@ -190,8 +190,6 @@ export const draftAttachmentUploadResponseSchema = z.object({
   outcome: z.enum(["created", "already_available"]).optional()
 });
 
-export const retryDraftAttachmentResponseSchema = draftAttachmentUploadResponseSchema;
-
 export type DraftAttachment = z.infer<typeof draftAttachmentSchema>;
 export type DraftAttachmentUploadResponse = z.infer<typeof draftAttachmentUploadResponseSchema>;
 
@@ -350,7 +348,6 @@ export const artifactPreviewResponseSchema = z.discriminatedUnion("status", [
 ]);
 
 export type ArtifactPreviewResponse = z.infer<typeof artifactPreviewResponseSchema>;
-export const retryArtifactPreviewResponseSchema = artifactPreviewResponseSchema;
 
 export const createConversationRequestSchema = z.object({
   title: z.string().min(1).optional(),

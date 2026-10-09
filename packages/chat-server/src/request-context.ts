@@ -1,81 +1,25 @@
 import type { FastifyRequest } from "fastify";
-import { z } from "zod";
 import {
   AppError,
-  isAuthenticatedServicePrincipal,
-  type AuthenticatedIdentity,
-  type AuthenticatedUser,
   type ConversationId,
   type LocaleCode,
   type RuntimeCallContext,
   asConversationId,
-  authContextFromUser,
-  createPlatformId,
-  normalizeAuthenticatedUser
+  authContextFromUser
 } from "@vivd-catalyst/core";
 import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
-import { hasExplicitCredentials } from "@vivd-catalyst/auth";
 import type { ChatServerOptions } from "./types";
 
-export async function authenticateRequest(
-  options: Pick<ChatServerOptions, "clientInstanceId" | "authAdapter" | "allowedOrigins">,
-  request: FastifyRequest
-): Promise<{ user: AuthenticatedUser; context: RuntimeCallContext }> {
-  const correlationId = createCorrelationId(request);
-  const identity = await authenticateIdentity(options, request, correlationId);
-  if (isAuthenticatedServicePrincipal(identity)) {
-    throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
+/** An empty path segment still matches a route, so a handler names what is missing. */
+export function requirePathParam(value: string, missingMessage: string): string {
+  if (!value) {
+    throw new AppError("BAD_REQUEST", missingMessage);
   }
-  const user = normalizeAuthenticatedUser(identity);
-
-  return {
-    user,
-    context: {
-      user,
-      clientInstanceId: options.clientInstanceId,
-      correlationId,
-      ...authContextFromUser(user)
-    }
-  };
+  return value;
 }
 
-export async function authenticateConfigAssetRequest(
-  options: ChatServerOptions,
-  request: FastifyRequest
-): Promise<{
-  identity: AuthenticatedIdentity;
-  context: { clientInstanceId: ChatServerOptions["clientInstanceId"]; correlationId: string };
-}> {
-  const correlationId = createCorrelationId(request);
-  const authenticated = await authenticateIdentity(options, request, correlationId);
-  const identity = isAuthenticatedServicePrincipal(authenticated)
-    ? authenticated
-    : normalizeAuthenticatedUser(authenticated);
-  return {
-    identity,
-    context: {
-      clientInstanceId: options.clientInstanceId,
-      correlationId
-    }
-  };
-}
-
-export function getConversationId(request: FastifyRequest): ConversationId {
-  const params = request.params as { conversationId?: string };
-  if (!params.conversationId) {
-    throw new AppError("BAD_REQUEST", "Missing conversation id");
-  }
-  return asConversationId(params.conversationId);
-}
-
-export function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  const parsed = schema.safeParse(body ?? {});
-  if (!parsed.success) {
-    throw new AppError("VALIDATION_FAILED", "Request body is invalid", {
-      issues: parsed.error.issues
-    });
-  }
-  return parsed.data;
+export function conversationIdParam(params: { conversationId: string }): ConversationId {
+  return asConversationId(requirePathParam(params.conversationId, "Missing conversation id"));
 }
 
 export function resolveRequestLocale(
@@ -83,9 +27,8 @@ export function resolveRequestLocale(
   request: FastifyRequest,
   requestedLocale?: string
 ): LocaleCode {
-  const query = request.query as { locale?: string } | undefined;
   return resolveConfigLocale(options.config.localization, {
-    requestedLocale: requestedLocale ?? query?.locale,
+    requestedLocale: requestedLocale ?? queryLocale(request.query),
     acceptLanguageHeader: request.headers["accept-language"]
   });
 }
@@ -103,44 +46,11 @@ export function withRequestLocale(
   };
 }
 
-export function createCorrelationId(request: FastifyRequest): string {
-  const existing = request.headers["x-correlation-id"];
-  if (typeof existing === "string" && existing.length > 0) {
-    return existing;
+// Read from the raw query because run and conversation routes honour `locale` without
+// declaring it.
+function queryLocale(query: unknown): string | undefined {
+  if (typeof query !== "object" || query === null || !("locale" in query)) {
+    return undefined;
   }
-  return createPlatformId("corr");
-}
-
-async function authenticateIdentity(
-  options: Pick<ChatServerOptions, "clientInstanceId" | "authAdapter" | "allowedOrigins">,
-  request: FastifyRequest,
-  correlationId: string
-): Promise<AuthenticatedIdentity> {
-  if (
-    hasExplicitCredentials(request.headers) &&
-    options.authAdapter.credentialMode !== "explicit"
-  ) {
-    throw new AppError("UNAUTHENTICATED", "Auth adapter does not accept explicit credentials");
-  }
-  const identity = await options.authAdapter.authenticate({
-    headers: request.headers,
-    clientInstanceId: options.clientInstanceId,
-    correlationId
-  });
-  if (
-    !isAuthenticatedServicePrincipal(identity) &&
-    identity.authenticationMethod === "session-cookie" &&
-    !["GET", "HEAD", "OPTIONS"].includes(request.method)
-  ) {
-    const origin = request.headers.origin;
-    const allowed =
-      origin !== undefined
-        ? origin === new URL(`${request.protocol}://${request.host}`).origin ||
-          (options.allowedOrigins ?? []).includes(origin)
-        : request.headers["sec-fetch-site"] === "same-origin";
-    if (!allowed) {
-      throw new AppError("FORBIDDEN", "Session request origin is not allowed");
-    }
-  }
-  return identity;
+  return typeof query.locale === "string" ? query.locale : undefined;
 }

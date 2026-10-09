@@ -11,7 +11,7 @@ import {
   type UserStatus
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
-import { authorizeGovernanceAction } from "./governance-actions";
+import { recordGovernanceAccess } from "./governance-actions";
 import { createPasswordSetupLink, PLATFORM_INVITATION_VALID_DAYS } from "./password-setup-workflow";
 import { pendingCleanupCountOf } from "./conversation-cleanup";
 import { cleanupProductUserData, type UserDeletionTotals } from "./user-deletion";
@@ -70,7 +70,7 @@ export class UserAdministrationWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
 
   async listUsers(user: AuthenticatedUser, context: RuntimeCallContext): Promise<UserRecord[]> {
-    await this.authorize(user, context, "governance.users_viewed");
+    await this.recordAccess(user, context, "governance.users_viewed");
     const users = await this.options.userStore.listUsers({
       clientInstanceId: this.options.clientInstanceId
     });
@@ -85,7 +85,7 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: CreateUserCommand
   ): Promise<UserRecord> {
-    await this.authorize(actor, context, "governance.user_create_authorized");
+    await this.recordAccess(actor, context, "governance.user_create_authorized");
     this.requireAssignableRoles(actor, command.roles);
     this.requireAssignablePermissions(actor, command.permissions);
     if (command.passwordSignIn && !command.email) {
@@ -116,7 +116,7 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: UpdateUserCommand
   ): Promise<UserRecord> {
-    await this.authorize(actor, context, "governance.user_update_authorized");
+    await this.recordAccess(actor, context, "governance.user_update_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
     this.requireAssignableRoles(actor, command.roles);
@@ -143,14 +143,7 @@ export class UserAdministrationWorkflow {
     if (!this.isSuperadmin(actor)) {
       throw new AppError("FORBIDDEN", "User deletion requires a superadmin role");
     }
-    await authorizeGovernanceAction({
-      options: this.options,
-      user: actor,
-      context,
-      requiredPermission: "users.manage",
-      auditType: "governance.user_delete_authorized",
-      deniedMessage: "User deletion requires 'users.manage' permission"
-    });
+    await this.recordAccess(actor, context, "governance.user_delete_authorized");
     if (command.userId === actor.id) {
       throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
     }
@@ -193,7 +186,7 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: UpsertUserIdentityCommand
   ): Promise<UserRecord> {
-    await this.authorize(actor, context, "governance.user_identity_upsert_authorized");
+    await this.recordAccess(actor, context, "governance.user_identity_upsert_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
     const updated = await this.options.userStore.upsertUserIdentity({
@@ -225,7 +218,7 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: DeleteUserIdentityCommand
   ): Promise<UserRecord> {
-    await this.authorize(actor, context, "governance.user_identity_delete_authorized");
+    await this.recordAccess(actor, context, "governance.user_identity_delete_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
     const updated = await this.options.userStore.deleteUserIdentity({
@@ -253,7 +246,7 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: ResetUserPasswordCommand
   ): Promise<{ ok: true }> {
-    await this.authorize(actor, context, "governance.user_password_reset_authorized");
+    await this.recordAccess(actor, context, "governance.user_password_reset_authorized");
     const setPassword = this.options.standaloneAuth?.setPassword;
     if (!setPassword) {
       throw new AppError(
@@ -300,7 +293,7 @@ export class UserAdministrationWorkflow {
     context: RuntimeCallContext,
     command: SendUserInvitationCommand
   ): Promise<{ ok: true }> {
-    await this.authorize(actor, context, "governance.user_invitation_authorized");
+    await this.recordAccess(actor, context, "governance.user_invitation_authorized");
     const { mail, standaloneAuth } = this.options;
     if (!mail || !standaloneAuth) {
       throw new AppError(
@@ -570,19 +563,13 @@ export class UserAdministrationWorkflow {
     }
   }
 
-  private async authorize(
+  // The right itself, `users.manage`, is every user administration operation's `requires`.
+  private async recordAccess(
     user: AuthenticatedUser,
     context: RuntimeCallContext,
     auditType: string
   ): Promise<void> {
-    await authorizeGovernanceAction({
-      options: this.options,
-      user,
-      context,
-      requiredPermission: "users.manage",
-      auditType,
-      deniedMessage: "User administration requires 'users.manage' permission"
-    });
+    await recordGovernanceAccess({ options: this.options, user, context, auditType });
   }
 
   private async recordUserMutation(

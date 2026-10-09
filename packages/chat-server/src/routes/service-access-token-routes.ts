@@ -1,15 +1,13 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, auditActorFromServicePrincipal } from "@vivd-catalyst/core";
 import { extractApiKey } from "@vivd-catalyst/auth";
-import { createCorrelationId } from "../request-context";
+import { AppError, auditActorFromServicePrincipal } from "@vivd-catalyst/core";
+import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
-export function registerServiceAccessTokenRoutes(
-  app: FastifyInstance,
-  options: ChatServerOptions
-): void {
-  app.post(apiOperations.exchangeApiKey.path, async (request) => {
+export function registerServiceAccessTokenRoutes(route: Route, options: ChatServerOptions): void {
+  // Public to the route helper: the API key in the request is the credential, and the
+  // exchange below is what authenticates it.
+  route(apiOperations.exchangeApiKey, async ({ request, context }) => {
     if (!options.serviceAccessToken) {
       throw new AppError("NOT_FOUND", "API access is not configured");
     }
@@ -17,7 +15,7 @@ export function registerServiceAccessTokenRoutes(
     if (!apiKey) {
       throw new AppError("UNAUTHENTICATED", "Missing API key");
     }
-    const correlationId = createCorrelationId(request);
+    const { correlationId } = context;
     let issued: Awaited<ReturnType<typeof options.serviceAccessToken.exchange.exchange>>;
     try {
       issued = await options.serviceAccessToken.exchange.exchange(apiKey);

@@ -1,29 +1,7 @@
+import { FIRST_PARTY_AUTH_SCOPES } from "@vivd-catalyst/core";
 import { z } from "zod";
 
-export const authScopeSchema = z.enum([
-  "*",
-  "me:read",
-  "me:delete",
-  "config:read",
-  "conversation:read",
-  "conversation:write",
-  "collaboration_workspace:read",
-  "collaboration_workspace:manage",
-  "run:start",
-  "run:observe",
-  "run:cancel",
-  "run:command",
-  "me:write",
-  "governance:read",
-  "governance:write",
-  "user_admin:read",
-  "user_admin:write",
-  "api_access:read",
-  "api_access:write",
-  "config_assets:read",
-  "config_assets:write",
-  "config_assets:release"
-]);
+export const authScopeSchema = z.enum(FIRST_PARTY_AUTH_SCOPES);
 
 export const chatSessionAuthScopeSchema = z.enum([
   "me:read",

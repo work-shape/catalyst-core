@@ -1,12 +1,12 @@
 import { z } from "zod";
-import type { ApiOperation, JsonApiOperation } from "./http-operation";
+import { operationPathParamNames, type Operation } from "./operations/define-operation";
 
 export interface OpenApiDocumentOptions {
   title?: string;
   version?: string;
 }
 
-export type ApiOperationCatalog = Record<string, ApiOperation>;
+export type ApiOperationCatalog = Record<string, Operation>;
 
 type OpenApiSchema = Record<string, unknown>;
 type OpenApiParameter = {
@@ -17,6 +17,16 @@ type OpenApiParameter = {
 };
 type OpenApiPathItem = Record<string, unknown>;
 
+/**
+ * Operations the server registers that the released document has never listed: the health
+ * probe and the retired session-token path. CB-4a adds them to the catalog without changing
+ * the document; CB-4b decides whether either is published.
+ */
+const UNDOCUMENTED_OPERATION_IDS: ReadonlySet<string> = new Set([
+  "getHealth",
+  "issueSessionTokenLegacyAlias"
+]);
+
 export function createOpenApiDocumentFromOperations(
   operations: ApiOperationCatalog,
   options: OpenApiDocumentOptions = {}
@@ -24,6 +34,9 @@ export function createOpenApiDocumentFromOperations(
   const paths: Record<string, OpenApiPathItem> = {};
 
   for (const operation of Object.values(operations)) {
+    if (operation.devOnly || UNDOCUMENTED_OPERATION_IDS.has(operation.id)) {
+      continue;
+    }
     const path = toOpenApiPath(operation.path);
     paths[path] ??= {};
     paths[path][operation.method.toLowerCase()] = createOpenApiOperation(operation);
@@ -39,27 +52,28 @@ export function createOpenApiDocumentFromOperations(
   } as const;
 }
 
-function createOpenApiOperation(operation: ApiOperation) {
+function createOpenApiOperation(operation: Operation) {
   return {
-    operationId: operation.operationId,
+    operationId: operation.id,
     ...createParameters(operation),
-    ...(operation.responseKind === "json" ? createJsonRequestBody(operation) : {}),
+    ...createRequestBody(operation),
     ...createResponse(operation)
   };
 }
 
-function createParameters(operation: ApiOperation): { parameters: OpenApiParameter[] } {
+// Every parameter is documented as a string until CB-5 derives the document from the schemas.
+function createParameters(operation: Operation): { parameters: OpenApiParameter[] } {
   const parameters: OpenApiParameter[] = [
-    ...pathParamNames(operation.path).map((name) => ({
+    ...operationPathParamNames(operation.path).map((name) => ({
       name,
       in: "path" as const,
       required: true,
       schema: { type: "string" }
     })),
-    ...(operation.queryParams ?? []).map((name) => ({
+    ...Object.entries(operation.query?.shape ?? {}).map(([name, schema]) => ({
       name,
       in: "query" as const,
-      required: operation.requiredQueryParams?.includes(name) ?? false,
+      required: !schema.safeParse(undefined).success,
       schema: { type: "string" }
     }))
   ];
@@ -67,21 +81,21 @@ function createParameters(operation: ApiOperation): { parameters: OpenApiParamet
   return { parameters };
 }
 
-function createJsonRequestBody(operation: JsonApiOperation) {
-  if (operation.requestKind === "json" && operation.requestSchema) {
+function createRequestBody(operation: Operation) {
+  if (operation.body) {
     return {
       requestBody: {
         required: true,
         content: {
           "application/json": {
-            schema: toOpenApiSchema(operation.requestSchema)
+            schema: toOpenApiSchema(operation.body)
           }
         }
       }
     };
   }
 
-  if (operation.requestKind === "multipart") {
+  if (operation.multipart) {
     return {
       requestBody: {
         required: true,
@@ -106,8 +120,9 @@ function createJsonRequestBody(operation: JsonApiOperation) {
   return {};
 }
 
-function createResponse(operation: ApiOperation) {
-  if (operation.responseKind === "blob") {
+// An event stream is documented by the schema of one event until CB-5 owns the document.
+function createResponse(operation: Operation) {
+  if (operation.response.kind === "blob") {
     return {
       responses: {
         "200": {
@@ -131,7 +146,7 @@ function createResponse(operation: ApiOperation) {
         description: "Successful response",
         content: {
           "application/json": {
-            schema: toOpenApiSchema(operation.responseSchema)
+            schema: toOpenApiSchema(operation.response.schema)
           }
         }
       }
@@ -147,8 +162,4 @@ function toOpenApiSchema(schema: z.ZodType): OpenApiSchema {
 
 function toOpenApiPath(path: string): string {
   return path.replaceAll(/:([A-Za-z][A-Za-z0-9_]*)/gu, "{$1}");
-}
-
-function pathParamNames(path: string): string[] {
-  return Array.from(path.matchAll(/:([A-Za-z][A-Za-z0-9_]*)/gu), (match) => match[1] ?? "");
 }

@@ -1,15 +1,16 @@
-import type { FastifyInstance } from "fastify";
+import { apiOperations } from "@vivd-catalyst/api-contract";
+import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
 /**
- * Development inspection route for the capture mail provider. It is not part of the product
- * API contract and is only registered when mails are captured instead of delivered, which
- * release config validation only accepts for development client instances.
+ * Development inspection route for the capture mail provider. It is only registered when
+ * mails are captured instead of delivered, which release config validation only accepts for
+ * development client instances.
  */
-export function registerDevMailRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerDevMailRoutes(route: Route, options: ChatServerOptions): void {
   const listCaptured = options.mail?.listCaptured;
   if (!listCaptured) {
     return;
   }
-  app.get("/api/dev/captured-mail", async () => listCaptured());
+  route(apiOperations.listCapturedMail, () => listCaptured());
 }

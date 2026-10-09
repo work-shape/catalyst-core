@@ -389,6 +389,8 @@ export const resetAdministeredUserPassword = <ThrowOnError extends boolean = fal
 
 export const sendAdministeredUserInvitation = <ThrowOnError extends boolean = false>(options: Options<SendAdministeredUserInvitationData, ThrowOnError>): RequestResult<SendAdministeredUserInvitationResponses, unknown, ThrowOnError> => (options.client ?? client).post<SendAdministeredUserInvitationResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/invitation', ...options });
 
+export const deleteAdministeredUserIdentity = <ThrowOnError extends boolean = false>(options: Options<DeleteAdministeredUserIdentityData, ThrowOnError>): RequestResult<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}', ...options });
+
 export const listServicePrincipals = <ThrowOnError extends boolean = false>(options?: Options<ListServicePrincipalsData, ThrowOnError>): RequestResult<ListServicePrincipalsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListServicePrincipalsResponses, unknown, ThrowOnError>({ url: '/api/superadmin/api-access/service-principals', ...options });
 
 export const createServicePrincipal = <ThrowOnError extends boolean = false>(options: Options<CreateServicePrincipalData, ThrowOnError>): RequestResult<CreateServicePrincipalResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateServicePrincipalResponses, unknown, ThrowOnError>({
@@ -419,8 +421,6 @@ export const createApiCredential = <ThrowOnError extends boolean = false>(option
 });
 
 export const revokeApiCredential = <ThrowOnError extends boolean = false>(options: Options<RevokeApiCredentialData, ThrowOnError>): RequestResult<RevokeApiCredentialResponses, unknown, ThrowOnError> => (options.client ?? client).post<RevokeApiCredentialResponses, unknown, ThrowOnError>({ url: '/api/superadmin/api-access/credentials/{credentialId}/revoke', ...options });
-
-export const deleteAdministeredUserIdentity = <ThrowOnError extends boolean = false>(options: Options<DeleteAdministeredUserIdentityData, ThrowOnError>): RequestResult<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteAdministeredUserIdentityResponses, unknown, ThrowOnError>({ url: '/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}', ...options });
 
 export const issueSessionToken = <ThrowOnError extends boolean = false>(options: Options<IssueSessionTokenData, ThrowOnError>): RequestResult<IssueSessionTokenResponses, unknown, ThrowOnError> => (options.client ?? client).post<IssueSessionTokenResponses, unknown, ThrowOnError>({
     url: '/api/superadmin/session-tokens',

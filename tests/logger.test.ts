@@ -304,7 +304,7 @@ describe("process logger", () => {
       return {};
     });
     try {
-      const response = await app.call("health", {
+      const response = await app.call("getHealth", {
         headers: { authorization: bearer, cookie: "private-cookie" }
       });
       expect(response.statusCode).toBe(200);

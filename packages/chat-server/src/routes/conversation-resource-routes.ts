@@ -1,21 +1,16 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations, type StructuredDataResourceResponse } from "@vivd-catalyst/api-contract";
-import { AppError, asStructuredDataResourceId, requireAuthScope } from "@vivd-catalyst/core";
+import { AppError, asStructuredDataResourceId } from "@vivd-catalyst/core";
 import { listConversationResources } from "../conversation-resources";
 import { ConversationWorkflow } from "../conversation-workflow";
-import { authenticateRequest, getConversationId } from "../request-context";
+import type { Route } from "../http/route";
+import { conversationIdParam, requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
-export function registerConversationResourceRoutes(
-  app: FastifyInstance,
-  options: ChatServerOptions
-): void {
+export function registerConversationResourceRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  app.get(apiOperations.listConversationResources.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const conversationId = getConversationId(request);
+  route(apiOperations.listConversationResources, async ({ user, params }) => {
+    const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     return listConversationResources({
       store: options.conversationStore,
@@ -24,15 +19,15 @@ export function registerConversationResourceRoutes(
     });
   });
 
-  app.get(apiOperations.getStructuredDataResource.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const conversationId = getConversationId(request);
+  route(apiOperations.getStructuredDataResource, async ({ user, params }) => {
+    const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const resource = await options.conversationStore.getStructuredDataResource({
       clientInstanceId: options.clientInstanceId,
       conversationId,
-      structuredDataResourceId: asStructuredDataResourceId(getStructuredDataResourceId(request))
+      structuredDataResourceId: asStructuredDataResourceId(
+        requirePathParam(params.structuredDataResourceId, "Missing structured data resource id")
+      )
     });
     if (!resource) {
       throw new AppError("NOT_FOUND", "Structured data resource is not available");
@@ -79,12 +74,4 @@ export function registerConversationResourceRoutes(
       }))
     } satisfies StructuredDataResourceResponse;
   });
-}
-
-function getStructuredDataResourceId(request: { params: unknown }): string {
-  const params = request.params as { structuredDataResourceId?: string };
-  if (!params?.structuredDataResourceId) {
-    throw new AppError("BAD_REQUEST", "Missing structured data resource id");
-  }
-  return params.structuredDataResourceId;
 }

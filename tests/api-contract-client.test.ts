@@ -92,6 +92,13 @@ describe("api operation catalog and client", () => {
     expect(parsed.success).toBe(true);
   });
 
+  // Registered by the server and absent from the released document.
+  const undocumentedOperationIds = [
+    "getHealth",
+    "listCapturedMail",
+    "issueSessionTokenLegacyAlias"
+  ];
+
   it("keeps the OpenAPI artifact generated from the operation catalog", async () => {
     const artifact = JSON.parse(
       await readFile("packages/api-contract/openapi.json", "utf8")
@@ -103,7 +110,9 @@ describe("api operation catalog and client", () => {
       const pathItem = (
         openApiDocument.paths as Record<string, Record<string, { operationId: string }>>
       )[openApiPath];
-      expect(pathItem?.[operation.method.toLowerCase()]?.operationId).toBe(operation.operationId);
+      const documented = pathItem?.[operation.method.toLowerCase()]?.operationId;
+      if (documented !== undefined) expect(documented).toBe(operation.id);
+      else expect(undocumentedOperationIds).toContain(operation.id);
     }
   });
 
@@ -112,26 +121,24 @@ describe("api operation catalog and client", () => {
     const createSchema = createOperation.requestBody.content["application/json"].schema;
 
     expect(createSchema.required).toEqual(["name"]);
-    expect(
-      apiOperations.createCollaborationWorkspace.requestSchema.parse({ name: "Product" })
-    ).toEqual({ name: "Product" });
-    expect(apiOperations.updateCollaborationWorkspace.requestSchema.parse({})).toEqual({});
+    expect(apiOperations.createCollaborationWorkspace.body.parse({ name: "Product" })).toEqual({
+      name: "Product"
+    });
+    expect(apiOperations.updateCollaborationWorkspace.body.parse({})).toEqual({});
   });
 
   it("exposes agent availability operations through the contract and client", async () => {
+    expect(apiOperations.setConfigAgentAvailability.body.parse({ mode: "selected" })).toEqual({
+      mode: "selected"
+    });
+    expect(() => apiOperations.setConfigAgentAvailability.body.parse({ mode: "some" })).toThrow();
     expect(
-      apiOperations.setConfigAgentAvailability.requestSchema.parse({ mode: "selected" })
-    ).toEqual({ mode: "selected" });
-    expect(() =>
-      apiOperations.setConfigAgentAvailability.requestSchema.parse({ mode: "some" })
-    ).toThrow();
-    expect(
-      apiOperations.replaceConfigAssets.responseSchema.parse({
+      apiOperations.replaceConfigAssets.response.schema.parse({
         version: 2,
         hiddenAgentNames: ["a"]
       })
     ).toEqual({ version: 2, hiddenAgentNames: ["a"] });
-    expect(apiOperations.replaceConfigAssets.responseSchema.parse({ version: 2 })).toEqual({
+    expect(apiOperations.replaceConfigAssets.response.schema.parse({ version: 2 })).toEqual({
       version: 2
     });
 
@@ -196,18 +203,18 @@ describe("api operation catalog and client", () => {
     ]);
     expect(conversationSchema.required).toContain("visibility");
     expect(
-      apiOperations.createCollaborationWorkspace.requestSchema.parse({
+      apiOperations.createCollaborationWorkspace.body.parse({
         name: "Product",
         defaultConversationVisibility: "private"
       })
     ).toEqual({ name: "Product", defaultConversationVisibility: "private" });
     expect(() =>
-      apiOperations.updateCollaborationWorkspace.requestSchema.parse({
+      apiOperations.updateCollaborationWorkspace.body.parse({
         defaultConversationVisibility: "secret"
       })
     ).toThrow();
     expect(() =>
-      apiOperations.moveConversation.requestSchema.parse({
+      apiOperations.moveConversation.body.parse({
         collaborationWorkspaceId: "cws_1",
         visibility: "secret"
       })

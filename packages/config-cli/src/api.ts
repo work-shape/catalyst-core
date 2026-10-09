@@ -62,11 +62,11 @@ export async function createConfigApi(options: ConfigApiOptions) {
     exportAssets: () => asConfigApiRequest(() => client.configAssets.export()),
     replaceAssets: (input: unknown) =>
       asConfigApiRequest(() =>
-        client.configAssets.replace(apiOperations.replaceConfigAssets.requestSchema.parse(input))
+        client.configAssets.replace(apiOperations.replaceConfigAssets.body.parse(input))
       ),
     validateAssets: (input: unknown) =>
       asConfigApiRequest(() =>
-        client.configAssets.validate(apiOperations.validateConfigAssets.requestSchema.parse(input))
+        client.configAssets.validate(apiOperations.validateConfigAssets.body.parse(input))
       )
   };
 }
@@ -141,7 +141,7 @@ async function issueLegacySessionToken(
   baseUrl: string,
   serverCredential: string
 ): Promise<string> {
-  const sessionRequest = apiOperations.issueSessionToken.requestSchema.parse({
+  const sessionRequest = apiOperations.issueSessionToken.body.parse({
     externalUserId: "catalyst-cli",
     displayLabel: "Catalyst CLI",
     scopes: ["config_assets:read", "config_assets:release"],
@@ -155,7 +155,7 @@ async function issueLegacySessionToken(
   const issued = await requestJson(
     fetchImpl,
     `${baseUrl}${apiOperations.issueSessionToken.buildPath()}`,
-    apiOperations.issueSessionToken.responseSchema,
+    apiOperations.issueSessionToken.response.schema,
     {
       method: apiOperations.issueSessionToken.method,
       headers: {

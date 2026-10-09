@@ -243,7 +243,7 @@ describe("browser origin policy", () => {
         tools: []
       });
       try {
-        const response = await app.call("health", { headers: { origin: foreignOrigin } });
+        const response = await app.call("getHealth", { headers: { origin: foreignOrigin } });
         expect(response.headers["access-control-allow-origin"]).toBeUndefined();
       } finally {
         await app.close();

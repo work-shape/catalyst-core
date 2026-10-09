@@ -13,7 +13,8 @@ import {
   createStandaloneAuthRuntime,
   type StandaloneAuthRuntime
 } from "@vivd-catalyst/auth";
-import { authenticateRequest } from "../packages/chat-server/src/request-context";
+import { createRoute } from "../packages/chat-server/src/http/route";
+import { routeTestOperations } from "./support/operations";
 import Fastify from "../packages/chat-server/node_modules/fastify/fastify.js";
 import { installErrorHandler } from "../packages/chat-server/src/errors";
 import { registerBetterAuthRoutes } from "../packages/chat-server/src/routes/better-auth-routes";
@@ -193,29 +194,33 @@ describe("standalone auth email routes", () => {
       cookie,
       chatSessionToken
     } = await createMixedCredentials();
-    const options = { clientInstanceId, authAdapter: composite };
-    const writeRequest = {
-      method: "POST",
-      protocol: "https",
-      host: "api.example.test",
-      headers: { cookie, origin: "https://foreign.test" }
-    } as Parameters<typeof authenticateRequest>[1];
-    await expect(authenticateRequest(options, writeRequest)).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "Session request origin is not allowed"
-    });
-    await expect(
-      authenticateRequest(options, {
-        ...writeRequest,
-        headers: { ...writeRequest.headers, authorization: `Bearer ${chatSessionToken}` }
-      })
-    ).resolves.toMatchObject({ user: { externalUserId: "widget-user" } });
-    await expect(
-      authenticateRequest(options, {
-        ...writeRequest,
-        headers: { ...writeRequest.headers, authorization: "Bearer invalid" }
-      })
-    ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    const httpServer = Fastify();
+    const server = bindTestTransport(httpServer, () => httpServer.close());
+    installErrorHandler(httpServer);
+    createRoute(httpServer, { clientInstanceId, authAdapter: composite })(
+      routeTestOperations.testIdentityWrite,
+      ({ user }) => ({ externalUserId: user.externalUserId })
+    );
+    const headers = { cookie, origin: "https://foreign.test" };
+    try {
+      const refused = await server.call("testIdentityWrite", { headers });
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json()).toMatchObject({
+        error: { code: "FORBIDDEN", message: "Session request origin is not allowed" }
+      });
+      const withToken = await server.call("testIdentityWrite", {
+        headers: { ...headers, authorization: `Bearer ${chatSessionToken}` }
+      });
+      expect(withToken.statusCode).toBe(200);
+      expect(withToken.json()).toMatchObject({ externalUserId: "widget-user" });
+      const withInvalidToken = await server.call("testIdentityWrite", {
+        headers: { ...headers, authorization: "Bearer invalid" }
+      });
+      expect(withInvalidToken.statusCode).toBe(401);
+      expect(withInvalidToken.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
+    } finally {
+      await server.close();
+    }
   });
 
   it.each([false, true])(
@@ -232,8 +237,9 @@ describe("standalone auth email routes", () => {
       const httpServer = Fastify();
       const server = bindTestTransport(httpServer, () => httpServer.close());
       installErrorHandler(httpServer);
-      httpServer.get("/identity", async (request) =>
-        authenticateRequest({ clientInstanceId, authAdapter }, request)
+      createRoute(httpServer, { clientInstanceId, authAdapter })(
+        routeTestOperations.testIdentity,
+        ({ user }) => ({ externalUserId: user.externalUserId })
       );
       try {
         const response = await server.call("testIdentity", {

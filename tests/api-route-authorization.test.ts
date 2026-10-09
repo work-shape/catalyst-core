@@ -1,0 +1,190 @@
+import { describe, expect, it } from "vitest";
+import { apiOperations, type ApiOperationName, type Operation } from "@vivd-catalyst/api-contract";
+import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
+import {
+  FIRST_PARTY_AUTH_SCOPES,
+  PERMISSIONS,
+  legacyPermissionFor,
+  operationPathParamNames
+} from "./support/route-catalog";
+import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
+import { createTestInstanceWith, listTestRoutes } from "./support/test-instance";
+
+// Generated from the catalog: every operation the server registers is called the ways it must
+// refuse. An operation added to the catalog is covered here without a line written for it.
+
+const authAdapter = createCallerAuthAdapter();
+const instance = createTestInstanceWith((stores) => ({
+  authAdapter,
+  approvalRequests: { store: stores, handlers: new Map() },
+  allowedOrigins: ["https://ui.example.test"],
+  mail: {
+    sender: { send: () => Promise.resolve({ ok: true }) },
+    appUrl: "https://ui.example.test",
+    listCaptured: () => []
+  },
+  sessionToken: {
+    serverCredential: "route-authorization-server-credential",
+    issuer: new HmacSessionTokenIssuer({
+      secret: "route-authorization-session-token-secret",
+      issuer: "test",
+      clientInstanceId: "route_authorization_test",
+      ttlSeconds: 60
+    })
+  }
+}));
+
+const names = Object.keys(apiOperations).filter(
+  (name): name is ApiOperationName => name in apiOperations
+);
+// Read through the descriptor's own type: each catalog entry is narrower than a test needs.
+const descriptor = (name: ApiOperationName): Operation => apiOperations[name];
+const authenticated = names.flatMap((name) => {
+  const operation = descriptor(name);
+  return operation.auth === "user" || operation.auth === "principal" ? [{ name, operation }] : [];
+});
+
+/**
+ * A body the operation's schema accepts, for the operations that require an action: the
+ * holder's rights are checked after the input, so a refusal for a missing right needs one.
+ */
+const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
+  setDefaultConfigAgent: { agentName: "agent" },
+  setConfigAgentAvailability: { mode: "all" },
+  replaceConfigAssets: { agents: [], skills: [], baseVersion: null },
+  validateConfigAssets: { agents: [], skills: [] },
+  createServicePrincipal: { displayLabel: "Service" },
+  updateServicePrincipal: { displayLabel: "Service" },
+  createApiCredential: { name: "Credential" },
+  createAdministeredUser: { displayLabel: "Person" },
+  updateAdministeredUser: { displayLabel: "Person" },
+  upsertAdministeredUserIdentity: { authSource: "test", externalUserId: "person" },
+  resetAdministeredUserPassword: { password: "long-enough-password" }
+};
+
+function call(name: ApiOperationName, as: ReturnType<typeof asCaller>, headers = {}) {
+  const operation = descriptor(name);
+  const payload = acceptedBodies[name];
+  return instance.call(
+    name,
+    {
+      params: Object.fromEntries(
+        operationPathParamNames(operation.path).map((param) => [param, "missing"])
+      ),
+      headers,
+      ...(payload === undefined ? {} : { payload })
+    },
+    as
+  );
+}
+
+const everyRight = { roles: ["superadmin"], permissions: [...PERMISSIONS] };
+
+describe("every operation of the catalog", () => {
+  // This instance runs without the sign-in library, so its mount is absent. The preflight
+  // route belongs to the CORS plugin.
+  it("is registered, and nothing else is", async () => {
+    const registered = (await listTestRoutes(instance))
+      .map(({ method, path }) => `${method} ${path}`)
+      .sort();
+    const catalog = names.map((name) => `${descriptor(name).method} ${descriptor(name).path}`);
+    expect(registered).toEqual([...catalog, "OPTIONS *"].sort());
+    expect(catalog).toEqual(
+      expect.arrayContaining([
+        "GET /health",
+        "GET /api/dev/captured-mail",
+        "POST /auth/session-token"
+      ])
+    );
+  });
+
+  it.each(authenticated)("$name refuses a credential without its scope", async (entry) => {
+    const { name } = entry;
+    const { scope } = entry.operation;
+    const scopes = FIRST_PARTY_AUTH_SCOPES.filter((other) => other !== "*" && other !== scope);
+    const response = await call(name, asCaller({ ...everyRight, scopes }));
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: { code: "FORBIDDEN", message: `Missing auth scope '${scope}'` }
+    });
+  });
+
+  const requiring = authenticated.flatMap(({ name, operation }) =>
+    operation.requires.map((action) => [name, action] as const)
+  );
+  it.each(requiring)("%s refuses a holder without %s", async (name, action) => {
+    const missing = legacyPermissionFor(action);
+    const response = await call(
+      name,
+      asCaller({
+        scopes: ["*"],
+        roles: ["user"],
+        permissions: PERMISSIONS.filter((permission) => permission !== missing)
+      })
+    );
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: { code: "FORBIDDEN", message: `Missing permission '${missing}'` }
+    });
+  });
+
+  it.each(authenticated.filter(({ operation }) => operation.auth === "user"))(
+    "$name refuses a service principal",
+    async ({ name }) => {
+      const response = await call(
+        name,
+        asCaller({ kind: "service", scopes: ["*"], permissions: [...PERMISSIONS] })
+      );
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({
+        error: {
+          code: "FORBIDDEN",
+          message: "Service principals cannot access user-scoped routes"
+        }
+      });
+    }
+  );
+
+  it.each(authenticated)(
+    "$name refuses an explicit credential against an ambient adapter",
+    async ({ name }) => {
+      const before = authAdapter.calls;
+      const response = await call(name, asCaller(everyRight), { authorization: "Bearer anything" });
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Auth adapter does not accept explicit credentials"
+        }
+      });
+      expect(authAdapter.calls).toBe(before);
+    }
+  );
+
+  const guarded = authenticated.filter(({ operation }) => operation.method !== "GET");
+  it.each(guarded)("$name refuses a session cookie from a foreign origin", async ({ name }) => {
+    const response = await call(name, asCaller({ ...everyRight, cookie: true }), {
+      origin: "https://foreign.test"
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: { code: "FORBIDDEN", message: "Session request origin is not allowed" }
+    });
+  });
+
+  it("guards the reading operations that are served by POST", () => {
+    const readingByPost = guarded.filter(({ operation }) => operation.effect === "reading");
+    expect(readingByPost.map(({ name }) => name)).toContain("validateConfigAssets");
+  });
+
+  it.each(names.filter((name) => descriptor(name).auth === "serverCredential"))(
+    "%s refuses a caller without the server credential",
+    async (name) => {
+      const response = await call(name, asCaller(everyRight));
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({
+        error: { code: "FORBIDDEN", message: "Invalid server credential" }
+      });
+    }
+  );
+});

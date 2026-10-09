@@ -399,7 +399,7 @@ export type GetCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -444,7 +444,7 @@ export type UpdateCurrentUserResponses = {
             displayLabel?: string;
             authSource: string;
         };
-        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'*' | 'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
     };
 };
 
@@ -4326,6 +4326,50 @@ export type SendAdministeredUserInvitationResponses = {
 
 export type SendAdministeredUserInvitationResponse = SendAdministeredUserInvitationResponses[keyof SendAdministeredUserInvitationResponses];
 
+export type DeleteAdministeredUserIdentityData = {
+    body?: never;
+    path: {
+        userId: string;
+        authSource: string;
+        externalUserId: string;
+    };
+    query?: never;
+    url: '/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}';
+};
+
+export type DeleteAdministeredUserIdentityResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        id: string;
+        clientInstanceId: string;
+        displayLabel: string;
+        email?: string;
+        roles: Array<string>;
+        permissionRefs: Array<string>;
+        permissions: Array<string>;
+        status: 'active' | 'disabled';
+        createdAt: string;
+        updatedAt: string;
+        lastAuthenticatedAt?: string;
+        identities: Array<{
+            clientInstanceId: string;
+            userId: string;
+            authSource: string;
+            externalUserId: string;
+            displayLabel?: string;
+            email?: string;
+            emailVerified: boolean;
+            createdAt: string;
+            updatedAt: string;
+            lastAuthenticatedAt?: string;
+        }>;
+    };
+};
+
+export type DeleteAdministeredUserIdentityResponse = DeleteAdministeredUserIdentityResponses[keyof DeleteAdministeredUserIdentityResponses];
+
 export type ListServicePrincipalsData = {
     body?: never;
     path?: never;
@@ -4529,50 +4573,6 @@ export type RevokeApiCredentialResponses = {
 
 export type RevokeApiCredentialResponse = RevokeApiCredentialResponses[keyof RevokeApiCredentialResponses];
 
-export type DeleteAdministeredUserIdentityData = {
-    body?: never;
-    path: {
-        userId: string;
-        authSource: string;
-        externalUserId: string;
-    };
-    query?: never;
-    url: '/api/superadmin/users/{userId}/identities/{authSource}/{externalUserId}';
-};
-
-export type DeleteAdministeredUserIdentityResponses = {
-    /**
-     * Successful response
-     */
-    200: {
-        id: string;
-        clientInstanceId: string;
-        displayLabel: string;
-        email?: string;
-        roles: Array<string>;
-        permissionRefs: Array<string>;
-        permissions: Array<string>;
-        status: 'active' | 'disabled';
-        createdAt: string;
-        updatedAt: string;
-        lastAuthenticatedAt?: string;
-        identities: Array<{
-            clientInstanceId: string;
-            userId: string;
-            authSource: string;
-            externalUserId: string;
-            displayLabel?: string;
-            email?: string;
-            emailVerified: boolean;
-            createdAt: string;
-            updatedAt: string;
-            lastAuthenticatedAt?: string;
-        }>;
-    };
-};
-
-export type DeleteAdministeredUserIdentityResponse = DeleteAdministeredUserIdentityResponses[keyof DeleteAdministeredUserIdentityResponses];
-
 export type IssueSessionTokenData = {
     body: {
         externalUserId: string;
@@ -4583,7 +4583,7 @@ export type IssueSessionTokenData = {
         permissionRefs?: Array<string>;
         permissions?: Array<string>;
         correlationId?: string;
-        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
+        scopes?: Array<'me:read' | 'me:delete' | 'config:read' | 'conversation:read' | 'conversation:write' | 'run:start' | 'run:observe' | 'run:cancel' | 'run:command' | 'collaboration_workspace:read' | 'collaboration_workspace:manage' | 'me:write' | 'governance:read' | 'governance:write' | 'user_admin:read' | 'user_admin:write' | 'api_access:read' | 'api_access:write' | 'config_assets:read' | 'config_assets:write' | 'config_assets:release'>;
         delegatedActor?: {
             kind: 'service_principal';
             id: string;

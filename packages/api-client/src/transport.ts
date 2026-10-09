@@ -11,7 +11,7 @@ export interface ApiClientOptions {
 }
 
 export type OperationRequestInput<Operation> = Operation extends {
-  requestSchema: z.ZodType<infer Request>;
+  body: z.ZodType<infer Request>;
 }
   ? Request
   : never;

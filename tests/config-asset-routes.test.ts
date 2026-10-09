@@ -38,7 +38,7 @@ describe("config asset admin routes", () => {
 
     await expect(mintToken(fixture.server)).resolves.toEqual(expect.any(String));
     await expect(
-      mintToken(fixture.server, { operation: "legacyIssueSessionToken" })
+      mintToken(fixture.server, { operation: "issueSessionTokenLegacyAlias" })
     ).resolves.toEqual(expect.any(String));
   });
 

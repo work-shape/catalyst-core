@@ -1,14 +1,10 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyBaseLogger, FastifyRequest } from "fastify";
 import { Readable } from "node:stream";
 import {
   apiOperations,
-  cancelRunRequestSchema,
   cancelRunResponseSchema,
-  createConversationRunRequestSchema,
   runObservationSchema,
-  runCommandRequestSchema,
   runCommandResponseSchema,
-  startConversationRunRequestSchema,
   startConversationRunResponseSchema
 } from "@vivd-catalyst/api-contract";
 import {
@@ -27,15 +23,15 @@ import {
   requireAuthScope
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
-import {
-  authenticateRequest,
-  getConversationId,
-  parseBody,
-  withRequestLocale
-} from "../request-context";
+import type { Route } from "../http/route";
+import { conversationIdParam, withRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
-export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServerOptions): void {
+export function registerAgentRunRoutes(
+  route: Route,
+  options: ChatServerOptions,
+  log: FastifyBaseLogger
+): void {
   const conversations = new ConversationWorkflow(options);
   const titleGenerationTasks = new Map<string, Promise<Conversation | undefined>>();
   const lifecycleMonitorTasks = new Set<AgentRunId>();
@@ -67,23 +63,17 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     return conversations.requireConversationAccess(conversationId, user);
   }
 
-  app.post(apiOperations.generateConversationTitle.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
-    const conversationId = getConversationId(request);
+  route(apiOperations.generateConversationTitle, async ({ user, context, params }) => {
+    const conversationId = conversationIdParam(params);
     return (
       (await generateTitleForConversationOnce(conversationId, user, context)) ??
       (await readCurrentConversation(conversationId, user))
     );
   });
 
-  async function cancelRun(request: FastifyRequest) {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "run:cancel");
-    const params = request.params as { conversationId?: string; runId?: string };
-    const conversationId = asConversationId(params.conversationId ?? "");
-    const runId = asAgentRunId(params.runId ?? "");
-    const body = parseBody(cancelRunRequestSchema, request.body ?? {});
+  route(apiOperations.cancelConversationRun, async ({ user, context, params, body, request }) => {
+    const conversationId = asConversationId(params.conversationId);
+    const runId = asAgentRunId(params.runId);
     const run = await conversations.cancelRun(
       conversationId,
       runId,
@@ -92,16 +82,12 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
       body.reason
     );
     return cancelRunResponseSchema.parse({ run });
-  }
+  });
 
-  app.post(apiOperations.cancelConversationRun.path, cancelRun);
-
-  app.post(apiOperations.startConversationRun.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
+  route(apiOperations.startConversationRun, async ({ user, context, params, body, request }) => {
+    // The descriptor carries one scope; starting a run needs this second one as well.
     requireAuthScope(user, "run:start");
-    const conversationId = getConversationId(request);
-    const body = parseBody(startConversationRunRequestSchema, request.body);
+    const conversationId = conversationIdParam(params);
     const localizedContext = withRequestLocale(context, options, request, body.locale);
     const started = await conversations.startMessageRun(conversationId, user, localizedContext, {
       agentName: body.agentName,
@@ -135,11 +121,9 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     );
   });
 
-  app.post(apiOperations.createConversationRun.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:write");
+  route(apiOperations.createConversationRun, async ({ user, context, body, request }) => {
+    // The descriptor carries one scope; starting a run needs this second one as well.
     requireAuthScope(user, "run:start");
-    const body = parseBody(createConversationRunRequestSchema, request.body);
     const localizedContext = withRequestLocale(context, options, request, body.locale);
     const started = await conversations.createConversationAndStartMessageRun(
       user,
@@ -181,13 +165,9 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     );
   });
 
-  app.post(apiOperations.commandConversationRun.path, async (request) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "run:command");
-    const params = request.params as { conversationId?: string; runId?: string };
-    const conversationId = asConversationId(params.conversationId ?? "");
-    const runId = asAgentRunId(params.runId ?? "");
-    const body = parseBody(runCommandRequestSchema, request.body);
+  route(apiOperations.commandConversationRun, async ({ user, context, params, body, request }) => {
+    const conversationId = asConversationId(params.conversationId);
+    const runId = asAgentRunId(params.runId);
     const run = await conversations.commandRun(
       conversationId,
       runId,
@@ -198,56 +178,56 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
     return runCommandResponseSchema.parse({ run });
   });
 
-  app.get(apiOperations.observeConversationRun.path, async (request, reply) => {
-    const { user, context } = await authenticateRequest(options, request);
-    requireAuthScope(user, "run:observe");
-    const params = request.params as { conversationId?: string; runId?: string };
-    const conversationId = asConversationId(params.conversationId ?? "");
-    const runId = asAgentRunId(params.runId ?? "");
-    const afterSequence = readAfterSequence(request);
-    const localizedContext = withRequestLocale(context, options, request, undefined);
+  route(
+    apiOperations.observeConversationRun,
+    async ({ user, context, params, query, request, reply }) => {
+      const conversationId = asConversationId(params.conversationId);
+      const runId = asAgentRunId(params.runId);
+      const afterSequence = readAfterSequence(query.after, request.headers["last-event-id"]);
+      const localizedContext = withRequestLocale(context, options, request, undefined);
 
-    const run = await conversations.getConversationRunForUser(conversationId, runId, user);
-    if (!run) {
-      throw new AppError("NOT_FOUND", "Agent run is not available");
-    }
-    if (!isObservableRunStatus(run.status) && afterSequence >= run.lastSequence) {
-      return reply.status(204).send();
-    }
+      const run = await conversations.getConversationRunForUser(conversationId, runId, user);
+      if (!run) {
+        throw new AppError("NOT_FOUND", "Agent run is not available");
+      }
+      if (!isObservableRunStatus(run.status) && afterSequence >= run.lastSequence) {
+        return reply.status(204).send();
+      }
 
-    let closed = false;
-    request.raw.on("close", () => {
-      closed = true;
-    });
+      let closed = false;
+      request.raw.on("close", () => {
+        closed = true;
+      });
 
-    reply.header("cache-control", "no-store");
-    reply.header("connection", "keep-alive");
-    reply.header("content-type", "text/event-stream; charset=utf-8");
-    return reply.send(
-      Readable.from(
-        (async function* streamRunObservations() {
-          for await (const event of conversations.observeRun(runId, localizedContext, {
-            afterSequence
-          })) {
-            if (closed) {
-              return;
+      reply.header("cache-control", "no-store");
+      reply.header("connection", "keep-alive");
+      reply.header("content-type", "text/event-stream; charset=utf-8");
+      return reply.send(
+        Readable.from(
+          (async function* streamRunObservations() {
+            for await (const event of conversations.observeRun(runId, localizedContext, {
+              afterSequence
+            })) {
+              if (closed) {
+                return;
+              }
+              const observation = runObservationSchema.parse({
+                clientInstanceId: options.clientInstanceId,
+                runId,
+                conversationId,
+                ownerUserId: run.ownerUserId,
+                sequence: event.sequence,
+                type: event.type,
+                payload: event,
+                createdAt: event.createdAt
+              });
+              yield `id: ${observation.sequence}\nevent: ${observation.type}\ndata: ${JSON.stringify(observation)}\n\n`;
             }
-            const observation = runObservationSchema.parse({
-              clientInstanceId: options.clientInstanceId,
-              runId,
-              conversationId,
-              ownerUserId: run.ownerUserId,
-              sequence: event.sequence,
-              type: event.type,
-              payload: event,
-              createdAt: event.createdAt
-            });
-            yield `id: ${observation.sequence}\nevent: ${observation.type}\ndata: ${JSON.stringify(observation)}\n\n`;
-          }
-        })()
-      )
-    );
-  });
+          })()
+        )
+      );
+    }
+  );
 
   function monitorRunLifecycleOnce(input: {
     conversationId: ConversationId;
@@ -304,7 +284,7 @@ export function registerAgentRunRoutes(app: FastifyInstance, options: ChatServer
       lifecycleMonitorTasks.delete(input.runId);
     })().catch((error: unknown) => {
       lifecycleMonitorTasks.delete(input.runId);
-      app.log.warn(
+      log.warn(
         { err: error, conversationId: input.conversationId, runId: input.runId },
         "Agent run lifecycle monitor failed"
       );
@@ -344,18 +324,11 @@ function isObservableRunStatus(status: string | undefined): boolean {
   );
 }
 
-function readAfterSequence(request: {
-  query: unknown;
-  headers: Record<string, string | string[] | undefined>;
-}): number {
-  const queryAfter = (request.query as { after?: unknown }).after;
-  const headerAfter = request.headers["last-event-id"];
-  const rawValue =
-    typeof queryAfter === "string"
-      ? queryAfter
-      : Array.isArray(headerAfter)
-        ? headerAfter[0]
-        : headerAfter;
+function readAfterSequence(
+  queryAfter: string | undefined,
+  headerAfter: string | string[] | undefined
+): number {
+  const rawValue = queryAfter ?? (Array.isArray(headerAfter) ? headerAfter[0] : headerAfter);
   if (!rawValue) {
     return 0;
   }

@@ -9,7 +9,7 @@ import {
   auditActorFromIdentity,
   hasPermission,
   isJsonObject,
-  requireAuthScope,
+  legacyPermissionFor,
   requirePermission,
   unknownToJsonValue,
   type AgentConfig,
@@ -20,6 +20,7 @@ import {
   type ConfigAssetMutation,
   type ConfigAssetRecord,
   type JsonObject,
+  type PlatformAction,
   type RuntimeCallContext,
   type SkillConfig
 } from "@vivd-catalyst/core";
@@ -28,7 +29,7 @@ import {
   validateConfigAssetCandidate,
   applyValidatedConfigAssetMutations
 } from "./config-asset-writer";
-import { authorizeGovernanceAction } from "./governance-actions";
+import { recordGovernanceAccess } from "./governance-actions";
 import type { ChatServerOptions } from "./types";
 
 interface ConfigAssetBundleInput {
@@ -60,7 +61,7 @@ export class ConfigAssetWorkflow {
   }
 
   async getOverview(user: AuthenticatedIdentity, context: ConfigAssetCallContext) {
-    await this.authorizeAuditedRead(user, context);
+    await this.recordAccess(user, context, "governance.config_assets_viewed");
     const [state, assets, availability] = await Promise.all([
       this.options.configAssets.store.getConfigAssetState({
         clientInstanceId: this.options.clientInstanceId
@@ -88,12 +89,8 @@ export class ConfigAssetWorkflow {
     };
   }
 
-  async getAsset(
-    user: AuthenticatedIdentity,
-    _context: ConfigAssetCallContext,
-    input: { kind: ConfigAssetKind; name: string }
-  ) {
-    this.authorizeRead(user);
+  async getAsset(user: AuthenticatedIdentity, input: { kind: ConfigAssetKind; name: string }) {
+    requirePermission(user, legacyPermissionFor(`${input.kind}.read`));
     const asset = await this.getActiveAssetOrThrow(input);
     return projectConfigAsset(asset);
   }
@@ -103,6 +100,7 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: PutConfigAssetCommand
   ) {
+    this.requireAssetWrite(user, `${command.kind}.write`);
     await this.authorizeInteractiveWrite(user, context);
     requireMatchingConfigName(command.config, command.name);
     const current = await this.loadCurrentBundle();
@@ -162,6 +160,7 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: AssetMutationCommand
   ) {
+    this.requireAssetWrite(user, `${command.kind}.delete`);
     await this.authorizeInteractiveWrite(user, context);
     this.assertInteractiveDeleteAllowed(command.kind);
     const existing = await this.getActiveAssetOrThrow(command);
@@ -268,21 +267,15 @@ export class ConfigAssetWorkflow {
   }
 
   /** The Shared Workspaces an instance admin can make an agent available in. */
-  async listAdministeredWorkspaces(user: AuthenticatedIdentity) {
-    requireAuthScope(user, "config_assets:write");
-    requirePermission(user, "config_assets.write");
+  async listAdministeredWorkspaces() {
     const workspaces = await this.options.userStore.listSharedWorkspaces({
       clientInstanceId: this.options.clientInstanceId
     });
     return workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name }));
   }
 
-  async listRevisions(
-    user: AuthenticatedIdentity,
-    _context: ConfigAssetCallContext,
-    input: { kind: ConfigAssetKind; name: string }
-  ) {
-    this.authorizeRead(user);
+  async listRevisions(user: AuthenticatedIdentity, input: { kind: ConfigAssetKind; name: string }) {
+    requirePermission(user, legacyPermissionFor(`${input.kind}.read`));
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,
       ...input
@@ -303,6 +296,7 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: AssetMutationCommand & { revision: number }
   ) {
+    this.requireAssetWrite(user, `${command.kind}.write`);
     await this.authorizeInteractiveWrite(user, context);
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,
@@ -366,7 +360,7 @@ export class ConfigAssetWorkflow {
   }
 
   async exportAssets(user: AuthenticatedIdentity, context: ConfigAssetCallContext) {
-    await this.authorizeAuditedRead(user, context);
+    await this.recordAccess(user, context, "governance.config_assets_viewed");
     const [state, assets] = await Promise.all([
       this.options.configAssets.store.getConfigAssetState({
         clientInstanceId: this.options.clientInstanceId
@@ -398,7 +392,7 @@ export class ConfigAssetWorkflow {
       deleteAssets?: Array<{ kind: ConfigAssetKind; name: string }>;
     }
   ) {
-    await this.authorizeReleaseWrite(user, context);
+    await this.recordAccess(user, context, "governance.config_assets_release_authorized");
     const [currentState, currentAssets] = await Promise.all([
       this.options.configAssets.store.getConfigAssetState({
         clientInstanceId: this.options.clientInstanceId
@@ -557,7 +551,7 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: ConfigAssetBundleInput
   ): Promise<{ valid: true }> {
-    await this.authorizeReleaseWrite(user, context);
+    await this.recordAccess(user, context, "governance.config_assets_release_authorized");
     const validated = this.validateBundle(command);
     this.assertChangedUserSelectableModelsEligible(
       await this.loadCurrentBundle(),
@@ -566,57 +560,36 @@ export class ConfigAssetWorkflow {
     return { valid: true };
   }
 
-  private authorizeRead(user: AuthenticatedIdentity): void {
-    requireAuthScope(user, "config_assets:read");
-    requirePermission(user, "config_assets.read");
+  // Rights that do not depend on the asset kind are the operation's `requires`. A right on
+  // one agent or one skill is checked here, where the kind is known.
+  private requireAssetWrite(
+    user: AuthenticatedIdentity,
+    action: Extract<PlatformAction, `${ConfigAssetKind}.${"write" | "delete"}`>
+  ): void {
+    if (!hasPermission(user, legacyPermissionFor(action))) {
+      throw new AppError(
+        "FORBIDDEN",
+        "Config asset changes require 'config_assets.write' permission"
+      );
+    }
   }
 
-  private async authorizeAuditedRead(
+  private recordAccess(
     user: AuthenticatedIdentity,
-    context: ConfigAssetCallContext
+    context: ConfigAssetCallContext,
+    auditType: string
   ): Promise<void> {
-    requireAuthScope(user, "config_assets:read");
-    await authorizeGovernanceAction({
-      options: this.options,
-      user,
-      context,
-      requiredPermission: "config_assets.read",
-      auditType: "governance.config_assets_viewed",
-      deniedMessage: "Config assets require 'config_assets.read' permission"
-    });
+    return recordGovernanceAccess({ options: this.options, user, context, auditType });
   }
 
   private async authorizeInteractiveWrite(
     user: AuthenticatedIdentity,
     context: ConfigAssetCallContext
   ): Promise<void> {
-    requireAuthScope(user, "config_assets:write");
-    await authorizeGovernanceAction({
-      options: this.options,
-      user,
-      context,
-      requiredPermission: "config_assets.write",
-      auditType: "governance.config_assets_write_authorized",
-      deniedMessage: "Config asset changes require 'config_assets.write' permission"
-    });
+    await this.recordAccess(user, context, "governance.config_assets_write_authorized");
     if (!this.options.config.administration.agentConfiguration.enabled) {
       throw new AppError("FORBIDDEN", "Interactive agent configuration is disabled");
     }
-  }
-
-  private async authorizeReleaseWrite(
-    user: AuthenticatedIdentity,
-    context: ConfigAssetCallContext
-  ): Promise<void> {
-    requireAuthScope(user, "config_assets:release");
-    await authorizeGovernanceAction({
-      options: this.options,
-      user,
-      context,
-      requiredPermission: "config_assets.release",
-      auditType: "governance.config_assets_release_authorized",
-      deniedMessage: "Config asset release sync requires 'config_assets.release' permission"
-    });
   }
 
   private assertInteractiveDeleteAllowed(kind: ConfigAssetKind): void {

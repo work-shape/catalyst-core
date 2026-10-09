@@ -1,30 +1,30 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createClientBranding, createSafeConfigView } from "@vivd-catalyst/config-schema";
-import { requireAuthScope, resolveEffectivePermissions } from "@vivd-catalyst/core";
+import { resolveEffectivePermissions } from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "../agent-availability";
+import type { Route } from "../http/route";
+import { resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
-import { authenticateRequest, resolveRequestLocale } from "../request-context";
 
-export function registerConfigRoutes(app: FastifyInstance, options: ChatServerOptions): void {
-  app.get(apiOperations.getCurrentUser.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "me:read");
-    return {
-      ...user,
-      permissions: [...resolveEffectivePermissions(user)]
-    };
-  });
+export function registerConfigRoutes(route: Route, options: ChatServerOptions): void {
+  route(apiOperations.getHealth, () => ({
+    status: "ok" as const,
+    clientInstanceId: options.clientInstanceId,
+    time: new Date().toISOString()
+  }));
 
-  app.get(apiOperations.getBranding.path, async (request) =>
+  route(apiOperations.getCurrentUser, ({ user }) => ({
+    ...user,
+    permissions: [...resolveEffectivePermissions(user)]
+  }));
+
+  route(apiOperations.getBranding, ({ request }) =>
     createClientBranding(options.config, {
       requestedLocale: resolveRequestLocale(options, request)
     })
   );
 
-  app.get(apiOperations.getConfig.path, async (request) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "config:read");
+  route(apiOperations.getConfig, async ({ request }) => {
     // The instance-wide agent list is what the caller sees in their Personal Workspace.
     const assets = await getWorkspaceAssetSnapshot(options, { kind: "personal" });
     const config = createSafeConfigView(options.config, assets, {

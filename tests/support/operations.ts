@@ -3,21 +3,129 @@ import {
   apiOperations,
   createOpenApiDocument,
   buildApiPath,
+  defineOperation,
+  json,
   type BuildApiPathOptions
 } from "@vivd-catalyst/api-contract";
 
-// Mounts and fixture routes absent from the product catalog stay behind test support until CB-4.
+// The sign-in library's mount, the worker's private transport and routes a test adds itself
+// are not catalog operations.
 const fixtureOperation = (method: "GET" | "POST", path: string) => ({
   method,
   path,
   buildPath: (input?: BuildApiPathOptions) => buildApiPath(path, input)
 });
+
+/** Operations a test registers through the route helper to exercise the helper itself. */
+const testIdentityOperation = {
+  summary: "Report the authenticated caller",
+  tag: "Test",
+  path: "/identity",
+  auth: "user",
+  scope: "me:read",
+  requires: [],
+  response: json(z.object({ externalUserId: z.string().optional() })),
+  errors: [],
+  rateClass: "read"
+} as const;
+const testAccess = { auth: "user", scope: "conversation:read", requires: [] } as const;
+const testOperation = {
+  summary: "Route helper fixture",
+  tag: "Test",
+  errors: [],
+  rateClass: "read"
+} as const;
+const testResult = json(z.object({ value: z.enum(["ok", "other"]), count: z.number().optional() }));
+export const routeTestOperations = {
+  testPublic: defineOperation({
+    ...testOperation,
+    id: "testPublic",
+    method: "GET",
+    path: "/test/public",
+    auth: "public",
+    effect: "reading",
+    response: testResult
+  }),
+  testServerCredential: defineOperation({
+    ...testOperation,
+    id: "testServerCredential",
+    method: "POST",
+    path: "/test/server-credential",
+    auth: "serverCredential",
+    effect: "changing",
+    response: testResult
+  }),
+  testUser: defineOperation({
+    ...testOperation,
+    ...testAccess,
+    id: "testUser",
+    method: "GET",
+    path: "/test/user",
+    effect: "reading",
+    response: testResult
+  }),
+  testPrincipal: defineOperation({
+    ...testOperation,
+    id: "testPrincipal",
+    method: "GET",
+    path: "/test/principal",
+    auth: "principal",
+    scope: "governance:read",
+    requires: ["audit.view", "usage.view"],
+    effect: "reading",
+    response: testResult
+  }),
+  /** Reads through POST, as an operation with a large input does. */
+  testReadingPost: defineOperation({
+    ...testOperation,
+    ...testAccess,
+    id: "testReadingPost",
+    method: "POST",
+    path: "/test/reading-post",
+    effect: "reading",
+    response: testResult
+  }),
+  testInput: defineOperation({
+    ...testOperation,
+    auth: "user",
+    scope: "conversation:write",
+    requires: ["users.manage"],
+    id: "testInput",
+    method: "POST",
+    path: "/test/items/:itemId",
+    effect: "changing",
+    query: z.object({ view: z.enum(["full", "short"]).optional() }),
+    body: z.object({ count: z.number().int() }),
+    response: json(z.object({ itemId: z.string(), view: z.string().optional(), count: z.number() }))
+  }),
+  /** Returns what the `result` query names, so one route shows every kind of response. */
+  testResponse: defineOperation({
+    ...testOperation,
+    ...testAccess,
+    id: "testResponse",
+    method: "GET",
+    path: "/test/response",
+    effect: "reading",
+    query: z.object({ result: z.string().optional() }),
+    response: testResult
+  }),
+  testIdentity: defineOperation({
+    ...testIdentityOperation,
+    id: "testIdentity",
+    method: "GET",
+    effect: "reading"
+  }),
+  testIdentityWrite: defineOperation({
+    ...testIdentityOperation,
+    id: "testIdentityWrite",
+    method: "POST",
+    effect: "changing"
+  })
+};
+
 export const testOperations = {
   legacyDevelopmentUsers: fixtureOperation("GET", "/auth/development/users"),
-  legacyIssueSessionToken: fixtureOperation("POST", "/auth/session-token"),
   ...apiOperations,
-  health: fixtureOperation("GET", "/health"),
-  capturedMail: fixtureOperation("GET", "/api/dev/captured-mail"),
   authSignIn: fixtureOperation("POST", "/api/auth/sign-in/email"),
   authSignUp: fixtureOperation("POST", "/api/auth/sign-up/email"),
   authSession: fixtureOperation("GET", "/api/auth/get-session"),
@@ -25,7 +133,7 @@ export const testOperations = {
   legacyChat: fixtureOperation("POST", "/api/chat"),
   testIp: fixtureOperation("GET", "/test/ip"),
   testStream: fixtureOperation("GET", "/stream"),
-  testIdentity: fixtureOperation("GET", "/identity"),
+  ...routeTestOperations,
   testProviderError: fixtureOperation("GET", "/test-provider-error"),
   testInternalError: fixtureOperation("GET", "/test-internal-error"),
   testExposedError: fixtureOperation("GET", "/test-exposed-error"),

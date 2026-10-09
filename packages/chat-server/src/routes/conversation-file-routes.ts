@@ -1,4 +1,3 @@
-import type { FastifyInstance } from "fastify";
 import { apiOperations, type ArtifactPreviewResponse } from "@vivd-catalyst/api-contract";
 import {
   AppError,
@@ -10,7 +9,6 @@ import {
   detectArtifactPreviewSourceKind,
   isRetryableArtifactPreviewErrorCode,
   readArtifactPreviewLifecycle,
-  requireAuthScope,
   resolveFilePreviewCapability,
   type ArtifactPreviewLifecycleState,
   type ArtifactPreviewStore,
@@ -18,36 +16,32 @@ import {
   type ManagedArtifactRecord
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversation-workflow";
-import { authenticateRequest, getConversationId } from "../request-context";
+import type { Route } from "../http/route";
+import { conversationIdParam, requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
-export function registerConversationFileRoutes(
-  app: FastifyInstance,
-  options: ChatServerOptions
-): void {
+export function registerConversationFileRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  app.get(apiOperations.getConversationFileContent.path, async (request, reply) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const conversationId = getConversationId(request);
+  route(apiOperations.getConversationFileContent, async ({ user, params, query, reply }) => {
+    const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const service = attachments(options);
-    const download = (request.query as { download?: string }).download === "true";
+    const download = query.download === "true";
     const sentAttachment = download
       ? (
           await options.conversationStore.listSentConversationAttachments({
             clientInstanceId: options.clientInstanceId,
             conversationId
           })
-        ).find((attachment) => attachment.fileId === getFileId(request))
+        ).find((attachment) => attachment.fileId === fileIdParam(params))
       : undefined;
     if (download && !sentAttachment) {
       throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
     }
     const file = await service.readConversationFile({
       conversationId,
-      fileId: getFileId(request)
+      fileId: fileIdParam(params)
     });
     const inlineCapability = resolveFilePreviewCapability({
       filename: file.filename,
@@ -74,12 +68,10 @@ export function registerConversationFileRoutes(
       .send(Buffer.from(file.bytes));
   });
 
-  app.get(apiOperations.getConversationArtifactContent.path, async (request, reply) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const conversationId = getConversationId(request);
+  route(apiOperations.getConversationArtifactContent, async ({ user, params, query, reply }) => {
+    const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
-    const artifactId = asManagedArtifactId(getArtifactId(request));
+    const artifactId = asManagedArtifactId(artifactIdParam(params));
     const artifactRecord = await options.conversationStore.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
       artifactId
@@ -95,7 +87,7 @@ export function registerConversationFileRoutes(
       artifactId
     });
     const filename = artifactRecord.filename ?? `${artifactRecord.id}`;
-    const inline = (request.query as { inline?: string }).inline === "true";
+    const inline = query.inline === "true";
     const previewCapability = resolveFilePreviewCapability(artifactRecord);
     if (inline && previewCapability !== "native_image" && previewCapability !== "native_pdf") {
       throw new AppError("VALIDATION_FAILED", "This artifact cannot be displayed inline");
@@ -108,12 +100,10 @@ export function registerConversationFileRoutes(
       .send(Buffer.from(artifact.bytes));
   });
 
-  app.get(apiOperations.getConversationArtifactPreview.path, async (request, reply) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const conversationId = getConversationId(request);
+  route(apiOperations.getConversationArtifactPreview, async ({ user, params, reply }) => {
+    const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
-    const artifactId = asManagedArtifactId(getArtifactId(request));
+    const artifactId = asManagedArtifactId(artifactIdParam(params));
     const artifactRecord = await options.conversationStore.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
       artifactId
@@ -122,17 +112,16 @@ export function registerConversationFileRoutes(
       throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
     }
     const preview = await readArtifactPreviewState(options.conversationStore, artifactRecord);
-    return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
+    void reply.header("cache-control", "private, no-store, max-age=0");
+    return preview;
   });
 
-  app.get(apiOperations.getConversationAttachmentPreview.path, async (request, reply) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const conversationId = getConversationId(request);
+  route(apiOperations.getConversationAttachmentPreview, async ({ user, params, reply }) => {
+    const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
     const attachment = await options.conversationStore.getConversationAttachment({
       clientInstanceId: options.clientInstanceId,
-      attachmentId: asConversationAttachmentId(getAttachmentId(request))
+      attachmentId: asConversationAttachmentId(attachmentIdParam(params))
     });
     if (
       !attachment ||
@@ -147,15 +136,14 @@ export function registerConversationFileRoutes(
     }
     const source = await ensureAttachmentPreviewSource(options, attachment);
     const preview = await readArtifactPreviewState(options.conversationStore, source);
-    return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
+    void reply.header("cache-control", "private, no-store, max-age=0");
+    return preview;
   });
 
-  app.post(apiOperations.retryConversationArtifactPreview.path, async (request, reply) => {
-    const { user } = await authenticateRequest(options, request);
-    requireAuthScope(user, "conversation:read");
-    const conversationId = getConversationId(request);
+  route(apiOperations.retryConversationArtifactPreview, async ({ user, params, reply }) => {
+    const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
-    const artifactId = asManagedArtifactId(getArtifactId(request));
+    const artifactId = asManagedArtifactId(artifactIdParam(params));
     const artifactRecord = await options.conversationStore.getManagedArtifact({
       clientInstanceId: options.clientInstanceId,
       artifactId
@@ -164,7 +152,8 @@ export function registerConversationFileRoutes(
       throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
     }
     const preview = await retryArtifactPreviewState(options.conversationStore, artifactRecord);
-    return reply.header("cache-control", "private, no-store, max-age=0").send(preview);
+    void reply.header("cache-control", "private, no-store, max-age=0");
+    return preview;
   });
 }
 
@@ -181,28 +170,16 @@ function attachments(options: ChatServerOptions) {
   return options.attachments;
 }
 
-function getFileId(request: { params: unknown }): string {
-  const params = request.params as { fileId?: string };
-  if (!params?.fileId) {
-    throw new AppError("BAD_REQUEST", "Missing file id");
-  }
-  return params.fileId;
+function fileIdParam(params: { fileId: string }): string {
+  return requirePathParam(params.fileId, "Missing file id");
 }
 
-function getArtifactId(request: { params: unknown }): string {
-  const params = request.params as { artifactId?: string };
-  if (!params?.artifactId) {
-    throw new AppError("BAD_REQUEST", "Missing artifact id");
-  }
-  return params.artifactId;
+function artifactIdParam(params: { artifactId: string }): string {
+  return requirePathParam(params.artifactId, "Missing artifact id");
 }
 
-function getAttachmentId(request: { params: unknown }): string {
-  const params = request.params as { attachmentId?: string };
-  if (!params?.attachmentId) {
-    throw new AppError("BAD_REQUEST", "Missing attachment id");
-  }
-  return params.attachmentId;
+function attachmentIdParam(params: { attachmentId: string }): string {
+  return requirePathParam(params.attachmentId, "Missing attachment id");
 }
 
 async function ensureAttachmentPreviewSource(

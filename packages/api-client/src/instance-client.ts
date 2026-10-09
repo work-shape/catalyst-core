@@ -13,22 +13,22 @@ export function createInstanceClients(transport: ApiClientTransport) {
       exchangeApiKey: () =>
         transport.unwrapJson(
           generatedSdk.exchangeApiKey({ client: transport.generatedClient }),
-          apiOperations.exchangeApiKey.responseSchema
+          apiOperations.exchangeApiKey.response.schema
         )
     },
     account: {
       get: (signal?: AbortSignal) =>
         transport.unwrapJson(
           generatedSdk.getCurrentUser({ client: transport.generatedClient, signal }),
-          apiOperations.getCurrentUser.responseSchema
+          apiOperations.getCurrentUser.response.schema
         ),
       update: (input: OperationRequestInput<typeof apiOperations.updateCurrentUser>) =>
         transport.unwrapJson(
           generatedSdk.updateCurrentUser({
             client: transport.generatedClient,
-            body: apiOperations.updateCurrentUser.requestSchema.parse(input)
+            body: apiOperations.updateCurrentUser.body.parse(input)
           }),
-          apiOperations.updateCurrentUser.responseSchema
+          apiOperations.updateCurrentUser.response.schema
         ),
       changePassword: (
         input: OperationRequestInput<typeof apiOperations.changeCurrentUserPassword>
@@ -36,28 +36,28 @@ export function createInstanceClients(transport: ApiClientTransport) {
         transport.unwrapJson(
           generatedSdk.changeCurrentUserPassword({
             client: transport.generatedClient,
-            body: apiOperations.changeCurrentUserPassword.requestSchema.parse(input)
+            body: apiOperations.changeCurrentUserPassword.body.parse(input)
           }),
-          apiOperations.changeCurrentUserPassword.responseSchema
+          apiOperations.changeCurrentUserPassword.response.schema
         ),
       delete: () =>
         transport.unwrapJson(
           generatedSdk.deleteCurrentUser({ client: transport.generatedClient }),
-          apiOperations.deleteCurrentUser.responseSchema
+          apiOperations.deleteCurrentUser.response.schema
         ),
       modelPreference: {
         get: () =>
           transport.unwrapJson(
             generatedSdk.getCurrentUserModelPreference({ client: transport.generatedClient }),
-            apiOperations.getCurrentUserModelPreference.responseSchema
+            apiOperations.getCurrentUserModelPreference.response.schema
           ),
         set: (input: OperationRequestInput<typeof apiOperations.setCurrentUserModelPreference>) =>
           transport.unwrapJson(
             generatedSdk.setCurrentUserModelPreference({
               client: transport.generatedClient,
-              body: apiOperations.setCurrentUserModelPreference.requestSchema.parse(input)
+              body: apiOperations.setCurrentUserModelPreference.body.parse(input)
             }),
-            apiOperations.setCurrentUserModelPreference.responseSchema
+            apiOperations.setCurrentUserModelPreference.response.schema
           )
       }
     },
@@ -70,17 +70,17 @@ export function createInstanceClients(transport: ApiClientTransport) {
           generatedSdk.requestPasswordReset({
             client: transport.generatedClient,
             query: { locale },
-            body: apiOperations.requestPasswordReset.requestSchema.parse(input)
+            body: apiOperations.requestPasswordReset.body.parse(input)
           }),
-          apiOperations.requestPasswordReset.responseSchema
+          apiOperations.requestPasswordReset.response.schema
         ),
       complete: (input: OperationRequestInput<typeof apiOperations.completePasswordSetup>) =>
         transport.unwrapJson(
           generatedSdk.completePasswordSetup({
             client: transport.generatedClient,
-            body: apiOperations.completePasswordSetup.requestSchema.parse(input)
+            body: apiOperations.completePasswordSetup.body.parse(input)
           }),
-          apiOperations.completePasswordSetup.responseSchema
+          apiOperations.completePasswordSetup.response.schema
         )
     },
     branding: {
@@ -90,7 +90,7 @@ export function createInstanceClients(transport: ApiClientTransport) {
             client: transport.generatedClient,
             query: { locale }
           }),
-          apiOperations.getBranding.responseSchema
+          apiOperations.getBranding.response.schema
         )
     },
     configuration: {
@@ -100,24 +100,24 @@ export function createInstanceClients(transport: ApiClientTransport) {
             client: transport.generatedClient,
             query: { locale }
           }),
-          apiOperations.getConfig.responseSchema
+          apiOperations.getConfig.response.schema
         )
     },
     governance: {
       listAuditEvents: () =>
         transport.unwrapJson(
           generatedSdk.listAuditEvents({ client: transport.generatedClient }),
-          apiOperations.listAuditEvents.responseSchema
+          apiOperations.listAuditEvents.response.schema
         ),
       listAuditActivities: () =>
         transport.unwrapJson(
           generatedSdk.listAuditActivities({ client: transport.generatedClient }),
-          apiOperations.listAuditActivities.responseSchema
+          apiOperations.listAuditActivities.response.schema
         ),
       getUsageSummary: () =>
         transport.unwrapJson(
           generatedSdk.getUsageSummary({ client: transport.generatedClient }),
-          apiOperations.getUsageSummary.responseSchema
+          apiOperations.getUsageSummary.response.schema
         )
     },
     approvalRequests: createApprovalRequestsClient(transport),
@@ -132,7 +132,7 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
     getOverview: () =>
       transport.unwrapJson(
         generatedSdk.getConfigAssetsOverview({ client: transport.generatedClient }),
-        apiOperations.getConfigAssetsOverview.responseSchema
+        apiOperations.getConfigAssetsOverview.response.schema
       ),
     get: (kind: ConfigAssetKind, name: string) =>
       transport.unwrapJson(
@@ -140,7 +140,7 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { kind, name }
         }),
-        apiOperations.getConfigAsset.responseSchema
+        apiOperations.getConfigAsset.response.schema
       ),
     put: (
       kind: ConfigAssetKind,
@@ -151,9 +151,9 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
         generatedSdk.putConfigAsset({
           client: transport.generatedClient,
           path: { kind, name },
-          body: apiOperations.putConfigAsset.requestSchema.parse(input)
+          body: apiOperations.putConfigAsset.body.parse(input)
         }),
-        apiOperations.putConfigAsset.responseSchema
+        apiOperations.putConfigAsset.response.schema
       ),
     delete: (
       kind: ConfigAssetKind,
@@ -164,17 +164,17 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
         generatedSdk.deleteConfigAsset({
           client: transport.generatedClient,
           path: { kind, name },
-          body: apiOperations.deleteConfigAsset.requestSchema.parse(input)
+          body: apiOperations.deleteConfigAsset.body.parse(input)
         }),
-        apiOperations.deleteConfigAsset.responseSchema
+        apiOperations.deleteConfigAsset.response.schema
       ),
     setDefaultAgent: (input: OperationRequestInput<typeof apiOperations.setDefaultConfigAgent>) =>
       transport.unwrapJson(
         generatedSdk.setDefaultConfigAgent({
           client: transport.generatedClient,
-          body: apiOperations.setDefaultConfigAgent.requestSchema.parse(input)
+          body: apiOperations.setDefaultConfigAgent.body.parse(input)
         }),
-        apiOperations.setDefaultConfigAgent.responseSchema
+        apiOperations.setDefaultConfigAgent.response.schema
       ),
     setAgentAvailability: (
       name: string,
@@ -184,16 +184,16 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
         generatedSdk.setConfigAgentAvailability({
           client: transport.generatedClient,
           path: { name },
-          body: apiOperations.setConfigAgentAvailability.requestSchema.parse(input)
+          body: apiOperations.setConfigAgentAvailability.body.parse(input)
         }),
-        apiOperations.setConfigAgentAvailability.responseSchema
+        apiOperations.setConfigAgentAvailability.response.schema
       ),
     listAdministeredWorkspaces: () =>
       transport.unwrapJson(
         generatedSdk.listAdministeredCollaborationWorkspaces({
           client: transport.generatedClient
         }),
-        apiOperations.listAdministeredCollaborationWorkspaces.responseSchema
+        apiOperations.listAdministeredCollaborationWorkspaces.response.schema
       ),
     listRevisions: (kind: ConfigAssetKind, name: string) =>
       transport.unwrapJson(
@@ -201,7 +201,7 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { kind, name }
         }),
-        apiOperations.listConfigAssetRevisions.responseSchema
+        apiOperations.listConfigAssetRevisions.response.schema
       ),
     revert: (
       kind: ConfigAssetKind,
@@ -212,30 +212,30 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
         generatedSdk.revertConfigAsset({
           client: transport.generatedClient,
           path: { kind, name },
-          body: apiOperations.revertConfigAsset.requestSchema.parse(input)
+          body: apiOperations.revertConfigAsset.body.parse(input)
         }),
-        apiOperations.revertConfigAsset.responseSchema
+        apiOperations.revertConfigAsset.response.schema
       ),
     export: () =>
       transport.unwrapJson(
         generatedSdk.exportConfigAssets({ client: transport.generatedClient }),
-        apiOperations.exportConfigAssets.responseSchema
+        apiOperations.exportConfigAssets.response.schema
       ),
     replace: (input: OperationRequestInput<typeof apiOperations.replaceConfigAssets>) =>
       transport.unwrapJson(
         generatedSdk.replaceConfigAssets({
           client: transport.generatedClient,
-          body: apiOperations.replaceConfigAssets.requestSchema.parse(input)
+          body: apiOperations.replaceConfigAssets.body.parse(input)
         }),
-        apiOperations.replaceConfigAssets.responseSchema
+        apiOperations.replaceConfigAssets.response.schema
       ),
     validate: (input: OperationRequestInput<typeof apiOperations.validateConfigAssets>) =>
       transport.unwrapJson(
         generatedSdk.validateConfigAssets({
           client: transport.generatedClient,
-          body: apiOperations.validateConfigAssets.requestSchema.parse(input)
+          body: apiOperations.validateConfigAssets.body.parse(input)
         }),
-        apiOperations.validateConfigAssets.responseSchema
+        apiOperations.validateConfigAssets.response.schema
       )
   };
 }
@@ -245,7 +245,7 @@ function createApiAccessClient(transport: ApiClientTransport) {
     listServicePrincipals: () =>
       transport.unwrapJson(
         generatedSdk.listServicePrincipals({ client: transport.generatedClient }),
-        apiOperations.listServicePrincipals.responseSchema
+        apiOperations.listServicePrincipals.response.schema
       ),
     createServicePrincipal: (
       input: OperationRequestInput<typeof apiOperations.createServicePrincipal>
@@ -253,9 +253,9 @@ function createApiAccessClient(transport: ApiClientTransport) {
       transport.unwrapJson(
         generatedSdk.createServicePrincipal({
           client: transport.generatedClient,
-          body: apiOperations.createServicePrincipal.requestSchema.parse(input)
+          body: apiOperations.createServicePrincipal.body.parse(input)
         }),
-        apiOperations.createServicePrincipal.responseSchema
+        apiOperations.createServicePrincipal.response.schema
       ),
     updateServicePrincipal: (
       servicePrincipalId: string,
@@ -265,9 +265,9 @@ function createApiAccessClient(transport: ApiClientTransport) {
         generatedSdk.updateServicePrincipal({
           client: transport.generatedClient,
           path: { servicePrincipalId },
-          body: apiOperations.updateServicePrincipal.requestSchema.parse(input)
+          body: apiOperations.updateServicePrincipal.body.parse(input)
         }),
-        apiOperations.updateServicePrincipal.responseSchema
+        apiOperations.updateServicePrincipal.response.schema
       ),
     createCredential: (
       servicePrincipalId: string,
@@ -277,9 +277,9 @@ function createApiAccessClient(transport: ApiClientTransport) {
         generatedSdk.createApiCredential({
           client: transport.generatedClient,
           path: { servicePrincipalId },
-          body: apiOperations.createApiCredential.requestSchema.parse(input)
+          body: apiOperations.createApiCredential.body.parse(input)
         }),
-        apiOperations.createApiCredential.responseSchema
+        apiOperations.createApiCredential.response.schema
       ),
     revokeCredential: (credentialId: string) =>
       transport.unwrapJson(
@@ -287,7 +287,7 @@ function createApiAccessClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { credentialId }
         }),
-        apiOperations.revokeApiCredential.responseSchema
+        apiOperations.revokeApiCredential.response.schema
       )
   };
 }
@@ -297,15 +297,15 @@ function createUsersClient(transport: ApiClientTransport) {
     list: () =>
       transport.unwrapJson(
         generatedSdk.listAdministeredUsers({ client: transport.generatedClient }),
-        apiOperations.listAdministeredUsers.responseSchema
+        apiOperations.listAdministeredUsers.response.schema
       ),
     create: (input: OperationRequestInput<typeof apiOperations.createAdministeredUser>) =>
       transport.unwrapJson(
         generatedSdk.createAdministeredUser({
           client: transport.generatedClient,
-          body: apiOperations.createAdministeredUser.requestSchema.parse(input)
+          body: apiOperations.createAdministeredUser.body.parse(input)
         }),
-        apiOperations.createAdministeredUser.responseSchema
+        apiOperations.createAdministeredUser.response.schema
       ),
     update: (
       userId: string,
@@ -315,9 +315,9 @@ function createUsersClient(transport: ApiClientTransport) {
         generatedSdk.updateAdministeredUser({
           client: transport.generatedClient,
           path: { userId },
-          body: apiOperations.updateAdministeredUser.requestSchema.parse(input)
+          body: apiOperations.updateAdministeredUser.body.parse(input)
         }),
-        apiOperations.updateAdministeredUser.responseSchema
+        apiOperations.updateAdministeredUser.response.schema
       ),
     delete: (userId: string) =>
       transport.unwrapJson(
@@ -325,7 +325,7 @@ function createUsersClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { userId }
         }),
-        apiOperations.deleteAdministeredUser.responseSchema
+        apiOperations.deleteAdministeredUser.response.schema
       ),
     upsertIdentity: (
       userId: string,
@@ -335,9 +335,9 @@ function createUsersClient(transport: ApiClientTransport) {
         generatedSdk.upsertAdministeredUserIdentity({
           client: transport.generatedClient,
           path: { userId },
-          body: apiOperations.upsertAdministeredUserIdentity.requestSchema.parse(input)
+          body: apiOperations.upsertAdministeredUserIdentity.body.parse(input)
         }),
-        apiOperations.upsertAdministeredUserIdentity.responseSchema
+        apiOperations.upsertAdministeredUserIdentity.response.schema
       ),
     resetPassword: (
       userId: string,
@@ -347,9 +347,9 @@ function createUsersClient(transport: ApiClientTransport) {
         generatedSdk.resetAdministeredUserPassword({
           client: transport.generatedClient,
           path: { userId },
-          body: apiOperations.resetAdministeredUserPassword.requestSchema.parse(input)
+          body: apiOperations.resetAdministeredUserPassword.body.parse(input)
         }),
-        apiOperations.resetAdministeredUserPassword.responseSchema
+        apiOperations.resetAdministeredUserPassword.response.schema
       ),
     sendInvitation: (userId: string) =>
       transport.unwrapJson(
@@ -357,7 +357,7 @@ function createUsersClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { userId }
         }),
-        apiOperations.sendAdministeredUserInvitation.responseSchema
+        apiOperations.sendAdministeredUserInvitation.response.schema
       ),
     deleteIdentity: (userId: string, authSource: string, externalUserId: string) =>
       transport.unwrapJson(
@@ -365,7 +365,7 @@ function createUsersClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { userId, authSource, externalUserId }
         }),
-        apiOperations.deleteAdministeredUserIdentity.responseSchema
+        apiOperations.deleteAdministeredUserIdentity.response.schema
       )
   };
 }
@@ -375,17 +375,17 @@ function createApprovalRequestsClient(transport: ApiClientTransport) {
     get: (requestId: string) =>
       transport.unwrapJson(
         generatedSdk.getApprovalRequest({ client: transport.generatedClient, path: { requestId } }),
-        apiOperations.getApprovalRequest.responseSchema
+        apiOperations.getApprovalRequest.response.schema
       ),
     list: (status?: ApprovalRequestStatus) =>
       transport.unwrapJson(
         generatedSdk.listApprovalRequests({ client: transport.generatedClient, query: { status } }),
-        apiOperations.listApprovalRequests.responseSchema
+        apiOperations.listApprovalRequests.response.schema
       ),
     pendingCount: () =>
       transport.unwrapJson(
         generatedSdk.countPendingApprovalRequests({ client: transport.generatedClient }),
-        apiOperations.countPendingApprovalRequests.responseSchema
+        apiOperations.countPendingApprovalRequests.response.schema
       ),
     decide: (
       requestId: string,
@@ -395,9 +395,9 @@ function createApprovalRequestsClient(transport: ApiClientTransport) {
         generatedSdk.decideApprovalRequest({
           client: transport.generatedClient,
           path: { requestId },
-          body: apiOperations.decideApprovalRequest.requestSchema.parse(input)
+          body: apiOperations.decideApprovalRequest.body.parse(input)
         }),
-        apiOperations.decideApprovalRequest.responseSchema
+        apiOperations.decideApprovalRequest.response.schema
       ),
     revert: (requestId: string) =>
       transport.unwrapJson(
@@ -405,7 +405,7 @@ function createApprovalRequestsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { requestId }
         }),
-        apiOperations.revertApprovalRequest.responseSchema
+        apiOperations.revertApprovalRequest.response.schema
       ),
     withdraw: (requestId: string) =>
       transport.unwrapJson(
@@ -413,7 +413,7 @@ function createApprovalRequestsClient(transport: ApiClientTransport) {
           client: transport.generatedClient,
           path: { requestId }
         }),
-        apiOperations.withdrawApprovalRequest.responseSchema
+        apiOperations.withdrawApprovalRequest.response.schema
       )
   };
 }
