@@ -147,11 +147,7 @@ describe("ArtifactPreviewWorker", () => {
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
-    await sleep(20);
-    const renewed = await fixture.store.files.getArtifactPreviewJob({
-      clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.source.id
-    });
+    const renewed = await jobAfterLeaseMoved(fixture, initiallyClaimed?.leaseExpiresAt);
     expect(renewed?.leaseExpiresAt).toBeDefined();
     expect(renewed!.leaseExpiresAt! > initiallyClaimed!.leaseExpiresAt!).toBe(true);
 
@@ -236,11 +232,7 @@ describe("ArtifactPreviewWorker", () => {
       clientInstanceId: fixture.clientInstanceId,
       sourceArtifactId: fixture.source.id
     });
-    await sleep(20);
-    const renewed = await fixture.store.files.getArtifactPreviewJob({
-      clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.source.id
-    });
+    const renewed = await jobAfterLeaseMoved(fixture, initiallyClaimed?.leaseExpiresAt);
     expect(renewed?.leaseExpiresAt).toBeDefined();
     expect(renewed!.leaseExpiresAt! > initiallyClaimed!.leaseExpiresAt!).toBe(true);
 
@@ -938,6 +930,32 @@ function createDeferred<T>(): {
     reject = promiseReject;
   });
   return { promise, resolve, reject };
+}
+
+/**
+ * The job once its lease is later than the given one. A renewal is a database write on a
+ * timer, so a busy machine may need more than a few intervals; after two seconds the job is
+ * returned as it is and the caller's comparison fails.
+ */
+async function jobAfterLeaseMoved(
+  fixture: Awaited<ReturnType<typeof createWorkerFixture>>,
+  initialLease: string | Date | undefined
+) {
+  const read = () =>
+    fixture.store.files.getArtifactPreviewJob({
+      clientInstanceId: fixture.clientInstanceId,
+      sourceArtifactId: fixture.source.id
+    });
+  const deadline = Date.now() + 2000;
+  let job = await read();
+  while (
+    Date.now() < deadline &&
+    !(initialLease && job?.leaseExpiresAt && job.leaseExpiresAt > initialLease)
+  ) {
+    await sleep(5);
+    job = await read();
+  }
+  return job;
 }
 
 function sleep(milliseconds: number): Promise<void> {
