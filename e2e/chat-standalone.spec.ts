@@ -875,6 +875,41 @@ test("links in user messages keep the bubble foreground contrast", async ({ page
   await expect(bubble).toBeVisible();
 });
 
+test("a first message sent while the workspace still loads goes out once it has loaded", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+  const releaseWorkspaces = await holdGet(page, (pathname) => pathname === "/api/v1/workspaces");
+  const createRunRequests = countRequests(
+    page,
+    "POST",
+    (pathname) => pathname === "/api/v1/conversations/runs"
+  );
+  await page.goto("/");
+
+  const input = page.getByPlaceholder("Message");
+  const sendButton = page.getByRole("button", { name: "Send message" });
+  const messageText = `Queued first message ${Date.now()}`;
+  await input.fill(`${messageText} draft`);
+  await input.press("Enter");
+  await expect(sendButton).toHaveAttribute("aria-busy", "true");
+
+  // Editing takes the send back and keeps the text in the box.
+  await input.fill(messageText);
+  await expect(sendButton).not.toHaveAttribute("aria-busy", "true");
+  await expect(input).toHaveValue(messageText);
+  await input.press("Enter");
+  await expect(sendButton).toHaveAttribute("aria-busy", "true");
+  expect(createRunRequests()).toBe(0);
+
+  releaseWorkspaces();
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+  const chat = page.getByRole("region", { name: "Chat" });
+  await expect(chat.locator('[data-role="user"]')).toHaveText([messageText]);
+  await expect(page.getByText(/Local agent response:/u)).toBeVisible();
+  expect(createRunRequests()).toBe(1);
+});
+
 test("new turns anchor below the top chrome and retain response runway", async ({ page }) => {
   await signInViaApi(page, normalUser);
   await page.goto("/");
@@ -902,6 +937,15 @@ test("new turns anchor below the top chrome and retain response runway", async (
 
     await expect(anchoredMessage).toHaveCount(1);
     await expect(reserve).toHaveCount(1);
+    // The activity row exists only while the run is busy, so it is checked before anything slow.
+    const activity = page.getByTestId("run-activity");
+    await expect(activity).toBeVisible();
+    const activityBeforeReserve = await Promise.all([
+      activity.boundingBox(),
+      reserve.boundingBox()
+    ]);
+    expect(activityBeforeReserve[0]?.y).toBeLessThan(activityBeforeReserve[1]?.y ?? 0);
+
     await expect
       .poll(async () => {
         const [viewportBox, bubbleBox] = await Promise.all([
@@ -934,14 +978,6 @@ test("new turns anchor below the top chrome and retain response runway", async (
       await page.waitForTimeout(75);
     }
     expect(Math.max(...anchoredPositions) - Math.min(...anchoredPositions)).toBeLessThanOrEqual(1);
-
-    const activity = page.getByTestId("run-activity");
-    await expect(activity).toBeVisible();
-    const activityBeforeReserve = await Promise.all([
-      activity.boundingBox(),
-      reserve.boundingBox()
-    ]);
-    expect(activityBeforeReserve[0]?.y).toBeLessThan(activityBeforeReserve[1]?.y ?? 0);
 
     const transcriptPadding = await anchoredMessage.evaluate((element) => {
       const transcript = element.parentElement;
@@ -2925,6 +2961,39 @@ async function holdCreateRun(page: Page): Promise<() => void> {
     await route.continue();
   });
   return () => release();
+}
+
+/** Holds back the server's answer to matching GET requests until the returned release is called. */
+async function holdGet(page: Page, matches: (pathname: string) => boolean): Promise<() => void> {
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(
+    (url) => url.origin === new URL(apiBaseUrl).origin && matches(url.pathname),
+    async (route) => {
+      if (route.request().method() === "GET") {
+        await gate;
+      }
+      await route.continue();
+    }
+  );
+  return () => release();
+}
+
+/** Counts the matching requests the browser has sent so far. */
+function countRequests(
+  page: Page,
+  method: string,
+  matches: (pathname: string) => boolean
+): () => number {
+  let count = 0;
+  page.on("request", (request) => {
+    if (request.method() === method && matches(new URL(request.url()).pathname)) {
+      count += 1;
+    }
+  });
+  return () => count;
 }
 
 /** Resolves once the browser has sent the first message of a new conversation. */
