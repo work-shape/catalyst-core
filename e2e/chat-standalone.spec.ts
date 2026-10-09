@@ -1322,6 +1322,76 @@ test("a superadmin manages a shared workspace without being a member", async ({
   await expect(page.getByPlaceholder("Message")).toBeVisible();
 });
 
+test("a stranger to a workspace and a non-author of a private conversation find nothing", async ({
+  page,
+  browser
+}) => {
+  const stamp = Date.now();
+  const closedWorkspaceName = `E2E Closed ${stamp}`;
+  const privateTitle = `E2E Private ${stamp}`;
+  const missing = z.object({ error: z.object({ code: z.literal("NOT_FOUND") }) });
+
+  // The superadmin owns a private workspace the normal user is no member of.
+  const superadminContext = await browser.newContext();
+  const superadminPage = await superadminContext.newPage();
+  await signInViaApi(superadminPage, superadminUser);
+  const closedWorkspace = await createWorkspace(superadminPage, {
+    name: closedWorkspaceName,
+    visibility: "private"
+  });
+
+  // The normal user writes a private conversation in a workspace of their own.
+  await signInViaApi(page, normalUser);
+  const ownWorkspace = await createWorkspace(page, {
+    name: `E2E Private Default ${stamp}`,
+    defaultConversationVisibility: "private"
+  });
+  const started = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/conversations/runs`, {
+    data: {
+      idempotencyKey: randomUUID(),
+      conversation: { title: privateTitle, collaborationWorkspaceId: ownWorkspace.id },
+      message: { text: `Opening message for ${privateTitle}` }
+    }
+  });
+  expect(started.ok()).toBe(true);
+  const { conversation } = z
+    .object({ conversation: z.object({ id: z.string(), visibility: z.literal("private") }) })
+    .parse(await started.json());
+
+  // A stranger gets the answer a workspace that does not exist would give, and no row for it.
+  const strangerRead = await page.request.get(
+    `${apiBaseUrl}/api/v1/workspaces/${encodeURIComponent(closedWorkspace.id)}`
+  );
+  expect(strangerRead.status()).toBe(404);
+  missing.parse(await strangerRead.json());
+  const strangerConversations = await page.request.get(
+    `${apiBaseUrl}/api/v1/conversations?collaborationWorkspaceId=${encodeURIComponent(closedWorkspace.id)}`
+  );
+  expect(strangerConversations.status()).toBe(404);
+  await page.goto("/");
+  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
+  await selectorTrigger.click();
+  await expect(page.getByRole("button", { name: ownWorkspace.name, exact: true })).toBeVisible();
+  await expect(page.getByText(closedWorkspaceName)).toHaveCount(0);
+
+  // A superadmin is Owner of the workspace, yet not the author: the private conversation is
+  // missing for them, in the thread and in the workspace's list.
+  const nonAuthorThread = await superadminPage.request.get(
+    `${apiBaseUrl}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`
+  );
+  expect(nonAuthorThread.status()).toBe(404);
+  missing.parse(await nonAuthorThread.json());
+  const nonAuthorList = await superadminPage.request.get(
+    `${apiBaseUrl}/api/v1/conversations?collaborationWorkspaceId=${encodeURIComponent(ownWorkspace.id)}`
+  );
+  expect(nonAuthorList.ok()).toBe(true);
+  expect(
+    z.object({ items: z.array(z.object({ id: z.string() })) }).parse(await nonAuthorList.json())
+      .items
+  ).toEqual([]);
+  await superadminContext.close();
+});
+
 test("first message from the root route moves to the persisted conversation route", async ({
   page
 }) => {
@@ -2650,6 +2720,21 @@ async function createListedConversation(page: Page, title: string): Promise<{ id
   return conversation;
 }
 
+async function createWorkspace(
+  page: Page,
+  data: {
+    name: string;
+    visibility?: "private" | "discoverable";
+    defaultConversationVisibility?: "private";
+  }
+): Promise<{ id: string; name: string }> {
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data
+  });
+  expect(created.ok()).toBe(true);
+  return z.object({ id: z.string(), name: z.string() }).parse(await created.json());
+}
+
 function legacyConversationPath(conversationId: string): string {
   return `/c/${encodeURIComponent(conversationId)}`;
 }
@@ -2697,10 +2782,9 @@ async function signInViaUi(
     page.getByRole("button", { name: "Sign in", exact: true }).click()
   ]);
   /*
-   * The rail itself is the readiness signal. With collaboration workspace
-   * chrome visible the client branding lives in the workspace selector popover
-   * rather than in a branding row, so the rail no longer spells out the client
-   * name.
+   * The rail itself is the readiness signal. The client branding lives in the
+   * workspace selector popover rather than in a branding row, so the rail does
+   * not spell out the client name.
    */
   await expect(
     page
