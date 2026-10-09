@@ -29,7 +29,7 @@ export function UserPermissionOverview({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="sticky left-0 z-10 bg-muted px-4 text-[11px] font-semibold tracking-[0.05em] uppercase">
+            <TableHead className="sticky left-0 z-10 bg-muted px-4 text-caption font-medium">
               {t("userRightsOverviewUser")}
             </TableHead>
             {USER_PERMISSIONS.map((permission) => {

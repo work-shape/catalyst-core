@@ -52,11 +52,3 @@ export function PersonalCollaborationWorkspaceAvatar({
 }) {
   return <Avatar kind="person" name={label} size={size} className={className} />;
 }
-
-/** The initials a hand-drawn member mark shows; the avatars above take theirs from the library. */
-export function collaborationWorkspaceInitials(label: string): string {
-  const words = label.trim().split(/\s+/u).filter(Boolean);
-  const initials =
-    words.length > 1 ? `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}` : label.trim().slice(0, 2);
-  return initials.toLocaleUpperCase() || "W";
-}

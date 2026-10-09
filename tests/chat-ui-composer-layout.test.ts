@@ -14,7 +14,7 @@ import {
   type SendBlock
 } from "../packages/chat-ui/src/assistant/send-block";
 import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider } from "./chat-ui-render-harness";
 
 const agents = [
   {

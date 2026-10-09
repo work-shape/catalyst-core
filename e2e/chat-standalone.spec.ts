@@ -39,12 +39,14 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   await expect(page.getByRole("button", { name: /Switch to (dark|light) theme/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
+  await expect(settingsGear(page)).toHaveCount(0);
 
   await page.getByRole("button", { name: "E2E User account" }).click();
   await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Language" })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
+  await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
+  await settingsPages(page).getByRole("button", { name: "Language and appearance" }).click();
+  await expect(page.getByRole("combobox", { name: "Language" })).toBeVisible();
 });
 
 test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
@@ -1206,10 +1208,11 @@ test("collaboration workspaces scope navigation, settings, and discovery", async
   const renamedWorkspaceName = `${workspaceName} renamed`;
   await selectorTrigger.click();
   await page.getByRole("button", { name: `Settings for ${workspaceName}` }).click();
+  await expect(page).toHaveURL(/\/settings\/workspace\/general$/u);
   await page.getByLabel("Name").fill(renamedWorkspaceName);
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(selectorTrigger).toContainText(renamedWorkspaceName);
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.goto(sharedPathname);
 
   await selectorTrigger.click();
   await page.getByRole("button", { name: "Browse workspaces" }).click();
@@ -1397,9 +1400,10 @@ test("a superadmin manages a shared workspace without being a member", async ({
   await expect(page.getByText("Superadmin, not a member")).toBeVisible();
   await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Leave workspace" })).toHaveCount(0);
-  await page.getByRole("tab", { name: "Members" }).click();
+  await settingsPages(page).getByRole("button", { name: "Members" }).click();
+  await expect(page).toHaveURL(/\/settings\/workspace\/members$/u);
   await expect(page.getByText(normalUser.email)).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Return to chat" }).click();
 
   await selectorTrigger.click();
   await page.getByRole("button", { name: workspaceName, exact: true }).click();
@@ -2179,57 +2183,52 @@ test("conversation rail renames from the menu and a later selected-title click",
 test("standalone auth gates superadmin views", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   await expect(page.getByRole("button", { name: "Usage" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
+  await expect(settingsGear(page)).toBeVisible();
 
   await page.getByRole("button", { name: "E2E Superadmin account" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
   await signInViaUi(page, normalUser, { alreadyOnLogin: true });
-  await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
+  // A user who owns a shared workspace has the gear too; the Instance pages stay closed.
+  await page.goto("/settings");
+  await expect(settingsPages(page).getByRole("button", { name: "Profile" })).toBeVisible();
+  await expect(settingsPages(page).getByRole("group", { name: "Instance" })).toHaveCount(0);
 });
 
-test("standalone settings and superadmin tabs are route-backed", async ({ page }) => {
+test("the Settings pages and Build are route-backed", async ({ page }) => {
   await signInViaApi(page, superadminUser);
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page).toHaveURL(/\/admin\/users$/u);
-  await expect(
-    page
-      .getByRole("region", { name: "Administration panel" })
-      .getByRole("heading", { name: "Users" })
-  ).toBeVisible();
+  await settingsGear(page).click();
+  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
+  await expect(page.getByRole("heading", { name: "Users", level: 1 })).toBeVisible();
 
   await page.goto("/settings");
-  await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
-  await expect(page).toHaveURL(/\/settings$/u);
+  await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
+  await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
 
+  // The addresses of the former administration panel still lead to their pages.
   await page.goto("/admin");
-  await expect(page).toHaveURL(/\/admin\/users$/u);
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
-  await expect(
-    page
-      .getByRole("region", { name: "Administration panel" })
-      .getByRole("heading", { name: "Users" })
-  ).toBeVisible();
-
-  await page.getByRole("button", { name: "Config" }).click();
-  await expect(page).toHaveURL(/\/admin\/config$/u);
-  await expect(page.getByRole("heading", { name: "Configuration" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Usage" }).click();
-  await expect(page).toHaveURL(/\/admin\/usage$/u);
-  await expect(page.getByRole("heading", { name: "Usage", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
+  await page.goto("/admin/usage");
+  await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
+  await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
   await expect(page.getByText("Billable this month")).toBeVisible();
 
-  await page.getByRole("button", { name: "Audit log" }).click();
-  await expect(page).toHaveURL(/\/admin\/audit$/u);
-  await expect(page.getByRole("heading", { name: "Audit log", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/config$/u);
+  await expect(page.getByRole("heading", { name: "Build", level: 1 })).toBeVisible();
+  await expect(settingsPages(page)).toHaveCount(0);
+
+  await settingsGear(page).click();
+  await settingsPages(page).getByRole("button", { name: "Audit", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/instance\/audit$/u);
+  await expect(page.getByRole("heading", { name: "Audit", level: 1 })).toBeVisible();
   await expect(page.getByText("Recent activity")).toBeVisible();
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/admin\/usage$/u);
-  await expect(page.getByText("Billable this month")).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
+  await expect(page.getByRole("heading", { name: "Users", level: 1 })).toBeVisible();
 });
 
 test("users, usage, audit and API access follow the German locale", async ({ page }) => {
@@ -2237,9 +2236,9 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
     window.localStorage.setItem("vivd-catalyst:locale", "de");
   });
   await signInViaApi(page, superadminUser);
-  const panel = page.getByRole("region", { name: "Administrationsbereich" });
+  const panel = page.getByRole("region", { name: "Einstellungen" });
 
-  await page.goto("/admin/users");
+  await page.goto("/settings/instance/users");
   await expect(panel.getByRole("heading", { name: "Benutzer", exact: true })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Neuer Benutzer" })).toBeVisible();
   await expect(panel.getByRole("searchbox", { name: "Benutzer suchen" })).toBeVisible();
@@ -2250,19 +2249,19 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
     /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}:\d{2}/u
   );
 
-  await page.goto("/admin/usage");
+  await page.goto("/settings/instance/usage");
   await expect(panel.getByRole("heading", { name: "Nutzung", exact: true })).toBeVisible();
   await expect(panel.getByText("Kosten diesen Monat")).toBeVisible();
   // Numbers are grouped the German way.
   await expect(page.getByTestId("configured-safeguards")).toContainText("25.000");
   await expect(panel.getByText("Billable")).toHaveCount(0);
 
-  await page.goto("/admin/audit");
-  await expect(panel.getByRole("heading", { name: "Auditprotokoll", exact: true })).toBeVisible();
+  await page.goto("/settings/instance/audit");
+  await expect(panel.getByRole("heading", { name: "Audit", exact: true })).toBeVisible();
   await expect(panel.getByText("Letzte Aktivitäten", { exact: true })).toBeVisible();
 
-  await page.goto("/admin/api-access");
-  await expect(panel.getByRole("heading", { name: "API-Zugriff", exact: true })).toBeVisible();
+  await page.goto("/settings/instance/api-access");
+  await expect(panel.getByRole("heading", { name: "API-Zugang", exact: true })).toBeVisible();
 });
 
 test("superadmin config follows the German locale", async ({ page }) => {
@@ -2273,13 +2272,9 @@ test("superadmin config follows the German locale", async ({ page }) => {
 
   await page.goto("/admin/config");
 
-  await expect(page.getByRole("region", { name: "Administrationsbereich" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Administrationsbereiche" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Benutzer/u })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Konfiguration", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Nutzung", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Auditprotokoll", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Konfiguration", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Bauen" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Bauen", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bauen", exact: true })).toBeVisible();
   await expect(page.getByText("Agenten", { exact: true })).toBeVisible();
   await expect(page.getByText("Fähigkeiten", { exact: true }).first()).toBeVisible();
   await expect(
@@ -2342,7 +2337,7 @@ test("superadmin manages config assets with validation and conflict protection",
 
   try {
     await page.goto("/admin/config");
-    await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Build" })).toBeVisible();
     await expect(page).toHaveURL(/\/admin\/config$/u);
     await expect(versionLabel(original.version)).toBeVisible();
 
@@ -2501,14 +2496,108 @@ test("superadmin manages config assets with validation and conflict protection",
   }
 });
 
+test("an instance admin opens every group of the Settings rail", async ({ page }) => {
+  await signInViaApi(page, superadminUser);
+  const workspace = await createWorkspace(page, { name: `E2E Rail ${Date.now()}` });
+
+  await page.goto("/");
+  await settingsGear(page).click();
+  const rail = settingsPages(page);
+  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
+  for (const group of ["You", "Workspace", "Instance"]) {
+    await expect(rail.getByRole("group", { name: group, exact: true })).toBeVisible();
+  }
+  await expect(rail.getByRole("group", { name: "Instance" }).getByRole("button")).toHaveText([
+    "Users",
+    "API access",
+    "Usage",
+    "Audit"
+  ]);
+  await expect(rail.getByRole("button", { name: "Users", exact: true })).toHaveAttribute(
+    "aria-current",
+    "true"
+  );
+  // Build stands in the main rail as an area of its own, not among the Settings pages.
+  await expect(page.getByRole("button", { name: "Build", exact: true })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Build" })).toHaveCount(0);
+
+  await rail.getByRole("button", { name: "API access", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/instance\/api-access$/u);
+  await expect(page.getByRole("heading", { name: "API access", level: 1 })).toBeVisible();
+
+  await rail.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/you\/security$/u);
+  await expect(page.getByRole("heading", { name: "Security", level: 1 })).toBeVisible();
+
+  // The Workspace pages change the workspace named under the group's label.
+  await rail.getByRole("button", { name: /^Members/u }).click();
+  await expect(page).toHaveURL(/\/settings\/workspace\/members$/u);
+  await expect(page.getByRole("heading", { name: "Members", level: 1 })).toBeVisible();
+  const scope = rail.getByRole("button", { name: /^Workspace for these pages: / });
+  if ((await scope.count()) > 0) {
+    await scope.click();
+    await page.getByRole("option", { name: workspace.name, exact: true }).click();
+    await expect(scope).toContainText(workspace.name);
+  } else {
+    await expect(rail.getByText(workspace.name, { exact: true })).toBeVisible();
+  }
+  await expect(page.getByText("E2E Superadmin").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Return to chat" }).click();
+  await expect(page.getByPlaceholder("Message")).toBeVisible();
+  await expect(rail).toHaveCount(0);
+});
+
+test("a plain user finds only their own pages in the Settings rail", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+
+  await page.goto("/settings");
+  await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
+  const rail = settingsPages(page);
+  await expect(rail.getByRole("button", { name: "Profile", exact: true })).toHaveAttribute(
+    "aria-current",
+    "true"
+  );
+  await expect(rail.getByRole("button", { name: "Language and appearance" })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Security", exact: true })).toBeVisible();
+  for (const closed of ["Users", "API access", "Usage", "Audit"]) {
+    await expect(rail.getByRole("button", { name: closed, exact: true })).toHaveCount(0);
+  }
+  await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveCount(0);
+
+  // The server refuses what the rail hides: the list of users stays closed to this user.
+  const users = await page.request.get(`${apiBaseUrl}/api/v1/instance/users`);
+  expect(users.status()).toBe(403);
+
+  // An instance page the user may not open leads away: to the chat, or to the workspace
+  // this user manages when an earlier test left them one.
+  await page.goto("/settings/instance/users");
+  await expect(page).toHaveURL(awayFromInstancePagesPattern);
+  await expect(page.getByRole("heading", { name: "Users", level: 1 })).toHaveCount(0);
+
+  // With too little room beside the content the rail is a select above it.
+  await page.setViewportSize({ width: 760, height: 800 });
+  await page.goto("/settings/you/profile");
+  const select = page.getByRole("combobox", { name: "Settings pages" });
+  await expect(select).toBeVisible();
+  await expect(rail).toBeHidden();
+  await select.selectOption({ label: "Language and appearance" });
+  await expect(page).toHaveURL(/\/settings\/you\/language-appearance$/u);
+  await expect(
+    page.getByRole("heading", { name: "Language and appearance", level: 1 })
+  ).toBeVisible();
+});
+
 test("normal users are redirected away from superadmin routes", async ({ page }) => {
   await signInViaApi(page, normalUser);
 
   await page.goto("/admin/usage");
 
   await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Administration panel" })).toHaveCount(0);
-  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  await expect(page).toHaveURL(awayFromInstancePagesPattern);
+  await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toHaveCount(0);
+  await expect(settingsPages(page).getByRole("group", { name: "Instance" })).toHaveCount(0);
 });
 
 test("workspace and superadmin keep page scroll locked", async ({ page }) => {
@@ -2524,21 +2613,24 @@ test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   await expect(page.getByRole("complementary", { name: "Conversations" })).toBeVisible();
   await expectDocumentScrollLocked(page);
 
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+  await settingsGear(page).click();
+  await expect(settingsPages(page)).toBeVisible();
   await expectDocumentScrollLocked(page);
 });
 
 test("superadmin can open usage and audit views", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   await ensureDarkMode(page);
-  await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
-  await expect(page.getByText("Administration")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
-  await page.getByRole("button", { name: /^Users/ }).click();
+  await expect(settingsGear(page)).toBeVisible();
+  await settingsGear(page).click();
+  await expect(settingsPages(page)).toBeVisible();
+  await expect(
+    settingsPages(page).getByRole("button", { name: "Usage", exact: true })
+  ).toBeVisible();
+  await expect(
+    settingsPages(page).getByRole("button", { name: "Users", exact: true })
+  ).toBeVisible();
+  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
   await expect
     .poll(() =>
       page
@@ -2546,27 +2638,35 @@ test("superadmin can open usage and audit views", async ({ page }) => {
         .evaluate((element) => getComputedStyle(element).backgroundColor)
     )
     .not.toBe("rgb(255, 255, 255)");
-  await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
+  await expect(
+    settingsPages(page).getByRole("button", { name: "Audit", exact: true })
+  ).toBeVisible();
 });
 
 test("admin sees billed usage and can manage users", async ({ page }) => {
   await signInViaUi(page, adminUser);
-  await expect(page.getByRole("button", { name: "Open administration panel" })).toBeVisible();
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page).toHaveURL(/\/admin\/users$/u);
-  const adminPanel = page.getByRole("region", { name: "Administration panel" });
+  await expect(settingsGear(page)).toBeVisible();
+  await settingsGear(page).click();
+  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
+  const adminPanel = page.getByRole("region", { name: "Settings" });
   await expect(adminPanel).toBeVisible();
-  await expect(adminPanel.getByText("Admin", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Usage/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Users/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Audit log" })).toBeVisible();
-  await page.getByRole("button", { name: /^Usage/ }).click();
-  await expect(page).toHaveURL(/\/admin\/usage$/u);
+  await expect(adminPanel.getByRole("cell", { name: "Admin", exact: true }).first()).toBeVisible();
+  await expect(
+    settingsPages(page).getByRole("button", { name: "Usage", exact: true })
+  ).toBeVisible();
+  await expect(
+    settingsPages(page).getByRole("button", { name: "Users", exact: true })
+  ).toBeVisible();
+  await expect(
+    settingsPages(page).getByRole("button", { name: "Audit", exact: true })
+  ).toBeVisible();
+  await settingsPages(page).getByRole("button", { name: "Usage", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
   await expect(page.getByText("Billable this month")).toBeVisible();
   await expect(page.getByTestId("monthly-usage")).toBeVisible();
 
-  await page.getByRole("button", { name: /^Users/ }).click();
-  await expect(page).toHaveURL(/\/admin\/users$/u);
+  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
   await page.getByRole("button", { name: "New user" }).click();
   const timestamp = Date.now();
   const createdUser = {
@@ -2635,10 +2735,9 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(toolCallCard).toContainText("Weather Forecast");
   await expect(toolCallCard).toContainText("Completed");
 
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
-  await expect(page.getByText("Administration")).toBeVisible();
-  await page.getByRole("button", { name: /^Usage/u }).click();
+  await settingsGear(page).click();
+  await expect(settingsPages(page)).toBeVisible();
+  await settingsPages(page).getByRole("button", { name: "Usage", exact: true }).click();
   await expect(page.getByText("Billable this month")).toBeVisible();
   await expect(page.getByText("Billable today")).toBeVisible();
   await expect(page.getByTestId("daily-usage")).toBeVisible();
@@ -2650,10 +2749,10 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(page.getByText("Recent model usage")).toBeVisible();
   await expect(page.getByText("deterministic-local").first()).toBeVisible();
   await expect(page.getByText("not_reported").first()).toBeVisible();
-  await page.getByRole("button", { name: "Audit log" }).click();
+  await settingsPages(page).getByRole("button", { name: "Audit", exact: true }).click();
   await expect(page.getByText("Recent activity")).toBeVisible();
   // Tool runs are folded into their activity as evidence; expand the rows to reveal them.
-  const adminRegion = page.getByRole("region", { name: "Administration panel" });
+  const adminRegion = page.getByRole("region", { name: "Settings" });
   const activityRows = adminRegion.locator("button[aria-expanded]");
   const rowCount = await activityRows.count();
   for (let index = 0; index < rowCount; index += 1) {
@@ -2790,10 +2889,10 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await page.context().clearCookies();
 
   await signInViaUi(page, superadminUser);
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+  await settingsGear(page).click();
+  await expect(settingsPages(page)).toBeVisible();
 
-  await page.getByRole("button", { name: /^Users/ }).click();
+  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
   await page.getByRole("button", { name: `E2E User ${normalUser.email}` }).click();
   await expect(page.getByRole("heading", { name: "Sign-in identities" })).toBeVisible();
 
@@ -2835,10 +2934,10 @@ test("superadmin resets a user's password from the users panel", async ({ page }
 
 test("superadmin creates a user with a password from the users panel", async ({ page }) => {
   await signInViaUi(page, superadminUser);
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+  await settingsGear(page).click();
+  await expect(settingsPages(page)).toBeVisible();
 
-  await page.getByRole("button", { name: /^Users/ }).click();
+  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
   await page.getByRole("button", { name: "New user" }).click();
 
   const timestamp = Date.now();
@@ -2883,15 +2982,15 @@ test("superadmin creates a user with a password from the users panel", async ({ 
   await expect(
     page.getByRole("button", { name: `${createdUser.displayLabel} account` })
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open administration panel" })).toHaveCount(0);
+  await expect(settingsGear(page)).toHaveCount(0);
 });
 
 test("superadmin deletes a user from the users panel", async ({ page }) => {
   await signInViaUi(page, superadminUser);
-  await page.getByRole("button", { name: "Open administration panel" }).click();
-  await expect(page.getByRole("region", { name: "Administration panel" })).toBeVisible();
+  await settingsGear(page).click();
+  await expect(settingsPages(page)).toBeVisible();
 
-  await page.getByRole("button", { name: /^Users/ }).click();
+  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
   await page.getByRole("button", { name: "New user" }).click();
 
   const timestamp = Date.now();
@@ -2936,6 +3035,16 @@ test("superadmin deletes a user from the users panel", async ({ page }) => {
  * find there is created together with its first turn. The turn has finished when this returns:
  * no stream from the setup is still running when the test starts.
  */
+/** The rail's gear: only a user with an administration page has it. */
+function settingsGear(page: Page): Locator {
+  return page.getByRole("button", { name: "Settings", exact: true });
+}
+
+/** The Settings sub-rail. */
+function settingsPages(page: Page): Locator {
+  return page.getByRole("navigation", { name: "Settings pages" });
+}
+
 async function createListedConversation(page: Page, title: string): Promise<{ id: string }> {
   const started = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/conversations/runs`, {
     data: {
@@ -2983,6 +3092,8 @@ function legacyConversationPath(conversationId: string): string {
 }
 
 const collaborationWorkspaceUrlPattern = /\/w\/[^/]+$/u;
+/** Where a closed Instance page sends a plain user: the chat, or a workspace they manage. */
+const awayFromInstancePagesPattern = /\/w\/[^/]+$|\/settings\/workspace\/general$/u;
 const collaborationWorkspaceConversationUrlPattern = /\/w\/[^/]+\/c\/[^/]+$/u;
 
 function conversationUrlPattern(conversationId: string): RegExp {

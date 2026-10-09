@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
-import { renderToStaticMarkup } from "./chat-ui-render-harness";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { ContextIndicator } from "../packages/chat-ui/src/assistant/context-indicator";
 import { resolveContextUsage } from "../packages/chat-ui/src/assistant/context-usage";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import { UserSettingsPanel } from "../packages/chat-ui/src/control-plane/user-settings-panel";
+import { LanguageAppearanceView } from "../packages/chat-ui/src/settings/pages/language-appearance";
 import {
   readStoredContextIndicatorPreference,
   writeStoredContextIndicatorPreference
@@ -35,31 +34,14 @@ describe("chat context indicator", () => {
       createElement(
         TranslationProvider,
         { children: null, locale: "de" },
-        createElement(UserSettingsPanel, {
-          user: {
-            id: "user",
-            externalUserId: "user",
-            displayLabel: "User",
-            roles: ["user"],
-            permissionRefs: [],
-            permissions: [],
-            clientInstanceId: "client",
-            authSource: "test"
-          },
-          canChangePassword: false,
-          updatingProfile: false,
-          changingPassword: false,
-          deletingAccount: false,
+        createElement(LanguageAppearanceView, {
           locales: ["de", "en"],
           locale: "de",
+          selectLocale: () => undefined,
+          themePreference: "system",
+          selectThemePreference: () => undefined,
           showContextIndicator: false,
-          onUpdateProfile: async () => {
-            throw new Error("not used");
-          },
-          onChangePassword: async () => undefined,
-          onDeleteAccount: async () => undefined,
-          onSelectLocale: () => undefined,
-          onShowContextIndicatorChange: () => undefined
+          setShowContextIndicator: () => undefined
         })
       )
     );

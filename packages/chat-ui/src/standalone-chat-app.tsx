@@ -9,7 +9,8 @@ import {
   useLocation,
   useRouter
 } from "@tanstack/react-router";
-import { ChatShell, type ChatShellAdminPanel } from "./chat-shell";
+import { ChatShell } from "./chat-shell";
+import type { ChatShellAdministration } from "./settings/page-definition";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
 import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./assistant/tool-activity";
 import { installStaleChunkRecovery } from "./stale-chunk-recovery";
@@ -20,7 +21,7 @@ import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "./workspace/wo
 export interface StandaloneChatAppOptions {
   apiBaseUrl?: string;
   defaultApiPort?: string | number;
-  adminPanel?: ChatShellAdminPanel;
+  administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
   toolActivityLabels?: ToolActivityLabels;
   rootElement?: HTMLElement | null;
@@ -29,7 +30,7 @@ export interface StandaloneChatAppOptions {
 export function renderStandaloneChatApp({
   apiBaseUrl,
   defaultApiPort,
-  adminPanel,
+  administration,
   displayWidgets,
   toolActivityLabels,
   rootElement = document.getElementById("root")
@@ -42,7 +43,7 @@ export function renderStandaloneChatApp({
 
   const router = createStandaloneChatRouter({
     apiBaseUrl: resolveApiBaseUrl(apiBaseUrl, defaultApiPort),
-    adminPanel,
+    administration,
     displayWidgets,
     toolActivityLabels
   });
@@ -56,7 +57,7 @@ export function renderStandaloneChatApp({
 
 interface StandaloneChatRouterOptions {
   apiBaseUrl: string;
-  adminPanel?: ChatShellAdminPanel;
+  administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
   toolActivityLabels?: ToolActivityLabels;
 }
@@ -104,7 +105,7 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
     <ToolActivityLabelsProvider labels={options.toolActivityLabels}>
       <ChatShell
         apiBaseUrl={options.apiBaseUrl}
-        adminPanel={options.adminPanel}
+        administration={options.administration}
         displayWidgets={options.displayWidgets}
         manageDocumentTitle
         onThemeModeChange={applyDocumentThemeMode}

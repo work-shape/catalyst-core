@@ -1,13 +1,12 @@
 import { createElement, type ComponentProps } from "react";
-import { renderToStaticMarkup } from "./chat-ui-render-harness";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import type { ServicePrincipalDetail } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
+import { ApiAccessPanel } from "../packages/chat-ui/src/control-plane/api-access-panel";
 import {
-  ApiAccessPanel,
   copySecretField,
   SecretFields
-} from "../packages/chat-ui/src/control-plane/api-access-panel";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+} from "../packages/chat-ui/src/control-plane/api-access-secret-fields";
 
 const detail: ServicePrincipalDetail = {
   principal: {
@@ -95,7 +94,7 @@ describe("API access panel", () => {
       )
     );
 
-    expect(markup).toContain("API-Zugriff");
+    expect(markup).toContain("API-Zugang");
     expect(markup).toContain("Noch keine Service Principals");
     expect(markup).not.toContain("never-rendered");
   });

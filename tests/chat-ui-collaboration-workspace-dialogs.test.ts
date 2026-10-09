@@ -1,27 +1,27 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "./chat-ui-render-harness";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import type {
   CollaborationWorkspaceDirectoryItem,
   CollaborationWorkspaceWithRole,
+  WorkspaceAccessRequestItem,
   WorkspaceMember,
   WorkspaceMemberCandidate
 } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { BrowseCollaborationWorkspacesDialog } from "../packages/chat-ui/src/collaboration-workspace/browse-collaboration-workspaces-dialog";
 import { CreateCollaborationWorkspaceDialog } from "../packages/chat-ui/src/collaboration-workspace/create-collaboration-workspace-dialog";
 import {
+  CollaborationWorkspaceAddMemberForm,
+  CollaborationWorkspaceMemberCandidateList,
+  nextCollaborationWorkspaceMemberCandidate
+} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-member-search";
+import {
   canChangeCollaborationWorkspaceRole,
   canDeleteCollaborationWorkspace,
-  canRemoveCollaborationWorkspaceMember,
-  CollaborationWorkspaceGeneralTab,
-  CollaborationWorkspaceMemberCandidateList,
-  CollaborationWorkspaceMembersTab,
-  CollaborationWorkspaceRequestsTab,
-  CollaborationWorkspaceSettingsDialog,
-  CollaborationWorkspaceSettingsHeader,
-  nextCollaborationWorkspaceMemberCandidate
-} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-settings-dialog";
+  canRemoveCollaborationWorkspaceMember
+} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-roles";
+import { WorkspaceGeneralView } from "../packages/chat-ui/src/settings/pages/workspace-general";
+import { WorkspaceMembersView } from "../packages/chat-ui/src/settings/pages/workspace-members";
 import {
   collaborationWorkspaceAccentColors,
   collaborationWorkspaceAccentTokens
@@ -204,21 +204,85 @@ describe("create collaboration workspace dialog", () => {
   });
 });
 
-describe("collaboration workspace settings tabs", () => {
+const accessRequest: WorkspaceAccessRequestItem = {
+  userId: "user_9",
+  displayLabel: "Jonas Weber",
+  email: "jonas@example.com",
+  createdAt: "2026-08-20T09:30:00.000Z"
+};
+
+function generalView(
+  collaborationWorkspace: CollaborationWorkspaceWithRole,
+  otherOwnerExists = true
+): string {
+  return render(
+    "de",
+    createElement(WorkspaceGeneralView, {
+      workspace: collaborationWorkspace,
+      otherOwnerExists,
+      errorMessage: undefined,
+      savePending: false,
+      saved: false,
+      leavePending: false,
+      onEdit: noop,
+      onSave: noop,
+      onLeave: noop,
+      onRequestDelete: noop
+    })
+  );
+}
+
+function membersView(
+  collaborationWorkspace: CollaborationWorkspaceWithRole,
+  input: {
+    currentUserId?: string;
+    members?: WorkspaceMember[] | undefined;
+    accessRequests?: WorkspaceAccessRequestItem[] | undefined;
+    membersLoadFailed?: boolean;
+    accessRequestsLoadFailed?: boolean;
+  } = {}
+): string {
+  return render(
+    "de",
+    createElement(WorkspaceMembersView, {
+      workspace: collaborationWorkspace,
+      currentUserId: input.currentUserId ?? "user_1",
+      members: "members" in input ? input.members : members,
+      membersLoadFailed: input.membersLoadFailed ?? false,
+      onRetryMembers: noop,
+      accessRequests: "accessRequests" in input ? input.accessRequests : [],
+      accessRequestsLoadFailed: input.accessRequestsLoadFailed ?? false,
+      onRetryAccessRequests: noop,
+      memberCandidates: [],
+      memberCandidatesLoading: false,
+      pending: false,
+      errorMessage: undefined,
+      onMemberCandidateSearchChange: noop,
+      onAddMember: noop,
+      onChangeMemberRole: noop,
+      onRemoveMember: noop,
+      onApproveAccessRequest: noop,
+      onDeclineAccessRequest: noop
+    })
+  );
+}
+
+function addMemberForm(): string {
+  return render(
+    "de",
+    createElement(CollaborationWorkspaceAddMemberForm, {
+      memberCandidates: [],
+      memberCandidatesLoading: false,
+      pending: false,
+      onMemberCandidateSearchChange: noop,
+      onAddMember: noop
+    })
+  );
+}
+
+describe("Workspace pages of Settings", () => {
   it("renames, describes and re-themes a shared workspace in General", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
-    );
+    const markup = generalView(sharedCollaborationWorkspace);
 
     expect(markup).toContain('value="Produktteam"');
     expect(markup).toContain("Alles rund um das Produkt");
@@ -226,23 +290,21 @@ describe("collaboration workspace settings tabs", () => {
     expect(markup).toContain("Arbeitsbereich verlassen");
   });
 
-  it("shows the stored default conversation visibility of a shared workspace", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: {
-          ...sharedCollaborationWorkspace,
-          defaultConversationVisibility: "private"
-        },
-        currentUserId: "user_1",
-        members,
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
+  it("puts the General fields into sections, the last one holding Leave and Delete", () => {
+    const markup = generalView(sharedCollaborationWorkspace);
+    const headings = [...markup.matchAll(/<h2[^>]*>([^<]*)<\/h2>/gu)].map((match) => match[1]);
+
+    expect(headings).toEqual(["Angaben", "Zugriff", "Darstellung", "Verlassen oder löschen"]);
+    expect(markup.indexOf("Arbeitsbereich löschen")).toBeGreaterThan(
+      markup.indexOf("Verlassen oder löschen")
     );
+  });
+
+  it("shows the stored default conversation visibility of a shared workspace", () => {
+    const markup = generalView({
+      ...sharedCollaborationWorkspace,
+      defaultConversationVisibility: "private"
+    });
 
     expect(markup).toContain("Neue Unterhaltungen sind");
     expect(markup).toMatch(
@@ -253,38 +315,8 @@ describe("collaboration workspace settings tabs", () => {
     );
   });
 
-  it("keeps the default conversation visibility out of a personal workspace", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: personalCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
-    );
-
-    expect(markup).not.toContain("Neue Unterhaltungen sind");
-  });
-
   it("blocks a sole owner from leaving and explains why", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members: [owner],
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
-    );
+    const markup = generalView(sharedCollaborationWorkspace, false);
 
     expect(markup).toContain(
       "Ein geteilter Arbeitsbereich muss mindestens einen Besitzer behalten."
@@ -292,19 +324,7 @@ describe("collaboration workspace settings tabs", () => {
   });
 
   it("offers a superadmin without a membership everything except leaving", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: { ...sharedCollaborationWorkspace, membershipRole: null },
-        currentUserId: "user_9",
-        members: [owner],
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
-    );
+    const markup = generalView({ ...sharedCollaborationWorkspace, membershipRole: null }, false);
 
     expect(markup).not.toContain("Arbeitsbereich verlassen");
     expect(markup).not.toContain(
@@ -314,64 +334,104 @@ describe("collaboration workspace settings tabs", () => {
     expect(markup).toContain("Änderungen speichern");
   });
 
-  it("names superadmin access in the header instead of a membership role", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceSettingsHeader, {
-        name: sharedCollaborationWorkspace.name,
-        membershipRole: null,
-        appearance: { emoji: null, accentColor: "violet" }
-      })
-    );
+  it("offers deletion to an owner of a shared workspace", () => {
+    const markup = generalView(sharedCollaborationWorkspace);
 
-    expect(markup).toContain("Superadmin, kein Mitglied");
-    expect(markup).not.toContain("Besitzer");
+    expect(markup).toContain('data-testid="collaboration-workspace-delete-trigger"');
+    expect(markup).toContain("Arbeitsbereich löschen");
+  });
+
+  it("hides deletion from an admin", () => {
+    const markup = generalView({
+      ...sharedCollaborationWorkspace,
+      role: "admin",
+      membershipRole: "admin"
+    });
+
+    expect(markup).not.toContain('data-testid="collaboration-workspace-delete-trigger"');
+  });
+
+  it("previews the stored emoji and colour beside the appearance fields", () => {
+    const markup = generalView(sharedCollaborationWorkspace);
+
+    expect(markup).toContain('data-collaboration-workspace-accent="violet"');
+    expect(markup).toContain(collaborationWorkspaceAccentTokens("violet", "light").surface);
+    for (const accentColor of collaborationWorkspaceAccentColors) {
+      expect(markup, accentColor).toContain(
+        `data-testid="collaboration-workspace-accent-${accentColor}"`
+      );
+    }
+  });
+
+  it("shows Requests above Members, each with its count, and no tabs", () => {
+    const markup = membersView(sharedCollaborationWorkspace, { accessRequests: [accessRequest] });
+    const headings = [...markup.matchAll(/<h2[^>]*>([^<]*)<\/h2>/gu)].map((match) => match[1]);
+
+    expect(headings).toEqual(["Anfragen", "Mitglieder"]);
+    expect(markup).not.toContain('role="tab"');
+    expect(markup).toContain("Mitglied hinzufügen");
+    expect(markup).toMatch(/Anfragen<\/h2><span[^>]*>1<\/span>/u);
+    expect(markup).toMatch(/Mitglieder<\/h2><span[^>]*>2<\/span>/u);
   });
 
   it("shows member email and role controls for an owner", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceMembersTab, {
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        loading: false,
-        loadFailed: false,
-        memberCandidates: [],
-        memberCandidatesLoading: false,
-        pending: false,
-        onMemberCandidateSearchChange: noop,
-        onAddMember: noop,
-        onChangeMemberRole: noop,
-        onRemoveMember: noop
-      })
-    );
+    const markup = membersView(sharedCollaborationWorkspace);
 
-    expect(markup).toContain("Mitglied per E-Mail hinzufügen");
     expect(markup).toContain("mara@example.com");
     expect(markup).toContain('aria-label="Rolle von Mara Ruiz"');
     expect(markup).toContain('aria-label="Mara Ruiz entfernen"');
     expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');
   });
 
-  it("keeps the browser address autofill out of the add-member input", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceMembersTab, {
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        loading: false,
-        loadFailed: false,
-        memberCandidates: [],
-        memberCandidatesLoading: false,
-        pending: false,
-        onMemberCandidateSearchChange: noop,
-        onAddMember: noop,
-        onChangeMemberRole: noop,
-        onRemoveMember: noop
-      })
+  it("shows the role as text to an admin, who may not change it", () => {
+    const markup = membersView(
+      { ...sharedCollaborationWorkspace, role: "admin", membershipRole: "admin" },
+      { currentUserId: "user_3" }
     );
+
+    expect(markup).not.toContain('aria-label="Rolle von Mara Ruiz"');
+    expect(markup).toContain("Besitzer");
+    expect(markup).toContain('aria-label="Mara Ruiz entfernen"');
+    expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');
+  });
+
+  it("lists access requests with approve and decline actions", () => {
+    const markup = membersView(sharedCollaborationWorkspace, { accessRequests: [accessRequest] });
+
+    expect(markup).toContain("Jonas Weber");
+    expect(markup).toContain("jonas@example.com");
+    expect(markup).toContain("Angefragt am");
+    expect(markup).toContain("Genehmigen");
+    expect(markup).toContain("Ablehnen");
+  });
+
+  it("keeps the Requests section, with its sentence, while nobody asks", () => {
+    const markup = membersView(sharedCollaborationWorkspace);
+
+    expect(markup).toContain("Anfragen");
+    expect(markup).toContain("Keine offenen Zugriffsanfragen.");
+  });
+
+  it("has no Requests section for a workspace nobody can ask to join", () => {
+    const markup = membersView({ ...sharedCollaborationWorkspace, visibility: "private" });
+
+    expect(markup).not.toContain("Anfragen");
+    expect(markup).toContain("Mitglieder");
+  });
+
+  it("reports a failed load inside the section that failed", () => {
+    const markup = membersView(sharedCollaborationWorkspace, {
+      members: undefined,
+      membersLoadFailed: true
+    });
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("Erneut versuchen");
+    expect(markup).toContain("Keine offenen Zugriffsanfragen.");
+  });
+
+  it("keeps the browser address autofill out of the add-member input", () => {
+    const markup = addMemberForm();
 
     // React serializes the attribute name as written; HTML parses it case-insensitively.
     expect(markup).toMatch(/id="collaboration-workspace-member-email"[^>]*autocomplete="off"/iu);
@@ -380,24 +440,9 @@ describe("collaboration workspace settings tabs", () => {
   });
 
   it("exposes the add-member field as a closed combobox until suggestions arrive", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceMembersTab, {
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        loading: false,
-        loadFailed: false,
-        memberCandidates: [],
-        memberCandidatesLoading: false,
-        pending: false,
-        onMemberCandidateSearchChange: noop,
-        onAddMember: noop,
-        onChangeMemberRole: noop,
-        onRemoveMember: noop
-      })
-    );
+    const markup = addMemberForm();
 
+    expect(markup).toContain("Mitglied per E-Mail hinzufügen");
     expect(markup).toContain('role="combobox"');
     expect(markup).toContain('aria-controls="collaboration-workspace-member-candidates"');
     expect(markup).toContain('aria-expanded="false"');
@@ -479,118 +524,6 @@ describe("collaboration workspace settings tabs", () => {
       expect(nextCollaborationWorkspaceMemberCandidate(0, -1, 3)).toBe(2);
       expect(nextCollaborationWorkspaceMemberCandidate(0, 1, 0)).toBe(-1);
     });
-  });
-
-  it("keeps roles read-only for an admin", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceMembersTab, {
-        collaborationWorkspace: {
-          ...sharedCollaborationWorkspace,
-          role: "admin",
-          membershipRole: "admin"
-        },
-        currentUserId: "user_3",
-        members,
-        loading: false,
-        loadFailed: false,
-        memberCandidates: [],
-        memberCandidatesLoading: false,
-        pending: false,
-        onMemberCandidateSearchChange: noop,
-        onAddMember: noop,
-        onChangeMemberRole: noop,
-        onRemoveMember: noop
-      })
-    );
-
-    expect(markup).not.toContain('aria-label="Rolle von Mara Ruiz"');
-    expect(markup).toContain('aria-label="Mara Ruiz entfernen"');
-    expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');
-  });
-
-  it("lists access requests with approve and decline actions", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceRequestsTab, {
-        accessRequests: [
-          {
-            userId: "user_9",
-            displayLabel: "Jonas Weber",
-            email: "jonas@example.com",
-            createdAt: "2026-08-20T09:30:00.000Z"
-          }
-        ],
-        loading: false,
-        loadFailed: false,
-        pending: false,
-        onApprove: noop,
-        onDecline: noop
-      })
-    );
-
-    expect(markup).toContain("Jonas Weber");
-    expect(markup).toContain("jonas@example.com");
-    expect(markup).toContain("Angefragt am");
-    expect(markup).toContain("Genehmigen");
-    expect(markup).toContain("Ablehnen");
-  });
-
-  it("explains the empty requests state", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceRequestsTab, {
-        accessRequests: [],
-        loading: false,
-        loadFailed: false,
-        pending: false,
-        onApprove: noop,
-        onDecline: noop
-      })
-    );
-
-    expect(markup).toContain("Keine offenen Zugriffsanfragen.");
-  });
-
-  it("offers deletion to an owner of a shared workspace", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
-    );
-
-    expect(markup).toContain('data-testid="collaboration-workspace-delete-trigger"');
-    expect(markup).toContain("Arbeitsbereich löschen");
-  });
-
-  it("hides deletion from an admin", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: {
-          ...sharedCollaborationWorkspace,
-          role: "admin",
-          membershipRole: "admin"
-        },
-        currentUserId: "user_3",
-        members,
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
-    );
-
-    expect(markup).not.toContain('data-testid="collaboration-workspace-delete-trigger"');
   });
 
   it("follows the role table for role changes and removals", () => {
@@ -984,20 +917,8 @@ describe("collaboration workspace emoji picker", () => {
     expect(markup).not.toContain(">Weniger<");
   });
 
-  it("offers the toggle in the settings dialog as well", () => {
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceGeneralTab, {
-        collaborationWorkspace: sharedCollaborationWorkspace,
-        currentUserId: "user_1",
-        members,
-        savePending: false,
-        membershipPending: false,
-        onSave: noop,
-        onLeave: noop,
-        onRequestDelete: noop
-      })
-    );
+  it("offers the toggle on the General page as well", () => {
+    const markup = generalView(sharedCollaborationWorkspace);
 
     expect(markup).toContain('data-testid="collaboration-workspace-emoji-more"');
     expect(markup).toContain(">Mehr<");
@@ -1055,72 +976,12 @@ describe("collaboration workspace emoji picker", () => {
   });
 });
 
-function renderSettingsDialog(): string {
-  return render(
-    "de",
-    createElement(CollaborationWorkspaceSettingsDialog, {
-      open: true,
-      collaborationWorkspace: sharedCollaborationWorkspace,
-      currentUserId: "user_1",
-      members,
-      membersLoading: false,
-      membersLoadFailed: false,
-      memberCandidates: [],
-      memberCandidatesLoading: false,
-      accessRequests: [],
-      accessRequestsLoading: false,
-      accessRequestsLoadFailed: false,
-      savePending: false,
-      membershipPending: false,
-      errorMessage: undefined,
-      onClose: noop,
-      onSave: noop,
-      onMemberCandidateSearchChange: noop,
-      onAddMember: noop,
-      onChangeMemberRole: noop,
-      onRemoveMember: noop,
-      onLeave: noop,
-      onRequestDelete: noop,
-      onApproveAccessRequest: noop,
-      onDeclineAccessRequest: noop
-    })
-  );
-}
-
 describe("collaboration workspace dialog chrome", () => {
   const scrollBody = 'data-testid="collaboration-workspace-dialog-scroll-body"';
   const pinnedFooter = '<div class="flex items-center justify-end gap-2 border-t px-5 py-4">';
 
-  it("keeps the settings tab panel itself unscrolled at a fixed height", () => {
-    const markup = renderSettingsDialog();
-
-    /*
-      The panel is the frame, not the scroller: each tab splits it into a
-      scrolling region and a pinned footer, so the height stays put while the
-      tab changes and no action can scroll out of reach.
-    */
-    expect(markup).toMatch(
-      /role="tabpanel"[^>]*class="h-\[clamp\(20rem,68vh,44rem\)\] overflow-hidden"/u
-    );
-    expect(markup).not.toMatch(/role="tabpanel"[^>]*class="[^"]*overflow-y-auto/u);
-  });
-
-  it("pins the settings save button below the scrolling fields", () => {
-    const markup = renderSettingsDialog();
-
-    const bodyIndex = markup.indexOf(scrollBody);
-    const footerIndex = markup.indexOf(pinnedFooter);
-    const saveIndex = markup.indexOf("Änderungen speichern");
-
-    expect(bodyIndex).toBeGreaterThan(-1);
-    expect(footerIndex).toBeGreaterThan(bodyIndex);
-    // The label only appears after the footer opens, so it cannot be scrolled away.
-    expect(saveIndex).toBeGreaterThan(footerIndex);
-  });
-
   it("gives every workspace dialog the same scroll body padding and gutter", () => {
     for (const markup of [
-      renderSettingsDialog(),
       render(
         "de",
         createElement(CreateCollaborationWorkspaceDialog, {
@@ -1164,17 +1025,6 @@ describe("collaboration workspace dialog chrome", () => {
     }
   });
 
-  it("reports which edge is hiding content so the fade can be applied", () => {
-    const markup = renderSettingsDialog();
-
-    /*
-      Server-rendered, nothing has scrolled yet, so both edges start false and
-      the mask is omitted entirely; the client sets them on scroll and resize.
-    */
-    expect(markup).toMatch(/data-overflow-above="false"[^>]*data-overflow-below="false"/u);
-    expect(markup).not.toContain("mask-image");
-  });
-
   it("themes the member candidate dropdown inside its own frame", () => {
     const markup = render(
       "de",
@@ -1199,36 +1049,6 @@ describe("collaboration workspace dialog chrome", () => {
 });
 
 describe("collaboration workspace appearance preview", () => {
-  const violetSurface = collaborationWorkspaceAccentTokens("violet", "light").surface;
-  const magentaSurface = collaborationWorkspaceAccentTokens("magenta", "light").surface;
-
-  it("previews the unsaved emoji and color in the settings header", () => {
-    // The header tile is the only preview of the appearance fields, so it has
-    // to follow the draft rather than the stored workspace: picking a swatch
-    // shows up here before "Anderungen speichern" is pressed.
-    const markup = render(
-      "de",
-      createElement(CollaborationWorkspaceSettingsHeader, {
-        name: sharedCollaborationWorkspace.name,
-        membershipRole: "owner",
-        appearance: { emoji: "🏦", accentColor: "magenta" }
-      })
-    );
-
-    expect(markup).toContain('data-collaboration-workspace-accent="magenta"');
-    expect(markup).toContain(magentaSurface);
-    expect(markup).toContain("🏦");
-    expect(markup).not.toContain(violetSurface);
-    expect(markup).not.toContain(sharedCollaborationWorkspace.emoji);
-  });
-
-  it("falls back to the stored appearance before anything is edited", () => {
-    const markup = renderSettingsDialog();
-
-    expect(markup).toContain('data-collaboration-workspace-accent="violet"');
-    expect(markup).toContain(violetSurface);
-  });
-
   it("previews the draft appearance in the create dialog too", () => {
     const markup = render(
       "de",
@@ -1251,7 +1071,7 @@ describe("collaboration workspace appearance preview", () => {
   });
 
   it("offers the whole palette as a wrapping grid of swatches", () => {
-    const markup = renderSettingsDialog();
+    const markup = generalView(sharedCollaborationWorkspace);
 
     for (const accentColor of collaborationWorkspaceAccentColors) {
       expect(markup, accentColor).toContain(

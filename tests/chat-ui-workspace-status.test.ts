@@ -1,7 +1,9 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import { renderToStaticMarkup as renderInUiRoot } from "./chat-ui-render-harness";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import {
+  renderToStaticMarkup as renderInUiRoot,
+  TranslationProvider
+} from "./chat-ui-render-harness";
 import {
   ConfigCheckPanel,
   OutdatedInterfaceBanner,

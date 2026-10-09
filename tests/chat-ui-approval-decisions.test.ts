@@ -25,7 +25,7 @@ import {
   type AssistantUiApprovalDecision,
   type AssistantUiMessageMetadata
 } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider } from "./chat-ui-render-harness";
 
 const MODEL_NOTE = "Approval request apr_1 (skill_change) was decided.";
 

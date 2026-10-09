@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ChevronLeft, ChevronRight, Copy, Search, UserPlus, Users } from "lucide-react";
+import { ChevronRight, Copy, Search, UserPlus, Users } from "lucide-react";
 import type {
   AdministeredUser,
   AdministeredUserIdentity,
@@ -9,15 +9,19 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   Badge,
+  Banner,
   Button,
   Card,
-  CardContent,
   Dialog,
+  EmptyState,
   FilterBar,
   Input,
+  PageHeader,
+  Pagination,
   SegmentedControl,
   SegmentedControlItem,
   Select,
+  SkeletonList,
   Table,
   TableBody,
   TableCell,
@@ -45,7 +49,6 @@ import { CreateUserFields, MaskedPasswordInput } from "./user-administration-fie
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
 import { UserPermissionOverview } from "./user-permission-overview";
 import { useTranslation } from "../i18n";
-import { ControlPlanePage } from "./control-plane-page";
 import { formatDateTime } from "./locale-format";
 
 interface UserAdministrationPanelProps {
@@ -161,266 +164,244 @@ export function UserAdministrationPanel({
   }
 
   return (
-    <ControlPlanePage
-      title={t("administrationUsers")}
-      description={t("settings.usersSummary", {
-        total: users.length.toLocaleString(locale),
-        active: activeUserCount.toLocaleString(locale)
-      })}
-      actions={
-        <Button type="button" onClick={() => setCreateOpen(true)}>
-          <UserPlus size={16} aria-hidden="true" />
-          {t("settings.userNew")}
-        </Button>
-      }
-    >
-      <FilterBar
-        search={
-          <Input
-            type="search"
-            leadingIcon={<Search aria-hidden="true" />}
-            placeholder={t("settings.userSearch")}
-            aria-label={t("settings.userSearch")}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        }
-        filters={
-          <>
-            <Select
-              className="w-full font-medium sm:w-40"
-              aria-label={t("settings.userFilterByStatus")}
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
-            >
-              <option value="all">{t("allStatuses")}</option>
-              <option value="active">{t("settings.statusActive")}</option>
-              <option value="disabled">{t("settings.statusDisabled")}</option>
-            </Select>
-            <Select
-              className="w-full font-medium sm:w-40"
-              aria-label={t("settings.userFilterByRole")}
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
-            >
-              <option value="all">{t("settings.userAllRoles")}</option>
-              {roleOptions.map((role) => {
-                const label = roleLabel(role);
-                return (
-                  <option key={role} value={role}>
-                    {label ? t(label) : role}
-                  </option>
-                );
-              })}
-            </Select>
-          </>
-        }
-        actions={
-          <SegmentedControl
-            label={t("userListViewChoice")}
-            value={listView}
-            onValueChange={(value) =>
-              setListView(value === "permissions" ? "permissions" : "users")
-            }
-          >
-            <SegmentedControlItem value="users">{t("userListView")}</SegmentedControlItem>
-            <SegmentedControlItem value="permissions">
-              {t("userRightsOverview")}
-            </SegmentedControlItem>
-          </SegmentedControl>
+    <>
+      <PageHeader
+        title={t("settings.users")}
+        description={t("settings.usersSummary", {
+          total: users.length.toLocaleString(locale),
+          active: activeUserCount.toLocaleString(locale)
+        })}
+        primaryAction={
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            <UserPlus aria-hidden="true" />
+            {t("settings.userNew")}
+          </Button>
         }
       />
-
-      {error ? <FormNotice notice={{ kind: "error", text: error }} /> : null}
-
-      <Card className="overflow-hidden">
-        {selectedRowIds.size > 0 && listView === "users" ? (
-          <div className="flex flex-wrap items-center gap-3 border-b bg-primary/10 px-4 py-2.5">
-            <span className="text-sm font-semibold text-primary">
-              {t("settings.userSelectedCount", {
-                count: selectedRowIds.size.toLocaleString(locale)
-              })}
-            </span>
-            <div className="flex-1" />
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-primary hover:bg-primary/15"
-              onClick={() => setSelectedRowIds(new Set())}
+      <div className="grid min-w-0 content-start gap-4">
+        <FilterBar
+          search={
+            <Input
+              type="search"
+              leadingIcon={<Search aria-hidden="true" />}
+              placeholder={t("settings.userSearch")}
+              aria-label={t("settings.userSearch")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          }
+          filters={
+            <>
+              <Select
+                className="w-full font-medium sm:w-40"
+                aria-label={t("settings.userFilterByStatus")}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as UserStatusFilter)}
+              >
+                <option value="all">{t("allStatuses")}</option>
+                <option value="active">{t("settings.statusActive")}</option>
+                <option value="disabled">{t("settings.statusDisabled")}</option>
+              </Select>
+              <Select
+                className="w-full font-medium sm:w-40"
+                aria-label={t("settings.userFilterByRole")}
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+              >
+                <option value="all">{t("settings.userAllRoles")}</option>
+                {roleOptions.map((role) => {
+                  const label = roleLabel(role);
+                  return (
+                    <option key={role} value={role}>
+                      {label ? t(label) : role}
+                    </option>
+                  );
+                })}
+              </Select>
+            </>
+          }
+          actions={
+            <SegmentedControl
+              label={t("userListViewChoice")}
+              value={listView}
+              onValueChange={(value) =>
+                setListView(value === "permissions" ? "permissions" : "users")
+              }
             >
-              {t("settings.userClearSelection")}
-            </Button>
-          </div>
-        ) : null}
+              <SegmentedControlItem value="users">{t("userListView")}</SegmentedControlItem>
+              <SegmentedControlItem value="permissions">
+                {t("userRightsOverview")}
+              </SegmentedControlItem>
+            </SegmentedControl>
+          }
+        />
 
-        {loading ? (
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            {t("settings.usersLoading")}
-          </CardContent>
-        ) : visibleUsers.length === 0 ? (
-          <CardContent className="grid justify-items-center gap-2 p-8 text-center">
-            <Users size={20} aria-hidden="true" className="text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              {t(users.length === 0 ? "settings.usersEmpty" : "settings.usersNoMatch")}
-            </p>
-            {users.length === 0 ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                <UserPlus size={15} aria-hidden="true" />
-                {t("settings.userCreateFirst")}
+        {error ? <Banner tone="danger">{error}</Banner> : null}
+
+        <Card className="overflow-hidden">
+          {selectedRowIds.size > 0 && listView === "users" ? (
+            <div className="flex flex-wrap items-center gap-3 border-b bg-primary/10 px-4 py-2.5">
+              <span className="text-sm font-semibold text-primary">
+                {t("settings.userSelectedCount", {
+                  count: selectedRowIds.size.toLocaleString(locale)
+                })}
+              </span>
+              <div className="flex-1" />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-primary hover:bg-primary/15"
+                onClick={() => setSelectedRowIds(new Set())}
+              >
+                {t("settings.userClearSelection")}
               </Button>
-            ) : null}
-          </CardContent>
-        ) : listView === "permissions" ? (
-          <UserPermissionOverview users={visibleUsers} onSelectUser={setSelectedUserId} />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10 px-4">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-sky-600"
-                    aria-label={t("settings.userSelectVisible")}
-                    checked={allPageRowsSelected}
-                    onChange={(event) => togglePageSelection(event.target.checked)}
-                  />
-                </TableHead>
-                <TableHead className="px-4">{t("userRightsOverviewUser")}</TableHead>
-                <TableHead className="px-4">{t("settings.userAccess")}</TableHead>
-                <TableHead className="px-4">{t("settings.status")}</TableHead>
-                <TableHead className="px-4">{t("settings.userSignInMethods")}</TableHead>
-                <TableHead className="px-4">{t("settings.userLastActive")}</TableHead>
-                <TableHead className="w-8" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageUsers.map((user) => (
-                <TableRow
-                  key={user.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => setSelectedUserId(user.id)}
-                >
-                  <TableCell className="px-4" onClick={(event) => event.stopPropagation()}>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <SkeletonList className="px-4" />
+          ) : visibleUsers.length === 0 ? (
+            <EmptyState
+              layout="inline"
+              icon={<Users aria-hidden="true" />}
+              action={
+                users.length === 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    <UserPlus aria-hidden="true" />
+                    {t("settings.userCreateFirst")}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {t(users.length === 0 ? "settings.usersEmpty" : "settings.usersNoMatch")}
+            </EmptyState>
+          ) : listView === "permissions" ? (
+            <UserPermissionOverview users={visibleUsers} onSelectUser={setSelectedUserId} />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10 px-4">
                     <input
                       type="checkbox"
                       className="size-4 accent-sky-600"
-                      aria-label={t("settings.userSelect", { name: user.displayLabel })}
-                      checked={selectedRowIds.has(user.id)}
-                      onChange={(event) => toggleRowSelection(user.id, event.target.checked)}
+                      aria-label={t("settings.userSelectVisible")}
+                      checked={allPageRowsSelected}
+                      onChange={(event) => togglePageSelection(event.target.checked)}
                     />
-                  </TableCell>
-                  <TableCell className="px-4">
-                    <button
-                      type="button"
-                      className="flex min-w-0 items-center gap-3 text-left outline-none"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedUserId(user.id);
-                      }}
-                    >
-                      <UserAvatar displayLabel={user.displayLabel} />
-                      <span className="grid min-w-0 gap-0.5">
-                        <span className="truncate font-medium">{user.displayLabel}</span>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {user.email ?? user.id}
-                        </span>
-                      </span>
-                    </button>
-                  </TableCell>
-                  <TableCell className="px-4">
-                    <Badge appearance="outline">
-                      {t(accessLevelLabel(rolesToAccessLevel(user.roles)))}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-4">
-                    <StatusBadge status={user.status} />
-                  </TableCell>
-                  <TableCell className="px-4 text-muted-foreground">
-                    {user.identities.length > 0
-                      ? distinctAuthSources(user.identities).join(", ")
-                      : t("settings.userSignInMethodsNone")}
-                  </TableCell>
-                  <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
-                    {user.lastAuthenticatedAt
-                      ? formatDateTime(user.lastAuthenticatedAt, locale)
-                      : t("settings.never")}
-                  </TableCell>
-                  <TableCell className="px-4 text-muted-foreground">
-                    <ChevronRight size={15} aria-hidden="true" />
-                  </TableCell>
+                  </TableHead>
+                  <TableHead className="px-4">{t("userRightsOverviewUser")}</TableHead>
+                  <TableHead className="px-4">{t("settings.userAccess")}</TableHead>
+                  <TableHead className="px-4">{t("settings.status")}</TableHead>
+                  <TableHead className="px-4">{t("settings.userSignInMethods")}</TableHead>
+                  <TableHead className="px-4">{t("settings.userLastActive")}</TableHead>
+                  <TableHead className="w-8" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              </TableHeader>
+              <TableBody>
+                {pageUsers.map((user) => (
+                  <TableRow
+                    key={user.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setSelectedUserId(user.id)}
+                  >
+                    <TableCell className="px-4" onClick={(event) => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-sky-600"
+                        aria-label={t("settings.userSelect", { name: user.displayLabel })}
+                        checked={selectedRowIds.has(user.id)}
+                        onChange={(event) => toggleRowSelection(user.id, event.target.checked)}
+                      />
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <button
+                        type="button"
+                        className="flex min-w-0 items-center gap-3 text-left outline-none"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedUserId(user.id);
+                        }}
+                      >
+                        <UserAvatar displayLabel={user.displayLabel} />
+                        <span className="grid min-w-0 gap-0.5">
+                          <span className="truncate font-medium">{user.displayLabel}</span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {user.email ?? user.id}
+                          </span>
+                        </span>
+                      </button>
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <Badge appearance="outline">
+                        {t(accessLevelLabel(rolesToAccessLevel(user.roles)))}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <StatusBadge status={user.status} />
+                    </TableCell>
+                    <TableCell className="px-4 text-muted-foreground">
+                      {user.identities.length > 0
+                        ? distinctAuthSources(user.identities).join(", ")
+                        : t("settings.userSignInMethodsNone")}
+                    </TableCell>
+                    <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
+                      {user.lastAuthenticatedAt
+                        ? formatDateTime(user.lastAuthenticatedAt, locale)
+                        : t("settings.never")}
+                    </TableCell>
+                    <TableCell className="px-4 text-muted-foreground">
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
 
-        {!loading && visibleUsers.length > 0 && listView === "users" ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
-            <div className="text-sm text-muted-foreground">
-              {t("settings.paginationRange", {
+          {!loading && visibleUsers.length > 0 && listView === "users" ? (
+            <Pagination
+              className="border-t px-4 py-3"
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              range={t("settings.paginationRange", {
                 from: pageStart + 1,
                 to: Math.min(pageStart + rowsPerPage, visibleUsers.length),
                 total: visibleUsers.length.toLocaleString(locale)
               })}
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                {t("settings.paginationRows")}
-                <Select
-                  className="h-8 w-20 px-2 text-sm"
-                  aria-label={t("settings.paginationRowsPerPage")}
-                  value={String(rowsPerPage)}
-                  onChange={(event) => setRowsPerPage(Number(event.target.value))}
-                >
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                </Select>
-              </label>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                className="size-8"
-                aria-label={t("settings.paginationPrevious")}
-                disabled={currentPage <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-              >
-                <ChevronLeft size={15} aria-hidden="true" />
-              </Button>
-              <span className="min-w-7 text-center text-sm font-semibold text-foreground">
-                {currentPage}
-              </span>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                className="size-8"
-                aria-label={t("settings.paginationNext")}
-                disabled={currentPage >= pageCount}
-                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-              >
-                <ChevronRight size={15} aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </Card>
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={setRowsPerPage}
+              labels={{
+                rows: t("settings.paginationRows"),
+                rowsPerPage: t("settings.paginationRowsPerPage"),
+                previous: t("settings.paginationPrevious"),
+                next: t("settings.paginationNext")
+              }}
+            />
+          ) : null}
+        </Card>
 
-      <CreateUserDialog
-        open={createOpen}
-        canManageSuperadminAccess={canManageSuperadminAccess}
-        mutating={mutating}
-        onClose={() => setCreateOpen(false)}
-        onCreateUser={onCreateUser}
-        onSendInvitation={onSendInvitation}
-        onCreated={(user) => {
-          setCreateOpen(false);
-          setSelectedUserId(user.id);
-        }}
-      />
-    </ControlPlanePage>
+        <CreateUserDialog
+          open={createOpen}
+          canManageSuperadminAccess={canManageSuperadminAccess}
+          mutating={mutating}
+          onClose={() => setCreateOpen(false)}
+          onCreateUser={onCreateUser}
+          onSendInvitation={onSendInvitation}
+          onCreated={(user) => {
+            setCreateOpen(false);
+            setSelectedUserId(user.id);
+          }}
+        />
+      </div>
+    </>
   );
 }
 

@@ -7,11 +7,15 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   Badge,
+  Banner,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   cn,
+  EmptyState,
+  PageHeader,
+  SkeletonPage,
   Table,
   TableBody,
   TableCell,
@@ -19,11 +23,18 @@ import {
   TableHeader,
   TableRow
 } from "@vivd-catalyst/ui";
-import { ControlPlanePage } from "./control-plane-page";
 import { formatDateTime } from "./locale-format";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 
-export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
+export function UsageView({
+  usage,
+  error
+}: {
+  /** Absent while the summary loads. */
+  usage: UsageSummary | undefined;
+  /** Why the summary could not be loaded. */
+  error?: string;
+}) {
   const i18n = useTranslation();
   const { t, locale } = i18n;
   const recentEvents = usage?.recentEvents ?? [];
@@ -33,186 +44,221 @@ export function UsageView({ usage }: { usage: UsageSummary | undefined }) {
       calls: (window?.modelCallCount ?? 0).toLocaleString(locale),
       tokens: (window?.totalTokens ?? 0).toLocaleString(locale)
     });
+  const header = (
+    <PageHeader
+      title={t("settings.usage")}
+      description={
+        usage
+          ? t("settings.usageSummary", {
+              calls: usage.currentMonth.modelCallCount.toLocaleString(locale),
+              tokens: usage.currentMonth.totalTokens.toLocaleString(locale)
+            })
+          : undefined
+      }
+    />
+  );
+  if (error) {
+    return (
+      <>
+        {header}
+        <Banner tone="danger">{error}</Banner>
+      </>
+    );
+  }
+  if (!usage) {
+    return (
+      <>
+        {header}
+        <SkeletonPage />
+      </>
+    );
+  }
+  // Nothing was ever recorded: one sentence, and no charts with empty axes.
+  if (usage.allTime.modelCallCount === 0 && recentEvents.length === 0) {
+    return (
+      <>
+        {header}
+        <EmptyState>{t("settings.usageMonthlyEmpty")}</EmptyState>
+      </>
+    );
+  }
   return (
-    <ControlPlanePage
-      title={t("administrationUsage")}
-      description={t("settings.usageSummary", {
-        calls: (usage?.currentMonth.modelCallCount ?? 0).toLocaleString(locale),
-        tokens: (usage?.currentMonth.totalTokens ?? 0).toLocaleString(locale)
-      })}
-    >
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <UsageMetric
-          icon={<DollarSign size={15} />}
-          label={t("settings.usageBillableMonth")}
-          value={formatBillableCost(usage?.currentMonth.cost, i18n)}
-          detail={callsAndTokens(usage?.currentMonth)}
+    <>
+      {header}
+      <div className="grid min-w-0 content-start gap-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <UsageMetric
+            icon={<DollarSign size={15} />}
+            label={t("settings.usageBillableMonth")}
+            value={formatBillableCost(usage?.currentMonth.cost, i18n)}
+            detail={callsAndTokens(usage?.currentMonth)}
+          />
+          <UsageMetric
+            icon={<DollarSign size={15} />}
+            label={t("settings.usageBillableToday")}
+            value={formatBillableCost(usage?.today.cost, i18n)}
+            detail={callsAndTokens(usage?.today)}
+          />
+          {showWebSearchCosts ? (
+            <UsageMetric
+              icon={<Search size={15} />}
+              label={t("settings.usageWebSearchBillable")}
+              value={formatWebSearchBillableCost(usage?.currentMonth.cost, i18n)}
+              detail={t("settings.usageSearchesMonthCount", {
+                count: (usage?.currentMonth.webSearchCallCount ?? 0).toLocaleString(locale)
+              })}
+            />
+          ) : (
+            <UsageMetric
+              icon={<Database size={15} />}
+              label={t("settings.usageTokensMonth")}
+              value={(usage?.currentMonth.totalTokens ?? 0).toLocaleString(locale)}
+            />
+          )}
+          <UsageMetric
+            icon={<DollarSign size={15} />}
+            label={t("settings.usageBillableAllTime")}
+            value={formatBillableCost(usage?.allTime.cost, i18n)}
+            detail={callsAndTokens(usage?.allTime)}
+          />
+        </div>
+
+        <SpendBudgetCard usage={usage} />
+
+        <DailyUsageCard
+          days={usage?.dailyUsage ?? []}
+          defaultMetric={usage?.allTime.cost.complete ? "cost" : "tokens"}
+          showWebSearchCosts={showWebSearchCosts}
         />
-        <UsageMetric
-          icon={<DollarSign size={15} />}
-          label={t("settings.usageBillableToday")}
-          value={formatBillableCost(usage?.today.cost, i18n)}
-          detail={callsAndTokens(usage?.today)}
+
+        <MonthlyHistoryCard
+          months={usage?.monthlyUsage ?? []}
+          showWebSearchCosts={showWebSearchCosts}
         />
+
         {showWebSearchCosts ? (
-          <UsageMetric
-            icon={<Search size={15} />}
-            label={t("settings.usageWebSearchBillable")}
-            value={formatWebSearchBillableCost(usage?.currentMonth.cost, i18n)}
-            detail={t("settings.usageSearchesMonthCount", {
-              count: (usage?.currentMonth.webSearchCallCount ?? 0).toLocaleString(locale)
-            })}
-          />
-        ) : (
-          <UsageMetric
-            icon={<Database size={15} />}
-            label={t("settings.usageTokensMonth")}
-            value={(usage?.currentMonth.totalTokens ?? 0).toLocaleString(locale)}
-          />
-        )}
-        <UsageMetric
-          icon={<DollarSign size={15} />}
-          label={t("settings.usageBillableAllTime")}
-          value={formatBillableCost(usage?.allTime.cost, i18n)}
-          detail={callsAndTokens(usage?.allTime)}
-        />
-      </div>
+          <Card data-testid="web-search-usage">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-base">{t("settings.usageWebSearchTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-2">
+              <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <UsageStat
+                  icon={<Search size={15} />}
+                  label={t("settings.usageSearchesToday")}
+                  value={usage?.today.webSearchCallCount ?? 0}
+                />
+                <UsageStat
+                  icon={<Search size={15} />}
+                  label={t("settings.usageSearchesMonth")}
+                  value={usage?.currentMonth.webSearchCallCount ?? 0}
+                />
+                <UsageStat
+                  icon={<DollarSign size={15} />}
+                  label={t("settings.usageSearchCostToday")}
+                  value={formatWebSearchBillableCost(usage?.today.cost, i18n)}
+                />
+                <UsageStat
+                  icon={<DollarSign size={15} />}
+                  label={t("settings.usageSearchCostMonth")}
+                  value={formatWebSearchBillableCost(usage?.currentMonth.cost, i18n)}
+                />
+              </dl>
+            </CardContent>
+          </Card>
+        ) : null}
 
-      <SpendBudgetCard usage={usage} />
-
-      <DailyUsageCard
-        days={usage?.dailyUsage ?? []}
-        defaultMetric={usage?.allTime.cost.complete ? "cost" : "tokens"}
-        showWebSearchCosts={showWebSearchCosts}
-      />
-
-      <MonthlyHistoryCard
-        months={usage?.monthlyUsage ?? []}
-        showWebSearchCosts={showWebSearchCosts}
-      />
-
-      {showWebSearchCosts ? (
-        <Card data-testid="web-search-usage">
+        <Card data-testid="configured-safeguards">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">{t("settings.usageWebSearchTitle")}</CardTitle>
+            <CardTitle className="text-base">{t("settings.usageSafeguards")}</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-2">
-            <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <dl className="grid gap-3 md:grid-cols-3">
               <UsageStat
-                icon={<Search size={15} />}
-                label={t("settings.usageSearchesToday")}
-                value={usage?.today.webSearchCallCount ?? 0}
+                icon={<ShieldCheck size={15} />}
+                label={t("settings.usageSafeguardCallsPerDay")}
+                value={usage?.safeguards.modelCallsPerDay}
               />
               <UsageStat
-                icon={<Search size={15} />}
-                label={t("settings.usageSearchesMonth")}
-                value={usage?.currentMonth.webSearchCallCount ?? 0}
+                icon={<ShieldCheck size={15} />}
+                label={t("settings.usageSafeguardTokensPerDay")}
+                value={usage?.safeguards.tokensPerDay}
               />
               <UsageStat
-                icon={<DollarSign size={15} />}
-                label={t("settings.usageSearchCostToday")}
-                value={formatWebSearchBillableCost(usage?.today.cost, i18n)}
-              />
-              <UsageStat
-                icon={<DollarSign size={15} />}
-                label={t("settings.usageSearchCostMonth")}
-                value={formatWebSearchBillableCost(usage?.currentMonth.cost, i18n)}
+                icon={<ShieldCheck size={15} />}
+                label={t("settings.usageSafeguardTokensPerMonth")}
+                value={usage?.safeguards.tokensPerMonth}
               />
             </dl>
           </CardContent>
         </Card>
-      ) : null}
 
-      <Card data-testid="configured-safeguards">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">{t("settings.usageSafeguards")}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-2">
-          <dl className="grid gap-3 md:grid-cols-3">
-            <UsageStat
-              icon={<ShieldCheck size={15} />}
-              label={t("settings.usageSafeguardCallsPerDay")}
-              value={usage?.safeguards.modelCallsPerDay}
-            />
-            <UsageStat
-              icon={<ShieldCheck size={15} />}
-              label={t("settings.usageSafeguardTokensPerDay")}
-              value={usage?.safeguards.tokensPerDay}
-            />
-            <UsageStat
-              icon={<ShieldCheck size={15} />}
-              label={t("settings.usageSafeguardTokensPerMonth")}
-              value={usage?.safeguards.tokensPerMonth}
-            />
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base">{t("settings.usageRecentTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-1">
-          {recentEvents.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("settings.time")}</TableHead>
-                  <TableHead>{t("settings.usageModel")}</TableHead>
-                  <TableHead>{t("settings.usageTokens")}</TableHead>
-                  <TableHead>{t("settings.usageCachedInput")}</TableHead>
-                  <TableHead>{t("settings.usageBillable")}</TableHead>
-                  {showWebSearchCosts ? (
-                    <TableHead>{t("settings.usageWebSearch")}</TableHead>
-                  ) : null}
-                  {showWebSearchCosts ? (
-                    <TableHead>{t("settings.usageSearchBillable")}</TableHead>
-                  ) : null}
-                  <TableHead>{t("settings.usageSource")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentEvents.map((event) => (
-                  <TableRow key={event.id}>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatDateTime(event.createdAt, locale)}
-                    </TableCell>
-                    <TableCell className="font-medium break-words">
-                      {event.billedAsFast
-                        ? t("settings.usageModelFast", { model: event.model })
-                        : event.model}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {event.totalTokens.toLocaleString(locale)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {event.cachedInputTokens?.toLocaleString(locale) ??
-                        t("settings.usageUnknown")}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {formatBillableCost(event.cost, i18n)}
-                    </TableCell>
+        <Card>
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base">{t("settings.usageRecentTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-1">
+            {recentEvents.length ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("settings.time")}</TableHead>
+                    <TableHead>{t("settings.usageModel")}</TableHead>
+                    <TableHead>{t("settings.usageTokens")}</TableHead>
+                    <TableHead>{t("settings.usageCachedInput")}</TableHead>
+                    <TableHead>{t("settings.usageBillable")}</TableHead>
                     {showWebSearchCosts ? (
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {event.webSearchCallCount.toLocaleString(locale)}
-                      </TableCell>
+                      <TableHead>{t("settings.usageWebSearch")}</TableHead>
                     ) : null}
                     {showWebSearchCosts ? (
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatWebSearchBillableCost(event.cost, i18n)}
-                      </TableCell>
+                      <TableHead>{t("settings.usageSearchBillable")}</TableHead>
                     ) : null}
-                    <TableCell className="text-muted-foreground">{event.source}</TableCell>
+                    <TableHead>{t("settings.usageSource")}</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="pt-1 text-sm text-muted-foreground">{t("settings.usageRecentEmpty")}</p>
-          )}
-        </CardContent>
-      </Card>
-    </ControlPlanePage>
+                </TableHeader>
+                <TableBody>
+                  {recentEvents.map((event) => (
+                    <TableRow key={event.id}>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatDateTime(event.createdAt, locale)}
+                      </TableCell>
+                      <TableCell className="font-medium break-words">
+                        {event.billedAsFast
+                          ? t("settings.usageModelFast", { model: event.model })
+                          : event.model}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {event.totalTokens.toLocaleString(locale)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {event.cachedInputTokens?.toLocaleString(locale) ??
+                          t("settings.usageUnknown")}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatBillableCost(event.cost, i18n)}
+                      </TableCell>
+                      {showWebSearchCosts ? (
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {event.webSearchCallCount.toLocaleString(locale)}
+                        </TableCell>
+                      ) : null}
+                      {showWebSearchCosts ? (
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {formatWebSearchBillableCost(event.cost, i18n)}
+                        </TableCell>
+                      ) : null}
+                      <TableCell className="text-muted-foreground">{event.source}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="pt-1 text-sm text-muted-foreground">{t("settings.usageRecentEmpty")}</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </>
   );
 }
 

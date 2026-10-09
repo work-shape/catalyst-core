@@ -1,6 +1,5 @@
-import { useState, type ComponentType } from "react";
+import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ApiClient, ApiUser, SafeConfig } from "@vivd-catalyst/api-client";
 import type { ThemeMode } from "@vivd-catalyst/ui/theme";
 import { ChatWorkspace } from "./chat-workspace";
 import {
@@ -8,46 +7,22 @@ import {
   ToolDisplayWidgetProvider,
   type ToolDisplayWidgetRegistry
 } from "./domain-ui-widgets";
+import type { ChatShellAdministration } from "./settings/page-definition";
 import {
   defaultWorkspaceRoute,
-  type SuperadminRouteTab,
   type WorkspaceRoute,
   type WorkspaceRouteChangeOptions
 } from "./workspace/workspace-route";
-
-export interface ChatShellAdminPanel {
-  resolveRoute(input: ChatShellAdminRouteInput): ChatShellAdminRouteState;
-  Panel: ComponentType<ChatShellAdminPanelInput>;
-}
-
-export interface ChatShellAdminRouteInput {
-  user: ApiUser | undefined;
-  configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
-  requestedTab: SuperadminRouteTab | undefined;
-}
-
-export interface ChatShellAdminRouteState {
-  canView: boolean;
-  pending: boolean;
-  selectedTab: SuperadminRouteTab | undefined;
-}
-
-export interface ChatShellAdminPanelInput {
-  apiBaseUrl: string;
-  authScope: string;
-  client: ApiClient;
-  user: ApiUser;
-  configAssetManagement: SafeConfig["features"]["configAssets"] | undefined;
-  userInvitationsEnabled: boolean;
-  selectedTab: SuperadminRouteTab;
-  onSelectTab(tab: SuperadminRouteTab): void;
-}
 
 export interface ChatShellProps {
   apiBaseUrl: string;
   token?: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
-  adminPanel?: ChatShellAdminPanel;
+  /**
+   * The administration this host ships: the Instance pages of Settings and the Build page,
+   * from `@vivd-catalyst/chat-ui/admin`. Without it the shell has neither.
+   */
+  administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
   manageDocumentTitle?: boolean;
   /**

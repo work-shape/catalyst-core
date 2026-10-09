@@ -58,7 +58,7 @@ export function ChatWorkspace({
   apiBaseUrl,
   token,
   getToken,
-  adminPanel,
+  administration,
   manageDocumentTitle,
   onThemeModeChange,
   className,
@@ -76,7 +76,7 @@ export function ChatWorkspace({
       onRouteChange={onRouteChange}
     >
       <ChatWorkspaceContent
-        adminPanel={adminPanel}
+        administration={administration}
         manageDocumentTitle={manageDocumentTitle}
         onThemeModeChange={onThemeModeChange}
         className={className}
@@ -87,19 +87,19 @@ export function ChatWorkspace({
 }
 
 function ChatWorkspaceContent({
-  adminPanel,
+  administration,
   manageDocumentTitle,
   onThemeModeChange,
   className,
   collaborationWorkspacesAvailable
 }: Pick<
   ChatWorkspaceProps,
-  "adminPanel" | "manageDocumentTitle" | "onThemeModeChange" | "className"
+  "administration" | "manageDocumentTitle" | "onThemeModeChange" | "className"
 > & {
   collaborationWorkspacesAvailable: boolean;
 }) {
   const model = useWorkspaceChatModel({
-    adminPanel,
+    administration,
     manageDocumentTitle,
     collaborationWorkspacesAvailable
   });
@@ -233,7 +233,7 @@ function ChatWorkspaceContent({
       loadFailed={collaborationWorkspace.loadFailed}
       clientBrandingHeader={<ClientBrandingHeader config={model.config.config} />}
       onSelectCollaborationWorkspace={collaborationWorkspace.selectCollaborationWorkspace}
-      onOpenCollaborationWorkspaceSettings={collaborationWorkspace.openSettingsDialog}
+      onOpenCollaborationWorkspaceSettings={collaborationWorkspace.openSettings}
       onBrowseCollaborationWorkspaces={collaborationWorkspace.openBrowseDialog}
       onCreateCollaborationWorkspace={collaborationWorkspace.openCreateDialog}
     />
@@ -271,6 +271,7 @@ function ChatWorkspaceContent({
               conversations={model.conversationRail.conversations}
               selectedConversationId={model.conversationRail.selectedConversationId}
               canViewAdministration={model.conversationRail.canViewAdministration}
+              canViewBuild={model.controlPlane.canViewBuild}
               approvals={approvals}
               view={model.conversationRail.view}
               creatingConversation={model.conversationRail.creatingConversation}
@@ -308,7 +309,6 @@ function ChatWorkspaceContent({
             apiBaseUrl={model.auth.apiBaseUrl}
             authScope={WORKSPACE_AUTH_SCOPE}
             client={chat.client}
-            currentUserId={model.auth.user.id}
             userLabel={userLabel}
             collaborationWorkspaces={collaborationWorkspace.collaborationWorkspaces}
             activeCollaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
@@ -316,13 +316,11 @@ function ChatWorkspaceContent({
             onClose={collaborationWorkspace.closeDialog}
             onCollaborationWorkspaceCreated={collaborationWorkspace.selectCollaborationWorkspace}
             onConversationMoved={collaborationWorkspace.conversationMoved}
-            onCollaborationWorkspaceDeleted={collaborationWorkspace.collaborationWorkspaceDeleted}
           />
         ) : null}
 
         <ApprovalRevisionHostProvider value={model.approvalRevision}>
           <ControlPlaneRoutes
-            adminPanel={adminPanel}
             controlPlane={model.controlPlane}
             approvalsView={
               approvals && model.route.view === "approvals" ? (

@@ -74,7 +74,7 @@ function formatEuro(amount: number): string {
 
 function createWindowSummary(billableCostMicros: number): UsageSummary["today"] {
   return {
-    modelCallCount: 0,
+    modelCallCount: 1,
     inputTokens: 0,
     cachedInputTokens: 0,
     outputTokens: 0,

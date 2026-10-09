@@ -1,6 +1,6 @@
 import { areaOfRoute, type WorkspaceRoute, type WorkspaceRouteView } from "../routes";
 
-export type { SuperadminRouteTab, WorkspaceRoute, WorkspaceRouteView } from "../routes";
+export type { WorkspaceRoute, WorkspaceRouteView } from "../routes";
 
 export interface WorkspaceRouteChangeOptions {
   replace?: boolean;

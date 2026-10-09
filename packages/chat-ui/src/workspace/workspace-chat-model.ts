@@ -46,7 +46,7 @@ import {
 } from "../collaboration-workspace/collaboration-workspace-model";
 import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
-import type { ChatShellAdminPanel } from "../chat-shell";
+import type { ChatShellAdministration } from "../settings/page-definition";
 import { useControlPlaneModel, type ControlPlaneModel } from "../control-plane/control-plane-model";
 import { clearRunCursors } from "../conversation/run-connection-manager";
 import {
@@ -161,7 +161,7 @@ export function activeAgentNameFor(
 }
 
 export interface WorkspaceChatModelInput {
-  adminPanel: ChatShellAdminPanel | undefined;
+  administration: ChatShellAdministration | undefined;
   manageDocumentTitle: boolean | undefined;
   /** False for embedded token sessions, which stay fixed-context. */
   collaborationWorkspacesAvailable: boolean;
@@ -310,7 +310,7 @@ export interface ToolDisplayModel {
 }
 
 export function useWorkspaceChatModel({
-  adminPanel,
+  administration,
   manageDocumentTitle,
   collaborationWorkspacesAvailable
 }: WorkspaceChatModelInput): WorkspaceChatModel {
@@ -385,7 +385,8 @@ export function useWorkspaceChatModel({
     legacyConversationUnavailable:
       route.kind === "legacy-conversation" && Boolean(threadQuery.error),
     goToCollaborationWorkspace: routeState.goToDefaultChat,
-    showConversation: routeState.showConversation
+    showConversation: routeState.showConversation,
+    showSettings: routeState.showSettings
   });
   const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
   const conversationsQuery = useWorkspaceConversationsQuery({
@@ -589,7 +590,8 @@ export function useWorkspaceChatModel({
   });
   const supportedLocales =
     config?.localization.supportedLocales ?? preferences.supportedFallbackLocales;
-  const { resolvedThemeMode, theme, toggleTheme } = useWorkspaceTheme(config?.ui);
+  const { resolvedThemeMode, theme, toggleTheme, themePreference, selectThemePreference } =
+    useWorkspaceTheme(config?.ui);
   const activeAgentName = activeAgentNameFor(config, selectedAgentName);
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
@@ -605,10 +607,16 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
-    adminPanel,
+    administration,
     user: meQuery.data,
-    configAssetManagement: config?.features.configAssets,
-    userInvitationsEnabled: config?.features.userInvitations.enabled ?? false,
+    config,
+    collaborationWorkspaces: collaborationWorkspace.collaborationWorkspaces,
+    // Without workspaces in this session there is no list to wait for.
+    collaborationWorkspacesReady:
+      !collaborationWorkspacesAvailable || !collaborationWorkspace.loading,
+    settingsCollaborationWorkspace: collaborationWorkspace.settingsCollaborationWorkspace,
+    selectSettingsCollaborationWorkspace:
+      collaborationWorkspace.selectSettingsCollaborationWorkspace,
     isAuthenticated,
     route,
     view,
@@ -617,9 +625,12 @@ export function useWorkspaceChatModel({
     selectLocale: preferences.selectLocale,
     showContextIndicator: preferences.showContextIndicator,
     setShowContextIndicator: preferences.setShowContextIndicator,
+    themePreference,
+    selectThemePreference,
     goToDefaultChat: goToActiveCollaborationWorkspaceChat,
+    showRoute: routeState.showRoute,
     onAccountDeleted: resetAuthenticatedWorkspaceState,
-    showSuperadmin: routeState.showSuperadmin
+    onCollaborationWorkspaceDeleted: collaborationWorkspace.collaborationWorkspaceDeleted
   });
   const canViewAdministration = controlPlane.canViewAdministration;
   const approvalPendingCountQuery = useApprovalPendingCountQuery({
@@ -860,7 +871,7 @@ export function useWorkspaceChatModel({
       sessionRetrying: meQuery.isFetching,
       signingOut: signOutMutation.isPending,
       signOut: () => signOutMutation.mutate(),
-      openSettings: routeState.showSettings,
+      openSettings: () => routeState.showSettings(),
       invalidateCurrentUser: workspaceCache.invalidateCurrentUser,
       retryCurrentUser: () => void meQuery.refetch()
     },

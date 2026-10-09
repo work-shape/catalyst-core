@@ -1,7 +1,15 @@
-import { ChevronLeft, ClipboardCheck, PanelLeft, Plus, Search, Shield } from "lucide-react";
+import {
+  Blocks,
+  ChevronLeft,
+  ClipboardCheck,
+  PanelLeft,
+  Plus,
+  Search,
+  Settings
+} from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
-import { Button, cn, CountBadge, Input } from "@vivd-catalyst/ui";
+import { Button, cn, CountBadge, Input, NavItem } from "@vivd-catalyst/ui";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -15,6 +23,7 @@ export function WorkspaceRail({
   conversations,
   selectedConversationId,
   canViewAdministration,
+  canViewBuild = false,
   approvals,
   view,
   creatingConversation,
@@ -35,6 +44,8 @@ export function WorkspaceRail({
   conversations: ConversationListItem[];
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
+  /** The viewer may open Build: the rail shows its row. */
+  canViewBuild?: boolean;
   /** Present only for users who may review Approval Requests. */
   approvals?: { pendingCount: number };
   view: WorkspaceView;
@@ -67,12 +78,12 @@ export function WorkspaceRail({
       type="button"
       variant="ghost"
       size="icon"
-      className={view === "superadmin" ? "bg-sidebar-accent text-primary" : "text-muted-foreground"}
-      aria-label={view === "superadmin" ? t("returnToChat") : t("openSuperadminPanel")}
-      title={view === "superadmin" ? t("returnToChat") : t("openSuperadminPanel")}
-      onClick={() => onViewChange(view === "superadmin" ? "chat" : "superadmin")}
+      className={view === "settings" ? "bg-sidebar-accent text-primary" : "text-muted-foreground"}
+      aria-label={view === "settings" ? t("returnToChat") : t("settings")}
+      title={view === "settings" ? t("returnToChat") : t("settings")}
+      onClick={() => onViewChange(view === "settings" ? "chat" : "settings")}
     >
-      <Shield size={16} aria-hidden="true" />
+      <Settings size={16} aria-hidden="true" />
     </Button>
   ) : null;
   const approvalsLabel =
@@ -243,15 +254,29 @@ export function WorkspaceRail({
         )}
       </nav>
 
-      <footer className="-mx-5 flex min-w-0 items-center justify-between gap-2 px-5 pt-4">
-        {userMenu}
-        {approvalsButton || administrationButton ? (
-          <div className="flex shrink-0 items-center gap-1">
-            {approvalsButton}
-            {administrationButton}
+      {/* One row of the rail: Build, set apart by a group gap, above the account row. */}
+      <div className="grid min-w-0">
+        {canViewBuild ? (
+          <div className="-mx-2 pt-4">
+            <NavItem
+              icon={<Blocks aria-hidden="true" />}
+              selected={view === "build"}
+              onClick={() => onViewChange("build")}
+            >
+              {t("nav.build")}
+            </NavItem>
           </div>
         ) : null}
-      </footer>
+        <footer className="-mx-5 flex min-w-0 items-center justify-between gap-2 px-5 pt-4">
+          {userMenu}
+          {approvalsButton || administrationButton ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {approvalsButton}
+              {administrationButton}
+            </div>
+          ) : null}
+        </footer>
+      </div>
     </aside>
   );
 }

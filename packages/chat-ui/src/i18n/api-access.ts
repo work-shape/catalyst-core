@@ -29,7 +29,6 @@ export const apiAccess = defineTranslations({
     apiAccessInheritsGrants: "Inherits principal grants",
     apiAccessKeyPrefix: "Key prefix",
     apiAccessLastUsed: "Last used",
-    apiAccessLoading: "Loading API access…",
     apiAccessName: "Name",
     apiAccessNever: "Never",
     apiAccessNeverExpires: "Never expires",
@@ -51,8 +50,7 @@ export const apiAccess = defineTranslations({
     apiAccessServerUrl: "Server URL",
     apiAccessServicePrincipals: "Service principals",
     apiAccessServicePrincipalsDescription: "Machine identities are managed separately from users.",
-    apiAccessStatus: "Status",
-    apiAccessTitle: "API access"
+    apiAccessStatus: "Status"
   },
   de: {
     apiAccessActive: "Aktiv",
@@ -85,7 +83,6 @@ export const apiAccess = defineTranslations({
     apiAccessInheritsGrants: "Übernimmt Principal-Berechtigungen",
     apiAccessKeyPrefix: "Schlüsselpräfix",
     apiAccessLastUsed: "Zuletzt verwendet",
-    apiAccessLoading: "API-Zugriff wird geladen…",
     apiAccessName: "Name",
     apiAccessNever: "Nie",
     apiAccessNeverExpires: "Läuft nie ab",
@@ -112,7 +109,6 @@ export const apiAccess = defineTranslations({
     apiAccessServicePrincipals: "Service Principals",
     apiAccessServicePrincipalsDescription:
       "Maschinenidentitäten werden getrennt von Benutzern verwaltet.",
-    apiAccessStatus: "Status",
-    apiAccessTitle: "API-Zugriff"
+    apiAccessStatus: "Status"
   }
 });

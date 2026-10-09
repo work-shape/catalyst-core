@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider } from "./chat-ui-render-harness";
 import { agentChipDisplayFor, AgentList } from "../packages/chat-ui/src/workspace/agent-selector";
 import { WorkspaceChrome } from "../packages/chat-ui/src/workspace/workspace-chrome";
 

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider } from "./chat-ui-render-harness";
 import { MarkdownArtifact } from "../packages/chat-ui/src/markdown-text";
 
 describe("chat UI Markdown rendering", () => {

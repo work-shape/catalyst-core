@@ -1,4 +1,4 @@
-import { Check, Clipboard, KeyRound, Pencil, Plus, ShieldCheck } from "lucide-react";
+import { KeyRound, Pencil, Plus, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
   ApiCredential,
@@ -13,15 +13,18 @@ import type {
 } from "@vivd-catalyst/api-client";
 import {
   Badge,
+  Banner,
   Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   Dialog,
-  InlineError,
+  EmptyState,
   Input,
+  PageHeader,
   Select,
+  SkeletonList,
   Table,
   TableBody,
   TableCell,
@@ -38,11 +41,9 @@ import {
   isCredentialActive,
   optionalTrimmedValue,
   scopesAllowedByPermissions,
-  type RecordedSecretCopy,
-  type SecretCopyState,
-  type SecretField
+  type RecordedSecretCopy
 } from "./api-access-model";
-import { ControlPlanePage } from "./control-plane-page";
+import { copySecretField, SecretFields, type RevealedSecret } from "./api-access-secret-fields";
 import { useTranslation } from "../i18n";
 
 export interface ApiAccessPanelInput {
@@ -108,164 +109,180 @@ export function ApiAccessPanel({
   }, [canMutate]);
 
   return (
-    <ControlPlanePage
-      title={t("apiAccessTitle")}
-      description={t("apiAccessDescription")}
-      actions={
-        canMutate ? (
-          <Button size="sm" onClick={() => setPrincipalDialog("create")}>
-            <Plus aria-hidden="true" />
-            {t("apiAccessCreatePrincipal")}
-          </Button>
-        ) : undefined
-      }
-    >
-      {error || actionError ? <InlineError>{actionError ?? error}</InlineError> : null}
+    <>
+      <PageHeader
+        title={t("settings.apiAccess")}
+        description={t("apiAccessDescription")}
+        primaryAction={
+          canMutate ? (
+            <Button onClick={() => setPrincipalDialog("create")}>
+              <Plus aria-hidden="true" />
+              {t("apiAccessCreatePrincipal")}
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="grid min-w-0 content-start gap-4">
+        {error || actionError ? <Banner tone="danger">{actionError ?? error}</Banner> : null}
 
-      <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(17rem,0.72fr)_minmax(28rem,1.28fr)]">
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base">{t("apiAccessServicePrincipals")}</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              {t("apiAccessServicePrincipalsDescription")}
-            </p>
-          </CardHeader>
-          <CardContent className="p-2 pt-1">
-            {loading ? (
-              <p className="px-2 py-4 text-sm text-muted-foreground">{t("apiAccessLoading")}</p>
-            ) : principals.length === 0 ? (
-              <div className="grid justify-items-center gap-2 px-4 py-8 text-center">
-                <ShieldCheck className="text-muted-foreground" aria-hidden="true" />
-                <p className="text-sm font-medium">{t("apiAccessEmpty")}</p>
-                <p className="max-w-sm text-xs text-muted-foreground">
-                  {t("apiAccessEmptyDescription")}
-                </p>
-              </div>
-            ) : (
-              <ul className="grid gap-1">
-                {principals.map((detail) => {
-                  const selected = selectedPrincipal?.principal.id === detail.principal.id;
-                  return (
-                    <li key={detail.principal.id}>
-                      <button
-                        type="button"
-                        aria-current={selected ? "page" : undefined}
-                        className={`grid w-full gap-1 rounded-md px-3 py-2.5 text-left transition-colors ${selected ? "bg-accent" : "hover:bg-muted/60"}`}
-                        onClick={() => setSelectedPrincipalId(detail.principal.id)}
+        <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(17rem,0.72fr)_minmax(28rem,1.28fr)]">
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-base">{t("apiAccessServicePrincipals")}</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {t("apiAccessServicePrincipalsDescription")}
+              </p>
+            </CardHeader>
+            <CardContent className="p-2 pt-1">
+              {loading ? (
+                <SkeletonList rows={3} className="px-2" />
+              ) : principals.length === 0 ? (
+                <EmptyState
+                  layout="inline"
+                  icon={<ShieldCheck aria-hidden="true" />}
+                  action={
+                    canMutate ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPrincipalDialog("create")}
                       >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium">
-                            {detail.principal.displayLabel}
+                        <Plus aria-hidden="true" />
+                        {t("apiAccessCreatePrincipal")}
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  {t("apiAccessEmpty")} {t("apiAccessEmptyDescription")}
+                </EmptyState>
+              ) : (
+                <ul className="grid gap-1">
+                  {principals.map((detail) => {
+                    const selected = selectedPrincipal?.principal.id === detail.principal.id;
+                    return (
+                      <li key={detail.principal.id}>
+                        <button
+                          type="button"
+                          aria-current={selected ? "page" : undefined}
+                          className={`grid w-full gap-1 rounded-md px-3 py-2.5 text-left transition-colors ${selected ? "bg-accent" : "hover:bg-muted/60"}`}
+                          onClick={() => setSelectedPrincipalId(detail.principal.id)}
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-medium">
+                              {detail.principal.displayLabel}
+                            </span>
+                            <Badge
+                              tone={detail.principal.status === "active" ? "accent" : "neutral"}
+                            >
+                              {detail.principal.status === "active"
+                                ? t("apiAccessActive")
+                                : t("apiAccessDisabled")}
+                            </Badge>
                           </span>
-                          <Badge tone={detail.principal.status === "active" ? "accent" : "neutral"}>
-                            {detail.principal.status === "active"
-                              ? t("apiAccessActive")
-                              : t("apiAccessDisabled")}
-                          </Badge>
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {detail.credentials.length}{" "}
-                          {detail.credentials.length === 1
-                            ? t("apiAccessCredential")
-                            : t("apiAccessCredentials")}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                          <span className="text-xs text-muted-foreground">
+                            {detail.credentials.length}{" "}
+                            {detail.credentials.length === 1
+                              ? t("apiAccessCredential")
+                              : t("apiAccessCredentials")}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
 
-        {selectedPrincipal ? (
-          <PrincipalDetail
-            detail={selectedPrincipal}
-            mutating={mutating}
-            canMutate={canMutate}
-            onEdit={() => setPrincipalDialog("edit")}
-            onCreateCredential={() => setCredentialDialogOpen(true)}
-            onRevokeCredential={setCredentialToRevoke}
+          {selectedPrincipal ? (
+            <PrincipalDetail
+              detail={selectedPrincipal}
+              mutating={mutating}
+              canMutate={canMutate}
+              onEdit={() => setPrincipalDialog("edit")}
+              onCreateCredential={() => setCredentialDialogOpen(true)}
+              onRevokeCredential={setCredentialToRevoke}
+            />
+          ) : null}
+        </div>
+
+        {principalDialog && canMutate ? (
+          <PrincipalDialog
+            mode={principalDialog}
+            detail={principalDialog === "edit" ? selectedPrincipal : undefined}
+            pending={mutating}
+            onClose={() => setPrincipalDialog(undefined)}
+            onSubmit={async (input) => {
+              setActionError(undefined);
+              try {
+                const detail =
+                  principalDialog === "edit" && selectedPrincipal
+                    ? await onUpdatePrincipal(selectedPrincipal.principal.id, input)
+                    : await onCreatePrincipal(input as CreateServicePrincipalRequest);
+                setSelectedPrincipalId(detail.principal.id);
+                setPrincipalDialog(undefined);
+              } catch (caught) {
+                setActionError(errorMessage(caught, t("settings.requestFailed")));
+              }
+            }}
           />
         ) : null}
+
+        {credentialDialogOpen && canMutate ? (
+          <CredentialDialog
+            open={credentialDialogOpen}
+            detail={selectedPrincipal}
+            pending={mutating}
+            onClose={() => setCredentialDialogOpen(false)}
+            onSubmit={async (input) => {
+              if (!selectedPrincipal) return;
+              setActionError(undefined);
+              try {
+                await onCreateCredential(selectedPrincipal.principal.id, input);
+                setCredentialDialogOpen(false);
+              } catch (caught) {
+                setActionError(errorMessage(caught, t("settings.requestFailed")));
+              }
+            }}
+          />
+        ) : null}
+
+        {canMutate && revealedCredential ? (
+          <SecretDialog secret={revealedCredential} onClose={onClearRevealedCredential} />
+        ) : null}
+
+        {credentialToRevoke && canMutate ? (
+          <Dialog
+            open={Boolean(credentialToRevoke)}
+            title={t("apiAccessRevokeCredential")}
+            onClose={() => setCredentialToRevoke(undefined)}
+          >
+            <p className="text-sm text-muted-foreground">{t("apiAccessRevokeDescription")}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCredentialToRevoke(undefined)}>
+                {t("cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                disabled={mutating}
+                onClick={async () => {
+                  if (!credentialToRevoke) return;
+                  setActionError(undefined);
+                  try {
+                    await onRevokeCredential(credentialToRevoke.id);
+                    setCredentialToRevoke(undefined);
+                  } catch (caught) {
+                    setActionError(errorMessage(caught, t("settings.requestFailed")));
+                  }
+                }}
+              >
+                {t("apiAccessRevoke")}
+              </Button>
+            </div>
+          </Dialog>
+        ) : null}
       </div>
-
-      {principalDialog && canMutate ? (
-        <PrincipalDialog
-          mode={principalDialog}
-          detail={principalDialog === "edit" ? selectedPrincipal : undefined}
-          pending={mutating}
-          onClose={() => setPrincipalDialog(undefined)}
-          onSubmit={async (input) => {
-            setActionError(undefined);
-            try {
-              const detail =
-                principalDialog === "edit" && selectedPrincipal
-                  ? await onUpdatePrincipal(selectedPrincipal.principal.id, input)
-                  : await onCreatePrincipal(input as CreateServicePrincipalRequest);
-              setSelectedPrincipalId(detail.principal.id);
-              setPrincipalDialog(undefined);
-            } catch (caught) {
-              setActionError(errorMessage(caught, t("settings.requestFailed")));
-            }
-          }}
-        />
-      ) : null}
-
-      {credentialDialogOpen && canMutate ? (
-        <CredentialDialog
-          open={credentialDialogOpen}
-          detail={selectedPrincipal}
-          pending={mutating}
-          onClose={() => setCredentialDialogOpen(false)}
-          onSubmit={async (input) => {
-            if (!selectedPrincipal) return;
-            setActionError(undefined);
-            try {
-              await onCreateCredential(selectedPrincipal.principal.id, input);
-              setCredentialDialogOpen(false);
-            } catch (caught) {
-              setActionError(errorMessage(caught, t("settings.requestFailed")));
-            }
-          }}
-        />
-      ) : null}
-
-      {canMutate && revealedCredential ? (
-        <SecretDialog secret={revealedCredential} onClose={onClearRevealedCredential} />
-      ) : null}
-
-      {credentialToRevoke && canMutate ? (
-        <Dialog
-          open={Boolean(credentialToRevoke)}
-          title={t("apiAccessRevokeCredential")}
-          onClose={() => setCredentialToRevoke(undefined)}
-        >
-          <p className="text-sm text-muted-foreground">{t("apiAccessRevokeDescription")}</p>
-          <div className="mt-5 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setCredentialToRevoke(undefined)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              variant="danger"
-              disabled={mutating}
-              onClick={async () => {
-                if (!credentialToRevoke) return;
-                setActionError(undefined);
-                try {
-                  await onRevokeCredential(credentialToRevoke.id);
-                  setCredentialToRevoke(undefined);
-                } catch (caught) {
-                  setActionError(errorMessage(caught, t("settings.requestFailed")));
-                }
-              }}
-            >
-              {t("apiAccessRevoke")}
-            </Button>
-          </div>
-        </Dialog>
-      ) : null}
-    </ControlPlanePage>
+    </>
   );
 }
 
@@ -331,9 +348,7 @@ function PrincipalDetail({
             ) : null}
           </div>
           {credentials.length === 0 ? (
-            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-              {t("apiAccessNoCredentials")}
-            </p>
+            <EmptyState layout="inline">{t("apiAccessNoCredentials")}</EmptyState>
           ) : (
             <Table>
               <TableHeader>
@@ -653,25 +668,6 @@ function CredentialForm({
   );
 }
 
-interface RevealedSecret {
-  secret: string;
-  serverUrl: string;
-  credentialName: string;
-}
-
-/** Copies one credential field and reports the copied field, or that copying failed. */
-export function copySecretField(
-  field: SecretField,
-  value: string,
-  onResult: (state: SecretCopyState) => void,
-  write: (value: string) => Promise<void> = copyText
-): void {
-  write(value).then(
-    () => onResult({ copied: field }),
-    () => onResult({ failed: true })
-  );
-}
-
 function SecretDialog({ secret, onClose }: { secret?: RevealedSecret; onClose(): void }) {
   const { t } = useTranslation();
   const [recorded, setRecorded] = useState<RecordedSecretCopy>();
@@ -688,82 +684,6 @@ function SecretDialog({ secret, onClose }: { secret?: RevealedSecret; onClose():
         />
       ) : null}
     </Dialog>
-  );
-}
-
-export function SecretFields({
-  secret,
-  copyState,
-  onCopy,
-  onClose
-}: {
-  secret: RevealedSecret;
-  copyState: SecretCopyState;
-  onCopy(field: SecretField, value: string): void;
-  onClose(): void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="grid gap-4">
-      <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
-        {t("apiAccessSecretOnce")}
-      </p>
-      <CopyField
-        label={t("apiAccessServerUrl")}
-        value={secret.serverUrl}
-        copied={copyState.copied === "server"}
-        onCopy={() => onCopy("server", secret.serverUrl)}
-      />
-      <CopyField
-        label={t("apiAccessApiKey")}
-        value={secret.secret}
-        copied={copyState.copied === "key"}
-        secret
-        onCopy={() => onCopy("key", secret.secret)}
-      />
-      {copyState.failed ? <InlineError>{t("apiAccessCopyFailed")}</InlineError> : null}
-      <div className="flex justify-end">
-        <Button onClick={onClose}>{t("apiAccessDone")}</Button>
-      </div>
-    </div>
-  );
-}
-
-function CopyField({
-  label,
-  value,
-  copied,
-  secret,
-  onCopy
-}: {
-  label: string;
-  value: string;
-  copied: boolean;
-  secret?: boolean;
-  onCopy(): void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="grid gap-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      <div className="flex min-w-0 gap-2">
-        <code
-          className="min-w-0 flex-1 overflow-x-auto rounded-md border bg-muted/50 px-3 py-2 text-xs"
-          data-secret={secret ? "one-time" : undefined}
-        >
-          {value}
-        </code>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label={t("settings.copyValue", { label })}
-          onClick={onCopy}
-        >
-          {copied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
-        </Button>
-      </div>
-    </div>
   );
 }
 
@@ -787,10 +707,6 @@ function formatDate(value: string | undefined, fallback: string, locale: LocaleC
 function localDateTimeMinimum(): string {
   const date = new Date(Date.now() + 60_000);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-}
-
-async function copyText(value: string): Promise<void> {
-  await navigator.clipboard.writeText(value);
 }
 
 function errorMessage(error: unknown, fallback: string): string {

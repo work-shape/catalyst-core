@@ -11,7 +11,7 @@ import {
   isRecentlyActiveAssistantRunId,
   rememberRecentlyActiveAssistantRunId
 } from "../packages/chat-ui/src/assistant/assistant-message";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider } from "./chat-ui-render-harness";
 import { ToolActivityLabelsProvider } from "../packages/chat-ui/src/assistant/tool-activity";
 import {
   findRunActivity,

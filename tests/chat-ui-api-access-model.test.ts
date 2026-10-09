@@ -12,11 +12,7 @@ import {
   createApiAccessAuthorityKey,
   createApiAccessRevealController
 } from "../packages/chat-ui/src/control-plane/api-access-reveal-controller";
-import {
-  canManageApiAccess,
-  canViewAdministrationPanel
-} from "../packages/chat-ui/src/control-plane/governance";
-import { resolveAdministrationRoute as resolveAdministrationRouteWithSkillChanges } from "../packages/chat-ui/src/control-plane/superadmin-panel";
+import { canManageApiAccess, canViewAdministrationPanel } from "@vivd-catalyst/chat-ui/admin";
 
 describe("API access model", () => {
   it("maps only current service-principal grants to credential scopes", () => {
@@ -59,62 +55,6 @@ describe("API access model", () => {
     expect(canManageApiAccess(apiAccessManager)).toBe(true);
     expect(canViewAdministrationPanel(apiAccessManager)).toBe(true);
     expect(canManageApiAccess({ ...apiAccessManager!, permissions: ["users.manage"] })).toBe(false);
-  });
-
-  it("resolves administration availability and tabs inside the optional module", () => {
-    const manager = {
-      id: "user-1",
-      clientInstanceId: "client-1",
-      authSource: "standalone",
-      externalUserId: "manager",
-      displayLabel: "Manager",
-      roles: ["admin"],
-      permissionRefs: [],
-      permissions: ["users.manage"]
-    } as Parameters<typeof canManageApiAccess>[0];
-
-    expect(
-      resolveAdministrationRoute({
-        user: manager,
-        configAssetManagement: undefined,
-        requestedTab: "audit"
-      })
-    ).toEqual({ canView: true, pending: false, selectedTab: "users" });
-    expect(
-      resolveAdministrationRoute({
-        user: { ...manager!, permissions: ["config_assets.read"] },
-        configAssetManagement: undefined,
-        requestedTab: "config"
-      })
-    ).toEqual({ canView: false, pending: true, selectedTab: "config" });
-    expect(
-      resolveAdministrationRoute({
-        user: { ...manager!, permissions: ["config_assets.read"] },
-        configAssetManagement: {
-          enabled: true,
-          editableAgentFields: [],
-          allowAgentCreation: false,
-          allowAgentDeletion: false,
-          allowDefaultAgentChange: false,
-          allowSkillEditing: false
-        },
-        requestedTab: "config"
-      })
-    ).toEqual({ canView: true, pending: false, selectedTab: "config" });
-    expect(
-      resolveAdministrationRoute({
-        user: { ...manager!, permissions: ["config_assets.read"] },
-        configAssetManagement: {
-          enabled: false,
-          editableAgentFields: [],
-          allowAgentCreation: false,
-          allowAgentDeletion: false,
-          allowDefaultAgentChange: false,
-          allowSkillEditing: false
-        },
-        requestedTab: "config"
-      })
-    ).toEqual({ canView: false, pending: false, selectedTab: undefined });
   });
 
   it.each(["changed", "lost"] as const)(
@@ -202,22 +142,3 @@ describe("API key copy result", () => {
     expect(copyStateFor(undefined, "cat_live_first")).toEqual({});
   });
 });
-
-// Route cases predate skill-change settings; supply the disabled defaults.
-type AdministrationRouteInput = Parameters<typeof resolveAdministrationRouteWithSkillChanges>[0];
-type ConfigAssetManagement = NonNullable<AdministrationRouteInput["configAssetManagement"]>;
-function resolveAdministrationRoute(
-  input: Omit<AdministrationRouteInput, "configAssetManagement"> & {
-    configAssetManagement?: Omit<ConfigAssetManagement, "agentSkillChanges">;
-  }
-) {
-  return resolveAdministrationRouteWithSkillChanges({
-    ...input,
-    configAssetManagement: input.configAssetManagement
-      ? {
-          ...input.configAssetManagement,
-          agentSkillChanges: { enabled: false, allowSkillCreation: false }
-        }
-      : undefined
-  });
-}

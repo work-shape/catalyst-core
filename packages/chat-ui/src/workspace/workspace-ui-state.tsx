@@ -12,7 +12,12 @@ import {
 import type { LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { readBrowserLocale } from "../i18n";
 import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
-import { readSystemThemeMode, resolveThemeModePreference, type ResolvedThemeMode } from "../theme";
+import {
+  readSystemThemeMode,
+  resolveThemeModePreference,
+  type ResolvedThemeMode,
+  type ThemeModePreference
+} from "../theme";
 import {
   DEFAULT_LOCALES,
   readStoredLocale,
@@ -30,7 +35,6 @@ import {
   defaultWorkspaceRoute,
   routeConversationId,
   workspaceRouteView,
-  type SuperadminRouteTab,
   type WorkspaceRoute,
   type WorkspaceRouteChangeOptions,
   type WorkspaceRouteView
@@ -49,8 +53,9 @@ interface WorkspaceRouteContextValue {
     conversationId: string,
     options?: WorkspaceRouteChangeOptions
   ): void;
-  showSettings(): void;
-  showSuperadmin(tab?: SuperadminRouteTab, options?: WorkspaceRouteChangeOptions): void;
+  /** Opens a page of the Settings area; without one, the person's own profile. */
+  showSettings(group?: string, page?: string, options?: WorkspaceRouteChangeOptions): void;
+  showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   selectWorkspaceView(view: WorkspaceRouteView): void;
   isConversationVisible(conversationId: string): boolean;
   resetRouteMemory(): void;
@@ -73,9 +78,9 @@ interface WorkspacePreferencesContextValue {
   setShowContextIndicator(visible: boolean): void;
   resourcesPanelPreference: ResourcesPanelPreference | undefined;
   setResourcesPanelPreference(preference: ResourcesPanelPreference): void;
-  themeOverride: ResolvedThemeMode | undefined;
+  themeOverride: ThemeModePreference | undefined;
   systemThemeMode: ResolvedThemeMode;
-  selectThemeMode(themeMode: ResolvedThemeMode): void;
+  selectThemeMode(themeMode: ThemeModePreference): void;
 }
 
 interface ListedConversationActivity {
@@ -128,7 +133,7 @@ export function WorkspaceUiStateProvider({
   const [resourcesPanelPreference, setResourcesPanelPreferenceState] = useState<
     ResourcesPanelPreference | undefined
   >(() => readStoredResourcesPanelPreference());
-  const [themeOverride, setThemeOverride] = useState<ResolvedThemeMode | undefined>(() =>
+  const [themeOverride, setThemeOverride] = useState<ThemeModePreference | undefined>(() =>
     readStoredThemeMode()
   );
   const [systemThemeMode, setSystemThemeMode] = useState<ResolvedThemeMode>(() =>
@@ -181,25 +186,22 @@ export function WorkspaceUiStateProvider({
     [onRouteChange]
   );
 
-  const showSettings = useCallback(() => {
-    onRouteChange({ kind: "settings" });
-  }, [onRouteChange]);
-
-  const showSuperadmin = useCallback(
-    (tab: SuperadminRouteTab = "users", options?: WorkspaceRouteChangeOptions) => {
-      onRouteChange({ kind: "superadmin", tab }, options);
+  const showSettings = useCallback(
+    (group = "you", page = "profile", options?: WorkspaceRouteChangeOptions) => {
+      onRouteChange({ kind: "settings", group, page }, options);
     },
     [onRouteChange]
   );
 
   const selectWorkspaceView = useCallback(
     (nextView: WorkspaceRouteView) => {
+      // The rail opens Settings on the first administration page the viewer may see.
       if (nextView === "settings") {
-        showSettings();
+        onRouteChange({ kind: "administration" });
         return;
       }
-      if (nextView === "superadmin") {
-        showSuperadmin("users");
+      if (nextView === "build") {
+        onRouteChange({ kind: "build" });
         return;
       }
       if (nextView === "approvals") {
@@ -208,7 +210,7 @@ export function WorkspaceUiStateProvider({
       }
       onRouteChange(lastChatRouteRef.current);
     },
-    [onRouteChange, showSettings, showSuperadmin]
+    [onRouteChange]
   );
 
   const isConversationVisible = useCallback(
@@ -298,7 +300,7 @@ export function WorkspaceUiStateProvider({
     writeStoredLocale(locale);
   }, []);
 
-  const selectThemeMode = useCallback((themeMode: ResolvedThemeMode) => {
+  const selectThemeMode = useCallback((themeMode: ThemeModePreference) => {
     setThemeOverride(themeMode);
     writeStoredThemeMode(themeMode);
   }, []);
@@ -321,7 +323,7 @@ export function WorkspaceUiStateProvider({
       goToDefaultChat,
       showConversation,
       showSettings,
-      showSuperadmin,
+      showRoute: onRouteChange,
       selectWorkspaceView,
       isConversationVisible,
       resetRouteMemory
@@ -329,13 +331,13 @@ export function WorkspaceUiStateProvider({
     [
       goToDefaultChat,
       isConversationVisible,
+      onRouteChange,
       resetRouteMemory,
       route,
       selectWorkspaceView,
       selectedConversationId,
       showConversation,
       showSettings,
-      showSuperadmin,
       view
     ]
   );
@@ -448,11 +450,14 @@ export function useWorkspaceTheme(ui: SafeConfig["ui"] | undefined): {
   resolvedThemeMode: ResolvedThemeMode;
   /** The instance's inputs for the resolved mode; undefined until the config has loaded. */
   theme: ThemeInputs | undefined;
+  /** What the person chose, or the instance's default while they chose nothing. */
+  themePreference: ThemeModePreference;
+  selectThemePreference(preference: ThemeModePreference): void;
   toggleTheme(): void;
 } {
   const { selectThemeMode, systemThemeMode, themeOverride } = useWorkspacePreferences();
-  const resolvedThemeMode =
-    themeOverride ?? resolveThemeModePreference(ui?.defaultThemeMode, systemThemeMode);
+  const themePreference = themeOverride ?? ui?.defaultThemeMode ?? "system";
+  const resolvedThemeMode = resolveThemeModePreference(themePreference, systemThemeMode);
   const theme = resolvedThemeMode === "dark" ? ui?.darkTheme : ui?.theme;
 
   const toggleTheme = useCallback(() => {
@@ -463,9 +468,11 @@ export function useWorkspaceTheme(ui: SafeConfig["ui"] | undefined): {
     () => ({
       resolvedThemeMode,
       theme,
+      themePreference,
+      selectThemePreference: selectThemeMode,
       toggleTheme
     }),
-    [resolvedThemeMode, theme, toggleTheme]
+    [resolvedThemeMode, selectThemeMode, theme, themePreference, toggleTheme]
   );
 }
 

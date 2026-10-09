@@ -19,7 +19,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-floating-promises",
       "scope": "packages/chat-ui",
-      "count": 64,
+      "count": 63,
       "owner": "G-5c"
     },
     {
@@ -61,7 +61,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "tests",
-      "count": 145,
+      "count": 142,
       "owner": "CB-2"
     },
     {
@@ -131,7 +131,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/chat-ui",
-      "count": 32,
+      "count": 31,
       "owner": "G-5c"
     },
     {
@@ -271,7 +271,7 @@
       "target": "lint",
       "rule": "catalyst/module-cycle",
       "scope": "packages/chat-ui",
-      "count": 6,
+      "count": 2,
       "owner": "G-5c"
     },
     {
@@ -292,7 +292,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 166,
+      "count": 155,
       "owner": "CB-2"
     },
     {
@@ -397,7 +397,7 @@
       "target": "lint",
       "rule": "knip/types",
       "scope": "packages/chat-ui",
-      "count": 25,
+      "count": 23,
       "owner": "G-5c"
     },
     {
@@ -476,13 +476,6 @@
       "scope": "packages/chat-ui/src/assistant/assistant-ui-adapter.ts",
       "count": 1,
       "owner": "G-5c"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
-      "scope": "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-settings-dialog.tsx",
-      "count": 1,
-      "owner": "AP-3"
     },
     {
       "target": "lint",

@@ -14,7 +14,7 @@ import {
 import { ArtifactPreviewMessage } from "../packages/chat-ui/src/artifact-preview-shell";
 import type { ToolArtifactDownloadRef } from "../packages/chat-ui/src/tool-artifacts";
 import { conversationFileFromResource } from "../packages/chat-ui/src/conversation-file-presentation";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider } from "./chat-ui-render-harness";
 
 describe("chat UI artifact preview state", () => {
   it("renders a generated JPEG resource without MIME metadata as an inline image", () => {

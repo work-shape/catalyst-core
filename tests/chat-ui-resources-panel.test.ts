@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
-import { renderToStaticMarkup } from "./chat-ui-render-harness";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import {
   createApiClient,
   type ConversationResourceListItem,
   type StructuredDataResourceResponse
 } from "@vivd-catalyst/api-client";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import {
   groupConversationResources,
   isResourcesPanelAvailable,

@@ -44,8 +44,16 @@ describe("collaboration workspace routes", () => {
   });
 
   it("leaves workspace-independent routes alone", () => {
-    expect(workspaceRouteFromPath("/settings")).toEqual({ kind: "settings" });
-    expect(workspaceRouteFromPath("/admin/users")).toEqual({ kind: "superadmin", tab: "users" });
+    expect(workspaceRouteFromPath("/settings")).toEqual({
+      kind: "settings",
+      group: "you",
+      page: "profile"
+    });
+    expect(workspaceRouteFromPath("/admin/users")).toEqual({
+      kind: "settings",
+      group: "instance",
+      page: "users"
+    });
   });
 
   it("navigates back to the same canonical urls", () => {

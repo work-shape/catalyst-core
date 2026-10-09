@@ -22,13 +22,16 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
     "chat"
   ],
   ["/c/conv_2", { kind: "legacy-conversation", conversationId: "conv_2" }, "chat"],
-  ["/settings", { kind: "settings" }, "settings"],
+  ["/settings/you/profile", { kind: "settings", group: "you", page: "profile" }, "settings"],
+  [
+    "/settings/workspace/members",
+    { kind: "settings", group: "workspace", page: "members" },
+    "settings"
+  ],
+  ["/settings/instance/users", { kind: "settings", group: "instance", page: "users" }, "settings"],
   ["/approvals", { kind: "approvals" }, "approvals"],
-  ["/admin/usage", { kind: "superadmin", tab: "usage" }, "superadmin"],
-  ["/admin/users", { kind: "superadmin", tab: "users" }, "superadmin"],
-  ["/admin/api-access", { kind: "superadmin", tab: "api-access" }, "superadmin"],
-  ["/admin/audit", { kind: "superadmin", tab: "audit" }, "superadmin"],
-  ["/admin/config", { kind: "superadmin", tab: "config" }, "superadmin"],
+  ["/admin", { kind: "administration" }, "settings"],
+  ["/admin/config", { kind: "build" }, "build"],
   ["/ui-library", { kind: "ui-library" }, "ui-library"]
 ];
 
@@ -36,7 +39,7 @@ describe("area route table", () => {
   it("has one row per area", () => {
     const areas = areaRoutes.map((row) => row.area);
 
-    expect(areas).toEqual(["chat", "settings", "approvals", "superadmin", "ui-library"]);
+    expect(areas).toEqual(["chat", "settings", "approvals", "build", "ui-library"]);
   });
 
   it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {
@@ -53,11 +56,30 @@ describe("area route table", () => {
     expect(areaRoutePaths().map((candidate) => candidate.path)).toContain(to);
   });
 
-  it("sends /admin to the users tab and resolves nothing by itself", () => {
-    const admin = areaRoutePaths().find((candidate) => candidate.path === "/admin");
+  /** The addresses of the old areas, with the Settings page that holds the same content now. */
+  const oldAddresses: [path: string, route: WorkspaceRoute][] = [
+    ["/settings", { kind: "settings", group: "you", page: "profile" }],
+    ["/admin/users", { kind: "settings", group: "instance", page: "users" }],
+    ["/admin/usage", { kind: "settings", group: "instance", page: "usage" }],
+    ["/admin/audit", { kind: "settings", group: "instance", page: "audit" }],
+    ["/admin/api-access", { kind: "settings", group: "instance", page: "api-access" }]
+  ];
 
-    expect(admin).toEqual({ path: "/admin", redirectTo: "/admin/users" });
-    expect(workspaceRouteFromPath("/admin")).toEqual({ kind: "collaboration-workspace-root" });
+  it.each(oldAddresses)("leads the old address %s to its Settings page", (path, route) => {
+    const row = areaRoutePaths().find((candidate) => candidate.path === path);
+    const { to, params = {} } = workspaceRouteNavigation(route);
+
+    expect(row?.route).toBeUndefined();
+    expect(row?.redirectTo).toBe(
+      to.replace(/\$(\w+)/gu, (_match, name: string) => params[name] ?? "")
+    );
+    expect(workspaceRouteFromPath(path)).toEqual(route);
+    expect(areaOfRoute(workspaceRouteFromPath(path))).toBe("settings");
+  });
+
+  it("keeps /admin and /admin/config as addresses the shell answers by the viewer's rights", () => {
+    expect(workspaceRouteFromPath("/admin")).toEqual({ kind: "administration" });
+    expect(workspaceRouteFromPath("/admin/config")).toEqual({ kind: "build" });
   });
 
   it("opens the application root for an address no row resolves", () => {

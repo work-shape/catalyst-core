@@ -1,5 +1,5 @@
 import { appErrorCodeSchema, type ApiErrorCode, type LocaleCode } from "@vivd-catalyst/api-client";
-import type { ResolvedThemeMode } from "./theme";
+import type { ThemeModePreference } from "./theme";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";
 export const DEFAULT_LOCALES: LocaleCode[] = ["en", "de"];
@@ -57,12 +57,15 @@ export function createEnvironmentDocumentTitle(
   return environment === "staging" ? `(Test) ${title}` : title;
 }
 
-export function readStoredThemeMode(): ResolvedThemeMode | undefined {
+/** The person's own choice of theme. Nothing stored means the instance's default applies. */
+export function readStoredThemeMode(): ThemeModePreference | undefined {
   const storedThemeMode = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return storedThemeMode === "dark" || storedThemeMode === "light" ? storedThemeMode : undefined;
+  return storedThemeMode === "dark" || storedThemeMode === "light" || storedThemeMode === "system"
+    ? storedThemeMode
+    : undefined;
 }
 
-export function writeStoredThemeMode(themeMode: ResolvedThemeMode): void {
+export function writeStoredThemeMode(themeMode: ThemeModePreference): void {
   window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
 }
 

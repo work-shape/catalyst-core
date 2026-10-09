@@ -1,9 +1,5 @@
-/** The pages of the administration area. */
-const superadminRouteTabs = ["usage", "users", "api-access", "audit", "config"] as const;
-export type SuperadminRouteTab = (typeof superadminRouteTabs)[number];
-
 /** The areas of the interface: what a route shows. */
-export type WorkspaceRouteView = "chat" | "settings" | "superadmin" | "approvals" | "ui-library";
+export type WorkspaceRouteView = "chat" | "settings" | "approvals" | "build" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -15,9 +11,16 @@ export type WorkspaceRoute =
   | { kind: "legacy-conversation"; conversationId: string }
   | { kind: "new-conversation"; collaborationWorkspaceId: string }
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
-  | { kind: "settings" }
+  /** One page of the Settings area. The Settings catalog knows the groups and the pages. */
+  | { kind: "settings"; group: string; page: string }
+  /**
+   * The old administration address. It is unresolved like the chat root: the Settings area
+   * replaces it with the first administration page the viewer may open.
+   */
+  | { kind: "administration" }
+  /** Config as a full page, until the Build area replaces it. */
+  | { kind: "build" }
   | { kind: "approvals" }
-  | { kind: "superadmin"; tab: SuperadminRouteTab }
   /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
   | { kind: "ui-library" };
 
@@ -51,15 +54,20 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/c/$conversationId", route: "legacy-conversation" }
     ]
   },
-  { area: "settings", paths: [{ path: "/settings", route: "settings" }] },
-  { area: "approvals", paths: [{ path: "/approvals", route: "approvals" }] },
   {
-    area: "superadmin",
+    area: "settings",
     paths: [
-      { path: "/admin", redirectTo: "/admin/users" },
-      { path: "/admin/$tab", route: "superadmin" }
+      { path: "/settings/$group/$page", route: "settings" },
+      { path: "/settings", redirectTo: "/settings/you/profile" },
+      { path: "/admin", route: "administration" },
+      { path: "/admin/users", redirectTo: "/settings/instance/users" },
+      { path: "/admin/usage", redirectTo: "/settings/instance/usage" },
+      { path: "/admin/audit", redirectTo: "/settings/instance/audit" },
+      { path: "/admin/api-access", redirectTo: "/settings/instance/api-access" }
     ]
   },
+  { area: "approvals", paths: [{ path: "/approvals", route: "approvals" }] },
+  { area: "build", paths: [{ path: "/admin/config", route: "build" }] },
   { area: "ui-library", paths: [{ path: "/ui-library", route: "ui-library" }] }
 ];
 
@@ -76,13 +84,21 @@ export function areaOfRoute(route: WorkspaceRoute): WorkspaceRouteView {
   return row?.area ?? "chat";
 }
 
-/** The route a path opens. A path no row resolves opens the application root. */
+/**
+ * The route a path opens. An address that leads elsewhere opens what it leads to, so a shell
+ * without a router follows the table too. A path no row resolves opens the application root.
+ */
 export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
   const segments = pathSegments(normalizePathname(pathname));
-  for (const { path, route } of areaRoutePaths()) {
-    const params = route === undefined ? undefined : matchPath(pathSegments(path), segments);
-    const resolved =
-      route === undefined || params === undefined ? undefined : routeOf(route, params);
+  for (const { path, route, redirectTo } of areaRoutePaths()) {
+    const params = matchPath(pathSegments(path), segments);
+    if (params === undefined) {
+      continue;
+    }
+    if (redirectTo !== undefined) {
+      return workspaceRouteFromPath(redirectTo);
+    }
+    const resolved = route === undefined ? undefined : routeOf(route, params);
     if (resolved) {
       return resolved;
     }
@@ -104,13 +120,16 @@ function routeOf(
   kind: WorkspaceRoute["kind"],
   params: Record<string, string>
 ): WorkspaceRoute | undefined {
-  const { collaborationWorkspaceId, conversationId, tab } = params;
+  const { collaborationWorkspaceId, conversationId, group, page } = params;
   switch (kind) {
     case "collaboration-workspace-root":
-    case "settings":
+    case "administration":
+    case "build":
     case "approvals":
     case "ui-library":
       return { kind };
+    case "settings":
+      return group && page ? { kind, group, page } : undefined;
     case "new-conversation":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
     case "conversation":
@@ -119,8 +138,6 @@ function routeOf(
         : undefined;
     case "legacy-conversation":
       return conversationId ? { kind, conversationId } : undefined;
-    case "superadmin":
-      return isSuperadminRouteTab(tab) ? { kind, tab } : undefined;
   }
 }
 
@@ -164,8 +181,4 @@ function decodePathSegment(value: string): string {
   } catch {
     return value;
   }
-}
-
-function isSuperadminRouteTab(value: string | undefined): value is SuperadminRouteTab {
-  return superadminRouteTabs.some((tab) => tab === value);
 }

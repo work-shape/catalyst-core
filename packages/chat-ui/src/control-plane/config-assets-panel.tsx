@@ -6,7 +6,7 @@ import type {
   ConfigAssetRevision,
   ConfigAssetsOverview
 } from "@vivd-catalyst/api-client";
-import { Button, cn, Dialog, Spinner } from "@vivd-catalyst/ui";
+import { Banner, Button, cn, Dialog, PageHeader, SkeletonPage } from "@vivd-catalyst/ui";
 import {
   agentAvailabilitySummary,
   agentConfigToForm,
@@ -24,7 +24,6 @@ import {
   RevisionHistory,
   SkillEditor
 } from "./config-asset-editors";
-import { ControlPlanePage } from "./control-plane-page";
 import { useTranslation } from "../i18n";
 import { apiErrorStatus } from "../workspace-utils";
 
@@ -155,294 +154,298 @@ export function ConfigAssetsPanel(input: ConfigAssetsPanelInput) {
 
   if (input.loading) {
     return (
-      <ControlPlanePage title={t("configuration")} description={pageDescription}>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner className="size-4" />
-          {t("configLoading")}
-        </div>
-      </ControlPlanePage>
+      <>
+        <PageHeader title={t("nav.build")} description={pageDescription} />
+        <SkeletonPage />
+      </>
     );
   }
 
   return (
-    <ControlPlanePage
-      title={t("configuration")}
-      description={pageDescription}
-      actions={
-        <>
-          {input.allowSkillEditing ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setSelection({ mode: "new", kind: "skill" })}
-            >
-              <Plus size={16} aria-hidden="true" />
-              {t("configNewSkill")}
-            </Button>
-          ) : null}
-          {input.allowAgentCreation ? (
-            <Button type="button" onClick={() => setSelection({ mode: "new", kind: "agent" })}>
-              <Plus size={16} aria-hidden="true" />
-              {t("configNewAgent")}
-            </Button>
-          ) : null}
-        </>
-      }
-    >
-      {input.error ? <p className="text-sm text-destructive">{input.error}</p> : null}
+    <>
+      <PageHeader
+        title={t("nav.build")}
+        description={pageDescription}
+        secondaryActions={
+          <>
+            {input.allowSkillEditing ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSelection({ mode: "new", kind: "skill" })}
+              >
+                <Plus size={16} aria-hidden="true" />
+                {t("configNewSkill")}
+              </Button>
+            ) : null}
+            {input.allowAgentCreation ? (
+              <Button type="button" onClick={() => setSelection({ mode: "new", kind: "agent" })}>
+                <Plus size={16} aria-hidden="true" />
+                {t("configNewAgent")}
+              </Button>
+            ) : null}
+          </>
+        }
+      />
+      <div className="grid min-w-0 content-start gap-4">
+        {input.error ? <Banner tone="danger">{input.error}</Banner> : null}
 
-      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
-        <aside className="grid min-w-0 content-start gap-4 overflow-hidden rounded-lg border bg-card p-3 shadow-xs sm:grid-cols-2 lg:sticky lg:top-0 lg:grid-cols-1">
-          <AssetList
-            label={t("configAgents")}
-            creatingLabel={t("configCreatingAgent")}
-            emptyLabel={t("configNoneYet")}
-            icon={<Bot size={14} aria-hidden="true" />}
-            names={agentNames}
-            describe={availabilityLabel}
-            decorate={(name) =>
-              name === defaultAgentName ? (
-                <span
-                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-primary"
-                  title={t("configDefaultAgent")}
-                  aria-label={t("configDefaultAgent")}
-                >
-                  <Star size={13} aria-hidden="true" />
-                </span>
-              ) : null
-            }
-            selectedName={
-              selection?.mode === "existing" && selection.kind === "agent"
-                ? selection.name
-                : undefined
-            }
-            creating={selection?.mode === "new" && selection.kind === "agent"}
-            onSelect={(name) => setSelection({ mode: "existing", kind: "agent", name })}
-          />
-          <AssetList
-            label={t("configSkills")}
-            creatingLabel={t("configCreatingSkill")}
-            emptyLabel={t("configNoneYet")}
-            icon={<BookOpen size={14} aria-hidden="true" />}
-            names={skillNames}
-            decorate={() => null}
-            selectedName={
-              selection?.mode === "existing" && selection.kind === "skill"
-                ? selection.name
-                : undefined
-            }
-            creating={selection?.mode === "new" && selection.kind === "skill"}
-            onSelect={(name) => setSelection({ mode: "existing", kind: "skill", name })}
-          />
-          {version !== undefined ? (
-            <p className="border-t px-1 pt-3 text-xs leading-5 text-muted-foreground sm:col-span-2 lg:col-span-1">
-              {t("configCliHint")}
-            </p>
-          ) : null}
-        </aside>
+        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+          <aside className="grid min-w-0 content-start gap-4 overflow-hidden rounded-lg border bg-card p-3 shadow-xs sm:grid-cols-2 lg:sticky lg:top-0 lg:grid-cols-1">
+            <AssetList
+              label={t("configAgents")}
+              creatingLabel={t("configCreatingAgent")}
+              emptyLabel={t("configNoneYet")}
+              icon={<Bot size={14} aria-hidden="true" />}
+              names={agentNames}
+              describe={availabilityLabel}
+              decorate={(name) =>
+                name === defaultAgentName ? (
+                  <span
+                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-primary"
+                    title={t("configDefaultAgent")}
+                    aria-label={t("configDefaultAgent")}
+                  >
+                    <Star size={13} aria-hidden="true" />
+                  </span>
+                ) : null
+              }
+              selectedName={
+                selection?.mode === "existing" && selection.kind === "agent"
+                  ? selection.name
+                  : undefined
+              }
+              creating={selection?.mode === "new" && selection.kind === "agent"}
+              onSelect={(name) => setSelection({ mode: "existing", kind: "agent", name })}
+            />
+            <AssetList
+              label={t("configSkills")}
+              creatingLabel={t("configCreatingSkill")}
+              emptyLabel={t("configNoneYet")}
+              icon={<BookOpen size={14} aria-hidden="true" />}
+              names={skillNames}
+              decorate={() => null}
+              selectedName={
+                selection?.mode === "existing" && selection.kind === "skill"
+                  ? selection.name
+                  : undefined
+              }
+              creating={selection?.mode === "new" && selection.kind === "skill"}
+              onSelect={(name) => setSelection({ mode: "existing", kind: "skill", name })}
+            />
+            {version !== undefined ? (
+              <p className="border-t px-1 pt-3 text-xs leading-5 text-muted-foreground sm:col-span-2 lg:col-span-1">
+                {t("configCliHint")}
+              </p>
+            ) : null}
+          </aside>
 
-        <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
-          {selection === undefined ? (
-            <div className="grid min-h-[28rem] place-items-center p-6 text-center">
-              <div className="grid max-w-sm justify-items-center gap-3">
-                <span className="inline-flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <Bot size={18} aria-hidden="true" />
-                </span>
-                <div className="grid gap-1">
-                  <h2 className="text-base font-semibold">{t("configSelectItemTitle")}</h2>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {t("configSelectItemDescription")}
-                  </p>
+          <div className="min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-xs">
+            {selection === undefined ? (
+              <div className="grid min-h-[28rem] place-items-center p-6 text-center">
+                <div className="grid max-w-sm justify-items-center gap-3">
+                  <span className="inline-flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <Bot size={18} aria-hidden="true" />
+                  </span>
+                  <div className="grid gap-1">
+                    <h2 className="text-base font-semibold">{t("configSelectItemTitle")}</h2>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {t("configSelectItemDescription")}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : selection.kind === "agent" ? (
-            <AgentEditor
-              key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
-              initialForm={
-                selection.mode === "existing" && selectedEntry
-                  ? agentConfigToForm(selectedEntry.config)
-                  : emptyAgentForm()
-              }
-              isNew={selection.mode === "new"}
-              isDefault={selection.mode === "existing" && selection.name === defaultAgentName}
-              references={input.overview?.references}
-              editableAgentFields={input.editableAgentFields}
-              canManageAgentModels={input.canManageAgentModels}
-              skillNames={skillNames}
-              mutating={input.mutating}
-              onSave={(form) =>
-                runMutation(() =>
-                  input
-                    .onSaveAsset({
-                      kind: "agent",
-                      name: form.name.trim(),
-                      config: editedAgentConfig(
-                        form,
-                        selection.mode === "existing" ? selectedEntry?.config : undefined
-                      ),
-                      baseVersion: version
-                    })
-                    .then(() => {
-                      if (selection.mode === "new") {
-                        setSelection({ mode: "existing", kind: "agent", name: form.name.trim() });
-                      }
-                    })
-                )
-              }
-              onDelete={
-                selection.mode === "existing" && input.allowAgentDeletion
-                  ? () =>
-                      runMutation(() =>
-                        input
-                          .onDeleteAsset({
-                            kind: "agent",
-                            name: selection.name,
+            ) : selection.kind === "agent" ? (
+              <AgentEditor
+                key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
+                initialForm={
+                  selection.mode === "existing" && selectedEntry
+                    ? agentConfigToForm(selectedEntry.config)
+                    : emptyAgentForm()
+                }
+                isNew={selection.mode === "new"}
+                isDefault={selection.mode === "existing" && selection.name === defaultAgentName}
+                references={input.overview?.references}
+                editableAgentFields={input.editableAgentFields}
+                canManageAgentModels={input.canManageAgentModels}
+                skillNames={skillNames}
+                mutating={input.mutating}
+                onSave={(form) =>
+                  runMutation(() =>
+                    input
+                      .onSaveAsset({
+                        kind: "agent",
+                        name: form.name.trim(),
+                        config: editedAgentConfig(
+                          form,
+                          selection.mode === "existing" ? selectedEntry?.config : undefined
+                        ),
+                        baseVersion: version
+                      })
+                      .then(() => {
+                        if (selection.mode === "new") {
+                          setSelection({ mode: "existing", kind: "agent", name: form.name.trim() });
+                        }
+                      })
+                  )
+                }
+                onDelete={
+                  selection.mode === "existing" && input.allowAgentDeletion
+                    ? () =>
+                        runMutation(() =>
+                          input
+                            .onDeleteAsset({
+                              kind: "agent",
+                              name: selection.name,
+                              baseVersion: version
+                            })
+                            .then(() => setSelection(undefined))
+                        )
+                    : undefined
+                }
+                onMakeDefault={
+                  selection.mode === "existing" &&
+                  selection.name !== defaultAgentName &&
+                  input.allowDefaultAgentChange
+                    ? () =>
+                        runMutation(() =>
+                          input.onSetDefaultAgent({
+                            agentName: selection.name,
                             baseVersion: version
                           })
-                          .then(() => setSelection(undefined))
-                      )
-                  : undefined
-              }
-              onMakeDefault={
-                selection.mode === "existing" &&
-                selection.name !== defaultAgentName &&
-                input.allowDefaultAgentChange
-                  ? () =>
-                      runMutation(() =>
-                        input.onSetDefaultAgent({ agentName: selection.name, baseVersion: version })
-                      )
-                  : undefined
-              }
-              availability={
-                selection.mode === "existing" && selectedEntry ? (
-                  <AgentAvailabilityEditor
-                    availability={agentAvailability.get(selection.name)}
-                    isDefault={selection.name === defaultAgentName}
-                    workspaces={input.administeredWorkspaces}
-                    workspacesError={input.administeredWorkspacesError}
-                    mutating={input.mutating}
-                    onSave={(availability) =>
-                      runMutation(() =>
-                        input.onSetAgentAvailability({ name: selection.name, ...availability })
-                      )
-                    }
-                  />
-                ) : null
-              }
-              revisions={
-                selection.mode === "existing" ? (
-                  <RevisionHistory
-                    kind="agent"
-                    name={selection.name}
-                    mutating={input.mutating}
-                    onLoadRevisions={input.onLoadRevisions}
-                    onRevert={
-                      input.editableAgentFields.length > 0 || input.canManageAgentModels
-                        ? (revision) =>
-                            runMutation(() =>
-                              input
-                                .onRevertAsset({
-                                  kind: "agent",
-                                  name: selection.name,
-                                  revision,
-                                  baseVersion: version
-                                })
-                                .then(() => setResetToken((token) => token + 1))
-                            )
-                        : undefined
-                    }
-                  />
-                ) : null
-              }
-            />
-          ) : (
-            <SkillEditor
-              key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
-              initialForm={
-                selection.mode === "existing" && selectedEntry
-                  ? skillConfigToForm(selectedEntry.config)
-                  : emptySkillForm()
-              }
-              isNew={selection.mode === "new"}
-              editable={input.allowSkillEditing}
-              mutating={input.mutating}
-              onSave={(form) =>
-                runMutation(() =>
-                  input
-                    .onSaveAsset({
-                      kind: "skill",
-                      name: form.name.trim(),
-                      config: skillFormToConfig(form),
-                      baseVersion: version
-                    })
-                    .then(() => {
-                      if (selection.mode === "new") {
-                        setSelection({ mode: "existing", kind: "skill", name: form.name.trim() });
+                        )
+                    : undefined
+                }
+                availability={
+                  selection.mode === "existing" && selectedEntry ? (
+                    <AgentAvailabilityEditor
+                      availability={agentAvailability.get(selection.name)}
+                      isDefault={selection.name === defaultAgentName}
+                      workspaces={input.administeredWorkspaces}
+                      workspacesError={input.administeredWorkspacesError}
+                      mutating={input.mutating}
+                      onSave={(availability) =>
+                        runMutation(() =>
+                          input.onSetAgentAvailability({ name: selection.name, ...availability })
+                        )
                       }
-                    })
-                )
-              }
-              onDelete={
-                selection.mode === "existing" && input.allowSkillEditing
-                  ? () =>
-                      runMutation(() =>
-                        input
-                          .onDeleteAsset({
-                            kind: "skill",
-                            name: selection.name,
-                            baseVersion: version
-                          })
-                          .then(() => setSelection(undefined))
-                      )
-                  : undefined
-              }
-              revisions={
-                selection.mode === "existing" ? (
-                  <RevisionHistory
-                    kind="skill"
-                    name={selection.name}
-                    mutating={input.mutating}
-                    onLoadRevisions={input.onLoadRevisions}
-                    onRevert={
-                      input.allowSkillEditing
-                        ? (revision) =>
-                            runMutation(() =>
-                              input
-                                .onRevertAsset({
-                                  kind: "skill",
-                                  name: selection.name,
-                                  revision,
-                                  baseVersion: version
-                                })
-                                .then(() => setResetToken((token) => token + 1))
-                            )
-                        : undefined
-                    }
-                  />
-                ) : null
-              }
-            />
-          )}
-        </div>
-      </div>
-
-      <Dialog
-        open={conflictOpen}
-        title={t("configChangedTitle")}
-        onClose={() => setConflictOpen(false)}
-      >
-        <div className="grid gap-4 p-5">
-          <p className="text-sm text-muted-foreground">{t("configChangedDescription")}</p>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setConflictOpen(false)}>
-              {t("configKeepEditing")}
-            </Button>
-            <Button onClick={() => void reloadAfterConflict()}>{t("configReloadLatest")}</Button>
+                    />
+                  ) : null
+                }
+                revisions={
+                  selection.mode === "existing" ? (
+                    <RevisionHistory
+                      kind="agent"
+                      name={selection.name}
+                      mutating={input.mutating}
+                      onLoadRevisions={input.onLoadRevisions}
+                      onRevert={
+                        input.editableAgentFields.length > 0 || input.canManageAgentModels
+                          ? (revision) =>
+                              runMutation(() =>
+                                input
+                                  .onRevertAsset({
+                                    kind: "agent",
+                                    name: selection.name,
+                                    revision,
+                                    baseVersion: version
+                                  })
+                                  .then(() => setResetToken((token) => token + 1))
+                              )
+                          : undefined
+                      }
+                    />
+                  ) : null
+                }
+              />
+            ) : (
+              <SkillEditor
+                key={`${resetToken}:${selectionKey(selection)}:${selectedEntry ? "loaded" : "pending"}`}
+                initialForm={
+                  selection.mode === "existing" && selectedEntry
+                    ? skillConfigToForm(selectedEntry.config)
+                    : emptySkillForm()
+                }
+                isNew={selection.mode === "new"}
+                editable={input.allowSkillEditing}
+                mutating={input.mutating}
+                onSave={(form) =>
+                  runMutation(() =>
+                    input
+                      .onSaveAsset({
+                        kind: "skill",
+                        name: form.name.trim(),
+                        config: skillFormToConfig(form),
+                        baseVersion: version
+                      })
+                      .then(() => {
+                        if (selection.mode === "new") {
+                          setSelection({ mode: "existing", kind: "skill", name: form.name.trim() });
+                        }
+                      })
+                  )
+                }
+                onDelete={
+                  selection.mode === "existing" && input.allowSkillEditing
+                    ? () =>
+                        runMutation(() =>
+                          input
+                            .onDeleteAsset({
+                              kind: "skill",
+                              name: selection.name,
+                              baseVersion: version
+                            })
+                            .then(() => setSelection(undefined))
+                        )
+                    : undefined
+                }
+                revisions={
+                  selection.mode === "existing" ? (
+                    <RevisionHistory
+                      kind="skill"
+                      name={selection.name}
+                      mutating={input.mutating}
+                      onLoadRevisions={input.onLoadRevisions}
+                      onRevert={
+                        input.allowSkillEditing
+                          ? (revision) =>
+                              runMutation(() =>
+                                input
+                                  .onRevertAsset({
+                                    kind: "skill",
+                                    name: selection.name,
+                                    revision,
+                                    baseVersion: version
+                                  })
+                                  .then(() => setResetToken((token) => token + 1))
+                              )
+                          : undefined
+                      }
+                    />
+                  ) : null
+                }
+              />
+            )}
           </div>
         </div>
-      </Dialog>
-    </ControlPlanePage>
+
+        <Dialog
+          open={conflictOpen}
+          title={t("configChangedTitle")}
+          onClose={() => setConflictOpen(false)}
+        >
+          <div className="grid gap-4 p-5">
+            <p className="text-sm text-muted-foreground">{t("configChangedDescription")}</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConflictOpen(false)}>
+                {t("configKeepEditing")}
+              </Button>
+              <Button onClick={() => void reloadAfterConflict()}>{t("configReloadLatest")}</Button>
+            </div>
+          </div>
+        </Dialog>
+      </div>
+    </>
   );
 }
 

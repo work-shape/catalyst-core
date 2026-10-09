@@ -48,6 +48,20 @@ contain breaking changes; a patch version does not.
 
 ### Changed
 
+- **Interface, Settings:** the Settings dialog, the workspace settings dialog and the
+  administration panel are one Settings area with a rail of pages in three groups: You (Profile,
+  Language and appearance, Security), Workspace (General, Members, with the shared workspace
+  they change named under the group) and Instance (Users, API access, Usage, Audit). A user
+  sees only the groups and pages they may open; the server still decides every right. Config
+  is the area Build in the main rail and keeps `/admin/config`. Pages live at
+  `/settings/<group>/<page>`; `/settings`, `/admin`, `/admin/users`, `/admin/usage`,
+  `/admin/audit` and `/admin/api-access` lead to the new addresses. The theme choice gains
+  "System". **Breaking for a host that assembles the shell:** the option `adminPanel` of
+  `renderStandaloneChatApp` and `ChatShell` is `administration`, and
+  `@vivd-catalyst/chat-ui/admin` exports `administration` in place of `superadminPanel` and
+  `SuperadminPanel`; pass `administration` from that entry. The type `ChatShellAdminPanel` is
+  `ChatShellAdministration`, and `canViewSuperadminPanel` is gone (use
+  `canViewAdministrationPanel`).
 - **Interface, default theme:** an instance that sets no `ui.theme` or `ui.darkTheme` now shows
   warm paper neutrals with one terracotta accent (light `#fdfbf7` page, `#f6f3ec` sidebar,
   `#b5573a` accent; dark `#1c1a17` page, `#131210` sidebar, `#d98c6c` accent). An instance

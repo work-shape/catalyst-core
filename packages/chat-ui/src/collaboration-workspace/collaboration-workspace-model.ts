@@ -5,6 +5,7 @@ import type {
   ConversationListItem
 } from "@vivd-catalyst/api-client";
 import { useCollaborationWorkspacesQuery } from "../api/workspace-queries";
+import { canManageCollaborationWorkspace } from "./collaboration-workspace-selector";
 import {
   clearStoredCollaborationWorkspaceId,
   readStoredCollaborationWorkspaceId,
@@ -20,7 +21,6 @@ export type CollaborationWorkspaceDialogState =
   | { kind: "none" }
   | { kind: "create" }
   | { kind: "browse" }
-  | { kind: "settings"; collaborationWorkspaceId: string }
   | {
       kind: "move-conversation";
       conversationId: string;
@@ -41,7 +41,14 @@ export interface CollaborationWorkspaceModel {
   selectCollaborationWorkspace(collaborationWorkspaceId: string): void;
   openCreateDialog(): void;
   openBrowseDialog(): void;
-  openSettingsDialog(collaborationWorkspaceId: string): void;
+  /**
+   * The shared workspace the Workspace pages of Settings change: the one last opened there,
+   * else the active one where the user manages it, else the first one they manage.
+   */
+  settingsCollaborationWorkspace: CollaborationWorkspaceWithRole | undefined;
+  selectSettingsCollaborationWorkspace(collaborationWorkspaceId: string): void;
+  /** Opens a workspace's settings: Members while requests wait there, General otherwise. */
+  openSettings(collaborationWorkspaceId: string): void;
   openMoveConversationDialog(
     conversation: Pick<ConversationListItem, "id" | "title" | "visibility" | "createdByUserId">
   ): void;
@@ -105,6 +112,7 @@ export interface CollaborationWorkspaceModelInput {
     conversationId: string,
     options?: { replace?: true }
   ): void;
+  showSettings(group: string, page: string): void;
 }
 
 export function useCollaborationWorkspaceModel(
@@ -121,9 +129,13 @@ export function useCollaborationWorkspaceModel(
     loadedConversationCollaborationWorkspaceId,
     legacyConversationUnavailable,
     goToCollaborationWorkspace,
-    showConversation
+    showConversation,
+    showSettings
   } = input;
   const [dialog, setDialog] = useState<CollaborationWorkspaceDialogState>({ kind: "none" });
+  const [settingsCollaborationWorkspaceId, setSettingsCollaborationWorkspaceId] = useState<
+    string | undefined
+  >();
   const collaborationWorkspacesQuery = useCollaborationWorkspacesQuery({
     apiBaseUrl,
     authScope,
@@ -247,17 +259,14 @@ export function useCollaborationWorkspaceModel(
     writeStoredCollaborationWorkspaceId(apiBaseUrl, userId, activeCollaborationWorkspace.id);
   }, [activeCollaborationWorkspace, apiBaseUrl, userId]);
 
-  useEffect(() => {
-    if (dialog.kind !== "settings" || !collaborationWorkspacesLoaded) {
-      return;
-    }
-    const stillManageable = collaborationWorkspaces.some(
-      (collaborationWorkspace) => collaborationWorkspace.id === dialog.collaborationWorkspaceId
+  const settingsCollaborationWorkspace = useMemo(() => {
+    const managed = collaborationWorkspaces.filter(canManageCollaborationWorkspace);
+    return (
+      managed.find((candidate) => candidate.id === settingsCollaborationWorkspaceId) ??
+      managed.find((candidate) => candidate.id === activeCollaborationWorkspaceId) ??
+      managed[0]
     );
-    if (!stillManageable) {
-      setDialog({ kind: "none" });
-    }
-  }, [collaborationWorkspaces, collaborationWorkspacesLoaded, dialog]);
+  }, [activeCollaborationWorkspaceId, collaborationWorkspaces, settingsCollaborationWorkspaceId]);
 
   const selectCollaborationWorkspace = useCallback(
     (collaborationWorkspaceId: string) => {
@@ -271,9 +280,16 @@ export function useCollaborationWorkspaceModel(
 
   const openCreateDialog = useCallback(() => setDialog({ kind: "create" }), []);
   const openBrowseDialog = useCallback(() => setDialog({ kind: "browse" }), []);
-  const openSettingsDialog = useCallback(
-    (collaborationWorkspaceId: string) => setDialog({ kind: "settings", collaborationWorkspaceId }),
-    []
+  const openSettings = useCallback(
+    (collaborationWorkspaceId: string) => {
+      const requestsWait = collaborationWorkspaces.some(
+        (candidate) =>
+          candidate.id === collaborationWorkspaceId && candidate.pendingAccessRequestCount > 0
+      );
+      setSettingsCollaborationWorkspaceId(collaborationWorkspaceId);
+      showSettings("workspace", requestsWait ? "members" : "general");
+    },
+    [collaborationWorkspaces, showSettings]
   );
   const openMoveConversationDialog = useCallback(
     (conversation: Pick<ConversationListItem, "id" | "title" | "visibility" | "createdByUserId">) =>
@@ -330,7 +346,9 @@ export function useCollaborationWorkspaceModel(
     selectCollaborationWorkspace,
     openCreateDialog,
     openBrowseDialog,
-    openSettingsDialog,
+    settingsCollaborationWorkspace,
+    selectSettingsCollaborationWorkspace: setSettingsCollaborationWorkspaceId,
+    openSettings,
     openMoveConversationDialog,
     closeDialog,
     conversationMoved,
@@ -341,8 +359,9 @@ export function useCollaborationWorkspaceModel(
 function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {
   return (
     route.kind === "settings" ||
+    route.kind === "administration" ||
+    route.kind === "build" ||
     route.kind === "approvals" ||
-    route.kind === "superadmin" ||
     route.kind === "ui-library"
   );
 }

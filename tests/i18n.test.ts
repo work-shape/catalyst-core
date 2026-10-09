@@ -18,7 +18,7 @@ describe("interface translations", () => {
   it("finds keys of every area through the one lookup", () => {
     expect(de.t("closeSidebar")).toBe("Seitenleiste schließen");
     expect(de.t("attachmentRemove")).toBe("Anhang entfernen");
-    expect(de.t("apiAccessTitle")).toBe("API-Zugriff");
+    expect(de.t("settings.apiAccess")).toBe("API-Zugang");
     expect(en.t("genericWelcome")).toBe("How can I help?");
   });
 
@@ -29,8 +29,8 @@ describe("interface translations", () => {
   });
 
   it("reads the settings pages in both languages", () => {
-    expect(en.t("settings.auditEmpty")).toBe("No activity visible yet.");
-    expect(de.t("settings.auditEmpty")).toBe("Noch keine Aktivitäten sichtbar.");
+    expect(en.t("settings.auditEmpty")).toBe("No audit events in this range.");
+    expect(de.t("settings.auditEmpty")).toBe("Keine Audit-Ereignisse in diesem Zeitraum.");
     expect([
       de.t("settings.time"),
       de.t("settings.auditEvent"),

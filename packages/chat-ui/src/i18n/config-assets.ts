@@ -125,8 +125,7 @@ export const configAssets = defineTranslations({
     configTools: "Tools",
     configVersion: "Version {version}",
     configWelcomeMessage: "Welcome message",
-    configWelcomeSubtitle: "Welcome subtitle",
-    configuration: "Configuration"
+    configWelcomeSubtitle: "Welcome subtitle"
   },
   de: {
     configAddPrompt: "Vorschlag hinzufügen",
@@ -261,7 +260,6 @@ export const configAssets = defineTranslations({
     configTools: "Werkzeuge",
     configVersion: "Version {version}",
     configWelcomeMessage: "Begrüßungsnachricht",
-    configWelcomeSubtitle: "Begrüßungsuntertitel",
-    configuration: "Konfiguration"
+    configWelcomeSubtitle: "Begrüßungsuntertitel"
   }
 });

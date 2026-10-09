@@ -2,6 +2,9 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
 import { UiRoot, uiLabelsEn } from "@vivd-catalyst/ui";
 
+/** The chat UI keeps its translation provider internal; tests take it from here. */
+export { TranslationProvider } from "../packages/chat-ui/src/i18n";
+
 /**
  * Renders chat UI the way the product does: inside a `UiRoot`. Library components that open an
  * overlay or show a label of their own refuse to render without one. The root's own element and

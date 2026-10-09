@@ -1,8 +1,7 @@
 import { createElement, type ReactNode } from "react";
-import { renderToStaticMarkup } from "./chat-ui-render-harness";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import type { ConversationListItem, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
 import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
 import {
