@@ -95,27 +95,57 @@ const keyName = (key, computed) =>
       : undefined;
 
 /**
- * Whether a node reads `property` from one of `objects`, by member access or by destructuring.
- * @param {AnyNode} node
- * @param {Set<AnyNode>} objects
- * @param {string} property
+ * The property names read from an object by static member access or by destructuring.
+ * Undefined when the object is used in any other way: aliased, passed on, compared or read
+ * with a computed key. No rule can follow the object after that.
+ * @param {AnyNode} object
+ * @returns {string[] | undefined}
  */
-const readsProperty = (node, objects, property) => {
-  if (node.type === "MemberExpression")
-    return objects.has(node.object) && keyName(node.property, node.computed) === property;
-  if (node.type !== "VariableDeclarator" && node.type !== "AssignmentExpression") return false;
-  const [pattern, source] =
-    node.type === "VariableDeclarator" ? [node.id, node.init] : [node.left, node.right];
-  return (
-    !!source &&
-    objects.has(source) &&
-    pattern.type === "ObjectPattern" &&
-    pattern.properties.some(
-      /** @param {AnyNode} item */
-      (item) => item.type !== "Property" || keyName(item.key, item.computed) === property
-    )
-  );
+const staticReads = (object) => {
+  const { parent } = /** @type {Node} */ (object);
+  if (!parent) return undefined;
+  // A `typeof` test and a name in a type read nothing from the object and cannot pass it on.
+  if (
+    (parent.type === "UnaryExpression" && parent.operator === "typeof") ||
+    ["TSTypeQuery", "TSQualifiedName"].includes(parent.type)
+  )
+    return [];
+  if (parent.type === "MemberExpression" && parent.object === object) {
+    const name = keyName(parent.property, parent.computed);
+    return name === undefined ? undefined : [name];
+  }
+  const pattern =
+    parent.type === "VariableDeclarator" && parent.init === object
+      ? parent.id
+      : parent.type === "AssignmentExpression" &&
+          parent.operator === "=" &&
+          parent.right === object &&
+          parent.parent?.type === "ExpressionStatement"
+        ? parent.left
+        : undefined;
+  if (pattern?.type !== "ObjectPattern") return undefined;
+  /** @type {string[]} */
+  const names = [];
+  for (const item of pattern.properties) {
+    const name = item.type === "Property" ? keyName(item.key, item.computed) : undefined;
+    if (name === undefined) return undefined;
+    names.push(name);
+  }
+  return names;
 };
+
+const hostObjects = ["globalThis", "window", "self"];
+
+/**
+ * The references to a host object that statically read one of `members` from it, such as
+ * `globalThis.fetch` or `const { console } = window`.
+ * @param {Context} context
+ * @param {string[]} members
+ */
+const hostMemberUses = (context, members) =>
+  [...globalUses(context, hostObjects)].filter((host) =>
+    staticReads(host)?.some((name) => members.includes(name))
+  );
 
 /**
  * The module a node loads, for static imports, dynamic imports and `require` calls.
@@ -159,30 +189,31 @@ const plugin = {
       "Console belongs in a CLI entry file",
       (filename) => packageAt(filename) !== undefined && !isCliEntry(filename),
       (context, report) => ({
-        Program: () => globalUses(context, ["console"]).forEach(report)
+        "Program:exit": () =>
+          [...globalUses(context, ["console"]), ...hostMemberUses(context, ["console"])].forEach(
+            report
+          )
       })
     ),
     "env-boundary": rule(
       "Environment reads belong in the package's src/env.ts",
       (filename) => packageAt(filename) !== undefined && !isPackageFile(filename, "src/env.ts"),
       (context, report) => {
-        /** @type {Set<AnyNode>} */
-        let processes = new Set();
         /** @param {AnyNode} node */
         const check = (node) => {
           const loaded = loadedModule(node);
-          if (
-            loaded === "process" ||
-            loaded === "node:process" ||
-            readsProperty(node, processes, "env")
-          )
-            report(node);
+          if (loaded === "process" || loaded === "node:process") report(node);
         };
         return {
-          Program: () => void (processes = globalUses(context, ["process"])),
-          MemberExpression: check,
-          VariableDeclarator: check,
-          AssignmentExpression: check,
+          // `process` may only be the object of a static read of something other than `env`.
+          // Any other use, and any `process` taken from a host object, could reach `env`.
+          "Program:exit": () =>
+            [
+              ...[...globalUses(context, ["process"])].filter(
+                (process) => staticReads(process)?.includes("env") ?? true
+              ),
+              ...hostMemberUses(context, ["process"])
+            ].forEach(report),
           // The global `process` keeps environment reads visible to this rule.
           ImportDeclaration: check,
           ImportExpression: check,
@@ -193,23 +224,25 @@ const plugin = {
     "fetch-boundary": rule(
       "Fetch belongs in api-client or a provider or connector adapter",
       (filename) => packageAt(filename) !== undefined && !mayFetch(filename),
-      (context, report) => {
-        /** @type {Set<AnyNode>} */
-        let hosts = new Set();
-        /** @param {AnyNode} node */
-        const check = (node) => {
-          if (readsProperty(node, hosts, "fetch")) report(node);
-        };
-        return {
-          Program: () => {
-            globalUses(context, ["fetch"]).forEach(report);
-            hosts = globalUses(context, ["globalThis", "window", "self"]);
-          },
-          MemberExpression: check,
-          VariableDeclarator: check,
-          AssignmentExpression: check
-        };
-      }
+      (context, report) => ({
+        "Program:exit": () =>
+          [...globalUses(context, ["fetch"]), ...hostMemberUses(context, ["fetch"])].forEach(report)
+      })
+    ),
+    // The three rules above follow a host object only through its named members. This rule
+    // reports every other use of one, so that no alias reaches console, process or fetch.
+    "host-object-boundary": rule(
+      "globalThis, window and self are only read through named members",
+      (filename) => packageAt(filename) !== undefined,
+      (context, report) => ({
+        "Program:exit": () =>
+          [
+            ...[...globalUses(context, hostObjects)].filter(
+              (host) => staticReads(host) === undefined
+            ),
+            ...hostMemberUses(context, hostObjects)
+          ].forEach(report)
+      })
     ),
     "memory-store": rule(
       "CB-3b removes STORE=memory and the in-memory platform store",
@@ -250,9 +283,8 @@ const config = [
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
-      "**/vendor/**",
-      "**/generated/**",
-      "**/migrations/**",
+      "packages/api-client/src/generated/**",
+      "packages/postgres-store/migrations/**",
       "**/.astro/**",
       "**/coverage/**",
       "**/playwright-report/**",

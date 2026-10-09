@@ -339,6 +339,13 @@
     },
     {
       "target": "lint",
+      "rule": "catalyst/host-object-boundary",
+      "scope": "packages/chat-ui",
+      "count": 1,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
       "rule": "catalyst/memory-store",
       "scope": "packages/client-assembly",
       "count": 2,

@@ -22,8 +22,8 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
   "knip.json": JSON.stringify({
     workspaces: {
       "packages/*": {
-        entry: ["src/*.{ts,cjs}", "src/adapters/*.ts"],
-        project: ["src/**/*.{ts,cjs}"]
+        entry: ["src/*.{ts,mts,cjs}", "src/adapters/*.ts"],
+        project: ["src/**/*.{ts,mts,cjs}"]
       },
       ".": { entry: ["tests/*.ts", "eslint.config.mjs"], project: ["tests/*.ts"] }
     }
@@ -86,6 +86,14 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
   [`${source}/env.ts`]: `export const mode = process.env.MODE;\n`,
   [`${source}/adapters/http.ts`]: `export const load = () => fetch("https://example.test");\n`,
   "tests/setup.test.ts": `console.log(process.env.MODE);\n`,
+  // Also allowed: named members other than console, process, env and fetch, a `typeof` test
+  // and a name in a type.
+  [`${source}/host-allowed.ts`]: `export const inBrowser = typeof window !== "undefined" && typeof process === "undefined";
+export const arch = process.arch;
+export const { platform } = process;
+export const address = globalThis.location;
+export type Handler = (event: globalThis.Event) => void;
+`,
 
   // typescript-eslint
   [`${source}/floating.ts`]: `Promise.resolve(1);\n`,
@@ -102,6 +110,7 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
 export const first = values[0]!;
 `,
   [`${source}/any.ts`]: `export const explicit: any = 1;\n`,
+  [`${source}/any-module.mts`]: `export const explicit: any = 1;\n`,
   [`${source}/unsafe-assertion.ts`]: `const input: unknown = 1;
 export const narrowed = input as number;
 `,
@@ -124,6 +133,7 @@ export const quiet = 1;
 log("example");
 `,
   [`${source}/console-alias.ts`]: `export const logger = console;\n`,
+  [`${source}/console-host.ts`]: `globalThis.console.log("example");\n`,
   [`${source}/env-member.ts`]: `export const mode = process.env.MODE;\n`,
   [`${source}/env-computed.ts`]: `export const mode = process["env"].MODE;\n`,
   [`${source}/env-destructured.ts`]: `const { env } = process;
@@ -135,12 +145,23 @@ export const mode = process.arch;
   [`${source}/env-named-import.ts`]: `import { env } from "node:process";
 export const mode = env.MODE;
 `,
+  [`${source}/env-alias.ts`]: `const p = process;
+export const mode = p.env.MODE;
+`,
+  [`${source}/env-host.ts`]: `export const mode = globalThis.process.env.MODE;\n`,
   [`${source}/env-require.cjs`]: `module.exports = require("node:process").arch;\n`,
   [`${source}/fetch-call.ts`]: `export const response = fetch("https://example.test");\n`,
   [`${source}/fetch-alias.ts`]: `export const transport = fetch;\n`,
   [`${source}/fetch-member.ts`]: `export const transport = globalThis.fetch;\n`,
   [`${source}/fetch-destructured.ts`]: `const { fetch: send } = globalThis;
 export const transport = send;
+`,
+  [`${source}/host-alias.ts`]: `const g = globalThis;
+export const response = g.fetch("https://example.test");
+`,
+  [`${source}/host-nested.ts`]: `export const response = window.self.fetch("https://example.test");\n`,
+  [`${source}/host-computed.ts`]: `const name = "fetch" as string;
+export const transport: unknown = Reflect.get(self, name);
 `,
 
   // Package boundaries, with each bypass
@@ -281,6 +302,7 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `@typescript-eslint/return-await ${source}/return-await.ts`,
         `@typescript-eslint/no-non-null-assertion ${source}/non-null.ts`,
         `@typescript-eslint/no-explicit-any ${source}/any.ts`,
+        `@typescript-eslint/no-explicit-any ${source}/any-module.mts`,
         `@typescript-eslint/no-unsafe-type-assertion ${source}/unsafe-assertion.ts`,
         `@typescript-eslint/no-unnecessary-type-assertion ${source}/unnecessary-assertion.ts`,
         `@typescript-eslint/ban-ts-comment ${source}/ts-comment.ts`,
@@ -289,16 +311,22 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/console-boundary ${source}/console-member.ts`,
         `catalyst/console-boundary ${source}/console-destructured.ts`,
         `catalyst/console-boundary ${source}/console-alias.ts`,
+        `catalyst/console-boundary ${source}/console-host.ts`,
         `catalyst/env-boundary ${source}/env-member.ts`,
         `catalyst/env-boundary ${source}/env-computed.ts`,
         `catalyst/env-boundary ${source}/env-destructured.ts`,
         `catalyst/env-boundary ${source}/env-import.ts`,
         `catalyst/env-boundary ${source}/env-named-import.ts`,
         `catalyst/env-boundary ${source}/env-require.cjs`,
+        `catalyst/env-boundary ${source}/env-alias.ts`,
+        `catalyst/env-boundary ${source}/env-host.ts`,
         `catalyst/fetch-boundary ${source}/fetch-call.ts`,
         `catalyst/fetch-boundary ${source}/fetch-alias.ts`,
         `catalyst/fetch-boundary ${source}/fetch-member.ts`,
         `catalyst/fetch-boundary ${source}/fetch-destructured.ts`,
+        `catalyst/host-object-boundary ${source}/host-alias.ts`,
+        `catalyst/host-object-boundary ${source}/host-nested.ts`,
+        `catalyst/host-object-boundary ${source}/host-computed.ts`,
         `import-x/no-unresolved ${source}/deep-import.ts`,
         `import-x/no-unresolved ${source}/deep-dynamic-import.ts`,
         `import-x/no-unresolved ${source}/deep-require.cjs`,
