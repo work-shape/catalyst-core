@@ -180,8 +180,8 @@ if (target === "format") {
       report("catalyst/package-cycle", "quality-package-graph.json", `${name} depends on itself`);
 
   // Source-module cycles among the files ESLint linted, resolved by TypeScript with the lint
-  // project's own options so that package aliases count. One finding per group of modules
-  // that reach each other.
+  // project's own options so that package aliases count. Modules that reach each other form
+  // a group, and every member is one finding, so a module that joins a group raises the count.
   const sources = new Set(results.map((result) => result.filePath));
   const { options } = parseProject("tsconfig.lint.json");
   /** @type {Map<string, string[]>} */
@@ -217,11 +217,13 @@ if (target === "format") {
     }
     if (low.get(file) !== index) return;
     const group = stack.splice(stack.indexOf(file)).sort();
-    if (group.length > 1 || imports.get(file)?.includes(file))
+    if (group.length === 1 && !imports.get(file)?.includes(file)) return;
+    const members = group.map((member) => relative(root, member).replaceAll("\\", "/"));
+    for (const member of group)
       report(
         "catalyst/module-cycle",
-        group[0] ?? file,
-        group.map((member) => relative(root, member)).join(" -> ")
+        member,
+        `One of ${group.length} modules that import each other: ${members.join(", ")}`
       );
   };
   for (const file of sources) if (!order.has(file)) visit(file);

@@ -334,6 +334,7 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `import-x/no-relative-packages ${source}/relative-package.ts`,
         `import-x/no-relative-packages ${source}/relative-require.cjs`,
         `catalyst/module-cycle ${source}/cycle-a.ts`,
+        `catalyst/module-cycle ${source}/cycle-b.ts`,
         `max-lines ${source}/large.ts`,
         `catalyst/memory-store ${source}/memory-store.ts`,
         `catalyst/database-skip tests/database.test.ts`,

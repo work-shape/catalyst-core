@@ -369,21 +369,21 @@
       "target": "lint",
       "rule": "catalyst/module-cycle",
       "scope": "packages/chat-server",
-      "count": 1,
+      "count": 4,
       "owner": "CB-4d"
     },
     {
       "target": "lint",
       "rule": "catalyst/module-cycle",
       "scope": "packages/chat-ui",
-      "count": 1,
+      "count": 6,
       "owner": "G-5c"
     },
     {
       "target": "lint",
       "rule": "catalyst/module-cycle",
       "scope": "packages/core",
-      "count": 1,
+      "count": 6,
       "owner": "CB-8b"
     },
     {
