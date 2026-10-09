@@ -7,6 +7,42 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Operations:** an operation can be registered once in the operation registry and is then
+  reached through one call path, `runOperation`, that checks the actor's right, resolves the
+  policy, asks the guardrails, executes and records the call as an Operation Run. Over HTTP
+  the status says how the run went: `200` with the output, `202` with the run and a
+  `Location` header while it waits for an approval, `403` for a refusal (`FORBIDDEN`,
+  `POLICY_DENIED`, `GUARDRAIL_BLOCKED`, `DECLINED`), the operation's own error for a failure.
+  Every answer of such a call names its run in the header `Operation-Run-Id`. A changing
+  operation takes an `Idempotency-Key`, scoped to its caller: the same call again is answered
+  from the run with `Idempotent-Replayed: true`, and `409` tells a key used for another call
+  (`IDEMPOTENCY_KEY_REUSED`), a first call still running (`OPERATION_IN_PROGRESS`), an
+  expired one (`OPERATION_EXPIRED`) or an answer too large to keep (`OUTPUT_NOT_RETAINED`).
+  No operation of the release is registered this way yet. A run stores a hash of the input,
+  never the input, and for a failure a code and a safe message.
+- **Operations:** `GET /api/v1/operations/runs/{runId}` reads one Operation Run and
+  `GET /api/v1/operations/runs` lists them, filtered by operation, status, actor, origin,
+  workspace and time. A caller reads its own run; any other run and the list take the right
+  to view the audit log. Both take the scope `governance:read`.
+- **Release config:** `policy.defaults` sets the policy value of operations that nothing else
+  names one for: `reading` is `allow` or `deny` (default `allow`), `changing` is `allow`,
+  `confirm`, `approval` or `deny` (default `confirm`). An instance without the section gets
+  the defaults.
+- **Database:** migration `0033_operation_runs` adds the table `operation_runs` and the
+  nullable columns `user_id`, `collaboration_workspace_id` and `operation_run_id` on
+  `model_usage_events`. Nothing writes the three columns yet. The previous release runs
+  against the migrated database.
+- **API client:** a method of an operation that can wait for an approval answers an
+  `OperationOutcome`: `done` with the output or `pending_approval` with the run. The client
+  sends a new `Idempotency-Key` with every such call unless the caller passes
+  `idempotencyKey`. `createApiClientFor(operations, options)` builds the same client for
+  operations outside the release's catalog. Cross-origin browsers may send `Idempotency-Key`
+  and read `Operation-Run-Id`, `Idempotent-Replayed` and `Location`.
+- **API contract:** `defineRegisteredOperation` defines an operation of the registry.
+  `defineOperation` takes an optional second success answer (`accepted`) and declared
+  `headers`, which the OpenAPI document states. Error codes that share a status share one
+  answer in the document, named after all of them.
+
 - **API reference:** an instance serves the OpenAPI document of the operations it runs at
   `GET /api/v1/openapi.json` and the same document as a page at `GET /api/v1/docs`. Both
   answer any signed-in person and any access token, whatever its scopes, and refuse a caller
