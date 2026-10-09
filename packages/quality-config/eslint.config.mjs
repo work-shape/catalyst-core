@@ -3,6 +3,7 @@ import { dirname, relative, resolve, sep } from "node:path";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import { importX } from "eslint-plugin-import-x";
 import tseslint from "typescript-eslint";
+import { leaseExemptions, processLocalTimers } from "./job-executor-exemptions.mjs";
 
 /**
  * @typedef {import("eslint").Rule.RuleContext} Context
@@ -188,81 +189,6 @@ const isServerSource = (filename) => {
 const mayFetch = (filename) =>
   packageAt(filename)?.directory === "packages/api-client" ||
   /[\\/](?:adapters|providers|connectors)[\\/]/.test(filename);
-
-/**
- * The claim queries and interval timers that predate the job executor, each with the ticket
- * that removes it. `within` is the function or method that holds the occurrence and `count`
- * how many it holds. One more in the same function, or one anywhere else, is a finding. The
- * list only shrinks.
- * @type {{ file: string, within: string, count: number, removedBy: string }[]}
- */
-const leaseExemptions = [
-  // The agent run lease: CB-7b.
-  {
-    file: "packages/postgres-store/src/postgres-agent-run-worker-operations.ts",
-    within: "claimNextAgentRun",
-    count: 1,
-    removedBy: "CB-7b"
-  },
-  {
-    file: "packages/postgres-store/src/postgres-agent-run-worker-operations.ts",
-    within: "recoverExpiredAgentRuns",
-    count: 1,
-    removedBy: "CB-7b"
-  },
-  // Heartbeat and cancellation timers.
-  {
-    file: "packages/agent-runtime/src/agent-run-worker.ts",
-    within: "runClaimed",
-    count: 2,
-    removedBy: "CB-7b"
-  },
-  // The workspace command lease: CB-7c.
-  {
-    file: "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
-    within: "claimNextWorkspaceCommand",
-    count: 1,
-    removedBy: "CB-7c"
-  },
-  {
-    file: "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
-    within: "recoverStaleWorkspaceCommands",
-    count: 1,
-    removedBy: "CB-7c"
-  },
-  // Heartbeat and cancellation timers.
-  {
-    file: "packages/tool-execution/src/workspace-command-worker.ts",
-    within: "runClaimedCommand",
-    count: 2,
-    removedBy: "CB-7c"
-  },
-  // The preview and document leases: S2-06b.
-  {
-    file: "packages/postgres-store/src/postgres-artifact-preview-operations.ts",
-    within: "claimNextArtifactPreviewJob",
-    count: 1,
-    removedBy: "S2-06b"
-  },
-  {
-    file: "packages/postgres-store/src/postgres-artifact-preview-operations.ts",
-    within: "recoverStaleArtifactPreviewJobs",
-    count: 1,
-    removedBy: "S2-06b"
-  },
-  {
-    file: "packages/postgres-store/src/postgres-file-store.ts",
-    within: "claimNextQueuedConversationAttachment",
-    count: 1,
-    removedBy: "S2-06b"
-  },
-  {
-    file: "packages/tool-execution/src/artifact-preview-worker.ts",
-    within: "startLeaseRenewal",
-    count: 1,
-    removedBy: "S2-06b"
-  }
-];
 
 /**
  * The name of the closest named function or method around a node.
@@ -711,8 +637,9 @@ const plugin = {
             for (const node of found) {
               const within = enclosingFunctionName(context, node);
               const allowed =
-                leaseExemptions.find((entry) => entry.file === file && entry.within === within)
-                  ?.count ?? 0;
+                [...leaseExemptions, ...processLocalTimers].find(
+                  (entry) => entry.file === file && entry.within === within
+                )?.count ?? 0;
               const count = (seen.get(within ?? "") ?? 0) + 1;
               seen.set(within ?? "", count);
               if (count > allowed) report(node);

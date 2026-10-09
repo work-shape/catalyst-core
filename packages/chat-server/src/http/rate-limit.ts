@@ -149,7 +149,7 @@ export function createInProcessRateLimiter(
   const windows = new Map<string, { count: number; endsAt: number }>();
   // One per rule, so there are a handful. They are held beside the counters and not capped.
   const overflow = new Map<string, { count: number; endsAt: number }>();
-  let sweeper: ReturnType<typeof setInterval> | undefined;
+  let sweeper: NodeJS.Timeout | undefined;
 
   function sweep(): void {
     const time = now();
