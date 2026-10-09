@@ -11,6 +11,7 @@ export * from "./schema/usage";
 export * from "./schema/configAssets";
 export * from "./schema/approvals";
 export * from "./schema/jobs";
+export * from "./schema/operationRuns";
 import { productUsers, userIdentities } from "./schema/users";
 import { servicePrincipals, apiCredentials } from "./schema/apiAccess";
 import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
@@ -33,6 +34,7 @@ import { modelUsageEvents } from "./schema/usage";
 import { configAssetState, configAssets, configAssetRevisions } from "./schema/configAssets";
 import { approvalRequests } from "./schema/approvals";
 import { platformJobs } from "./schema/jobs";
+import { operationRuns } from "./schema/operationRuns";
 
 export const schema = {
   approvalRequests,
@@ -60,5 +62,6 @@ export const schema = {
   configAssetState,
   configAssets,
   configAssetRevisions,
-  platformJobs
+  platformJobs,
+  operationRuns
 };

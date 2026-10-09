@@ -21,6 +21,10 @@ export const modelUsageEvents = pgTable(
     source: text("source").$type<ModelUsageEvent["source"]>().notNull(),
     customerBillableCost:
       jsonb("customer_billable_cost").$type<ModelUsageEvent["customerBillableCost"]>(),
+    // Who the usage is attributed to. Rows written before these columns hold none.
+    userId: text("user_id"),
+    collaborationWorkspaceId: text("collaboration_workspace_id"),
+    operationRunId: text("operation_run_id"),
     correlationId: text("correlation_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },
