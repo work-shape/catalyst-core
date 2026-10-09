@@ -395,6 +395,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   from the conversation's history, so affected conversations answer again without a migration.
   A provider's 400 `context_length_exceeded` fails the run with "This conversation is too long
   for the model. Start a new conversation." instead of an internal error.
+- **Models:** an image whose data URL would exceed the same limit (about 15 MiB of image bytes) is
+  left out of the request to an OpenAI-compatible provider, and the model reads a note in its
+  place that an image was too large to include. Such an image used to fail the run with 400
+  `string_above_max_length` on every message of the conversation.
 - **Models:** a run waits out a provider's per-minute rate limit. On HTTP 429, or the same
   refusal inside a stream, a model call waits about 4 s, 8 s, 16 s and 32 s, up to 60 s in
   total, and never sooner than the provider's `Retry-After`; a `Retry-After` beyond what is

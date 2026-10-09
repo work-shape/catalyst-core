@@ -1010,6 +1010,114 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it.each(["responses", "chat_completions"] as const)(
+    "leaves an image above the provider's string limit out of a %s request and says so",
+    async (api) => {
+      let requestBody = "";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+          requestBody = String(init?.body);
+          return new Response(
+            JSON.stringify(
+              api === "responses"
+                ? { output_text: "done", usage: { input_tokens: 1, output_tokens: 1 } }
+                : {
+                    choices: [{ message: { content: "done" } }],
+                    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+                  }
+            ),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        })
+      );
+      const prefixLength = "data:image/png;base64,".length;
+      // The largest image whose data URL still fits, and one that is three bytes larger.
+      const fittingBytes = Math.floor((OPENAI_RESPONSES_STRING_MAX_CHARS - prefixLength) / 4) * 3;
+      const image = (byteLength: number) => ({
+        type: "image" as const,
+        mimeType: "image/png" as const,
+        data: new Uint8Array(byteLength)
+      });
+      const clientInstanceId = asClientInstanceId("client-test");
+      const provider = new OpenAiCompatibleChatProvider({
+        id: "openai",
+        api,
+        model: "gpt-5.5",
+        baseUrl: "https://example.test/v1",
+        apiKey: "test"
+      });
+
+      await provider.complete(
+        {
+          providerId: "openai",
+          model: "gpt-5.5",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Compare these." },
+                image(fittingBytes),
+                image(fittingBytes + 3)
+              ]
+            },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [
+                {
+                  toolCallId: "call_image",
+                  toolName: "view_document_page",
+                  input: { pageNumber: 1 }
+                }
+              ]
+            },
+            {
+              role: "tool",
+              toolCallId: "call_image",
+              content: [{ type: "text", text: '{"pageNumber":1}' }, image(fittingBytes + 3)]
+            }
+          ],
+          tools: [{ name: "view_document_page", description: "View PDF page" }]
+        },
+        {
+          clientInstanceId,
+          correlationId: "corr-test",
+          user: {
+            id: "user-test",
+            externalUserId: "user-test",
+            displayLabel: "User",
+            roles: ["user"],
+            permissionRefs: [],
+            clientInstanceId,
+            authSource: "test"
+          }
+        }
+      );
+
+      const strings: string[] = [];
+      JSON.parse(requestBody, (_key, value: unknown) => {
+        if (typeof value === "string") {
+          strings.push(value);
+        }
+        return value;
+      });
+      const dataUrls = strings.filter((value) => value.startsWith("data:"));
+      expect(dataUrls.map((value) => value.length)).toEqual([
+        prefixLength + (fittingBytes / 3) * 4
+      ]);
+      expect(Math.max(...strings.map((value) => value.length))).toBeLessThanOrEqual(
+        OPENAI_RESPONSES_STRING_MAX_CHARS
+      );
+      expect(strings).toContain(
+        "Compare these.\n\n[1 image was too large to include in the model input and was left out.]"
+      );
+      expect(strings).toContain(
+        "Visual output from tool call call_image.\n\n[1 image was too large to include in the model input and was left out.]"
+      );
+    }
+  );
+
   it("announces OpenAI-compatible tool calls before their streamed input is complete", async () => {
     let requestBody:
       | {

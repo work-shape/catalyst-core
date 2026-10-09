@@ -36,7 +36,9 @@ import type {
 
 // The longest string the Responses API accepts in a request: 20 MiB, the number its 400
 // `string_above_max_length` names. A compaction or reasoning item above it is not kept as a
-// continuation, so the conversation goes on from its own history; the user sees nothing.
+// continuation, so the conversation goes on from its own history; the user sees nothing. An image
+// whose data URL would be longer (about 15 MiB of image bytes) is left out of the request, and the
+// model is told so in its place.
 export const OPENAI_RESPONSES_STRING_MAX_CHARS = 20_971_520;
 
 export interface OpenAiCompatibleProviderTool {
@@ -200,20 +202,21 @@ function toOpenAiChatMessagesForOne(
 
   if (message.role === "tool") {
     const text = modelContentText(message.content);
-    const images = modelContentImages(message.content);
-    if (images.length > 0) {
+    const images = toImageInputs(modelContentImages(message.content));
+    if (images.count > 0) {
       pendingVisualMessages.push({
         role: "user",
         content: [
           {
             type: "text",
-            text: `Visual output from tool call ${message.toolCallId}.`
+            text: withOmittedImagesNote(
+              `Visual output from tool call ${message.toolCallId}.`,
+              images.omittedCount
+            )
           },
-          ...images.map((image) => ({
+          ...images.dataUrls.map((url) => ({
             type: "image_url" as const,
-            image_url: {
-              url: imageToDataUrl(image)
-            }
+            image_url: { url }
           }))
         ]
       });
@@ -280,18 +283,21 @@ export function toOpenAiResponsesInput(
         call_id: message.toolCallId,
         output: modelContentText(message.content)
       });
-      const images = modelContentImages(message.content);
-      if (images.length > 0) {
+      const images = toImageInputs(modelContentImages(message.content));
+      if (images.count > 0) {
         pendingVisualMessages.push({
           role: "user",
           content: [
             {
               type: "input_text",
-              text: `Visual output from tool call ${message.toolCallId}.`
+              text: withOmittedImagesNote(
+                `Visual output from tool call ${message.toolCallId}.`,
+                images.omittedCount
+              )
             },
-            ...images.map((image) => ({
+            ...images.dataUrls.map((url) => ({
               type: "input_image" as const,
-              image_url: imageToDataUrl(image)
+              image_url: url
             }))
           ]
         });
@@ -645,11 +651,11 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toOpenAiChatContent(content: ModelContent): OpenAiChatTextImageContent {
-  const images = modelContentImages(content);
-  if (images.length === 0) {
+  const images = toImageInputs(modelContentImages(content));
+  if (images.count === 0) {
     return modelContentText(content);
   }
-  const text = modelContentText(content);
+  const text = withOmittedImagesNote(modelContentText(content), images.omittedCount);
   return [
     ...(text
       ? [
@@ -659,21 +665,19 @@ function toOpenAiChatContent(content: ModelContent): OpenAiChatTextImageContent 
           }
         ]
       : []),
-    ...images.map((image) => ({
+    ...images.dataUrls.map((url) => ({
       type: "image_url" as const,
-      image_url: {
-        url: imageToDataUrl(image)
-      }
+      image_url: { url }
     }))
   ];
 }
 
 function toOpenAiResponsesContent(content: ModelContent): OpenAiResponsesInputContent {
-  const images = modelContentImages(content);
-  if (images.length === 0) {
+  const images = toImageInputs(modelContentImages(content));
+  if (images.count === 0) {
     return modelContentText(content);
   }
-  const text = modelContentText(content);
+  const text = withOmittedImagesNote(modelContentText(content), images.omittedCount);
   return [
     ...(text
       ? [
@@ -683,15 +687,49 @@ function toOpenAiResponsesContent(content: ModelContent): OpenAiResponsesInputCo
           }
         ]
       : []),
-    ...images.map((image) => ({
+    ...images.dataUrls.map((url) => ({
       type: "input_image" as const,
-      image_url: imageToDataUrl(image)
+      image_url: url
     }))
   ];
 }
 
+/**
+ * The data URLs of the images a request can carry. The provider refuses a whole request over one
+ * string above its limit, so an image that large is counted as omitted instead of sent.
+ */
+function toImageInputs(images: Extract<ModelContentPart, { type: "image" }>[]): {
+  count: number;
+  dataUrls: string[];
+  omittedCount: number;
+} {
+  const dataUrls = images
+    .filter((image) => imageDataUrlLength(image) <= OPENAI_RESPONSES_STRING_MAX_CHARS)
+    .map(imageToDataUrl);
+  return { count: images.length, dataUrls, omittedCount: images.length - dataUrls.length };
+}
+
+function withOmittedImagesNote(text: string, omittedCount: number): string {
+  if (omittedCount === 0) {
+    return text;
+  }
+  const note =
+    omittedCount === 1
+      ? "[1 image was too large to include in the model input and was left out.]"
+      : `[${omittedCount} images were too large to include in the model input and were left out.]`;
+  return text ? `${text}\n\n${note}` : note;
+}
+
+function imageDataUrlPrefix(image: Extract<ModelContentPart, { type: "image" }>): string {
+  return `data:${image.mimeType};base64,`;
+}
+
+function imageDataUrlLength(image: Extract<ModelContentPart, { type: "image" }>): number {
+  return imageDataUrlPrefix(image).length + Math.ceil(image.data.byteLength / 3) * 4;
+}
+
 function imageToDataUrl(image: Extract<ModelContentPart, { type: "image" }>): string {
-  return `data:${image.mimeType};base64,${Buffer.from(image.data).toString("base64")}`;
+  return `${imageDataUrlPrefix(image)}${Buffer.from(image.data).toString("base64")}`;
 }
 
 function flushPendingVisualMessages<T>(target: T[], pending: T[]): void {
