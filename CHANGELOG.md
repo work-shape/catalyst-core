@@ -344,6 +344,14 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Chat:** an instance configuration that does not load no longer leaves "Loading
+  configuration" standing. A request without an answer or with a 5xx is tried three more times;
+  after that, or at once for an answer of a shape the interface cannot read, a panel offers "Try
+  again" and "Reload". An answer from another release reads as the outdated-tab notice does, and
+  the console names the paths of the fields that did not fit, never their values. The client
+  reports an answer that does not match its operation's schema as `ApiResponseShapeError`, an
+  `ApiError` with those paths, and calls `onResponseMismatch`; the interface then shows the
+  reload notice, also for an enum value or a stream event of a later release.
 - **Retention:** conversation expiry decides under the conversation's row lock and removes
   data only afterwards. A conversation is expired only if it is still due, or still an
   abandoned draft, at that moment, so a message, an upload or a restored draft attachment that

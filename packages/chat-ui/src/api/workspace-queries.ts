@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ApiError,
+  ApiResponseShapeError,
   listAll,
   type ApiClient,
   type Conversation,
@@ -65,17 +67,47 @@ export async function getCurrentUserWithinDeadline(
   }
 }
 
-export function useWorkspaceConfigQuery(
-  input: WorkspaceQueryInput & {
+const CONFIG_LOAD_RETRIES = 3;
+
+/**
+ * The instance configuration the whole interface waits for. A failure that may pass by itself
+ * (no answer, or a 5xx) is tried again a few times before it shows; a refusal or an answer of
+ * another shape is not, because asking again changes nothing.
+ */
+export function workspaceConfigQueryOptions(
+  input: Pick<WorkspaceQueryInput, "apiBaseUrl" | "authScope"> & {
+    client: { config: Pick<ApiClient["config"], "get"> };
     localePreference: LocaleCode | undefined;
     enabled: boolean;
   }
 ) {
-  return useQuery({
+  return {
     queryKey: workspaceQueryKeys.config(input.apiBaseUrl, input.authScope, input.localePreference),
-    queryFn: () => input.client.config.get({ query: { locale: input.localePreference } }),
+    queryFn: async () => {
+      try {
+        return await input.client.config.get({ query: { locale: input.localePreference } });
+      } catch (error) {
+        if (error instanceof ApiResponseShapeError) {
+          // Paths only: the values of an instance configuration do not belong in a console.
+          console.error(
+            `The instance configuration does not fit this interface at: ${error.paths.join(", ")}`
+          );
+        }
+        throw error;
+      }
+    },
+    retry: (failureCount: number, error: unknown) =>
+      failureCount < CONFIG_LOAD_RETRIES && isTransientFailure(error),
     enabled: input.enabled
-  });
+  };
+}
+
+function isTransientFailure(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 0 || error.status >= 500);
+}
+
+export function useWorkspaceConfigQuery(input: Parameters<typeof workspaceConfigQueryOptions>[0]) {
+  return useQuery(workspaceConfigQueryOptions(input));
 }
 
 export function workspaceConversationsQueryOptions(

@@ -43,15 +43,25 @@ export async function refusalError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, readErrorMessage(payload) ?? REQUEST_FAILED, payload);
 }
 
-/** The server answered a success that is not what the operation's contract describes. */
-export function malformedResponseError(status: number, cause: unknown): ApiError {
-  return new ApiError(
-    status,
-    cause instanceof SyntaxError
-      ? "API response is not valid JSON"
-      : "API response does not match the contract",
-    cause
-  );
+/** The server answered a success whose body cannot be read as JSON. */
+export function unreadableResponseError(status: number, cause: unknown): ApiError {
+  return new ApiError(status, "API response is not valid JSON", cause);
+}
+
+/**
+ * The server answered a success that the operation's schema refuses: usually a client of
+ * another release than the server, such as an enum value or an event type this client does not
+ * know. `paths` names where the answer differs and never what it held.
+ */
+export class ApiResponseShapeError extends ApiError {
+  /** Dotted paths of the fields the schema refused, each once. */
+  readonly paths: readonly string[];
+
+  constructor(status: number, cause: z.ZodError) {
+    super(status, "API response does not match the contract", cause);
+    this.name = "ApiResponseShapeError";
+    this.paths = [...new Set(cause.issues.map((issue) => issue.path.join(".") || "(root)"))];
+  }
 }
 
 function parseJsonOrText(text: string): unknown {

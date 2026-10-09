@@ -1,7 +1,7 @@
 import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
 import type { CSSProperties, ReactNode } from "react";
-import { Banner, Button, cn } from "@vivd-catalyst/ui";
+import { Banner, Button, Card, CardContent, CardHeader, CardTitle, cn } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { AgentSelector, type AgentChipDisplay } from "./agent-selector";
 import { useTranslation } from "../i18n";
@@ -9,8 +9,9 @@ import { type ResolvedThemeMode } from "../theme";
 import { ThemeToggle } from "./theme-toggle";
 
 /**
- * Shown once when the server no longer knows an operation this interface calls, which happens
- * to a tab that stayed open across an upgrade. The reader reloads; nothing reloads by itself.
+ * Shown once when the server no longer knows an operation this interface calls, or answers one
+ * outside the schema this interface was built with, which happens to a tab that stayed open
+ * across an upgrade. The reader reloads; nothing reloads by itself.
  */
 export function OutdatedInterfaceNotice() {
   const { interfaceOutdated } = useWorkspaceApiClient();
@@ -61,7 +62,7 @@ export function SessionCheckPanel({
       }
       action={
         unavailable ? (
-          <Button type="button" size="sm" disabled={retrying} onClick={onRetry}>
+          <Button size="sm" disabled={retrying} onClick={onRetry}>
             {t("tryAgain")}
           </Button>
         ) : undefined
@@ -70,22 +71,57 @@ export function SessionCheckPanel({
   );
 }
 
+/**
+ * What stands in for the workspace until the instance configuration has loaded. A failed load
+ * offers both ways out. An answer from another release reads as the outdated-tab notice does,
+ * because that is what it is.
+ */
 export function ConfigCheckPanel({
   className,
-  error
+  failure,
+  retrying,
+  onRetry,
+  onReload
 }: {
   className: string | undefined;
-  error: string | undefined;
+  failure: "outdated" | "unavailable" | undefined;
+  retrying: boolean;
+  onRetry(): void;
+  onReload(): void;
 }) {
   const { t } = useTranslation();
-  const failed = error !== undefined;
 
+  if (failure === undefined) {
+    return (
+      <StatusPanel
+        className={className}
+        title={t("configLoading")}
+        description={t("workspaceLoadingDescription")}
+      />
+    );
+  }
+
+  const outdated = failure === "outdated";
   return (
     <StatusPanel
       className={className}
-      title={failed ? t("couldNotLoadWorkspace") : t("configLoading")}
-      description={
-        failed ? error || t("workspaceLoadFailedDescription") : t("workspaceLoadingDescription")
+      role="alert"
+      title={outdated ? t("interfaceOutdatedTitle") : t("couldNotLoadWorkspace")}
+      description={outdated ? t("interfaceOutdatedBody") : t("workspaceLoadFailedDescription")}
+      action={
+        <>
+          <Button
+            size="sm"
+            variant={outdated ? "secondary" : "primary"}
+            disabled={retrying}
+            onClick={onRetry}
+          >
+            {t("tryAgain")}
+          </Button>
+          <Button size="sm" variant={outdated ? "primary" : "secondary"} onClick={onReload}>
+            {t("interfaceOutdatedReload")}
+          </Button>
+        </>
       }
     />
   );
@@ -93,11 +129,13 @@ export function ConfigCheckPanel({
 
 function StatusPanel({
   className,
+  role,
   title,
   description,
   action
 }: {
   className: string | undefined;
+  role?: "alert";
   title: string;
   description: string;
   action?: ReactNode;
@@ -109,11 +147,13 @@ function StatusPanel({
         className
       )}
     >
-      <div className="grid w-full max-w-[380px] gap-2 rounded-lg border bg-card p-5 text-card-foreground shadow-xs">
-        <strong className="text-sm font-semibold">{title}</strong>
-        <p className="text-sm text-muted-foreground">{description}</p>
-        {action ? <div className="mt-2">{action}</div> : null}
-      </div>
+      <Card padding="md" role={role} className="w-full max-w-[380px] shadow-xs">
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <p className="text-body text-muted-foreground">{description}</p>
+        </CardHeader>
+        {action ? <CardContent className="flex flex-wrap gap-2">{action}</CardContent> : null}
+      </Card>
     </main>
   );
 }

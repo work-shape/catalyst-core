@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ApiClient,
   ApiUser,
@@ -59,12 +59,7 @@ import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
 import type { WorkspaceRoute } from "./workspace-route";
-import {
-  apiErrorMessage,
-  apiErrorStatus,
-  applyFavicon,
-  createEnvironmentDocumentTitle
-} from "../workspace-utils";
+import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
 import {
   agentModelSelection,
   conversationModelPicks,
@@ -199,7 +194,13 @@ export interface WorkspaceAuthModel {
 
 export interface WorkspaceConfigModel {
   config: SafeConfig | undefined;
-  error: string | undefined;
+  /**
+   * Why the configuration did not load. `outdated`: the answer or the path belongs to another
+   * release than this interface, so only a reload helps. `unavailable`: anything else.
+   */
+  failure: "outdated" | "unavailable" | undefined;
+  retrying: boolean;
+  retry(): void;
   activeLocale: LocaleCode;
   localePreference: LocaleCode | undefined;
   supportedLocales: LocaleCode[];
@@ -319,7 +320,7 @@ export function useWorkspaceChatModel({
   const [changedConversationModelPicks, setChangedConversationModelPicks] = useState<
     Readonly<Record<string, ModelPicks>>
   >({});
-  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  const { apiBaseUrl, client, interfaceOutdated } = useWorkspaceApiClient();
   const routeState = useWorkspaceRouteState();
   const chrome = useWorkspaceChromeState();
   const preferences = useWorkspacePreferences();
@@ -341,6 +342,16 @@ export function useWorkspaceChatModel({
     localePreference: preferences.localePreference,
     enabled: isAuthenticated
   });
+  const configFailure = !configQuery.error
+    ? undefined
+    : interfaceOutdated
+      ? "outdated"
+      : "unavailable";
+  const { refetch: refetchConfig } = configQuery;
+  const retryConfig = useCallback(() => {
+    // A refetch reports its failure through the query and does not reject.
+    refetchConfig().catch(() => undefined);
+  }, [refetchConfig]);
   const modelPreferenceQuery = useWorkspaceModelPreferenceQuery({
     apiBaseUrl,
     client,
@@ -392,6 +403,14 @@ export function useWorkspaceChatModel({
     collaborationWorkspaceId: activeCollaborationWorkspaceId,
     collaborationWorkspacesAvailable
   });
+  const configSessionEnded = apiErrorStatus(configQuery.error) === 401;
+  const { invalidateCurrentUser } = workspaceCache;
+  useEffect(() => {
+    // The session ended between the two requests: asking who is signed in leads to sign-in.
+    if (configSessionEnded) {
+      invalidateCurrentUser();
+    }
+  }, [configSessionEnded, invalidateCurrentUser]);
   const controller = useConversationController({
     client,
     conversationId: selectedConversationId,
@@ -858,7 +877,9 @@ export function useWorkspaceChatModel({
     },
     config: {
       config,
-      error: configQuery.error ? (apiErrorMessage(configQuery.error, undefined) ?? "") : undefined,
+      failure: configFailure,
+      retrying: configQuery.isFetching,
+      retry: retryConfig,
       activeLocale,
       localePreference: preferences.localePreference,
       supportedLocales,

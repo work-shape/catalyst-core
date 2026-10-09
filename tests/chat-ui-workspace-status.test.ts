@@ -1,5 +1,4 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup as renderInUiRoot } from "./chat-ui-render-harness";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
@@ -10,37 +9,97 @@ import {
 } from "../packages/chat-ui/src/workspace/workspace-chrome";
 
 describe("workspace config status", () => {
+  const idle = { retrying: false, onRetry: () => undefined, onReload: () => undefined };
+
   it("keeps the loading state neutral until customer config is available", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderInUiRoot(
       createElement(
         TranslationProvider,
         { children: null, locale: "en" },
-        createElement(ConfigCheckPanel, { className: undefined, error: undefined })
+        createElement(ConfigCheckPanel, { className: undefined, failure: undefined, ...idle })
       )
     );
 
     expect(markup).toContain("Loading configuration…");
     expect(markup).not.toContain("Vivd Catalyst");
     expect(markup).not.toContain("lucide-shield");
+    expect(markup).not.toContain("<button");
   });
 
-  it("shows a localized neutral error when config loading fails without details", () => {
-    const markup = renderToStaticMarkup(
+  it.each([
+    [
+      "en",
+      "Could not load workspace",
+      "Please refresh the page and try again.",
+      "Try again",
+      "Reload"
+    ],
+    [
+      "de",
+      "Arbeitsbereich konnte nicht geladen werden",
+      "Bitte lade die Seite neu und versuche es noch einmal.",
+      "Erneut versuchen",
+      "Neu laden"
+    ]
+  ] as const)("offers a retry and a reload when the load failed in %s", (locale, ...texts) => {
+    const markup = renderInUiRoot(
       createElement(
         TranslationProvider,
-        { children: null, locale: "de" },
-        createElement(ConfigCheckPanel, { className: undefined, error: "" })
+        { children: null, locale },
+        createElement(ConfigCheckPanel, { className: undefined, failure: "unavailable", ...idle })
       )
     );
 
-    expect(markup).toContain("Arbeitsbereich konnte nicht geladen werden");
-    expect(markup).toContain("Bitte lade die Seite neu und versuche es noch einmal.");
+    expect(markup.match(/role="alert"/gu)).toHaveLength(1);
+    for (const text of texts) {
+      expect(markup).toContain(text);
+    }
+    expect(markup.match(/<button/gu)).toHaveLength(2);
+  });
+
+  it.each([
+    ["en", "The application was updated", "Try again", "Reload"],
+    ["de", "Die Anwendung wurde aktualisiert", "Erneut versuchen", "Neu laden"]
+  ] as const)(
+    "reads as the outdated-tab notice for another release's answer in %s",
+    (locale, ...texts) => {
+      const markup = renderInUiRoot(
+        createElement(
+          TranslationProvider,
+          { children: null, locale },
+          createElement(ConfigCheckPanel, { className: undefined, failure: "outdated", ...idle })
+        )
+      );
+
+      for (const text of texts) {
+        expect(markup).toContain(text);
+      }
+      expect(markup.match(/<button/gu)).toHaveLength(2);
+    }
+  );
+
+  it("holds the retry while one is under way", () => {
+    const markup = renderInUiRoot(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "en" },
+        createElement(ConfigCheckPanel, {
+          className: undefined,
+          failure: "unavailable",
+          ...idle,
+          retrying: true
+        })
+      )
+    );
+
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Try again<\/button>/u);
+    expect(markup).not.toMatch(/<button[^>]*disabled=""[^>]*>Reload<\/button>/u);
   });
 });
 
 describe("workspace session status", () => {
   it("shows a neutral localized failure with one manual retry", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderInUiRoot(
       createElement(
         TranslationProvider,
         { children: null, locale: "de" },
@@ -60,7 +119,7 @@ describe("workspace session status", () => {
   });
 
   it("does not offer retry while the initial check is still running", () => {
-    const markup = renderToStaticMarkup(
+    const markup = renderInUiRoot(
       createElement(
         TranslationProvider,
         { children: null, locale: "en" },

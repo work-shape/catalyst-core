@@ -1,4 +1,4 @@
-import { createApiClient } from "@vivd-catalyst/api-client";
+import { ApiResponseShapeError, createApiClient } from "@vivd-catalyst/api-client";
 import { UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { callTestPath, createTestInstance, type TestInstance } from "./support/test-instance";
@@ -24,13 +24,15 @@ function notFound(details?: unknown): Response {
 
 function clientAnswering(response: () => Response) {
   const onUnknownOperation = vi.fn();
+  const onResponseMismatch = vi.fn();
   const client = createApiClient({
     baseUrl: "https://catalyst.example.test",
     getToken: () => "token",
     fetchImpl: () => Promise.resolve(response()),
-    onUnknownOperation
+    onUnknownOperation,
+    onResponseMismatch
   });
-  return { client, onUnknownOperation };
+  return { client, onUnknownOperation, onResponseMismatch };
 }
 
 describe("an interface older than its server", () => {
@@ -63,5 +65,20 @@ describe("an interface older than its server", () => {
     const missing = clientAnswering(() => notFound());
     await expect(missing.client.me.get()).rejects.toMatchObject({ status: 404 });
     expect(missing.onUnknownOperation).not.toHaveBeenCalled();
+  });
+
+  it("reports an answer outside the schema of its operation by path, and no unreadable one", async () => {
+    // What a value of a later release, such as an unknown enum member, looks like to a client.
+    const mismatched = clientAnswering(() => Response.json({ items: [{ id: 7 }] }));
+    const failure = await mismatched.client.conversations.list().catch((caught: unknown) => caught);
+    expect(failure).toBeInstanceOf(ApiResponseShapeError);
+    expect(failure).toMatchObject({ status: 200 });
+    expect(failure).toHaveProperty("paths", expect.arrayContaining(["items.0.id"]));
+    expect(mismatched.onResponseMismatch).toHaveBeenCalledTimes(1);
+    expect(mismatched.onUnknownOperation).not.toHaveBeenCalled();
+
+    const unreadable = clientAnswering(() => new Response("<html>"));
+    await expect(unreadable.client.conversations.list()).rejects.toMatchObject({ status: 200 });
+    expect(unreadable.onResponseMismatch).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,10 @@ import { createApiClient, type ApiClient } from "@vivd-catalyst/api-client";
 interface WorkspaceApiClientContextValue {
   apiBaseUrl: string;
   client: ApiClient;
-  /** The server answered that it does not know an operation this interface called. */
+  /**
+   * The server answered that it does not know an operation this interface called, or answered
+   * one outside the schema this interface was built with: it runs another release.
+   */
   interfaceOutdated: boolean;
 }
 
@@ -29,6 +32,7 @@ export function WorkspaceApiClientProvider({
     return createApiClient({
       baseUrl: apiBaseUrl,
       onUnknownOperation: () => setInterfaceOutdated(true),
+      onResponseMismatch: () => setInterfaceOutdated(true),
       ...(resolvedGetToken ? { getToken: resolvedGetToken } : {})
     });
   }, [apiBaseUrl, getToken, token]);

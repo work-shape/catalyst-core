@@ -5,7 +5,7 @@ import {
   type OperationPathParamName
 } from "@vivd-catalyst/api-contract";
 import type { z } from "zod";
-import { ApiError, malformedResponseError, transportError } from "./errors";
+import { ApiError, ApiResponseShapeError, transportError, unreadableResponseError } from "./errors";
 import { readServerSentEvents } from "./server-sent-events";
 import {
   createApiTransport,
@@ -196,7 +196,12 @@ function callOperation(
   return transport
     .send(operation, request)
     .then(async (answer) =>
-      parseJson(await readBody(() => answer.text(), request), response.schema, answer.status)
+      parseJson(
+        transport,
+        await readBody(() => answer.text(), request),
+        response.schema,
+        answer.status
+      )
     );
 }
 
@@ -216,7 +221,7 @@ async function* streamEvents(
   }
   try {
     for await (const data of readServerSentEvents(answer.body)) {
-      yield parseJson(data, schema, answer.status);
+      yield parseJson(transport, data, schema, answer.status);
     }
   } catch (error) {
     throw asCallFailure(error, request);
@@ -236,16 +241,22 @@ function asCallFailure(error: unknown, request: OperationRequest): unknown {
   return error instanceof ApiError || request.signal?.aborted ? error : transportError(error);
 }
 
-function parseJson(text: string, schema: z.ZodType, status: number): unknown {
+function parseJson(
+  transport: ApiTransport,
+  text: string,
+  schema: z.ZodType,
+  status: number
+): unknown {
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch (error) {
-    throw malformedResponseError(status, error);
+    throw unreadableResponseError(status, error);
   }
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
-    throw malformedResponseError(status, parsed.error);
+    transport.reportResponseMismatch();
+    throw new ApiResponseShapeError(status, parsed.error);
   }
   return parsed.data;
 }

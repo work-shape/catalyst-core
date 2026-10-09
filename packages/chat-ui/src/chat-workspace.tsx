@@ -173,8 +173,15 @@ function ChatWorkspaceContent({
     return (
       <TranslationProvider locale={model.config.activeLocale}>
         <UiRoot mode={themeMode} labels={uiLabels}>
-          <OutdatedInterfaceNotice />
-          <ConfigCheckPanel className={className} error={model.config.error} />
+          {/* A failed load says it in the panel; the notice above it would say it twice. */}
+          {model.config.failure ? null : <OutdatedInterfaceNotice />}
+          <ConfigCheckPanel
+            className={className}
+            failure={model.config.failure}
+            retrying={model.config.retrying}
+            onRetry={model.config.retry}
+            onReload={() => window.location.reload()}
+          />
         </UiRoot>
       </TranslationProvider>
     );

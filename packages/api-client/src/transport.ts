@@ -16,6 +16,11 @@ export interface ApiClientOptions {
    * this client was built for another release than the server now runs.
    */
   onUnknownOperation?: () => void;
+  /**
+   * Called when a successful answer does not match the schema of its operation, which reads
+   * the same way: the server speaks another release's contract than this client.
+   */
+  onResponseMismatch?: () => void;
 }
 
 /** What one call may carry. Which parts an operation takes is decided by its descriptor. */
@@ -42,6 +47,7 @@ export function createApiTransport(options: ApiClientOptions) {
   return {
     browserManagedDownloads: cookieMode && (options.browserManagedDownloads ?? true),
     urlFor,
+    reportResponseMismatch: () => options.onResponseMismatch?.(),
     async send(operation: Operation, request: OperationRequest): Promise<Response> {
       const url = urlFor(operation, request);
       const headers = new Headers();

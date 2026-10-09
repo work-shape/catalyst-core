@@ -910,6 +910,52 @@ test("a first message sent while the workspace still loads goes out once it has 
   expect(createRunRequests()).toBe(1);
 });
 
+test("a configuration the interface cannot read shows an error that a retry recovers from", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+  const logged: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") logged.push(message.text());
+  });
+  // The first request gets no answer, the second an answer of another shape, the third the
+  // server's own.
+  let requests = 0;
+  await page.route(
+    (url) => url.origin === new URL(apiBaseUrl).origin && url.pathname === "/api/v1/config",
+    async (route) => {
+      requests += 1;
+      if (requests === 1) {
+        await route.abort("connectionfailed");
+      } else if (requests === 2) {
+        const response = await route.fetch();
+        const body: unknown = await response.json();
+        await route.fulfill({
+          response,
+          json: { ...z.record(z.string(), z.unknown()).parse(body), agents: "not-a-list" }
+        });
+      } else {
+        await route.continue();
+      }
+    }
+  );
+  await page.goto("/");
+
+  const failure = page.getByRole("alert");
+  await expect(failure).toContainText("The application was updated");
+  await expect(failure.getByRole("button", { name: "Reload", exact: true })).toBeVisible();
+  expect(requests).toBe(2);
+  const shapeLogs = logged.filter((text) => text.includes("instance configuration"));
+  expect(shapeLogs).toEqual(["The instance configuration does not fit this interface at: agents"]);
+
+  await failure.getByRole("button", { name: "Try again", exact: true }).click();
+
+  await expect(page.getByText("E2E Customer")).toBeVisible();
+  await expect(page.getByRole("button", { name: "E2E User account" })).toBeVisible();
+  await expect(failure).toHaveCount(0);
+  expect(requests).toBe(3);
+});
+
 test("new turns anchor below the top chrome and retain response runway", async ({ page }) => {
   await signInViaApi(page, normalUser);
   await page.goto("/");
