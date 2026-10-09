@@ -9,7 +9,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-The development stack starts Postgres, the API, and the UI. The API listens on `http://127.0.0.1:4100`, and the UI listens on `http://127.0.0.1:5173`.
+The development stack starts Postgres, migrates the database with the one-shot `migrate` service, then starts the API and the UI. The API listens on `http://127.0.0.1:4100`, and the UI listens on `http://127.0.0.1:5173`.
 
 ## Agent and skill configuration
 

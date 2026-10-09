@@ -13,14 +13,6 @@ x-client-build: &client-build
   args:
     <<: *client-build-args
 
-x-migrate-command: &migrate-command
-  [
-    "node",
-    "--input-type=module",
-    "-e",
-    "import { createPlatformStore } from '@vivd-catalyst/client-assembly'; const store = await createPlatformStore({ env: process.env }); await store.close?.();"
-  ]
-
 x-app-environment: &app-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: ${DATABASE_URL:-postgres://agent_chat:agent_chat@postgres:5432/agent_chat}
@@ -54,14 +46,12 @@ services:
     build:
       <<: *client-build
       target: api
-    working_dir: /app/clients/demo
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       <<: *app-environment
-      RUN_MIGRATIONS: "true"
-    command: *migrate-command
+    command: ["node", "clients/demo/dist/migrate.js"]
 
   api:
     build:
@@ -76,7 +66,6 @@ services:
       <<: *app-environment
       HOST: 0.0.0.0
       PORT: 4100
-      RUN_MIGRATIONS: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:8080/api/auth}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}

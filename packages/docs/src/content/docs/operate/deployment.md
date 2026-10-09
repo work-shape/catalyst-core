@@ -70,7 +70,9 @@ Minimum requirements:
 
 Database schema changes must be shipped as committed Drizzle migration files. Do not use `drizzle-kit push` or any direct schema-push workflow.
 
-For the first single-instance Docker Compose production deployment, running committed migrations on API startup is acceptable and keeps a newly pulled image aligned with the database. For multi-replica deployments, zero-downtime deploys, or migrations with data backfills, run migrations as one explicit deploy step before app containers start.
+Migrations run as an explicit deploy step before the API and the workers start. Each client builds `dist/migrate.js`; the Compose `migrate` service runs `node <client folder>/dist/migrate.js`, and the API and every worker wait for it to complete. The step holds a Postgres advisory lock, applies each committed migration once and prints the names it applied.
+
+The API and the workers never migrate. When one starts, it reads the migration state: a database that lacks committed migrations stops it with their names, and a database ahead of the release starts, so the previous release keeps serving while a newer one is rolled out. There is no `RUN_MIGRATIONS` switch.
 
 ## Production Readiness Checklist
 

@@ -48,6 +48,16 @@ contain breaking changes; a patch version does not.
   names the new key. The interface composes a view's head and content policy when it shows
   the view, so the setting also governs views saved earlier: before upgrading, name every
   host saved views still need.
+- **Breaking, operations:** migrations run only as an explicit step, and `RUN_MIGRATIONS` is
+  gone. Each client builds `dist/migrate.js` (`client.migrate()` in `src/migrate.ts`); the
+  Compose `migrate` service runs `node <client folder>/dist/migrate.js` and the API and workers
+  wait for it. The API and the workers no longer migrate when they start: a database that
+  lacks committed migrations stops them with the missing migration names, and a database
+  ahead of the release starts. Remove `RUN_MIGRATIONS` from Compose and environment files and
+  replace an inline migration command with the entry; a setup that relied on the API
+  migrating at startup must run the step first. `@vivd-catalyst/postgres-store` exports
+  `migrateDatabase({ databaseUrl })`, which holds the advisory lock and returns the applied
+  names; the `runMigrations` option and the store's `migrate()` are removed.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
   `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is
   absent on the last page; pass it back as `cursor` with the same filters to read the next

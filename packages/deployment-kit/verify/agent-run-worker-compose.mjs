@@ -33,8 +33,16 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
     `${composeFile}: agent-run-worker must drain active runs below its stop grace period`
   );
   assert(
-    worker.includes("AGENT_RUN_WORKER_ID") && worker.includes('RUN_MIGRATIONS: "false"'),
-    `${composeFile}: agent-run-worker must have a stable id and must not run migrations`
+    worker.includes("AGENT_RUN_WORKER_ID"),
+    `${composeFile}: agent-run-worker must have a stable id`
+  );
+  assert(
+    !contents.includes("RUN_MIGRATIONS") && !contents.includes("createPlatformStore"),
+    `${composeFile}: only the migrate service migrates; no startup switch or inline command`
+  );
+  assert(
+    extractServiceBlock(contents, "migrate").includes("dist/migrate.js"),
+    `${composeFile}: the migrate service must run the client's explicit migration entry`
   );
   assert(
     worker.includes("AGENT_RUN_WORKER_CONCURRENCY: ${AGENT_RUN_WORKER_CONCURRENCY:-2}"),

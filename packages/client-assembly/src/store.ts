@@ -10,8 +10,7 @@ export async function createPlatformStore(input: {
   if (input.env.DATABASE_URL) {
     return createPostgresStores({
       databaseUrl: input.env.DATABASE_URL,
-      logger: input.logger ?? createLogger(),
-      runMigrations: input.env.RUN_MIGRATIONS !== "false"
+      logger: input.logger ?? createLogger()
     });
   }
 

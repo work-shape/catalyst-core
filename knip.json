@@ -36,6 +36,7 @@
         "src/chat-main.tsx",
         "src/server.ts",
         "src/seed-auth.ts",
+        "src/migrate.ts",
         "src/*worker*.ts",
         "*.config.{ts,js,mjs}"
       ],

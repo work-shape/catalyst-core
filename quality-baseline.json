@@ -4,13 +4,6 @@
     {
       "target": "format",
       "rule": "prettier",
-      "scope": "clients/demo",
-      "count": 2,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "format",
-      "rule": "prettier",
       "scope": "root",
       "count": 1,
       "owner": "CB-8b"

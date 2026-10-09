@@ -41,6 +41,7 @@ const e2eHost = process.env.E2E_HOST ?? "127.0.0.1";
 const e2eApiPort = process.env.E2E_API_PORT ?? "4210";
 const e2eUiPort = process.env.E2E_UI_PORT ?? "5273";
 const e2ePostgresPort = process.env.E2E_POSTGRES_PORT ?? "55433";
+const e2eDatabaseUrl = `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
 const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
@@ -74,6 +75,7 @@ try {
   await assertTcpPortAvailable(e2eApiPort, "API");
   await assertTcpPortAvailable(e2eUiPort, "UI");
   await startPostgres();
+  await migrateDatabase();
   startApiServer();
   startUiServer();
   await withServerMonitoring(
@@ -211,6 +213,15 @@ async function startPostgres() {
   );
 }
 
+// The API never migrates when it starts, so the runner takes the explicit step first.
+async function migrateDatabase() {
+  await run(process.execPath, ["clients/demo/dist/migrate.js"], {
+    cwd: repoRoot,
+    env: { ...process.env, DATABASE_URL: e2eDatabaseUrl },
+    label: "migrate database"
+  });
+}
+
 function startApiServer() {
   return spawnManaged(process.execPath, ["clients/demo/dist/server.js"], {
     cwd: repoRoot,
@@ -220,8 +231,7 @@ function startApiServer() {
       HOST: e2eHost,
       PORT: e2eApiPort,
       CLIENT_CONFIG_PATH: e2eConfigPath,
-      DATABASE_URL: `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`,
-      RUN_MIGRATIONS: "true",
+      DATABASE_URL: e2eDatabaseUrl,
       CHAT_UI_ORIGIN: e2eUiUrl,
       BETTER_AUTH_URL: `${e2eApiUrl}/api/auth`,
       BETTER_AUTH_SECRET: "e2e-better-auth-secret-with-at-least-32-characters",

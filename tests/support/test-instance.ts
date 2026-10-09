@@ -132,7 +132,7 @@ async function createDefaultInstance(
   register?: (route: Route) => void
 ): Promise<TestInstance<TestStore>> {
   const stores = addTestStoreHelpers(
-    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), runMigrations: false })
+    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl() })
   );
   const config = createTestConfig();
   const state: Metadata = {
@@ -231,8 +231,7 @@ async function createConfiguredInstance(
       ...input.execution,
       env: {
         ...input.execution.env,
-        DATABASE_URL: await fileTestDatabaseUrl(),
-        RUN_MIGRATIONS: "false"
+        DATABASE_URL: await fileTestDatabaseUrl()
       }
     });
     const cleanup = assembly.close.bind(assembly);
@@ -251,8 +250,7 @@ async function createConfiguredInstance(
       url.searchParams.set("application_name", input.postgres.applicationName);
     const stores = await createPostgresStores({
       logger: input.postgres.logger,
-      databaseUrl: url.toString(),
-      runMigrations: false
+      databaseUrl: url.toString()
     });
     const cleanup = stores.close.bind(stores);
     const instance = bindInstance(stores, { closed: false, cleanup });
@@ -276,8 +274,7 @@ async function createConfiguredInstance(
     ...input,
     env: {
       ...input.env,
-      DATABASE_URL: await fileTestDatabaseUrl(input.fixtureFile),
-      RUN_MIGRATIONS: "false"
+      DATABASE_URL: await fileTestDatabaseUrl(input.fixtureFile)
     }
   });
   try {
@@ -441,7 +438,7 @@ export async function bindTestTransport(
   close: () => Promise<void>
 ): Promise<TestInstance<TestStore>> {
   const stores = addTestStoreHelpers(
-    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl(), runMigrations: false })
+    await createPostgresStores({ databaseUrl: await fileTestDatabaseUrl() })
   );
   return bindInstance(stores, {
     server,

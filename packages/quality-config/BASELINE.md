@@ -4,7 +4,7 @@ Counts are exact by target, rule and package in each repository's `quality-basel
 
 | Target         | Rule                                               | Tool              | Platform | Capabilities | Owners                                                                                                  |
 | -------------- | -------------------------------------------------- | ----------------- | -------: | -----------: | ------------------------------------------------------------------------------------------------------- |
-| format         | `prettier`                                         | Prettier          |        3 |          234 | CB-2, CB-6b, CB-8b, CS-5                                                                                |
+| format         | `prettier`                                         | Prettier          |        1 |          234 | CB-2, CB-6b, CB-8b, CS-5                                                                                |
 | lint           | `@typescript-eslint/ban-ts-comment`                | typescript-eslint |        1 |            0 | CB-2                                                                                                    |
 | lint           | `@typescript-eslint/no-floating-promises`          | typescript-eslint |       67 |            2 | CB-10a, CB-6b, EW-1, G-5c                                                                               |
 | lint           | `@typescript-eslint/no-misused-promises`           | typescript-eslint |       16 |            0 | G-5c                                                                                                    |
@@ -49,3 +49,5 @@ Capabilities environment findings include the 30 artifact-helper CLI entries tha
 C-126 owns the 16 artifact-helper source and script files over 800 lines.
 
 CB-8a added the literal interface text rule with 144 findings, all in `packages/chat-ui/src/control-plane`. NL-4a localized that folder and removed the entry, so the rule has no baseline left. CB-8a also split `chat-ui/src/i18n.tsx`, which removed its large-file entry, and stopped exporting one unused function from it.
+
+CB-3c replaced the inline Compose migration command with the client migration entry, which removed the two formatting findings in `clients/demo`.

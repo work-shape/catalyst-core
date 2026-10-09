@@ -8,6 +8,7 @@ const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
 const e2eConfigPath = process.env.E2E_CONFIG_PATH ?? "tests/fixtures/e2e-app.yaml";
+const e2eDatabaseUrl = `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
 const useExternalServers = process.env.E2E_USE_EXTERNAL_SERVERS === "1";
 
 export default defineConfig({
@@ -35,6 +36,8 @@ export default defineConfig({
           command:
             `${shellEnv({ COMPOSE_PROJECT_NAME: e2eComposeProject, POSTGRES_HOST_PORT: e2ePostgresPort })} docker compose -f clients/demo/docker-compose.yml down -v --remove-orphans && ` +
             `${shellEnv({ COMPOSE_PROJECT_NAME: e2eComposeProject, POSTGRES_HOST_PORT: e2ePostgresPort })} docker compose -f clients/demo/docker-compose.yml up -d --wait postgres && ` +
+            // The API never migrates when it starts, so the explicit step runs first.
+            `${shellEnv({ DATABASE_URL: e2eDatabaseUrl })} node clients/demo/dist/migrate.js && ` +
             `${shellEnv(createApiServerEnv())} node clients/demo/dist/server.js`,
           url: `${e2eApiUrl}/health`,
           reuseExistingServer: false,
@@ -57,8 +60,7 @@ function createApiServerEnv(): Record<string, string> {
     HOST: e2eHost,
     PORT: e2eApiPort,
     CLIENT_CONFIG_PATH: e2eConfigPath,
-    DATABASE_URL: `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`,
-    RUN_MIGRATIONS: "true",
+    DATABASE_URL: e2eDatabaseUrl,
     CHAT_UI_ORIGIN: e2eUiUrl,
     BETTER_AUTH_URL: `${e2eApiUrl}/api/auth`,
     BETTER_AUTH_SECRET: "e2e-better-auth-secret-with-at-least-32-characters",

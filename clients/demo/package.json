@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsup src/server.ts src/seed-auth.ts src/artifact-preview-worker.ts --format esm --out-dir dist && vite build",
-    "build:server": "tsup src/server.ts src/seed-auth.ts src/artifact-preview-worker.ts --format esm --out-dir dist",
+    "build": "tsup src/server.ts src/seed-auth.ts src/migrate.ts src/artifact-preview-worker.ts --format esm --out-dir dist && vite build",
+    "build:server": "tsup src/server.ts src/seed-auth.ts src/migrate.ts src/artifact-preview-worker.ts --format esm --out-dir dist",
     "build:ui": "vite build",
     "config:push": "pnpm --filter \"@vivd-catalyst/config-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config push --dir . --force",
     "dev": "docker compose watch api ui artifact-preview-worker",

@@ -2,8 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { migrateDatabase } from "@vivd-catalyst/postgres-store";
 
 const defaultTestMigrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -77,15 +76,15 @@ export class PostgresFixtures {
           const [ready] = await admin`select datname from pg_database where datname = ${template}`;
           if (!ready) {
             await admin.unsafe(`create database "${template}" template template0`);
-            const sql = postgres(this.url(template), { max: 1, connect_timeout: 5, onnotice() {} });
             try {
-              await migrate(drizzle(sql), { migrationsFolder: this.migrationsDirectory });
+              // The same entry an operator runs, so the template is what a deployment gets.
+              await migrateDatabase({
+                databaseUrl: this.url(template),
+                migrationsDirectory: this.migrationsDirectory
+              });
             } catch (error) {
-              await sql.end();
               await admin.unsafe(`drop database "${template}" with (force)`);
               throw error;
-            } finally {
-              await sql.end();
             }
           }
         }

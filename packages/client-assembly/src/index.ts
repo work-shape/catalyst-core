@@ -31,6 +31,7 @@ export {
   type SeedStandaloneAuthInput,
   type SeedStandaloneAuthResult
 } from "./seed-auth";
+export { migrateClientInstanceDatabase } from "./migrate";
 export { createPlatformStore } from "./store";
 export { createToolDefinitions } from "./tools";
 export {

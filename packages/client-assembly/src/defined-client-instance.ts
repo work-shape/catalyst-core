@@ -22,6 +22,7 @@ import {
   type SeedStandaloneAuthInput,
   type SeedStandaloneAuthResult
 } from "./seed-auth";
+import { migrateClientInstanceDatabase } from "./migrate";
 
 export interface DefineClientInstanceInput {
   rootDir: string | URL;
@@ -73,6 +74,8 @@ export interface DefinedClientInstance {
       configPath?: string;
     }
   ): Promise<SeedStandaloneAuthResult>;
+  /** Applies the committed migrations to the instance database and returns the names applied. */
+  migrate(input?: { env?: ClientInstanceEnv }): Promise<string[]>;
 }
 
 export function defineClientInstance(input: DefineClientInstanceInput): DefinedClientInstance {
@@ -190,6 +193,9 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         allowedOrigins:
           seedInput.allowedOrigins === undefined ? input.allowedOrigins : seedInput.allowedOrigins
       });
+    },
+    async migrate(migrateInput = {}) {
+      return migrateClientInstanceDatabase({ env: loadEnvironment({ env: migrateInput.env }) });
     }
   };
 }

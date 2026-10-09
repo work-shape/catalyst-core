@@ -30,7 +30,7 @@ Paste an OpenAI API key into `.env` before using the default demo config. The de
 - The API image is Node-only and does not install LibreOffice, Poppler, or Python document tooling.
 - The artifact-preview worker image is the only demo runtime image that installs LibreOffice and Poppler.
 - The UI is served from a built Vite bundle.
-- A one-shot migration service runs committed Drizzle migrations before the API starts.
+- A one-shot migration service runs committed Drizzle migrations before the API starts; the API and the workers never migrate.
 - Standalone Better Auth users from `clients/demo/config/app.yaml` are seeded into Postgres on startup.
 - You can seed those users explicitly with `pnpm --filter @vivd-catalyst/demo seed:auth`.
 

@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres, { type Notice } from "postgres";
 import type { Logger, PlatformStores } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
-import { runPostgresMigrations } from "./migrations";
+import { assertDatabaseMigrated } from "./migrations";
 import { schema } from "./schema";
 import { createPostgresConversationsStore } from "./stores/conversations";
 import { createPostgresAgentRunsStore } from "./stores/agentRuns";
@@ -20,13 +20,13 @@ import { createPostgresStructuredDataStore } from "./stores/structuredData";
 export interface PostgresStoresOptions {
   databaseUrl: string;
   logger?: Logger;
-  runMigrations?: boolean;
 }
 
 export interface PostgresStores extends PlatformStores {
   close(): Promise<void>;
-  migrate(): Promise<void>;
 }
+
+export { DatabaseBehindError, migrateDatabase, type MigrateDatabaseInput } from "./migrations";
 
 function handlePostgresNotice(notice: Notice, logger?: Logger): void {
   if (
@@ -55,6 +55,10 @@ function bindStores(db: PostgresConnection): PlatformStores {
   };
 }
 
+/**
+ * Connects to a migrated database. It runs no DDL: a database that lacks committed migrations
+ * stops the caller with their names, and `migrateDatabase` is the step that applies them.
+ */
 export async function createPostgresStores(
   options: PostgresStoresOptions
 ): Promise<PostgresStores> {
@@ -66,11 +70,10 @@ export async function createPostgresStores(
   const db = drizzle(sql, { schema });
   const stores: PostgresStores = {
     ...bindStores(db),
-    close: () => sql.end(),
-    migrate: () => runPostgresMigrations(sql, db, options.logger)
+    close: () => sql.end()
   };
   try {
-    if (options.runMigrations ?? true) await stores.migrate();
+    await assertDatabaseMigrated(sql);
     return stores;
   } catch (error) {
     await sql.end();
