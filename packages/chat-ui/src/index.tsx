@@ -11,3 +11,5 @@ export type {
 } from "./domain-ui-widgets";
 export type { StandaloneChatAppOptions } from "./standalone-chat-app";
 export { createTranslationContext, useTranslation } from "./i18n";
+export { composeViewDocument, viewRuntimeAddress } from "./view-document";
+export type { ViewDocumentInput, ViewRuntimeAddress } from "./view-document";

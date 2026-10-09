@@ -51,6 +51,6 @@
     "packages/chat-ui/src/workspace/workspace-chrome.tsx": {"elements":1,"palette":3,"font-size":1},
     "packages/chat-ui/src/workspace/workspace-rail.tsx": {"elements":2,"font-size":1},
     "packages/config-schema/src/schemas.ts": {"hex":14},
-    "packages/tool-execution/src/built-in-tools.ts": {"palette":1,"hex":38}
+    "packages/tool-execution/src/built-in-tools.ts": {"palette":1,"hex":3}
   }
 }

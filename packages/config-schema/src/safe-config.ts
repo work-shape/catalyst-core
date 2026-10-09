@@ -47,6 +47,9 @@ export function createSafeConfigView(
     usage: {
       safeguards: config.usage.safeguards
     },
+    views: {
+      allowedScriptSrc: config.views.allowedScriptSrc
+    },
     features: {
       attachments: {
         enabled: false,

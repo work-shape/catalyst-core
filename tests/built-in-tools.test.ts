@@ -1,14 +1,15 @@
-import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { asClientInstanceId, isJsonObject, type ToolExecutionContext } from "@vivd-catalyst/core";
 import {
-  prepareVisualizationHtml,
-  showViewTool,
-  showViewToolDefinition
-} from "@vivd-catalyst/tool-execution";
+  clientInstanceConfigSchema,
+  createSafeConfigView,
+  parseClientInstanceConfig
+} from "@vivd-catalyst/config-schema";
+import { asClientInstanceId, isJsonObject, type ToolExecutionContext } from "@vivd-catalyst/core";
+import { createShowViewTool, showViewTool } from "@vivd-catalyst/tool-execution";
 
 describe("built-in platform tools", () => {
-  it("renders model-authored HTML through display without echoing HTML into model-visible output", async () => {
+  it("stores the model's HTML alone and keeps it out of model-visible output", async () => {
     const result = await showViewTool.execute(
       {
         html: "<section><h1>Dashboard</h1></section>",
@@ -23,31 +24,24 @@ describe("built-in platform tools", () => {
       throw new Error("Expected show_view to succeed");
     }
 
-    if (!result.display || typeof result.display.data?.html !== "string") {
-      throw new Error("Expected show_view to return rendered HTML");
-    }
-
     expect(JSON.stringify(result.output)).not.toContain("<section>");
+    // Version 2: the head, the content policy and the runtime are composed by the interface
+    // when the view is shown (tests/chat-ui-view-document.test.ts).
     expect(result.display).toMatchObject({
       kind: "html.rendered",
-      version: 1,
+      version: 2,
       mode: "inline",
       data: {
-        title: "Dashboard"
+        title: "Dashboard",
+        html: "<section><h1>Dashboard</h1></section>"
       }
     });
-    expect(result.display.data?.html).toContain("cdn.tailwindcss.com");
-    expect(result.display.data?.html).toContain("lucide.min.js");
-    expect(result.display.data?.html).toContain("vivdCatalystTheme");
-    expect(result.display.data?.html).toContain("Content-Security-Policy");
-    expect(result.display.data?.html).toContain("connect-src 'none'");
-    expect(result.display.data?.html).toContain("<section><h1>Dashboard</h1></section>");
   });
 
-  it("allows external HTTPS scripts by default for chart CDNs", async () => {
+  it("strips a content policy the model wrote and nothing else", async () => {
     const result = await showViewTool.execute(
       {
-        html: '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script><canvas id="chart"></canvas>',
+        html: `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'"><title>Chart</title></head><body><script>window.chartReady = true;</script></body></html>`,
         mode: "inline"
       },
       createToolContext()
@@ -57,178 +51,29 @@ describe("built-in platform tools", () => {
     if (result.status !== "success") {
       throw new Error("Expected show_view to succeed");
     }
-
-    if (!result.display || typeof result.display.data?.html !== "string") {
-      throw new Error("Expected show_view to return rendered HTML");
-    }
-
-    expect(readCsp(result.display.data?.html)).toContain(
-      "script-src https://cdn.tailwindcss.com https://unpkg.com https:"
+    expect(result.display?.data?.html).toBe(
+      "<!doctype html><html><head><title>Chart</title></head><body><script>window.chartReady = true;</script></body></html>"
     );
-    expect(showViewTool.description).toContain("External HTTPS script sources are configured");
   });
 
-  it("can be configured to keep third-party chart CDNs out of the HTML display CSP", async () => {
-    const configuredTool = showViewToolDefinition.create({
-      allowedScriptSrc: [],
-      externalRuntime: true
-    });
+  it("tells the agent what a view may load", () => {
+    const closed = createShowViewTool();
+    const named = createShowViewTool({ allowedScriptSrc: ["https://cdn.jsdelivr.net"] });
+    const open = createShowViewTool({ allowedScriptSrc: ["https:"] });
 
-    const result = await configuredTool.execute(
-      {
-        html: '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script><canvas id="chart"></canvas>',
-        mode: "inline"
-      },
-      createToolContext()
-    );
-
-    expect(result.status).toBe("success");
-    if (result.status !== "success") {
-      throw new Error("Expected show_view to succeed");
+    for (const tool of [closed, named, open]) {
+      expect(tool.description).toContain("Tailwind CSS and Lucide are loaded from the instance");
+      expect(tool.description).toContain("Network fetches and external images are blocked.");
     }
-
-    if (!result.display || typeof result.display.data?.html !== "string") {
-      throw new Error("Expected show_view to return rendered HTML");
-    }
-
-    const scriptSrc = readCspDirective(result.display.data?.html, "script-src");
-    expect(scriptSrc).toContain("https://cdn.tailwindcss.com");
-    expect(scriptSrc).toContain("https://unpkg.com");
-    expect(scriptSrc).not.toContain("https:");
-    expect(configuredTool.description).toContain("No additional charting CDNs are configured");
+    expect(closed.description).toContain("No other script file can be loaded");
+    expect(named.description).toContain("only from: https://cdn.jsdelivr.net.");
+    expect(open.description).toContain("from any HTTPS host");
   });
 
-  it("provides a network-isolated visualization mode for private hydrated data", () => {
-    const html = prepareVisualizationHtml("<script>window.ready = true;</script>", {
-      allowedScriptSrc: [],
-      externalRuntime: false
-    });
-    const csp = readCsp(html);
-    const scriptSrc = readCspDirective(html, "script-src");
+  it("names no outside host and no runtime switch in the tool's source", async () => {
+    const source = await readFile("packages/tool-execution/src/built-in-tools.ts", "utf8");
 
-    expect(html).not.toContain("cdn.tailwindcss.com");
-    expect(html).not.toContain("unpkg.com");
-    expect(scriptSrc).not.toContain("https:");
-    expect(scriptSrc).not.toContain("'unsafe-eval'");
-    expect(csp).toContain("default-src 'none'");
-    expect(csp).toContain("connect-src 'none'");
-    expect(csp).toContain("img-src data: blob:");
-    expect(csp).toContain("form-action 'none'");
-    expect(csp).toContain("navigate-to 'none'");
-  });
-
-  it("adds configured script sources to the HTML display CSP", async () => {
-    const configuredTool = showViewToolDefinition.create({
-      allowedScriptSrc: ["https://cdn.jsdelivr.net"],
-      externalRuntime: true
-    });
-
-    const result = await configuredTool.execute(
-      {
-        html: '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script><canvas id="chart"></canvas>',
-        mode: "inline"
-      },
-      createToolContext()
-    );
-
-    expect(result.status).toBe("success");
-    if (result.status !== "success") {
-      throw new Error("Expected configured show_view to succeed");
-    }
-
-    if (!result.display || typeof result.display.data?.html !== "string") {
-      throw new Error("Expected show_view to return rendered HTML");
-    }
-
-    expect(readCsp(result.display.data?.html)).toContain(
-      "script-src https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net"
-    );
-    expect(configuredTool.description).toContain("https://cdn.jsdelivr.net");
-  });
-
-  it("maps the wildcard script source setting to HTTPS scripts", async () => {
-    const parsedConfig = showViewToolDefinition.configSchema?.safeParse({
-      allowedScriptSrc: ["*"]
-    });
-    expect(parsedConfig?.success).toBe(true);
-    if (!parsedConfig?.success) {
-      throw new Error("Expected wildcard config to parse");
-    }
-    const configuredTool = showViewToolDefinition.create(parsedConfig.data);
-
-    const result = await configuredTool.execute(
-      {
-        html: '<script src="https://cdn.example.test/chart.js"></script><canvas id="chart"></canvas>',
-        mode: "inline"
-      },
-      createToolContext()
-    );
-
-    expect(result.status).toBe("success");
-    if (result.status !== "success") {
-      throw new Error("Expected wildcard configured show_view to succeed");
-    }
-
-    if (!result.display || typeof result.display.data?.html !== "string") {
-      throw new Error("Expected show_view to return rendered HTML");
-    }
-
-    expect(readCsp(result.display.data?.html)).toContain("https:");
-    expect(configuredTool.description).toContain("External HTTPS script sources are configured");
-  });
-
-  it("strips model-authored CSP tags and hashes model-authored inline scripts", async () => {
-    const inlineScript = "window.chartReady = true;";
-    const result = await showViewTool.execute(
-      {
-        html: `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'"><title>Chart</title></head><body><script>${inlineScript}</script></body></html>`,
-        mode: "inline"
-      },
-      createToolContext()
-    );
-
-    expect(result.status).toBe("success");
-    if (result.status !== "success") {
-      throw new Error("Expected show_view to succeed");
-    }
-
-    if (!result.display || typeof result.display.data?.html !== "string") {
-      throw new Error("Expected show_view to return rendered HTML");
-    }
-
-    const html = result.display.data?.html ?? "";
-    const csp = readCsp(html);
-    const scriptSrc = readCspDirective(html, "script-src");
-    expect(countOccurrences(html, "Content-Security-Policy")).toBe(1);
-    expect(csp).not.toContain("script-src 'none'");
-    expect(scriptSrc).not.toContain("'unsafe-inline'");
-    expect(csp).toContain(scriptHashSource(inlineScript));
-  });
-
-  it("provides semantic status and chart theme colors to Tailwind and default iframe styles", () => {
-    const html = prepareVisualizationHtml("<section>Status</section>");
-
-    expect(html).toContain('const vcThemeColorNames=["background"');
-    expect(html).toContain(
-      '"destructive","success","warning","info","chart-1","chart-2","chart-3","chart-4","chart-5","border"'
-    );
-    expect(html).toContain("--primary: #1a1a1a;");
-    expect(html).toContain("--background: #ffffff;");
-    expect(html).toContain("--success: #047857;");
-    expect(html).toContain("--warning: #b45309;");
-    expect(html).toContain("--info: #0369a1;");
-    expect(html).toContain("--chart-1: #0f766e;");
-    expect(html).toContain("--chart-2: #b45309;");
-    expect(html).toContain("--chart-3: #0369a1;");
-    expect(html).toContain("--chart-4: #7c3aed;");
-    expect(html).toContain("--chart-5: #be185d;");
-    expect(html).toContain('success:color("success")');
-    expect(html).toContain('warning:color("warning")');
-    expect(html).toContain('info:color("info")');
-    expect(html).toContain(
-      'function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}'
-    );
-    expect(html).toContain("window.vivdCatalystTheme={color,chartColors,chartPalette}");
+    expect(source).not.toMatch(/cdn\.tailwindcss\.com|unpkg\.com|externalRuntime/u);
   });
 
   it("keeps show_view color guidance aligned between tool and JSON schema descriptions", () => {
@@ -251,21 +96,82 @@ describe("built-in platform tools", () => {
       expect(description).toContain("never index it like an array");
     }
   });
+});
 
-  it("rejects unsafe configured script sources", () => {
-    expect(
-      showViewToolDefinition.configSchema?.safeParse({
-        allowedScriptSrc: ["http://cdn.jsdelivr.net"]
-      }).success
-    ).toBe(false);
+describe("views config", () => {
+  it("allows no outside script host by default and shows the list in the safe config", () => {
+    const config = parseClientInstanceConfig(baseConfig());
 
-    expect(
-      showViewToolDefinition.configSchema?.safeParse({
-        allowedScriptSrc: ["https://cdn.jsdelivr.net/npm/chart.js?leak=value"]
-      }).success
-    ).toBe(false);
+    expect(config.views.allowedScriptSrc).toEqual([]);
+    expect(createSafeConfigView(config, emptyAssets()).views).toEqual({ allowedScriptSrc: [] });
+  });
+
+  it("normalizes the named hosts", () => {
+    const config = parseClientInstanceConfig(
+      baseConfig({
+        views: { allowedScriptSrc: ["https://cdn.jsdelivr.net/", "https://cdn.jsdelivr.net", "*"] }
+      })
+    );
+
+    expect(config.views.allowedScriptSrc).toEqual(["https://cdn.jsdelivr.net", "https:"]);
+    expect(createSafeConfigView(config, emptyAssets()).views.allowedScriptSrc).toEqual([
+      "https://cdn.jsdelivr.net",
+      "https:"
+    ]);
+  });
+
+  it("rejects unsafe script sources", () => {
+    for (const source of [
+      "http://cdn.jsdelivr.net",
+      "https://cdn.jsdelivr.net/npm/chart.js?leak=value",
+      "https://*.example.test"
+    ]) {
+      expect(() =>
+        parseClientInstanceConfig(baseConfig({ views: { allowedScriptSrc: [source] } }))
+      ).toThrow();
+    }
+  });
+
+  it("refuses every key in the tool's own config and names the new one", () => {
+    for (const key of ["allowedScriptSrc", "anyOtherKey"]) {
+      const parsed = clientInstanceConfigSchema.safeParse(
+        baseConfig({ tools: [{ name: "show_view", enabled: true, config: { [key]: ["*"] } }] })
+      );
+
+      expect(parsed.error?.issues).toMatchObject([
+        {
+          path: ["tools", 0, "config", key],
+          message: expect.stringContaining("'views.allowedScriptSrc'")
+        }
+      ]);
+    }
   });
 });
+
+function baseConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    version: 1,
+    clientInstance: {
+      id: "views-config-test",
+      displayName: "Views Config Test",
+      environment: "development"
+    },
+    localization: {
+      defaultLocale: "en",
+      supportedLocales: ["en"]
+    },
+    modelProviders: [{ id: "local", type: "deterministic", model: "local" }],
+    ...overrides
+  };
+}
+
+function emptyAssets() {
+  return {
+    version: 0,
+    agents: [],
+    skills: []
+  };
+}
 
 function readHtmlSchemaDescription(): string {
   const properties = showViewTool.inputJsonSchema?.properties;
@@ -277,34 +183,6 @@ function readHtmlSchemaDescription(): string {
     throw new Error("Expected show_view input JSON schema to describe html");
   }
   return html.description;
-}
-
-function readCsp(html: string | undefined): string {
-  const match = html?.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/u);
-  if (!match?.[1]) {
-    throw new Error("Expected rendered HTML to include a CSP meta tag");
-  }
-  return match[1];
-}
-
-function readCspDirective(html: string | undefined, directiveName: string): string[] {
-  const csp = readCsp(html);
-  const directive = csp
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${directiveName} `));
-  if (!directive) {
-    throw new Error(`Expected rendered HTML CSP to include ${directiveName}`);
-  }
-  return directive.split(/\s+/u).slice(1);
-}
-
-function countOccurrences(value: string, pattern: string): number {
-  return value.split(pattern).length - 1;
-}
-
-function scriptHashSource(source: string): string {
-  return `'sha256-${createHash("sha256").update(source).digest("base64")}'`;
 }
 
 function createToolContext(): ToolExecutionContext {

@@ -39,6 +39,15 @@ contain breaking changes; a patch version does not.
   the capability context, together with the `PlatformStoreMode` type, and an artifact preview
   `sourceReaderFactory` no longer receives `storeMode`. `@vivd-catalyst/core/testing` and its
   `InMemoryPlatformStore` are removed.
+- **Views (breaking):** a generated view loads Tailwind CSS and Lucide from the instance, in
+  pinned versions under `/app-runtime/view/1/`, and no longer from two public hosts. A reverse
+  proxy in front of an instance must route `/app-runtime/*` to the API. The hosts a view may
+  load other scripts from are the instance key `views.allowedScriptSrc`, which defaults to
+  none; before, the `show_view` tool's `config.allowedScriptSrc` defaulted to every HTTPS
+  host. The `show_view` tool takes no config now: any key left there fails validation and
+  names the new key. The interface composes a view's head and content policy when it shows
+  the view, so the setting also governs views saved earlier: before upgrading, name every
+  host saved views still need.
 - **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
   `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is
   absent on the last page; pass it back as `cursor` with the same filters to read the next

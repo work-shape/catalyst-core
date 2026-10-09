@@ -110,11 +110,79 @@ const openAiCompatibleModelProviderSchema = z.object({
   compliance: modelProviderComplianceSchema.optional()
 });
 
-const toolInstanceConfigSchema = z.object({
-  name: z.string().min(1),
-  enabled: z.boolean().default(true),
-  config: z.record(z.string(), z.unknown()).default({})
-});
+const toolInstanceConfigSchema = z
+  .object({
+    name: z.string().min(1),
+    enabled: z.boolean().default(true),
+    config: z.record(z.string(), z.unknown()).default({})
+  })
+  .superRefine((tool, context) => {
+    if (tool.name !== "show_view") {
+      return;
+    }
+    // An earlier release read script settings from this tool's own config. Left there they
+    // would be ignored without a word, so every key is refused and the new place is named.
+    for (const key of Object.keys(tool.config)) {
+      context.addIssue({
+        code: "custom",
+        path: ["config", key],
+        message: `'show_view' takes no tool config: every view loads its runtime from the instance, and outside script hosts are named in the instance key 'views.allowedScriptSrc', which defaults to none`
+      });
+    }
+  });
+
+/**
+ * One host a view may load scripts from besides the instance: an HTTPS origin or path, or
+ * `https:` for every HTTPS host. Undefined when the value is not safe to put into a content
+ * policy.
+ */
+function normalizeViewScriptSource(value: string): string | undefined {
+  const trimmedValue = value.trim();
+  if (trimmedValue === "*" || trimmedValue === "https:") {
+    return "https:";
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+    return undefined;
+  }
+
+  const source = url.pathname === "/" ? url.origin : `${url.origin}${url.pathname}`;
+  return /[\s"'`;*<>{}]/u.test(source) ? undefined : source;
+}
+
+const viewScriptSourceSchema = z
+  .string()
+  .min(1)
+  .superRefine((value, context) => {
+    if (!normalizeViewScriptSource(value)) {
+      context.addIssue({
+        code: "custom",
+        message:
+          'Script sources must be "*" for all HTTPS scripts, or HTTPS origins/paths without credentials, query strings, fragments, whitespace, quotes, semicolons, or wildcards.'
+      });
+    }
+  })
+  .transform((value) => normalizeViewScriptSource(value) ?? value);
+
+const viewsConfigSchema = z
+  .object({
+    /**
+     * Hosts a generated view may load scripts from besides the instance's own view runtime.
+     * Read when a view is shown, so it also governs views saved earlier.
+     */
+    allowedScriptSrc: z
+      .array(viewScriptSourceSchema)
+      .default([])
+      .transform((sources) => Array.from(new Set(sources)))
+  })
+  .default({ allowedScriptSrc: [] });
 
 const dataSourceConfigSchema = z.object({
   kind: z.literal("postgres"),
@@ -892,6 +960,7 @@ export const clientInstanceConfigSchema = z.object({
       costs: {}
     }),
   tools: z.array(toolInstanceConfigSchema).default([]),
+  views: viewsConfigSchema,
   dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
   ui: uiConfigSchema
 });

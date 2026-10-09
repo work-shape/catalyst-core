@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { composeViewDocument, viewRuntimeAddress } from "@vivd-catalyst/chat-ui";
 import { uiConfigSchema } from "@vivd-catalyst/config-schema";
-import { prepareVisualizationHtml } from "@vivd-catalyst/tool-execution";
 import {
   contrastRatio,
   createThemeTokens,
@@ -16,6 +16,9 @@ import {
   type ThemeTokenName,
   type ThemeTokens
 } from "@vivd-catalyst/ui/theme";
+import { stubViewHtmlParser } from "./view-html-parser";
+
+stubViewHtmlParser();
 
 const schemaDefaults = uiConfigSchema.parse({});
 const schemaInputs: Record<ThemeMode, ThemeInputs> = {
@@ -77,7 +80,12 @@ describe("UI theme defaults", () => {
   });
 
   it("gives a View outside a themed chat the light default for every token it declares", () => {
-    const html = prepareVisualizationHtml("<section>View</section>");
+    const html = composeViewDocument({
+      html: "<section>View</section>",
+      kind: "html.rendered",
+      runtime: viewRuntimeAddress("", "https://chat.example.test/"),
+      allowedScriptSrc: []
+    });
     const defaultTheme =
       /<style id="vivd-catalyst-default-theme">\s*:root \{([^}]*)\}/u.exec(html)?.[1] ?? "";
     const declared = [...defaultTheme.matchAll(/(--[a-z0-9-]+):\s*([^;]+);/gu)].flatMap((match) =>

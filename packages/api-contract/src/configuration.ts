@@ -106,6 +106,8 @@ export const safeConfigSchema = z.object({
       tokensPerMonth: z.number().optional()
     })
   }),
+  /** What a generated view may load besides the instance's own view runtime. */
+  views: z.object({ allowedScriptSrc: z.array(z.string()) }).default({ allowedScriptSrc: [] }),
   features: z.object({
     attachments: z.object({
       enabled: z.boolean(),

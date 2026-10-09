@@ -323,7 +323,7 @@ export async function createClientInstanceExecutionAssembly(
   const tools = createToolDefinitions({
     config,
     tools: [
-      ...createBuiltInToolDefinitions(),
+      ...createBuiltInToolDefinitions(config.views),
       ...workspaceTools,
       ...createStructuredDataToolDefinitions({
         store,

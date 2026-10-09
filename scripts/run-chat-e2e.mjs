@@ -290,7 +290,8 @@ async function runPlaywright() {
       E2E_COMPOSE_PROJECT: e2eComposeProject,
       E2E_API_URL: e2eApiUrl,
       E2E_UI_URL: e2eUiUrl,
-      E2E_CONFIG_PATH: e2eConfigPath
+      E2E_CONFIG_PATH: e2eConfigPath,
+      E2E_SERVER_CREDENTIAL: e2eServerCredential
     }
   });
 }

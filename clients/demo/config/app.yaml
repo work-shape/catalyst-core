@@ -161,9 +161,6 @@ tools:
     enabled: true
   - name: show_view
     enabled: true
-    config:
-      allowedScriptSrc:
-        - "*"
   - name: structured_data.publish
     enabled: true
   - name: structured_data.read

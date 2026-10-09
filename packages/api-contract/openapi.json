@@ -2226,6 +2226,24 @@
                       ],
                       "additionalProperties": false
                     },
+                    "views": {
+                      "default": {
+                        "allowedScriptSrc": []
+                      },
+                      "type": "object",
+                      "properties": {
+                        "allowedScriptSrc": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "allowedScriptSrc"
+                      ],
+                      "additionalProperties": false
+                    },
                     "features": {
                       "type": "object",
                       "properties": {
@@ -2665,6 +2683,7 @@
                     "localization",
                     "retention",
                     "usage",
+                    "views",
                     "features",
                     "agents",
                     "ui"

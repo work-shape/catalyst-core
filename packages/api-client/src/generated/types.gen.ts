@@ -658,6 +658,9 @@ export type GetConfigResponses = {
                 tokensPerMonth?: number;
             };
         };
+        views: {
+            allowedScriptSrc: Array<string>;
+        };
         features: {
             attachments: {
                 enabled: boolean;

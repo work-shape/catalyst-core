@@ -1,17 +1,24 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode
 } from "react";
-import { Spinner, useUiMode } from "@vivd-catalyst/ui";
+import { Banner, Spinner, useUiMode } from "@vivd-catalyst/ui";
 import { THEME_TOKEN_NAMES } from "@vivd-catalyst/ui/theme";
 import { useTranslation } from "./i18n";
 import { renderStructuredDataResourceDisplay } from "./structured-data-resource-display";
+import {
+  composeViewDocument,
+  DISPLAY_BLOCKED_MESSAGE_TYPE,
+  DISPLAY_HEIGHT_MESSAGE_TYPE,
+  type ViewDisplayKind
+} from "./view-document";
+import { useViewPolicy } from "./view-policy";
 
-const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
 const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
 
 /**
@@ -87,19 +94,32 @@ export function renderBuiltInDisplay(display: {
   }
   const title = typeof display.data.title === "string" ? display.data.title : "Rendered HTML";
   const mode = readDisplayMode(display);
-  return <RenderedHtmlDisplay html={display.data.html} mode={mode} title={title} />;
+  return (
+    <RenderedHtmlDisplay html={display.data.html} kind={display.kind} mode={mode} title={title} />
+  );
 }
 
+/**
+ * The one component every generated view passes through. It composes the frame document from
+ * the stored HTML and the instance's policy of today, then adds the theme found on its host.
+ */
 function RenderedHtmlDisplay({
-  html,
+  html: storedHtml,
+  kind,
   mode,
   title
 }: {
   html: string;
+  kind: ViewDisplayKind;
   mode: ToolDisplayMode;
   title: string;
 }) {
   const { t } = useTranslation();
+  const { runtime, allowedScriptSrc } = useViewPolicy();
+  const html = useMemo(
+    () => composeViewDocument({ html: storedHtml, kind, runtime, allowedScriptSrc }),
+    [storedHtml, kind, runtime, allowedScriptSrc]
+  );
   const hostRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const htmlRef = useRef<string | undefined>(undefined);
@@ -107,6 +127,7 @@ function RenderedHtmlDisplay({
   const [frameDocument, setFrameDocument] = useState<{ key: number; srcDoc?: string }>({ key: 0 });
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [scriptBlocked, setScriptBlocked] = useState(false);
   const heightLimit = FRAME_HEIGHT_LIMITS[mode];
   const frameHeight = clampNumber(
     contentHeight ?? heightLimit.fallback,
@@ -126,6 +147,7 @@ function RenderedHtmlDisplay({
     frameSourceRef.current = nextSrcDoc;
     if (htmlChanged) {
       setContentHeight(undefined);
+      setScriptBlocked(false);
     }
     setLoading(true);
     setFrameDocument((currentDocument) => ({
@@ -142,6 +164,10 @@ function RenderedHtmlDisplay({
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.source !== iframeRef.current?.contentWindow || !isRecord(event.data)) {
+        return;
+      }
+      if (event.data.type === DISPLAY_BLOCKED_MESSAGE_TYPE) {
+        setScriptBlocked(true);
         return;
       }
       if (
@@ -164,6 +190,7 @@ function RenderedHtmlDisplay({
 
   return (
     <div ref={hostRef} className="relative bg-background">
+      {scriptBlocked ? <Banner tone="warning">{t("displayScriptBlocked")}</Banner> : null}
       {loading ? (
         <div
           className="absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_srgb,var(--muted)_30%,var(--background))] text-sm text-muted-foreground"

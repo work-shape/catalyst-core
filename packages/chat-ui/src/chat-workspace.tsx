@@ -15,6 +15,7 @@ import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { uiLabelsFor } from "./ui-labels";
+import { ViewPolicyProvider } from "./view-policy";
 import { agentChipDisplayFor } from "./workspace/agent-selector";
 import { ClientBrandingHeader } from "./workspace/client-branding";
 import { UserMenu } from "./workspace/user-menu";
@@ -226,7 +227,7 @@ function ChatWorkspaceContent({
     />
   ) : undefined;
 
-  return (
+  const workspace = (
     <TranslationProvider locale={model.config.activeLocale}>
       <UiRoot
         as="main"
@@ -367,6 +368,12 @@ function ChatWorkspaceContent({
         </ApprovalRevisionHostProvider>
       </UiRoot>
     </TranslationProvider>
+  );
+  // Every generated view below is shown under the instance's view policy of today.
+  return (
+    <ViewPolicyProvider allowedScriptSrc={model.config.config.views.allowedScriptSrc}>
+      {workspace}
+    </ViewPolicyProvider>
   );
 }
 

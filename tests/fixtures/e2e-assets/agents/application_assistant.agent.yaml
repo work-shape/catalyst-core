@@ -7,6 +7,7 @@ instructions: |
 toolNames:
   - demo.workflow_summary
   - demo.weather_forecast
+  - show_view
 initialPrompts:
   - title: Find review risks
     prompt: List the most important application or document review risks I should check first.

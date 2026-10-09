@@ -184,6 +184,18 @@ Startup validation fails when:
 - an agent references a disabled or missing tool
 - an enabled tool requires approval before approval resume is implemented
 
+## Generated Views
+
+A view an agent shows with `show_view` loads Tailwind CSS and Lucide from the instance and no script from any other host. `views.allowedScriptSrc` names the hosts views may load scripts from besides the instance, as HTTPS origins or paths:
+
+```yaml
+views:
+  allowedScriptSrc:
+    - https://cdn.jsdelivr.net
+```
+
+The default is an empty list, and `"*"` allows every HTTPS host. The setting applies when a view is shown, so it also governs views saved before a change. Earlier releases read script settings from the `show_view` tool's own `config`. That tool takes no config now, and any key left there fails validation with a message that names `views.allowedScriptSrc`.
+
 ## Agent And Skill Configuration Assets
 
 Agents and client skills remain source-controlled YAML and Markdown, but runtime reads them from the versioned configuration-asset store. A `catalyst.yaml` manifest selects the working-copy files and target instances:
