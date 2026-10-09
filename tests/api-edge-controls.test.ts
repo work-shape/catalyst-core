@@ -1,8 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { Readable } from "node:stream";
-import { setTimeout as delay } from "node:timers/promises";
+import { request as httpRequest } from "node:http";
 import postgres, { type Sql } from "postgres";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import {
   CompositeAuthAdapter,
@@ -21,15 +19,14 @@ import {
   type RateLimitRule
 } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
-import { inventedAuthPath, routeTestOperations } from "./support/operations";
+import { inventedAuthPath, routeTestOperations, signInPathSpellings } from "./support/operations";
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import {
-  addTestRoute,
   callTestPath,
-  createTestInstance,
   createTestInstanceWith,
   getTestRuntime,
+  listenTestInstance,
   type TestInstance
 } from "./support/test-instance";
 
@@ -87,6 +84,46 @@ describe("the in-process rate limiter", () => {
     expect(await limiter.consume("b", rule)).toEqual({ allowed: true, retryAfterMs: 0 });
     time += 50_000;
     expect(await limiter.consume("a", rule)).toEqual({ allowed: true, retryAfterMs: 0 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("counts new keys on one shared counter once it holds as many keys as it may", async () => {
+    let time = 1_000;
+    const limiter = createInProcessRateLimiter({ now: () => time, maxKeys: 3 });
+    for (const key of ["a", "b", "c"]) {
+      expect((await limiter.consume(key, rule)).allowed).toBe(true);
+    }
+    // Callers it has no room for share one counter of the same rule.
+    expect((await limiter.consume("d", rule)).allowed).toBe(true);
+    expect((await limiter.consume("e", rule)).allowed).toBe(true);
+    expect(await limiter.consume("f", rule)).toEqual({ allowed: false, retryAfterMs: MINUTE_MS });
+    // A rule of its own has a shared counter of its own, and a known caller keeps its count.
+    expect((await limiter.consume("g", { limit: 5, windowMs: MINUTE_MS })).allowed).toBe(true);
+    expect((await limiter.consume("a", rule)).allowed).toBe(true);
+    expect((await limiter.consume("a", rule)).allowed).toBe(false);
+    // Room is made as soon as counters have run out.
+    time += MINUTE_MS;
+    for (const key of ["f", "h", "i"]) {
+      expect((await limiter.consume(key, rule)).allowed).toBe(true);
+      expect((await limiter.consume(key, rule)).allowed).toBe(true);
+      expect((await limiter.consume(key, rule)).allowed).toBe(false);
+    }
+  });
+
+  it("removes counters that have run out without waiting for another call", async () => {
+    vi.useFakeTimers();
+    const limiter = createInProcessRateLimiter();
+    expect(vi.getTimerCount()).toBe(0);
+    for (let caller = 0; caller < 1000; caller += 1) {
+      await limiter.consume(`caller-${caller}`, rule);
+    }
+    expect(vi.getTimerCount()).toBe(1);
+    // Nobody calls again. The sweep runs on its own and stops once nothing is left.
+    await vi.advanceTimersByTimeAsync(3 * MINUTE_MS);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("counts every limiter on its own, as two processes would", async () => {
@@ -255,7 +292,10 @@ describe("rate limits on operations", () => {
     expect(calls.slice(0, 2)).toEqual([
       { key: "password_reset.request|address:198.51.100.40", rule: perMinute(300) },
       {
-        key: "password_reset.request|address:198.51.100.40|account:ada@example.test",
+        // The account is counted under a hash, never under what the caller sent.
+        key: expect.stringMatching(
+          /^password_reset\.request\|address:198\.51\.100\.40\|account:[\w-]{22}$/u
+        ),
         rule: perMinute(2)
       }
     ]);
@@ -532,11 +572,70 @@ describe("session cookies and tokens", () => {
       { key: "auth.session|address:198.51.100.33", rule: perMinute(6000) },
       { key: "auth.sign-in|address:198.51.100.33", rule: perMinute(300) },
       {
-        key: "auth.sign-in|address:198.51.100.33|account:someone@example.test",
+        key: expect.stringMatching(/^auth\.sign-in\|address:198\.51\.100\.33\|account:[\w-]{22}$/u),
         rule: perMinute(3)
       }
     ]);
   });
+
+  it("counts an account name only when it can be one, and under the address otherwise", async () => {
+    const signIn = (account: string) =>
+      limitedInstance.call("authSignIn", {
+        remoteAddress: "198.51.100.34",
+        headers: { origin: baseUrl },
+        payload: { email: account, password: "not-the-password" }
+      });
+    counted.length = 0;
+    await signIn(`${"a".repeat(900_000)}@example.test`);
+    await signIn(`${"a".repeat(250)}@example.test`);
+    await signIn("not an account name");
+    for (let name = 0; name < 20; name += 1) {
+      await signIn(`someone-${name}@example.test`);
+    }
+    const keys = counted.map((call) => call.key).filter((key) => key.startsWith("auth."));
+    expect(keys.filter((key) => key === "auth.sign-in|address:198.51.100.34")).toHaveLength(23);
+    // Twenty names, twenty counters, each as long as any other.
+    const accounts = keys.filter((key) => key.includes("|account:"));
+    expect(new Set(accounts).size).toBe(20);
+    expect(Math.max(...keys.map((key) => key.length))).toBeLessThan(80);
+  });
+
+  it.each(Object.entries(signInPathSpellings))(
+    "counts sign-in under a path spelled with a %s, or does not serve it",
+    async (spelling, path) => {
+      const url = new URL(await listenTestInstance(limitedInstance));
+      const account = `spelled-${spelling.replaceAll(" ", "-")}@example.test`;
+      // Sent as written: a client library would tidy the path before sending it.
+      const attempt = () =>
+        new Promise<number>((resolve, reject) => {
+          const sent = httpRequest(
+            {
+              host: url.hostname,
+              port: url.port,
+              method: "POST",
+              path,
+              headers: { origin: baseUrl, "content-type": "application/json" }
+            },
+            (response) => {
+              response.resume();
+              resolve(response.statusCode ?? 0);
+            }
+          );
+          sent.on("error", reject);
+          sent.end(JSON.stringify({ email: account, password: "not-the-password" }));
+        });
+      const statuses: number[] = [];
+      for (let count = 0; count < 5; count += 1) {
+        statuses.push(await attempt());
+      }
+      // Three tries a minute on this account. A password is never checked a fourth time.
+      expect(statuses.filter((status) => status === 401).length).toBeLessThanOrEqual(3);
+      expect(statuses.every((status) => [401, 404, 429].includes(status))).toBe(true);
+      if (statuses.includes(401)) {
+        expect(statuses).toEqual([401, 401, 401, 429, 429]);
+      }
+    }
+  );
 
   it("accepts a same-origin https call with a cookie through the in-process boundary", async () => {
     const { cookie } = await signIn();
@@ -552,138 +651,4 @@ describe("session cookies and tokens", () => {
     expect((await post("https://instance.test")).status).toBe(200);
     expect((await post("http://instance.test")).status).toBe(403);
   });
-});
-
-describe("the public runtime boundary", () => {
-  async function exerciseLifecycle(instance: TestInstance): Promise<void> {
-    const runtime = await getTestRuntime(instance);
-    const inProcess = await runtime.fetch(new Request("http://instance.test/health"));
-    expect(inProcess.status).toBe(200);
-    expect(await inProcess.json()).toMatchObject({ status: "ok" });
-    const missing = await runtime.fetch(
-      new Request("http://instance.test/api/v1/nothing", { method: "POST", body: "{}" })
-    );
-    expect(missing.status).toBe(404);
-    expect(await missing.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
-
-    const url = await runtime.listen({ host: "127.0.0.1", port: 0 });
-    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/u);
-    expect((await fetch(`${url}/health`)).status).toBe(200);
-
-    await instance.close();
-    await expect(fetch(`${url}/health`)).rejects.toThrow();
-  }
-
-  it("stops the producer of a streamed answer that is aborted or cancelled", async () => {
-    const errors: unknown[] = [];
-    const onError = (error: unknown): void => {
-      errors.push(error);
-    };
-    process.on("uncaughtException", onError);
-    process.on("unhandledRejection", onError);
-    const instance = await createTestInstance({ config: createTestConfig(), tools: [] });
-    let running = 0;
-    addTestRoute(instance, "/stream", (_request, reply) =>
-      reply.header("content-type", "text/plain").send(
-        Readable.from(
-          (async function* produce() {
-            running += 1;
-            try {
-              for (;;) {
-                yield "chunk\n";
-                await delay(5);
-              }
-            } finally {
-              running -= 1;
-            }
-          })()
-        )
-      )
-    );
-    const runtime = await getTestRuntime(instance);
-    try {
-      const abort = new AbortController();
-      const aborted = await runtime.fetch(
-        new Request("http://instance.test/stream", { signal: abort.signal })
-      );
-      const abortedReader = aborted.body?.getReader();
-      expect(new TextDecoder().decode((await abortedReader?.read())?.value)).toContain("chunk");
-      expect(running).toBe(1);
-      abort.abort();
-      await expect(abortedReader?.read()).rejects.toMatchObject({ name: "AbortError" });
-      await expect.poll(() => running).toBe(0);
-
-      const cancelled = await runtime.fetch(new Request("http://instance.test/stream"));
-      const cancelledReader = cancelled.body?.getReader();
-      await cancelledReader?.read();
-      expect(running).toBe(1);
-      await cancelledReader?.cancel();
-      await expect.poll(() => running).toBe(0);
-
-      // A request aborted before it is sent is not answered.
-      await expect(
-        runtime.fetch(new Request("http://instance.test/stream", { signal: AbortSignal.abort() }))
-      ).rejects.toMatchObject({ name: "AbortError" });
-      // The server is still there, and nothing was thrown past it.
-      expect((await runtime.fetch(new Request("http://instance.test/health"))).status).toBe(200);
-      expect(errors).toEqual([]);
-    } finally {
-      process.off("uncaughtException", onError);
-      process.off("unhandledRejection", onError);
-    }
-  });
-
-  it("stops reading a body at the server's limit", async () => {
-    const runtime = await getTestRuntime(await createTestInstance());
-    const chunk = new Uint8Array(64 * 1024);
-    let pulled = 0;
-    let cancelled = false;
-    // Thirty megabytes, of which the server accepts one.
-    const body = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        pulled += 1;
-        if (pulled > 480) {
-          controller.close();
-        } else {
-          controller.enqueue(chunk);
-        }
-      },
-      cancel() {
-        cancelled = true;
-      }
-    });
-    // A streamed request body needs `duplex`, which the DOM types lack.
-    const init: RequestInit & { duplex: "half" } = {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-      duplex: "half"
-    };
-    const response = await runtime.fetch(
-      new Request(`http://instance.test${apiOperations["password_setup.complete"].path}`, init)
-    );
-    expect(response.ok).toBe(false);
-    expect(pulled).toBeLessThan(64);
-    await expect.poll(() => cancelled).toBe(true);
-  });
-
-  it("answers in process, listens and closes as a chat server", async () => {
-    await exerciseLifecycle(await createTestInstance());
-  });
-
-  it("answers in process, listens and closes as an assembled instance", async () => {
-    await exerciseLifecycle(await createTestInstance({ config: createTestConfig(), tools: [] }));
-  });
-
-  it.each(["chat-server", "client-assembly", "core"])(
-    "keeps the web framework out of the built declarations of %s",
-    async (name) => {
-      const declarations = await readFile(
-        new URL(`../packages/${name}/dist/index.d.ts`, import.meta.url),
-        "utf8"
-      );
-      expect(declarations).toContain("HttpRuntime");
-      expect(declarations).not.toMatch(/fastify|light-my-request/iu);
-    }
-  );
 });

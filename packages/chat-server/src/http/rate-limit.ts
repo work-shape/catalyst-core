@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { rateLimitedDetailsSchema, type OperationRateClass } from "@vivd-catalyst/api-contract";
 import type { RateLimitsConfig } from "@vivd-catalyst/config-schema";
 import {
@@ -5,6 +6,7 @@ import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
+  type RateLimitDecision,
   type RateLimiter,
   type RateLimitRule
 } from "@vivd-catalyst/core";
@@ -14,6 +16,15 @@ const MINUTE_MS = 60 * 1000;
 // Protects API keys and the server credential from being guessed from one address. Over it
 // the sender of refused credentials reads 429 `RATE_LIMITED`; an accepted one is not affected.
 const REFUSED_CREDENTIALS_PER_ADDRESS_PER_MINUTE = 60;
+// The longest mail address there is. Protects the counters from names sent only to fill
+// memory: a longer name is counted under the caller's address alone, and nobody sees it.
+const ACCOUNT_NAME_MAX_CHARS = 254;
+// How often counters that have run out are removed, whether or not anyone calls.
+const SWEEP_INTERVAL_MS = 60 * 1000;
+// Protects the process's memory from a flood of invented callers. Once this many counters are
+// held, a caller without one shares a single counter per rule with all other new callers and
+// reads 429 `RATE_LIMITED` when that is used up; callers already counted are not affected.
+const MAX_COUNTERS = 200_000;
 
 /**
  * Who a call is counted under: the principal where the operation authenticates one, the one
@@ -75,10 +86,23 @@ function callerKey(caller: RateLimitedCaller): string {
     : `address:${caller.address}|account:${caller.account}`;
 }
 
-/** The account a sign-in or reset call names, as the counter spells it. */
+/**
+ * The account a sign-in or reset call names, as the counter spells it: a hash of the trimmed,
+ * lower-cased mail address. Nothing for a name that cannot be a mail address, so what a
+ * caller invents is counted under its address alone and is never kept.
+ */
 export function accountTried(body: unknown): string | undefined {
-  const email = z.object({ email: z.string().min(1) }).safeParse(body);
-  return email.success ? email.data.email.trim().toLowerCase() : undefined;
+  const named = z.object({ email: z.string() }).safeParse(body);
+  if (!named.success || named.data.email.length > 4 * ACCOUNT_NAME_MAX_CHARS) {
+    return undefined;
+  }
+  const account = z
+    .email()
+    .max(ACCOUNT_NAME_MAX_CHARS)
+    .safeParse(named.data.email.trim().toLowerCase());
+  return account.success
+    ? createHash("sha256").update(account.data).digest("base64url").slice(0, 22)
+    : undefined;
 }
 
 /**
@@ -112,43 +136,65 @@ export async function requireWithinLimit(
   );
 }
 
-const SWEEP_INTERVAL_MS = 60 * 1000;
-
 /**
  * Counters in this process, one fixed window per key. They start empty after a restart, and a
- * second API process would count on its own.
+ * second API process would count on its own. Counters that have run out are removed by a
+ * timer, which runs only while there are counters and never keeps the process alive.
  */
-export function createInProcessRateLimiter(options: { now?: () => number } = {}): RateLimiter {
+export function createInProcessRateLimiter(
+  options: { now?: () => number; maxKeys?: number } = {}
+): RateLimiter {
   const now = options.now ?? Date.now;
+  const maxKeys = options.maxKeys ?? MAX_COUNTERS;
   const windows = new Map<string, { count: number; endsAt: number }>();
-  let nextSweepAt = 0;
+  // One per rule, so there are a handful. They are held beside the counters and not capped.
+  const overflow = new Map<string, { count: number; endsAt: number }>();
+  let sweeper: ReturnType<typeof setInterval> | undefined;
 
-  function sweep(time: number): void {
-    if (time < nextSweepAt) {
-      return;
-    }
-    nextSweepAt = time + SWEEP_INTERVAL_MS;
-    for (const [key, window] of windows) {
-      if (window.endsAt <= time) {
-        windows.delete(key);
+  function sweep(): void {
+    const time = now();
+    for (const counters of [windows, overflow]) {
+      for (const [key, window] of counters) {
+        if (window.endsAt <= time) {
+          counters.delete(key);
+        }
       }
     }
+    if (windows.size === 0 && overflow.size === 0 && sweeper) {
+      clearInterval(sweeper);
+      sweeper = undefined;
+    }
+  }
+
+  function count(
+    counters: Map<string, { count: number; endsAt: number }>,
+    key: string,
+    rule: RateLimitRule,
+    time: number
+  ): RateLimitDecision {
+    const current = counters.get(key);
+    if (!current || current.endsAt <= time) {
+      counters.set(key, { count: 1, endsAt: time + rule.windowMs });
+      sweeper ??= setInterval(sweep, SWEEP_INTERVAL_MS).unref();
+      return { allowed: true, retryAfterMs: 0 };
+    }
+    if (current.count >= rule.limit) {
+      return { allowed: false, retryAfterMs: current.endsAt - time };
+    }
+    current.count += 1;
+    return { allowed: true, retryAfterMs: 0 };
   }
 
   return {
     async consume(key, rule) {
       const time = now();
-      sweep(time);
-      const current = windows.get(key);
-      if (!current || current.endsAt <= time) {
-        windows.set(key, { count: 1, endsAt: time + rule.windowMs });
-        return { allowed: true, retryAfterMs: 0 };
+      if (!windows.has(key) && windows.size >= maxKeys) {
+        sweep();
+        if (windows.size >= maxKeys) {
+          return count(overflow, `${rule.limit}/${rule.windowMs}`, rule, time);
+        }
       }
-      if (current.count >= rule.limit) {
-        return { allowed: false, retryAfterMs: current.endsAt - time };
-      }
-      current.count += 1;
-      return { allowed: true, retryAfterMs: 0 };
+      return count(windows, key, rule, time);
     }
   };
 }

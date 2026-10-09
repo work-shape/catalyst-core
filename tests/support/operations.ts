@@ -22,6 +22,16 @@ const fixtureOperation = (method: "GET" | "POST", path: string) => ({
 /** A path under the sign-in library's mount that the library does not serve. */
 export const inventedAuthPath = (name: string | number): string => `/api/auth/invented-${name}`;
 
+/** Spellings of the sign-in path that a server or the sign-in library may read as sign-in. */
+export const signInPathSpellings = {
+  "dot segment": "/api/auth/./sign-in/email",
+  "parent segment": "/api/auth/x/../sign-in/email",
+  "encoded dot segment": "/api/auth/%2e/sign-in/email",
+  "doubled slash": "/api/auth//sign-in/email",
+  "mixed case": "/api/auth/Sign-In/Email",
+  "encoded letter": "/api/auth/sign-in/emai%6c"
+} as const;
+
 /** Operations a test registers through the route helper to exercise the helper itself. */
 const testIdentityOperation = {
   summary: "Report the authenticated caller",

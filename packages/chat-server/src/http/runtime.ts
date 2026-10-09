@@ -64,7 +64,9 @@ export function createHttpRuntime(server: InProcessHttpServer): HttpRuntime {
       try {
         response = await Promise.race([injected, aborted]);
       } catch (error) {
-        body?.destroy();
+        // An upload that is not all sent ends with an error, as a connection that drops does.
+        // The server stops waiting for the rest, answers, and that answer is destroyed below.
+        body?.destroy(new Error("The request was aborted"));
         void injected.then(
           (late) => late.raw.res.destroy(),
           () => undefined

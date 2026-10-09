@@ -26,7 +26,10 @@ export function registerBetterAuthRoutes(
       // Counted here, before the library sees the call, so that attempts sent side by side
       // are refused before any of them has a password checked. A path the library does not
       // serve is not counted at all.
-      const kind = standaloneAuth.routeKind(request.url.split("?", 1)[0] ?? request.url);
+      // The one URL that is classified here and handed to the library below, so both read the
+      // same path however the caller spelled it.
+      const url = toAuthRequestUrl(request.url, standaloneAuth.baseUrl);
+      const kind = standaloneAuth.routeKind(url.pathname);
       if (kind === "credential") {
         await requireWithinLimit(options, SIGN_IN_ROUTES, { address: request.ip }, reply);
         const account = accountTried(request.body);
@@ -48,7 +51,7 @@ export function registerBetterAuthRoutes(
         );
       }
       const response = await standaloneAuth.handleRequest(
-        new Request(toAuthRequestUrl(request.url, standaloneAuth.baseUrl), {
+        new Request(url, {
           method: request.method,
           headers: toRequestHeaders(request.headers, request.ip),
           body: request.method === "GET" ? undefined : toRequestBody(request.body)
@@ -79,9 +82,18 @@ export function sendWebResponse(reply: FastifyReply, response: Response): Fastif
   return reply.send(Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>));
 }
 
-function toAuthRequestUrl(requestUrl: string, baseUrl: string): string {
-  const origin = new URL(baseUrl).origin;
-  return new URL(requestUrl, origin).toString();
+/**
+ * The call's URL in one spelling: dot segments resolved and repeated slashes joined. A path
+ * that still holds an escaped character is not one of the library's, so it is not served.
+ */
+function toAuthRequestUrl(requestUrl: string, baseUrl: string): URL {
+  // A leading "//" would be read as another host.
+  const url = new URL(requestUrl.replace(/^\/+/u, "/"), new URL(baseUrl).origin);
+  url.pathname = url.pathname.replaceAll(/\/{2,}/gu, "/");
+  if (url.pathname.includes("%")) {
+    throw new AppError("NOT_FOUND", "Operation is not available");
+  }
+  return url;
 }
 
 /**
