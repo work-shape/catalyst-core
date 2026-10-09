@@ -1,9 +1,28 @@
 import type { FastifyInstance } from "fastify";
+import { apiOperations, UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
 import { AppError, isAppError, toErrorEnvelope } from "@vivd-catalyst/core";
 
+const catalogRoutes = Object.values(apiOperations).map((operation) => ({
+  method: operation.method,
+  path: new RegExp(`^${operation.path.replaceAll(/:[A-Za-z][A-Za-z0-9_]*/gu, "[^/]+")}$`, "u")
+}));
+
+function isCatalogOperation(method: string, url: string): boolean {
+  const path = url.split("?", 1)[0] ?? url;
+  return catalogRoutes.some((route) => route.method === method && route.path.test(path));
+}
+
 export function installErrorHandler(app: FastifyInstance): void {
-  app.setNotFoundHandler((_request, _reply) => {
-    throw new AppError("NOT_FOUND", "Operation is not available");
+  app.setNotFoundHandler((request, _reply) => {
+    // An operation this instance runs without is still an operation. Anything else tells the
+    // caller that it was built for another release, which an open interface shows as a notice.
+    throw new AppError(
+      "NOT_FOUND",
+      "Operation is not available",
+      isCatalogOperation(request.method, request.url)
+        ? undefined
+        : { reason: UNKNOWN_OPERATION_REASON }
+    );
   });
   app.setErrorHandler((error, request, reply) => {
     if (!isAppError(error)) {

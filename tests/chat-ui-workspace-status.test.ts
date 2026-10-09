@@ -1,9 +1,11 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup as renderInUiRoot } from "./chat-ui-render-harness";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
 import {
   ConfigCheckPanel,
+  OutdatedInterfaceBanner,
   SessionCheckPanel
 } from "../packages/chat-ui/src/workspace/workspace-chrome";
 
@@ -73,5 +75,23 @@ describe("workspace session status", () => {
 
     expect(markup).toContain("Checking session");
     expect(markup).not.toContain("<button");
+  });
+});
+
+describe("an interface older than its server", () => {
+  it.each([
+    ["en", "The application was updated", "Reload"],
+    ["de", "Die Anwendung wurde aktualisiert", "Neu laden"]
+  ] as const)("shows one notice with a reload action in %s", (locale, title, action) => {
+    const markup = renderInUiRoot(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(OutdatedInterfaceBanner, { onReload: () => undefined })
+      )
+    );
+    expect(markup.match(/role="status"/gu)).toHaveLength(1);
+    expect(markup).toContain(title);
+    expect(markup).toMatch(new RegExp(`<button[^>]*>${action}</button>`, "u"));
   });
 });

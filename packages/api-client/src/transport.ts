@@ -1,3 +1,4 @@
+import { isUnknownOperationResponse } from "@vivd-catalyst/api-contract";
 import type { z } from "zod";
 import { ApiError } from "./errors";
 import { createClient as createGeneratedClient } from "./generated/client";
@@ -8,6 +9,11 @@ export interface ApiClientOptions {
   fetchImpl?: typeof fetch;
   /** Only available without a token source; browser navigation cannot send a bearer token. */
   browserManagedDownloads?: boolean;
+  /**
+   * Called when the server answers that a method and path is no operation of its catalog:
+   * this client was built for another release than the server now runs.
+   */
+  onUnknownOperation?: () => void;
 }
 
 export type OperationRequestInput<Operation> = Operation extends {
@@ -45,6 +51,13 @@ export function createApiClientTransport(options: ApiClientOptions) {
       request.headers.set("authorization", `Bearer ${token}`);
     }
     return request;
+  });
+
+  generatedClient.interceptors.error.use((error, response) => {
+    if (response?.status === 404 && isUnknownOperationResponse(error)) {
+      options.onUnknownOperation?.();
+    }
+    return error;
   });
 
   return {

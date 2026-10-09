@@ -19,7 +19,12 @@ import { ViewPolicyProvider } from "./view-policy";
 import { agentChipDisplayFor } from "./workspace/agent-selector";
 import { ClientBrandingHeader } from "./workspace/client-branding";
 import { UserMenu } from "./workspace/user-menu";
-import { ConfigCheckPanel, SessionCheckPanel, WorkspaceChrome } from "./workspace/workspace-chrome";
+import {
+  ConfigCheckPanel,
+  OutdatedInterfaceNotice,
+  SessionCheckPanel,
+  WorkspaceChrome
+} from "./workspace/workspace-chrome";
 import { WorkspaceRail } from "./workspace/workspace-rail";
 import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspace-chat-model";
@@ -154,6 +159,7 @@ function ChatWorkspaceContent({
     return (
       <TranslationProvider locale={model.config.activeLocale}>
         <UiRoot mode={themeMode} labels={uiLabels}>
+          <OutdatedInterfaceNotice />
           <SessionCheckPanel
             className={className}
             unavailable={model.auth.sessionUnavailable}
@@ -169,6 +175,7 @@ function ChatWorkspaceContent({
     return (
       <TranslationProvider locale={model.config.activeLocale}>
         <UiRoot mode={themeMode} labels={uiLabels}>
+          <OutdatedInterfaceNotice />
           <ConfigCheckPanel className={className} error={model.config.error} />
         </UiRoot>
       </TranslationProvider>
@@ -243,6 +250,7 @@ function ChatWorkspaceContent({
           className
         )}
       >
+        <OutdatedInterfaceNotice />
         {model.chrome.sidebarOpen ? <SidebarBackdrop onClose={model.chrome.closeSidebar} /> : null}
 
         {model.chrome.sidebarOpen ? (

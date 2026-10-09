@@ -1,9 +1,11 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { createApiClient, type ApiClient } from "@vivd-catalyst/api-client";
 
 interface WorkspaceApiClientContextValue {
   apiBaseUrl: string;
   client: ApiClient;
+  /** The server answered that it does not know an operation this interface called. */
+  interfaceOutdated: boolean;
 }
 
 const WorkspaceApiClientContext = createContext<WorkspaceApiClientContextValue | undefined>(
@@ -21,19 +23,22 @@ export function WorkspaceApiClientProvider({
   getToken?: () => string | undefined | Promise<string | undefined>;
   children: ReactNode;
 }) {
+  const [interfaceOutdated, setInterfaceOutdated] = useState(false);
   const client = useMemo(() => {
     const resolvedGetToken = getToken ?? (token !== undefined ? () => token : undefined);
     return createApiClient({
       baseUrl: apiBaseUrl,
+      onUnknownOperation: () => setInterfaceOutdated(true),
       ...(resolvedGetToken ? { getToken: resolvedGetToken } : {})
     });
   }, [apiBaseUrl, getToken, token]);
   const value = useMemo<WorkspaceApiClientContextValue>(
     () => ({
       apiBaseUrl,
-      client
+      client,
+      interfaceOutdated
     }),
-    [apiBaseUrl, client]
+    [apiBaseUrl, client, interfaceOutdated]
   );
 
   return (

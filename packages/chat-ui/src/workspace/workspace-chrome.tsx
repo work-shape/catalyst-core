@@ -1,11 +1,43 @@
 import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
 import type { CSSProperties, ReactNode } from "react";
-import { Button, cn } from "@vivd-catalyst/ui";
+import { Banner, Button, cn } from "@vivd-catalyst/ui";
+import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { AgentSelector, type AgentChipDisplay } from "./agent-selector";
 import { useTranslation } from "../i18n";
 import { type ResolvedThemeMode } from "../theme";
 import { ThemeToggle } from "./theme-toggle";
+
+/**
+ * Shown once when the server no longer knows an operation this interface calls, which happens
+ * to a tab that stayed open across an upgrade. The reader reloads; nothing reloads by itself.
+ */
+export function OutdatedInterfaceNotice() {
+  const { interfaceOutdated } = useWorkspaceApiClient();
+  return interfaceOutdated ? (
+    <OutdatedInterfaceBanner onReload={() => window.location.reload()} />
+  ) : null;
+}
+
+export function OutdatedInterfaceBanner({ onReload }: { onReload(): void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center p-3">
+      <Banner
+        tone="warning"
+        title={t("interfaceOutdatedTitle")}
+        action={
+          <Button size="sm" variant="secondary" onClick={onReload}>
+            {t("interfaceOutdatedReload")}
+          </Button>
+        }
+        className="pointer-events-auto w-full max-w-xl shadow-lg"
+      >
+        {t("interfaceOutdatedBody")}
+      </Banner>
+    </div>
+  );
+}
 
 export function SessionCheckPanel({
   className,

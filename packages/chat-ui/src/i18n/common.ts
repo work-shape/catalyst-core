@@ -11,6 +11,10 @@ export const common = defineTranslations({
     deleting: "Deleting",
     exitFullscreen: "Exit fullscreen",
     email: "Email",
+    interfaceOutdatedBody:
+      "This page is from an earlier version and can no longer reach the server. Reload it to continue.",
+    interfaceOutdatedReload: "Reload",
+    interfaceOutdatedTitle: "The application was updated",
     language: "Language",
     localeDe: "Deutsch",
     localeEn: "English",
@@ -36,6 +40,10 @@ export const common = defineTranslations({
     deleting: "Löscht",
     exitFullscreen: "Vollbild schließen",
     email: "E-Mail",
+    interfaceOutdatedBody:
+      "Diese Seite stammt aus einer früheren Version und erreicht den Server nicht mehr. Lade sie neu, um weiterzuarbeiten.",
+    interfaceOutdatedReload: "Neu laden",
+    interfaceOutdatedTitle: "Die Anwendung wurde aktualisiert",
     language: "Sprache",
     localeDe: "Deutsch",
     localeEn: "English",
