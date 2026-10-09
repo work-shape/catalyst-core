@@ -46,7 +46,7 @@ contain breaking changes; a patch version does not.
   `ui.collaborationWorkspaces` from config files. For this one release a config that still
   says `enabled: true` loads; `enabled: false`, or any other value, stops the instance at
   startup with a message that names the key. That acceptance ends with the next release. The
-  safe config (`GET /api/v1/config`) no longer carries `features.collaborationWorkspaces`:
+  safe config (`GET /api/v1/instance/config`) no longer carries `features.collaborationWorkspaces`:
   deploy the interface and the API together, because an interface built before this release
   reads the new answer as invalid. Creating, browsing and requesting access to a Shared
   Workspace and adding members no longer answer 403 "Collaboration workspaces are not enabled
