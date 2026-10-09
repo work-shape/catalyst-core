@@ -359,7 +359,8 @@ export async function createClientInstanceExecutionAssembly(
       return assets.agents.find((candidate) => candidate.name === agentName)?.toolNames ?? [];
     },
     auditRecorder,
-    usageRecorder: usageGovernance
+    usageRecorder: usageGovernance,
+    logger
   });
   const defaultModelProvider = config.modelProviders[0];
   if (!defaultModelProvider) {

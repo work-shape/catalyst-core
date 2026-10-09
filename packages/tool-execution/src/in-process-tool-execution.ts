@@ -1,13 +1,17 @@
 import { ZodError } from "zod";
 import {
+  isAppError,
+  toErrorEnvelope,
   type ApprovedToolExecutionRequest,
   type JsonObject,
+  type Logger,
   type ModelUsageRecorder,
   type ToolAuthorizationDecision,
   type ToolExecution,
   type ToolExecutionContext,
   type ToolExecutionRequest,
-  type ToolExecutionResult
+  type ToolExecutionResult,
+  type ToolHandlerFailureResult
 } from "@vivd-catalyst/core";
 import { auditActorFromUser, type AuditRecorder } from "@vivd-catalyst/core";
 import type { ToolRegistry } from "./tool-registry";
@@ -18,6 +22,8 @@ export interface InProcessToolExecutionOptions {
   getAgentToolNames(agentName: string): readonly string[] | Promise<readonly string[]>;
   auditRecorder?: AuditRecorder;
   usageRecorder?: ModelUsageRecorder;
+  /** Receives the full error of a handler whose failure the model only sees as a reference. */
+  logger?: Logger;
 }
 
 export class InProcessToolExecution implements ToolExecution {
@@ -27,12 +33,14 @@ export class InProcessToolExecution implements ToolExecution {
   ) => readonly string[] | Promise<readonly string[]>;
   private readonly auditRecorder?: AuditRecorder;
   private readonly usageRecorder?: ModelUsageRecorder;
+  private readonly logger?: Logger;
 
   constructor(options: InProcessToolExecutionOptions) {
     this.registry = options.registry;
     this.getAgentToolNames = options.getAgentToolNames;
     this.auditRecorder = options.auditRecorder;
     this.usageRecorder = options.usageRecorder;
+    this.logger = options.logger;
   }
 
   async authorize(
@@ -148,16 +156,44 @@ export class InProcessToolExecution implements ToolExecution {
                 message: issue.message
               }))
             })
-          : failed(
-              "handler_failed",
-              error instanceof Error ? error.message : "Tool handler failed"
-            );
+          : this.thrownHandlerFailure(error, request, context);
 
       await this.audit("tool.failed", "failed", request, context, {
         code: result.error.code
       });
       return result;
     }
+  }
+
+  /**
+   * What a thrown error may tell the model, by the rule of `toErrorEnvelope`: the message of an
+   * `AppError` that exposes it. Any other error, a database driver's included, can carry SQL,
+   * parameters or paths. It goes to the logger, and the model gets the correlation id to quote.
+   */
+  private thrownHandlerFailure(
+    error: unknown,
+    request: ToolExecutionRequest,
+    context: ToolExecutionContext
+  ): ToolHandlerFailureResult {
+    if (isAppError(error) && error.code !== "INTERNAL" && error.exposeMessage) {
+      return failed("handler_failed", toErrorEnvelope(error, context.correlationId).error.message);
+    }
+    this.logger?.error(
+      {
+        error,
+        correlationId: context.correlationId,
+        toolName: request.toolName,
+        toolCallId: request.toolCallId,
+        agentName: request.agentName,
+        conversationId: request.conversationId
+      },
+      "Tool handler failed"
+    );
+    return failed(
+      "handler_failed",
+      `The tool failed with an internal error. Reference: ${context.correlationId}`,
+      { correlationId: context.correlationId }
+    );
   }
 
   private async recordAndRemoveModelUsage(
