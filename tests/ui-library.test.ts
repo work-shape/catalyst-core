@@ -99,6 +99,27 @@ describe("UiRoot", () => {
   });
 });
 
+describe("Button", () => {
+  it("is a plain button unless the caller makes it a submit button", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        Fragment,
+        null,
+        createElement(library.Button, null, "Plain"),
+        createElement(library.Button, { type: "submit" }, "Submit"),
+        createElement(
+          library.Button,
+          { asChild: true },
+          createElement("a", { href: "/next" }, "Link")
+        )
+      )
+    );
+    expect(html).toContain('type="button"');
+    expect(html).toContain('type="submit"');
+    expect(html.match(/type="/g)).toHaveLength(2);
+  });
+});
+
 describe("UI gallery", () => {
   // The root is what the gallery's panels are, so it has no entry of its own.
   const withoutEntry = new Set(["UiRoot"]);

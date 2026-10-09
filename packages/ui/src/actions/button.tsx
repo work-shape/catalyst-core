@@ -65,6 +65,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       className={classes}
       {...props}
+      // A button without a type submits the form around it, also through a portal.
+      type={props.type ?? "button"}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
     >
