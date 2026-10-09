@@ -134,7 +134,7 @@ const staticReads = (object) => {
   return names;
 };
 
-const hostObjects = ["globalThis", "window", "self"];
+const hostObjects = ["globalThis", "global", "window", "self"];
 
 /**
  * The references to a host object that statically read one of `members` from it, such as
@@ -232,7 +232,7 @@ const plugin = {
     // The three rules above follow a host object only through its named members. This rule
     // reports every other use of one, so that no alias reaches console, process or fetch.
     "host-object-boundary": rule(
-      "globalThis, window and self are only read through named members",
+      "globalThis, global, window and self are only read through named members",
       (filename) => packageAt(filename) !== undefined,
       (context, report) => ({
         "Program:exit": () =>

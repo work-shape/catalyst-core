@@ -159,6 +159,10 @@ export const transport = send;
   [`${source}/host-alias.ts`]: `const g = globalThis;
 export const response = g.fetch("https://example.test");
 `,
+  [`${source}/global-console.ts`]: `global.console.log("example");\n`,
+  [`${source}/global-env.ts`]: `export const mode = global.process.env.MODE;\n`,
+  [`${source}/global-fetch.ts`]: `export const response = global.fetch("https://example.test");\n`,
+  [`${source}/global-alias.ts`]: `export const g = global;\n`,
   [`${source}/host-nested.ts`]: `export const response = window.self.fetch("https://example.test");\n`,
   [`${source}/host-computed.ts`]: `const name = "fetch" as string;
 export const transport: unknown = Reflect.get(self, name);
@@ -317,6 +321,10 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/console-boundary ${source}/console-destructured.ts`,
         `catalyst/console-boundary ${source}/console-alias.ts`,
         `catalyst/console-boundary ${source}/console-host.ts`,
+        `catalyst/console-boundary ${source}/global-console.ts`,
+        `catalyst/env-boundary ${source}/global-env.ts`,
+        `catalyst/fetch-boundary ${source}/global-fetch.ts`,
+        `catalyst/host-object-boundary ${source}/global-alias.ts`,
         `catalyst/env-boundary ${source}/env-member.ts`,
         `catalyst/env-boundary ${source}/env-computed.ts`,
         `catalyst/env-boundary ${source}/env-destructured.ts`,
