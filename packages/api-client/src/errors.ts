@@ -1,4 +1,9 @@
-import { appErrorCodeSchema, type ApiErrorCode } from "@vivd-catalyst/api-contract";
+import {
+  appErrorCodeSchema,
+  rateLimitedDetailsSchema,
+  type ApiErrorCode
+} from "@vivd-catalyst/api-contract";
+import { z } from "zod";
 
 /**
  * Every way a call can fail once its input was accepted. `status` is the HTTP status, or 0 when
@@ -10,6 +15,8 @@ export class ApiError extends Error {
   readonly code?: ApiErrorCode;
   readonly payload: unknown;
   readonly correlationId?: string;
+  /** How long a caller over a rate limit has to wait, from a 429 `RATE_LIMITED` answer. */
+  readonly retryAfterSeconds?: number;
 
   constructor(status: number, message: string, payload: unknown) {
     super(message);
@@ -18,6 +25,7 @@ export class ApiError extends Error {
     this.code = readApiErrorCode(payload);
     this.payload = payload;
     this.correlationId = readCorrelationId(payload);
+    this.retryAfterSeconds = readRetryAfterSeconds(payload);
   }
 }
 
@@ -80,4 +88,11 @@ function readCorrelationId(payload: unknown): string | undefined {
   return error && "correlationId" in error && typeof error.correlationId === "string"
     ? error.correlationId
     : undefined;
+}
+
+function readRetryAfterSeconds(payload: unknown): number | undefined {
+  const parsed = z
+    .object({ error: z.object({ details: rateLimitedDetailsSchema }) })
+    .safeParse(payload);
+  return parsed.success ? parsed.data.error.details.retryAfterSeconds : undefined;
 }

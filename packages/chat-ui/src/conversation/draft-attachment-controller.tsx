@@ -32,6 +32,9 @@ type LocalUploadingConversationAttachment = LocalUploadingAttachment & { convers
 const MAX_CONCURRENT_UPLOADS = 2;
 const UPLOAD_ATTEMPTS = 3;
 const GATEWAY_FAILURE_STATUSES = [0, 502, 503, 504];
+// A dropped folder can run into the instance's limit on changing calls. Each file waits as
+// long as the API says and goes on, a bounded number of times.
+const RATE_LIMIT_WAITS = 5;
 
 export function useDraftAttachmentController(
   input: DraftAttachmentControllerInput
@@ -224,12 +227,14 @@ class UnreadableFileError extends Error {}
  * Reads the file into memory before the request opens, then retries failures that are not an
  * answer from the API. A browser that cannot read a file promptly (a cloud-synced folder that
  * still has to download it) otherwise opens the request and stalls its body until the reverse
- * proxy gives up. Retrying is safe: the API deduplicates uploads by checksum.
+ * proxy gives up. Retrying is safe: the API deduplicates uploads by checksum. An upload the API
+ * refused for the rate limit waits the time the API names and is sent again.
  */
 export async function uploadFileWithRetry<T>(
   file: File,
   upload: (readFile: File) => Promise<T>,
-  retryDelayMs = 1000
+  retryDelayMs = 1000,
+  wait: (ms: number) => Promise<unknown> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 ): Promise<T> {
   let bytes: ArrayBuffer;
   try {
@@ -241,14 +246,22 @@ export async function uploadFileWithRetry<T>(
     type: file.type,
     lastModified: file.lastModified
   });
-  for (let attempt = 1; ; attempt += 1) {
+  let rateLimitWaits = 0;
+  for (let attempt = 1; ;) {
     try {
       return await upload(readFile);
     } catch (error) {
+      const retryAfterSeconds = error instanceof ApiError ? error.retryAfterSeconds : undefined;
+      if (retryAfterSeconds !== undefined && rateLimitWaits < RATE_LIMIT_WAITS) {
+        rateLimitWaits += 1;
+        await wait(retryAfterSeconds * 1000);
+        continue;
+      }
       if (attempt >= UPLOAD_ATTEMPTS || !isTransientUploadError(error)) {
         throw error;
       }
-      await new Promise((resolve) => setTimeout(resolve, attempt * retryDelayMs));
+      await wait(attempt * retryDelayMs);
+      attempt += 1;
     }
   }
 }
