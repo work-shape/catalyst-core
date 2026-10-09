@@ -23,33 +23,44 @@ import {
   type WorkspaceObjectStore
 } from "@vivd-catalyst/tool-execution";
 
-export async function createWorkspaceHarness(
-  input: {
-    agentToolNames?: string[];
-    commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
-    execResultWaitMs?:
-      ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"] | null;
-    execResultPollIntervalMs?: ConstructorParameters<
-      typeof WorkspaceCommandService
-    >[0]["execResultPollIntervalMs"];
-    limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
-    serviceStore?: (
-      store: PlatformStores
-    ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
-    telemetry?: WorkspaceCommandTelemetry;
-    withAuditRecorder?: boolean;
-    sourceFiles?: Record<
-      string,
-      {
-        filename: string;
-        mimeType?: string;
-        bytes: Uint8Array;
-      }
-    >;
-  } = {}
+interface WorkspaceHarnessInput {
+  agentToolNames?: string[];
+  commandResults?: ConstructorParameters<typeof WorkspaceCommandService>[0]["commandResults"];
+  execResultWaitMs?:
+    ConstructorParameters<typeof WorkspaceCommandService>[0]["execResultWaitMs"] | null;
+  execResultPollIntervalMs?: ConstructorParameters<
+    typeof WorkspaceCommandService
+  >[0]["execResultPollIntervalMs"];
+  limits?: ConstructorParameters<typeof WorkspaceCommandService>[0]["limits"];
+  serviceStore?: (
+    store: PlatformStores
+  ) => ConstructorParameters<typeof WorkspaceCommandService>[0]["store"];
+  telemetry?: WorkspaceCommandTelemetry;
+  withAuditRecorder?: boolean;
+  sourceFiles?: Record<
+    string,
+    {
+      filename: string;
+      mimeType?: string;
+      bytes: Uint8Array;
+    }
+  >;
+}
+
+export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) {
+  return createWorkspaceHarnessOn(
+    createTestInstance().stores,
+    asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`),
+    input
+  );
+}
+
+/** The harness on a store the caller supplies, such as the Postgres store of a suite. */
+export async function createWorkspaceHarnessOn<Stores extends PlatformStores>(
+  store: Stores,
+  clientInstanceId: ClientInstanceId,
+  input: WorkspaceHarnessInput = {}
 ) {
-  const clientInstanceId = asClientInstanceId(`workspace_tools_${globalThis.crypto.randomUUID()}`);
-  const store = createTestInstance().stores;
   const owner = await store.users.resolveUserIdentity({
     clientInstanceId,
     authSource: "test",

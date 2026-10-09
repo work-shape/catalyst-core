@@ -423,14 +423,17 @@ export class WorkspaceCommandService {
       return capacity.result;
     }
 
-    const patchCommandId = createPlatformId<"WorkspaceCommandId">("wcmd_patch");
+    // A patch is not a workspace command: nothing is queued, leased or run. Like an import, it
+    // stores no command row, so its files name no last command. The id only keeps the object
+    // keys of this patch apart.
+    const patchObjectKeyId = createPlatformId<"WorkspaceCommandId">("wcmd_patch");
     const changedFiles = [];
     for (const write of prepared.value.writes) {
       const stored = await this.fileStore.putWorkspaceFile({
         clientInstanceId: context.clientInstanceId,
         conversationId: workspace.value.conversationId,
         workspaceId: workspace.value.id,
-        commandId: patchCommandId,
+        commandId: patchObjectKeyId,
         path: write.path,
         bytes: write.bytes,
         checksum: write.checksum,
@@ -454,7 +457,6 @@ export class WorkspaceCommandService {
               ? { modifiedBy: "workspace.apply_patch" }
               : { source: "workspace.apply_patch" })
           },
-          lastCommandId: patchCommandId,
           updatedAt: this.now()
         }
       );
@@ -472,7 +474,6 @@ export class WorkspaceCommandService {
         clientInstanceId: context.clientInstanceId,
         workspaceId: workspace.value.id,
         path: deletion.path,
-        lastCommandId: patchCommandId,
         deletedAt: this.now()
       });
       if (deleted) {
