@@ -35,8 +35,8 @@ describe("Collaboration Workspace API", () => {
     const workspaces = await app.call("listCollaborationWorkspaces", {}, "owner");
     expect(workspaces.statusCode).toBe(200);
     const personalWorkspace = workspaces
-      .json<Array<{ id: string; kind: string }>>()
-      .find((workspace) => workspace.kind === "personal");
+      .json<{ items: Array<{ id: string; kind: string }> }>()
+      .items.find((workspace) => workspace.kind === "personal");
     expect(personalWorkspace).toBeDefined();
 
     const conversation = await app.call(
@@ -52,7 +52,7 @@ describe("Collaboration Workspace API", () => {
     await seedConversationMessage(app.stores.conversations, conversationId);
     const listedConversations = await app.call("listConversations", {}, "owner");
     expect(listedConversations.statusCode).toBe(200);
-    expect(listedConversations.json()).toContainEqual(
+    expect(listedConversations.json().items).toContainEqual(
       expect.objectContaining({ id: conversationId })
     );
     expect(
@@ -97,6 +97,46 @@ describe("Collaboration Workspace API", () => {
     }
 
     await app.close();
+  });
+
+  it("pages candidates with identical labels and emails by their user ids", async () => {
+    const app = await createWorkspaceApp();
+    await currentUser(app, "owner");
+    const workspaceId = await createSharedWorkspace(app, "owner", "Candidate paging");
+    try {
+      const candidates = [];
+      for (let index = 0; index < 3; index++) {
+        candidates.push(
+          await app.stores.users.createUser({
+            clientInstanceId,
+            displayLabel: "Same Candidate",
+            email: "same@example.test"
+          })
+        );
+      }
+      const ids: string[] = [];
+      let cursor: string | undefined;
+      for (let index = 0; index < 3; index++) {
+        const response = await app.call(
+          "listCollaborationWorkspaceMemberCandidates",
+          {
+            params: { collaborationWorkspaceId: workspaceId },
+            query: { q: "same", limit: 1, cursor }
+          },
+          "owner"
+        );
+        expect(response.statusCode).toBe(200);
+        const page = response.json<{ items: { userId: string }[]; nextCursor?: string }>();
+        expect(page.items).toHaveLength(1);
+        ids.push(...page.items.map((item) => item.userId));
+        cursor = page.nextCursor;
+        if (index < 2) expect(cursor).toEqual(expect.any(String));
+      }
+      expect(cursor).toBeUndefined();
+      expect(ids).toEqual(candidates.map((candidate) => candidate.id).sort());
+    } finally {
+      await app.close();
+    }
   });
 
   it("searches add-member candidates for workspace owners and admins", async () => {
@@ -151,10 +191,11 @@ describe("Collaboration Workspace API", () => {
       "owner"
     );
     expect(ownerLabelMatch.statusCode).toBe(200);
-    expect(ownerLabelMatch.json()).toEqual([
+    expect(ownerLabelMatch.json().items).toEqual([
       {
         displayLabel: "Label Search Person",
         email: "label-result@example.test",
+        userId: expect.any(String),
         hasPendingAccessRequest: false
       }
     ]);
@@ -165,10 +206,11 @@ describe("Collaboration Workspace API", () => {
       "admin"
     );
     expect(adminEmailMatch.statusCode).toBe(200);
-    expect(adminEmailMatch.json()).toEqual([
+    expect(adminEmailMatch.json().items).toEqual([
       {
         displayLabel: "Email Result",
         email: "Mixed.Email@example.test",
+        userId: expect.any(String),
         hasPendingAccessRequest: false
       }
     ]);
@@ -178,10 +220,11 @@ describe("Collaboration Workspace API", () => {
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "VERIFIED.ALIAS" } },
       "owner"
     );
-    expect(verifiedIdentityMatch.json()).toEqual([
+    expect(verifiedIdentityMatch.json().items).toEqual([
       {
         displayLabel: "Identity Email Result",
         email: "Verified.Alias@example.test",
+        userId: expect.any(String),
         hasPendingAccessRequest: false
       }
     ]);
@@ -191,10 +234,11 @@ describe("Collaboration Workspace API", () => {
       { params: { collaborationWorkspaceId: workspaceId }, query: { q: "OUTSIDER@" } },
       "owner"
     );
-    expect(pendingRequester.json()).toEqual([
+    expect(pendingRequester.json().items).toEqual([
       {
         displayLabel: "outsider",
         email: "outsider@example.test",
+        userId: expect.any(String),
         hasPendingAccessRequest: true
       }
     ]);
@@ -206,7 +250,7 @@ describe("Collaboration Workspace API", () => {
           { params: { collaborationWorkspaceId: workspaceId }, query: { q: "MEMBER@EXAMPLE" } },
           "owner"
         )
-      ).json()
+      ).json().items
     ).toEqual([]);
     expect(
       (
@@ -215,7 +259,7 @@ describe("Collaboration Workspace API", () => {
           { params: { collaborationWorkspaceId: workspaceId }, query: { q: " a " } },
           "owner"
         )
-      ).json()
+      ).json().items
     ).toEqual([]);
     expect(
       (
@@ -249,11 +293,13 @@ describe("Collaboration Workspace API", () => {
       "admin"
     );
     expect(limited.statusCode).toBe(200);
-    expect(limited.json()).toHaveLength(8);
-    expect(limited.json()).toEqual(
+    expect(limited.json().items).toHaveLength(8);
+    expect(limited.json()).not.toHaveProperty("nextCursor");
+    expect(limited.json().items).toEqual(
       Array.from({ length: 8 }, (_, index) => ({
         displayLabel: `Limit Candidate ${index.toString().padStart(2, "0")}`,
         email: `limit-${index}@example.test`,
+        userId: expect.any(String),
         hasPendingAccessRequest: false
       }))
     );
@@ -282,7 +328,7 @@ describe("Collaboration Workspace API", () => {
     for (const actor of ["owner", "member"]) {
       const listed = await app.call("listCollaborationWorkspaces", {}, actor);
       expect(listed.statusCode).toBe(200);
-      expect(listed.json()).toContainEqual(expect.objectContaining({ id: workspaceId }));
+      expect(listed.json().items).toContainEqual(expect.objectContaining({ id: workspaceId }));
 
       const read = await app.call(
         "getCollaborationWorkspace",
@@ -559,7 +605,7 @@ describe("Collaboration Workspace API", () => {
     );
     expect(clearedRequestApproval.statusCode).toBe(404);
     const pendingDirectory = await app.call("listCollaborationWorkspaceDirectory", {}, "outsider");
-    expect(pendingDirectory.json()).toContainEqual(
+    expect(pendingDirectory.json().items).toContainEqual(
       expect.objectContaining({ id: collaborationWorkspaceId, accessState: "request_pending" })
     );
     const requests = await app.call(
@@ -568,10 +614,10 @@ describe("Collaboration Workspace API", () => {
       "admin"
     );
     expect(requests.statusCode).toBe(200);
-    expect(requests.json()).toContainEqual(expect.objectContaining({ userId: outsider.id }));
+    expect(requests.json().items).toContainEqual(expect.objectContaining({ userId: outsider.id }));
 
     const ownerRows = await app.call("listCollaborationWorkspaces", {}, "owner");
-    expect(ownerRows.json()).toContainEqual(
+    expect(ownerRows.json().items).toContainEqual(
       expect.objectContaining({ id: collaborationWorkspaceId, pendingAccessRequestCount: 1 })
     );
     expect(
@@ -602,7 +648,7 @@ describe("Collaboration Workspace API", () => {
       ).statusCode
     ).toBe(200);
     const declinedDirectory = await app.call("listCollaborationWorkspaceDirectory", {}, "declined");
-    expect(declinedDirectory.json()).toContainEqual(
+    expect(declinedDirectory.json().items).toContainEqual(
       expect.objectContaining({ id: collaborationWorkspaceId, accessState: "can_request" })
     );
     expect(
@@ -688,12 +734,12 @@ describe("Collaboration Workspace API", () => {
 
     const audit = await app.call("listAuditEvents", {}, "owner");
     expect(audit.statusCode).toBe(200);
-    const auditEvents = audit.json<
-      Array<{
+    const auditEvents = audit.json<{
+      items: Array<{
         type: string;
         metadata?: Record<string, unknown>;
-      }>
-    >();
+      }>;
+    }>().items;
     expect(auditEvents.map((event) => event.type)).toEqual(
       expect.arrayContaining([
         "collaboration_workspace.created",
@@ -727,15 +773,17 @@ describe("Collaboration Workspace API", () => {
     const directory = await app.call("listCollaborationWorkspaceDirectory", {}, "outsider");
     expect(directory.statusCode).toBe(200);
     const directoryRow = directory
-      .json<Array<Record<string, unknown>>>()
-      .find((row) => row.id === collaborationWorkspaceId);
+      .json<{ items: Array<Record<string, unknown>> }>()
+      .items.find((row) => row.id === collaborationWorkspaceId);
     expect(directoryRow).toEqual({
       id: collaborationWorkspaceId,
       name: "Discoverable",
       description: "Limited metadata",
       emoji: null,
       accentColor: "ruby",
-      accessState: "can_request"
+      accessState: "can_request",
+      // The key the directory is paged by.
+      createdAt: expect.any(String)
     });
     for (const absent of ["members", "memberCount", "email", "activity", "role"]) {
       expect(directoryRow).not.toHaveProperty(absent);
@@ -840,7 +888,7 @@ describe("Collaboration Workspace API", () => {
       "member"
     );
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toContainEqual(expect.objectContaining({ id: conversationId }));
+    expect(listed.json().items).toContainEqual(expect.objectContaining({ id: conversationId }));
     expect(
       (
         await app.call(
@@ -1005,7 +1053,7 @@ describe("Collaboration Workspace API", () => {
     });
     const workspaceRows = z.array(z.looseObject({ id: z.string(), kind: z.string() }));
     const listWorkspaces = async (actor: string) =>
-      workspaceRows.parse((await app.call("listCollaborationWorkspaces", {}, actor)).json());
+      workspaceRows.parse((await app.call("listCollaborationWorkspaces", {}, actor)).json().items);
     const listed = (await listWorkspaces("superadmin")).find((row) => row.id === workspaceId);
     // Pending requests stay a to-do for the workspace's own Owners and Admins.
     expect(listed).toMatchObject({
@@ -1070,7 +1118,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       z
         .array(z.object({ id: z.string() }))
-        .parse(conversations.json())
+        .parse(conversations.json().items)
         .map((row) => row.id)
     ).toEqual([conversationId]);
 
@@ -1107,7 +1155,7 @@ describe("Collaboration Workspace API", () => {
     );
     expect(promoted.statusCode).toBe(200);
     const audit = await app.call("listAuditEvents", {}, "superadmin");
-    expect(audit.json()).toContainEqual(
+    expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "collaboration_workspace.updated",
         subject: workspaceId,
@@ -1141,7 +1189,7 @@ describe("Collaboration Workspace API", () => {
     expect(
       z
         .array(z.object({ userId: z.string() }))
-        .parse(members.json())
+        .parse(members.json().items)
         .map((row) => row.userId)
         .sort()
     ).toEqual([member.id, outsider.id].sort());
@@ -1338,7 +1386,7 @@ describe("Collaboration Workspace API", () => {
       "direct"
     );
     expect(destinationFiles.statusCode).toBe(200);
-    expect(destinationFiles.json()).toContainEqual(expect.objectContaining({ fileId }));
+    expect(destinationFiles.json().items).toContainEqual(expect.objectContaining({ fileId }));
     expect(
       (
         await app.call(
@@ -1350,7 +1398,7 @@ describe("Collaboration Workspace API", () => {
     ).toBe(200);
 
     const audit = await app.call("listAuditEvents", {}, "owner");
-    expect(audit.json()).toContainEqual(
+    expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.moved",
         subject: conversationId,
@@ -1429,9 +1477,9 @@ describe("Collaboration Workspace API", () => {
     expect(mismatch.statusCode).toBe(422);
     expect(mismatch.json()).toMatchObject({ error: { code: "VALIDATION_FAILED" } });
 
-    const ownerWorkspaces = (await app.call("listCollaborationWorkspaces", {}, "owner")).json<
-      Array<{ id: string; kind: string; name: string }>
-    >();
+    const ownerWorkspaces = (await app.call("listCollaborationWorkspaces", {}, "owner")).json<{
+      items: Array<{ id: string; kind: string; name: string }>;
+    }>().items;
     const personal = ownerWorkspaces.find((workspace) => workspace.kind === "personal")!;
     const personalDelete = await app.call(
       "deleteCollaborationWorkspace",
@@ -1553,9 +1601,9 @@ describe("Collaboration Workspace API", () => {
       ).toBe(404);
     }
 
-    const audit = (await app.call("listAuditEvents", {}, "owner")).json<
-      Array<{ type: string; subject: string; metadata?: Record<string, unknown> }>
-    >();
+    const audit = (await app.call("listAuditEvents", {}, "owner")).json<{
+      items: Array<{ type: string; subject: string; metadata?: Record<string, unknown> }>;
+    }>().items;
     expect(audit).toContainEqual(
       expect.objectContaining({
         type: "collaboration_workspace.deleted",
@@ -1688,7 +1736,7 @@ describe("Conversation visibility", () => {
         actor
       );
       expect(listed.statusCode).toBe(200);
-      return listed.json<Array<{ id: string }>>().map((row) => row.id);
+      return listed.json<{ items: Array<{ id: string }> }>().items.map((row) => row.id);
     };
 
     // The composer creates the conversation before the first upload lands.
@@ -1761,11 +1809,18 @@ describe("Conversation visibility", () => {
           route: route.name,
           actor,
           status: 404,
-          body: { error: { code: "NOT_FOUND", message: "Conversation is not available" } }
+          body: {
+            error: {
+              correlationId: expect.any(String),
+              code: "NOT_FOUND",
+              message: "Conversation is not available"
+            }
+          }
         });
-        expect({ status: denied.statusCode, body: denied.body }).toEqual({
-          status: missing.statusCode,
-          body: missing.body
+        expect(denied.statusCode).toBe(missing.statusCode);
+        expect(denied.json().error).toEqual({
+          ...missing.json().error,
+          correlationId: expect.any(String)
         });
       }
     }
@@ -1777,7 +1832,7 @@ describe("Conversation visibility", () => {
         actor
       );
       expect(listed.statusCode).toBe(200);
-      expect(listed.json<Array<{ id: string }>>().map((row) => row.id)).toEqual([
+      expect(listed.json<{ items: Array<{ id: string }> }>().items.map((row) => row.id)).toEqual([
         sharedConversationId
       ]);
     }
@@ -1788,8 +1843,8 @@ describe("Conversation visibility", () => {
     );
     expect(
       listedByAuthor
-        .json<Array<{ id: string }>>()
-        .map((row) => row.id)
+        .json<{ items: Array<{ id: string }> }>()
+        .items.map((row) => row.id)
         .sort()
     ).toEqual([conversationId, sharedConversationId].sort());
 
@@ -1891,7 +1946,7 @@ describe("Conversation visibility", () => {
 
     const defaultWorkspaceId = await createSharedWorkspace(app, "owner", "Open by default");
     const workspaces = await app.call("listCollaborationWorkspaces", {}, "owner");
-    expect(workspaces.json()).toEqual(
+    expect(workspaces.json().items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: defaultWorkspaceId,
@@ -2028,8 +2083,8 @@ describe("Conversation visibility", () => {
       await addWorkspaceMember(app, "owner", workspaceId, "member@example.test");
     }
     const personalWorkspaceId = (await app.call("listCollaborationWorkspaces", {}, "member"))
-      .json<Array<{ id: string; kind: string }>>()
-      .find((workspace) => workspace.kind === "personal")!.id;
+      .json<{ items: Array<{ id: string; kind: string }> }>()
+      .items.find((workspace) => workspace.kind === "personal")!.id;
     const move = (
       actor: string,
       conversationId: string,
@@ -2413,6 +2468,9 @@ async function currentUser(
 ): Promise<{ id: ReturnType<typeof asUserId> }> {
   const response = await server.call("getCurrentUser", {}, externalUserId);
   expect(response.statusCode).toBe(200);
+  expect(
+    (await server.call("ensurePersonalCollaborationWorkspace", {}, externalUserId)).statusCode
+  ).toBe(200);
   return { id: asUserId(response.json<{ id: string }>().id) };
 }
 

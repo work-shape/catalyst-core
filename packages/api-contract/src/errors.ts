@@ -8,6 +8,7 @@ export const appErrorCodeSchema = z.enum([
   "CONFLICT",
   "TIMEOUT",
   "VALIDATION_FAILED",
+  "RATE_LIMITED",
   "INTERNAL"
 ]);
 
@@ -15,7 +16,8 @@ export const apiErrorResponseSchema = z.object({
   error: z.object({
     code: appErrorCodeSchema,
     message: z.string(),
-    details: z.unknown().optional()
+    details: z.unknown().optional(),
+    correlationId: z.string().min(1)
   })
 });
 

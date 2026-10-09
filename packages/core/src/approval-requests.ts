@@ -1,3 +1,4 @@
+import type { StorePage } from "./paging";
 import type { AgentRunId, ClientInstanceId, ConversationId, ToolCallId } from "./ids";
 import type { AuthenticatedUser } from "./identity";
 import type { JsonObject } from "./json";
@@ -102,12 +103,13 @@ export interface ApprovalRequestStore {
     clientInstanceId: ClientInstanceId;
     requestId: string;
   }): Promise<ApprovalRequest | undefined>;
-  /** Newest first, limited to 200 matching requests. */
+  /** Newest first with an exclusive createdAt/id cursor when paging. */
   listApprovalRequests(input: {
     clientInstanceId: ClientInstanceId;
     kinds: readonly string[];
     status?: ApprovalRequestStatus;
     conversationId?: ConversationId;
+    page?: StorePage;
   }): Promise<ApprovalRequest[]>;
   countPendingApprovalRequests(input: {
     clientInstanceId: ClientInstanceId;

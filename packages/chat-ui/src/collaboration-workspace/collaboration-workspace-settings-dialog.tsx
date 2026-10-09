@@ -877,7 +877,7 @@ export function CollaborationWorkspaceMemberCandidateList({
       >
         {candidates.map((candidate, index) => (
           <li
-            key={candidate.email}
+            key={candidate.userId}
             role="option"
             id={collaborationWorkspaceMemberCandidateOptionId(index)}
             aria-selected={index === highlightedIndex}

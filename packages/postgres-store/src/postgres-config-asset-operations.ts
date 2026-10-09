@@ -1,3 +1,4 @@
+import { keysetFilter } from "./paging";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   AppError,
@@ -100,10 +101,12 @@ export async function listConfigAssetRevisions(
     .where(
       and(
         eq(configAssetRevisions.clientInstanceId, input.clientInstanceId),
-        eq(configAssetRevisions.assetId, asset.id)
+        eq(configAssetRevisions.assetId, asset.id),
+        keysetFilter(input.page, [configAssetRevisions.revision], false)
       )
     )
-    .orderBy(asc(configAssetRevisions.revision));
+    .orderBy(asc(configAssetRevisions.revision))
+    .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapConfigAssetRevision);
 }
 

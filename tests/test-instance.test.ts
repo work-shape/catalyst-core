@@ -47,8 +47,8 @@ describe("test instance", () => {
         )
       ).statusCode
     ).toBe(404);
-    expect((await first.call("listConversations", {}, owner)).json()).toHaveLength(1);
-    expect((await first.call("listConversations", {}, other)).json()).toHaveLength(0);
+    expect((await first.call("listConversations", {}, owner)).json().items).toHaveLength(1);
+    expect((await first.call("listConversations", {}, other)).json().items).toHaveLength(0);
     await first.close();
     expect((await second.call("getCurrentUser")).statusCode).toBe(200);
     await second.close();

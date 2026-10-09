@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { listQuerySchema } from "../shared";
 import {
   apiCredentialSchema,
   createApiCredentialRequestSchema,
@@ -7,7 +7,7 @@ import {
   servicePrincipalDetailSchema,
   updateServicePrincipalRequestSchema
 } from "../identity";
-import { defineOperation, json } from "./define-operation";
+import { defineOperation, json, page } from "./define-operation";
 
 export const apiAccessOperations = {
   listServicePrincipals: defineOperation({
@@ -20,7 +20,8 @@ export const apiAccessOperations = {
     scope: "api_access:read",
     requires: ["api_access.manage"],
     effect: "reading",
-    response: json(z.array(servicePrincipalDetailSchema)),
+    query: listQuerySchema,
+    response: page(servicePrincipalDetailSchema, ["principal.displayLabel", "principal.id"], false),
     errors: [],
     rateClass: "read"
   }),

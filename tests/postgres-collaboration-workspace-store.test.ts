@@ -208,6 +208,7 @@ describePostgres("Postgres Collaboration Workspace store", () => {
         {
           displayLabel: "Pending Candidate",
           email: "pending-candidate@example.test",
+          userId: expect.any(String),
           hasPendingAccessRequest: true
         }
       ]);
@@ -222,6 +223,7 @@ describePostgres("Postgres Collaboration Workspace store", () => {
         {
           displayLabel: "Identity Result",
           email: "Verified.Alias@example.test",
+          userId: expect.any(String),
           hasPendingAccessRequest: false
         }
       ]);

@@ -422,7 +422,7 @@ describe("workspace-scoped agents", () => {
 
   it("offers the active workspace's agents and default instead of the instance view", () => {
     const result = scoped({
-      workspaceAgents: { defaultAgentName: "contracts", agents: [agent("contracts")] }
+      workspaceAgents: { defaultAgentName: "contracts", items: [agent("contracts")] }
     });
 
     expect(result.config?.agents.map((entry) => entry.name)).toEqual(["contracts"]);
@@ -438,7 +438,7 @@ describe("workspace-scoped agents", () => {
   });
 
   it("reports a workspace without agents as empty, not as loading", () => {
-    const result = scoped({ workspaceAgents: { agents: [] } });
+    const result = scoped({ workspaceAgents: { items: [] } });
 
     expect(result.config?.agents).toEqual([]);
     expect(result).toMatchObject({ agentsLoading: false, workspaceScoped: true });

@@ -1,3 +1,4 @@
+import { timestampSchema } from "./shared";
 import { FIRST_PARTY_AUTH_SCOPES } from "@vivd-catalyst/core";
 import { z } from "zod";
 
@@ -65,12 +66,12 @@ export const issueSessionTokenRequestSchema = z.object({
 
 export const issueSessionTokenResponseSchema = z.object({
   chatSessionToken: z.string(),
-  expiresAt: z.string()
+  expiresAt: timestampSchema
 });
 
 export const exchangeApiKeyResponseSchema = z.object({
   accessToken: z.string(),
-  expiresAt: z.string()
+  expiresAt: timestampSchema
 });
 
 export const userStatusSchema = z.enum(["active", "disabled"]);
@@ -83,9 +84,9 @@ export const administeredUserIdentitySchema = z.object({
   displayLabel: z.string().optional(),
   email: z.string().optional(),
   emailVerified: z.boolean(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  lastAuthenticatedAt: z.string().optional()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  lastAuthenticatedAt: timestampSchema.optional()
 });
 
 export const administeredUserSchema = z.object({
@@ -97,9 +98,9 @@ export const administeredUserSchema = z.object({
   permissionRefs: z.array(z.string()),
   permissions: z.array(z.string()),
   status: userStatusSchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  lastAuthenticatedAt: z.string().optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  lastAuthenticatedAt: timestampSchema.optional(),
   identities: z.array(administeredUserIdentitySchema)
 });
 
@@ -196,10 +197,10 @@ export const apiCredentialSchema = z.object({
   name: z.string(),
   keyPrefix: z.string(),
   scopes: z.array(apiCredentialScopeSchema).optional(),
-  createdAt: z.string(),
-  expiresAt: z.string().optional(),
-  revokedAt: z.string().optional(),
-  lastUsedAt: z.string().optional()
+  createdAt: timestampSchema,
+  expiresAt: timestampSchema.optional(),
+  revokedAt: timestampSchema.optional(),
+  lastUsedAt: timestampSchema.optional()
 });
 
 export const servicePrincipalSchema = z.object({
@@ -211,9 +212,9 @@ export const servicePrincipalSchema = z.object({
   permissionRefs: z.array(z.string()),
   permissions: z.array(servicePrincipalPermissionSchema),
   createdByUserId: z.string().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  lastUsedAt: z.string().optional()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  lastUsedAt: timestampSchema.optional()
 });
 
 export const servicePrincipalDetailSchema = z.object({
@@ -242,7 +243,7 @@ export const updateServicePrincipalRequestSchema = z
 export const createApiCredentialRequestSchema = z.object({
   name: z.string().trim().min(1),
   scopes: z.array(apiCredentialScopeSchema).optional(),
-  expiresAt: z.string().datetime({ offset: true }).optional()
+  expiresAt: timestampSchema.optional()
 });
 
 export const createApiCredentialResponseSchema = z.object({

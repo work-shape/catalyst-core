@@ -1,5 +1,5 @@
 import { createTestInstance } from "./support/test-instance";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   AppError,
@@ -56,11 +56,20 @@ describe("artifact preview routes", () => {
         claimedAt: "2026-08-03T10:00:00.000Z"
       });
 
+      const ensure = vi.spyOn(store.files, "ensureManagedArtifact");
+      const enqueue = vi.spyOn(store.files, "enqueueArtifactPreviewJob");
+      const read = await server.call("getConversationAttachmentPreview", {
+        params: { conversationId: conversation.id, attachmentId: attachment.id }
+      });
+      expect(read.statusCode).toBe(200);
+      expect(read.json()).toMatchObject({ status: "pending" });
+      expect(ensure).not.toHaveBeenCalled();
+      expect(enqueue).not.toHaveBeenCalled();
       const [first, concurrent] = await Promise.all([
-        server.call("getConversationAttachmentPreview", {
+        server.call("startConversationAttachmentPreview", {
           params: { conversationId: conversation.id, attachmentId: attachment.id }
         }),
-        server.call("getConversationAttachmentPreview", {
+        server.call("startConversationAttachmentPreview", {
           params: { conversationId: conversation.id, attachmentId: attachment.id }
         })
       ]);
@@ -409,7 +418,7 @@ describe("artifact preview routes", () => {
         })
       ).resolves.toMatchObject({ status: "pending" });
 
-      const pending = await server.call("getConversationArtifactPreview", {
+      const pending = await server.call("startConversationArtifactPreview", {
         params: { conversationId: conversation.id, artifactId: pendingArtifact.id }
       });
       expect(pending.statusCode).toBe(200);
@@ -565,7 +574,7 @@ describe("artifact preview routes", () => {
         status: "failed",
         errorCode: "conversion_failed"
       });
-      const oldRendererPreview = await server.call("getConversationArtifactPreview", {
+      const oldRendererPreview = await server.call("startConversationArtifactPreview", {
         params: { conversationId: conversation.id, artifactId: oldRendererFailureArtifact.id }
       });
       expect(oldRendererPreview.statusCode).toBe(200);
@@ -574,7 +583,7 @@ describe("artifact preview routes", () => {
         artifactId: oldRendererFailureArtifact.id,
         queuedAt: expect.any(String)
       });
-      const spreadsheetPending = await server.call("getConversationArtifactPreview", {
+      const spreadsheetPending = await server.call("startConversationArtifactPreview", {
         params: { conversationId: conversation.id, artifactId: spreadsheetArtifact.id }
       });
       expect(spreadsheetPending.statusCode).toBe(200);
@@ -609,7 +618,7 @@ describe("artifact preview routes", () => {
       expect(embedded.payload).not.toContain("wcmd_secret");
       expect(embedded.payload).not.toContain("document.preview_page_image");
 
-      const embeddedGif = await server.call("getConversationArtifactPreview", {
+      const embeddedGif = await server.call("startConversationArtifactPreview", {
         params: { conversationId: conversation.id, artifactId: embeddedGifWithoutFormatArtifact.id }
       });
       expect(embeddedGif.statusCode).toBe(200);

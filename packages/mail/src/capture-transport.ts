@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { MailSendResult, MailTransport, RenderedMail } from "./types";
 
 const MAX_CAPTURED_MAILS = 50;
 
 export interface CapturedMail extends RenderedMail {
+  id: string;
   sentAt: string;
 }
 
@@ -14,7 +16,7 @@ export class CaptureMailTransport implements MailTransport {
   private readonly mails: CapturedMail[] = [];
 
   async deliver(mail: RenderedMail): Promise<MailSendResult> {
-    this.mails.push({ ...mail, sentAt: new Date().toISOString() });
+    this.mails.push({ ...mail, id: randomUUID(), sentAt: new Date().toISOString() });
     if (this.mails.length > MAX_CAPTURED_MAILS) {
       this.mails.shift();
     }

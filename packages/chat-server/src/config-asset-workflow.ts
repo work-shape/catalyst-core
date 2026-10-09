@@ -1,3 +1,4 @@
+import type { StorePage } from "@vivd-catalyst/core";
 import {
   AGENT_EDITABLE_FIELDS,
   AGENT_MODEL_SETTING_FIELDS,
@@ -271,10 +272,17 @@ export class ConfigAssetWorkflow {
     const workspaces = await this.options.stores.workspaces.listSharedWorkspaces({
       clientInstanceId: this.options.clientInstanceId
     });
-    return workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name }));
+    return workspaces.map((workspace) => ({
+      id: workspace.id,
+      name: workspace.name,
+      createdAt: workspace.createdAt
+    }));
   }
 
-  async listRevisions(user: AuthenticatedIdentity, input: { kind: ConfigAssetKind; name: string }) {
+  async listRevisions(
+    user: AuthenticatedIdentity,
+    input: { kind: ConfigAssetKind; name: string; page?: StorePage }
+  ) {
     requirePermission(user, legacyPermissionFor(`${input.kind}.read`));
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,

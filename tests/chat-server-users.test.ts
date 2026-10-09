@@ -170,9 +170,9 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(audit.statusCode).toBe(200);
-    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
-      expect.arrayContaining(["user.profile_updated"])
-    );
+    expect(
+      audit.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
+    ).toEqual(expect.arrayContaining(["user.profile_updated"]));
 
     await app.close();
   });
@@ -229,6 +229,11 @@ describe("client instance app vertical slice", () => {
       roles: ["user"],
       permissionRefs: ["demo-tools"],
       correlationId: "corr_other"
+    });
+    await store.workspaces.ensurePersonalWorkspace({ clientInstanceId, userId: asUserId(user.id) });
+    await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: asUserId(otherUser.id)
     });
     const [personalWorkspace] = await store.workspaces.listWorkspacesForUser({
       clientInstanceId,
@@ -738,7 +743,8 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(usersBefore.statusCode).toBe(200);
-    const usersBeforeBody = usersBefore.json() as Array<{ id: string; roles: string[] }>;
+    const usersBeforeBody = usersBefore.json<{ items: Array<{ id: string; roles: string[] }> }>()
+      .items;
     const superadminUser = usersBeforeBody.find((user) => user.roles.includes("superadmin"));
     expect(superadminUser).toBeUndefined();
 
@@ -748,10 +754,12 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(superadminVisibleUsers.statusCode).toBe(200);
-    const superadminVisibleUsersBody = superadminVisibleUsers.json() as Array<{
-      id: string;
-      roles: string[];
-    }>;
+    const superadminVisibleUsersBody = superadminVisibleUsers.json<{
+      items: Array<{
+        id: string;
+        roles: string[];
+      }>;
+    }>().items;
     const superadminManagedUser = superadminVisibleUsersBody.find((user) =>
       user.roles.includes("superadmin")
     );
@@ -912,7 +920,7 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(usersBefore.statusCode).toBe(200);
-    expect(usersBefore.json()).toEqual(
+    expect(usersBefore.json().items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           displayLabel: "Superadmin",
@@ -1002,7 +1010,7 @@ describe("client instance app vertical slice", () => {
       })
     );
     expect(standaloneConversations.statusCode).toBe(200);
-    expect(standaloneConversations.json()).toEqual([
+    expect(standaloneConversations.json().items).toEqual([
       expect.objectContaining({
         id: conversation.id,
         createdByUserId: administeredUser.id
@@ -1015,9 +1023,9 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(audit.statusCode).toBe(200);
-    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
-      expect.arrayContaining(["user.created", "user.identity_upserted"])
-    );
+    expect(
+      audit.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
+    ).toEqual(expect.arrayContaining(["user.created", "user.identity_upserted"]));
 
     await app.close();
   });
@@ -1109,7 +1117,7 @@ describe("client instance app vertical slice", () => {
       })
     );
     expect(standaloneConversations.statusCode).toBe(200);
-    expect(standaloneConversations.json()).toEqual([
+    expect(standaloneConversations.json().items).toEqual([
       expect.objectContaining({
         id: conversation.id,
         createdByUserId: administeredUser.id
@@ -1122,9 +1130,9 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(audit.statusCode).toBe(200);
-    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
-      expect.arrayContaining(["user.identity_linked"])
-    );
+    expect(
+      audit.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
+    ).toEqual(expect.arrayContaining(["user.identity_linked"]));
 
     const duplicate = await app.call("createAdministeredUser", {
       headers: {

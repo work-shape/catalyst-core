@@ -79,7 +79,7 @@ describe("config asset admin routes", () => {
     const revisions = await request(fixture.server, token, "listConfigAssetRevisions", {
       params: { kind: "agent", name: "assistant" }
     });
-    expect(revisions.json()).toMatchObject([
+    expect(revisions.json().items).toMatchObject([
       {
         actor: {
           principalKind: "service",
@@ -145,7 +145,7 @@ describe("config asset admin routes", () => {
       params: { kind: "agent", name: "assistant" }
     });
     expect(revisionsBeforeRevert.statusCode).toBe(200);
-    expect(revisionsBeforeRevert.json()).toMatchObject([
+    expect(revisionsBeforeRevert.json().items).toMatchObject([
       {
         revision: 1,
         operation: "create",
@@ -923,7 +923,9 @@ describe("config asset admin routes", () => {
       {}
     );
     expect(workspaces.statusCode).toBe(200);
-    expect(workspaces.json()).toEqual([{ id: shared.id, name: "KAI" }]);
+    expect(workspaces.json().items).toEqual([
+      { id: shared.id, name: "KAI", createdAt: expect.any(String) }
+    ]);
 
     const setKai = (payload: unknown, name = "kai") =>
       request(fixture.server, token, "setConfigAgentAvailability", {

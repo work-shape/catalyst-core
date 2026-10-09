@@ -137,7 +137,11 @@ describe("browser origin policy", () => {
           expect(response.statusCode, response.body).toBe(status);
           if (status === 403) {
             expect(response.json()).toEqual({
-              error: { code: "FORBIDDEN", message: "Session request origin is not allowed" }
+              error: {
+                correlationId: expect.any(String),
+                code: "FORBIDDEN",
+                message: "Session request origin is not allowed"
+              }
             });
           }
         }

@@ -302,6 +302,40 @@ describe("password setup by email", () => {
     expect((await delivering.server.call("listCapturedMail", {})).statusCode).toBe(404);
   });
 
+  it("pages identical captured mails with tied timestamps without losing rows", async () => {
+    const harness = await createMailHarness({ listCaptured: true });
+    const clock = vi
+      .spyOn(Date.prototype, "toISOString")
+      .mockReturnValue("2026-10-09T12:00:00.000Z");
+    try {
+      const mail = {
+        to: { email: "ada@example.test" },
+        subject: "Same",
+        text: "Same",
+        html: "Same"
+      };
+      for (let index = 0; index < 3; index++) await harness.transport.deliver(mail);
+      const ids: string[] = [];
+      let cursor: string | undefined;
+      for (let index = 0; index < 3; index++) {
+        const response = await harness.server.call("listCapturedMail", {
+          query: { limit: 1, cursor }
+        });
+        expect(response.statusCode).toBe(200);
+        const page = response.json<{ items: { id: string }[]; nextCursor?: string }>();
+        expect(page.items).toHaveLength(1);
+        ids.push(...page.items.map((item) => item.id));
+        cursor = page.nextCursor;
+        if (index < 2) expect(cursor).toEqual(expect.any(String));
+      }
+      expect(cursor).toBeUndefined();
+      expect(new Set(ids)).toEqual(new Set(harness.transport.list().map((mail) => mail.id)));
+    } finally {
+      clock.mockRestore();
+      await harness.server.close();
+    }
+  });
+
   it("records an anonymous reset request without an actor and keeps the user as subject", async () => {
     const harness = await createMailHarness();
     await harness.addPasswordUser("ada@example.test", "Ada");
@@ -347,7 +381,7 @@ describe("password setup by email", () => {
     expect(harness.transport.list()).toHaveLength(1);
   });
 
-  it("exposes the fixed invitation delivery failure through HTTP", async () => {
+  it("redacts internal invitation delivery failures through HTTP", async () => {
     const harness = await createMailHarness();
     vi.spyOn(harness.transport, "deliver").mockResolvedValue({
       ok: false,
@@ -363,7 +397,11 @@ describe("password setup by email", () => {
       });
       expect(invited.statusCode).toBe(500);
       expect(invited.json()).toEqual({
-        error: { code: "INTERNAL", message: "The invitation email could not be sent" }
+        error: {
+          correlationId: expect.any(String),
+          code: "INTERNAL",
+          message: "Internal server error"
+        }
       });
     } finally {
       await harness.server.close();

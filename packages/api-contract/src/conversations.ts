@@ -1,3 +1,4 @@
+import { timestampSchema } from "./shared";
 import { z } from "zod";
 import { localeCodeSchema, reasoningEffortSchema } from "./configuration";
 
@@ -12,10 +13,10 @@ export const conversationSchema = z.object({
   visibility: conversationVisibilitySchema,
   title: z.string(),
   status: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  retainedUntil: z.string(),
-  deletedAt: z.string().optional()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  retainedUntil: timestampSchema,
+  deletedAt: timestampSchema.optional()
 });
 
 export const moveConversationRequestSchema = z.object({
@@ -48,7 +49,7 @@ export const webSourceSchema = z.object({
   title: z.string().optional(),
   provider: z.enum(["openai-native", "serper", "tavily", "firecrawl", "browserbase", "direct"]),
   query: z.string().optional(),
-  retrievedAt: z.string().optional(),
+  retrievedAt: timestampSchema.optional(),
   snippet: z.string().optional(),
   contentHash: z.string().optional(),
   resultPosition: z.number().optional()
@@ -120,7 +121,7 @@ export const approvalDecisionMessageMetadataSchema = z.object({
   ]),
   decidedBy: z.string(),
   decidedByLabel: z.string(),
-  decidedAt: z.string(),
+  decidedAt: timestampSchema,
   summary: z.string(),
   comment: z.string().optional(),
   requestedBy: z.string().optional()
@@ -149,7 +150,7 @@ export const messageSchema = z.object({
   clientInstanceId: z.string(),
   role: z.enum(["user", "assistant", "system", "tool"]),
   text: z.string(),
-  createdAt: z.string(),
+  createdAt: timestampSchema,
   metadata: messageMetadataSchema.optional()
 });
 
@@ -180,8 +181,8 @@ export const draftAttachmentSchema = z.object({
     })
   ),
   error: z.record(z.string(), z.unknown()).optional(),
-  createdAt: z.string(),
-  updatedAt: z.string()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
 });
 
 export const draftAttachmentUploadResponseSchema = z.object({
@@ -197,8 +198,8 @@ export const conversationResourceBaseSchema = z.object({
   resourceId: z.string(),
   title: z.string(),
   subtitle: z.string().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
 });
 
 export const conversationResourceListItemSchema = z.discriminatedUnion("resourceType", [
@@ -257,7 +258,8 @@ export const conversationResourceListItemSchema = z.discriminatedUnion("resource
 ]);
 
 export const conversationResourceListResponseSchema = z.object({
-  resources: z.array(conversationResourceListItemSchema)
+  items: z.array(conversationResourceListItemSchema),
+  nextCursor: z.string().optional()
 });
 
 const structuredDataValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
@@ -267,8 +269,8 @@ export const structuredDataResourceResponseSchema = z.object({
   resourceKey: z.string(),
   title: z.string(),
   revision: z.number().int().positive(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
   sections: z.array(
     z.object({
       key: z.string(),
@@ -314,7 +316,7 @@ export const artifactPreviewImagePageSchema = z.object({
 export const artifactPreviewPendingResponseSchema = z.object({
   status: z.literal("pending"),
   artifactId: z.string(),
-  queuedAt: z.string().optional()
+  queuedAt: timestampSchema.optional()
 });
 
 export const artifactPreviewReadyResponseSchema = z.object({
@@ -386,14 +388,14 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("message_delta"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     delta: z.string()
   }),
   z.object({
     type: z.literal("reasoning_delta"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     id: z.string(),
     delta: z.string()
   }),
@@ -401,7 +403,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("message_completed"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     message: z.object({
       id: z.string(),
       role: z.literal("assistant"),
@@ -413,7 +415,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("tool_call_preparing"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     toolCallId: z.string(),
     toolName: z.string()
   }),
@@ -421,14 +423,14 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("tool_call_preparation_cancelled"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     toolCallId: z.string()
   }),
   z.object({
     type: z.literal("tool_call_started"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     toolCallId: z.string(),
     toolName: z.string(),
     input: z.unknown()
@@ -437,7 +439,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("tool_permission_requested"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     toolCallId: z.string(),
     toolName: z.string(),
     reason: z.string(),
@@ -447,7 +449,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("tool_call_completed"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     toolCallId: z.string(),
     toolName: z.string(),
     result: z.unknown(),
@@ -458,7 +460,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("tool_call_failed"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     toolCallId: z.string(),
     toolName: z.string(),
     result: z.unknown(),
@@ -469,20 +471,20 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("run_completed"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string()
+    createdAt: timestampSchema
   }),
   z.object({
     type: z.literal("run_cancelled"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     reason: z.string().optional()
   }),
   z.object({
     type: z.literal("run_failed"),
     runId: z.string(),
     sequence: z.number(),
-    createdAt: z.string(),
+    createdAt: timestampSchema,
     error: z.object({
       code: z.string(),
       message: z.string(),
@@ -506,17 +508,17 @@ export const agentRunSchema = z.object({
   agentName: z.string(),
   status: agentRunStatusSchema,
   idempotencyKey: z.string().optional(),
-  startedAt: z.string(),
-  updatedAt: z.string(),
-  completedAt: z.string().optional(),
-  cancelledAt: z.string().optional(),
-  failedAt: z.string().optional(),
+  startedAt: timestampSchema,
+  updatedAt: timestampSchema,
+  completedAt: timestampSchema.optional(),
+  cancelledAt: timestampSchema.optional(),
+  failedAt: timestampSchema.optional(),
   lastSequence: z.number().int().nonnegative(),
   error: agentRunErrorSchema.optional(),
   correlationId: z.string(),
   leaseOwner: z.string().optional(),
-  leaseExpiresAt: z.string().optional(),
-  heartbeatAt: z.string().optional()
+  leaseExpiresAt: timestampSchema.optional(),
+  heartbeatAt: timestampSchema.optional()
 });
 
 export const activeRunSummarySchema = z.object({
@@ -524,8 +526,8 @@ export const activeRunSummarySchema = z.object({
   conversationId: z.string(),
   agentName: z.string(),
   status: agentRunStatusSchema,
-  startedAt: z.string(),
-  updatedAt: z.string(),
+  startedAt: timestampSchema,
+  updatedAt: timestampSchema,
   lastSequence: z.number().int().nonnegative()
 });
 
@@ -599,7 +601,7 @@ export const runObservationSchema = z.object({
   sequence: z.number().int().positive(),
   type: z.string(),
   payload: agentRuntimeEventSchema,
-  createdAt: z.string()
+  createdAt: timestampSchema
 });
 
 export const startConversationRunRequestSchema = z.object({
@@ -646,21 +648,21 @@ export const runCommandResponseSchema = z.object({
 });
 
 export const conversationListItemSchema = conversationSchema.extend({
-  latestMessageAt: z.string().optional(),
+  latestMessageAt: timestampSchema.optional(),
   activeRun: activeRunSummarySchema.optional(),
   unread: z.boolean().optional(),
-  lastViewedAt: z.string().optional()
+  lastViewedAt: timestampSchema.optional()
 });
 
 export const conversationUserStateSchema = z.object({
   clientInstanceId: z.string(),
   conversationId: z.string(),
   userId: z.string(),
-  lastViewedAt: z.string().optional(),
+  lastViewedAt: timestampSchema.optional(),
   lastReadMessageId: z.string().optional(),
   lastReadRunId: z.string().optional(),
   lastReadRunSequence: z.number().int().nonnegative().optional(),
-  updatedAt: z.string()
+  updatedAt: timestampSchema
 });
 
 export const conversationThreadSnapshotSchema = z.object({
@@ -684,7 +686,7 @@ export const conversationThreadSnapshotSchema = z.object({
     })
     .optional(),
   userState: conversationUserStateSchema,
-  serverTime: z.string()
+  serverTime: timestampSchema
 });
 
 export const cancelRunRequestSchema = z

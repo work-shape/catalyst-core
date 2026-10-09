@@ -1,9 +1,4 @@
-import type {
-  AgentRun,
-  AgentRunError,
-  AgentRuntimeEvent,
-  RunObservation
-} from "@vivd-catalyst/core";
+import type { AgentRun, AgentRunError, RunObservation } from "@vivd-catalyst/core";
 import { isAppError } from "@vivd-catalyst/core";
 import type { Logger } from "@vivd-catalyst/core";
 import type { ChatServerOptions, RunRecoveryOptions } from "./types";
@@ -186,12 +181,6 @@ function hasLiveLease(run: AgentRun, now: Date): boolean {
 
 export function isMissingLocalRuntimeState(error: unknown): boolean {
   return isAppError(error) && error.code === "NOT_FOUND";
-}
-
-export function recoveryEventFromObservation(
-  observation: RunObservation | undefined
-): AgentRuntimeEvent | undefined {
-  return observation?.payload;
 }
 
 function staleCutoff(now: Date, staleActiveRunMs: number): string {

@@ -8,7 +8,7 @@ import type { ChatServerOptions } from "../types";
 export function registerConversationRoutes(route: Route, options: ChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
 
-  route(apiOperations.listConversations, ({ user, query }) => {
+  route(apiOperations.listConversations, ({ user, query, paging }) => {
     const { collaborationWorkspaceId } = query;
     if (collaborationWorkspaceId === "") {
       throw new AppError("BAD_REQUEST", "Missing collaborationWorkspaceId query parameter");
@@ -17,7 +17,8 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
       collaborationWorkspaceId === undefined
         ? undefined
         : asCollaborationWorkspaceId(collaborationWorkspaceId),
-      user
+      user,
+      paging
     );
   });
 

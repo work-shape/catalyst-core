@@ -9,6 +9,7 @@ export class ConfigApiError extends Error {
   readonly status: number;
   readonly code?: string;
   readonly details?: unknown;
+  readonly correlationId?: string;
 
   constructor(status: number, payload: unknown) {
     const error = readApiError(payload);
@@ -17,6 +18,7 @@ export class ConfigApiError extends Error {
     this.status = status;
     this.code = error.code;
     this.details = error.details;
+    this.correlationId = error.correlationId;
   }
 }
 
@@ -205,11 +207,15 @@ function readApiError(payload: unknown): {
   code?: string;
   message?: string;
   details?: unknown;
+  correlationId?: string;
 } {
   if (!isRecord(payload) || !isRecord(payload.error)) {
     return {};
   }
   return {
+    ...(typeof payload.error.correlationId === "string"
+      ? { correlationId: payload.error.correlationId }
+      : {}),
     ...(typeof payload.error.code === "string" ? { code: payload.error.code } : {}),
     ...(typeof payload.error.message === "string" ? { message: payload.error.message } : {}),
     ...(payload.error.details === undefined ? {} : { details: payload.error.details })

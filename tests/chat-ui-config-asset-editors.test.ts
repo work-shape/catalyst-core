@@ -294,8 +294,8 @@ describe("config asset editors", () => {
   });
 
   const workspaces = [
-    { id: "ws_sales", name: "Sales" },
-    { id: "ws_legal", name: "Legal" }
+    { id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" },
+    { id: "ws_legal", name: "Legal", createdAt: "2026-06-27T00:00:00.000Z" }
   ];
 
   it("offers personal and shared workspaces for a selectively available agent", () => {

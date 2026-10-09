@@ -64,7 +64,7 @@ describe("client instance app vertical slice", () => {
     }
     // A rejected model leaves no conversation behind.
     const conversations = await app.call("listConversations", {});
-    expect(conversations.json()).toEqual([]);
+    expect(conversations.json().items).toEqual([]);
 
     for (const modelBindingId of ["own", "offered"]) {
       const started = await start(modelBindingId);
@@ -184,7 +184,7 @@ describe("client instance app vertical slice", () => {
       expect(rejected.json().error.message).toMatch(/is not available for user selection$/u);
     }
     const conversations = await app.call("listConversations", {});
-    expect(conversations.json()).toEqual([]);
+    expect(conversations.json().items).toEqual([]);
 
     for (const reasoningEffort of ["high", "medium"]) {
       const started = await start(reasoningEffort);
@@ -236,7 +236,7 @@ describe("client instance app vertical slice", () => {
     const messages = await app.call("listConversationMessages", {
       params: { conversationId: conversation.id }
     });
-    expect(messages.json()).toEqual([]);
+    expect(messages.json().items).toEqual([]);
     await app.close();
   });
 
@@ -275,7 +275,8 @@ describe("client instance app vertical slice", () => {
       params: { conversationId: conversation.id }
     });
     expect(messages.statusCode).toBe(200);
-    const persistedMessages = messages.json() as Array<{ role: string; text: string }>;
+    const persistedMessages = messages.json<{ items: Array<{ role: string; text: string }> }>()
+      .items;
     expect(persistedMessages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -288,7 +289,9 @@ describe("client instance app vertical slice", () => {
     const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect(
-      (audit.json() as Array<{ type: string }>).some((event) => event.type === "tool.completed")
+      audit
+        .json<{ items: Array<{ type: string }> }>()
+        .items.some((event) => event.type === "tool.completed")
     ).toBe(true);
 
     const usage = await app.call("getUsageSummary", {});

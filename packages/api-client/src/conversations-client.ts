@@ -1,3 +1,7 @@
+import type {
+  StartConversationArtifactPreviewResponse,
+  StartConversationAttachmentPreviewResponse
+} from "./generated/types.gen";
 import { apiOperations, type ConversationVisibility } from "@vivd-catalyst/api-contract";
 import * as generatedSdk from "./generated/sdk.gen";
 import type { ApiClientTransport, OperationRequestInput } from "./transport";
@@ -9,11 +13,12 @@ export function createConversationsClient(transport: ApiClientTransport) {
     });
 
   const listForWorkspace = (collaborationWorkspaceId?: string) =>
-    transport.unwrapJson(
-      generatedSdk.listConversations({
-        client: transport.generatedClient,
-        ...(collaborationWorkspaceId === undefined ? {} : { query: { collaborationWorkspaceId } })
-      }),
+    transport.unwrapList(
+      (paging) =>
+        generatedSdk.listConversations({
+          client: transport.generatedClient,
+          query: { collaborationWorkspaceId, ...paging }
+        }),
       apiOperations.listConversations.response.schema
     );
 
@@ -39,11 +44,13 @@ export function createConversationsClient(transport: ApiClientTransport) {
         apiOperations.getConversationThread.response.schema
       ),
     listMessages: (conversationId: string) =>
-      transport.unwrapJson(
-        generatedSdk.listConversationMessages({
-          client: transport.generatedClient,
-          path: { conversationId }
-        }),
+      transport.unwrapList(
+        (paging) =>
+          generatedSdk.listConversationMessages({
+            client: transport.generatedClient,
+            path: { conversationId },
+            query: paging
+          }),
         apiOperations.listConversationMessages.response.schema
       ),
     generateTitle: (conversationId: string) =>
@@ -89,11 +96,13 @@ export function createConversationsClient(transport: ApiClientTransport) {
       ),
     resources: {
       list: (conversationId: string) =>
-        transport.unwrapJson(
-          generatedSdk.listConversationResources({
-            client: transport.generatedClient,
-            path: { conversationId }
-          }),
+        transport.unwrapList(
+          (paging) =>
+            generatedSdk.listConversationResources({
+              client: transport.generatedClient,
+              path: { conversationId },
+              query: paging
+            }),
           apiOperations.listConversationResources.response.schema
         ),
       getStructuredData: (conversationId: string, structuredDataResourceId: string) =>
@@ -107,11 +116,13 @@ export function createConversationsClient(transport: ApiClientTransport) {
     },
     draftAttachments: {
       list: (conversationId: string) =>
-        transport.unwrapJson(
-          generatedSdk.listDraftAttachments({
-            client: transport.generatedClient,
-            path: { conversationId }
-          }),
+        transport.unwrapList(
+          (paging) =>
+            generatedSdk.listDraftAttachments({
+              client: transport.generatedClient,
+              path: { conversationId },
+              query: paging
+            }),
           apiOperations.listDraftAttachments.response.schema
         ),
       upload: (conversationId: string, file: File) =>
@@ -158,6 +169,29 @@ export function createConversationsClient(transport: ApiClientTransport) {
         )
     },
     artifacts: {
+      startPreview: (
+        conversationId: string,
+        artifactId: string
+      ): Promise<StartConversationArtifactPreviewResponse> =>
+        transport.unwrapJson(
+          generatedSdk.startConversationArtifactPreview({
+            client: transport.generatedClient,
+            path: { conversationId, artifactId }
+          }),
+          apiOperations.startConversationArtifactPreview.response.schema
+        ),
+      startAttachmentPreview: (
+        conversationId: string,
+        attachmentId: string
+      ): Promise<StartConversationAttachmentPreviewResponse> =>
+        transport.unwrapJson(
+          generatedSdk.startConversationAttachmentPreview({
+            client: transport.generatedClient,
+            path: { conversationId, attachmentId }
+          }),
+          apiOperations.startConversationAttachmentPreview.response.schema
+        ),
+
       getContent: (conversationId: string, artifactId: string) =>
         transport.unwrapBlob(
           generatedSdk.getConversationArtifactContent({

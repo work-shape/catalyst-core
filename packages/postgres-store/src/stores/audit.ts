@@ -1,3 +1,4 @@
+import type { StorePage } from "@vivd-catalyst/core";
 import {
   type AuditEvent,
   type AuditEventInput,
@@ -18,6 +19,7 @@ export function createPostgresAuditStore(db: PostgresConnection): AuditEventStor
       clientInstanceId: ClientInstanceId;
       limit?: number;
       type?: string;
+      page?: StorePage;
     }): Promise<AuditEvent[]> {
       return listPostgresAuditEvents(db, input);
     }

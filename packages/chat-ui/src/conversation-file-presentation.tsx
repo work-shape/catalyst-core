@@ -193,8 +193,8 @@ export function useOpenConversationFile(): (input: OpenConversationFileInput) =>
         });
         const resource =
           "fileId" in input
-            ? findSourceFileResource(response.resources, input.fileId)
-            : findSourceFileResourceByAttachmentId(response.resources, input.attachmentId);
+            ? findSourceFileResource(response, input.fileId)
+            : findSourceFileResourceByAttachmentId(response, input.attachmentId);
         if (!resource) {
           throw new Error("Conversation file resource was not found");
         }
@@ -523,7 +523,7 @@ function AttachmentOfficePreview({
     setArtifactId(undefined);
     setFailed(false);
     void client.conversations.artifacts
-      .getAttachmentPreview(conversationId, attachmentId)
+      .startAttachmentPreview(conversationId, attachmentId)
       .then((preview) => {
         if (active) {
           setArtifactId(preview.artifactId);

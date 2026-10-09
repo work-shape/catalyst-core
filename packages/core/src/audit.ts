@@ -1,3 +1,4 @@
+import type { StorePage } from "./paging";
 import {
   getAuthPrincipal,
   getSubjectUserId,
@@ -59,6 +60,7 @@ export interface AuditEventStore {
     clientInstanceId: ClientInstanceId;
     limit?: number;
     type?: string;
+    page?: StorePage;
   }): Promise<AuditEvent[]>;
 }
 

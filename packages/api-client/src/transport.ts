@@ -62,6 +62,22 @@ export function createApiClientTransport(options: ApiClientOptions) {
       }
       return schema.parse(payload.data);
     },
+    /** Existing interface lists consume every page instead of silently truncating at 50. */
+    async unwrapList<T>(
+      fetchPage: (query: { limit: number; cursor?: string }) => Promise<GeneratedResult<unknown>>,
+      schema: z.ZodType<{ items: T[]; nextCursor?: string }>
+    ): Promise<T[]> {
+      const items: T[] = [];
+      let cursor: string | undefined;
+      do {
+        const result = await fetchPage({ limit: 200, ...(cursor ? { cursor } : {}) });
+        if (result.error !== undefined) throw apiErrorFromGeneratedResult(result);
+        const page = schema.parse(result.data);
+        items.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor);
+      return items;
+    },
     async unwrapBlob(result: Promise<GeneratedResult<Blob | File>>): Promise<Blob> {
       const payload = await result;
       if (payload.error !== undefined) {

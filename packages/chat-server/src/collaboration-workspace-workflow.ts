@@ -1,4 +1,5 @@
 import {
+  type ISODateString,
   AppError,
   WORKSPACE_ACCENT_COLORS,
   asUserId,
@@ -56,6 +57,7 @@ export interface WorkspaceDirectoryItem {
   emoji: string | null;
   accentColor: WorkspaceAccentColor | null;
   accessState: "member" | "request_pending" | "can_request";
+  createdAt: ISODateString;
 }
 
 export interface WorkspaceMemberItem {
@@ -656,7 +658,8 @@ export class CollaborationWorkspaceWorkflow {
           description: workspace.description,
           emoji: workspace.emoji,
           accentColor: workspace.accentColor,
-          accessState: membership ? "member" : request ? "request_pending" : "can_request"
+          accessState: membership ? "member" : request ? "request_pending" : "can_request",
+          createdAt: workspace.createdAt
         };
       })
     );

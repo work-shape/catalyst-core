@@ -1,3 +1,4 @@
+import type { StorePage } from "./paging";
 import type { AgentRunId, ClientInstanceId, ConversationId, ModelUsageEventId } from "./ids";
 import type { ISODateString } from "./time";
 
@@ -135,6 +136,7 @@ export interface ModelUsageEventStore {
     start?: ISODateString;
     end?: ISODateString;
     limit?: number;
+    page?: StorePage;
   }): Promise<ModelUsageEvent[]>;
 }
 

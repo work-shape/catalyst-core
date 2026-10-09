@@ -1,3 +1,4 @@
+import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
 import { operationPathParamNames, type Operation } from "@vivd-catalyst/api-contract";
 import { hasExplicitCredentials } from "@vivd-catalyst/auth";
@@ -13,10 +14,11 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type StorePage,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { z } from "zod";
+import { z } from "zod";
 import type { ChatServerOptions } from "../types";
 
 type RouteServerOptions = Pick<
@@ -49,6 +51,7 @@ export type RouteCall<Op extends Operation> = Caller<Op["auth"]> & {
   query: Parsed<Op["query"]>;
   body: Parsed<Op["body"]>;
   /** For what the descriptor does not carry: headers, the upload stream, the request log. */
+  paging: StorePage | undefined;
   request: FastifyRequest;
   reply: FastifyReply;
 };
@@ -76,7 +79,11 @@ type RouteResult<Op extends Operation> = Op["response"] extends {
   schema: infer Schema extends z.ZodType;
 }
   ? ResponseShape<z.input<Schema>>
-  : FastifyReply;
+  : Op["response"] extends { kind: "page"; schema: infer Schema extends z.ZodType }
+    ? z.input<Schema> extends { items: infer Items }
+      ? ResponseShape<Items>
+      : never
+    : FastifyReply;
 
 type RouteHandler<Op extends Operation> = (
   call: RouteCall<Op>
@@ -92,6 +99,7 @@ interface AssembledCall {
   params: Record<string, string>;
   query: unknown;
   body: unknown;
+  paging: StorePage | undefined;
   request: FastifyRequest;
   reply: FastifyReply;
 }
@@ -112,6 +120,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       url: operation.path,
       handler: async (request, reply) => {
         const correlationId = createCorrelationId(request);
+        void reply.header("x-correlation-id", correlationId);
         const caller = await authenticate(options, operation, request, correlationId);
         if (caller.identity && operation.scope) {
           requireAuthScope(caller.identity, operation.scope);
@@ -124,14 +133,31 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
             requirePermission(caller.identity, legacyPermissionFor(action));
           }
         }
+        const params = readPathParams(operation, request.params);
+        const paging =
+          operation.response.kind === "page"
+            ? storePage(query, operation.response.order, pageScope(operation.id, params, query))
+            : undefined;
         const result = await handler({
           ...caller,
-          params: readPathParams(operation, request.params),
+          params,
+          paging,
           query,
           body,
           request,
           reply
         });
+        if (operation.response.kind === "page") {
+          const resultPage = paginate(
+            z.array(z.unknown()).parse(result),
+            query,
+            operation.response.order,
+            operation.response.descending,
+            pageScope(operation.id, params, query)
+          );
+          checkResponse(options, operation, operation.response.schema, resultPage);
+          return resultPage;
+        }
         if (operation.response.kind === "json") {
           checkResponse(options, operation, operation.response.schema, result);
         }

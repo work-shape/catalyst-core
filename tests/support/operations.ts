@@ -5,6 +5,9 @@ import {
   buildApiPath,
   defineOperation,
   json,
+  page,
+  listQuerySchema,
+  timestampSchema,
   type BuildApiPathOptions
 } from "@vivd-catalyst/api-contract";
 
@@ -37,6 +40,20 @@ const testOperation = {
 } as const;
 const testResult = json(z.object({ value: z.enum(["ok", "other"]), count: z.number().optional() }));
 export const routeTestOperations = {
+  testList: defineOperation({
+    ...testOperation,
+    ...testAccess,
+    id: "testList",
+    method: "GET",
+    path: "/test/list",
+    effect: "reading",
+    query: listQuerySchema.extend({ filter: z.string().optional() }),
+    response: page(
+      z.object({ id: z.string(), createdAt: timestampSchema }),
+      ["createdAt", "id"],
+      true
+    )
+  }),
   testPublic: defineOperation({
     ...testOperation,
     id: "testPublic",

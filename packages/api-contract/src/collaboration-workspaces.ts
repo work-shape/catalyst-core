@@ -1,3 +1,4 @@
+import { timestampSchema } from "./shared";
 import { z } from "zod";
 import { conversationVisibilitySchema } from "./conversations";
 
@@ -36,8 +37,8 @@ export const collaborationWorkspaceSchema = z.object({
   emoji: z.string().nullable(),
   accentColor: workspaceAccentColorSchema.nullable(),
   personalUserId: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
 });
 
 export const collaborationWorkspaceWithRoleSchema = collaborationWorkspaceSchema.extend({
@@ -54,7 +55,8 @@ export const collaborationWorkspaceDirectoryItemSchema = z.object({
   description: z.string().nullable(),
   emoji: z.string().nullable(),
   accentColor: workspaceAccentColorSchema.nullable(),
-  accessState: z.enum(["member", "request_pending", "can_request"])
+  accessState: z.enum(["member", "request_pending", "can_request"]),
+  createdAt: timestampSchema
 });
 
 export const workspaceMembershipSchema = z.object({
@@ -62,8 +64,8 @@ export const workspaceMembershipSchema = z.object({
   clientInstanceId: z.string(),
   userId: z.string(),
   role: workspaceMembershipRoleSchema,
-  createdAt: z.string(),
-  updatedAt: z.string()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
 });
 
 export const workspaceMemberSchema = z.object({
@@ -74,6 +76,7 @@ export const workspaceMemberSchema = z.object({
 });
 
 export const workspaceMemberCandidateSchema = z.object({
+  userId: z.string(),
   displayLabel: z.string(),
   email: z.string(),
   hasPendingAccessRequest: z.boolean()
@@ -84,14 +87,14 @@ export const workspaceAccessRequestSchema = z.object({
   collaborationWorkspaceId: z.string(),
   clientInstanceId: z.string(),
   userId: z.string(),
-  createdAt: z.string()
+  createdAt: timestampSchema
 });
 
 export const workspaceAccessRequestItemSchema = z.object({
   userId: z.string(),
   displayLabel: z.string(),
   email: z.string().nullable(),
-  createdAt: z.string()
+  createdAt: timestampSchema
 });
 
 const workspaceNameSchema = z.string().trim().min(1).max(120);

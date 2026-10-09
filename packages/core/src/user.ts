@@ -1,3 +1,4 @@
+import type { StorePage } from "./paging";
 import type { ReasoningEffortConfig } from "./config";
 import { AppError } from "./errors";
 import type { AuthenticatedUser, UserRole } from "./identity";
@@ -110,7 +111,11 @@ export interface UserModelPreferenceInput {
 
 export interface UserStore {
   resolveUserIdentity(input: ResolveUserIdentityInput): Promise<AuthenticatedUser>;
-  listUsers(input: { clientInstanceId: ClientInstanceId }): Promise<UserRecord[]>;
+  listUsers(input: {
+    clientInstanceId: ClientInstanceId;
+    page?: StorePage;
+    excludeSuperadmins?: boolean;
+  }): Promise<UserRecord[]>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
   updateUser(input: UpdateUserInput): Promise<UserRecord>;
   deleteUser(input: DeleteUserInput): Promise<UserRecord>;

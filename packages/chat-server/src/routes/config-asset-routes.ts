@@ -39,8 +39,8 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
     workflow.listAdministeredWorkspaces()
   );
 
-  route(apiOperations.listConfigAssetRevisions, ({ identity, params }) =>
-    workflow.listRevisions(identity, assetParams(params))
+  route(apiOperations.listConfigAssetRevisions, ({ identity, params, paging }) =>
+    workflow.listRevisions(identity, { ...assetParams(params), page: paging })
   );
 
   route(apiOperations.revertConfigAsset, ({ identity, context, params, body }) =>

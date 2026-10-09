@@ -63,7 +63,7 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(workspaceListing.statusCode).toBe(403);
-    expect((workspaceListing.json() as { error: { message: string } }).error.message).toContain(
+    expect(workspaceListing.json().error.message).toContain(
       "Missing auth scope 'collaboration_workspace:read'"
     );
 
@@ -120,18 +120,18 @@ describe("client instance app vertical slice", () => {
       headers: { authorization: `Bearer ${token}` }
     });
     expect(personalConversations.statusCode).toBe(200);
-    expect((personalConversations.json() as Array<{ id: string }>).map(({ id }) => id)).toEqual([
-      personalConversation.id
-    ]);
+    expect(
+      personalConversations.json<{ items: Array<{ id: string }> }>().items.map(({ id }) => id)
+    ).toEqual([personalConversation.id]);
 
     const sharedConversations = await app.call("listConversations", {
       query: { collaborationWorkspaceId: sharedWorkspaceId },
       headers: { authorization: `Bearer ${token}` }
     });
     expect(sharedConversations.statusCode).toBe(200);
-    expect((sharedConversations.json() as Array<{ id: string }>).map(({ id }) => id)).toEqual([
-      sharedConversationId
-    ]);
+    expect(
+      sharedConversations.json<{ items: Array<{ id: string }> }>().items.map(({ id }) => id)
+    ).toEqual([sharedConversationId]);
 
     const usage = await app.call("getUsageSummary", {
       headers: {
@@ -337,7 +337,7 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(audit.statusCode).toBe(200);
-    expect(audit.json()).toContainEqual(
+    expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.created",
         subject: conversation.id,
@@ -429,13 +429,17 @@ describe("client instance app vertical slice", () => {
     const sameServiceOtherSubject = await thread(john.authorization);
     expect(sameServiceOtherSubject.statusCode).toBe(404);
     expect(sameServiceOtherSubject.json()).toEqual({
-      error: { code: "NOT_FOUND", message: "Conversation is not available" }
+      error: {
+        correlationId: expect.any(String),
+        code: "NOT_FOUND",
+        message: "Conversation is not available"
+      }
     });
     const listed = await app.call("listConversations", {
       query: { collaborationWorkspaceId: workspace.id },
       headers: { authorization: john.authorization }
     });
-    expect(listed.json()).toEqual([]);
+    expect(listed.json().items).toEqual([]);
 
     await app.close();
   });
@@ -581,7 +585,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await server.call("listAdministeredUsers", {});
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toEqual(
+    expect(listed.json().items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: profileOnlyUser.id,
@@ -597,9 +601,9 @@ describe("client instance app vertical slice", () => {
 
     const audit = await server.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
-    expect((audit.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
-      expect.arrayContaining(["user.password_sign_in_created", "user.password_reset"])
-    );
+    expect(
+      audit.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
+    ).toEqual(expect.arrayContaining(["user.password_sign_in_created", "user.password_reset"]));
 
     const deleted = await server.call("deleteAdministeredUser", {
       params: { userId: createdUser.id }
@@ -609,7 +613,7 @@ describe("client instance app vertical slice", () => {
 
     const listedAfterDelete = await server.call("listAdministeredUsers", {});
     expect(listedAfterDelete.statusCode).toBe(200);
-    expect(listedAfterDelete.json()).not.toContainEqual(
+    expect(listedAfterDelete.json().items).not.toContainEqual(
       expect.objectContaining({
         id: createdUser.id
       })
@@ -617,9 +621,9 @@ describe("client instance app vertical slice", () => {
 
     const auditAfterDelete = await server.call("listAuditEvents", {});
     expect(auditAfterDelete.statusCode).toBe(200);
-    expect((auditAfterDelete.json() as Array<{ type: string }>).map((event) => event.type)).toEqual(
-      expect.arrayContaining(["governance.user_delete_authorized", "user.deleted"])
-    );
+    expect(
+      auditAfterDelete.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
+    ).toEqual(expect.arrayContaining(["governance.user_delete_authorized", "user.deleted"]));
 
     await server.close();
   });

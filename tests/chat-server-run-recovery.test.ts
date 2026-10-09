@@ -9,9 +9,23 @@ import {
 import { personalConversationListInput } from "./support/fixtures";
 
 describe("client instance app vertical slice", () => {
-  it("recovers a stale durable active run in thread snapshots without duplicate terminal observations", async () => {
+  it("reads a stale run without recovery and cancels it explicitly before thread snapshots without duplicate terminal observations", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
+    const before = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id }
+    });
+    expect(before.json().activeRun.run.status).toBe("running");
+    expect(
+      await store.agentRuns.listRunObservations({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: run.id
+      })
+    ).toHaveLength(1);
+    await server.call("cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      payload: {}
+    });
 
     const snapshot = await server.call("getConversationThread", {
       params: { conversationId: conversation.id }
@@ -51,18 +65,32 @@ describe("client instance app vertical slice", () => {
     await server.close();
   });
 
-  it("recovers stale durable active runs while listing conversations", async () => {
+  it("reads stale runs without recovery and cancels them explicitly before listing conversations", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
+    const before = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id }
+    });
+    expect(before.json().activeRun.run.status).toBe("running");
+    expect(
+      await store.agentRuns.listRunObservations({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: run.id
+      })
+    ).toHaveLength(1);
+    await server.call("cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      payload: {}
+    });
 
     const listed = await server.call(
       "listConversations",
       await personalConversationListInput(server)
     );
     expect(listed.statusCode).toBe(200);
-    const listedConversation = (listed.json() as Array<{ id: string; activeRun?: unknown }>).find(
-      (item) => item.id === conversation.id
-    );
+    const listedConversation = listed
+      .json<{ items: Array<{ id: string; activeRun?: unknown }> }>()
+      .items.find((item) => item.id === conversation.id);
     expect(listedConversation).toBeDefined();
     expect(listedConversation).not.toHaveProperty("activeRun");
 
@@ -82,9 +110,23 @@ describe("client instance app vertical slice", () => {
     await server.close();
   });
 
-  it("recovers a stale durable active run for observation cursors after the last pre-crash sequence", async () => {
+  it("cancels a stale durable active run before reading observation cursors after the last pre-crash sequence", async () => {
     const fixture = await createStaleRunRecoveryFixture();
     const { server, store, conversation, run } = fixture;
+    const before = await server.call("getConversationThread", {
+      params: { conversationId: conversation.id }
+    });
+    expect(before.json().activeRun.run.status).toBe("running");
+    expect(
+      await store.agentRuns.listRunObservations({
+        clientInstanceId: fixture.clientInstanceId,
+        runId: run.id
+      })
+    ).toHaveLength(1);
+    await server.call("cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      payload: {}
+    });
 
     const events = await server.call("observeConversationRun", {
       params: { conversationId: conversation.id, runId: run.id },
@@ -129,7 +171,7 @@ describe("client instance app vertical slice", () => {
     await server.close();
   });
 
-  it("recovers a fresh durable active run when local runtime observation state is missing", async () => {
+  it("cancels a fresh durable active run before observing when local runtime state is missing", async () => {
     const fixture = await createStaleRunRecoveryFixture({
       staleActiveRunMs: 60 * 60 * 1000
     });
@@ -140,6 +182,11 @@ describe("client instance app vertical slice", () => {
       status: "running",
       updatedAt: new Date().toISOString(),
       lastSequence: 1
+    });
+
+    await server.call("cancelConversationRun", {
+      params: { conversationId: conversation.id, runId: run.id },
+      payload: {}
     });
 
     const events = await server.call("observeConversationRun", {

@@ -10,6 +10,8 @@ import {
 } from "@vivd-catalyst/api-contract";
 import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
 
+const createdAt = "2026-06-27T00:00:00.000Z";
+
 describe("api operation catalog and client", () => {
   it.each([
     { name: "cookie", getToken: undefined, credentials: "include", authorization: null },
@@ -38,7 +40,7 @@ describe("api operation catalog and client", () => {
           requests.push(request);
           if (request.url.endsWith("/events")) return new Response(null, { status: 204 });
           if (request.url.includes("/content")) return new Response("download");
-          return Response.json([]);
+          return Response.json({ items: [] });
         }
       });
       await client.conversations.list();
@@ -162,10 +164,12 @@ describe("api operation catalog and client", () => {
         if (url.pathname.endsWith("/agents")) {
           return Response.json({
             defaultAgentName: "kai",
-            agents: [{ name: "kai", displayName: "KAI", selectableModels: [], initialPrompts: [] }]
+            items: [{ name: "kai", displayName: "KAI", selectableModels: [], initialPrompts: [] }]
           });
         }
-        return Response.json([{ id: "cws_1", name: "KAI", visibility: "private" }]);
+        return Response.json({
+          items: [{ id: "cws_1", name: "KAI", visibility: "private", createdAt }]
+        });
       }
     });
 
@@ -177,11 +181,11 @@ describe("api operation catalog and client", () => {
     ).resolves.toEqual(availability);
     // The admin picker carries the id and name only.
     await expect(client.configAssets.listAdministeredWorkspaces()).resolves.toEqual([
-      { id: "cws_1", name: "KAI" }
+      { id: "cws_1", name: "KAI", createdAt }
     ]);
     await expect(client.collaborationWorkspaces.listAgents("cws_1", "de")).resolves.toMatchObject({
       defaultAgentName: "kai",
-      agents: [{ name: "kai" }]
+      items: [{ name: "kai" }]
     });
     expect(requests).toEqual([
       {
@@ -189,8 +193,52 @@ describe("api operation catalog and client", () => {
         path: contractPathFixtures.agentAvailability,
         body: { mode: "selected", collaborationWorkspaceIds: ["cws_1"] }
       },
-      { method: "GET", path: contractPathFixtures.adminWorkspaces },
-      { method: "GET", path: contractPathFixtures.workspaceAgents }
+      { method: "GET", path: `${contractPathFixtures.adminWorkspaces}?limit=200` },
+      { method: "GET", path: `${contractPathFixtures.workspaceAgents}&limit=200` }
+    ]);
+  });
+
+  it("collects cursor pages through the validated list envelope", async () => {
+    const calls: URL[] = [];
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        const url = new URL(request.url);
+        calls.push(url);
+        return url.searchParams.get("cursor") === "second"
+          ? Response.json({
+              items: [{ id: "cws_2", name: "Second", visibility: "private", createdAt }]
+            })
+          : Response.json({
+              items: [{ id: "cws_1", name: "First", visibility: "private", createdAt }],
+              nextCursor: "second"
+            });
+      }
+    });
+    expect((await client.configAssets.listAdministeredWorkspaces()).map((row) => row.id)).toEqual([
+      "cws_1",
+      "cws_2"
+    ]);
+    expect(calls.map((url) => url.searchParams.get("limit"))).toEqual(["200", "200"]);
+    expect(calls.map((url) => url.searchParams.get("cursor"))).toEqual([null, "second"]);
+  });
+
+  it("asks for one bounded page of the audit log, because every call is recorded as a view", async () => {
+    const calls: URL[] = [];
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        calls.push(new URL(request.url));
+        return Response.json({ items: [], nextCursor: "more" });
+      }
+    });
+    await expect(client.governance.listAuditActivities()).resolves.toEqual([]);
+    await expect(client.governance.listAuditEvents()).resolves.toEqual([]);
+    expect(calls.map((url) => `${url.pathname}${url.search}`)).toEqual([
+      apiOperations.listAuditActivities.path,
+      `${apiOperations.listAuditEvents.path}?limit=100`
     ]);
   });
 
@@ -294,7 +342,7 @@ describe("api operation catalog and client", () => {
       baseUrl: "https://chat.example/",
       fetchImpl: async (input, init) => {
         calls.push(input instanceof Request ? input : new Request(input, init));
-        return Response.json([]);
+        return Response.json({ items: [] });
       }
     });
 
@@ -303,9 +351,9 @@ describe("api operation catalog and client", () => {
     await client.conversations.list(42 as never);
 
     expect(calls.map((request) => request.url)).toEqual([
-      "https://chat.example/api/conversations",
-      "https://chat.example/api/conversations?collaborationWorkspaceId=workspace%2Fone",
-      "https://chat.example/api/conversations"
+      "https://chat.example/api/conversations?limit=200",
+      "https://chat.example/api/conversations?collaborationWorkspaceId=workspace%2Fone&limit=200",
+      "https://chat.example/api/conversations?limit=200"
     ]);
   });
 
@@ -313,7 +361,7 @@ describe("api operation catalog and client", () => {
     const calls: Request[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       calls.push(input instanceof Request ? input : new Request(input, init));
-      return Response.json([]);
+      return Response.json({ items: [] });
     };
     const client = createApiClient({
       baseUrl: "https://chat.example/",
@@ -328,7 +376,8 @@ describe("api operation catalog and client", () => {
     const request = calls[0];
     expect(request?.url).toBe(
       `https://chat.example${operation.buildPath({
-        params: { conversationId: "conversation/with space" }
+        params: { conversationId: "conversation/with space" },
+        query: { limit: 200 }
       })}`
     );
     expect(request?.method).toBe(operation.method);
@@ -565,6 +614,28 @@ describe("api operation catalog and client", () => {
       status: 0,
       message: "API request failed",
       payload: networkFailure
+    });
+  });
+
+  it("retains RATE_LIMITED codes and error correlation identifiers", async () => {
+    const client = createApiClient({
+      baseUrl: "https://chat.example",
+      fetchImpl: async () =>
+        Response.json(
+          {
+            error: {
+              code: "RATE_LIMITED",
+              message: "Try later",
+              correlationId: "corr_rate_limit"
+            }
+          },
+          { status: 429 }
+        )
+    });
+    await expect(client.conversations.list()).rejects.toMatchObject({
+      status: 429,
+      code: "RATE_LIMITED",
+      correlationId: "corr_rate_limit"
     });
   });
 

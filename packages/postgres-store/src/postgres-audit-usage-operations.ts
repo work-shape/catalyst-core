@@ -1,3 +1,5 @@
+import { keysetFilter } from "./paging";
+import type { StorePage } from "@vivd-catalyst/core";
 import { and, desc, eq, gte, lt, sql as drizzleSql } from "drizzle-orm";
 import {
   type AuditEvent,
@@ -41,6 +43,7 @@ export async function listAuditEvents(
     clientInstanceId: ClientInstanceId;
     limit?: number;
     type?: string;
+    page?: StorePage;
   }
 ): Promise<AuditEvent[]> {
   const limit = input.limit ?? 100;
@@ -53,9 +56,9 @@ export async function listAuditEvents(
   const rows = await db
     .select()
     .from(auditEvents)
-    .where(filters)
-    .orderBy(desc(auditEvents.createdAt))
-    .limit(limit);
+    .where(and(filters, keysetFilter(input.page, [auditEvents.createdAt, auditEvents.id], true)))
+    .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+    .limit(input.page?.limit ?? limit);
   return rows.map(mapAuditEvent);
 }
 
@@ -129,14 +132,20 @@ export async function listModelUsageEvents(
     start?: string;
     end?: string;
     limit?: number;
+    page?: StorePage;
   }
 ): Promise<ModelUsageEvent[]> {
   const query = db
     .select()
     .from(modelUsageEvents)
-    .where(and(...modelUsageFilters(input)))
-    .orderBy(desc(modelUsageEvents.createdAt));
-  const rows = input.limit === undefined ? await query : await query.limit(input.limit);
+    .where(
+      and(
+        ...modelUsageFilters(input),
+        keysetFilter(input.page, [modelUsageEvents.createdAt, modelUsageEvents.id], true)
+      )
+    )
+    .orderBy(desc(modelUsageEvents.createdAt), desc(modelUsageEvents.id));
+  const rows = await query.limit(input.page?.limit ?? input.limit ?? 2147483647);
   return rows.map(mapModelUsageEvent);
 }
 

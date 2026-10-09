@@ -105,7 +105,11 @@ describe("every operation of the catalog", () => {
     const response = await call(name, asCaller({ ...everyRight, scopes }));
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({
-      error: { code: "FORBIDDEN", message: `Missing auth scope '${scope}'` }
+      error: {
+        correlationId: expect.any(String),
+        code: "FORBIDDEN",
+        message: `Missing auth scope '${scope}'`
+      }
     });
   });
 
@@ -124,7 +128,11 @@ describe("every operation of the catalog", () => {
     );
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({
-      error: { code: "FORBIDDEN", message: `Missing permission '${missing}'` }
+      error: {
+        correlationId: expect.any(String),
+        code: "FORBIDDEN",
+        message: `Missing permission '${missing}'`
+      }
     });
   });
 
@@ -138,6 +146,7 @@ describe("every operation of the catalog", () => {
       expect(response.statusCode).toBe(403);
       expect(response.json()).toEqual({
         error: {
+          correlationId: expect.any(String),
           code: "FORBIDDEN",
           message: "Service principals cannot access user-scoped routes"
         }
@@ -153,6 +162,7 @@ describe("every operation of the catalog", () => {
       expect(response.statusCode).toBe(401);
       expect(response.json()).toEqual({
         error: {
+          correlationId: expect.any(String),
           code: "UNAUTHENTICATED",
           message: "Auth adapter does not accept explicit credentials"
         }
@@ -168,7 +178,11 @@ describe("every operation of the catalog", () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({
-      error: { code: "FORBIDDEN", message: "Session request origin is not allowed" }
+      error: {
+        correlationId: expect.any(String),
+        code: "FORBIDDEN",
+        message: "Session request origin is not allowed"
+      }
     });
   });
 
@@ -189,7 +203,11 @@ describe("every operation of the catalog", () => {
       );
       expect(response.statusCode).toBe(403);
       expect(response.json()).toEqual({
-        error: { code: "FORBIDDEN", message: "Missing auth scope 'run:start'" }
+        error: {
+          correlationId: expect.any(String),
+          code: "FORBIDDEN",
+          message: "Missing auth scope 'run:start'"
+        }
       });
     }
   );
@@ -205,7 +223,11 @@ describe("every operation of the catalog", () => {
       const response = await call(name, asCaller(everyRight));
       expect(response.statusCode).toBe(403);
       expect(response.json()).toEqual({
-        error: { code: "FORBIDDEN", message: "Invalid server credential" }
+        error: {
+          correlationId: expect.any(String),
+          code: "FORBIDDEN",
+          message: "Invalid server credential"
+        }
       });
     }
   );

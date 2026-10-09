@@ -1,3 +1,4 @@
+import type { StorePage } from "@vivd-catalyst/core";
 import {
   type ClientInstanceId,
   type ModelUsageEvent,
@@ -28,6 +29,7 @@ export function createPostgresUsageStore(db: PostgresConnection): ModelUsageEven
       start?: string;
       end?: string;
       limit?: number;
+      page?: StorePage;
     }): Promise<ModelUsageEvent[]> {
       return listPostgresModelUsageEvents(db, input);
     }

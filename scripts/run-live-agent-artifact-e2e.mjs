@@ -243,9 +243,7 @@ async function runScenario(scenario) {
     conversationId: started.conversation.id,
     runId: started.run.id
   });
-  const messages = await requestJson(`/api/conversations/${started.conversation.id}/messages`, {
-    method: "GET"
-  });
+  const messages = await requestList(`/api/conversations/${started.conversation.id}/messages`);
   const thread = await requestJson(`/api/conversations/${started.conversation.id}/thread`, {
     method: "GET"
   });
@@ -458,6 +456,25 @@ function buildToolTrace(events) {
     }
   }
   return [...toolCalls.values()];
+}
+
+async function requestList(path) {
+  const items = [];
+  let cursor;
+  do {
+    const query = new URLSearchParams({ limit: "200" });
+    if (cursor) query.set("cursor", cursor);
+    const page = await requestJson(`${path}?${query}`, { method: "GET" });
+    if (
+      !Array.isArray(page.items) ||
+      (page.nextCursor !== undefined && typeof page.nextCursor !== "string")
+    ) {
+      throw new Error(`Invalid list response for ${path}`);
+    }
+    items.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return items;
 }
 
 async function requestJson(path, input) {

@@ -1,3 +1,4 @@
+import type { StorePage } from "@vivd-catalyst/core";
 import {
   AppError,
   auditActorFromUser,
@@ -97,7 +98,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   async listRequests(
     user: AuthenticatedUser,
     context: CallContext,
-    filter: { status?: ApprovalRequestStatus } = {}
+    filter: { status?: ApprovalRequestStatus; page?: StorePage } = {}
   ): Promise<ApprovalRequestView[]> {
     const kinds = this.reviewableKinds(user);
     if (kinds.length === 0) {

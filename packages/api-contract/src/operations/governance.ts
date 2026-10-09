@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { listQuerySchema } from "../shared";
 import { auditActivitySchema, auditEventSchema, usageSummarySchema } from "../governance";
-import { defineOperation, json } from "./define-operation";
+import { defineOperation, json, page } from "./define-operation";
 
 export const governanceOperations = {
   listAuditEvents: defineOperation({
@@ -13,7 +14,8 @@ export const governanceOperations = {
     scope: "governance:read",
     requires: ["audit.view"],
     effect: "reading",
-    response: json(z.array(auditEventSchema)),
+    query: listQuerySchema,
+    response: page(auditEventSchema, ["createdAt", "id"], true),
     errors: [],
     rateClass: "read"
   }),
@@ -21,13 +23,14 @@ export const governanceOperations = {
     id: "listAuditActivities",
     method: "GET",
     path: "/api/audit-activities",
-    summary: "List audit events grouped into activities",
+    summary: "List the latest audit activities",
     tag: "Governance",
     auth: "user",
     scope: "governance:read",
     requires: ["audit.view"],
     effect: "reading",
-    response: json(z.array(auditActivitySchema)),
+    // The latest activities only: not a paged list, so it takes no limit and no cursor.
+    response: json(z.object({ items: z.array(auditActivitySchema) })),
     errors: [],
     rateClass: "read"
   }),

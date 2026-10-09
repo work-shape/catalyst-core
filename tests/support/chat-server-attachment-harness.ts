@@ -387,7 +387,7 @@ export async function waitForReadyDraftAttachment(
       params: { conversationId: conversationId }
     });
     expect(response.statusCode).toBe(200);
-    const attachments = response.json<Array<{ status: string }>>();
+    const attachments = response.json<{ items: Array<{ status: string }> }>().items;
     if (attachments.some((attachment) => attachment.status === "ready")) {
       return;
     }

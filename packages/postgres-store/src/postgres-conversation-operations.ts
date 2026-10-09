@@ -1,3 +1,5 @@
+import { keysetFilter } from "./paging";
+import type { StorePage } from "@vivd-catalyst/core";
 import {
   and,
   asc,
@@ -89,6 +91,7 @@ export async function listConversationsForWorkspace(
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
     scope: ConversationListScope;
+    page?: StorePage;
   }
 ): Promise<Conversation[]> {
   const { scope } = input;
@@ -100,6 +103,7 @@ export async function listConversationsForWorkspace(
         eq(conversations.clientInstanceId, input.clientInstanceId),
         eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
         eq(conversations.status, "active"),
+        keysetFilter(input.page, [conversations.updatedAt, conversations.id], true),
         ...(scope.kind === "lifecycle"
           ? []
           : [
@@ -119,7 +123,8 @@ export async function listConversationsForWorkspace(
             ])
       )
     )
-    .orderBy(desc(conversations.updatedAt));
+    .orderBy(desc(conversations.updatedAt), desc(conversations.id))
+    .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapConversation);
 }
 

@@ -1,3 +1,4 @@
+import type { StorePage } from "./paging";
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
 import type {
   AgentRunId,
@@ -135,6 +136,7 @@ export interface ConversationStore extends ConversationHistoryStore {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
     scope: ConversationListScope;
+    page?: StorePage;
   }): Promise<Conversation[]>;
   /** Lifecycle only: every active private Conversation the user created, in any workspace. */
   listPrivateConversationsCreatedByUser(input: {

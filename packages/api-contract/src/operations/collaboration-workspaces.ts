@@ -1,3 +1,4 @@
+import { listQuerySchema } from "../shared";
 import { z } from "zod";
 import {
   addWorkspaceMemberRequestSchema,
@@ -16,9 +17,23 @@ import {
   workspaceMembershipSchema
 } from "../collaboration-workspaces";
 import { collaborationWorkspaceAgentsSchema } from "../configuration";
-import { defineOperation, json } from "./define-operation";
+import { defineOperation, json, page } from "./define-operation";
 
 export const collaborationWorkspaceOperations = {
+  ensurePersonalCollaborationWorkspace: defineOperation({
+    id: "ensurePersonalCollaborationWorkspace",
+    method: "POST",
+    path: "/api/collaboration-workspaces/personal",
+    summary: "Create the caller's personal workspace if missing",
+    tag: "Collaboration Workspaces",
+    auth: "user",
+    scope: "collaboration_workspace:read",
+    requires: [],
+    effect: "changing",
+    response: json(collaborationWorkspaceWithRoleSchema),
+    errors: [],
+    rateClass: "write"
+  }),
   listCollaborationWorkspaces: defineOperation({
     id: "listCollaborationWorkspaces",
     method: "GET",
@@ -29,7 +44,8 @@ export const collaborationWorkspaceOperations = {
     scope: "collaboration_workspace:read",
     requires: [],
     effect: "reading",
-    response: json(z.array(collaborationWorkspaceWithRoleSchema)),
+    query: listQuerySchema,
+    response: page(collaborationWorkspaceWithRoleSchema, ["createdAt", "id"], false),
     errors: [],
     rateClass: "read"
   }),
@@ -58,7 +74,8 @@ export const collaborationWorkspaceOperations = {
     scope: "collaboration_workspace:read",
     requires: [],
     effect: "reading",
-    response: json(z.array(collaborationWorkspaceDirectoryItemSchema)),
+    query: listQuerySchema,
+    response: page(collaborationWorkspaceDirectoryItemSchema, ["createdAt", "id"], false),
     errors: [],
     rateClass: "read"
   }),
@@ -86,7 +103,7 @@ export const collaborationWorkspaceOperations = {
     scope: "config:read",
     requires: [],
     effect: "reading",
-    query: z.object({ locale: z.string().optional() }),
+    query: listQuerySchema.extend({ locale: z.string().optional() }),
     response: json(collaborationWorkspaceAgentsSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
@@ -145,7 +162,8 @@ export const collaborationWorkspaceOperations = {
     scope: "collaboration_workspace:read",
     requires: [],
     effect: "reading",
-    response: json(z.array(workspaceMemberSchema)),
+    query: listQuerySchema,
+    response: page(workspaceMemberSchema, ["displayLabel", "userId"], false),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
@@ -159,8 +177,8 @@ export const collaborationWorkspaceOperations = {
     scope: "collaboration_workspace:manage",
     requires: [],
     effect: "reading",
-    query: z.object({ q: z.string().optional() }),
-    response: json(z.array(workspaceMemberCandidateSchema)),
+    query: listQuerySchema.extend({ q: z.string().optional() }),
+    response: page(workspaceMemberCandidateSchema, ["displayLabel", "email", "userId"], false),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
@@ -246,7 +264,8 @@ export const collaborationWorkspaceOperations = {
     scope: "collaboration_workspace:read",
     requires: [],
     effect: "reading",
-    response: json(z.array(workspaceAccessRequestItemSchema)),
+    query: listQuerySchema,
+    response: page(workspaceAccessRequestItemSchema, ["createdAt", "userId"], false),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

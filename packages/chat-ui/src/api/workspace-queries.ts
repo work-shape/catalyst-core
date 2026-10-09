@@ -113,9 +113,27 @@ export function useCollaborationWorkspacesQuery(
 ) {
   return useQuery({
     queryKey: workspaceQueryKeys.collaborationWorkspaces(input.apiBaseUrl, input.authScope),
-    queryFn: () => input.client.collaborationWorkspaces.list(),
+    queryFn: () => listCollaborationWorkspacesWithPersonal(input.client.collaborationWorkspaces),
     enabled: input.enabled
   });
+}
+
+/**
+ * Reading the list creates nothing, so a person's first visit finds no Personal Workspace.
+ * Only then is it created; every later load is the one reading request.
+ */
+export async function listCollaborationWorkspacesWithPersonal<
+  Workspace extends { kind: string }
+>(workspaces: {
+  list(): Promise<Workspace[]>;
+  ensurePersonal(): Promise<unknown>;
+}): Promise<Workspace[]> {
+  const listed = await workspaces.list();
+  if (listed.some((workspace) => workspace.kind === "personal")) {
+    return listed;
+  }
+  await workspaces.ensurePersonal();
+  return workspaces.list();
 }
 
 /**

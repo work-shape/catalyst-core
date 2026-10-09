@@ -69,6 +69,7 @@ export interface WorkspaceAccessRequest {
 }
 
 export interface WorkspaceMemberCandidate {
+  userId: UserId;
   displayLabel: string;
   email: string;
   hasPendingAccessRequest: boolean;

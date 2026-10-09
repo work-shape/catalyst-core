@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { listQuerySchema } from "../shared";
 import {
   approvalRequestSchema,
   approvalRequestViewSchema,
@@ -6,7 +6,7 @@ import {
   listApprovalRequestsQuerySchema,
   pendingApprovalRequestCountSchema
 } from "../approval-requests";
-import { defineOperation, json } from "./define-operation";
+import { defineOperation, json, page } from "./define-operation";
 
 export const approvalRequestOperations = {
   getApprovalRequest: defineOperation({
@@ -33,8 +33,8 @@ export const approvalRequestOperations = {
     scope: "governance:read",
     requires: [],
     effect: "reading",
-    query: listApprovalRequestsQuerySchema,
-    response: json(z.array(approvalRequestViewSchema)),
+    query: listApprovalRequestsQuerySchema.extend(listQuerySchema.shape),
+    response: page(approvalRequestViewSchema, ["createdAt", "id"], true),
     errors: [],
     rateClass: "read"
   }),

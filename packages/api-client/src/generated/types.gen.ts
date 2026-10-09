@@ -74,7 +74,9 @@ export type ListApprovalRequestsData = {
     body?: never;
     path?: never;
     query?: {
-        status?: string;
+        status?: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+        limit?: number;
+        cursor?: string;
     };
     url: '/api/approval-requests';
 };
@@ -83,55 +85,58 @@ export type ListApprovalRequestsResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        clientInstanceId: string;
-        kind: string;
-        summary: string;
-        payload: {
-            [key: string]: unknown;
-        };
-        requestedBy: {
+    200: {
+        items: Array<{
             id: string;
-            displayLabel: string;
-        };
-        origin?: {
-            conversationId: string;
-            agentRunId: string;
-            toolCallId: string;
-            agentName: string;
-        };
-        status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
-        decision?: {
-            approved: boolean;
-            decidedBy: string;
-            decidedByLabel: string;
-            decidedAt: string;
-            reason?: string;
-            comment?: string;
-        };
-        reversion?: {
-            revertedBy: string;
-            revertedByLabel: string;
-            revertedAt: string;
-        };
-        checks: Array<{
-            id: string;
-            status: 'passed' | 'warned' | 'blocked';
-            message: string;
+            clientInstanceId: string;
+            kind: string;
+            summary: string;
+            payload: {
+                [key: string]: unknown;
+            };
+            requestedBy: {
+                id: string;
+                displayLabel: string;
+            };
+            origin?: {
+                conversationId: string;
+                agentRunId: string;
+                toolCallId: string;
+                agentName: string;
+            };
+            status: 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+            decision?: {
+                approved: boolean;
+                decidedBy: string;
+                decidedByLabel: string;
+                decidedAt: string;
+                reason?: string;
+                comment?: string;
+            };
+            reversion?: {
+                revertedBy: string;
+                revertedByLabel: string;
+                revertedAt: string;
+            };
+            checks: Array<{
+                id: string;
+                status: 'passed' | 'warned' | 'blocked';
+                message: string;
+            }>;
+            applyResult?: {
+                [key: string]: unknown;
+            };
+            createdAt: string;
+            updatedAt: string;
+            preview: {
+                [key: string]: unknown;
+            };
+            canDecide: boolean;
+            canWithdraw: boolean;
+            canRevert: boolean;
         }>;
-        applyResult?: {
-            [key: string]: unknown;
-        };
-        createdAt: string;
-        updatedAt: string;
-        preview: {
-            [key: string]: unknown;
-        };
-        canDecide: boolean;
-        canWithdraw: boolean;
-        canRevert: boolean;
-    }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListApprovalRequestsResponse = ListApprovalRequestsResponses[keyof ListApprovalRequestsResponses];
@@ -746,18 +751,18 @@ export type GetConfigResponses = {
 
 export type GetConfigResponse = GetConfigResponses[keyof GetConfigResponses];
 
-export type ListCollaborationWorkspacesData = {
+export type EnsurePersonalCollaborationWorkspaceData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/collaboration-workspaces';
+    url: '/api/collaboration-workspaces/personal';
 };
 
-export type ListCollaborationWorkspacesResponses = {
+export type EnsurePersonalCollaborationWorkspaceResponses = {
     /**
      * Successful response
      */
-    200: Array<{
+    200: {
         id: string;
         clientInstanceId: string;
         kind: 'personal' | 'shared';
@@ -773,7 +778,45 @@ export type ListCollaborationWorkspacesResponses = {
         role: 'owner' | 'admin' | 'member';
         membershipRole: 'owner' | 'admin' | 'member' | null;
         pendingAccessRequestCount: number;
-    }>;
+    };
+};
+
+export type EnsurePersonalCollaborationWorkspaceResponse = EnsurePersonalCollaborationWorkspaceResponses[keyof EnsurePersonalCollaborationWorkspaceResponses];
+
+export type ListCollaborationWorkspacesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/collaboration-workspaces';
+};
+
+export type ListCollaborationWorkspacesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        items: Array<{
+            id: string;
+            clientInstanceId: string;
+            kind: 'personal' | 'shared';
+            name: string;
+            description: string | null;
+            visibility: 'discoverable' | 'private';
+            defaultConversationVisibility: 'workspace' | 'private';
+            emoji: string | null;
+            accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
+            personalUserId: string | null;
+            createdAt: string;
+            updatedAt: string;
+            role: 'owner' | 'admin' | 'member';
+            membershipRole: 'owner' | 'admin' | 'member' | null;
+            pendingAccessRequestCount: number;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListCollaborationWorkspacesResponse = ListCollaborationWorkspacesResponses[keyof ListCollaborationWorkspacesResponses];
@@ -820,7 +863,10 @@ export type CreateCollaborationWorkspaceResponse = CreateCollaborationWorkspaceR
 export type ListCollaborationWorkspaceDirectoryData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/collaboration-workspaces/directory';
 };
 
@@ -828,14 +874,18 @@ export type ListCollaborationWorkspaceDirectoryResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        name: string;
-        description: string | null;
-        emoji: string | null;
-        accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
-        accessState: 'member' | 'request_pending' | 'can_request';
-    }>;
+    200: {
+        items: Array<{
+            id: string;
+            name: string;
+            description: string | null;
+            emoji: string | null;
+            accentColor: 'garnet' | 'ruby' | 'mahogany' | 'copper' | 'amber' | 'olive' | 'jade' | 'emerald' | 'teal' | 'turquoise' | 'azure' | 'sapphire' | 'indigo' | 'violet' | 'magenta' | 'rose' | 'stone' | 'slate' | null;
+            accessState: 'member' | 'request_pending' | 'can_request';
+            createdAt: string;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListCollaborationWorkspaceDirectoryResponse = ListCollaborationWorkspaceDirectoryResponses[keyof ListCollaborationWorkspaceDirectoryResponses];
@@ -946,6 +996,8 @@ export type ListCollaborationWorkspaceAgentsData = {
         collaborationWorkspaceId: string;
     };
     query?: {
+        limit?: number;
+        cursor?: string;
         locale?: string;
     };
     url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/agents';
@@ -957,7 +1009,7 @@ export type ListCollaborationWorkspaceAgentsResponses = {
      */
     200: {
         defaultAgentName?: string;
-        agents: Array<{
+        items: Array<{
             name: string;
             displayName: string;
             description?: string;
@@ -981,6 +1033,7 @@ export type ListCollaborationWorkspaceAgentsResponses = {
                 prompt: string;
             }>;
         }>;
+        nextCursor?: string;
     };
 };
 
@@ -1013,7 +1066,10 @@ export type ListCollaborationWorkspaceMembersData = {
     path: {
         collaborationWorkspaceId: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/members';
 };
 
@@ -1021,12 +1077,15 @@ export type ListCollaborationWorkspaceMembersResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        userId: string;
-        displayLabel: string;
-        email: string | null;
-        role: 'owner' | 'admin' | 'member';
-    }>;
+    200: {
+        items: Array<{
+            userId: string;
+            displayLabel: string;
+            email: string | null;
+            role: 'owner' | 'admin' | 'member';
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListCollaborationWorkspaceMembersResponse = ListCollaborationWorkspaceMembersResponses[keyof ListCollaborationWorkspaceMembersResponses];
@@ -1062,6 +1121,8 @@ export type ListCollaborationWorkspaceMemberCandidatesData = {
         collaborationWorkspaceId: string;
     };
     query?: {
+        limit?: number;
+        cursor?: string;
         q?: string;
     };
     url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/member-candidates';
@@ -1071,11 +1132,15 @@ export type ListCollaborationWorkspaceMemberCandidatesResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        displayLabel: string;
-        email: string;
-        hasPendingAccessRequest: boolean;
-    }>;
+    200: {
+        items: Array<{
+            userId: string;
+            displayLabel: string;
+            email: string;
+            hasPendingAccessRequest: boolean;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListCollaborationWorkspaceMemberCandidatesResponse = ListCollaborationWorkspaceMemberCandidatesResponses[keyof ListCollaborationWorkspaceMemberCandidatesResponses];
@@ -1164,7 +1229,10 @@ export type ListCollaborationWorkspaceAccessRequestsData = {
     path: {
         collaborationWorkspaceId: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/collaboration-workspaces/{collaborationWorkspaceId}/access-requests';
 };
 
@@ -1172,12 +1240,15 @@ export type ListCollaborationWorkspaceAccessRequestsResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        userId: string;
-        displayLabel: string;
-        email: string | null;
-        createdAt: string;
-    }>;
+    200: {
+        items: Array<{
+            userId: string;
+            displayLabel: string;
+            email: string | null;
+            createdAt: string;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListCollaborationWorkspaceAccessRequestsResponse = ListCollaborationWorkspaceAccessRequestsResponses[keyof ListCollaborationWorkspaceAccessRequestsResponses];
@@ -1261,6 +1332,8 @@ export type ListConversationsData = {
     body?: never;
     path?: never;
     query?: {
+        limit?: number;
+        cursor?: string;
         collaborationWorkspaceId?: string;
     };
     url: '/api/conversations';
@@ -1270,32 +1343,35 @@ export type ListConversationsResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        clientInstanceId: string;
-        collaborationWorkspaceId: string;
-        createdByUserId: string;
-        createdByExternalUserId: string;
-        visibility: 'workspace' | 'private';
-        title: string;
-        status: string;
-        createdAt: string;
-        updatedAt: string;
-        retainedUntil: string;
-        deletedAt?: string;
-        latestMessageAt?: string;
-        activeRun?: {
+    200: {
+        items: Array<{
             id: string;
-            conversationId: string;
-            agentName: string;
-            status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
-            startedAt: string;
+            clientInstanceId: string;
+            collaborationWorkspaceId: string;
+            createdByUserId: string;
+            createdByExternalUserId: string;
+            visibility: 'workspace' | 'private';
+            title: string;
+            status: string;
+            createdAt: string;
             updatedAt: string;
-            lastSequence: number;
-        };
-        unread?: boolean;
-        lastViewedAt?: string;
-    }>;
+            retainedUntil: string;
+            deletedAt?: string;
+            latestMessageAt?: string;
+            activeRun?: {
+                id: string;
+                conversationId: string;
+                agentName: string;
+                status: 'queued' | 'running' | 'waiting_for_permission' | 'cancelling' | 'completed' | 'cancelled' | 'failed';
+                startedAt: string;
+                updatedAt: string;
+                lastSequence: number;
+            };
+            unread?: boolean;
+            lastViewedAt?: string;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListConversationsResponse = ListConversationsResponses[keyof ListConversationsResponses];
@@ -1685,7 +1761,10 @@ export type ListConversationMessagesData = {
     path: {
         conversationId: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/conversations/{conversationId}/messages';
 };
 
@@ -1693,102 +1772,105 @@ export type ListConversationMessagesResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        conversationId: string;
-        clientInstanceId: string;
-        role: 'user' | 'assistant' | 'system' | 'tool';
-        text: string;
-        createdAt: string;
-        metadata?: {
-            agentRuntime?: {
-                version: 1;
-                kind: 'approval_decision';
-                requestId: string;
-                requestKind: string;
-                status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
-                decidedBy: string;
-                decidedByLabel: string;
-                decidedAt: string;
-                summary: string;
-                comment?: string;
-                requestedBy?: string;
-            } | {
-                version: 1;
-                kind: 'user_message';
-                attachmentManifest: unknown;
-            } | {
-                version: 1;
-                kind: 'assistant_tool_calls';
-                runId: string;
-                toolCalls: Array<{
+    200: {
+        items: Array<{
+            id: string;
+            conversationId: string;
+            clientInstanceId: string;
+            role: 'user' | 'assistant' | 'system' | 'tool';
+            text: string;
+            createdAt: string;
+            metadata?: {
+                agentRuntime?: {
+                    version: 1;
+                    kind: 'approval_decision';
+                    requestId: string;
+                    requestKind: string;
+                    status: 'approved' | 'rejected' | 'changes_requested' | 'superseded' | 'withdrawn' | 'reverted';
+                    decidedBy: string;
+                    decidedByLabel: string;
+                    decidedAt: string;
+                    summary: string;
+                    comment?: string;
+                    requestedBy?: string;
+                } | {
+                    version: 1;
+                    kind: 'user_message';
+                    attachmentManifest: unknown;
+                } | {
+                    version: 1;
+                    kind: 'assistant_tool_calls';
+                    runId: string;
+                    toolCalls: Array<{
+                        toolCallId: string;
+                        toolName: string;
+                        input: unknown;
+                    }>;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
+                } | {
+                    version: 1;
+                    kind: 'assistant_final';
+                    runId: string;
+                    finishStatus: 'completed' | 'cancelled';
+                    cancellationReason?: string;
+                    reasoning?: Array<{
+                        id: string;
+                        text: string;
+                    }>;
+                    sources?: Array<{
+                        id: string;
+                        url: string;
+                        title?: string;
+                        provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
+                        query?: string;
+                        retrievedAt?: string;
+                        snippet?: string;
+                        contentHash?: string;
+                        resultPosition?: number;
+                    }>;
+                    citations?: Array<{
+                        sourceId: string;
+                        label?: string;
+                        quote?: string;
+                        characterRange?: {
+                            start: number;
+                            end: number;
+                        };
+                    }>;
+                    modelContext?: {
+                        inputTokens: number;
+                        compactThresholdTokens: number;
+                        compacted: boolean;
+                    };
+                } | {
+                    version: 1;
+                    kind: 'tool_result';
+                    runId: string;
                     toolCallId: string;
                     toolName: string;
                     input: unknown;
-                }>;
-                reasoning?: Array<{
-                    id: string;
-                    text: string;
-                }>;
-                modelContext?: {
-                    inputTokens: number;
-                    compactThresholdTokens: number;
-                    compacted: boolean;
-                };
-            } | {
-                version: 1;
-                kind: 'assistant_final';
-                runId: string;
-                finishStatus: 'completed' | 'cancelled';
-                cancellationReason?: string;
-                reasoning?: Array<{
-                    id: string;
-                    text: string;
-                }>;
-                sources?: Array<{
-                    id: string;
-                    url: string;
-                    title?: string;
-                    provider: 'openai-native' | 'serper' | 'tavily' | 'firecrawl' | 'browserbase' | 'direct';
-                    query?: string;
-                    retrievedAt?: string;
-                    snippet?: string;
-                    contentHash?: string;
-                    resultPosition?: number;
-                }>;
-                citations?: Array<{
-                    sourceId: string;
-                    label?: string;
-                    quote?: string;
-                    characterRange?: {
-                        start: number;
-                        end: number;
+                    result: unknown;
+                    modelOutput: string;
+                    projectionNotice?: {
+                        [key: string]: unknown;
                     };
-                }>;
-                modelContext?: {
-                    inputTokens: number;
-                    compactThresholdTokens: number;
-                    compacted: boolean;
-                };
-            } | {
-                version: 1;
-                kind: 'tool_result';
-                runId: string;
-                toolCallId: string;
-                toolName: string;
-                input: unknown;
-                result: unknown;
-                modelOutput: string;
-                projectionNotice?: {
+                } | {
                     [key: string]: unknown;
                 };
-            } | {
+                display?: unknown;
                 [key: string]: unknown;
             };
-            display?: unknown;
-            [key: string]: unknown;
-        };
-    }>;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListConversationMessagesResponse = ListConversationMessagesResponses[keyof ListConversationMessagesResponses];
@@ -1798,7 +1880,10 @@ export type ListConversationResourcesData = {
     path: {
         conversationId: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/conversations/{conversationId}/resources';
 };
 
@@ -1807,7 +1892,7 @@ export type ListConversationResourcesResponses = {
      * Successful response
      */
     200: {
-        resources: Array<{
+        items: Array<{
             resourceId: string;
             title: string;
             subtitle?: string;
@@ -1887,6 +1972,7 @@ export type ListConversationResourcesResponses = {
                 structuredDataResourceId: string;
             };
         }>;
+        nextCursor?: string;
     };
 };
 
@@ -2996,12 +3082,207 @@ export type DeleteConversationResponses = {
 
 export type DeleteConversationResponse = DeleteConversationResponses[keyof DeleteConversationResponses];
 
+export type GetConversationArtifactPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        artifactId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview';
+};
+
+export type GetConversationArtifactPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+        retryable?: boolean;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type GetConversationArtifactPreviewResponse = GetConversationArtifactPreviewResponses[keyof GetConversationArtifactPreviewResponses];
+
+export type StartConversationArtifactPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        artifactId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview';
+};
+
+export type StartConversationArtifactPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+        retryable?: boolean;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type StartConversationArtifactPreviewResponse = StartConversationArtifactPreviewResponses[keyof StartConversationArtifactPreviewResponses];
+
+export type GetConversationAttachmentPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview';
+};
+
+export type GetConversationAttachmentPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+        retryable?: boolean;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type GetConversationAttachmentPreviewResponse = GetConversationAttachmentPreviewResponses[keyof GetConversationAttachmentPreviewResponses];
+
+export type StartConversationAttachmentPreviewData = {
+    body?: never;
+    path: {
+        conversationId: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview';
+};
+
+export type StartConversationAttachmentPreviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        status: 'pending';
+        artifactId: string;
+        queuedAt?: string;
+    } | {
+        status: 'ready';
+        artifactId: string;
+        type: 'image_pages';
+        format: 'png' | 'webp' | 'jpeg';
+        pageCount?: number;
+        truncated?: boolean;
+        pages: Array<{
+            artifactId: string;
+            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
+            filename?: string;
+            pageNumber?: number;
+            slideNumber?: number;
+            width?: number;
+            height?: number;
+        }>;
+    } | {
+        status: 'failed';
+        artifactId: string;
+        errorCode?: string;
+        retryable?: boolean;
+    } | {
+        status: 'unsupported';
+        artifactId: string;
+        errorCode?: string;
+    };
+};
+
+export type StartConversationAttachmentPreviewResponse = StartConversationAttachmentPreviewResponses[keyof StartConversationAttachmentPreviewResponses];
+
 export type ListDraftAttachmentsData = {
     body?: never;
     path: {
         conversationId: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/conversations/{conversationId}/draft-attachments';
 };
 
@@ -3009,31 +3290,34 @@ export type ListDraftAttachmentsResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        conversationId: string;
-        fileId: string;
-        filename: string;
-        mimeType?: string;
-        byteSize: number;
-        status: 'queued' | 'preprocessing' | 'ready' | 'failed' | 'unsupported' | 'deleted';
-        format?: string;
-        artifactRefs: {
-            [key: string]: string;
-        };
-        processingMetadata: {
-            [key: string]: unknown;
-        };
-        warnings: Array<{
-            code: string;
-            message: string;
+    200: {
+        items: Array<{
+            id: string;
+            conversationId: string;
+            fileId: string;
+            filename: string;
+            mimeType?: string;
+            byteSize: number;
+            status: 'queued' | 'preprocessing' | 'ready' | 'failed' | 'unsupported' | 'deleted';
+            format?: string;
+            artifactRefs: {
+                [key: string]: string;
+            };
+            processingMetadata: {
+                [key: string]: unknown;
+            };
+            warnings: Array<{
+                code: string;
+                message: string;
+            }>;
+            error?: {
+                [key: string]: unknown;
+            };
+            createdAt: string;
+            updatedAt: string;
         }>;
-        error?: {
-            [key: string]: unknown;
-        };
-        createdAt: string;
-        updatedAt: string;
-    }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListDraftAttachmentsResponse = ListDraftAttachmentsResponses[keyof ListDraftAttachmentsResponses];
@@ -3266,102 +3550,6 @@ export type GetConversationArtifactContentResponses = {
 
 export type GetConversationArtifactContentResponse = GetConversationArtifactContentResponses[keyof GetConversationArtifactContentResponses];
 
-export type GetConversationArtifactPreviewData = {
-    body?: never;
-    path: {
-        conversationId: string;
-        artifactId: string;
-    };
-    query?: never;
-    url: '/api/conversations/{conversationId}/artifacts/{artifactId}/preview';
-};
-
-export type GetConversationArtifactPreviewResponses = {
-    /**
-     * Successful response
-     */
-    200: {
-        status: 'pending';
-        artifactId: string;
-        queuedAt?: string;
-    } | {
-        status: 'ready';
-        artifactId: string;
-        type: 'image_pages';
-        format: 'png' | 'webp' | 'jpeg';
-        pageCount?: number;
-        truncated?: boolean;
-        pages: Array<{
-            artifactId: string;
-            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
-            filename?: string;
-            pageNumber?: number;
-            slideNumber?: number;
-            width?: number;
-            height?: number;
-        }>;
-    } | {
-        status: 'failed';
-        artifactId: string;
-        errorCode?: string;
-        retryable?: boolean;
-    } | {
-        status: 'unsupported';
-        artifactId: string;
-        errorCode?: string;
-    };
-};
-
-export type GetConversationArtifactPreviewResponse = GetConversationArtifactPreviewResponses[keyof GetConversationArtifactPreviewResponses];
-
-export type GetConversationAttachmentPreviewData = {
-    body?: never;
-    path: {
-        conversationId: string;
-        attachmentId: string;
-    };
-    query?: never;
-    url: '/api/conversations/{conversationId}/attachments/{attachmentId}/preview';
-};
-
-export type GetConversationAttachmentPreviewResponses = {
-    /**
-     * Successful response
-     */
-    200: {
-        status: 'pending';
-        artifactId: string;
-        queuedAt?: string;
-    } | {
-        status: 'ready';
-        artifactId: string;
-        type: 'image_pages';
-        format: 'png' | 'webp' | 'jpeg';
-        pageCount?: number;
-        truncated?: boolean;
-        pages: Array<{
-            artifactId: string;
-            mimeType: 'image/png' | 'image/jpeg' | 'image/webp';
-            filename?: string;
-            pageNumber?: number;
-            slideNumber?: number;
-            width?: number;
-            height?: number;
-        }>;
-    } | {
-        status: 'failed';
-        artifactId: string;
-        errorCode?: string;
-        retryable?: boolean;
-    } | {
-        status: 'unsupported';
-        artifactId: string;
-        errorCode?: string;
-    };
-};
-
-export type GetConversationAttachmentPreviewResponse = GetConversationAttachmentPreviewResponses[keyof GetConversationAttachmentPreviewResponses];
-
 export type RetryConversationArtifactPreviewData = {
     body?: never;
     path: {
@@ -3413,7 +3601,10 @@ export type RetryConversationArtifactPreviewResponse = RetryConversationArtifact
 export type ListAuditEventsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/audit-events';
 };
 
@@ -3421,72 +3612,8 @@ export type ListAuditEventsResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        clientInstanceId: string;
-        type: string;
-        status: string;
-        actor?: {
-            userId?: string;
-            externalUserId?: string;
-            displayLabel: string;
-            roles: Array<string>;
-            principalKind?: 'user' | 'service';
-            principalId?: string;
-            principalDisplayLabel?: string;
-            credentialId?: string;
-            subjectUserId?: string;
-            delegatedActor?: {
-                kind: 'service_principal';
-                id: string;
-                displayLabel?: string;
-                authSource: string;
-            };
-        };
-        subject?: string;
-        reason?: string;
-        correlationId: string;
-        createdAt: string;
-        metadata?: {
-            [key: string]: unknown;
-        };
-    }>;
-};
-
-export type ListAuditEventsResponse = ListAuditEventsResponses[keyof ListAuditEventsResponses];
-
-export type ListAuditActivitiesData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/audit-activities';
-};
-
-export type ListAuditActivitiesResponses = {
-    /**
-     * Successful response
-     */
-    200: Array<{
-        correlationId: string;
-        at: string;
-        label: string;
-        tier: 'governance' | 'workflow' | 'runtime' | 'telemetry';
-        outcome: 'success' | 'failed' | 'denied' | 'warning';
-        actor: {
-            kind: 'user' | 'assistant' | 'service' | 'system';
-            label: string;
-            onBehalfOf?: string;
-            roles?: Array<string>;
-        };
-        target?: {
-            kind: string;
-            id: string;
-            label?: string;
-        };
-        reason?: string;
-        eventCount: number;
-        repeatCount: number;
-        evidence: Array<{
+    200: {
+        items: Array<{
             id: string;
             clientInstanceId: string;
             type: string;
@@ -3516,7 +3643,76 @@ export type ListAuditActivitiesResponses = {
                 [key: string]: unknown;
             };
         }>;
-    }>;
+        nextCursor?: string;
+    };
+};
+
+export type ListAuditEventsResponse = ListAuditEventsResponses[keyof ListAuditEventsResponses];
+
+export type ListAuditActivitiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/audit-activities';
+};
+
+export type ListAuditActivitiesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        items: Array<{
+            correlationId: string;
+            at: string;
+            label: string;
+            tier: 'governance' | 'workflow' | 'runtime' | 'telemetry';
+            outcome: 'success' | 'failed' | 'denied' | 'warning';
+            actor: {
+                kind: 'user' | 'assistant' | 'service' | 'system';
+                label: string;
+                onBehalfOf?: string;
+                roles?: Array<string>;
+            };
+            target?: {
+                kind: string;
+                id: string;
+                label?: string;
+            };
+            reason?: string;
+            eventCount: number;
+            repeatCount: number;
+            evidence: Array<{
+                id: string;
+                clientInstanceId: string;
+                type: string;
+                status: string;
+                actor?: {
+                    userId?: string;
+                    externalUserId?: string;
+                    displayLabel: string;
+                    roles: Array<string>;
+                    principalKind?: 'user' | 'service';
+                    principalId?: string;
+                    principalDisplayLabel?: string;
+                    credentialId?: string;
+                    subjectUserId?: string;
+                    delegatedActor?: {
+                        kind: 'service_principal';
+                        id: string;
+                        displayLabel?: string;
+                        authSource: string;
+                    };
+                };
+                subject?: string;
+                reason?: string;
+                correlationId: string;
+                createdAt: string;
+                metadata?: {
+                    [key: string]: unknown;
+                };
+            }>;
+        }>;
+    };
 };
 
 export type ListAuditActivitiesResponse = ListAuditActivitiesResponses[keyof ListAuditActivitiesResponses];
@@ -3873,7 +4069,10 @@ export type SetConfigAgentAvailabilityResponse = SetConfigAgentAvailabilityRespo
 export type ListAdministeredCollaborationWorkspacesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/admin/collaboration-workspaces';
 };
 
@@ -3881,10 +4080,14 @@ export type ListAdministeredCollaborationWorkspacesResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        name: string;
-    }>;
+    200: {
+        items: Array<{
+            id: string;
+            name: string;
+            createdAt: string;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListAdministeredCollaborationWorkspacesResponse = ListAdministeredCollaborationWorkspacesResponses[keyof ListAdministeredCollaborationWorkspacesResponses];
@@ -3895,7 +4098,10 @@ export type ListConfigAssetRevisionsData = {
         kind: string;
         name: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/admin/config/assets/{kind}/{name}/revisions';
 };
 
@@ -3903,37 +4109,40 @@ export type ListConfigAssetRevisionsResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        revision: number;
-        operation: 'create' | 'update' | 'delete' | 'revert';
-        config: {
-            [key: string]: unknown;
-        } | null;
-        actor: {
-            userId?: string;
-            externalUserId?: string;
-            displayLabel: string;
-            roles: Array<string>;
-            principalKind?: 'user' | 'service';
-            principalId?: string;
-            principalDisplayLabel?: string;
-            credentialId?: string;
-            subjectUserId?: string;
-            delegatedActor?: {
-                kind: 'service_principal';
-                id: string;
-                displayLabel?: string;
-                authSource: string;
+    200: {
+        items: Array<{
+            revision: number;
+            operation: 'create' | 'update' | 'delete' | 'revert';
+            config: {
+                [key: string]: unknown;
+            } | null;
+            actor: {
+                userId?: string;
+                externalUserId?: string;
+                displayLabel: string;
+                roles: Array<string>;
+                principalKind?: 'user' | 'service';
+                principalId?: string;
+                principalDisplayLabel?: string;
+                credentialId?: string;
+                subjectUserId?: string;
+                delegatedActor?: {
+                    kind: 'service_principal';
+                    id: string;
+                    displayLabel?: string;
+                    authSource: string;
+                };
+            } | null;
+            origin?: {
+                kind: 'approval_request';
+                requestId: string;
+                summary: string;
             };
-        } | null;
-        origin?: {
-            kind: 'approval_request';
-            requestId: string;
-            summary: string;
-        };
-        globalVersion: number;
-        createdAt: string;
-    }>;
+            globalVersion: number;
+            createdAt: string;
+        }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListConfigAssetRevisionsResponse = ListConfigAssetRevisionsResponses[keyof ListConfigAssetRevisionsResponses];
@@ -4058,7 +4267,10 @@ export type ValidateConfigAssetsResponse = ValidateConfigAssetsResponses[keyof V
 export type ListAdministeredUsersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/superadmin/users';
 };
 
@@ -4066,31 +4278,34 @@ export type ListAdministeredUsersResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        id: string;
-        clientInstanceId: string;
-        displayLabel: string;
-        email?: string;
-        roles: Array<string>;
-        permissionRefs: Array<string>;
-        permissions: Array<string>;
-        status: 'active' | 'disabled';
-        createdAt: string;
-        updatedAt: string;
-        lastAuthenticatedAt?: string;
-        identities: Array<{
+    200: {
+        items: Array<{
+            id: string;
             clientInstanceId: string;
-            userId: string;
-            authSource: string;
-            externalUserId: string;
-            displayLabel?: string;
+            displayLabel: string;
             email?: string;
-            emailVerified: boolean;
+            roles: Array<string>;
+            permissionRefs: Array<string>;
+            permissions: Array<string>;
+            status: 'active' | 'disabled';
             createdAt: string;
             updatedAt: string;
             lastAuthenticatedAt?: string;
+            identities: Array<{
+                clientInstanceId: string;
+                userId: string;
+                authSource: string;
+                externalUserId: string;
+                displayLabel?: string;
+                email?: string;
+                emailVerified: boolean;
+                createdAt: string;
+                updatedAt: string;
+                lastAuthenticatedAt?: string;
+            }>;
         }>;
-    }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListAdministeredUsersResponse = ListAdministeredUsersResponses[keyof ListAdministeredUsersResponses];
@@ -4373,7 +4588,10 @@ export type DeleteAdministeredUserIdentityResponse = DeleteAdministeredUserIdent
 export type ListServicePrincipalsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+    };
     url: '/api/superadmin/api-access/service-principals';
 };
 
@@ -4381,33 +4599,36 @@ export type ListServicePrincipalsResponses = {
     /**
      * Successful response
      */
-    200: Array<{
-        principal: {
-            id: string;
-            clientInstanceId: string;
-            displayLabel: string;
-            description?: string;
-            status: 'active' | 'disabled';
-            permissionRefs: Array<string>;
-            permissions: Array<'config_assets.read' | 'config_assets.release'>;
-            createdByUserId?: string;
-            createdAt: string;
-            updatedAt: string;
-            lastUsedAt?: string;
-        };
-        credentials: Array<{
-            id: string;
-            clientInstanceId: string;
-            servicePrincipalId: string;
-            name: string;
-            keyPrefix: string;
-            scopes?: Array<'config_assets:read' | 'config_assets:release'>;
-            createdAt: string;
-            expiresAt?: string;
-            revokedAt?: string;
-            lastUsedAt?: string;
+    200: {
+        items: Array<{
+            principal: {
+                id: string;
+                clientInstanceId: string;
+                displayLabel: string;
+                description?: string;
+                status: 'active' | 'disabled';
+                permissionRefs: Array<string>;
+                permissions: Array<'config_assets.read' | 'config_assets.release'>;
+                createdByUserId?: string;
+                createdAt: string;
+                updatedAt: string;
+                lastUsedAt?: string;
+            };
+            credentials: Array<{
+                id: string;
+                clientInstanceId: string;
+                servicePrincipalId: string;
+                name: string;
+                keyPrefix: string;
+                scopes?: Array<'config_assets:read' | 'config_assets:release'>;
+                createdAt: string;
+                expiresAt?: string;
+                revokedAt?: string;
+                lastUsedAt?: string;
+            }>;
         }>;
-    }>;
+        nextCursor?: string;
+    };
 };
 
 export type ListServicePrincipalsResponse = ListServicePrincipalsResponses[keyof ListServicePrincipalsResponses];

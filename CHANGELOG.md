@@ -32,6 +32,35 @@ contain breaking changes; a patch version does not.
 
 ### Changed
 
+- **API (breaking):** every list answers with `{ items, nextCursor }` instead of a bare array.
+  `limit` defaults to 50 and accepts 1 to 200, anything else answers 422. `nextCursor` is
+  absent on the last page; pass it back as `cursor` with the same filters to read the next
+  page. A cursor from another list or with other filters answers 422. The conversation
+  resources list carries `items` instead of `resources`, and the agents of a workspace carry
+  `items` instead of `agents`, next to `defaultAgentName`. Workspaces in the directory and in
+  the administration picker carry `createdAt`, the key they are paged by. The audit
+  activity view is not paged: it answers `{ items }` with the latest activities only, at most
+  100 from the latest 500 audit events, and takes no `limit` or `cursor`. The shared API
+  client keeps returning complete arrays; its audit event helper returns the latest 100
+  events.
+- **API (breaking):** every timestamp is UTC and ends in `Z`. A timestamp with an offset such
+  as `+02:00`, or without a zone, answers 422; this applies to `expiresAt` when an API
+  credential is created.
+- **API (breaking):** reading no longer creates anything. A list of workspaces or
+  conversations does not create the caller's Personal Workspace; call
+  `POST /api/collaboration-workspaces/personal` once instead. A preview read does not start
+  the preview; call `POST /api/conversations/{conversationId}/artifacts/{artifactId}/preview`
+  or `POST /api/conversations/{conversationId}/attachments/{attachmentId}/preview`, and read
+  the preview until it is ready. A preview that was never started reads as `pending` without
+  `queuedAt`. The three operations need the scope of the read they replace.
+- **API (breaking):** every error answers with
+  `{ error: { code, message, correlationId, details? } }`, and the same id in the
+  `x-correlation-id` response header. A caller's own `x-correlation-id` request header is
+  kept. An unknown path answers 404 in this shape. `RATE_LIMITED` (429) is a new code. An
+  `INTERNAL` error always reads "Internal server error".
+- **Document worker (breaking):** the worker answers errors in the same envelope,
+  `{ error: { code, message, correlationId } }`, instead of the flat `{ code, message }`.
+  Deploy the worker and the application of one release together.
 - **Chat:** the conversation list is a compact single-line list without the last-updated date.
   A conversation within seven days of its retention date carries an amber clock, on instances
   with `retention.expireConversations` enabled. Its hint names the deletion date; it opens on

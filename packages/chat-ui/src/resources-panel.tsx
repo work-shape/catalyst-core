@@ -48,7 +48,7 @@ export function useResourcesPanelState({
     conversationId,
     enabled: enabled && Boolean(conversationId)
   });
-  const resources = query.data?.resources ?? [];
+  const resources = query.data ?? [];
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");

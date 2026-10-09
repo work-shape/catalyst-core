@@ -1,3 +1,4 @@
+import type { StorePage } from "./paging";
 import type { AuditActor } from "./audit";
 import type { AgentConfig, SkillConfig } from "./config";
 import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
@@ -120,6 +121,7 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     name: string;
+    page?: StorePage;
   }): Promise<ConfigAssetRevisionRecord[]>;
   applyConfigAssetMutations(input: {
     clientInstanceId: ClientInstanceId;

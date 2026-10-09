@@ -1,4 +1,6 @@
-import { and, asc, eq, inArray, sql as drizzleSql } from "drizzle-orm";
+import { keysetFilter } from "./paging";
+import type { StorePage } from "@vivd-catalyst/core";
+import { and, eq, inArray, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type AuditEvent,
@@ -174,11 +176,6 @@ export async function resolveUserIdentity(
       throw new AppError("INTERNAL", "Failed to resolve user identity");
     }
 
-    await ensurePersonalWorkspaceInTransaction(tx, {
-      clientInstanceId: input.clientInstanceId,
-      userId: user.id as UserRecord["id"]
-    });
-
     const [identity] = await tx
       .insert(userIdentities)
       .values({
@@ -245,13 +242,32 @@ export async function resolveUserIdentity(
 
 export async function listUsers(
   db: PostgresConnection,
-  input: { clientInstanceId: ClientInstanceId }
+  input: { clientInstanceId: ClientInstanceId; page?: StorePage; excludeSuperadmins?: boolean }
 ): Promise<UserRecord[]> {
   const rows = await db
     .select()
     .from(productUsers)
-    .where(eq(productUsers.clientInstanceId, input.clientInstanceId))
-    .orderBy(asc(productUsers.displayLabel));
+    .where(
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        keysetFilter(
+          input.page,
+          [
+            drizzleSql`${productUsers.displayLabel} COLLATE "C"`,
+            drizzleSql`${productUsers.id} COLLATE "C"`
+          ],
+          false
+        ),
+        input.excludeSuperadmins
+          ? drizzleSql`NOT (${productUsers.roles} @> '["superadmin"]'::jsonb)`
+          : undefined
+      )
+    )
+    .orderBy(
+      drizzleSql`${productUsers.displayLabel} COLLATE "C"`,
+      drizzleSql`${productUsers.id} COLLATE "C"`
+    )
+    .limit(input.page?.limit ?? 2147483647);
   if (rows.length === 0) {
     return [];
   }

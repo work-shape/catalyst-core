@@ -1,3 +1,4 @@
+import type { StorePage } from "@vivd-catalyst/core";
 import {
   type ClientInstanceId,
   type CreateUserInput,
@@ -29,7 +30,11 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     async resolveUserIdentity(input: ResolveUserIdentityInput) {
       return resolvePostgresUserIdentity(db, input, (event) => appendPostgresAuditEvent(db, event));
     },
-    async listUsers(input: { clientInstanceId: ClientInstanceId }): Promise<UserRecord[]> {
+    async listUsers(input: {
+      clientInstanceId: ClientInstanceId;
+      page?: StorePage;
+      excludeSuperadmins?: boolean;
+    }): Promise<UserRecord[]> {
       return listPostgresUsers(db, input);
     },
     async createUser(input: CreateUserInput): Promise<UserRecord> {

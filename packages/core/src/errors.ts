@@ -6,6 +6,7 @@ export type AppErrorCode =
   | "CONFLICT"
   | "TIMEOUT"
   | "VALIDATION_FAILED"
+  | "RATE_LIMITED"
   | "INTERNAL";
 
 const statusByCode: Record<AppErrorCode, number> = {
@@ -16,6 +17,7 @@ const statusByCode: Record<AppErrorCode, number> = {
   CONFLICT: 409,
   TIMEOUT: 504,
   VALIDATION_FAILED: 422,
+  RATE_LIMITED: 429,
   INTERNAL: 500
 };
 
@@ -50,23 +52,29 @@ export interface ErrorEnvelope {
     code: AppErrorCode;
     message: string;
     details?: unknown;
+    correlationId: string;
   };
 }
 
 /**
- * The one rule for what an error may tell a caller. A message leaves only when the error
- * exposes it, and details leave only below status 500. Anything that is not an AppError is an
+ * The one rule for what an error may tell a caller. INTERNAL never exposes a message;
+ * other messages require exposeMessage, and details leave only below status 500. An unknown error is an
  * internal error without message or details.
  */
-export function toErrorEnvelope(error: unknown): ErrorEnvelope {
+export function toErrorEnvelope(error: unknown, correlationId: string): ErrorEnvelope {
   if (!isAppError(error)) {
-    return { statusCode: 500, error: { code: "INTERNAL", message: INTERNAL_ERROR_MESSAGE } };
+    return {
+      statusCode: 500,
+      error: { code: "INTERNAL", message: INTERNAL_ERROR_MESSAGE, correlationId }
+    };
   }
   return {
     statusCode: error.statusCode,
     error: {
       code: error.code,
-      message: error.exposeMessage ? error.message : INTERNAL_ERROR_MESSAGE,
+      correlationId,
+      message:
+        error.code !== "INTERNAL" && error.exposeMessage ? error.message : INTERNAL_ERROR_MESSAGE,
       ...(error.statusCode < 500 ? { details: error.details } : {})
     }
   };

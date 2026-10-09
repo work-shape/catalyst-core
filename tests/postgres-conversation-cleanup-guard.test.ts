@@ -35,6 +35,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     expect(refused.statusCode).toBe(409);
     expect(refused.json()).toEqual({
       error: {
+        correlationId: expect.any(String),
         code: "CONFLICT",
         message:
           "This workspace cannot be deleted yet because data of its deleted conversations is still being removed. Try again later.",
@@ -145,6 +146,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
       expect(refused.statusCode).toBe(409);
       expect(refused.json()).toEqual({
         error: {
+          correlationId: expect.any(String),
           code: "CONFLICT",
           message:
             "The account cannot be deleted yet because data of its deleted conversations is still being removed. Try again later.",

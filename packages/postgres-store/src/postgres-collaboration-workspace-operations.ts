@@ -1,6 +1,7 @@
 import { and, asc, eq, ilike, inArray, isNull, or, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   AppError,
+  asUserId,
   type ClientInstanceId,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
@@ -419,6 +420,7 @@ export async function searchMemberCandidates(
   )`;
   const rows = await db
     .select({
+      userId: productUsers.id,
       displayLabel: productUsers.displayLabel,
       email: effectiveEmail,
       hasPendingAccessRequest
@@ -457,6 +459,7 @@ export async function searchMemberCandidates(
   return rows.map((row) => {
     if (row.email === null) throw new Error("Workspace candidate email is missing");
     return {
+      userId: asUserId(row.userId),
       displayLabel: row.displayLabel,
       email: row.email,
       hasPendingAccessRequest: row.hasPendingAccessRequest

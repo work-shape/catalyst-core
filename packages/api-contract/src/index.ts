@@ -18,3 +18,5 @@ export function createOpenApiDocument() {
 }
 
 export const openApiDocument = createOpenApiDocument();
+
+export * from "./shared";

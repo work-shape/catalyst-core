@@ -157,7 +157,7 @@ describe("conversation resource routes", () => {
       );
       expect(resources.statusCode).toBe(200);
       expect(resources.json()).toEqual({
-        resources: [
+        items: [
           {
             resourceType: "structured_data",
             resourceId: `structured_data:${resource.id}`,
@@ -284,7 +284,7 @@ describe("conversation resource routes", () => {
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
-        resources: [
+        items: [
           {
             resourceType: "structured_result",
             resourceId: "structured_result:report",
@@ -372,7 +372,7 @@ describe("conversation resource routes", () => {
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
-        resources: [
+        items: [
           {
             resourceType: "structured_result",
             resourceId: "structured_result:credit-report",
@@ -428,7 +428,7 @@ describe("conversation resource routes", () => {
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        resources: [
+        items: [
           {
             resourceType: "structured_result",
             key: "legacy-report",
@@ -518,7 +518,7 @@ describe("conversation resource routes", () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
-        resources: [
+        items: [
           expect.objectContaining({
             resourceId: `source_file:${sent.id}`,
             preview: { kind: "source_file", fileId: file.id }
@@ -634,7 +634,7 @@ describe("conversation resource routes", () => {
       );
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
-        resources: [
+        items: [
           {
             resourceType: "generated_file",
             resourceId: `generated_file:${newPromotion.id}`,

@@ -59,7 +59,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await app.call("listConversations", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toContainEqual(
+    expect(listed.json().items).toContainEqual(
       expect.objectContaining({
         id: conversation.id,
         title: "Please Summarize The Release Notes"
@@ -69,9 +69,9 @@ describe("client instance app vertical slice", () => {
     const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
     expect(
-      (audit.json() as Array<{ type: string }>).some(
-        (event) => event.type === "conversation.title_generated"
-      )
+      audit
+        .json<{ items: Array<{ type: string }> }>()
+        .items.some((event) => event.type === "conversation.title_generated")
     ).toBe(true);
 
     await app.close();
@@ -104,7 +104,7 @@ describe("client instance app vertical slice", () => {
     expect(invalid.statusCode).toBe(422);
 
     const audit = await app.call("listAuditEvents", {});
-    expect(audit.json()).toContainEqual(
+    expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.renamed",
         subject: conversation.id,
@@ -159,7 +159,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await app.call("listConversations", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toContainEqual(
+    expect(listed.json().items).toContainEqual(
       expect.objectContaining({
         id: conversation.id,
         title: "Please Summarize This Boarding Pass"
@@ -365,7 +365,7 @@ describe("client instance app vertical slice", () => {
     ).resolves.toBeUndefined();
     const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
-    expect(audit.json()).toContainEqual(
+    expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.deleted",
         metadata: expect.objectContaining({
@@ -433,7 +433,7 @@ describe("client instance app vertical slice", () => {
     ).resolves.toBeUndefined();
 
     const audit = await app.call("listAuditEvents", {});
-    expect(audit.json()).toContainEqual(
+    expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "conversation.deleted",
         metadata: expect.objectContaining({
@@ -530,7 +530,7 @@ describe("client instance app vertical slice", () => {
 
     const listed = await app.call("listConversations", await personalConversationListInput(app));
     expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toContainEqual(
+    expect(listed.json().items).toContainEqual(
       expect.objectContaining({
         id: conversation.id,
         title: "Tool result review"

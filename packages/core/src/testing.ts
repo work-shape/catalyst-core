@@ -1,4 +1,5 @@
 import type { PlatformStores } from "./platform-store";
+import type { StorePage } from "./paging";
 import {
   AppError,
   createApprovalDecisionMessage,
@@ -690,6 +691,7 @@ export class InMemoryPlatformStore
       )
       .slice(0, input.limit)
       .map((candidate) => ({
+        userId: candidate.user.id,
         displayLabel: candidate.user.displayLabel,
         email: candidate.email,
         hasPendingAccessRequest: this.workspaceAccessRequests.has(
@@ -2212,16 +2214,24 @@ export class InMemoryPlatformStore
     clientInstanceId: ClientInstanceId;
     limit?: number;
     type?: string;
+    page?: StorePage;
   }): Promise<AuditEvent[]> {
-    const limit = input.limit ?? 100;
+    const [afterCreatedAt, afterId] = input.page?.after ?? [];
     return this.auditEvents
       .filter(
         (event) =>
           event.clientInstanceId === input.clientInstanceId &&
-          (!input.type || event.type === input.type)
+          (!input.type || event.type === input.type) &&
+          (afterCreatedAt === undefined ||
+            afterId === undefined ||
+            event.createdAt < afterCreatedAt ||
+            (event.createdAt === afterCreatedAt && event.id < afterId))
       )
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-      .slice(0, limit);
+      .sort(
+        (left, right) =>
+          right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id)
+      )
+      .slice(0, input.page?.limit ?? input.limit ?? 100);
   }
 
   async appendModelUsageEvent(input: ModelUsageEventRecordInput): Promise<ModelUsageEvent> {
@@ -2290,10 +2300,6 @@ export class InMemoryPlatformStore
       };
       this.identities.set(identityKey, updatedIdentity);
       this.memoryUsers.set(user.id, updatedUser);
-      await this.ensurePersonalWorkspace({
-        clientInstanceId: input.clientInstanceId,
-        userId: user.id
-      });
       return authenticatedUserFromRecord({
         user: updatedUser,
         identity: updatedIdentity,
@@ -2336,10 +2342,6 @@ export class InMemoryPlatformStore
     };
     this.identities.set(identityKey, identity);
     this.memoryUsers.set(updatedUser.id, updatedUser);
-    await this.ensurePersonalWorkspace({
-      clientInstanceId: input.clientInstanceId,
-      userId: updatedUser.id
-    });
     return authenticatedUserFromRecord({
       user: updatedUser,
       identity,

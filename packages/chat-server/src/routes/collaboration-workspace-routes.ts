@@ -1,6 +1,7 @@
+import { paginate, pageScope } from "../http/paging";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
-import { asCollaborationWorkspaceId, asUserId } from "@vivd-catalyst/core";
+import { asCollaborationWorkspaceId, asUserId, getSubjectUserId } from "@vivd-catalyst/core";
 import { CollaborationWorkspaceWorkflow } from "../collaboration-workspace-workflow";
 import type { Route } from "../http/route";
 import { requirePathParam, resolveRequestLocale } from "../request-context";
@@ -11,6 +12,14 @@ export function registerCollaborationWorkspaceRoutes(
   options: ChatServerOptions
 ): void {
   const workspaces = new CollaborationWorkspaceWorkflow(options);
+
+  route(apiOperations.ensurePersonalCollaborationWorkspace, async ({ user }) => {
+    const workspace = await options.stores.workspaces.ensurePersonalWorkspace({
+      clientInstanceId: options.clientInstanceId,
+      userId: asUserId(getSubjectUserId(user))
+    });
+    return workspaces.getWorkspace(user, workspace.id);
+  });
 
   route(apiOperations.listCollaborationWorkspaces, async ({ user }) => {
     return workspaces.listWorkspaces(user);
@@ -28,13 +37,25 @@ export function registerCollaborationWorkspaceRoutes(
     return workspaces.getWorkspace(user, collaborationWorkspaceId(params));
   });
 
-  route(apiOperations.listCollaborationWorkspaceAgents, async ({ user, params, request }) => {
-    const assets = await workspaces.getAssetSnapshot(user, collaborationWorkspaceId(params));
-    const { defaultAgentName, agents } = createSafeConfigView(options.config, assets, {
-      requestedLocale: resolveRequestLocale(options, request)
-    });
-    return { defaultAgentName, agents };
-  });
+  route(
+    apiOperations.listCollaborationWorkspaceAgents,
+    async ({ user, params, request, query }) => {
+      const assets = await workspaces.getAssetSnapshot(user, collaborationWorkspaceId(params));
+      const { defaultAgentName, agents } = createSafeConfigView(options.config, assets, {
+        requestedLocale: resolveRequestLocale(options, request)
+      });
+      return {
+        defaultAgentName,
+        ...paginate(
+          agents,
+          query,
+          ["name"],
+          false,
+          pageScope(apiOperations.listCollaborationWorkspaceAgents.id, params, query)
+        )
+      };
+    }
+  );
 
   route(apiOperations.updateCollaborationWorkspace, async ({ user, context, params, body }) => {
     return workspaces.updateSettings(user, context, collaborationWorkspaceId(params), body);

@@ -1,3 +1,4 @@
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import { randomUUID } from "node:crypto";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test, type Locator, type Page } from "@playwright/test";
@@ -1440,11 +1441,11 @@ test("stop generating cancels the active stream instead of only hiding the butto
   );
 
   const conversationId = currentConversationId(page);
-  const messages = await page.request.get(
-    `${apiBaseUrl}/api/conversations/${conversationId}/messages`
+  const persistedMessages = await readPagedList(
+    page,
+    `/api/conversations/${conversationId}/messages`,
+    apiOperations.listConversationMessages.response.schema
   );
-  expect(messages.ok()).toBe(true);
-  const persistedMessages = (await messages.json()) as Array<{ role: string; text: string }>;
   const persistedAssistantText = persistedMessages
     .filter((message) => message.role === "assistant")
     .map((message) => message.text)
@@ -2495,9 +2496,11 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`, { data: {} });
   await page.context().clearCookies();
   await signInViaApi(page, superadminUser);
-  const usersResponse = await page.request.get(`${apiBaseUrl}/api/superadmin/users`);
-  expect(usersResponse.ok()).toBe(true);
-  const administeredUsers = (await usersResponse.json()) as Array<{ id: string; email?: string }>;
+  const administeredUsers = await readPagedList(
+    page,
+    "/api/superadmin/users",
+    apiOperations.listAdministeredUsers.response.schema
+  );
   const target = administeredUsers.find((candidate) => candidate.email === normalUser.email);
   expect(target).toBeDefined();
   const restored = await requestWithOrigin(
@@ -2599,9 +2602,11 @@ test("superadmin deletes a user from the users panel", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
   await expect(page.getByText(createdUser.displayLabel, { exact: true })).toHaveCount(0);
 
-  const usersResponse = await page.request.get(`${apiBaseUrl}/api/superadmin/users`);
-  expect(usersResponse.ok()).toBe(true);
-  const users = (await usersResponse.json()) as Array<{ email?: string }>;
+  const users = await readPagedList(
+    page,
+    "/api/superadmin/users",
+    apiOperations.listAdministeredUsers.response.schema
+  );
   expect(users.some((user) => user.email === createdUser.email)).toBe(false);
 });
 
@@ -2799,13 +2804,16 @@ async function serveAgentSettings(
         return;
       }
       const response = await route.fetch();
-      const body: { ui?: object; agents?: unknown[] } = await response.json();
+      const body: { ui?: object; agents?: unknown[]; items?: unknown[] } = await response.json();
       await route.fulfill({
         response,
         json: {
           ...body,
           ...(body.ui ? { ui: { ...body.ui, ...ui } } : {}),
-          ...(singleAgent && body.agents ? { agents: body.agents.slice(0, 1) } : {})
+          ...(singleAgent && body.agents ? { agents: body.agents.slice(0, 1) } : {}),
+          ...(singleAgent && body.items
+            ? { items: body.items.slice(0, 1), nextCursor: undefined }
+            : {})
         }
       });
     }
@@ -2919,4 +2927,24 @@ async function expectDocumentScrollLocked(page: Page): Promise<void> {
     };
   });
   expect(dimensions.scrollHeight).toBeLessThanOrEqual(dimensions.clientHeight + 1);
+}
+
+async function readPagedList<Item>(
+  page: Page,
+  path: string,
+  schema: z.ZodType<{ items: Item[]; nextCursor?: string }>
+): Promise<Item[]> {
+  const items: Item[] = [];
+  let cursor: string | undefined;
+  do {
+    const url = new URL(path, apiBaseUrl);
+    url.searchParams.set("limit", "200");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const response = await page.request.get(url.toString());
+    expect(response.ok()).toBe(true);
+    const result = schema.parse(await response.json());
+    items.push(...result.items);
+    cursor = result.nextCursor;
+  } while (cursor);
+  return items;
 }

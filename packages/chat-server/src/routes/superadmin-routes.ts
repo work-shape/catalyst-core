@@ -23,8 +23,8 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     });
   });
 
-  route(apiOperations.listAdministeredUsers, async ({ user, context }) => {
-    return userAdministration.listUsers(user, context);
+  route(apiOperations.listAdministeredUsers, async ({ user, context, paging }) => {
+    return userAdministration.listUsers(user, context, paging);
   });
 
   route(apiOperations.createAdministeredUser, async ({ user, context, body }) => {

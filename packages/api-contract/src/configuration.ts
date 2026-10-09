@@ -1,3 +1,4 @@
+import { timestampSchema } from "./shared";
 import { z } from "zod";
 import { auditActorSchema } from "./identity";
 
@@ -169,7 +170,8 @@ export const safeConfigSchema = z.object({
 
 export const collaborationWorkspaceAgentsSchema = z.object({
   defaultAgentName: z.string().optional(),
-  agents: safeConfigSchema.shape.agents
+  items: safeConfigSchema.shape.agents,
+  nextCursor: z.string().optional()
 });
 
 export const usageSafeguardsSchema = safeConfigSchema.shape.usage.shape.safeguards;
@@ -191,14 +193,15 @@ export const setConfigAgentAvailabilityRequestSchema = z.object({
 
 export const administeredCollaborationWorkspaceSchema = z.object({
   id: z.string(),
-  name: z.string()
+  name: z.string(),
+  createdAt: timestampSchema
 });
 
 export const configAssetSummarySchema = z.object({
   kind: configAssetKindSchema,
   name: z.string(),
   revision: z.number().int().positive(),
-  updatedAt: z.string(),
+  updatedAt: timestampSchema,
   // Agents only. An agent without availability is hidden in every workspace.
   availability: agentAvailabilitySchema.optional()
 });
@@ -212,7 +215,7 @@ export const configAssetSchema = z.object({
   name: z.string(),
   revision: z.number().int().positive(),
   config: configAssetConfigSchema,
-  updatedAt: z.string()
+  updatedAt: timestampSchema
 });
 
 export const configAssetRevisionSchema = z.object({
@@ -224,7 +227,7 @@ export const configAssetRevisionSchema = z.object({
     .object({ kind: z.literal("approval_request"), requestId: z.string(), summary: z.string() })
     .optional(),
   globalVersion: z.number().int().positive(),
-  createdAt: z.string()
+  createdAt: timestampSchema
 });
 
 export const configAssetsOverviewSchema = z.object({

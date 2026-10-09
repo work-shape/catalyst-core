@@ -1,3 +1,4 @@
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import {
   type TestInstance as TestServer,
   fetchTestOperation,
@@ -240,9 +241,9 @@ describe("client instance app vertical slice", () => {
       params: { conversationId: conversation.id }
     });
     expect(messages.status).toBe(200);
-    const userMessages = ((await messages.json()) as Array<{ role: string; text: string }>).filter(
-      (message) => message.role === "user"
-    );
+    const userMessages = apiOperations.listConversationMessages.response.schema
+      .parse(await messages.json())
+      .items.filter((message) => message.role === "user");
     expect(userMessages).toEqual([
       expect.objectContaining({
         text: "start through public run API"
@@ -320,20 +321,9 @@ describe("client instance app vertical slice", () => {
       { params: { conversationId: conversation.id } }
     );
     expect(afterDifferentKeyMessages.status).toBe(200);
-    const afterDifferentKeyUserMessages = (
-      (await afterDifferentKeyMessages.json()) as Array<{
-        id: string;
-        role: string;
-        text: string;
-        metadata?: {
-          agentRuntime?: {
-            attachmentManifest?: {
-              attachments?: Array<{ attachmentId?: string }>;
-            };
-          };
-        };
-      }>
-    ).filter((message) => message.role === "user");
+    const afterDifferentKeyUserMessages = apiOperations.listConversationMessages.response.schema
+      .parse(await afterDifferentKeyMessages.json())
+      .items.filter((message) => message.role === "user");
     const racedMessages = afterDifferentKeyUserMessages.filter((message) =>
       ["different key start accepted", "different key start rejected"].includes(message.text)
     );
@@ -343,13 +333,15 @@ describe("client instance app vertical slice", () => {
         text: acceptedDifferentKeyStart.userMessage.text
       })
     ]);
-    expect(
-      racedMessages[0]?.metadata?.agentRuntime?.attachmentManifest?.attachments
-    ).toContainEqual(
-      expect.objectContaining({
-        attachmentId: uploadedBody.attachment.id
-      })
-    );
+    expect(racedMessages[0]?.metadata).toMatchObject({
+      agentRuntime: {
+        attachmentManifest: {
+          attachments: expect.arrayContaining([
+            expect.objectContaining({ attachmentId: uploadedBody.attachment.id })
+          ])
+        }
+      }
+    });
 
     const firstCreateAndStart = await fetchTestOperation(baseUrl, "createConversationRun", {
       ...{
@@ -542,7 +534,7 @@ describe("client instance app vertical slice", () => {
     ).toBe(true);
     const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
-    expect(audit.json()).not.toContainEqual(
+    expect(audit.json().items).not.toContainEqual(
       expect.objectContaining({
         type: "message.cancelled",
         metadata: expect.objectContaining({
@@ -632,13 +624,9 @@ describe("client instance app vertical slice", () => {
       params: { conversationId: conversation.id }
     });
     expect(messages.status).toBe(200);
-    const assistantMessages = (
-      (await messages.json()) as Array<{
-        role: string;
-        text: string;
-        metadata?: { agentRuntime?: Record<string, unknown> };
-      }>
-    ).filter((message) => message.role === "assistant");
+    const assistantMessages = apiOperations.listConversationMessages.response.schema
+      .parse(await messages.json())
+      .items.filter((message) => message.role === "assistant");
     expect(assistantMessages).toHaveLength(1);
     expect(assistantMessages[0]).toMatchObject({
       text: streamedPrefix,
@@ -730,7 +718,8 @@ describe("client instance app vertical slice", () => {
       params: { conversationId: conversation.id }
     });
     expect(messages.statusCode).toBe(200);
-    const persistedMessages = messages.json() as Array<{ role: string; text: string }>;
+    const persistedMessages = messages.json<{ items: Array<{ role: string; text: string }> }>()
+      .items;
     const userMessages = persistedMessages.filter((message) => message.role === "user");
     expect(userMessages).toHaveLength(1);
     expect(userMessages[0]?.text).toBe(activePrompt);
@@ -745,7 +734,7 @@ describe("client instance app vertical slice", () => {
       params: { conversationId: conversation.id }
     });
     expect(drafts.statusCode).toBe(200);
-    expect(drafts.json()).toContainEqual(
+    expect(drafts.json().items).toContainEqual(
       expect.objectContaining({
         id: uploadedBody.attachment.id,
         status: "ready"
@@ -754,12 +743,12 @@ describe("client instance app vertical slice", () => {
 
     const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
-    const messageCreatedEvents = (
-      audit.json() as Array<{ type: string; metadata?: { conversationId?: string } }>
-    ).filter(
-      (event) =>
-        event.type === "message.created" && event.metadata?.conversationId === conversation.id
-    );
+    const messageCreatedEvents = audit
+      .json<{ items: Array<{ type: string; metadata?: { conversationId?: string } }> }>()
+      .items.filter(
+        (event) =>
+          event.type === "message.created" && event.metadata?.conversationId === conversation.id
+      );
     expect(messageCreatedEvents).toHaveLength(1);
 
     await app.close();
@@ -820,7 +809,9 @@ describe("client instance app vertical slice", () => {
         params: { conversationId: conversation.id }
       });
       expect(messages.status).toBe(200);
-      const persistedMessages = (await messages.json()) as Array<{ role: string; text: string }>;
+      const persistedMessages = apiOperations.listConversationMessages.response.schema.parse(
+        await messages.json()
+      ).items;
       const assistantText = persistedMessages
         .filter((message) => message.role === "assistant")
         .map((message) => message.text)
@@ -872,7 +863,7 @@ describe("client instance app vertical slice", () => {
 
     const audit = await app.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
-    expect(audit.json()).toContainEqual(
+    expect(audit.json().items).toContainEqual(
       expect.objectContaining({
         type: "message.failed",
         metadata: expect.objectContaining({
@@ -893,7 +884,9 @@ async function waitForAuditEvents(
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const audit = await server.call("listAuditEvents", {});
     expect(audit.statusCode).toBe(200);
-    const events = audit.json() as Array<{ type: string; metadata?: Record<string, unknown> }>;
+    const events = audit.json<{
+      items: Array<{ type: string; metadata?: Record<string, unknown> }>;
+    }>().items;
     if (events.some((event) => event.type === type)) {
       return events;
     }
@@ -923,7 +916,7 @@ describe("agent availability per Collaboration Workspace", () => {
       const messages = await app.call("listConversationMessages", {
         params: { conversationId: shared }
       });
-      expect(messages.json()).toEqual([]);
+      expect(messages.json().items).toEqual([]);
       const allowed = await fixture.startRun(shared, "shared_only");
       expect(allowed.statusCode).toBe(200);
       expect(allowed.json()).toMatchObject({ run: { agentName: "shared_only" } });
@@ -943,7 +936,7 @@ describe("agent availability per Collaboration Workspace", () => {
         await app.call("listConversations", {
           query: { collaborationWorkspaceId: personalWorkspaceId }
         })
-      ).json() as unknown[];
+      ).json<{ items: unknown[] }>().items;
       const createRejected = await app.call("createConversationRun", {
         payload: {
           agentName: "shared_only",
@@ -958,7 +951,7 @@ describe("agent availability per Collaboration Workspace", () => {
           await app.call("listConversations", {
             query: { collaborationWorkspaceId: personalWorkspaceId }
           })
-        ).json()
+        ).json().items
       ).toHaveLength(personalBefore.length);
       const createAllowed = await app.call("createConversationRun", {
         payload: {
@@ -1045,9 +1038,9 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(shared.statusCode).toBe(200);
       expect(shared.json()).toMatchObject({
         defaultAgentName: "test_agent",
-        agents: [{ name: "shared_only" }, { name: "test_agent", displayName: "Test Agent" }]
+        items: [{ name: "shared_only" }, { name: "test_agent", displayName: "Test Agent" }]
       });
-      expect(Object.keys((shared.json() as { agents: object[] }).agents[0]!).sort()).toEqual([
+      expect(Object.keys((shared.json() as { items: object[] }).items[0]!).sort()).toEqual([
         "displayName",
         "initialPrompts",
         "name",
@@ -1058,7 +1051,7 @@ describe("agent availability per Collaboration Workspace", () => {
         params: { collaborationWorkspaceId: personalWorkspaceId }
       });
       expect(
-        (personal.json() as { agents: Array<{ name: string }> }).agents.map((agent) => agent.name)
+        (personal.json() as { items: Array<{ name: string }> }).items.map((agent) => agent.name)
       ).toEqual(["personal_only", "test_agent"]);
 
       // The instance-wide list is the caller's Personal Workspace view.
@@ -1122,10 +1115,13 @@ async function createAvailabilityFixture() {
   const created = await app.call("createCollaborationWorkspace", { payload: { name: "KAI" } });
   expect(created.statusCode).toBe(200);
   const sharedWorkspaceId = (created.json() as { id: string }).id;
-  const workspaces = (await app.call("listCollaborationWorkspaces", {})).json() as Array<{
-    id: string;
-    kind: string;
-  }>;
+  expect((await app.call("ensurePersonalCollaborationWorkspace", {})).statusCode).toBe(200);
+  const workspaces = (await app.call("listCollaborationWorkspaces", {})).json<{
+    items: Array<{
+      id: string;
+      kind: string;
+    }>;
+  }>().items;
   const personalWorkspaceId = workspaces.find((workspace) => workspace.kind === "personal")!.id;
 
   const setAvailability = (agentName: string, availability: AgentAvailability) =>

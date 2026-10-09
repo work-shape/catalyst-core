@@ -1,3 +1,4 @@
+import type { StorePage } from "@vivd-catalyst/core";
 import { randomBytes } from "node:crypto";
 import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
@@ -69,10 +70,16 @@ interface ResetUserPasswordCommand {
 export class UserAdministrationWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
 
-  async listUsers(user: AuthenticatedUser, context: RuntimeCallContext): Promise<UserRecord[]> {
+  async listUsers(
+    user: AuthenticatedUser,
+    context: RuntimeCallContext,
+    page?: StorePage
+  ): Promise<UserRecord[]> {
     await this.recordAccess(user, context, "governance.users_viewed");
     const users = await this.options.stores.users.listUsers({
-      clientInstanceId: this.options.clientInstanceId
+      clientInstanceId: this.options.clientInstanceId,
+      page,
+      excludeSuperadmins: !this.isSuperadmin(user)
     });
     if (this.isSuperadmin(user)) {
       return users;

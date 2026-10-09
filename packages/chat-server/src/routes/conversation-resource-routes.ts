@@ -12,11 +12,13 @@ export function registerConversationResourceRoutes(route: Route, options: ChatSe
   route(apiOperations.listConversationResources, async ({ user, params }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
-    return listConversationResources({
-      store: options.stores,
-      clientInstanceId: options.clientInstanceId,
-      conversationId
-    });
+    return (
+      await listConversationResources({
+        store: options.stores,
+        clientInstanceId: options.clientInstanceId,
+        conversationId
+      })
+    ).items;
   });
 
   route(apiOperations.getStructuredDataResource, async ({ user, params }) => {

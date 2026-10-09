@@ -7,6 +7,9 @@ import {
 import * as generatedSdk from "./generated/sdk.gen";
 import type { ApiClientTransport, OperationRequestInput } from "./transport";
 
+/** As many audit entries as the audit screens show. */
+const AUDIT_PAGE_SIZE = 100;
+
 export function createInstanceClients(transport: ApiClientTransport) {
   return {
     authentication: {
@@ -104,16 +107,25 @@ export function createInstanceClients(transport: ApiClientTransport) {
         )
     },
     governance: {
-      listAuditEvents: () =>
-        transport.unwrapJson(
-          generatedSdk.listAuditEvents({ client: transport.generatedClient }),
-          apiOperations.listAuditEvents.response.schema
-        ),
-      listAuditActivities: () =>
-        transport.unwrapJson(
-          generatedSdk.listAuditActivities({ client: transport.generatedClient }),
-          apiOperations.listAuditActivities.response.schema
-        ),
+      // The audit screens show the latest entries. One call is one request, because the server
+      // records every call as a view of the audit log. The activity list is not paged at all.
+      listAuditEvents: async () =>
+        (
+          await transport.unwrapJson(
+            generatedSdk.listAuditEvents({
+              client: transport.generatedClient,
+              query: { limit: AUDIT_PAGE_SIZE }
+            }),
+            apiOperations.listAuditEvents.response.schema
+          )
+        ).items,
+      listAuditActivities: async () =>
+        (
+          await transport.unwrapJson(
+            generatedSdk.listAuditActivities({ client: transport.generatedClient }),
+            apiOperations.listAuditActivities.response.schema
+          )
+        ).items,
       getUsageSummary: () =>
         transport.unwrapJson(
           generatedSdk.getUsageSummary({ client: transport.generatedClient }),
@@ -189,18 +201,22 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
         apiOperations.setConfigAgentAvailability.response.schema
       ),
     listAdministeredWorkspaces: () =>
-      transport.unwrapJson(
-        generatedSdk.listAdministeredCollaborationWorkspaces({
-          client: transport.generatedClient
-        }),
+      transport.unwrapList(
+        (paging) =>
+          generatedSdk.listAdministeredCollaborationWorkspaces({
+            client: transport.generatedClient,
+            query: paging
+          }),
         apiOperations.listAdministeredCollaborationWorkspaces.response.schema
       ),
     listRevisions: (kind: ConfigAssetKind, name: string) =>
-      transport.unwrapJson(
-        generatedSdk.listConfigAssetRevisions({
-          client: transport.generatedClient,
-          path: { kind, name }
-        }),
+      transport.unwrapList(
+        (paging) =>
+          generatedSdk.listConfigAssetRevisions({
+            client: transport.generatedClient,
+            path: { kind, name },
+            query: paging
+          }),
         apiOperations.listConfigAssetRevisions.response.schema
       ),
     revert: (
@@ -243,8 +259,9 @@ function createConfigAssetsClient(transport: ApiClientTransport) {
 function createApiAccessClient(transport: ApiClientTransport) {
   return {
     listServicePrincipals: () =>
-      transport.unwrapJson(
-        generatedSdk.listServicePrincipals({ client: transport.generatedClient }),
+      transport.unwrapList(
+        (paging) =>
+          generatedSdk.listServicePrincipals({ client: transport.generatedClient, query: paging }),
         apiOperations.listServicePrincipals.response.schema
       ),
     createServicePrincipal: (
@@ -295,8 +312,9 @@ function createApiAccessClient(transport: ApiClientTransport) {
 function createUsersClient(transport: ApiClientTransport) {
   return {
     list: () =>
-      transport.unwrapJson(
-        generatedSdk.listAdministeredUsers({ client: transport.generatedClient }),
+      transport.unwrapList(
+        (paging) =>
+          generatedSdk.listAdministeredUsers({ client: transport.generatedClient, query: paging }),
         apiOperations.listAdministeredUsers.response.schema
       ),
     create: (input: OperationRequestInput<typeof apiOperations.createAdministeredUser>) =>
@@ -378,8 +396,12 @@ function createApprovalRequestsClient(transport: ApiClientTransport) {
         apiOperations.getApprovalRequest.response.schema
       ),
     list: (status?: ApprovalRequestStatus) =>
-      transport.unwrapJson(
-        generatedSdk.listApprovalRequests({ client: transport.generatedClient, query: { status } }),
+      transport.unwrapList(
+        (paging) =>
+          generatedSdk.listApprovalRequests({
+            client: transport.generatedClient,
+            query: { status, ...paging }
+          }),
         apiOperations.listApprovalRequests.response.schema
       ),
     pendingCount: () =>

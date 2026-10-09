@@ -125,7 +125,7 @@ export function workspaceScopedConfigFor(input: {
     return {
       config: {
         ...config,
-        agents: input.workspaceAgents.agents,
+        agents: input.workspaceAgents.items,
         defaultAgentName: input.workspaceAgents.defaultAgentName
       },
       agentsLoading: false,

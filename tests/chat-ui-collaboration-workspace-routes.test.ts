@@ -14,6 +14,7 @@ import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/cha
 import {
   PERSONAL_DEFAULT_CONVERSATION_LIST,
   conversationListCacheKey,
+  listCollaborationWorkspacesWithPersonal,
   workspaceConversationsQueryOptions
 } from "../packages/chat-ui/src/api/workspace-queries";
 import { workspaceQueryKeys } from "../packages/chat-ui/src/api/workspace-query-keys";
@@ -217,6 +218,37 @@ describe("conversation list cache targeting", () => {
     expect(
       conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_personal"), false)
     ).toEqual(options.queryKey);
+  });
+});
+
+describe("personal workspace on the workspace list", () => {
+  const client = (kinds: string[][]) => {
+    const calls: string[] = [];
+    const pages = [...kinds];
+    return {
+      calls,
+      list: async () => {
+        calls.push("list");
+        return (pages.shift() ?? []).map((kind) => ({ kind }));
+      },
+      ensurePersonal: async () => {
+        calls.push("ensurePersonal");
+      }
+    };
+  };
+
+  it("only reads when the list already has the Personal Workspace", async () => {
+    const api = client([["personal", "shared"]]);
+    const listed = await listCollaborationWorkspacesWithPersonal(api);
+    expect(listed).toEqual([{ kind: "personal" }, { kind: "shared" }]);
+    expect(api.calls).toEqual(["list"]);
+  });
+
+  it("creates the Personal Workspace once when the list has none, then reads again", async () => {
+    const api = client([["shared"], ["personal", "shared"]]);
+    const listed = await listCollaborationWorkspacesWithPersonal(api);
+    expect(listed).toEqual([{ kind: "personal" }, { kind: "shared" }]);
+    expect(api.calls).toEqual(["list", "ensurePersonal", "list"]);
   });
 });
 

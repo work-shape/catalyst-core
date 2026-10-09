@@ -1,3 +1,4 @@
+import { timestampSchema } from "./shared";
 import { z } from "zod";
 import { usageSafeguardsSchema } from "./configuration";
 import { auditActorSchema } from "./identity";
@@ -11,7 +12,7 @@ export const auditEventSchema = z.object({
   subject: z.string().optional(),
   reason: z.string().optional(),
   correlationId: z.string(),
-  createdAt: z.string(),
+  createdAt: timestampSchema,
   metadata: z.record(z.string(), z.unknown()).optional()
 });
 
@@ -30,7 +31,7 @@ export const auditActivityTargetSchema = z.object({
 
 export const auditActivitySchema = z.object({
   correlationId: z.string(),
-  at: z.string(),
+  at: timestampSchema,
   label: z.string(),
   tier: z.enum(["governance", "workflow", "runtime", "telemetry"]),
   outcome: z.enum(["success", "failed", "denied", "warning"]),
@@ -58,12 +59,12 @@ export const modelUsageVolumeEventSchema = z.object({
   billedAsFast: z.boolean(),
   source: z.enum(["provider_reported", "not_reported", "estimated"]),
   correlationId: z.string(),
-  createdAt: z.string()
+  createdAt: timestampSchema
 });
 
 export const modelUsageVolumeWindowSummarySchema = z.object({
-  start: z.string().optional(),
-  end: z.string().optional(),
+  start: timestampSchema.optional(),
+  end: timestampSchema.optional(),
   modelCallCount: z.number(),
   inputTokens: z.number(),
   cachedInputTokens: z.number(),
@@ -114,7 +115,7 @@ export const usageSpendBudgetSchema = z.object({
 });
 
 export const usageSummarySchema = z.object({
-  generatedAt: z.string(),
+  generatedAt: timestampSchema,
   spendBudget: usageSpendBudgetSchema,
   safeguards: usageSafeguardsSchema,
   today: modelUsageWindowSummarySchema,

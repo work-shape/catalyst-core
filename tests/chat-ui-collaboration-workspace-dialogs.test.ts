@@ -407,8 +407,18 @@ describe("collaboration workspace settings tabs", () => {
 
   describe("member candidate suggestions", () => {
     const candidates: WorkspaceMemberCandidate[] = [
-      { displayLabel: "Mara Ruiz", email: "mara@example.com", hasPendingAccessRequest: false },
-      { displayLabel: "Jonas Weber", email: "jonas@example.com", hasPendingAccessRequest: true }
+      {
+        userId: "user_mara",
+        displayLabel: "Mara Ruiz",
+        email: "mara@example.com",
+        hasPendingAccessRequest: false
+      },
+      {
+        userId: "user_jonas",
+        displayLabel: "Jonas Weber",
+        email: "jonas@example.com",
+        hasPendingAccessRequest: true
+      }
     ];
 
     it("renders each candidate as an option with the email as secondary text", () => {
@@ -849,7 +859,8 @@ describe("browse collaboration workspaces dialog", () => {
       description: "Kurzbeschreibung",
       emoji: null,
       accentColor: "teal",
-      accessState: "can_request"
+      accessState: "can_request",
+      createdAt: "2026-06-27T00:00:00.000Z"
     },
     {
       id: "cw_pending",
@@ -857,7 +868,8 @@ describe("browse collaboration workspaces dialog", () => {
       description: null,
       emoji: null,
       accentColor: null,
-      accessState: "request_pending"
+      accessState: "request_pending",
+      createdAt: "2026-06-27T00:00:00.000Z"
     },
     {
       id: "cw_member",
@@ -865,7 +877,8 @@ describe("browse collaboration workspaces dialog", () => {
       description: null,
       emoji: "📈",
       accentColor: "amber",
-      accessState: "member"
+      accessState: "member",
+      createdAt: "2026-06-27T00:00:00.000Z"
     }
   ];
 
@@ -1130,7 +1143,8 @@ describe("collaboration workspace dialog chrome", () => {
               description: null,
               emoji: null,
               accentColor: null,
-              accessState: "can_request"
+              accessState: "can_request",
+              createdAt: "2026-06-27T00:00:00.000Z"
             }
           ],
           loading: false,
@@ -1167,6 +1181,7 @@ describe("collaboration workspace dialog chrome", () => {
       createElement(CollaborationWorkspaceMemberCandidateList, {
         candidates: [
           {
+            userId: "user_neu",
             email: "neu@example.com",
             displayLabel: "Neue Person",
             hasPendingAccessRequest: false

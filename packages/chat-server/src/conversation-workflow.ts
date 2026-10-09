@@ -1,3 +1,4 @@
+import type { StorePage } from "@vivd-catalyst/core";
 import { auditActorFromUser, projectAgentRun } from "@vivd-catalyst/core";
 import {
   AppError,
@@ -52,13 +53,7 @@ import {
   isTemporaryConversationTitle,
   normalizeGeneratedConversationTitle
 } from "./conversation-title";
-import {
-  isActiveRun,
-  isMissingLocalRuntimeState,
-  recoverInterruptedRun,
-  recoverStaleRun,
-  recoveryEventFromObservation
-} from "./run-recovery";
+import { isActiveRun, isMissingLocalRuntimeState, recoverInterruptedRun } from "./run-recovery";
 import type { ChatServerOptions } from "./types";
 
 export interface CreateConversationCommand {
@@ -166,19 +161,25 @@ export class ConversationWorkflow {
 
   async listConversations(
     collaborationWorkspaceId: CollaborationWorkspaceId | undefined,
-    user: AuthenticatedUser
+    user: AuthenticatedUser,
+    page?: StorePage
   ): Promise<ConversationListItem[]> {
-    collaborationWorkspaceId ??= (
-      await this.options.stores.workspaces.ensurePersonalWorkspace({
-        clientInstanceId: this.options.clientInstanceId,
-        userId: asUserId(getSubjectUserId(user))
-      })
-    ).id;
+    if (!collaborationWorkspaceId) {
+      const personal = (
+        await this.options.stores.workspaces.listWorkspacesForUser({
+          clientInstanceId: this.options.clientInstanceId,
+          userId: asUserId(getSubjectUserId(user))
+        })
+      ).find((workspace) => workspace.kind === "personal");
+      if (!personal) return [];
+      collaborationWorkspaceId = personal.id;
+    }
     await this.workspaces.requireWorkspaceAccess(user, collaborationWorkspaceId);
     const conversations = await this.options.stores.conversations.listConversationsForWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
-      scope: { kind: "viewer", userId: getSubjectUserId(user) }
+      scope: { kind: "viewer", userId: getSubjectUserId(user) },
+      page
     });
     return Promise.all(
       conversations.map(async (conversation): Promise<ConversationListItem> => {
@@ -186,8 +187,7 @@ export class ConversationWorkflow {
           clientInstanceId: this.options.clientInstanceId,
           conversationId: conversation.id
         });
-        const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
-        const runForList = recovered?.run ?? activeRun;
+        const runForList = activeRun;
         return {
           ...conversation,
           ...(runForList && isActiveRun(runForList)
@@ -256,7 +256,6 @@ export class ConversationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
-    const recovered = activeRun ? await recoverStaleRun(this.options, activeRun) : undefined;
     const latestRun = activeRun
       ? undefined
       : await this.options.stores.agentRuns.getLatestConversationAgentRun({
@@ -265,7 +264,7 @@ export class ConversationWorkflow {
         });
     const latestVisibleTerminalRun =
       latestRun?.status === "failed" || latestRun?.status === "cancelled" ? latestRun : undefined;
-    const runForSnapshot = recovered?.run ?? activeRun ?? latestVisibleTerminalRun;
+    const runForSnapshot = activeRun ?? latestVisibleTerminalRun;
     const latestRunOfAnyStatus = activeRun ?? latestRun;
     const serverTime = new Date().toISOString();
     const completedRunProjections = await this.createCompletedRunProjections(
@@ -681,17 +680,7 @@ export class ConversationWorkflow {
       });
     } catch (error) {
       if (isMissingLocalRuntimeState(error)) {
-        const staleRun =
-          (await this.options.stores.agentRuns.getAgentRun({
-            clientInstanceId: this.options.clientInstanceId,
-            runId
-          })) ?? latestRun;
-        const recovered = await recoverInterruptedRun(this.options, staleRun);
-        const recoveryEvent = recoveryEventFromObservation(recovered?.observation);
-        if (recoveryEvent && recoveryEvent.sequence > lastSequence) {
-          yield recoveryEvent;
-        }
-        if (recovered || observations.length > 0) {
+        if (observations.length > 0) {
           return;
         }
       }

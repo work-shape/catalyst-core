@@ -1103,14 +1103,14 @@ async function createRunnerHarness(
     permissions: []
   });
   const ownerUserId = owner.id;
-  const [personalWorkspace] = await store.workspaces.listWorkspacesForUser({
+  const personalWorkspace = await store.workspaces.ensurePersonalWorkspace({
     clientInstanceId,
     userId: asUserId(owner.id)
   });
   const conversation = await store.conversations.createConversation({
     visibility: "workspace",
     clientInstanceId,
-    collaborationWorkspaceId: personalWorkspace!.id,
+    collaborationWorkspaceId: personalWorkspace.id,
     createdByUserId: ownerUserId,
     createdByExternalUserId: ownerUserId,
     title: "Workspace runner test",

@@ -1,6 +1,6 @@
-import { z } from "zod";
+import { listQuerySchema } from "../shared";
 import { capturedMailSchema, healthSchema } from "../system";
-import { defineOperation, json } from "./define-operation";
+import { defineOperation, json, page } from "./define-operation";
 
 export const systemOperations = {
   getHealth: defineOperation({
@@ -23,7 +23,8 @@ export const systemOperations = {
     tag: "System",
     auth: "public",
     effect: "reading",
-    response: json(z.array(capturedMailSchema)),
+    query: listQuerySchema,
+    response: page(capturedMailSchema, ["sentAt", "id"], true),
     errors: [],
     rateClass: "read",
     devOnly: true

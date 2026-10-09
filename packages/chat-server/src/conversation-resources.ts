@@ -50,7 +50,7 @@ export async function listConversationResources(input: {
     ...structuredDataResources(structuredData)
   ];
   resources.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  return { resources };
+  return { items: resources };
 }
 
 function structuredDataResources(

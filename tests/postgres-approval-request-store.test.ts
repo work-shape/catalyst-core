@@ -182,19 +182,26 @@ describePostgres("Postgres approval request store", () => {
         payload: {},
         requestedBy: { id: "requester", displayLabel: "Requester" }
       });
-      const newest = queued
-        .sort(
-          (left, right) =>
-            right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id)
-        )
-        .slice(0, 200);
-      expect(
-        await store.approvals.listApprovalRequests({
+      const newestFirst = queued.sort(
+        (left, right) =>
+          right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id)
+      );
+      const list = (page: { limit: number; after?: [string, string] }) =>
+        store.approvals.listApprovalRequests({
           clientInstanceId,
           kinds: ["fake"],
-          status: "pending"
-        })
-      ).toEqual(newest);
+          status: "pending",
+          page
+        });
+      // The store returns the page it is asked for and resumes below the last row of it.
+      const firstPage = await list({ limit: 200 });
+      expect(firstPage).toEqual(newestFirst.slice(0, 200));
+      const anchor = firstPage[199];
+      expect(anchor).toBeDefined();
+      if (!anchor) return;
+      expect(await list({ limit: 200, after: [anchor.createdAt, anchor.id] })).toEqual(
+        newestFirst.slice(200)
+      );
       expect(
         await store.approvals.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })
       ).toBe(205);

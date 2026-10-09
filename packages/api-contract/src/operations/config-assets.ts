@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { listQuerySchema } from "../shared";
 import {
   administeredCollaborationWorkspaceSchema,
   agentAvailabilitySchema,
@@ -18,7 +18,7 @@ import {
   setDefaultConfigAgentRequestSchema,
   validateConfigAssetsResponseSchema
 } from "../configuration";
-import { defineOperation, json } from "./define-operation";
+import { defineOperation, json, page } from "./define-operation";
 
 export const configAssetOperations = {
   getConfigAssetsOverview: defineOperation({
@@ -119,7 +119,8 @@ export const configAssetOperations = {
     scope: "config_assets:write",
     requires: ["agent.write"],
     effect: "reading",
-    response: json(z.array(administeredCollaborationWorkspaceSchema)),
+    query: listQuerySchema,
+    response: page(administeredCollaborationWorkspaceSchema, ["createdAt", "id"], false),
     errors: [],
     rateClass: "read"
   }),
@@ -133,7 +134,8 @@ export const configAssetOperations = {
     scope: "config_assets:read",
     requires: [],
     effect: "reading",
-    response: json(z.array(configAssetRevisionSchema)),
+    query: listQuerySchema,
+    response: page(configAssetRevisionSchema, ["revision"], false),
     errors: [],
     rateClass: "read"
   }),

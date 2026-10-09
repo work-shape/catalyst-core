@@ -1,12 +1,42 @@
+import { listQuerySchema } from "../shared";
 import { z } from "zod";
 import {
   artifactPreviewResponseSchema,
   draftAttachmentSchema,
   draftAttachmentUploadResponseSchema
 } from "../conversations";
-import { blob, defineOperation, json } from "./define-operation";
+import { blob, defineOperation, json, page } from "./define-operation";
 
 export const conversationFileOperations = {
+  startConversationArtifactPreview: defineOperation({
+    id: "startConversationArtifactPreview",
+    method: "POST",
+    path: "/api/conversations/:conversationId/artifacts/:artifactId/preview",
+    summary: "Prepare the page preview of an artifact",
+    tag: "Conversation Files",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "changing",
+    response: json(artifactPreviewResponseSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  startConversationAttachmentPreview: defineOperation({
+    id: "startConversationAttachmentPreview",
+    method: "POST",
+    path: "/api/conversations/:conversationId/attachments/:attachmentId/preview",
+    summary: "Prepare the page preview of a sent attachment",
+    tag: "Conversation Files",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "changing",
+    response: json(artifactPreviewResponseSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+
   listDraftAttachments: defineOperation({
     id: "listDraftAttachments",
     method: "GET",
@@ -17,7 +47,8 @@ export const conversationFileOperations = {
     scope: "conversation:read",
     requires: [],
     effect: "reading",
-    response: json(z.array(draftAttachmentSchema)),
+    query: listQuerySchema,
+    response: page(draftAttachmentSchema, ["createdAt", "id"], false),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

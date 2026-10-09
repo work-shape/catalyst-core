@@ -116,6 +116,22 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
     return preview;
   });
 
+  route(apiOperations.startConversationArtifactPreview, async ({ user, params, reply }) => {
+    const conversationId = conversationIdParam(params);
+    await conversations.requireConversationAccess(conversationId, user);
+    const artifactId = asManagedArtifactId(artifactIdParam(params));
+    const artifactRecord = await options.stores.files.getManagedArtifact({
+      clientInstanceId: options.clientInstanceId,
+      artifactId
+    });
+    if (!artifactRecord || artifactRecord.conversationId !== conversationId) {
+      throw new AppError("NOT_FOUND", "Managed artifact is not available in this conversation");
+    }
+    const preview = await startArtifactPreviewState(options.stores.files, artifactRecord);
+    void reply.header("cache-control", "private, no-store, max-age=0");
+    return preview;
+  });
+
   route(apiOperations.getConversationAttachmentPreview, async ({ user, params, reply }) => {
     const conversationId = conversationIdParam(params);
     await conversations.requireConversationAccess(conversationId, user);
@@ -135,7 +151,38 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
       throw new AppError("VALIDATION_FAILED", "This attachment uses its native preview path");
     }
     const source = await ensureAttachmentPreviewSource(options, attachment);
-    const preview = await readArtifactPreviewState(options.stores.files, source);
+    const preview = source
+      ? await readArtifactPreviewState(options.stores.files, source)
+      : ({
+          status: "pending",
+          artifactId: attachmentPreviewSourceArtifactId(attachment)
+        } satisfies ArtifactPreviewResponse);
+
+    void reply.header("cache-control", "private, no-store, max-age=0");
+    return preview;
+  });
+
+  route(apiOperations.startConversationAttachmentPreview, async ({ user, params, reply }) => {
+    const conversationId = conversationIdParam(params);
+    await conversations.requireConversationAccess(conversationId, user);
+    const attachment = await options.stores.files.getConversationAttachment({
+      clientInstanceId: options.clientInstanceId,
+      attachmentId: asConversationAttachmentId(attachmentIdParam(params))
+    });
+    if (
+      !attachment ||
+      attachment.conversationId !== conversationId ||
+      !attachment.messageId ||
+      attachment.status === "deleted"
+    ) {
+      throw new AppError("NOT_FOUND", "Attachment is not available in this conversation");
+    }
+    if (!isOfficePagePreviewCapability(resolveFilePreviewCapability(attachment))) {
+      throw new AppError("VALIDATION_FAILED", "This attachment uses its native preview path");
+    }
+    const source = await ensureAttachmentPreviewSource(options, attachment, true);
+    if (!source) throw new AppError("INTERNAL", "Preview source was not created");
+    const preview = await startArtifactPreviewState(options.stores.files, source);
     void reply.header("cache-control", "private, no-store, max-age=0");
     return preview;
   });
@@ -184,8 +231,9 @@ function attachmentIdParam(params: { attachmentId: string }): string {
 
 async function ensureAttachmentPreviewSource(
   options: ChatServerOptions,
-  attachment: ConversationAttachment
-): Promise<ManagedArtifactRecord> {
+  attachment: ConversationAttachment,
+  create = false
+): Promise<ManagedArtifactRecord | undefined> {
   const referencedId = attachment.artifactRefs[ATTACHMENT_PREVIEW_SOURCE_ARTIFACT_REF];
   if (referencedId) {
     const referenced = await options.stores.files.getManagedArtifact({
@@ -210,9 +258,11 @@ async function ensureAttachmentPreviewSource(
     })
   ).find((artifact) => artifact.metadata.sourceAttachmentId === attachment.id);
   if (existing) {
-    await rememberAttachmentPreviewSource(options, attachment, existing);
+    if (create) await rememberAttachmentPreviewSource(options, attachment, existing);
     return existing;
   }
+
+  if (!create) return undefined;
 
   const file = await options.stores.files.getManagedFile({
     clientInstanceId: options.clientInstanceId,
@@ -307,7 +357,7 @@ async function readArtifactPreviewState(
   }
 
   if (detectArtifactPreviewSourceKind(artifact)) {
-    return queueArtifactPreview(store, artifact);
+    return { status: "pending", artifactId: artifact.id };
   }
 
   return {
@@ -315,6 +365,16 @@ async function readArtifactPreviewState(
     artifactId: artifact.id,
     errorCode: "unsupported_type"
   };
+}
+
+async function startArtifactPreviewState(
+  store: ArtifactPreviewStore,
+  artifact: ManagedArtifactRecord
+): Promise<ArtifactPreviewResponse> {
+  const current = await readArtifactPreviewState(store, artifact);
+  return current.status === "pending" && !current.queuedAt
+    ? queueArtifactPreview(store, artifact)
+    : current;
 }
 
 async function retryArtifactPreviewState(
@@ -358,7 +418,9 @@ async function retryArtifactPreviewState(
   if (errorCode) {
     return failedArtifactPreviewResponse(artifact.id, errorCode);
   }
-  return readArtifactPreviewState(store, artifact);
+  return detectArtifactPreviewSourceKind(artifact)
+    ? queueArtifactPreview(store, artifact)
+    : readArtifactPreviewState(store, artifact);
 }
 
 async function queueArtifactPreview(

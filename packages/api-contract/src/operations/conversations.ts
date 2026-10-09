@@ -1,9 +1,10 @@
+import { listQuerySchema } from "../shared";
 import { z } from "zod";
 import {
   cancelRunRequestSchema,
   cancelRunResponseSchema,
   conversationListItemSchema,
-  conversationResourceListResponseSchema,
+  conversationResourceListItemSchema,
   conversationSchema,
   conversationThreadSnapshotSchema,
   createConversationRequestSchema,
@@ -18,7 +19,7 @@ import {
   startConversationRunResponseSchema,
   structuredDataResourceResponseSchema
 } from "../conversations";
-import { defineOperation, json, sse } from "./define-operation";
+import { defineOperation, json, page, sse } from "./define-operation";
 
 export const conversationOperations = {
   listConversations: defineOperation({
@@ -31,8 +32,8 @@ export const conversationOperations = {
     scope: "conversation:read",
     requires: [],
     effect: "reading",
-    query: z.object({ collaborationWorkspaceId: z.string().optional() }),
-    response: json(z.array(conversationListItemSchema)),
+    query: listQuerySchema.extend({ collaborationWorkspaceId: z.string().optional() }),
+    response: page(conversationListItemSchema, ["updatedAt", "id"], true),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
@@ -119,7 +120,8 @@ export const conversationOperations = {
     scope: "conversation:read",
     requires: [],
     effect: "reading",
-    response: json(z.array(messageSchema)),
+    query: listQuerySchema,
+    response: page(messageSchema, ["createdAt", "id"], false),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
@@ -133,7 +135,8 @@ export const conversationOperations = {
     scope: "conversation:read",
     requires: [],
     effect: "reading",
-    response: json(conversationResourceListResponseSchema),
+    query: listQuerySchema,
+    response: page(conversationResourceListItemSchema, ["updatedAt", "resourceId"], true),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

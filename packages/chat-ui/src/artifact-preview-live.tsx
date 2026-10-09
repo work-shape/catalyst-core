@@ -196,6 +196,7 @@ export function LiveArtifactPreview({
 
   useEffect(() => {
     let cancelled = false;
+    let initialized = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const poll = (pendingAttempt: number) => {
@@ -205,9 +206,12 @@ export function LiveArtifactPreview({
         preview: current.preview,
         refreshing: true
       }));
-      void client.conversations.artifacts
-        .getPreview(conversationId, artifact.artifactId)
+      const read = !initialized
+        ? client.conversations.artifacts.startPreview(conversationId, artifact.artifactId)
+        : client.conversations.artifacts.getPreview(conversationId, artifact.artifactId);
+      void read
         .then((preview) => {
+          initialized = true;
           if (cancelled) {
             return;
           }

@@ -1,3 +1,4 @@
+import { timestampSchema } from "./shared";
 import { z } from "zod";
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
@@ -39,18 +40,18 @@ export const approvalRequestSchema = z.object({
       approved: z.boolean(),
       decidedBy: z.string(),
       decidedByLabel: z.string(),
-      decidedAt: z.string(),
+      decidedAt: timestampSchema,
       reason: z.string().optional(),
       comment: z.string().optional()
     })
     .optional(),
   reversion: z
-    .object({ revertedBy: z.string(), revertedByLabel: z.string(), revertedAt: z.string() })
+    .object({ revertedBy: z.string(), revertedByLabel: z.string(), revertedAt: timestampSchema })
     .optional(),
   checks: z.array(approvalCheckResultSchema),
   applyResult: jsonObjectSchema.optional(),
-  createdAt: z.string(),
-  updatedAt: z.string()
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
 });
 
 export const approvalRequestViewSchema = approvalRequestSchema.extend({

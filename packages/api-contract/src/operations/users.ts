@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { listQuerySchema } from "../shared";
 import {
   administeredUserSchema,
   createAdministeredUserRequestSchema,
@@ -8,7 +8,7 @@ import {
   updateAdministeredUserRequestSchema,
   upsertAdministeredUserIdentityRequestSchema
 } from "../identity";
-import { defineOperation, json } from "./define-operation";
+import { defineOperation, json, page } from "./define-operation";
 
 export const userOperations = {
   listAdministeredUsers: defineOperation({
@@ -21,7 +21,8 @@ export const userOperations = {
     scope: "user_admin:read",
     requires: ["users.manage"],
     effect: "reading",
-    response: json(z.array(administeredUserSchema)),
+    query: listQuerySchema,
+    response: page(administeredUserSchema, ["displayLabel", "id"], false),
     errors: [],
     rateClass: "read"
   }),

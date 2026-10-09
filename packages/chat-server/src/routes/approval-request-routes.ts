@@ -17,8 +17,8 @@ export function registerApprovalRequestRoutes(route: Route, options: ChatServerO
   route(apiOperations.getApprovalRequest, ({ user, context, params }) =>
     workflow.getRequest(user, context, requestId(params))
   );
-  route(apiOperations.listApprovalRequests, ({ user, context, query }) =>
-    workflow.listRequests(user, context, query)
+  route(apiOperations.listApprovalRequests, ({ user, context, query, paging }) =>
+    workflow.listRequests(user, context, { status: query.status, page: paging })
   );
   route(apiOperations.countPendingApprovalRequests, ({ user }) => workflow.pendingCount(user));
   route(apiOperations.decideApprovalRequest, ({ user, context, params, body }) =>

@@ -61,7 +61,7 @@ function createOpenApiOperation(operation: Operation) {
   };
 }
 
-// Every parameter is documented as a string until CB-5 derives the document from the schemas.
+// Query constraints include the list limit default and maximum from the sole schema.
 function createParameters(operation: Operation): { parameters: OpenApiParameter[] } {
   const parameters: OpenApiParameter[] = [
     ...operationPathParamNames(operation.path).map((name) => ({
@@ -74,7 +74,7 @@ function createParameters(operation: Operation): { parameters: OpenApiParameter[
       name,
       in: "query" as const,
       required: !schema.safeParse(undefined).success,
-      schema: { type: "string" }
+      schema: toOpenApiSchema(schema)
     }))
   ];
 

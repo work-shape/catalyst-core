@@ -1,3 +1,4 @@
+import { keysetFilter } from "./paging";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   AppError,
@@ -59,6 +60,7 @@ export async function listApprovalRequests(
       and(
         eq(approvalRequests.clientInstanceId, input.clientInstanceId),
         inArray(approvalRequests.kind, [...input.kinds]),
+        keysetFilter(input.page, [approvalRequests.createdAt, approvalRequests.id], true),
         input.status === undefined ? undefined : eq(approvalRequests.status, input.status),
         input.conversationId === undefined
           ? undefined
@@ -66,7 +68,7 @@ export async function listApprovalRequests(
       )
     )
     .orderBy(desc(approvalRequests.createdAt), desc(approvalRequests.id))
-    .limit(200);
+    .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapApprovalRequest);
 }
 

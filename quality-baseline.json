@@ -68,7 +68,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "tests",
-      "count": 183,
+      "count": 182,
       "owner": "CB-2"
     },
     {
@@ -103,14 +103,14 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unnecessary-type-assertion",
       "scope": "tests",
-      "count": 126,
+      "count": 106,
       "owner": "CB-2"
     },
     {
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "e2e",
-      "count": 10,
+      "count": 7,
       "owner": "CB-1b"
     },
     {
@@ -180,7 +180,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/postgres-store",
-      "count": 48,
+      "count": 47,
       "owner": "CB-3a"
     },
     {
@@ -201,7 +201,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 90,
+      "count": 86,
       "owner": "CB-2"
     },
     {

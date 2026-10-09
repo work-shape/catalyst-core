@@ -249,7 +249,11 @@ describe("provider error boundary", () => {
       const exposed = await app.call("testExposedError", {});
       expect(exposed.statusCode).toBe(500);
       expect(exposed.json()).toEqual({
-        error: { code: "INTERNAL", message: "A fixed user-facing failure" }
+        error: {
+          correlationId: expect.any(String),
+          code: "INTERNAL",
+          message: "Internal server error"
+        }
       });
       const created = await app.call("createConversation", { payload: { title: "hello" } });
       expect(created.statusCode).toBe(200);
@@ -260,7 +264,9 @@ describe("provider error boundary", () => {
       await drainRunEvents(app, id, started.run.id);
       await app.call("generateConversationTitle", { params: { conversationId: id } });
       const audit = await app.call("listAuditEvents", {});
-      const events = audit.json() as Array<{ type: string; metadata: Record<string, unknown> }>;
+      const events = audit.json<{
+        items: Array<{ type: string; metadata: Record<string, unknown> }>;
+      }>().items;
       const titleFailures = events.filter(
         (event) => event.type === "conversation.title_generation_failed"
       );
@@ -280,7 +286,11 @@ describe("provider error boundary", () => {
         const response = await app.call(operation);
         expect(response.statusCode).toBe(500);
         expect(response.json()).toEqual({
-          error: { code: "INTERNAL", message: "Internal server error" }
+          error: {
+            correlationId: expect.any(String),
+            code: "INTERNAL",
+            message: "Internal server error"
+          }
         });
         expect(response.body).not.toContain(marker);
       }
@@ -288,6 +298,7 @@ describe("provider error boundary", () => {
       expect(validation.statusCode).toBe(422);
       expect(validation.json()).toEqual({
         error: {
+          correlationId: expect.any(String),
           code: "VALIDATION_FAILED",
           message: "Choose a valid name",
           details: { field: "name" }

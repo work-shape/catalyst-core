@@ -1,4 +1,5 @@
 import type { OperationEffect, OperationScope, PlatformAction } from "@vivd-catalyst/core";
+import { listEnvelopeSchema } from "../shared";
 import type { z } from "zod";
 import type { ApiErrorCode } from "../errors";
 
@@ -16,11 +17,26 @@ export type OperationRateClass = "read" | "write" | "auth";
 
 export type OperationResponse =
   | { readonly kind: "json"; readonly schema: z.ZodType }
+  | {
+      readonly kind: "page";
+      readonly schema: z.ZodType;
+      readonly order: readonly string[];
+      readonly descending: boolean;
+    }
   | { readonly kind: "sse"; readonly schema: z.ZodType }
   | { readonly kind: "blob" };
 
 export function json<Schema extends z.ZodType>(schema: Schema) {
   return { kind: "json", schema } as const;
+}
+
+/** List handlers return store rows; the helper owns the sole wire envelope. */
+export function page<Schema extends z.ZodType>(
+  schema: Schema,
+  order: readonly string[],
+  descending = false
+) {
+  return { kind: "page", schema: listEnvelopeSchema(schema), order, descending } as const;
 }
 
 /** A stream of server-sent events whose `data` is one value of `schema`. */
@@ -32,7 +48,7 @@ export function blob() {
   return { kind: "blob" } as const;
 }
 
-export type OperationQuerySchema = z.ZodObject<Record<string, z.ZodType<string | undefined>>>;
+export type OperationQuerySchema = z.ZodObject<Record<string, z.ZodType>>;
 
 type OperationAccess =
   | {
@@ -83,6 +99,7 @@ export const COMMON_OPERATION_ERRORS = [
   "UNAUTHENTICATED",
   "FORBIDDEN",
   "VALIDATION_FAILED",
+  "RATE_LIMITED",
   "INTERNAL"
 ] as const satisfies readonly ApiErrorCode[];
 
