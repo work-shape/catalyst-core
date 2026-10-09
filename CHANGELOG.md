@@ -213,6 +213,38 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   seconds for running jobs and gives the rest back, so the Compose service `api` needs
   `stop_grace_period: 30s`. Ended job rows are removed after 7 days (succeeded, cancelled) or
   30 days (failed, dead).
+- **Jobs (operator-relevant, breaking for integrators):** file previews and document
+  preprocessing run on the job executor, as the kinds `artifact_preview.render` (two attempts,
+  30 seconds apart, a lease of 5 minutes) and `conversation_attachment.preprocess` (three
+  attempts, 30 seconds doubling up to 10 minutes, a lease of twice the preprocessing timeout
+  and at least a minute). The preview row and the attachment stay the record the interface
+  reads; the row and its job are written in one transaction. No migration. A document that
+  fails for a passing reason is now tried three times before its attachment shows as failed;
+  a document that is refused, such as an unsupported format, fails at once as before.
+  - The preview worker no longer reads `ARTIFACT_PREVIEW_POLL_INTERVAL_MS`,
+    `ARTIFACT_PREVIEW_LEASE_DURATION_MS`, `ARTIFACT_PREVIEW_LEASE_RENEW_INTERVAL_MS` and
+    `ARTIFACT_PREVIEW_MAX_ATTEMPTS`, and the document worker no longer reads
+    `DOCUMENT_WORKER_POLL_INTERVAL_MS`. Remove them from the environment.
+    `ARTIFACT_PREVIEW_CONCURRENCY` and `DOCUMENT_WORKER_CONCURRENCY` stay: they are how many
+    jobs one process runs at once.
+  - On SIGTERM both workers give their running jobs back, so the Compose service of the
+    document worker needs `stop_grace_period: 30s`, as the preview worker has it.
+  - This release can run beside the previous one and be rolled back to it. A job copies its
+    lease onto the old lease columns of its row, so a worker of the previous release leaves
+    the row alone; the job leaves a row alone while a worker of the previous release holds it;
+    and the schedule `platform_jobs.adopt_legacy` gives every unfinished row without a job
+    its job once a minute, which covers rows the previous release's API writes. The copy, the
+    schedule and the old lease columns go in a later release.
+  - `@vivd-catalyst/tool-execution` exports `createArtifactPreviewJobHandler` in place of the
+    class `ArtifactPreviewWorker`. `ClientInstanceArtifactPreviewWorker.worker` is a
+    `JobWorker` and its `stop()` takes no argument. The file store loses
+    `claimNextArtifactPreviewJob`, `recoverStaleArtifactPreviewJobs` and
+    `claimNextQueuedConversationAttachment`; a row is claimed by id with
+    `claimArtifactPreviewJob` and `claimConversationAttachmentForPreprocessing`.
+  - `@vivd-catalyst/capability-sdk` exports `defineJobKind` and `defineJobHandler`. The
+    capability context has `jobs`, to enqueue, and `transaction`, to write a record and
+    enqueue its job together. An attachment handler may implement `adoptLegacyAttachments`
+    for the transition.
 - **Audit (breaking, deletes data):** audit retention is enforced. The daily job `audit.prune`
   deletes the instance's audit events older than `retention.auditDays` (default 365) and
   records one `audit.pruned` event with the count. There is no switch. On the first start

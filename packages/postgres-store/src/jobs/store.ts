@@ -97,7 +97,11 @@ export function mapJob(row: JobRow): Job {
   };
 }
 
-async function enqueueJob<Payload extends JsonObject>(
+/**
+ * Inserts a job through `db`. A store that writes a subject record and its job in one
+ * transaction of its own calls this with that transaction and reports the enqueue afterwards.
+ */
+export async function enqueueJob<Payload extends JsonObject>(
   db: PostgresConnection,
   kind: JobKind<Payload>,
   payload: Payload,

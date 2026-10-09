@@ -244,6 +244,8 @@ export async function createClientInstanceExecutionAssembly(
     secrets,
     objectStorage: config.infrastructure.objectStorage,
     files: store.files,
+    jobs: store.jobs,
+    transaction: (fn) => store.transaction((tx) => fn({ files: tx.files, jobs: tx.jobs })),
     managedObjectAccess: {
       createAccess(accessInput) {
         return createManagedObjectAccess({
@@ -608,6 +610,13 @@ function createCompositeAttachmentService(
         removed.push(...((await handler.deleteOrphanedFileObjects?.(input)) ?? []));
       }
       return uniqueStrings(removed);
+    },
+    async adoptLegacyAttachments(input) {
+      let adopted = 0;
+      for (const handler of handlers) {
+        adopted += (await handler.adoptLegacyAttachments?.(input)) ?? 0;
+      }
+      return adopted;
     },
     async readConversationFile(input) {
       return tryAttachmentHandlers(

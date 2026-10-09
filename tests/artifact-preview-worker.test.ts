@@ -1,18 +1,20 @@
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { ArtifactPreviewJobRecord, JobId, JobWorker, Logger } from "@vivd-catalyst/core";
+import { createPostgresJobWorker, type PostgresStores } from "@vivd-catalyst/postgres-store";
+import { withTestSql as withSql } from "./support/test-sql";
 import { createTestInstance } from "./support/test-instance";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import * as XLSX from "../packages/tool-execution/node_modules/xlsx";
 import {
   type ArtifactPreviewRenderInput,
   type ArtifactPreviewRenderResult,
   type ArtifactPreviewRenderer,
-  type ArtifactPreviewWorkerOptions,
-  ArtifactPreviewWorker,
+  type ArtifactPreviewJobHandlerOptions,
+  createArtifactPreviewJobHandler,
   LibreOfficeArtifactPreviewRenderer,
   SPREADSHEET_PREVIEW_MAX_CELLS,
   createArtifactPreviewSettingsHash,
@@ -29,7 +31,13 @@ import {
   asClientInstanceId
 } from "@vivd-catalyst/core";
 
-describe("ArtifactPreviewWorker", () => {
+const workers: JobWorker[] = [];
+
+afterEach(async () => {
+  await Promise.all(workers.splice(0).map((worker) => worker.stop()));
+});
+
+describe("the artifact preview job handler", () => {
   it("renders a queued document job into managed preview image artifacts and a ready manifest", async () => {
     const fixture = await createWorkerFixture();
     const renderer = new FakeRenderer({
@@ -134,24 +142,35 @@ describe("ArtifactPreviewWorker", () => {
     expect(renderer.inputs[0]?.bytes).toEqual(bytes("attachment-backed-docx"));
   });
 
-  it("renews the lease while a long preview render is active", async () => {
+  it("copies the job's lease onto the row and extends it with each heartbeat", async () => {
     const fixture = await createWorkerFixture();
     const deferred = createDeferred<ArtifactPreviewRenderResult>();
     const renderer = new FakeRenderer({ deferred });
-    const worker = createWorker(fixture, renderer, {
-      leaseDurationMs: 30,
-      leaseRenewIntervalMs: 5
-    });
+    const worker = createWorker(fixture, renderer);
 
     const running = worker.runOnce();
     await renderer.called;
-    const initiallyClaimed = await fixture.store.files.getArtifactPreviewJob({
-      clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.source.id
+    const claimed = await readPreviewJob(fixture);
+    const [job] = await platformJobs(fixture);
+    // Mirror: a worker of the previous release sees the row as held, under the job's token.
+    expect(claimed).toMatchObject({
+      status: "processing",
+      attempts: 1,
+      leaseOwnerId: `job:${job?.id}`,
+      leaseToken: job?.lease_token
     });
-    const renewed = await jobAfterLeaseMoved(fixture, initiallyClaimed?.leaseExpiresAt);
-    expect(renewed?.leaseExpiresAt).toBeDefined();
-    expect(renewed!.leaseExpiresAt! > initiallyClaimed!.leaseExpiresAt!).toBe(true);
+    expect(claimed?.leaseExpiresAt).toBeDefined();
+
+    // What the executor does at each heartbeat, in the heartbeat's own transaction.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await fixture.store.transaction((stores) =>
+      worker.handler.bind(jobFor(fixture, job)).onHeartbeat!(
+        { leaseToken: job?.lease_token ?? "" },
+        stores
+      )
+    );
+    const renewed = await readPreviewJob(fixture);
+    expect(renewed!.leaseExpiresAt! > claimed!.leaseExpiresAt!).toBe(true);
 
     deferred.resolve({
       format: "png",
@@ -159,7 +178,7 @@ describe("ArtifactPreviewWorker", () => {
     });
     await expect(running).resolves.toMatchObject({
       status: "claimed",
-      job: { status: "completed" }
+      job: { status: "completed", leaseToken: undefined }
     });
   });
 
@@ -219,35 +238,6 @@ describe("ArtifactPreviewWorker", () => {
     expect(renderer.inputs[0]?.bytes).toEqual(bytes("attachment-backed-docx"));
   });
 
-  it("renews the lease while a long preview render is active", async () => {
-    const fixture = await createWorkerFixture();
-    const deferred = createDeferred<ArtifactPreviewRenderResult>();
-    const renderer = new FakeRenderer({ deferred });
-    const worker = createWorker(fixture, renderer, {
-      leaseDurationMs: 30,
-      leaseRenewIntervalMs: 5
-    });
-
-    const running = worker.runOnce();
-    await renderer.called;
-    const initiallyClaimed = await fixture.store.files.getArtifactPreviewJob({
-      clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.source.id
-    });
-    const renewed = await jobAfterLeaseMoved(fixture, initiallyClaimed?.leaseExpiresAt);
-    expect(renewed?.leaseExpiresAt).toBeDefined();
-    expect(renewed!.leaseExpiresAt! > initiallyClaimed!.leaseExpiresAt!).toBe(true);
-
-    deferred.resolve({
-      format: "png",
-      pages: [{ bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 }]
-    });
-    await expect(running).resolves.toMatchObject({
-      status: "claimed",
-      job: { status: "completed" }
-    });
-  });
-
   it("records the full page count when only a bounded partial preview is rendered", async () => {
     const fixture = await createWorkerFixture();
     const worker = createWorker(
@@ -301,8 +291,10 @@ describe("ArtifactPreviewWorker", () => {
 
     const result = await worker.runOnce();
 
-    expect(result.status).toBe("stale");
+    // The row went with its conversation: the job has nothing left to write and ends.
+    expect(result.status).toBe("idle");
     expect(deletionRan).toBe(true);
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "succeeded" }]);
     expect(
       fixture.objectStore.keys().filter((key) => key.startsWith("artifact-previews/"))
     ).toEqual([]);
@@ -869,24 +861,17 @@ describe("ArtifactPreviewWorker", () => {
     expect(fixture.objectStore.keys()).toEqual([fixture.source.objectKey]);
   });
 
-  it("retries renderer failures until the configured attempt limit then writes a failed manifest", async () => {
+  it("retries a renderer failure once, then fails the row with a manifest and the job is dead", async () => {
     const fixture = await createWorkerFixture();
     const renderer = new FakeRenderer({
       failure: { code: "conversion_failed", retryable: true }
     });
-    const worker = createWorker(fixture, renderer, { maxAttempts: 2 });
+    const worker = createWorker(fixture, renderer);
 
     const first = await worker.runOnce();
-    expect(first.status).toBe("claimed");
-    if (first.status !== "claimed") {
-      throw new Error("Expected first preview job attempt");
-    }
-    expect(first.job).toMatchObject({
-      status: "pending",
-      attempts: 1,
-      errorCode: "conversion_failed",
-      leaseToken: undefined
-    });
+    // The row stays held by the job between its attempts; nothing is final yet.
+    expect(first).toMatchObject({ status: "claimed", job: { status: "processing", attempts: 1 } });
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "queued", attempts: 1 }]);
     await expect(
       fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
@@ -894,17 +879,13 @@ describe("ArtifactPreviewWorker", () => {
       })
     ).resolves.toBeUndefined();
 
+    await makeJobsDue(fixture);
     const second = await worker.runOnce();
-    expect(second.status).toBe("claimed");
-    if (second.status !== "claimed") {
-      throw new Error("Expected second preview job attempt");
-    }
-    expect(second.job).toMatchObject({
-      status: "failed",
-      attempts: 2,
-      errorCode: "conversion_failed",
-      leaseToken: undefined
+    expect(second).toMatchObject({
+      status: "claimed",
+      job: { status: "failed", attempts: 2, errorCode: "conversion_failed", leaseToken: undefined }
     });
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "dead", attempts: 2 }]);
     await expect(
       fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
@@ -916,47 +897,381 @@ describe("ArtifactPreviewWorker", () => {
     });
   });
 
-  it("waits for active rendering when stopped without cancellation", async () => {
+  it("marks the job failed, not dead, when another attempt cannot help", async () => {
+    const fixture = await createWorkerFixture({ byteSize: 6, sourceBytes: bytes("small") });
+    const worker = createWorker(fixture, new FakeRenderer({ result: emptyRenderResult() }), {
+      maxSourceBytes: 5
+    });
+
+    await worker.runOnce();
+
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "failed", attempts: 1 }]);
+  });
+
+  it("gives the job back when the worker stops and the next worker finishes the row", async () => {
+    const fixture = await createWorkerFixture();
+    const renderer = new FakeRenderer({ abortable: true });
+    const worker = createWorker(fixture, renderer);
+
+    const running = worker.jobs.runDue();
+    await renderer.called;
+    await worker.jobs.stop();
+    await running;
+
+    // Queued again, due at once, the attempt given back. The row is still held by the job.
+    expect(await platformJobs(fixture)).toMatchObject([
+      { status: "queued", attempts: 0, due: true }
+    ]);
+    expect(await readPreviewJob(fixture)).toMatchObject({ status: "processing" });
+
+    const next = createWorker(
+      fixture,
+      new FakeRenderer({
+        result: {
+          format: "png",
+          pages: [{ bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 }]
+        }
+      })
+    );
+    // The same job takes its row over at once, without waiting for the lease it left on it.
+    await expect(next.runOnce()).resolves.toMatchObject({
+      status: "claimed",
+      job: { status: "completed" }
+    });
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "succeeded", attempts: 1 }]);
+  });
+});
+
+describe("the preview job beside a worker of the previous release", () => {
+  const onePage: ArtifactPreviewRenderResult = {
+    format: "png",
+    pages: [{ bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 }]
+  };
+
+  it("adopts a row the previous release inserted without a job, once", async () => {
+    const fixture = await createWorkerFixture();
+    // The previous release's API writes the row and knows nothing of jobs.
+    await withSql(
+      (sql) => sql`delete from platform_jobs where client_instance_id = ${fixture.clientInstanceId}`
+    );
+    const adopt = () =>
+      fixture.store.files.adoptArtifactPreviewJobs({
+        clientInstanceId: fixture.clientInstanceId,
+        limit: 10
+      });
+
+    await expect(adopt()).resolves.toBe(1);
+    // A row with an unfinished job is left alone.
+    await expect(adopt()).resolves.toBe(0);
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "queued", attempts: 0 }]);
+
+    const worker = createWorker(fixture, new FakeRenderer({ result: onePage }));
+    await expect(worker.runOnce()).resolves.toMatchObject({
+      status: "claimed",
+      job: { status: "completed", attempts: 1 }
+    });
+    // A finished row is not adopted again.
+    await expect(adopt()).resolves.toBe(0);
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "succeeded" }]);
+  });
+
+  it("does nothing when the previous release's worker finishes the row it holds", async () => {
+    const fixture = await createWorkerFixture();
+    const legacy = await legacyClaim(fixture, "legacy-worker", "legacy-lease");
+    expect(legacy).toBe(fixture.previewJobId);
+    const renderer = new FakeRenderer({ result: onePage });
+    const worker = createWorker(fixture, renderer, { yieldCheckIntervalMs: 20 });
+
+    const running = worker.jobs.runDue();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Yield: the job waits while the foreign lease is alive.
+    expect(renderer.inputs).toHaveLength(0);
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "running" }]);
+    expect(await readPreviewJob(fixture)).toMatchObject({
+      leaseOwnerId: "legacy-worker",
+      attempts: 1
+    });
+
+    await fixture.store.files.markClaimedArtifactPreviewJobUnsupported({
+      clientInstanceId: fixture.clientInstanceId,
+      jobId: fixture.previewJobId,
+      leaseToken: "legacy-lease",
+      errorCode: "unsupported_type",
+      unsupportedAt: new Date().toISOString()
+    });
+    await running;
+
+    // One result, the previous release's. The job ends without having rendered.
+    expect(renderer.inputs).toHaveLength(0);
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "succeeded", attempts: 1 }]);
+    expect(await readPreviewJob(fixture)).toMatchObject({
+      status: "unsupported",
+      attempts: 1
+    });
+  });
+
+  it("finishes a row whose previous-release worker was killed, after that lease expires", async () => {
+    const fixture = await createWorkerFixture();
+    await legacyClaim(fixture, "legacy-worker", "legacy-lease");
+    const renderer = new FakeRenderer({ result: onePage });
+    const worker = createWorker(fixture, renderer, { yieldCheckIntervalMs: 20 });
+
+    const running = worker.jobs.runDue();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(renderer.inputs).toHaveLength(0);
+    await withSql(
+      (sql) => sql`
+        update artifact_preview_jobs set lease_expires_at = now() - interval '1 second'
+        where id = ${fixture.previewJobId}
+      `
+    );
+    await running;
+
+    expect(renderer.inputs).toHaveLength(1);
+    expect(await readPreviewJob(fixture)).toMatchObject({ status: "completed", attempts: 2 });
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "succeeded", attempts: 1 }]);
+    // The killed worker's token finishes nothing afterwards.
+    await expect(
+      fixture.store.files.failClaimedArtifactPreviewJob({
+        clientInstanceId: fixture.clientInstanceId,
+        jobId: fixture.previewJobId,
+        leaseToken: "legacy-lease",
+        errorCode: "conversion_failed",
+        failedAt: new Date().toISOString()
+      })
+    ).rejects.toThrow();
+    expect(await readPreviewJob(fixture)).toMatchObject({ status: "completed" });
+  });
+
+  it("keeps the previous release's worker off a row the job holds, and lets it continue after a rollback", async () => {
     const fixture = await createWorkerFixture();
     const deferred = createDeferred<ArtifactPreviewRenderResult>();
     const renderer = new FakeRenderer({ deferred });
-    const worker = createWorker(fixture, renderer, { pollIntervalMs: 5 });
+    const worker = createWorker(fixture, renderer);
 
-    const loop = worker.start();
+    const running = worker.jobs.runDue();
     await renderer.called;
-    const stop = worker.stop();
-    const stoppedEarly = await Promise.race([stop.then(() => true), sleep(30).then(() => false)]);
-    expect(stoppedEarly).toBe(false);
+    // The mirror makes the row look held to the previous release: neither its claim nor its
+    // stale-lease recovery touches it.
+    await expect(legacyClaim(fixture, "legacy-worker", "legacy-lease")).resolves.toBeUndefined();
+    await expect(legacyRecoverStale(fixture)).resolves.toBe(0);
 
-    deferred.resolve({
-      format: "png",
-      pages: [{ bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 }]
+    // The rollback: the new worker is gone mid-attempt and only the previous release runs. Its
+    // recovery returns the row to pending once the mirrored lease has run out, and it claims it.
+    await withSql(
+      (sql) => sql`
+        update artifact_preview_jobs set lease_expires_at = now() - interval '1 second'
+        where id = ${fixture.previewJobId}
+      `
+    );
+    await expect(legacyRecoverStale(fixture)).resolves.toBe(1);
+    await expect(legacyClaim(fixture, "legacy-worker", "legacy-lease")).resolves.toBe(
+      fixture.previewJobId
+    );
+
+    // The attempt that lost the row writes no second result.
+    deferred.resolve(onePage);
+    await running;
+    expect(await readPreviewJob(fixture)).toMatchObject({
+      status: "processing",
+      leaseOwnerId: "legacy-worker",
+      leaseToken: "legacy-lease"
     });
-    await stop;
-    await loop;
-
     await expect(
       fixture.store.files.getArtifactPreviewManifest({
         clientInstanceId: fixture.clientInstanceId,
         sourceArtifactId: fixture.source.id
       })
-    ).resolves.toMatchObject({ status: "ready" });
+    ).resolves.toBeUndefined();
+  });
+
+  it("fails the row when the worker crashed on the job's last attempt", async () => {
+    const fixture = await createWorkerFixture();
+    const worker = createWorker(fixture, new FakeRenderer({ result: onePage }));
+    // A worker that claimed the last attempt, mirrored its lease and then died.
+    await withSql(async (sql) => {
+      const [job] = await sql<{ id: string }[]>`
+        update platform_jobs
+        set status = 'running', attempts = max_attempts, lease_token = 'crashed',
+            lease_expires_at = now() - interval '1 second'
+        where client_instance_id = ${fixture.clientInstanceId}
+        returning id
+      `;
+      await sql`
+        update artifact_preview_jobs
+        set status = 'processing', attempts = 2, lease_owner_id = ${`job:${job?.id}`},
+            lease_token = 'crashed', lease_expires_at = now() - interval '1 second'
+        where id = ${fixture.previewJobId}
+      `;
+    });
+
+    await worker.jobs.runDue();
+
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "dead", attempts: 2 }]);
+    expect(await readPreviewJob(fixture)).toMatchObject({
+      status: "failed",
+      errorCode: "stale_lease",
+      leaseToken: undefined
+    });
+    await expect(
+      fixture.store.files.getArtifactPreviewManifest({
+        clientInstanceId: fixture.clientInstanceId,
+        sourceArtifactId: fixture.source.id
+      })
+    ).resolves.toMatchObject({ status: "failed", errorCode: "stale_lease" });
   });
 });
 
+/**
+ * The claim of the previous release's preview worker, as that release runs it: the oldest
+ * pending row, whoever inserted it.
+ */
+function legacyClaim(
+  fixture: WorkerFixture,
+  workerId: string,
+  leaseToken: string
+): Promise<string | undefined> {
+  return withSql(async (sql) => {
+    const rows = await sql<{ id: string }[]>`
+      with candidate as (
+        select id
+        from artifact_preview_jobs
+        where client_instance_id = ${fixture.clientInstanceId}
+          and status = 'pending'
+          and (next_attempt_at is null or next_attempt_at <= now())
+        order by coalesce(next_attempt_at, created_at) asc, created_at asc, id asc
+        limit 1
+        for update skip locked
+      )
+      update artifact_preview_jobs apj
+      set status = 'processing',
+          attempts = apj.attempts + 1,
+          next_attempt_at = null,
+          lease_owner_id = ${workerId},
+          lease_token = ${leaseToken},
+          lease_expires_at = now() + interval '5 minutes',
+          error_code = null,
+          error_message = null,
+          updated_at = now()
+      from candidate
+      where apj.id = candidate.id
+      returning apj.id
+    `;
+    return rows[0]?.id;
+  });
+}
+
+/** The previous release's stale-lease recovery for a row with attempts left. */
+function legacyRecoverStale(fixture: WorkerFixture): Promise<number> {
+  return withSql(async (sql) => {
+    const rows = await sql`
+      update artifact_preview_jobs
+      set status = 'pending', next_attempt_at = now(), lease_owner_id = null,
+          lease_token = null, lease_expires_at = null, error_code = 'stale_lease'
+      where client_instance_id = ${fixture.clientInstanceId}
+        and status = 'processing'
+        and lease_expires_at is not null
+        and lease_expires_at < now()
+      returning id
+    `;
+    return rows.length;
+  });
+}
+
+const silentLogger: Logger = {
+  debug() {},
+  info() {},
+  warn() {},
+  error() {},
+  child: () => silentLogger
+};
+
+interface PlatformJobRow {
+  id: JobId;
+  status: string;
+  attempts: number;
+  lease_token: string | null;
+  due: boolean;
+}
+
+function platformJobs(fixture: WorkerFixture): Promise<PlatformJobRow[]> {
+  return withSql(
+    (sql) => sql<PlatformJobRow[]>`
+      select id, status, attempts, lease_token, run_after <= now() as due
+      from platform_jobs
+      where client_instance_id = ${fixture.clientInstanceId}
+      order by created_at, id
+    `
+  );
+}
+
+/** As if the backoff had passed. */
+async function makeJobsDue(fixture: WorkerFixture): Promise<void> {
+  await withSql(
+    (sql) => sql`
+      update platform_jobs set run_after = now()
+      where client_instance_id = ${fixture.clientInstanceId} and status = 'queued'
+    `
+  );
+}
+
+function readPreviewJob(fixture: WorkerFixture): Promise<ArtifactPreviewJobRecord | undefined> {
+  return fixture.store.files.getArtifactPreviewJob({
+    clientInstanceId: fixture.clientInstanceId,
+    sourceArtifactId: fixture.source.id,
+    ...(fixture.settingsHash ? { settingsHash: fixture.settingsHash } : {})
+  });
+}
+
+function jobFor(fixture: WorkerFixture, row: PlatformJobRow | undefined) {
+  if (!row) throw new Error("Expected a platform job");
+  return {
+    id: row.id,
+    clientInstanceId: fixture.clientInstanceId,
+    kind: "artifact_preview.render",
+    payload: { previewJobId: fixture.previewJobId },
+    status: "running" as const,
+    runAfter: new Date().toISOString(),
+    attempts: row.attempts,
+    maxAttempts: 2,
+    correlationId: "corr_test",
+    createdAt: new Date().toISOString()
+  };
+}
+
+/**
+ * A job worker that serves the preview kind for the fixture. `runOnce` is one pass of it and
+ * answers with the preview row as the pass left it.
+ */
 function createWorker(
   fixture: WorkerFixture,
   renderer: ArtifactPreviewRenderer,
-  options: Partial<ArtifactPreviewWorkerOptions> = {}
-): ArtifactPreviewWorker {
-  return new ArtifactPreviewWorker({
-    clientInstanceId: fixture.clientInstanceId,
-    store: fixture.store.files,
+  options: Partial<ArtifactPreviewJobHandlerOptions> = {}
+) {
+  const handler = createArtifactPreviewJobHandler({
+    stores: fixture.store,
     objectStore: fixture.objectStore,
     renderer,
-    workerId: "artifact-preview-test-worker",
     ...options
   });
+  const jobs = createPostgresJobWorker({
+    stores: fixture.store,
+    clientInstanceId: fixture.clientInstanceId,
+    handlers: [handler],
+    logger: silentLogger
+  });
+  workers.push(jobs);
+  return {
+    handler,
+    jobs,
+    async runOnce(): Promise<
+      { status: "idle" } | { status: "claimed"; job: ArtifactPreviewJobRecord }
+    > {
+      await jobs.runDue();
+      const job = await readPreviewJob(fixture);
+      return job ? { status: "claimed", job } : { status: "idle" };
+    }
+  };
 }
 
 async function createWorkerFixture(
@@ -1008,7 +1323,7 @@ async function createWorkerFixture(
     body: sourceBytes,
     contentType: source.mimeType
   });
-  await store.files.enqueueArtifactPreviewJob({
+  const previewJob = await store.files.enqueueArtifactPreviewJob({
     clientInstanceId,
     conversationId: conversation.id,
     sourceArtifactId: source.id,
@@ -1017,16 +1332,27 @@ async function createWorkerFixture(
     ...(input.settingsHash ? { settingsHash: input.settingsHash } : {}),
     queuedAt: "2026-07-01T10:00:00.000Z"
   });
-  return { clientInstanceId, store, objectStore, conversation, sourceFile, source };
+  return {
+    clientInstanceId,
+    store,
+    objectStore,
+    conversation,
+    sourceFile,
+    source,
+    previewJobId: previewJob.id,
+    settingsHash: input.settingsHash
+  };
 }
 
 interface WorkerFixture {
   clientInstanceId: ClientInstanceId;
-  store: PlatformStores;
+  store: PostgresStores;
   objectStore: MemoryObjectStorage;
   conversation: Conversation;
   sourceFile: ManagedFileRecord;
   source: ManagedArtifactRecord;
+  previewJobId: string;
+  settingsHash?: string;
 }
 
 class FakeRenderer implements ArtifactPreviewRenderer {
@@ -1039,6 +1365,8 @@ class FakeRenderer implements ArtifactPreviewRenderer {
       result?: ArtifactPreviewRenderResult;
       failure?: { code: ArtifactPreviewFailureCode; retryable: boolean; message?: string };
       deferred?: ReturnType<typeof createDeferred<ArtifactPreviewRenderResult>>;
+      /** Renders until the attempt is aborted, as the real renderer does. */
+      abortable?: boolean;
     }
   ) {
     this.called = new Promise((resolve) => {
@@ -1054,6 +1382,12 @@ class FakeRenderer implements ArtifactPreviewRenderer {
     }
     if (this.behavior.deferred) {
       return this.behavior.deferred.promise;
+    }
+    if (this.behavior.abortable) {
+      const signal = input.signal;
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new Error("render aborted")));
+      });
     }
     return this.behavior.result ?? emptyRenderResult();
   }
@@ -1254,34 +1588,4 @@ function createDeferred<T>(): {
     reject = promiseReject;
   });
   return { promise, resolve, reject };
-}
-
-/**
- * The job once its lease is later than the given one. A renewal is a database write on a
- * timer, so a busy machine may need more than a few intervals; after two seconds the job is
- * returned as it is and the caller's comparison fails.
- */
-async function jobAfterLeaseMoved(
-  fixture: Awaited<ReturnType<typeof createWorkerFixture>>,
-  initialLease: string | Date | undefined
-) {
-  const read = () =>
-    fixture.store.files.getArtifactPreviewJob({
-      clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.source.id
-    });
-  const deadline = Date.now() + 2000;
-  let job = await read();
-  while (
-    Date.now() < deadline &&
-    !(initialLease && job?.leaseExpiresAt && job.leaseExpiresAt > initialLease)
-  ) {
-    await sleep(5);
-    job = await read();
-  }
-  return job;
-}
-
-function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

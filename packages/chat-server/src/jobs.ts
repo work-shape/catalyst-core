@@ -8,6 +8,8 @@ import {
 } from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "./conversation-workflow";
 import {
+  adoptLegacyJobsJob,
+  adoptLegacyJobsSchedule,
   cleanUpExecutionWorkspacesJob,
   expireConversationsJob,
   expireConversationsSchedule,
@@ -116,13 +118,31 @@ export function createChatServerJobs(
         if (pruned.completedCount + pruned.failedCount > 0)
           control.logger.info(pruned, "Pruned ended jobs");
       }
+    }),
+    defineJobHandler({
+      kind: adoptLegacyJobsJob,
+      slots: 1,
+      async run(_job, control) {
+        // An enqueue under a live dedupe key inserts nothing, so a tick may run twice.
+        const previews = await options.stores.files.adoptArtifactPreviewJobs({
+          clientInstanceId: options.clientInstanceId,
+          limit: LEGACY_ADOPTION_BATCH_SIZE
+        });
+        const attachments =
+          (await options.attachments?.adoptLegacyAttachments?.({
+            limit: LEGACY_ADOPTION_BATCH_SIZE
+          })) ?? 0;
+        if (previews + attachments > 0)
+          control.logger.info({ previews, attachments }, "Adopted rows without a job");
+      }
     })
   ];
   const schedules: JobSchedule[] = [
     expireConversationsSchedule,
     recoverAgentRunsSchedule,
     pruneAuditEventsSchedule,
-    pruneJobsSchedule
+    pruneJobsSchedule,
+    adoptLegacyJobsSchedule
   ];
 
   const cleanup = options.executionWorkspaceCleanup;
@@ -152,3 +172,6 @@ export function createChatServerJobs(
 }
 
 const DEFAULT_WORKSPACE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+// Rows one tick of the adopt schedule gives a job, per kind. It keeps a tick inside its lease
+// after an upgrade with a long backlog; the next tick, a minute later, takes the rest.
+const LEGACY_ADOPTION_BATCH_SIZE = 500;

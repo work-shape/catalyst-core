@@ -438,20 +438,28 @@ export type WriteArtifactPreviewManifestInput =
       writtenAt?: ISODateString;
     };
 
-export interface ClaimNextArtifactPreviewJobInput {
+/**
+ * What a job finds when it claims its subject row by id. `finished` is a row that needs no
+ * work any more, a missing one included. `held` is a row under a live lease that is not the
+ * job's: during the transition release a worker of the previous release has it.
+ */
+export type SubjectRowClaim<Row> =
+  { status: "claimed"; row: Row } | { status: "finished" } | { status: "held" };
+
+export interface ClaimArtifactPreviewJobInput {
   clientInstanceId: ClientInstanceId;
-  workerId: string;
+  jobId: string;
+  /** Names the executor job, so a later attempt of it takes the row over at once. */
+  leaseOwnerId: string;
   leaseToken: string;
-  now: ISODateString;
-  leaseExpiresAt: ISODateString;
+  leaseMs: number;
 }
 
 export interface RenewClaimedArtifactPreviewJobLeaseInput {
   clientInstanceId: ClientInstanceId;
   jobId: string;
   leaseToken: string;
-  renewedAt: ISODateString;
-  leaseExpiresAt: ISODateString;
+  leaseMs: number;
 }
 
 export interface CompleteClaimedArtifactPreviewJobInput {
@@ -482,17 +490,6 @@ export interface MarkClaimedArtifactPreviewJobUnsupportedInput {
   errorCode?: ArtifactPreviewFailureCode;
   errorMessage?: string;
   unsupportedAt: ISODateString;
-}
-
-export interface RecoverStaleArtifactPreviewJobsInput {
-  clientInstanceId: ClientInstanceId;
-  staleLeaseExpiredBefore: ISODateString;
-  recoveredAt: ISODateString;
-  maxAttempts: number;
-  limit: number;
-  errorCode?: ArtifactPreviewFailureCode;
-  errorMessage?: string;
-  retryAt?: ISODateString;
 }
 
 /**
@@ -554,6 +551,10 @@ export interface ManagedArtifactStore {
 }
 
 export interface ArtifactPreviewStore {
+  /**
+   * Writes the preview row and, in the same transaction, enqueues the job
+   * `artifact_preview.render` that drives it while the row is not finished.
+   */
   enqueueArtifactPreviewJob(
     input: EnqueueArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord>;
@@ -564,12 +565,18 @@ export interface ArtifactPreviewStore {
     rendererVersion?: string;
     settingsHash?: string;
   }): Promise<ArtifactPreviewJobRecord | undefined>;
-  claimNextArtifactPreviewJob(
-    input: ClaimNextArtifactPreviewJobInput
-  ): Promise<ArtifactPreviewJobRecord | undefined>;
+  /**
+   * The first step of the job that drives a preview row: takes the row by id when it is
+   * pending, when its lease ran out or when an earlier attempt of the same job held it, and
+   * writes the job's lease onto the row's lease columns. The times are the database's.
+   */
+  claimArtifactPreviewJob(
+    input: ClaimArtifactPreviewJobInput
+  ): Promise<SubjectRowClaim<ArtifactPreviewJobRecord>>;
+  /** Extends the lease copied onto the row. False when the row is no longer held with the token. */
   renewClaimedArtifactPreviewJobLease(
     input: RenewClaimedArtifactPreviewJobLeaseInput
-  ): Promise<ArtifactPreviewJobRecord>;
+  ): Promise<boolean>;
   completeClaimedArtifactPreviewJob(
     input: CompleteClaimedArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord>;
@@ -579,9 +586,14 @@ export interface ArtifactPreviewStore {
   markClaimedArtifactPreviewJobUnsupported(
     input: MarkClaimedArtifactPreviewJobUnsupportedInput
   ): Promise<ArtifactPreviewJobRecord>;
-  recoverStaleArtifactPreviewJobs(
-    input: RecoverStaleArtifactPreviewJobsInput
-  ): Promise<ArtifactPreviewJobRecord[]>;
+  /**
+   * Transition release only: enqueues a job for every preview row that is not finished and has
+   * no queued or running job, up to `limit`. Returns how many it enqueued.
+   */
+  adoptArtifactPreviewJobs(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<number>;
   getArtifactPreviewManifest(input: {
     clientInstanceId: ClientInstanceId;
     sourceArtifactId: ManagedArtifactId;
@@ -636,16 +648,36 @@ export interface ConversationAttachmentStore {
     messageId: MessageId;
     claimedAt: ISODateString;
   }): Promise<ConversationAttachment[]>;
-  claimNextQueuedConversationAttachment(input: {
+  /**
+   * The first step of the job that preprocesses an attachment: takes the row by id when it is
+   * queued, when its lease ran out or when an earlier attempt of the same job held it, and
+   * writes the job's lease onto the row's lease columns. The times are the database's.
+   */
+  claimConversationAttachmentForPreprocessing(input: {
     clientInstanceId: ClientInstanceId;
-    workerId: string;
+    attachmentId: ConversationAttachmentId;
+    /** Names the executor job, so a later attempt of it takes the row over at once. */
+    leaseOwnerId: string;
     leaseToken: string;
-    now: ISODateString;
-    leaseExpiresAt: ISODateString;
-    perConversationLimit: number;
-    globalLimit: number;
+    leaseMs: number;
+  }): Promise<SubjectRowClaim<ConversationAttachment>>;
+  /** Extends the lease copied onto the row. False when the row is no longer held with the token. */
+  renewClaimedConversationAttachmentLease(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    leaseMs: number;
+  }): Promise<boolean>;
+  /**
+   * Transition release only: the attachments that wait for preprocessing and have no queued or
+   * running job of `jobKind`, oldest first. The adopt schedule enqueues a job for each.
+   */
+  listConversationAttachmentsWithoutJob(input: {
+    clientInstanceId: ClientInstanceId;
+    jobKind: string;
     formats?: readonly FileAttachmentFormat[];
-  }): Promise<ConversationAttachment | undefined>;
+    limit: number;
+  }): Promise<Array<{ id: ConversationAttachmentId; conversationId: ConversationId }>>;
   completeClaimedConversationAttachment(input: {
     clientInstanceId: ClientInstanceId;
     attachmentId: ConversationAttachmentId;
@@ -698,96 +730,3 @@ export interface PlatformFileStore
     ManagedArtifactStore,
     ArtifactPreviewStore,
     ConversationAttachmentStore {}
-
-export function detectArtifactPreviewSourceKind(input: {
-  filename?: string;
-  kind?: string;
-  mimeType?: string;
-}): ArtifactPreviewSourceKind | undefined {
-  const capability = resolveFilePreviewCapability(input);
-  return capability === "native_pdf"
-    ? "pdf"
-    : capability === "office_presentation_pages"
-      ? "presentation"
-      : capability === "office_document_pages"
-        ? "document"
-        : capability === "spreadsheet"
-          ? "spreadsheet"
-          : undefined;
-}
-
-/** Selects preview behavior from the file itself, independent of how it entered the conversation. */
-export function resolveFilePreviewCapability(input: {
-  filename?: string;
-  kind?: string;
-  mimeType?: string;
-}): FilePreviewCapability | undefined {
-  const descriptor =
-    `${input.mimeType ?? ""} ${input.kind ?? ""} ${input.filename ?? ""}`.toLowerCase();
-  if (containsPdfSignal(descriptor)) {
-    return "native_pdf";
-  }
-  if (containsOfficePresentationSignal(descriptor)) {
-    return "office_presentation_pages";
-  }
-  if (containsOfficeDocumentSignal(descriptor)) {
-    return "office_document_pages";
-  }
-  if (containsSpreadsheetSignal(descriptor)) {
-    return "spreadsheet";
-  }
-  if (
-    input.mimeType?.toLowerCase().startsWith("image/") ||
-    /\.(png|jpe?g|webp|gif|svg)$/iu.test(input.filename ?? "")
-  ) {
-    return "native_image";
-  }
-  if (descriptor.includes("markdown") || hasArtifactPreviewExtension(descriptor, ["md", "mdx"])) {
-    return "markdown";
-  }
-  if (
-    input.mimeType?.toLowerCase().startsWith("text/") ||
-    descriptor.includes("application/json") ||
-    hasArtifactPreviewExtension(descriptor, ["txt", "csv", "json", "html", "rtf"])
-  ) {
-    return "text";
-  }
-  return undefined;
-}
-
-function containsPdfSignal(descriptor: string): boolean {
-  return descriptor.includes("application/pdf") || hasArtifactPreviewExtension(descriptor, ["pdf"]);
-}
-
-function containsOfficePresentationSignal(descriptor: string): boolean {
-  return (
-    descriptor.includes("presentationml") ||
-    descriptor.includes("powerpoint") ||
-    hasArtifactPreviewExtension(descriptor, ["pptx", "ppt"])
-  );
-}
-
-function containsOfficeDocumentSignal(descriptor: string): boolean {
-  return (
-    descriptor.includes("wordprocessingml") ||
-    descriptor.includes("msword") ||
-    hasArtifactPreviewExtension(descriptor, ["docx", "doc"])
-  );
-}
-
-function containsSpreadsheetSignal(descriptor: string): boolean {
-  return (
-    descriptor.includes("spreadsheetml") ||
-    descriptor.includes("ms-excel") ||
-    descriptor.includes("msexcel") ||
-    descriptor.includes("opendocument.spreadsheet") ||
-    descriptor.includes("spreadsheet") ||
-    hasArtifactPreviewExtension(descriptor, ["xlsx", "xlsm", "xls", "ods"])
-  );
-}
-
-function hasArtifactPreviewExtension(descriptor: string, extensions: string[]): boolean {
-  return extensions.some((extension) =>
-    new RegExp(`(^|[^a-z0-9])${extension}([^a-z0-9]|$)`, "iu").test(descriptor)
-  );
-}

@@ -102,15 +102,17 @@ describe("artifact preview store adapters", () => {
     }
   });
 
-  it("recovers stale preview job leases in Postgres", async () => {
+  it("takes a preview row over for the same job or after its lease, and never a finished one", async () => {
     const store = (
       await createTestInstance({
         postgres: {}
       })
     ).stores;
+    const rawSql = postgres(databaseUrl, { max: 1 });
     try {
-      await expectPreviewJobStaleRecoveryContract(store);
+      await expectPreviewRowTakeoverContract(store, rawSql);
     } finally {
+      await rawSql.end();
       await store.close();
     }
   });
@@ -328,13 +330,13 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
     queuedAt: "2026-07-01T11:00:00.000Z"
   });
 
-  const claimed = await store.files.claimNextArtifactPreviewJob({
-    clientInstanceId: fixture.clientInstanceId,
-    workerId: "preview-worker-a",
-    leaseToken: "lease-a",
-    now: "2026-07-01T11:00:01.000Z",
-    leaseExpiresAt: "2026-07-01T11:05:01.000Z"
-  });
+  const claimed = await claimPreviewRow(
+    store,
+    fixture.clientInstanceId,
+    job.id,
+    "preview-worker-a",
+    "lease-a"
+  );
   expect(claimed).toMatchObject({
     id: job.id,
     status: "processing",
@@ -343,13 +345,7 @@ async function expectPreviewJobLeaseContract(store: PreviewJobIdentityStore): Pr
     attempts: 1
   });
   await expect(
-    store.files.claimNextArtifactPreviewJob({
-      clientInstanceId: fixture.clientInstanceId,
-      workerId: "preview-worker-b",
-      leaseToken: "lease-b",
-      now: "2026-07-01T11:00:02.000Z",
-      leaseExpiresAt: "2026-07-01T11:05:02.000Z"
-    })
+    claimPreviewRow(store, fixture.clientInstanceId, job.id, "preview-worker-b", "lease-b")
   ).resolves.toBeUndefined();
   await expect(
     store.files.completeClaimedArtifactPreviewJob({
@@ -432,13 +428,13 @@ async function expectPreviewArtifactCompletionContract(
     settingsHash: "settings-completion",
     queuedAt: "2026-07-01T11:30:00.000Z"
   });
-  await store.files.claimNextArtifactPreviewJob({
-    clientInstanceId: fixture.clientInstanceId,
-    workerId: "preview-worker-completion",
-    leaseToken: "lease-completion",
-    now: "2026-07-01T11:30:01.000Z",
-    leaseExpiresAt: "2026-07-01T11:35:01.000Z"
-  });
+  await claimPreviewRow(
+    store,
+    fixture.clientInstanceId,
+    job.id,
+    "preview-worker-completion",
+    "lease-completion"
+  );
   const previewArtifact = {
     sourceFileId: fixture.file.id,
     kind: "document.preview_page_image",
@@ -526,11 +522,12 @@ async function expectPreviewArtifactCompletionContract(
   });
 }
 
-async function expectPreviewJobStaleRecoveryContract(
-  store: PreviewJobIdentityStore
+async function expectPreviewRowTakeoverContract(
+  store: PreviewJobIdentityStore,
+  rawSql: Sql
 ): Promise<void> {
   const fixture = await createPreviewFixture(store);
-  await store.files.enqueueArtifactPreviewJob({
+  const job = await store.files.enqueueArtifactPreviewJob({
     clientInstanceId: fixture.clientInstanceId,
     conversationId: fixture.conversation.id,
     sourceArtifactId: fixture.artifact.id,
@@ -541,75 +538,72 @@ async function expectPreviewJobStaleRecoveryContract(
     settingsHash: "settings-stale",
     queuedAt: "2026-07-01T12:00:00.000Z"
   });
-  const firstClaim = await store.files.claimNextArtifactPreviewJob({
-    clientInstanceId: fixture.clientInstanceId,
-    workerId: "preview-worker-stale",
-    leaseToken: "lease-stale-1",
-    now: "2026-07-01T12:00:01.000Z",
-    leaseExpiresAt: "2026-07-01T12:01:00.000Z"
-  });
-  expect(firstClaim).toMatchObject({ status: "processing", attempts: 1 });
-
-  await expect(
-    store.files.recoverStaleArtifactPreviewJobs({
+  const claim = (leaseOwnerId: string, leaseToken: string) =>
+    store.files.claimArtifactPreviewJob({
       clientInstanceId: fixture.clientInstanceId,
-      staleLeaseExpiredBefore: "2026-07-01T12:00:30.000Z",
-      recoveredAt: "2026-07-01T12:00:30.000Z",
-      maxAttempts: 2,
-      limit: 10
-    })
-  ).resolves.toHaveLength(0);
+      jobId: job.id,
+      leaseOwnerId,
+      leaseToken,
+      leaseMs: 60_000
+    });
 
-  const retried = await store.files.recoverStaleArtifactPreviewJobs({
-    clientInstanceId: fixture.clientInstanceId,
-    staleLeaseExpiredBefore: "2026-07-01T12:02:00.000Z",
-    recoveredAt: "2026-07-01T12:02:01.000Z",
-    maxAttempts: 2,
-    limit: 10
+  await expect(claim("job:one", "lease-1")).resolves.toMatchObject({
+    status: "claimed",
+    row: { status: "processing", attempts: 1, leaseOwnerId: "job:one", leaseToken: "lease-1" }
   });
-  expect(retried).toHaveLength(1);
-  expect(retried[0]).toMatchObject({
-    status: "pending",
-    attempts: 1,
-    leaseToken: undefined,
-    errorCode: "stale_lease"
+  // A live lease of another owner is left alone.
+  await expect(claim("job:two", "lease-2")).resolves.toEqual({ status: "held" });
+  // A later attempt of the same job takes the row over at once.
+  await expect(claim("job:one", "lease-3")).resolves.toMatchObject({
+    status: "claimed",
+    row: { attempts: 2, leaseToken: "lease-3" }
   });
-
-  const secondClaim = await store.files.claimNextArtifactPreviewJob({
-    clientInstanceId: fixture.clientInstanceId,
-    workerId: "preview-worker-stale",
-    leaseToken: "lease-stale-2",
-    now: "2026-07-01T12:02:02.000Z",
-    leaseExpiresAt: "2026-07-01T12:03:00.000Z"
-  });
-  expect(secondClaim).toMatchObject({ status: "processing", attempts: 2 });
-
-  const failed = await store.files.recoverStaleArtifactPreviewJobs({
-    clientInstanceId: fixture.clientInstanceId,
-    staleLeaseExpiredBefore: "2026-07-01T12:04:00.000Z",
-    recoveredAt: "2026-07-01T12:04:01.000Z",
-    maxAttempts: 2,
-    limit: 10
-  });
-  expect(failed).toHaveLength(1);
-  expect(failed[0]).toMatchObject({
-    status: "failed",
-    attempts: 2,
-    leaseToken: undefined,
-    errorCode: "stale_lease"
-  });
+  // The earlier attempt's token no longer extends the lease.
   await expect(
-    store.files.getArtifactPreviewManifest({
+    store.files.renewClaimedArtifactPreviewJobLease({
       clientInstanceId: fixture.clientInstanceId,
-      sourceArtifactId: fixture.artifact.id,
-      renderer: "preview-renderer-stale",
-      rendererVersion: "1.0.0",
-      settingsHash: "settings-stale"
+      jobId: job.id,
+      leaseToken: "lease-1",
+      leaseMs: 60_000
     })
-  ).resolves.toMatchObject({
-    status: "failed",
-    errorCode: "stale_lease"
+  ).resolves.toBe(false);
+  await expect(
+    store.files.renewClaimedArtifactPreviewJobLease({
+      clientInstanceId: fixture.clientInstanceId,
+      jobId: job.id,
+      leaseToken: "lease-3",
+      leaseMs: 60_000
+    })
+  ).resolves.toBe(true);
+
+  // Once the lease ran out, by the database's clock, another owner takes the row.
+  await rawSql`
+    update artifact_preview_jobs set lease_expires_at = now() - interval '1 second'
+    where id = ${job.id}
+  `;
+  await expect(claim("job:two", "lease-4")).resolves.toMatchObject({
+    status: "claimed",
+    row: { attempts: 3, leaseOwnerId: "job:two", leaseToken: "lease-4" }
   });
+
+  await store.files.failClaimedArtifactPreviewJob({
+    clientInstanceId: fixture.clientInstanceId,
+    jobId: job.id,
+    leaseToken: "lease-4",
+    errorCode: "stale_lease",
+    failedAt: "2026-07-01T12:04:01.000Z"
+  });
+  // A finished row is nobody's to claim, and neither is one that does not exist.
+  await expect(claim("job:two", "lease-5")).resolves.toEqual({ status: "finished" });
+  await expect(
+    store.files.claimArtifactPreviewJob({
+      clientInstanceId: fixture.clientInstanceId,
+      jobId: "apj_missing",
+      leaseOwnerId: "job:two",
+      leaseToken: "lease-6",
+      leaseMs: 60_000
+    })
+  ).resolves.toEqual({ status: "finished" });
 }
 
 async function expectPreviewJobRetryReplacementRaceContract(
@@ -631,13 +625,13 @@ async function expectPreviewJobRetryReplacementRaceContract(
     ...retryInput,
     queuedAt: "2026-07-01T12:30:00.000Z"
   });
-  const claimed = await store.files.claimNextArtifactPreviewJob({
-    clientInstanceId: fixture.clientInstanceId,
-    workerId: "preview-worker-initial",
-    leaseToken: "lease-initial",
-    now: "2026-07-01T12:30:01.000Z",
-    leaseExpiresAt: "2026-07-01T12:31:00.000Z"
-  });
+  const claimed = await claimPreviewRow(
+    store,
+    fixture.clientInstanceId,
+    job.id,
+    "preview-worker-initial",
+    "lease-initial"
+  );
   expect(claimed).toMatchObject({
     id: job.id,
     status: "processing",
@@ -700,6 +694,24 @@ async function expectPreviewJobRetryReplacementRaceContract(
     leaseOwnerId: "preview-worker-race",
     leaseToken: "lease-race"
   });
+}
+
+/** The claim by id of the executor job; the row when it was taken, nothing when it is held. */
+async function claimPreviewRow(
+  store: PreviewJobIdentityStore,
+  clientInstanceId: ClientInstanceId,
+  jobId: string,
+  leaseOwnerId: string,
+  leaseToken: string
+) {
+  const claim = await store.files.claimArtifactPreviewJob({
+    clientInstanceId,
+    jobId,
+    leaseOwnerId,
+    leaseToken,
+    leaseMs: 5 * 60_000
+  });
+  return claim.status === "claimed" ? claim.row : undefined;
 }
 
 async function waitForBlockedArtifactPreviewJobUpdate(sql: Sql): Promise<void> {

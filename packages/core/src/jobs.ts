@@ -90,6 +90,14 @@ export function defineSchedule(schedule: JobSchedule): JobSchedule {
   return Object.freeze({ ...schedule });
 }
 
+/**
+ * The dedupe key of a job that drives one record: the kind and the record's id. While such a
+ * job is queued or running, a second enqueue for the record inserts nothing.
+ */
+export function subjectDedupeKey(kind: string, subjectId: string): string {
+  return `${kind}:${subjectId}`;
+}
+
 /** The dedupe key under which the one live tick of a scheduled kind is held. */
 export function scheduleDedupeKey(kind: string): string {
   return `schedule:${kind}`;

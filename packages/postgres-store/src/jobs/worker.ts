@@ -176,8 +176,20 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
     const lease: JobLease = { jobId: row.id, token: row.leaseToken ?? "" };
     const jobLogger = logger.child({ jobId: row.id, kind: row.kind, attempt: row.attempts });
     const abort = new AbortController();
+    let bound: BoundJob | undefined;
+    // With `onHeartbeat` the lease and the handler's copy of it move in one transaction: a row
+    // of the subject never shows a lease the job no longer has.
+    const beat = (): Promise<boolean> => {
+      const onHeartbeat = bound?.onHeartbeat;
+      if (!onHeartbeat) return heartbeatJob(db, lease, handler.kind.leaseMs);
+      return stores.transaction(async (txStores) => {
+        const held = await heartbeatJob(connectionOf(txStores.jobs), lease, handler.kind.leaseMs);
+        if (held) await onHeartbeat({ leaseToken: lease.token }, txStores);
+        return held;
+      });
+    };
     const heartbeat = setInterval(() => {
-      heartbeatJob(db, lease, handler.kind.leaseMs)
+      beat()
         .then((held) => {
           if (held) return;
           clearInterval(heartbeat);
@@ -188,6 +200,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         });
     }, handler.kind.leaseMs / HEARTBEATS_PER_LEASE);
     const control: JobControl = {
+      leaseToken: lease.token,
       signal: abort.signal,
       attempt: row.attempts,
       logger: jobLogger,
@@ -204,7 +217,6 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         })
     };
     const ended = (async () => {
-      let bound: BoundJob | undefined;
       let outcome: Outcome;
       try {
         try {

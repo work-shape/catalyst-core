@@ -261,19 +261,34 @@ export const register = (path: string) => app.get(path, handler);
 export const heartbeat = setInterval(() => {}, 1000);
 `,
   "packages/tool-execution/package.json": JSON.stringify({ name: "@fixture/tool-execution" }),
-  // One timer in this method is a named exemption. The second is the thirteenth.
+  // The preview lease left the exemption list when previews moved onto the executor: its
+  // timer and its claim query are findings when they are put back.
   "packages/tool-execution/src/artifact-preview-worker.ts": `export class ArtifactPreviewWorker {
   startLeaseRenewal() {
-    const renewal = setInterval(() => {}, 1000);
-    const thirteenth = setInterval(() => {}, 1000);
-    return [renewal, thirteenth];
+    return setInterval(() => {}, 1000);
   }
 }
 `,
-  // The same timer under another name is not the exempted one.
+  "packages/postgres-store/src/postgres-artifact-preview-operations.ts": `export function claimNextArtifactPreviewJob() {
+  return "select id from artifact_preview_jobs for update skip locked";
+}
+export function recoverStaleArtifactPreviewJobs() {
+  return "select id from artifact_preview_jobs for update skip locked";
+}
+`,
+  "packages/postgres-store/src/postgres-file-store.ts": `export function claimNextQueuedConversationAttachment() {
+  return "select id from conversation_attachments for update skip locked";
+}
+`,
+  // Two timers in this method are a named exemption. The third is the ninth occurrence. The
+  // same timer under another name is not the exempted one.
   "packages/tool-execution/src/workspace-command-worker.ts": `export class WorkspaceCommandWorker {
   runClaimedCommand() {
-    return [setInterval(() => {}, 1000), setInterval(() => {}, 1000)];
+    return [
+      setInterval(() => {}, 1000),
+      setInterval(() => {}, 1000),
+      setInterval(() => {}, 1000)
+    ];
   }
   runAnother() {
     return setInterval(() => {}, 1000);
@@ -540,7 +555,11 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/job-executor-boundary ${source}/interval.ts`,
         `catalyst/job-executor-boundary ${source}/interval-host.ts`,
         `catalyst/job-executor-boundary ${source}/interval-alias.ts`,
+        "catalyst/job-executor-boundary packages/postgres-store/src/postgres-artifact-preview-operations.ts",
+        "catalyst/job-executor-boundary packages/postgres-store/src/postgres-artifact-preview-operations.ts",
+        "catalyst/job-executor-boundary packages/postgres-store/src/postgres-file-store.ts",
         "catalyst/job-executor-boundary packages/tool-execution/src/artifact-preview-worker.ts",
+        "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
         "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
         `catalyst/memory-store ${source}/memory-store.ts`,
         "catalyst/test-api-path tests/api-path.test.ts",

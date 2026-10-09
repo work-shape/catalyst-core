@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type ArtifactPreviewImageArtifactInput,
@@ -6,15 +6,15 @@ import {
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type ArtifactPreviewModelImageRef,
-  type ClaimNextArtifactPreviewJobInput,
+  type ClaimArtifactPreviewJobInput,
   type ClientInstanceId,
   type CompleteClaimedArtifactPreviewJobInput,
   type EnqueueArtifactPreviewJobInput,
   type FailClaimedArtifactPreviewJobInput,
   type ManagedArtifactId,
   type MarkClaimedArtifactPreviewJobUnsupportedInput,
-  type RecoverStaleArtifactPreviewJobsInput,
   type RenewClaimedArtifactPreviewJobLeaseInput,
+  type SubjectRowClaim,
   type WriteArtifactPreviewManifestInput,
   asManagedArtifactId,
   createPlatformId,
@@ -160,74 +160,104 @@ export async function getArtifactPreviewJob(
   return row ? mapArtifactPreviewJob(row) : undefined;
 }
 
-export async function claimNextArtifactPreviewJob(
+/**
+ * Takes a preview row by id for the executor job that drives it and writes the job's lease
+ * onto the row's lease columns, which a worker of the previous release reads. The row is taken
+ * when it is pending, when its lease ran out, or when `leaseOwnerId` already holds it: that is
+ * an earlier attempt of the same job, whose lease the executor has ended.
+ */
+export async function claimArtifactPreviewJob(
   db: PostgresConnection,
-  input: ClaimNextArtifactPreviewJobInput
-): Promise<ArtifactPreviewJobRecord | undefined> {
-  const claimed = await db.transaction(async (tx) => {
-    const rows = (await tx.execute(drizzleSql<{ id: string }>`
-      with candidate as (
-        select id
-        from artifact_preview_jobs
-        where client_instance_id = ${input.clientInstanceId}
-          and status = 'pending'
-          and (
-            next_attempt_at is null
-            or next_attempt_at <= ${input.now}::timestamptz
+  input: ClaimArtifactPreviewJobInput
+): Promise<SubjectRowClaim<ArtifactPreviewJobRecord>> {
+  const ofRow = and(
+    eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
+    eq(artifactPreviewJobs.id, input.jobId)
+  );
+  const [claimed] = await db
+    .update(artifactPreviewJobs)
+    .set({
+      status: "processing",
+      attempts: drizzleSql`${artifactPreviewJobs.attempts} + 1`,
+      nextAttemptAt: null,
+      leaseOwnerId: input.leaseOwnerId,
+      leaseToken: input.leaseToken,
+      leaseExpiresAt: leaseExpiry(input.leaseMs),
+      errorCode: null,
+      errorMessage: null,
+      updatedAt: drizzleSql`now()`
+    })
+    .where(
+      and(
+        ofRow,
+        drizzleSql`(
+          ${artifactPreviewJobs.status} = 'pending'
+          or (
+            ${artifactPreviewJobs.status} = 'processing'
+            and (
+              ${artifactPreviewJobs.leaseExpiresAt} is null
+              or ${artifactPreviewJobs.leaseExpiresAt} <= now()
+              or ${artifactPreviewJobs.leaseOwnerId} = ${input.leaseOwnerId}
+            )
           )
-        order by coalesce(next_attempt_at, created_at) asc, created_at asc, id asc
-        limit 1
-        for update skip locked
+        )`
       )
-      update artifact_preview_jobs apj
-      set status = 'processing',
-          attempts = apj.attempts + 1,
-          next_attempt_at = null,
-          lease_owner_id = ${input.workerId},
-          lease_token = ${input.leaseToken},
-          lease_expires_at = ${input.leaseExpiresAt}::timestamptz,
-          error_code = null,
-          error_message = null,
-          updated_at = ${input.now}::timestamptz
-      from candidate
-      where apj.id = candidate.id
-      returning apj.id
-    `)) as unknown as Array<{ id: string }>;
-    const jobId = rows[0]?.id;
-    if (!jobId) {
-      return undefined;
-    }
-    const [row] = await tx
-      .select()
-      .from(artifactPreviewJobs)
-      .where(
-        and(
-          eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
-          eq(artifactPreviewJobs.id, jobId)
-        )
-      )
-      .limit(1);
-    return row;
-  });
-  return claimed ? mapArtifactPreviewJob(claimed) : undefined;
+    )
+    .returning();
+  if (claimed) return { status: "claimed", row: mapArtifactPreviewJob(claimed) };
+  const [current] = await db
+    .select({ status: artifactPreviewJobs.status })
+    .from(artifactPreviewJobs)
+    .where(ofRow)
+    .limit(1);
+  return current && !isTerminalArtifactPreviewJob(current.status)
+    ? { status: "held" }
+    : { status: "finished" };
 }
 
 export async function renewClaimedArtifactPreviewJobLease(
   db: PostgresConnection,
   input: RenewClaimedArtifactPreviewJobLeaseInput
-): Promise<ArtifactPreviewJobRecord> {
-  const [job] = await db
+): Promise<boolean> {
+  const rows = await db
     .update(artifactPreviewJobs)
-    .set({
-      leaseExpiresAt: new Date(input.leaseExpiresAt),
-      updatedAt: new Date(input.renewedAt)
-    })
+    .set({ leaseExpiresAt: leaseExpiry(input.leaseMs), updatedAt: drizzleSql`now()` })
     .where(claimedArtifactPreviewJobWhere(input))
-    .returning();
-  if (!job) {
-    throw new AppError("CONFLICT", "Artifact preview job lease is no longer active");
-  }
-  return mapArtifactPreviewJob(job);
+    .returning({ id: artifactPreviewJobs.id });
+  return rows.length > 0;
+}
+
+/**
+ * Transition release only: the preview rows that are not finished and have no queued or
+ * running job of `jobKind` under the row's dedupe key, oldest first.
+ */
+export async function listArtifactPreviewJobIdsWithoutJob(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; jobKind: string; limit: number }
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: artifactPreviewJobs.id })
+    .from(artifactPreviewJobs)
+    .where(
+      and(
+        eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
+        inArray(artifactPreviewJobs.status, ["pending", "processing"]),
+        drizzleSql`not exists (
+          select 1 from platform_jobs job
+          where job.client_instance_id = ${artifactPreviewJobs.clientInstanceId}
+            and job.kind = ${input.jobKind}
+            and job.dedupe_key = ${input.jobKind} || ':' || ${artifactPreviewJobs.id}
+            and job.status in ('queued', 'running')
+        )`
+      )
+    )
+    .orderBy(asc(artifactPreviewJobs.createdAt), asc(artifactPreviewJobs.id))
+    .limit(input.limit);
+  return rows.map((row) => row.id);
+}
+
+function leaseExpiry(leaseMs: number) {
+  return drizzleSql`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
 }
 
 export async function completeClaimedArtifactPreviewJob(
@@ -405,80 +435,6 @@ export async function markClaimedArtifactPreviewJobUnsupported(
       writtenAt: unsupportedAt
     });
     return mapArtifactPreviewJob(job);
-  });
-}
-
-export async function recoverStaleArtifactPreviewJobs(
-  db: PostgresConnection,
-  input: RecoverStaleArtifactPreviewJobsInput
-): Promise<ArtifactPreviewJobRecord[]> {
-  if (input.limit <= 0) {
-    return [];
-  }
-  const recoveredAt = new Date(input.recoveredAt);
-  const retryAt = new Date(input.retryAt ?? input.recoveredAt);
-  return db.transaction(async (tx) => {
-    const staleRows = (await tx.execute(drizzleSql<{ id: string }>`
-      select id
-      from artifact_preview_jobs
-      where client_instance_id = ${input.clientInstanceId}
-        and status = 'processing'
-        and lease_expires_at is not null
-        and lease_expires_at < ${input.staleLeaseExpiredBefore}::timestamptz
-      order by lease_expires_at asc, id asc
-      limit ${input.limit}
-      for update skip locked
-    `)) as unknown as Array<{ id: string }>;
-    const recovered: ArtifactPreviewJobRecord[] = [];
-    for (const stale of staleRows) {
-      const [current] = await tx
-        .select()
-        .from(artifactPreviewJobs)
-        .where(
-          and(
-            eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
-            eq(artifactPreviewJobs.id, stale.id)
-          )
-        )
-        .limit(1);
-      if (!current) {
-        continue;
-      }
-      const terminal = current.attempts >= input.maxAttempts;
-      const errorCode = input.errorCode ?? "stale_lease";
-      const [job] = await tx
-        .update(artifactPreviewJobs)
-        .set({
-          status: terminal ? "failed" : "pending",
-          nextAttemptAt: terminal ? null : retryAt,
-          leaseOwnerId: null,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          errorCode,
-          errorMessage: input.errorMessage ?? null,
-          updatedAt: recoveredAt
-        })
-        .where(
-          and(
-            eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
-            eq(artifactPreviewJobs.id, stale.id)
-          )
-        )
-        .returning();
-      if (!job) {
-        continue;
-      }
-      if (terminal) {
-        await writeTerminalPreviewManifest(tx, {
-          status: "failed",
-          job,
-          errorCode,
-          writtenAt: recoveredAt
-        });
-      }
-      recovered.push(mapArtifactPreviewJob(job));
-    }
-    return recovered;
   });
 }
 

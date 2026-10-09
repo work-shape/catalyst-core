@@ -45,31 +45,6 @@ export const leaseExemptions = [
     within: "runClaimedCommand",
     count: 2,
     removedBy: "CB-7c"
-  },
-  // The preview and document leases: S2-06b.
-  {
-    file: "packages/postgres-store/src/postgres-artifact-preview-operations.ts",
-    within: "claimNextArtifactPreviewJob",
-    count: 1,
-    removedBy: "S2-06b"
-  },
-  {
-    file: "packages/postgres-store/src/postgres-artifact-preview-operations.ts",
-    within: "recoverStaleArtifactPreviewJobs",
-    count: 1,
-    removedBy: "S2-06b"
-  },
-  {
-    file: "packages/postgres-store/src/postgres-file-store.ts",
-    within: "claimNextQueuedConversationAttachment",
-    count: 1,
-    removedBy: "S2-06b"
-  },
-  {
-    file: "packages/tool-execution/src/artifact-preview-worker.ts",
-    within: "startLeaseRenewal",
-    count: 1,
-    removedBy: "S2-06b"
   }
 ];
 

@@ -1,8 +1,7 @@
-import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { createChatServerJobs, generateConversationTitleJob } from "@vivd-catalyst/chat-server";
 import { createJobWorker } from "@vivd-catalyst/client-assembly";
-import { asClientInstanceId } from "@vivd-catalyst/core";
+import { asClientInstanceId, asConversationId } from "@vivd-catalyst/core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import {
   createFailingTestLogger,
@@ -10,7 +9,7 @@ import {
   personalConversationListInput
 } from "./support/fixtures";
 import { createRetentionOptions } from "./support/retention-harness";
-import { fileTestDatabaseUrl } from "./support/test-database";
+import { withTestSql as withSql } from "./support/test-sql";
 import { createTestInstance, getTestJobs, type TestInstance } from "./support/test-instance";
 
 const clientInstanceId = asClientInstanceId("demo-local");
@@ -101,6 +100,52 @@ describe("the jobs of the API process", () => {
       { status: "succeeded", due: true },
       { status: "queued", due: false }
     ]);
+  });
+
+  it("gives a preview row without a job its job at the first pass, and no second one", async () => {
+    const app = await createApp();
+    const created = await app.call("conversations.create", { payload: { title: "Adoption" } });
+    const conversation = { id: asConversationId(created.json<{ id: string }>().id) };
+    const source = await app.stores.files.createManagedArtifact({
+      clientInstanceId,
+      conversationId: conversation.id,
+      kind: "document.docx",
+      objectKey: `adoption/${conversation.id}/report.docx`,
+      filename: "report.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      byteSize: 4,
+      checksum: "sha256:adoption"
+    });
+    const row = await app.stores.files.enqueueArtifactPreviewJob({
+      clientInstanceId,
+      conversationId: conversation.id,
+      sourceArtifactId: source.id,
+      sourceChecksum: source.checksum,
+      sourceMimeType: source.mimeType
+    });
+    const previewJobs = () =>
+      withSql(async (sql) => {
+        const rows = await sql<{ status: string; dedupe_key: string }[]>`
+          select status, dedupe_key from platform_jobs
+          where kind = 'artifact_preview.render' and subject = ${row.id}`;
+        return rows.map((found) => ({ ...found }));
+      });
+    const queued = [{ status: "queued", dedupe_key: `artifact_preview.render:${row.id}` }];
+    // The row and its job commit together.
+    await expect(previewJobs()).resolves.toEqual(queued);
+    // As the previous release's API leaves it: the row, and no job.
+    await withSql((sql) => sql`delete from platform_jobs where kind = 'artifact_preview.render'`);
+
+    await getTestJobs(app).runDue();
+    await expect(previewJobs()).resolves.toEqual(queued);
+
+    await withSql(
+      (sql) => sql`
+        update platform_jobs set run_after = now()
+        where kind = 'platform_jobs.adopt_legacy' and status = 'queued'`
+    );
+    await getTestJobs(app).runDue();
+    await expect(previewJobs()).resolves.toEqual(queued);
   });
 
   it("removes audit events older than the audit retention and records the count", async () => {
@@ -256,15 +301,6 @@ describe("the title job and a rename by the user", () => {
 
 function createApp(): Promise<TestInstance> {
   return createTestInstance({ config: createTestConfig(), env: {}, tools: [] });
-}
-
-async function withSql<Result>(run: (sql: postgres.Sql) => Promise<Result>): Promise<Result> {
-  const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
-  try {
-    return await run(sql);
-  } finally {
-    await sql.end();
-  }
 }
 
 function titleJobs(conversationId: string) {

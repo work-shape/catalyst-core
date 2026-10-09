@@ -53,7 +53,7 @@ function bindStores(
   return {
     conversations: createPostgresConversationsStore(db),
     agentRuns: createPostgresAgentRunsStore(db),
-    files: createPostgresFilesStore(db),
+    files: createPostgresFilesStore(db, enqueued),
     audit: createPostgresAuditStore(db),
     usage: createPostgresUsageStore(db),
     users: createPostgresUsersStore(db),

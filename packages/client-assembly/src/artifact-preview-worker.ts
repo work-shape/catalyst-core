@@ -1,6 +1,7 @@
 import { createLogger } from "./logger";
 import {
   AppError,
+  type JobWorker,
   type PlatformStores,
   type ProviderCreateContext,
   type SecretResolver
@@ -11,7 +12,7 @@ import {
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import {
-  ArtifactPreviewWorker,
+  createArtifactPreviewJobHandler,
   LibreOfficeArtifactPreviewRenderer
 } from "@vivd-catalyst/tool-execution";
 import type { ArtifactPreviewSourceReader } from "@vivd-catalyst/tool-execution";
@@ -21,6 +22,7 @@ import {
   createWorkspaceObjectStore,
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
+import { createJobWorker } from "./job-worker";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceArtifactPreviewWorkerInput {
@@ -43,9 +45,11 @@ export type ArtifactPreviewSourceReaderFactory = (input: {
 
 export interface ClientInstanceArtifactPreviewWorker {
   readonly config: ClientInstanceConfig;
-  readonly worker: ArtifactPreviewWorker;
+  /** The job worker that serves `artifact_preview.render`. */
+  readonly worker: JobWorker;
+  /** Starts the worker and resolves once `stop` has given its jobs back. */
   runUntilStopped(): Promise<void>;
-  stop(input?: { cancelActive?: boolean; reason?: string }): Promise<void>;
+  stop(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -79,44 +83,61 @@ export async function createClientInstanceArtifactPreviewWorker(
       })
     : undefined;
   const objectStore = (await createWorkspaceObjectStore(config, infrastructure.context)).objects;
-  const worker = new ArtifactPreviewWorker({
+  const worker = createJobWorker({
+    stores: store,
     clientInstanceId,
-    store: store.files,
-    objectStore,
-    sourceReader,
-    renderer: new LibreOfficeArtifactPreviewRenderer({
-      sofficeCommand: env.ARTIFACT_PREVIEW_SOFFICE_COMMAND,
-      pdfInfoCommand: env.ARTIFACT_PREVIEW_PDFINFO_COMMAND,
-      pdfToPpmCommand: env.ARTIFACT_PREVIEW_PDFTOPPM_COMMAND,
-      tempRootDirectory: env.ARTIFACT_PREVIEW_TEMP_ROOT
-    }),
-    workerId: env.ARTIFACT_PREVIEW_WORKER_ID,
-    concurrency: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONCURRENCY"),
-    pollIntervalMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_POLL_INTERVAL_MS"),
-    leaseDurationMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_LEASE_DURATION_MS"),
-    leaseRenewIntervalMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_LEASE_RENEW_INTERVAL_MS"),
-    maxAttempts: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_ATTEMPTS"),
-    maxPages: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_PAGES"),
-    maxSourceBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_SOURCE_BYTES"),
-    maxConvertedPdfBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_CONVERTED_PDF_BYTES"),
-    maxOutputBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_OUTPUT_BYTES"),
-    maxRasterDimension: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_RASTER_DIMENSION"),
-    conversionTimeoutMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONVERSION_TIMEOUT_MS"),
-    rasterizationTimeoutMs: readPositiveIntegerEnv(
-      env,
-      "ARTIFACT_PREVIEW_RASTERIZATION_TIMEOUT_MS"
-    ),
-    previewDpi: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_DPI")
+    // The worker id names this process in the log lines of its jobs.
+    logger: env.ARTIFACT_PREVIEW_WORKER_ID
+      ? logger.child({ workerId: env.ARTIFACT_PREVIEW_WORKER_ID })
+      : logger,
+    handlers: [
+      createArtifactPreviewJobHandler({
+        stores: store,
+        objectStore,
+        sourceReader,
+        renderer: new LibreOfficeArtifactPreviewRenderer({
+          sofficeCommand: env.ARTIFACT_PREVIEW_SOFFICE_COMMAND,
+          pdfInfoCommand: env.ARTIFACT_PREVIEW_PDFINFO_COMMAND,
+          pdfToPpmCommand: env.ARTIFACT_PREVIEW_PDFTOPPM_COMMAND,
+          tempRootDirectory: env.ARTIFACT_PREVIEW_TEMP_ROOT
+        }),
+        slots: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONCURRENCY"),
+        maxPages: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_PAGES"),
+        maxSourceBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_SOURCE_BYTES"),
+        maxConvertedPdfBytes: readPositiveIntegerEnv(
+          env,
+          "ARTIFACT_PREVIEW_MAX_CONVERTED_PDF_BYTES"
+        ),
+        maxOutputBytes: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_OUTPUT_BYTES"),
+        maxRasterDimension: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_MAX_RASTER_DIMENSION"),
+        conversionTimeoutMs: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_CONVERSION_TIMEOUT_MS"),
+        rasterizationTimeoutMs: readPositiveIntegerEnv(
+          env,
+          "ARTIFACT_PREVIEW_RASTERIZATION_TIMEOUT_MS"
+        ),
+        previewDpi: readPositiveIntegerEnv(env, "ARTIFACT_PREVIEW_DPI")
+      })
+    ]
+  });
+  let stopped: (() => void) | undefined;
+  const untilStopped = new Promise<void>((resolve) => {
+    stopped = resolve;
   });
 
   return {
     config,
     worker,
     runUntilStopped() {
-      return worker.runUntilStopped();
+      worker.start();
+      return untilStopped;
     },
-    stop(stopInput = {}) {
-      return worker.stop(stopInput);
+    async stop() {
+      // Gives back the jobs it still holds while the database is open.
+      try {
+        await worker.stop();
+      } finally {
+        stopped?.();
+      }
     },
     async close() {
       await store.close?.();
@@ -134,15 +155,11 @@ export async function runClientInstanceArtifactPreviewWorker(
       return;
     }
     stopping = true;
-    service
-      .stop({
-        cancelActive: true,
-        reason: `Received ${signal}`
-      })
-      .catch((error: unknown) => {
-        createLogger().error({ error }, "Worker shutdown failed");
-        process.exitCode = 1;
-      });
+    createLogger().info({ signal }, "Artifact preview worker is stopping");
+    service.stop().catch((error: unknown) => {
+      createLogger().error({ error }, "Worker shutdown failed");
+      process.exitCode = 1;
+    });
   };
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);

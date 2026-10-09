@@ -62,6 +62,11 @@ export interface ChatAttachmentService {
    * the object keys that were removed; a key nobody stores is left out.
    */
   deleteOrphanedFileObjects?(input: { objectKeys: readonly string[] }): Promise<string[]>;
+  /**
+   * Transition release only: enqueues a job for each attachment that waits for preprocessing
+   * and has no queued or running job, up to `limit`, and returns how many.
+   */
+  adoptLegacyAttachments?(input: { limit: number }): Promise<number>;
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;

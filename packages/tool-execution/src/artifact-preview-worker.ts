@@ -3,14 +3,23 @@ import { basename, extname } from "node:path";
 import {
   AppError,
   ARTIFACT_PREVIEW_MAX_PAGES,
+  JobLeaseLostError,
+  NonRetryableJobError,
+  claimSubjectRow,
+  defineJobHandler,
   detectArtifactPreviewSourceKind,
+  renderArtifactPreviewJob,
+  subjectRowLeaseOwnerId,
   type ArtifactPreviewImageArtifactInput,
   type ArtifactPreviewImageFormat,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewSourceKind,
   type ClientInstanceId,
+  type Job,
+  type JobControl,
   type ManagedArtifactRecord,
-  type PlatformStores
+  type PlatformStores,
+  type RegisteredJobHandler
 } from "@vivd-catalyst/core";
 import { readArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import {
@@ -38,12 +47,6 @@ export {
   type ArtifactPreviewRenderer
 } from "./artifact-preview-renderer";
 
-const DEFAULT_POLL_INTERVAL_MS = 1000;
-const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1000;
-const DEFAULT_STALE_RECOVERY_INTERVAL_MS = 30000;
-const DEFAULT_STALE_RECOVERY_LIMIT = 50;
-const DEFAULT_MAX_ATTEMPTS = 2;
-const DEFAULT_RETRY_DELAY_MS = 0;
 const DEFAULT_MAX_SOURCE_BYTES = 100 * 1024 * 1024;
 const HARD_MAX_SOURCE_BYTES = 1024 * 1024 * 1024;
 const DEFAULT_MAX_CONVERTED_PDF_BYTES = 256 * 1024 * 1024;
@@ -58,32 +61,17 @@ const DEFAULT_RASTERIZATION_TIMEOUT_MS = 180000;
 const DEFAULT_PREVIEW_DPI = 144;
 const DEFAULT_OUTPUT_FORMAT: ArtifactPreviewImageFormat = "png";
 
-export type ArtifactPreviewWorkerStore = Pick<
-  PlatformStores["files"],
-  | "claimNextArtifactPreviewJob"
-  | "renewClaimedArtifactPreviewJobLease"
-  | "completeClaimedArtifactPreviewJob"
-  | "failClaimedArtifactPreviewJob"
-  | "getManagedArtifact"
-  | "markClaimedArtifactPreviewJobUnsupported"
-  | "recoverStaleArtifactPreviewJobs"
->;
+// The lease an exhausted job writes onto its row for the moment in which it marks it failed.
+const EXHAUSTED_ROW_LEASE_MS = 60 * 1000;
 
-export interface ArtifactPreviewWorkerOptions {
-  clientInstanceId: ClientInstanceId;
-  store: ArtifactPreviewWorkerStore;
+export interface ArtifactPreviewJobHandlerOptions {
+  /** The stores of the process. Reads go through them, writes through the job's transaction. */
+  stores: Pick<PlatformStores, "files">;
   objectStore: DeletableWorkspaceObjectStorage;
   sourceReader?: ArtifactPreviewSourceReader;
   renderer?: ArtifactPreviewRenderer;
-  workerId?: string;
-  concurrency?: number;
-  pollIntervalMs?: number;
-  leaseDurationMs?: number;
-  leaseRenewIntervalMs?: number;
-  staleRecoveryIntervalMs?: number;
-  staleRecoveryLimit?: number;
-  maxAttempts?: number;
-  retryDelayMs?: number;
+  /** How many previews this process renders at once. */
+  slots?: number;
   maxSourceBytes?: number;
   maxConvertedPdfBytes?: number;
   maxOutputBytes?: number;
@@ -94,6 +82,8 @@ export interface ArtifactPreviewWorkerOptions {
   previewDpi?: number;
   outputFormat?: ArtifactPreviewImageFormat;
   now?: () => string;
+  /** Replaces the five seconds between two looks at a row another worker holds. For tests. */
+  yieldCheckIntervalMs?: number;
 }
 
 export interface ArtifactPreviewSourceReader {
@@ -103,26 +93,42 @@ export interface ArtifactPreviewSourceReader {
   }): Promise<{ bytes: Uint8Array }>;
 }
 
-export type ArtifactPreviewWorkerRunOnceResult =
-  | { status: "idle" }
-  | { status: "claimed"; job: ArtifactPreviewJobRecord }
-  | { status: "stale"; job: ArtifactPreviewJobRecord };
+type PreviewJob = Job<{ previewJobId: string }>;
 
-export class ArtifactPreviewWorker {
-  private readonly clientInstanceId: ClientInstanceId;
-  private readonly store: ArtifactPreviewWorkerStore;
+/** The row is no longer this attempt's: another worker finished it or its conversation is gone. */
+class PreviewRowLostError extends Error {}
+
+/**
+ * The handler of `artifact_preview.render`. The executor job is the only claim on a preview
+ * row; the handler takes the row by id, renders, and writes the row's status and result
+ * inside the job's fenced transaction.
+ */
+export function createArtifactPreviewJobHandler(
+  options: ArtifactPreviewJobHandlerOptions
+): RegisteredJobHandler {
+  const render = new ArtifactPreviewRender(options);
+  return defineJobHandler({
+    kind: renderArtifactPreviewJob,
+    slots: options.slots ?? 1,
+    run: (job, control) => render.run(job, control),
+    // Transition release: the lease is copied onto the row for workers of the previous release.
+    async onHeartbeat(job, lease, stores) {
+      await stores.files.renewClaimedArtifactPreviewJobLease({
+        clientInstanceId: job.clientInstanceId,
+        jobId: job.payload.previewJobId,
+        leaseToken: lease.leaseToken,
+        leaseMs: renderArtifactPreviewJob.leaseMs
+      });
+    },
+    onExhausted: (job, stores) => render.failAfterLastAttempt(job, stores)
+  });
+}
+
+class ArtifactPreviewRender {
+  private readonly store: Pick<PlatformStores, "files">["files"];
   private readonly objectStore: DeletableWorkspaceObjectStorage;
   private readonly sourceReader?: ArtifactPreviewSourceReader;
   private readonly renderer: ArtifactPreviewRenderer;
-  private readonly workerId: string;
-  private readonly concurrency: number;
-  private readonly pollIntervalMs: number;
-  private readonly leaseDurationMs: number;
-  private readonly leaseRenewIntervalMs: number;
-  private readonly staleRecoveryIntervalMs: number;
-  private readonly staleRecoveryLimit: number;
-  private readonly maxAttempts: number;
-  private readonly retryDelayMs: number;
   private readonly maxSourceBytes: number;
   private readonly maxConvertedPdfBytes: number;
   private readonly maxOutputBytes: number;
@@ -133,28 +139,13 @@ export class ArtifactPreviewWorker {
   private readonly previewDpi: number;
   private readonly outputFormat: ArtifactPreviewImageFormat;
   private readonly now: () => string;
-  private readonly activeControllers = new Set<AbortController>();
-  private stopping = false;
-  private loopPromise?: Promise<void>;
-  private lastStaleRecoveryMs = 0;
+  private readonly yieldCheckIntervalMs?: number;
 
-  constructor(options: ArtifactPreviewWorkerOptions) {
-    this.clientInstanceId = options.clientInstanceId;
-    this.store = options.store;
+  constructor(options: ArtifactPreviewJobHandlerOptions) {
+    this.store = options.stores.files;
     this.objectStore = options.objectStore;
     this.sourceReader = options.sourceReader;
     this.renderer = options.renderer ?? new LibreOfficeArtifactPreviewRenderer();
-    this.workerId = options.workerId ?? `artifact-preview-worker-${randomUUID()}`;
-    this.concurrency = options.concurrency ?? 1;
-    this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
-    this.leaseRenewIntervalMs =
-      options.leaseRenewIntervalMs ?? Math.max(1000, Math.floor(this.leaseDurationMs / 3));
-    this.staleRecoveryIntervalMs =
-      options.staleRecoveryIntervalMs ?? DEFAULT_STALE_RECOVERY_INTERVAL_MS;
-    this.staleRecoveryLimit = options.staleRecoveryLimit ?? DEFAULT_STALE_RECOVERY_LIMIT;
-    this.maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
-    this.retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
     this.maxSourceBytes = Math.min(
       options.maxSourceBytes ?? DEFAULT_MAX_SOURCE_BYTES,
       HARD_MAX_SOURCE_BYTES
@@ -178,122 +169,128 @@ export class ArtifactPreviewWorker {
     this.previewDpi = options.previewDpi ?? DEFAULT_PREVIEW_DPI;
     this.outputFormat = options.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
     this.now = options.now ?? (() => new Date().toISOString());
+    this.yieldCheckIntervalMs = options.yieldCheckIntervalMs;
   }
 
-  async runOnce(
-    input: { recoverStale?: boolean } = {}
-  ): Promise<ArtifactPreviewWorkerRunOnceResult> {
-    if (input.recoverStale ?? true) {
-      await this.recoverStaleJobs();
-    }
-    const now = this.now();
-    const claimed = await this.store.claimNextArtifactPreviewJob({
-      clientInstanceId: this.clientInstanceId,
-      workerId: this.workerId,
-      leaseToken: randomUUID(),
-      now,
-      leaseExpiresAt: addMilliseconds(now, this.leaseDurationMs)
-    });
-    if (!claimed) {
-      return { status: "idle" };
-    }
-    return this.processClaimedJob(claimed);
-  }
-
-  async recoverStaleJobs(): Promise<ArtifactPreviewJobRecord[]> {
-    const now = this.now();
-    this.lastStaleRecoveryMs = Date.now();
-    return this.store.recoverStaleArtifactPreviewJobs({
-      clientInstanceId: this.clientInstanceId,
-      staleLeaseExpiredBefore: now,
-      recoveredAt: now,
-      retryAt: addMilliseconds(now, this.retryDelayMs),
-      maxAttempts: this.maxAttempts,
-      limit: this.staleRecoveryLimit,
-      errorCode: "stale_lease",
-      errorMessage: previewFailureMessage("stale_lease")
-    });
-  }
-
-  start(): Promise<void> {
-    if (!this.loopPromise) {
-      this.stopping = false;
-      this.loopPromise = Promise.all(
-        Array.from({ length: this.concurrency }, (_, index) => this.runLoop(index))
-      ).then(() => undefined);
-    }
-    return this.loopPromise;
-  }
-
-  runUntilStopped(): Promise<void> {
-    return this.start();
-  }
-
-  async stop(input: { cancelActive?: boolean; reason?: string } = {}): Promise<void> {
-    this.stopping = true;
-    if (input.cancelActive) {
-      for (const controller of this.activeControllers) {
-        controller.abort(input.reason ?? "Artifact preview worker is stopping");
-      }
-    }
-    await this.loopPromise;
-    this.loopPromise = undefined;
-  }
-
-  private async runLoop(index: number): Promise<void> {
-    while (!this.stopping) {
-      await this.maybeRecoverStaleJobs();
-      const result = await this.runOnce({ recoverStale: false });
-      if (result.status === "idle") {
-        await sleep(this.pollIntervalMs);
-      }
-    }
-    void index;
-  }
-
-  private async maybeRecoverStaleJobs(): Promise<void> {
-    if (Date.now() - this.lastStaleRecoveryMs < this.staleRecoveryIntervalMs) {
-      return;
-    }
-    await this.recoverStaleJobs();
-  }
-
-  private async processClaimedJob(
-    job: ArtifactPreviewJobRecord
-  ): Promise<ArtifactPreviewWorkerRunOnceResult> {
-    const controller = new AbortController();
-    this.activeControllers.add(controller);
-    const stopLeaseRenewal = this.startLeaseRenewal(job, controller);
+  async run(job: PreviewJob, control: JobControl): Promise<void> {
+    // Yield: a row a worker of the previous release holds is left to it until its lease ends.
+    const row = await claimSubjectRow(
+      control,
+      (stores) =>
+        stores.files.claimArtifactPreviewJob({
+          clientInstanceId: job.clientInstanceId,
+          jobId: job.payload.previewJobId,
+          leaseOwnerId: subjectRowLeaseOwnerId(job.id),
+          leaseToken: control.leaseToken,
+          leaseMs: renderArtifactPreviewJob.leaseMs
+        }),
+      this.yieldCheckIntervalMs
+    );
+    if (!row) return;
     try {
-      const terminal = await this.processClaimedJobWithSignal(job, controller.signal);
-      return { status: "claimed", job: terminal };
-    } catch (error: unknown) {
-      if (isLeaseConflict(error)) {
-        return { status: "stale", job };
-      }
-      const failure = normalizePreviewFailure(error);
       try {
-        const terminal =
-          failure.code === "unsupported_type"
-            ? await this.markUnsupported(job)
-            : await this.failClaimedJob(job, failure);
-        return { status: "claimed", job: terminal };
-      } catch (terminalError: unknown) {
-        if (isLeaseConflict(terminalError)) {
-          return { status: "stale", job };
-        }
-        throw terminalError;
+        await this.renderClaimedRow(row, control);
+      } catch (error: unknown) {
+        // A stopped or taken-over attempt writes nothing: the executor gives the job back or
+        // has given it to another attempt, which takes the row over.
+        if (control.signal.aborted || error instanceof JobLeaseLostError) throw error;
+        const failure = normalizePreviewFailure(error);
+        if (failure.code === "unsupported_type") await this.markUnsupported(row, control);
+        else await this.fail(job, row, failure, control);
       }
-    } finally {
-      stopLeaseRenewal();
-      this.activeControllers.delete(controller);
+    } catch (error: unknown) {
+      if (error instanceof PreviewRowLostError) return;
+      throw error;
     }
   }
 
-  private async processClaimedJobWithSignal(
+  /**
+   * The lease expired on the last attempt. Runs in the transaction that marks the job dead:
+   * the row fails with it unless it is finished or a worker of the previous release holds it.
+   */
+  async failAfterLastAttempt(job: PreviewJob, stores: PlatformStores): Promise<void> {
+    const leaseToken = randomUUID();
+    const claim = await stores.files.claimArtifactPreviewJob({
+      clientInstanceId: job.clientInstanceId,
+      jobId: job.payload.previewJobId,
+      leaseOwnerId: subjectRowLeaseOwnerId(job.id),
+      leaseToken,
+      leaseMs: EXHAUSTED_ROW_LEASE_MS
+    });
+    if (claim.status !== "claimed") return;
+    await stores.files.failClaimedArtifactPreviewJob({
+      clientInstanceId: job.clientInstanceId,
+      jobId: claim.row.id,
+      leaseToken,
+      errorCode: "stale_lease",
+      errorMessage: previewFailureMessage("stale_lease"),
+      failedAt: this.now()
+    });
+  }
+
+  /**
+   * A failure with an attempt left leaves the row as it is, held by this job, and the executor
+   * runs the job again after its backoff. A failure that another attempt cannot help, and the
+   * failure of the last attempt, are written to the row.
+   */
+  private async fail(
+    job: PreviewJob,
+    row: ArtifactPreviewJobRecord,
+    failure: ArtifactPreviewFailure,
+    control: JobControl
+  ): Promise<never> {
+    const message = failure.message ?? previewFailureMessage(failure.code);
+    if (failure.retryable && control.attempt < job.maxAttempts)
+      throw new AppError("INTERNAL", `Artifact preview failed: ${failure.code}`);
+    await this.writeRow(control, (stores) =>
+      stores.files.failClaimedArtifactPreviewJob({
+        clientInstanceId: row.clientInstanceId,
+        jobId: row.id,
+        leaseToken: requiredLeaseToken(row),
+        errorCode: failure.code,
+        errorMessage: message,
+        failedAt: this.now()
+      })
+    );
+    if (failure.retryable)
+      throw new AppError("INTERNAL", `Artifact preview failed: ${failure.code}`);
+    throw new NonRetryableJobError(`Artifact preview failed: ${failure.code}`);
+  }
+
+  private async markUnsupported(row: ArtifactPreviewJobRecord, control: JobControl): Promise<void> {
+    await this.writeRow(control, (stores) =>
+      stores.files.markClaimedArtifactPreviewJobUnsupported({
+        clientInstanceId: row.clientInstanceId,
+        jobId: row.id,
+        leaseToken: requiredLeaseToken(row),
+        errorCode: "unsupported_type",
+        errorMessage: previewFailureMessage("unsupported_type"),
+        unsupportedAt: this.now()
+      })
+    );
+  }
+
+  /**
+   * Writes the row inside the job's fenced transaction. The store refuses a row that this
+   * attempt no longer holds; that is no failure of the preview.
+   */
+  private async writeRow<Result>(
+    control: JobControl,
+    write: (stores: PlatformStores) => Promise<Result>
+  ): Promise<Result> {
+    try {
+      return await control.transaction(write);
+    } catch (error: unknown) {
+      if (isRowConflict(error)) throw new PreviewRowLostError();
+      throw error;
+    }
+  }
+
+  private async renderClaimedRow(
     job: ArtifactPreviewJobRecord,
-    signal: AbortSignal
-  ): Promise<ArtifactPreviewJobRecord> {
+    control: JobControl
+  ): Promise<void> {
+    const signal = control.signal;
     const source = await this.store.getManagedArtifact({
       clientInstanceId: job.clientInstanceId,
       artifactId: job.sourceArtifactId
@@ -303,20 +300,20 @@ export class ArtifactPreviewWorker {
       source.conversationId !== job.conversationId ||
       source.checksum !== job.sourceChecksum
     ) {
-      return this.failClaimedJob(job, previewFailure("source_missing", false));
+      throw previewFailure("source_missing", false);
     }
 
     const sourceKind = detectArtifactPreviewSourceKind(source);
     if (!sourceKind) {
-      return this.markUnsupported(job);
+      throw previewFailure("unsupported_type", false);
     }
     if (source.byteSize > this.maxSourceBytes) {
-      return this.failClaimedJob(job, previewFailure("source_too_large", false));
+      throw previewFailure("source_too_large", false);
     }
 
     const sourceBytes = await this.readSourceBytes(source);
     if (sourceBytes.byteLength > this.maxSourceBytes) {
-      return this.failClaimedJob(job, previewFailure("source_too_large", false));
+      throw previewFailure("source_too_large", false);
     }
 
     const renderSettings = readArtifactPreviewSettingsHash(job.settingsHash);
@@ -340,7 +337,7 @@ export class ArtifactPreviewWorker {
       signal
     });
     if (rendered.pages.length === 0 || rendered.pages.length > this.maxPages) {
-      return this.failClaimedJob(job, previewFailure("page_limit_exceeded", false));
+      throw previewFailure("page_limit_exceeded", false);
     }
     const outputBytes = rendered.pages.reduce((total, page) => total + page.bytes.byteLength, 0);
     const oversizedPage = rendered.pages.some(
@@ -349,7 +346,7 @@ export class ArtifactPreviewWorker {
         (page.height !== undefined && page.height > this.maxRasterDimension)
     );
     if (outputBytes > this.maxOutputBytes || oversizedPage) {
-      return this.failClaimedJob(job, previewFailure("output_too_large", false));
+      throw previewFailure("output_too_large", false);
     }
 
     const staged = await this.stageRenderedPages({
@@ -359,17 +356,21 @@ export class ArtifactPreviewWorker {
       rendered
     });
     try {
-      return await this.store.completeClaimedArtifactPreviewJob({
-        clientInstanceId: job.clientInstanceId,
-        jobId: job.id,
-        leaseToken: requiredLeaseToken(job),
-        format: rendered.format,
-        previewArtifacts: staged.previewArtifacts,
-        sourcePageCount: rendered.pageCount,
-        completedAt: this.now()
-      });
+      await control.transaction((stores) =>
+        stores.files.completeClaimedArtifactPreviewJob({
+          clientInstanceId: job.clientInstanceId,
+          jobId: job.id,
+          leaseToken: requiredLeaseToken(job),
+          format: rendered.format,
+          previewArtifacts: staged.previewArtifacts,
+          sourcePageCount: rendered.pageCount,
+          completedAt: this.now()
+        })
+      );
     } catch (error: unknown) {
       await this.deleteStagedObjects(staged.objectKeys);
+      // The store refuses a row this attempt no longer holds and a source that went away.
+      if (isRowConflict(error)) throw previewFailure("source_missing", false);
       throw error;
     }
   }
@@ -393,30 +394,6 @@ export class ArtifactPreviewWorker {
         throw previewFailure("source_missing", false);
       }
     }
-  }
-
-  private startLeaseRenewal(
-    job: ArtifactPreviewJobRecord,
-    controller: AbortController
-  ): () => void {
-    const timer = setInterval(() => {
-      const renewedAt = this.now();
-      void this.store
-        .renewClaimedArtifactPreviewJobLease({
-          clientInstanceId: job.clientInstanceId,
-          jobId: job.id,
-          leaseToken: requiredLeaseToken(job),
-          renewedAt,
-          leaseExpiresAt: addMilliseconds(renewedAt, this.leaseDurationMs)
-        })
-        .catch((error: unknown) => {
-          controller.abort(
-            error instanceof Error ? error.message : "Artifact preview lease was lost"
-          );
-        });
-    }, this.leaseRenewIntervalMs);
-    timer.unref?.();
-    return () => clearInterval(timer);
   }
 
   private async stageRenderedPages(input: {
@@ -523,38 +500,13 @@ export class ArtifactPreviewWorker {
       objectKeys.map((objectKey) => this.objectStore.deleteObject(objectKey))
     );
   }
-
-  private markUnsupported(job: ArtifactPreviewJobRecord): Promise<ArtifactPreviewJobRecord> {
-    return this.store.markClaimedArtifactPreviewJobUnsupported({
-      clientInstanceId: job.clientInstanceId,
-      jobId: job.id,
-      leaseToken: requiredLeaseToken(job),
-      errorCode: "unsupported_type",
-      errorMessage: previewFailureMessage("unsupported_type"),
-      unsupportedAt: this.now()
-    });
-  }
-
-  private failClaimedJob(
-    job: ArtifactPreviewJobRecord,
-    failure: ArtifactPreviewFailure
-  ): Promise<ArtifactPreviewJobRecord> {
-    const failedAt = this.now();
-    const canRetry = failure.retryable && job.attempts < this.maxAttempts;
-    return this.store.failClaimedArtifactPreviewJob({
-      clientInstanceId: job.clientInstanceId,
-      jobId: job.id,
-      leaseToken: requiredLeaseToken(job),
-      errorCode: failure.code,
-      errorMessage: failure.message ?? previewFailureMessage(failure.code),
-      failedAt,
-      ...(canRetry ? { retryAt: addMilliseconds(failedAt, this.retryDelayMs) } : {})
-    });
-  }
 }
 
-function isLeaseConflict(error: unknown): boolean {
-  return error instanceof AppError && error.code === "CONFLICT";
+/** A conflict the files store raised about the row, not the executor about the job's lease. */
+function isRowConflict(error: unknown): boolean {
+  return (
+    error instanceof AppError && error.code === "CONFLICT" && !(error instanceof JobLeaseLostError)
+  );
 }
 
 function requiredLeaseToken(job: ArtifactPreviewJobRecord): string {
@@ -637,12 +589,4 @@ function imageExtension(mimeType: ArtifactPreviewRenderedModelImage["mimeType"])
 
 function checksumBytes(bytes: Uint8Array): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-}
-
-function addMilliseconds(isoDate: string, milliseconds: number): string {
-  return new Date(new Date(isoDate).getTime() + milliseconds).toISOString();
-}
-
-function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

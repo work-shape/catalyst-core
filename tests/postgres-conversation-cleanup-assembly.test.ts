@@ -181,13 +181,12 @@ async function createCompletedPreview(input: {
     sourceChecksum: source.checksum,
     sourceMimeType: source.mimeType
   });
-  const now = new Date();
-  await input.store.files.claimNextArtifactPreviewJob({
+  await input.store.files.claimArtifactPreviewJob({
     ...scope,
-    workerId: "preview-worker",
+    jobId: job.id,
+    leaseOwnerId: "preview-worker",
     leaseToken: "lease",
-    now: now.toISOString(),
-    leaseExpiresAt: new Date(now.getTime() + 60_000).toISOString()
+    leaseMs: 60_000
   });
   const page = await input.store.files.createManagedArtifact({
     ...scope,
@@ -206,7 +205,7 @@ async function createCompletedPreview(input: {
     leaseToken: "lease",
     format: "png",
     pages: [{ artifactId: page.id, mimeType: "image/png", filename: page.filename, pageNumber: 1 }],
-    completedAt: now.toISOString()
+    completedAt: new Date().toISOString()
   });
   return [pageKey, sourceKey].sort();
 }

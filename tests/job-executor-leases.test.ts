@@ -115,6 +115,58 @@ describe("job executor leases, wake and start", () => {
     expect(users.map((candidate) => candidate.displayLabel)).toEqual(["After"]);
   });
 
+  it("writes the handler's copy of the lease in the heartbeat's own transaction", async () => {
+    const clientInstanceId = db.clientInstance("mirror");
+    // A heartbeat every 100 ms.
+    const kind = kindOf("test.mirror", { leaseMs: 300 });
+    const user = await db.store.users.createUser({ clientInstanceId, displayLabel: "none" });
+    const started = deferred<JobControl>();
+    let failing = false;
+    const only = worker(db.store, clientInstanceId, [
+      defineJobHandler({
+        kind,
+        slots: 1,
+        async run(_job, control) {
+          started.resolve(control);
+          await hang(control);
+        },
+        async onHeartbeat(_job, lease, stores) {
+          await stores.users.updateUser({
+            clientInstanceId,
+            userId: user.id,
+            displayLabel: lease.leaseToken
+          });
+          if (failing) throw new Error("the copy cannot be written");
+        }
+      })
+    ]);
+    await db.store.jobs.enqueue(kind, { n: 1 }, { clientInstanceId });
+    startPass(only);
+    const control = await started.promise;
+    const label = async () =>
+      (await db.store.users.listUsers({ clientInstanceId })).map((found) => found.displayLabel);
+
+    await waitUntil(
+      async () => (await label())[0] === control.leaseToken,
+      "the heartbeat hands the lease token to the handler"
+    );
+
+    // A copy that cannot be written takes the heartbeat with it: the job's lease is not
+    // extended past what its subject shows.
+    failing = true;
+    await db.store.users.updateUser({ clientInstanceId, userId: user.id, displayLabel: "none" });
+    const expiry = async () =>
+      (
+        await db.sql<{ lease_expires_at: Date }[]>`
+          select lease_expires_at from platform_jobs
+          where client_instance_id = ${clientInstanceId}`
+      )[0]?.lease_expires_at.getTime();
+    const before = await expiry();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(await expiry()).toBe(before);
+    expect(await label()).toEqual(["none"]);
+  });
+
   it("claims a job enqueued in the same process without waiting for the next poll", async () => {
     const clientInstanceId = db.clientInstance("wake");
     const kind = kindOf("test.wake");

@@ -16,10 +16,14 @@ import {
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
   AppError,
+  artifactPreviewJobDedupeKey,
+  asConversationAttachmentId,
   asConversationId,
+  renderArtifactPreviewJob,
+  type SubjectRowClaim,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
-  type ClaimNextArtifactPreviewJobInput,
+  type ClaimArtifactPreviewJobInput,
   type ClientInstanceId,
   type CompleteClaimedArtifactPreviewJobInput,
   type ConversationAttachment,
@@ -42,7 +46,6 @@ import {
   type ManagedObjectDeletionResult,
   type MessageId,
   type OrphanedManagedFile,
-  type RecoverStaleArtifactPreviewJobsInput,
   type RenewClaimedArtifactPreviewJobLeaseInput,
   type UpdateConversationAttachmentInput,
   type WriteArtifactPreviewManifestInput,
@@ -53,17 +56,18 @@ import {
   requireActiveConversationLock,
   touchConversation
 } from "./postgres-conversation-operations";
+import { enqueueJob } from "./jobs/store";
 import { conversationsPendingCleanup } from "./postgres-pending-cleanup";
 import { mapConversationAttachment, mapManagedArtifact, mapManagedFile } from "./rows";
 import {
-  claimNextArtifactPreviewJob as claimNextPostgresArtifactPreviewJob,
+  claimArtifactPreviewJob as claimPostgresArtifactPreviewJob,
   completeClaimedArtifactPreviewJob as completeClaimedPostgresArtifactPreviewJob,
   enqueueArtifactPreviewJob as enqueuePostgresArtifactPreviewJob,
   failClaimedArtifactPreviewJob as failClaimedPostgresArtifactPreviewJob,
   getArtifactPreviewJob as getPostgresArtifactPreviewJob,
   getArtifactPreviewManifest as getPostgresArtifactPreviewManifest,
   markClaimedArtifactPreviewJobUnsupported as markClaimedPostgresArtifactPreviewJobUnsupported,
-  recoverStaleArtifactPreviewJobs as recoverStalePostgresArtifactPreviewJobs,
+  listArtifactPreviewJobIdsWithoutJob,
   renewClaimedArtifactPreviewJobLease as renewClaimedPostgresArtifactPreviewJobLease,
   writeArtifactPreviewManifest as writePostgresArtifactPreviewManifest
 } from "./postgres-artifact-preview-operations";
@@ -79,7 +83,13 @@ import {
 
 type PostgresConnection = PostgresJsDatabase<typeof schema>;
 
+function leaseExpiry(leaseMs: number) {
+  return drizzleSql`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
+}
+
 export interface PostgresPlatformFileStoreCallbacks {
+  /** Tells the job workers of this process that the store enqueued a job. */
+  jobsEnqueued(): void;
   touchConversation(
     clientInstanceId: ClientInstanceId,
     conversationId: ConversationId,
@@ -373,7 +383,47 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   async enqueueArtifactPreviewJob(
     input: EnqueueArtifactPreviewJobInput
   ): Promise<ArtifactPreviewJobRecord> {
-    return enqueuePostgresArtifactPreviewJob(this.db, input);
+    // The row and the job that drives it commit together, whoever asks for the preview.
+    const record = await this.db.transaction(async (tx) => {
+      const row = await enqueuePostgresArtifactPreviewJob(tx, input);
+      if (row.status === "pending" || row.status === "processing")
+        await this.enqueueArtifactPreviewRender(tx, input.clientInstanceId, row.id);
+      return row;
+    });
+    this.callbacks.jobsEnqueued();
+    return record;
+  }
+
+  private async enqueueArtifactPreviewRender(
+    tx: PostgresConnection,
+    clientInstanceId: ClientInstanceId,
+    previewJobId: string
+  ): Promise<void> {
+    await enqueueJob(
+      tx,
+      renderArtifactPreviewJob,
+      { previewJobId },
+      {
+        clientInstanceId,
+        subject: previewJobId,
+        dedupeKey: artifactPreviewJobDedupeKey(previewJobId)
+      }
+    );
+  }
+
+  async adoptArtifactPreviewJobs(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<number> {
+    const ids = await listArtifactPreviewJobIdsWithoutJob(this.db, {
+      clientInstanceId: input.clientInstanceId,
+      jobKind: renderArtifactPreviewJob.kind,
+      limit: input.limit
+    });
+    for (const id of ids)
+      await this.enqueueArtifactPreviewRender(this.db, input.clientInstanceId, id);
+    if (ids.length > 0) this.callbacks.jobsEnqueued();
+    return ids.length;
   }
 
   async getArtifactPreviewJob(input: {
@@ -386,15 +436,15 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return getPostgresArtifactPreviewJob(this.db, input);
   }
 
-  async claimNextArtifactPreviewJob(
-    input: ClaimNextArtifactPreviewJobInput
-  ): Promise<ArtifactPreviewJobRecord | undefined> {
-    return claimNextPostgresArtifactPreviewJob(this.db, input);
+  async claimArtifactPreviewJob(
+    input: ClaimArtifactPreviewJobInput
+  ): Promise<SubjectRowClaim<ArtifactPreviewJobRecord>> {
+    return claimPostgresArtifactPreviewJob(this.db, input);
   }
 
   async renewClaimedArtifactPreviewJobLease(
     input: RenewClaimedArtifactPreviewJobLeaseInput
-  ): Promise<ArtifactPreviewJobRecord> {
+  ): Promise<boolean> {
     return renewClaimedPostgresArtifactPreviewJobLease(this.db, input);
   }
 
@@ -414,12 +464,6 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     input: MarkClaimedArtifactPreviewJobUnsupportedInput
   ): Promise<ArtifactPreviewJobRecord> {
     return markClaimedPostgresArtifactPreviewJobUnsupported(this.db, input);
-  }
-
-  async recoverStaleArtifactPreviewJobs(
-    input: RecoverStaleArtifactPreviewJobsInput
-  ): Promise<ArtifactPreviewJobRecord[]> {
-    return recoverStalePostgresArtifactPreviewJobs(this.db, input);
   }
 
   async getArtifactPreviewManifest(input: {
@@ -727,94 +771,118 @@ class PostgresPlatformFileStore implements PlatformFileStore {
     return rows.map(mapConversationAttachment);
   }
 
-  async claimNextQueuedConversationAttachment(input: {
+  /**
+   * Takes an attachment by id for the executor job that preprocesses it and writes the job's
+   * lease onto the row's lease columns, which a worker of the previous release reads. The row
+   * is taken when it is queued, when its lease ran out, or when `leaseOwnerId` already holds
+   * it: that is an earlier attempt of the same job, whose lease the executor has ended.
+   */
+  async claimConversationAttachmentForPreprocessing(input: {
     clientInstanceId: ClientInstanceId;
-    workerId: string;
+    attachmentId: ConversationAttachmentId;
+    leaseOwnerId: string;
     leaseToken: string;
-    now: string;
-    leaseExpiresAt: string;
-    perConversationLimit: number;
-    globalLimit: number;
-    formats?: readonly string[];
-  }): Promise<ConversationAttachment | undefined> {
-    const now = new Date(input.now).toISOString();
-    const leaseExpiresAt = new Date(input.leaseExpiresAt).toISOString();
-    const formatFilter =
-      input.formats && input.formats.length > 0
-        ? drizzleSql`and ca.format in (${drizzleSql.join(
-            input.formats.map((format) => drizzleSql`${format}`),
-            drizzleSql`, `
-          )})`
-        : drizzleSql``;
-    const rows = await this.db.transaction(async (tx) => {
-      const claimed = (await tx.execute(drizzleSql<{ id: string }>`
-        with candidate as (
-          select ca.id
-          from conversation_attachments ca
-          where ca.client_instance_id = ${input.clientInstanceId}
-            and ca.status <> 'deleted'
-            ${formatFilter}
-            and (
-              ca.status = 'queued'
-              or (
-                ca.status = 'preprocessing'
-                and (
-                  ca.processing_lease_expires_at is null
-                  or ca.processing_lease_expires_at <= ${now}::timestamptz
-                )
+    leaseMs: number;
+  }): Promise<SubjectRowClaim<ConversationAttachment>> {
+    const ofRow = and(
+      eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+      eq(conversationAttachments.id, input.attachmentId)
+    );
+    const [claimed] = await this.db
+      .update(conversationAttachments)
+      .set({
+        status: "preprocessing",
+        processingOwnerId: input.leaseOwnerId,
+        processingLeaseToken: input.leaseToken,
+        processingLeaseExpiresAt: leaseExpiry(input.leaseMs),
+        processingAttempts: drizzleSql`${conversationAttachments.processingAttempts} + 1`,
+        preprocessingStartedAt: drizzleSql`coalesce(${conversationAttachments.preprocessingStartedAt}, now())`,
+        updatedAt: drizzleSql`now()`,
+        error: null
+      })
+      .where(
+        and(
+          ofRow,
+          drizzleSql`(
+            ${conversationAttachments.status} = 'queued'
+            or (
+              ${conversationAttachments.status} = 'preprocessing'
+              and (
+                ${conversationAttachments.processingLeaseExpiresAt} is null
+                or ${conversationAttachments.processingLeaseExpiresAt} <= now()
+                or ${conversationAttachments.processingOwnerId} = ${input.leaseOwnerId}
               )
             )
-            and (
-              select count(*)
-              from conversation_attachments active
-              where active.client_instance_id = ca.client_instance_id
-                and active.status = 'preprocessing'
-                and active.processing_lease_token is not null
-                and active.processing_lease_expires_at > ${now}::timestamptz
-            ) < ${input.globalLimit}
-            and (
-              select count(*)
-              from conversation_attachments active
-              where active.client_instance_id = ca.client_instance_id
-                and active.conversation_id = ca.conversation_id
-                and active.status = 'preprocessing'
-                and active.processing_lease_token is not null
-                and active.processing_lease_expires_at > ${now}::timestamptz
-            ) < ${input.perConversationLimit}
-          order by ca.created_at asc
-          limit 1
-          for update skip locked
+          )`
         )
-        update conversation_attachments ca
-        set status = 'preprocessing',
-            processing_owner_id = ${input.workerId},
-            processing_lease_token = ${input.leaseToken},
-            processing_lease_expires_at = ${leaseExpiresAt}::timestamptz,
-            processing_attempts = ca.processing_attempts + 1,
-            preprocessing_started_at = coalesce(ca.preprocessing_started_at, ${now}::timestamptz),
-            updated_at = ${now}::timestamptz,
-            error = null
-        from candidate
-        where ca.id = candidate.id
-        returning ca.id
-      `)) as unknown as Array<{ id: string }>;
-      const claimedId = claimed[0]?.id;
-      if (!claimedId) {
-        return [];
-      }
-      return tx
-        .select()
-        .from(conversationAttachments)
-        .where(
-          and(
-            eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
-            eq(conversationAttachments.id, claimedId)
-          )
+      )
+      .returning();
+    if (claimed) return { status: "claimed", row: mapConversationAttachment(claimed) };
+    const [current] = await this.db
+      .select({ status: conversationAttachments.status })
+      .from(conversationAttachments)
+      .where(ofRow)
+      .limit(1);
+    return current?.status === "queued" || current?.status === "preprocessing"
+      ? { status: "held" }
+      : { status: "finished" };
+  }
+
+  async renewClaimedConversationAttachmentLease(input: {
+    clientInstanceId: ClientInstanceId;
+    attachmentId: ConversationAttachmentId;
+    leaseToken: string;
+    leaseMs: number;
+  }): Promise<boolean> {
+    const rows = await this.db
+      .update(conversationAttachments)
+      .set({ processingLeaseExpiresAt: leaseExpiry(input.leaseMs) })
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.id, input.attachmentId),
+          eq(conversationAttachments.status, "preprocessing"),
+          eq(conversationAttachments.processingLeaseToken, input.leaseToken)
         )
-        .limit(1);
-    });
-    const row = rows[0];
-    return row ? mapConversationAttachment(row) : undefined;
+      )
+      .returning({ id: conversationAttachments.id });
+    return rows.length > 0;
+  }
+
+  async listConversationAttachmentsWithoutJob(input: {
+    clientInstanceId: ClientInstanceId;
+    jobKind: string;
+    formats?: readonly string[];
+    limit: number;
+  }): Promise<Array<{ id: ConversationAttachmentId; conversationId: ConversationId }>> {
+    const rows = await this.db
+      .select({
+        id: conversationAttachments.id,
+        conversationId: conversationAttachments.conversationId
+      })
+      .from(conversationAttachments)
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          inArray(conversationAttachments.status, ["queued", "preprocessing"]),
+          input.formats && input.formats.length > 0
+            ? inArray(conversationAttachments.format, [...input.formats])
+            : undefined,
+          drizzleSql`not exists (
+            select 1 from platform_jobs job
+            where job.client_instance_id = ${conversationAttachments.clientInstanceId}
+              and job.kind = ${input.jobKind}
+              and job.dedupe_key = ${input.jobKind} || ':' || ${conversationAttachments.id}
+              and job.status in ('queued', 'running')
+          )`
+        )
+      )
+      .orderBy(asc(conversationAttachments.createdAt), asc(conversationAttachments.id))
+      .limit(input.limit);
+    return rows.map((row) => ({
+      id: asConversationAttachmentId(row.id),
+      conversationId: asConversationId(row.conversationId)
+    }));
   }
 
   async completeClaimedConversationAttachment(input: {

@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
 import {
   AppError,
+  defineJobHandler,
+  defineJobKind,
   type AttachmentManifest,
   type ClientInstanceId,
   type ConversationAttachment,
   type ConversationId,
   type DraftAttachment,
+  type Job,
+  type JobControl,
+  type JobHandler,
+  type JobKind,
+  type JobsStore,
   type JsonObject,
   type Logger,
   type ManagedArtifactId,
@@ -15,6 +22,7 @@ import {
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
   type PlatformFileStore,
+  type RegisteredJobHandler,
   type RegisteredProviderDefinition,
   type SecretResolver
 } from "@vivd-catalyst/core";
@@ -44,6 +52,10 @@ export type {
   DataSourceRegistration
 };
 export { defineTool, defineConfiguredTool, toolFailed, toolSuccess };
+// A capability declares its job kinds with `defineJobKind`, enqueues through `jobs` on its
+// context and serves them from its own worker process with `defineJobHandler`.
+export { defineJobHandler, defineJobKind };
+export type { Job, JobControl, JobHandler, JobKind, RegisteredJobHandler };
 export type {
   AnyConfiguredToolDefinition,
   AnyToolDefinition,
@@ -68,7 +80,24 @@ export interface ClientInstanceCapabilityContext {
    */
   objectStorage: { files?: unknown; workspaces?: unknown };
   files: ClientInstanceCapabilityFiles;
+  /** Enqueues jobs of the kinds the capability declares. */
+  jobs: ClientInstanceCapabilityJobs;
+  /**
+   * Runs `fn` with `files` and `jobs` bound to one transaction, so a record and the job that
+   * drives it commit or roll back together.
+   */
+  transaction<Result>(
+    fn: (stores: ClientInstanceCapabilityStores) => Promise<Result>
+  ): Promise<Result>;
   managedObjectAccess: ManagedObjectAccessFactory;
+}
+
+export type ClientInstanceCapabilityJobs = Pick<JobsStore, "enqueue">;
+
+/** What a capability writes through inside `transaction`. */
+export interface ClientInstanceCapabilityStores {
+  files: ClientInstanceCapabilityFiles;
+  jobs: ClientInstanceCapabilityJobs;
 }
 
 export type ClientInstanceCapabilityFiles = Pick<
@@ -81,7 +110,9 @@ export type ClientInstanceCapabilityFiles = Pick<
   | "reactivateDraftAttachment"
   | "deleteDraftAttachment"
   | "claimReadyDraftAttachmentsForMessage"
-  | "claimNextQueuedConversationAttachment"
+  | "claimConversationAttachmentForPreprocessing"
+  | "renewClaimedConversationAttachmentLease"
+  | "listConversationAttachmentsWithoutJob"
   | "completeClaimedConversationAttachment"
   | "failClaimedConversationAttachment"
   | "findReadyConversationAttachmentByFile"
@@ -157,6 +188,13 @@ export interface ClientInstanceAttachmentHandler {
    * handler removes only the object keys it stores itself and returns those.
    */
   deleteOrphanedFileObjects?(input: { objectKeys: readonly string[] }): Promise<string[]>;
+  /**
+   * Transition release only: enqueues a job for each of the handler's attachments that waits
+   * for preprocessing and has no queued or running job, up to `limit`, and returns how many.
+   * The schedule `platform_jobs.adopt_legacy` calls it every minute. It goes with that schedule
+   * in the contract step.
+   */
+  adoptLegacyAttachments?(input: { limit: number }): Promise<number>;
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;

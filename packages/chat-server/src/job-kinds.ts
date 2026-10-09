@@ -45,6 +45,13 @@ export const cleanUpExecutionWorkspacesJob = defineScheduledKind("execution_work
 export const recoverAgentRunsJob = defineScheduledKind("agent_run.recover", 2 * MINUTE_MS);
 export const pruneAuditEventsJob = defineScheduledKind("audit.prune");
 export const pruneJobsJob = defineScheduledKind("platform_jobs.prune");
+/**
+ * Transition release only: gives a job to every preview row and every attachment that waits
+ * for work and has none. Such a row was queued before the upgrade, written by an API of the
+ * previous release, or left behind by a worker of it. It goes with the lease columns of those
+ * rows in the contract step.
+ */
+export const adoptLegacyJobsJob = defineScheduledKind("platform_jobs.adopt_legacy", 2 * MINUTE_MS);
 
 export const expireConversationsSchedule = defineSchedule({
   kind: expireConversationsJob,
@@ -61,3 +68,9 @@ export const pruneAuditEventsSchedule = defineSchedule({
   every: DAY_MS
 });
 export const pruneJobsSchedule = defineSchedule({ kind: pruneJobsJob, every: DAY_MS });
+export const adoptLegacyJobsSchedule = defineSchedule({
+  kind: adoptLegacyJobsJob,
+  every: MINUTE_MS,
+  // Work that was in flight at the upgrade gets its job as soon as the new API is up.
+  dueAtStart: true
+});
