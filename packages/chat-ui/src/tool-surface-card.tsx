@@ -32,7 +32,8 @@ export function ToolSurfaceList({
   }
 
   return (
-    <div className={cn("grid gap-2", className)}>
+    // One column that may shrink, so a card in a narrow thread truncates its title.
+    <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2", className)}>
       {surfaces.map((surface, index) => (
         <ToolSurfaceCard
           key={surface.surfaceId}

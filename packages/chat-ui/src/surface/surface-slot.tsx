@@ -41,11 +41,14 @@ export type SurfaceSlotMode = "beside" | "covering" | "fullscreen";
  */
 export function SurfaceSlot({
   renderers = surfaceRenderers,
-  onBesideWidthChange
+  onBesideWidthChange,
+  onCoveringChange
 }: {
   renderers?: SurfaceRenderers;
   /** Told how much of the main area the surface takes beside the conversation; 0 otherwise. */
   onBesideWidthChange?: (width: number) => void;
+  /** Told whether the surface covers the main area, so what lies under it can go inert. */
+  onCoveringChange?: (covering: boolean) => void;
 }) {
   const { close, entry, open } = useToolDisplayPanel();
   const { t } = useTranslation();
@@ -55,6 +58,7 @@ export function SurfaceSlot({
   // The widths chosen since the page loaded. Before that a kind's width comes from storage.
   const [chosenWidths, setChosenWidths] = useState<Partial<Record<SurfaceKind, number>>>({});
   const [fullscreen, setFullscreen] = useState(false);
+  const [resizing, setResizing] = useState(false);
   const surface = entry && open ? entry : undefined;
   const kind = surface?.kind;
   const maximumWidth = maxSurfaceWidth(mainWidth, splitMin);
@@ -76,10 +80,13 @@ export function SurfaceSlot({
   const mode: SurfaceSlotMode =
     placement === "covering" ? "covering" : fullscreen ? "fullscreen" : "beside";
   const besideWidth = surface && mode === "beside" ? width : 0;
+  // Fullscreen hides the conversation as much as a narrow main area does.
+  const covering = Boolean(surface) && mode !== "beside";
 
+  // The reader closes the surface on the surface, so the focus goes back to what opened it.
   const closeSurface = useCallback(() => {
     setFullscreen(false);
-    close();
+    close({ restoreFocus: true });
   }, [close]);
 
   const chooseWidth = useCallback(
@@ -105,6 +112,7 @@ export function SurfaceSlot({
       const target = event.currentTarget;
       let latestWidth: number | undefined;
       target.setPointerCapture(event.pointerId);
+      setResizing(true);
 
       function onPointerMove(moveEvent: globalThis.PointerEvent) {
         latestWidth = chooseWidth(startWidth + startX - moveEvent.clientX);
@@ -117,6 +125,7 @@ export function SurfaceSlot({
         window.removeEventListener("pointermove", onPointerMove);
         window.removeEventListener("pointerup", onPointerUp);
         window.removeEventListener("pointercancel", onPointerUp);
+        setResizing(false);
         if (kind !== undefined && latestWidth !== undefined) {
           writeStoredSurfaceWidth(kind, latestWidth);
         }
@@ -181,7 +190,13 @@ export function SurfaceSlot({
       return undefined;
     }
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape") {
+      // Escape closes the topmost layer first: a menu has taken the key already, and a dialog,
+      // the palette or the drawer is about to.
+      if (
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        document.querySelector("dialog:modal") !== null
+      ) {
         return;
       }
       if (mode === "fullscreen") {
@@ -204,6 +219,10 @@ export function SurfaceSlot({
     onBesideWidthChange?.(besideWidth);
   }, [besideWidth, onBesideWidthChange]);
 
+  useEffect(() => {
+    onCoveringChange?.(covering);
+  }, [covering, onCoveringChange]);
+
   return (
     <aside
       ref={slotRef}
@@ -220,7 +239,8 @@ export function SurfaceSlot({
       style={mode === "beside" ? { width: `${width}px` } : undefined}
     >
       {surface && mode === "beside" && mainWidth !== undefined ? (
-        // The hairline between the two sides is the handle: 12 px wide to the pointer.
+        // The hairline between the two sides is the handle: 12 px wide to the pointer. It takes
+        // the ring colour only while it is dragged or holds the keyboard focus.
         <div
           role="separator"
           aria-orientation="vertical"
@@ -229,10 +249,11 @@ export function SurfaceSlot({
           aria-valuemax={Math.round(mainWidth - splitMin)}
           aria-valuenow={Math.round(mainWidth - width)}
           tabIndex={0}
+          data-resizing={resizing ? "" : undefined}
           className={cn(
             "absolute inset-y-0 left-0 z-10 w-3 -translate-x-1/2 cursor-col-resize touch-none outline-none",
             "after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2",
-            "hover:after:bg-ring focus-visible:after:bg-ring"
+            "focus-visible:after:bg-ring data-resizing:after:bg-ring"
           )}
           onPointerDown={onResizePointerDown}
           onKeyDown={onResizeKeyDown}

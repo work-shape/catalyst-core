@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -20,7 +21,11 @@ interface ToolDisplayPanelContextValue {
   open: boolean;
   show(entry: Surface): void;
   showOnce(entry: Surface): void;
-  close(): void;
+  /**
+   * Closes the surface. `restoreFocus` returns the focus to what opened it, for a close the
+   * reader asked for on the surface itself.
+   */
+  close(options?: { restoreFocus?: boolean }): void;
 }
 
 const ToolDisplayPanelContext = createContext<ToolDisplayPanelContextValue | undefined>(undefined);
@@ -48,7 +53,14 @@ export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) 
   }
   const autoShowTracker = autoShowTrackerRef.current;
 
+  // What held the focus when the reader opened the surface. A surface that opened by itself
+  // has no opener.
+  const openerRef = useRef<HTMLElement | undefined>(undefined);
+
   const show = useCallback((nextEntry: Surface) => {
+    const focused = document.activeElement;
+    openerRef.current =
+      focused instanceof HTMLElement && focused !== document.body ? focused : undefined;
     setEntry(nextEntry);
     setOpen(true);
   }, []);
@@ -58,16 +70,34 @@ export function ToolDisplayPanelProvider({ children }: { children: ReactNode }) 
       if (!autoShowTracker.shouldAutoShow(nextEntry.key)) {
         return;
       }
+      openerRef.current = undefined;
       setEntry(nextEntry);
       setOpen(true);
     },
     [autoShowTracker]
   );
 
-  const close = useCallback(() => {
+  // The opener takes the focus once the surface has left the page: a chat the surface covered
+  // is inert until then and would refuse it.
+  const focusAfterCloseRef = useRef<HTMLElement | undefined>(undefined);
+
+  const close = useCallback((options?: { restoreFocus?: boolean }) => {
+    focusAfterCloseRef.current = options?.restoreFocus ? openerRef.current : undefined;
+    openerRef.current = undefined;
     setOpen(false);
     setEntry(undefined);
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      return;
+    }
+    const opener = focusAfterCloseRef.current;
+    focusAfterCloseRef.current = undefined;
+    if (opener?.isConnected) {
+      opener.focus();
+    }
+  }, [open]);
 
   const value = useMemo<ToolDisplayPanelContextValue>(
     () => ({
