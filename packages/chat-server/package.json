@@ -48,6 +48,7 @@
     "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/mail": "workspace:*",
     "@vivd-catalyst/model-provider": "workspace:*",
+    "@vivd-catalyst/tool-execution": "workspace:*",
     "@vivd-catalyst/usage-governance": "workspace:*",
     "ai": "^6.0.199",
     "fastify": "^5.8.5",

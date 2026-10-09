@@ -10,6 +10,7 @@ import { createInProcessRateLimiter } from "./http/rate-limit";
 import { createRoute } from "./http/route";
 import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
+import { registerOperationRunRoutes } from "./routes/operation-run-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerApiReferenceRoutes } from "./routes/api-reference-routes";
@@ -87,7 +88,15 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
     origin: allowedOrigins,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["authorization", "content-type", "x-correlation-id", "x-server-credential"]
+    allowedHeaders: [
+      "authorization",
+      "content-type",
+      "idempotency-key",
+      "x-correlation-id",
+      "x-server-credential"
+    ],
+    // A browser on another origin reads these of an operation's answer.
+    exposedHeaders: ["operation-run-id", "idempotent-replayed", "location"]
   });
   await app.register(multipart, {
     limits: {
@@ -113,6 +122,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerConversationFileRoutes(route, options);
   registerDraftAttachmentRoutes(route, options);
   registerAuditRoutes(route, options);
+  registerOperationRunRoutes(route, options);
   registerApiAccessAdministrationRoutes(route, options);
   registerSuperadminRoutes(route, options);
   registerApiReferenceRoutes(route, options);

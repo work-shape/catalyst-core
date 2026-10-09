@@ -109,6 +109,8 @@ describe("the operation catalog", () => {
         "me.password.change  POST /api/v1/me/password",
         "me.update  PATCH /api/v1/me",
         "openapi.get  GET /api/v1/openapi.json",
+        "operations.get_run  GET /api/v1/operations/runs/:runId",
+        "operations.list_runs  GET /api/v1/operations/runs",
         "password_reset.request  POST /api/v1/password-reset",
         "password_setup.complete  POST /api/v1/password-setup",
         "service_principals.create  POST /api/v1/instance/service-principals",
@@ -180,6 +182,7 @@ describe("the operation catalog", () => {
       "instance",
       "me",
       "openapi.json",
+      "operations",
       "password-reset",
       "password-setup",
       "workspaces"
@@ -285,9 +288,15 @@ describe("a running instance", () => {
       expect(current.has(`${method} ${path}`), `${method} ${path}`).toBe(false);
     }
     // Each operation moved. Two were dropped: the alias, and the title generation, which is
-    // the job conversation.generate_title now. The reference of the instance is the one
-    // addition since: it never had an unversioned path.
-    const added: readonly ApiOperationName[] = ["openapi.get", "docs.get"];
+    // the job conversation.generate_title now. The reference of the instance was the one
+    // addition of that release: it never had an unversioned path. The Operation Runs came
+    // after it.
+    const added: readonly ApiOperationName[] = [
+      "openapi.get",
+      "docs.get",
+      "operations.get_run",
+      "operations.list_runs"
+    ];
     expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });
 });

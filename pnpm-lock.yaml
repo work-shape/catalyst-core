@@ -266,6 +266,9 @@ importers:
       '@vivd-catalyst/model-provider':
         specifier: workspace:*
         version: link:../model-provider
+      '@vivd-catalyst/tool-execution':
+        specifier: workspace:*
+        version: link:../tool-execution
       '@vivd-catalyst/usage-governance':
         specifier: workspace:*
         version: link:../usage-governance

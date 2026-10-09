@@ -9,6 +9,8 @@ import { z } from "zod";
  */
 const callerSchema = z.object({
   kind: z.enum(["user", "service"]).default("user"),
+  /** Which user or service principal calls, where a test tells two of a kind apart. */
+  id: z.string().optional(),
   scopes: z.array(z.string()).default(["*"]),
   roles: z.array(z.string()).default([]),
   permissions: z.array(z.string()).default([]),
@@ -38,7 +40,7 @@ export function createCallerAuthAdapter(): AuthAdapter & { calls: number } {
         caller.kind === "service"
           ? {
               kind: "service",
-              id: asServicePrincipalId("sp_test"),
+              id: asServicePrincipalId(caller.id ?? "sp_test"),
               credentialId: asApiCredentialId("cred_test"),
               displayLabel: "Test service",
               permissionRefs: [],
@@ -48,7 +50,7 @@ export function createCallerAuthAdapter(): AuthAdapter & { calls: number } {
               scopes
             }
           : {
-              id: "usr_test",
+              id: caller.id ?? "usr_test",
               externalUserId: "test-user",
               displayLabel: "Test user",
               roles: caller.roles,

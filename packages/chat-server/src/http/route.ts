@@ -1,3 +1,4 @@
+import { checkResponse } from "./check-response";
 import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
 import {
@@ -19,11 +20,17 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type OperationResource,
   type StorePage,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import {
+  createOperationFace,
+  type AssembledOperationBinding,
+  type OperationBindingContext
+} from "../operations/operation-face";
 import type { ResolvedChatServerOptions } from "../types";
 import { accountTried, requireWithinLimit } from "./rate-limit";
 
@@ -36,6 +43,9 @@ type RouteServerOptions = Pick<
   | "config"
   | "logger"
   | "rateLimiter"
+  | "stores"
+  | "auditRecorder"
+  | "operations"
 >;
 
 /** What a handler knows about a call whose caller is not a signed-in user. */
@@ -95,8 +105,34 @@ type RouteHandler<Op extends Operation> = (
   call: RouteCall<Op>
 ) => RouteResult<Op> | Promise<RouteResult<Op>>;
 
+type InputPart<Schema> = Schema extends z.ZodType ? z.output<Schema> : unknown;
+
+/** The one flat input of a registered operation: the fields of its body, query and path. */
+type OperationInput<Op extends Operation> = InputPart<Op["body"]> &
+  InputPart<Op["query"]> &
+  Record<OperationPathParamName<Op["path"]>, string>;
+
+/** What a registration adds to the descriptor: what the call touches and what it does. */
+interface OperationBinding<Op extends Operation> extends Omit<
+  AssembledOperationBinding,
+  "resource" | "execute"
+> {
+  resource?(input: OperationInput<Op>): OperationResource | undefined;
+  execute(
+    input: OperationInput<Op>,
+    context: OperationBindingContext
+  ): RouteResult<Op> | Promise<RouteResult<Op>>;
+}
+
 export interface Route {
   <const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
+  /**
+   * Registers an operation of the registry, defined with `defineRegisteredOperation`. Every
+   * call of it runs through `runOperation` and is an Operation Run: the right in `requires`,
+   * the policy and the guardrails are checked there, and the answer's status says how the run
+   * went.
+   */
+  operation<const Op extends Operation>(operation: Op, binding: OperationBinding<Op>): void;
   /** Every operation registered on this server so far, through whichever helper. */
   readonly registered: readonly Operation[];
 }
@@ -135,35 +171,17 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       method: operation.method,
       url: operation.path,
       handler: async (request, reply) => {
-        const correlationId = createCorrelationId(request);
-        void reply.header("x-correlation-id", correlationId);
-        // A public call is counted by its address before anything else runs, a call with a
-        // principal by that principal as soon as it is known.
-        if (operation.auth === "public") {
-          await requireWithinLimit(options, operation, { address: request.ip }, reply);
-        }
-        const caller = await authenticate(options, operation, request, reply, correlationId);
-        if (caller.identity) {
-          await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
-        }
-        if (caller.identity && operation.scope) {
-          requireAuthScope(caller.identity, operation.scope);
-        }
-        const query = parseInput(operation.query, request.query, "Request query is invalid");
-        const body = parseInput(operation.body, request.body ?? {}, "Request body is invalid");
-        const takesCredential = operation.auth === "public" && operation.rateClass === "auth";
-        const account = takesCredential ? accountTried(body) : undefined;
-        if (account !== undefined) {
-          // The tight limit: tries on one account from one address.
-          await requireWithinLimit(options, operation, { address: request.ip, account }, reply);
-        }
+        const { caller, query, body, params, takesCredential } = await admit(
+          operation,
+          request,
+          reply
+        );
         if (caller.identity) {
           for (const action of operation.requires ?? []) {
             // AP-1 replaces this line with `access.require(action)`.
             requirePermission(caller.identity, legacyPermissionFor(action));
           }
         }
-        const params = readPathParams(operation, request.params);
         const paging =
           operation.response.kind === "page"
             ? storePage(query, operation.response.order, pageScope(operation.id, params, query))
@@ -198,7 +216,86 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       }
     });
   }
-  return Object.assign(route, { registered });
+
+  /**
+   * What every call passes before its operation is reached: it is authenticated as the
+   * operation's `auth` says and counted against the rate class, its credential's scope is
+   * checked, and its query and body are parsed.
+   */
+  async function admit(operation: Operation, request: FastifyRequest, reply: FastifyReply) {
+    const correlationId = createCorrelationId(request);
+    void reply.header("x-correlation-id", correlationId);
+    // A public call is counted by its address before anything else runs, a call with a
+    // principal by that principal as soon as it is known.
+    if (operation.auth === "public") {
+      await requireWithinLimit(options, operation, { address: request.ip }, reply);
+    }
+    const caller = await authenticate(options, operation, request, reply, correlationId);
+    if (caller.identity) {
+      await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
+    }
+    if (caller.identity && operation.scope) {
+      requireAuthScope(caller.identity, operation.scope);
+    }
+    const query = parseInput(operation.query, request.query, "Request query is invalid");
+    const body = parseInput(operation.body, request.body ?? {}, "Request body is invalid");
+    const takesCredential = operation.auth === "public" && operation.rateClass === "auth";
+    const account = takesCredential ? accountTried(body) : undefined;
+    if (account !== undefined) {
+      // The tight limit: tries on one account from one address.
+      await requireWithinLimit(options, operation, { address: request.ip, account }, reply);
+    }
+    const params = readPathParams(operation, request.params);
+    return { correlationId, caller, query, body, params, takesCredential };
+  }
+
+  const face = createOperationFace(options);
+  function registerOperation<const Op extends Operation>(
+    operation: Op,
+    binding: OperationBinding<Op>
+  ): void;
+  function registerOperation(operation: Operation, binding: AssembledOperationBinding): void {
+    face.register(operation, binding);
+    registered.push(operation);
+    app.route({
+      method: operation.method,
+      url: operation.path,
+      handler: async (request, reply) => {
+        const { correlationId, caller, params } = await admit(operation, request, reply);
+        if (!caller.identity) {
+          throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);
+        }
+        // The parts are handed on as they arrived: the registry's one schema parses them, and
+        // what it parsed is what the run hashes and the operation receives.
+        return face.answer(
+          operation,
+          {
+            identity: caller.identity,
+            correlationId,
+            input: { ...inputFields(request.body), ...inputFields(request.query), ...params },
+            idempotencyKey: readIdempotencyKey(request)
+          },
+          reply
+        );
+      }
+    });
+  }
+  return Object.assign(route, { registered, operation: registerOperation });
+}
+
+const inputFieldsSchema = z.record(z.string(), z.unknown()).catch({});
+
+function inputFields(part: unknown): Record<string, unknown> {
+  return inputFieldsSchema.parse(part ?? {});
+}
+
+/** The caller's key for the call. It is the one header a call's outcome depends on. */
+function readIdempotencyKey(request: FastifyRequest): string | undefined {
+  const key = request.headers["idempotency-key"];
+  if (Array.isArray(key)) {
+    throw new AppError("VALIDATION_FAILED", "A call takes one Idempotency-Key");
+  }
+  return key;
 }
 
 async function authenticate(
@@ -331,35 +428,4 @@ function readPathParams(operation: Operation, params: unknown): Record<string, s
       return [name, value];
     })
   );
-}
-
-/**
- * A response outside its contract is always logged. Only a development instance refuses it:
- * the handler has already committed its work by now, and one stored value outside an enum
- * would otherwise fail a whole list for the people using an operated instance.
- */
-function checkResponse(
-  options: RouteServerOptions,
-  operation: Operation,
-  schema: z.ZodType,
-  result: unknown
-): void {
-  const validated = schema.safeParse(result);
-  if (validated.success) {
-    return;
-  }
-  // Paths and codes only: the values are the payload the schema refused.
-  options.logger.error(
-    {
-      operationId: operation.id,
-      issues: validated.error.issues.map((issue) => ({
-        path: issue.path.join("."),
-        code: issue.code
-      }))
-    },
-    "Operation response does not match its schema"
-  );
-  if (options.config.clientInstance.environment === "development") {
-    throw new AppError("INTERNAL", `Operation '${operation.id}' returned an invalid response`);
-  }
 }

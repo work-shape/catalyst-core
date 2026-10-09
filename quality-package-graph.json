@@ -15,6 +15,7 @@
     "@vivd-catalyst/core",
     "@vivd-catalyst/mail",
     "@vivd-catalyst/model-provider",
+    "@vivd-catalyst/tool-execution",
     "@vivd-catalyst/usage-governance"
   ],
   "@vivd-catalyst/chat-standalone": ["@vivd-catalyst/chat-ui"],

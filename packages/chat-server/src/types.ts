@@ -13,7 +13,13 @@ import type {
   ExecutionWorkspaceCleanupStore,
   ManagedArtifactId
 } from "@vivd-catalyst/core";
-import type { AuditRecorder, RateLimiter } from "@vivd-catalyst/core";
+import type {
+  AuditRecorder,
+  CentralPolicySetting,
+  PlatformEventEmitter,
+  RateLimiter
+} from "@vivd-catalyst/core";
+import type { OperationApprovalRequests } from "@vivd-catalyst/tool-execution";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
@@ -110,6 +116,17 @@ export interface ChatServerOptions {
   };
   /** Counts calls per operation and caller. Without one the server counts in its own process. */
   rateLimiter?: RateLimiter;
+  /** What the calls of registered operations run with beyond the server's own defaults. */
+  operations?: {
+    /** The events of a call. Without one, audited events become audit rows and nothing blocks. */
+    events?: PlatformEventEmitter;
+    /** The admin's policy settings. Without them only the defaults apply. */
+    centralPolicySettings?():
+      readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
+    /** Files the request another person decides. Without it a call that needs one is refused. */
+    approvals?: OperationApprovalRequests;
+    now?: () => Date;
+  };
 }
 
 /** The options as the server's own modules see them, with every default filled in. */
