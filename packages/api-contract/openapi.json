@@ -43,6 +43,9 @@
       "name": "Instance"
     },
     {
+      "name": "Operations"
+    },
+    {
       "name": "Reference"
     },
     {
@@ -5368,6 +5371,234 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/operations/runs": {
+      "get": {
+        "operationId": "operations.list_runs",
+        "summary": "List the Operation Runs of the instance, newest first",
+        "tags": [
+          "Operations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "operation",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OperationRunStatus"
+            }
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "agent",
+                "user",
+                "cli",
+                "mcp",
+                "app",
+                "workflow",
+                "schedule"
+              ]
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Timestamp"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OperationRun"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "audit.view"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/operations/runs/{runId}": {
+      "get": {
+        "operationId": "operations.get_run",
+        "summary": "Read one Operation Run: your own, or any with the right to view the audit log",
+        "tags": [
+          "Operations"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/password-reset": {
       "post": {
         "operationId": "password_reset.request",
@@ -8261,6 +8492,13 @@
           "TIMEOUT",
           "VALIDATION_FAILED",
           "RATE_LIMITED",
+          "POLICY_DENIED",
+          "GUARDRAIL_BLOCKED",
+          "DECLINED",
+          "IDEMPOTENCY_KEY_REUSED",
+          "OPERATION_IN_PROGRESS",
+          "OPERATION_EXPIRED",
+          "OUTPUT_NOT_RETAINED",
           "INTERNAL"
         ]
       },
@@ -11811,8 +12049,12 @@
                           "type": "string",
                           "enum": [
                             "path",
-                            "query"
+                            "query",
+                            "header"
                           ]
+                        },
+                        "description": {
+                          "type": "string"
                         },
                         "required": {
                           "type": "boolean"
@@ -11889,6 +12131,23 @@
                           "properties": {
                             "description": {
                               "type": "string"
+                            },
+                            "headers": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                  "$ref": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "$ref"
+                                ]
+                              }
                             },
                             "content": {
                               "type": "object",
@@ -11997,6 +12256,23 @@
                     "description": {
                       "type": "string"
                     },
+                    "headers": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "$ref": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "$ref"
+                        ]
+                      }
+                    },
                     "content": {
                       "type": "object",
                       "propertyNames": {
@@ -12021,6 +12297,31 @@
                   },
                   "required": [
                     "description"
+                  ]
+                }
+              },
+              "headers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "schema": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "description",
+                    "schema"
                   ]
                 }
               },
@@ -12052,6 +12353,291 @@
           "tags",
           "paths",
           "components"
+        ]
+      },
+      "OperationRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "changing"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/OperationRunStatus"
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "service_principal"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "label"
+            ]
+          },
+          "origin": {
+            "$ref": "#/components/schemas/OperationRunOrigin"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "approvalRequestId": {
+            "type": "string"
+          },
+          "inputHash": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "decision": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "direct",
+                  "confirmed",
+                  "approved",
+                  "declined"
+                ]
+              },
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              "comment": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode",
+              "by",
+              "at"
+            ]
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "startedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "finishedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "href": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "effect",
+          "status",
+          "actor",
+          "origin",
+          "inputHash",
+          "attempt",
+          "correlationId",
+          "createdAt",
+          "href"
+        ]
+      },
+      "OperationRunOrigin": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "agent"
+              },
+              "agentRunId": {
+                "type": "string"
+              },
+              "conversationId": {
+                "type": "string"
+              },
+              "agentName": {
+                "type": "string"
+              },
+              "toolCallId": {
+                "type": "string"
+              },
+              "toolName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "agentRunId",
+              "conversationId",
+              "agentName",
+              "toolCallId",
+              "toolName"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "user"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "cli"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "mcp"
+              },
+              "clientName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "app"
+              },
+              "appRevisionId": {
+                "type": "string"
+              },
+              "actionName": {
+                "type": "string"
+              },
+              "pageSessionId": {
+                "type": "string"
+              },
+              "conversationId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "appRevisionId",
+              "actionName",
+              "pageSessionId"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "workflow"
+              },
+              "workflowRunId": {
+                "type": "string"
+              },
+              "stepRunId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "workflowRunId",
+              "stepRunId"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "schedule"
+              },
+              "scheduleId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "scheduleId"
+            ]
+          }
+        ]
+      },
+      "OperationRunStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "pending_confirmation",
+          "pending_approval",
+          "done",
+          "failed",
+          "denied",
+          "expired"
         ]
       },
       "PendingApprovalRequestCount": {

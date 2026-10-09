@@ -141,7 +141,13 @@ function overview(document: OpenApiDocument): string {
   const errors = Object.entries(document.components.responses)
     .map(([, response]) => `<li>${prose(response.description)}</li>`)
     .join("");
-  return `<p>${prose(document.info.description)}</p><h2 id="credentials">Credentials</h2><ul class="api-fields">${schemes}</ul><h2 id="errors">Errors</h2><ul class="api-fields">${errors}</ul>`;
+  const headers = Object.entries(document.components.headers ?? {})
+    .map(([, header]) => `<li>${prose(header.description)}</li>`)
+    .join("");
+  const headerSection = headers
+    ? `<h2 id="headers">Answer headers</h2><ul class="api-fields">${headers}</ul>`
+    : "";
+  return `<p>${prose(document.info.description)}</p><h2 id="credentials">Credentials</h2><ul class="api-fields">${schemes}</ul><h2 id="errors">Errors</h2><ul class="api-fields">${errors}</ul>${headerSection}`;
 }
 
 function operationHtml(
@@ -187,7 +193,9 @@ function operationHtml(
           : Object.entries(response?.content ?? {})
               .map(([mediaType, media]) => contentHtml(writer, mediaType, media.schema))
               .join("");
-      return `<li><code>${text(status)}</code> ${prose(response?.description ?? "")}${content}</li>`;
+      const headers = "$ref" in answer ? [] : Object.keys(answer.headers ?? {});
+      const sets = headers.length > 0 ? ` Sets ${codeList(headers)}.` : "";
+      return `<li><code>${text(status)}</code> ${prose(response?.description ?? "")}${sets}${content}</li>`;
     })
     .join("");
   return [

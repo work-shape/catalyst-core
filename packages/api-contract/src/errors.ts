@@ -9,6 +9,13 @@ export const appErrorCodeSchema = z.enum([
   "TIMEOUT",
   "VALIDATION_FAILED",
   "RATE_LIMITED",
+  "POLICY_DENIED",
+  "GUARDRAIL_BLOCKED",
+  "DECLINED",
+  "IDEMPOTENCY_KEY_REUSED",
+  "OPERATION_IN_PROGRESS",
+  "OPERATION_EXPIRED",
+  "OUTPUT_NOT_RETAINED",
   "INTERNAL"
 ]);
 
@@ -24,6 +31,19 @@ export const API_ERROR_MEANINGS: Record<z.infer<typeof appErrorCodeSchema>, stri
   VALIDATION_FAILED: "Path, query or body do not match the operation's schema.",
   RATE_LIMITED:
     "The caller sent too many requests of this operation's rate class. `details.retryAfterSeconds` and the `Retry-After` header give the seconds to wait. The numbers are the instance's, set under `rateLimits` in its release config.",
+  POLICY_DENIED:
+    "The instance's policy does not allow this operation from here. `details.operation` names it.",
+  GUARDRAIL_BLOCKED: "A guardrail refused the call. `details.guardrailId` names it.",
+  DECLINED:
+    "The person asked to approve the call declined it. `details.by` names them, `details.comment` holds their reason where they gave one.",
+  IDEMPOTENCY_KEY_REUSED:
+    "The `Idempotency-Key` was already used for another operation or another input. Send a new key.",
+  OPERATION_IN_PROGRESS:
+    "The first call with this `Idempotency-Key` has not ended. `details.operationRunId` names its run.",
+  OPERATION_EXPIRED:
+    "The call waited for an approval until it expired, and nothing was executed. Call again with a new key.",
+  OUTPUT_NOT_RETAINED:
+    "The call with this `Idempotency-Key` completed, and its answer was too large to keep. Read the result from what the call changed.",
   INTERNAL: "The instance failed. The message never carries details."
 };
 

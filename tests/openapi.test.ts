@@ -5,6 +5,7 @@ import {
   COMMON_OPERATION_ERRORS,
   apiOperations,
   createOpenApiDocument,
+  createOpenApiDocumentFromOperations,
   findBreakingChanges,
   openApiDocumentSchema,
   renderApiReferencePage,
@@ -16,6 +17,7 @@ import type { AuthAdapter } from "@vivd-catalyst/auth";
 import { APP_ERROR_STATUS_CODES, AppError } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { required } from "./support/assertions";
+import { registeredTestOperations } from "./support/operations";
 import { retiredApiPaths } from "./support/retired-api-paths";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { createTestInstanceWith, type TestStore } from "./support/test-instance";
@@ -117,6 +119,102 @@ describe("the released OpenAPI document", () => {
       }
     }
     expect(Object.keys(documentedOperation("branding.get").responses)).not.toContain("401");
+  });
+
+  it("gives the codes that share a status one answer that names each of them", () => {
+    const registered = createOpenApiDocumentFromOperations(registeredTestOperations);
+    const change = documentedOperationOf(registered, "testRunChange");
+    expect(change.responses["403"]).toEqual({
+      $ref: "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+    });
+    const refusal = required(
+      registered.components.responses.ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined
+    );
+    for (const code of ["FORBIDDEN", "POLICY_DENIED", "GUARDRAIL_BLOCKED", "DECLINED"]) {
+      expect(refusal.description).toContain(`\`${code}\``);
+    }
+    const conflict = change.responses["409"];
+    if (!conflict || !("$ref" in conflict)) throw new Error("409 is not a reference");
+    const repeated = required(
+      registered.components.responses[conflict.$ref.replace("#/components/responses/", "")]
+    );
+    for (const code of [
+      "IDEMPOTENCY_KEY_REUSED",
+      "OPERATION_IN_PROGRESS",
+      "OPERATION_EXPIRED",
+      "OUTPUT_NOT_RETAINED"
+    ]) {
+      expect(repeated.description).toContain(code);
+    }
+    // An answer for one code keeps the name it always had.
+    expect(Object.keys(released.components.responses)).toContain("Forbidden");
+  });
+
+  it("declares 202, the key and the run headers on operations of the registry only", () => {
+    const registered = createOpenApiDocumentFromOperations(registeredTestOperations);
+    expect(openApiDocumentSchema.safeParse(registered).success).toBe(true);
+    const change = documentedOperationOf(registered, "testRunChange");
+    const read = documentedOperationOf(registered, "testRunRead");
+    const header = (name: string) => ({ $ref: `#/components/headers/${name}` });
+
+    expect(Object.keys(change.responses)).toContain("202");
+    expect(change.responses["202"]).toMatchObject({
+      content: { "application/json": { schema: { $ref: "#/components/schemas/OperationRun" } } },
+      headers: {
+        "Operation-Run-Id": header("OperationRunId"),
+        Location: header("Location"),
+        "Idempotent-Replayed": header("IdempotentReplayed")
+      }
+    });
+    expect(change.responses["200"]).toMatchObject({
+      headers: {
+        "Operation-Run-Id": header("OperationRunId"),
+        "Idempotent-Replayed": header("IdempotentReplayed")
+      }
+    });
+    expect(change.responses["200"]).not.toHaveProperty("headers.Location");
+    expect(change.parameters).toContainEqual(
+      expect.objectContaining({ name: "Idempotency-Key", in: "header", required: false })
+    );
+
+    // A reading operation of the registry names its run and never waits.
+    expect(Object.keys(read.responses)).not.toContain("202");
+    expect(read.responses["200"]).toMatchObject({
+      headers: { "Operation-Run-Id": header("OperationRunId") }
+    });
+    expect(read.parameters.map((parameter) => parameter.in)).not.toContain("header");
+
+    // Each header is declared once and referred to from there.
+    expect(Object.keys(required(registered.components.headers))).toEqual([
+      "OperationRunId",
+      "Location",
+      "IdempotentReplayed"
+    ]);
+
+    // A hand-written route declares none of it.
+    for (const operation of Object.values(released.paths).flatMap((methods) =>
+      Object.values(methods)
+    )) {
+      expect(Object.keys(operation.responses), operation.operationId).not.toContain("202");
+      expect(JSON.stringify(operation), operation.operationId).not.toContain("components/headers");
+    }
+    expect(released.components.headers).toBeUndefined();
+
+    const page = renderApiReferencePage(registered, {
+      documentHref: "openapi.json",
+      theme: {
+        light: {
+          surfaceColor: "#ffffff",
+          backgroundColor: "#f5f5f5",
+          textColor: "#1a1a1a",
+          mutedTextColor: "#5e5e5e",
+          borderColor: "#e5e5e5",
+          accentColor: "#1a1a1a"
+        }
+      }
+    });
+    expect(page.html).toContain("Idempotency-Key");
+    expect(page.html).toContain("Operation-Run-Id");
   });
 
   it("names every schema it refers to and holds no schema nothing refers to", () => {

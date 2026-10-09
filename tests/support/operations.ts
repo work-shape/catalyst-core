@@ -4,6 +4,7 @@ import {
   createOpenApiDocument,
   buildApiPath,
   defineOperation,
+  defineRegisteredOperation,
   json,
   page,
   listQuerySchema,
@@ -164,6 +165,59 @@ export const routeTestOperations = {
   })
 };
 
+/** Operations a test registers in the operation registry to exercise its HTTP face. */
+const registeredTestOperation = {
+  summary: "Operation registry fixture",
+  tag: "Test",
+  auth: "principal",
+  errors: [],
+  rateClass: "read"
+} as const;
+export const registeredTestOperations = {
+  testRunRead: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "testRunRead",
+    method: "GET",
+    path: "/api/v1/test/operations/items/:itemId",
+    scope: "governance:read",
+    requires: ["audit.view"],
+    effect: "reading",
+    query: z.object({ view: z.enum(["full", "short"]).optional() }),
+    response: json(z.object({ itemId: z.string(), view: z.string().optional() }))
+  }),
+  testRunList: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "testRunList",
+    method: "GET",
+    path: "/api/v1/test/operations/items",
+    scope: "governance:read",
+    requires: [],
+    effect: "reading",
+    query: listQuerySchema,
+    response: page(
+      z.object({ id: z.string(), createdAt: timestampSchema }),
+      ["createdAt", "id"],
+      true
+    )
+  }),
+  /** Does what `mode` names, so one operation shows every way a changing call can end. */
+  testRunChange: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "testRunChange",
+    method: "POST",
+    path: "/api/v1/test/operations/items",
+    scope: "governance:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: z.object({
+      name: z.string().min(1),
+      mode: z.enum(["ok", "not-found", "throw", "large", "gated", "own-right"]).default("ok")
+    }),
+    response: json(z.object({ name: z.string(), filler: z.string().optional() })),
+    errors: ["NOT_FOUND"]
+  })
+};
+
 export const testOperations = {
   legacyDevelopmentUsers: fixtureOperation("GET", "/auth/development/users"),
   ...apiOperations,
@@ -175,6 +229,7 @@ export const testOperations = {
   testIp: fixtureOperation("GET", "/test/ip"),
   testStream: fixtureOperation("GET", "/stream"),
   ...routeTestOperations,
+  ...registeredTestOperations,
   testProviderError: fixtureOperation("GET", "/test-provider-error"),
   testInternalError: fixtureOperation("GET", "/test-internal-error"),
   testExposedError: fixtureOperation("GET", "/test-exposed-error"),

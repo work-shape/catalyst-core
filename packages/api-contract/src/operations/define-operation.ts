@@ -1,4 +1,10 @@
-import type { OperationEffect, OperationScope, PlatformAction } from "@vivd-catalyst/core";
+import {
+  IDEMPOTENCY_KEY_MAX_LENGTH,
+  type OperationEffect,
+  type OperationScope,
+  type PlatformAction
+} from "@vivd-catalyst/core";
+import { operationRunSchema } from "../operation-runs";
 import { listEnvelopeSchema } from "../shared";
 import type { z } from "zod";
 import type { ApiErrorCode } from "../errors";
@@ -62,6 +68,26 @@ export function blob(contentType = "application/octet-stream") {
 
 export type OperationQuerySchema = z.ZodObject<Record<string, z.ZodType>>;
 
+/**
+ * The headers of the contract beyond the common ones, each with what it tells. The document
+ * declares each once, and an operation names the ones it takes and sets.
+ */
+export const OPERATION_HEADERS = {
+  request: {
+    "Idempotency-Key": `A key the caller chooses for one changing call, up to ${IDEMPOTENCY_KEY_MAX_LENGTH} characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.`
+  },
+  response: {
+    "Operation-Run-Id":
+      "The id of the Operation Run that records this call. Set on every answer of a call that got as far as a run, a refusal and a failure included.",
+    Location: "Where the Operation Run of a call that waits for an approval is read.",
+    "Idempotent-Replayed":
+      "`true` when the answer is the recorded one of an earlier call with the same `Idempotency-Key`."
+  }
+} as const;
+
+export type OperationRequestHeader = keyof typeof OPERATION_HEADERS.request;
+export type OperationResponseHeader = keyof typeof OPERATION_HEADERS.response;
+
 type OperationAccess =
   | {
       readonly auth: "serverCredential";
@@ -98,6 +124,16 @@ export type OperationConfig = OperationAccess & {
   /** The request is a multipart upload with one `file` part instead of a JSON body. */
   readonly multipart?: true;
   readonly response: OperationResponse;
+  /**
+   * A second success answer, `202 Accepted`: the call waits for somebody else, and this is
+   * what it answers meanwhile.
+   */
+  readonly accepted?: z.ZodType;
+  /** The headers of `OPERATION_HEADERS` the operation takes and sets. */
+  readonly headers?: {
+    readonly request?: readonly OperationRequestHeader[];
+    readonly response?: readonly OperationResponseHeader[];
+  };
   /** Error codes beyond the common set every operation can answer with. */
   readonly errors: readonly ApiErrorCode[];
   readonly rateClass: OperationRateClass;
@@ -132,6 +168,65 @@ export function defineOperation<const Config extends OperationConfig>(
     buildPath: (options) =>
       buildPath(config.path, config.query ? Object.keys(config.query.shape) : [], options)
   };
+}
+
+/** What an operation of the registry leaves to `defineRegisteredOperation`. */
+type RegisteredOperationConfig = OperationConfig & {
+  readonly auth: "user" | "principal";
+  readonly response: { readonly kind: "json" | "page" };
+  readonly accepted?: never;
+  readonly headers?: never;
+};
+
+const REGISTERED_READING = {
+  headers: { response: ["Operation-Run-Id"] }
+} as const;
+
+const REGISTERED_CHANGING = {
+  accepted: operationRunSchema,
+  headers: {
+    request: ["Idempotency-Key"],
+    response: ["Operation-Run-Id", "Location", "Idempotent-Replayed"]
+  }
+} as const;
+
+/** The error codes the policy of an instance adds to every operation of the registry. */
+const REGISTERED_ERRORS = ["POLICY_DENIED", "GUARDRAIL_BLOCKED"] as const;
+/** The error codes a changing operation of the registry adds for approvals and repeated calls. */
+const REGISTERED_CHANGING_ERRORS = [
+  "DECLINED",
+  "IDEMPOTENCY_KEY_REUSED",
+  "OPERATION_IN_PROGRESS",
+  "OPERATION_EXPIRED",
+  "OUTPUT_NOT_RETAINED"
+] as const;
+
+/**
+ * An operation of the registry: every call of it is an Operation Run, named by the header
+ * `Operation-Run-Id`. A reading one answers its output or an error. A changing one takes an
+ * `Idempotency-Key` and can also answer `202` with the run while it waits for an approval.
+ */
+export function defineRegisteredOperation<
+  const Config extends RegisteredOperationConfig & { readonly effect: "reading" }
+>(config: Config): Operation<Config & typeof REGISTERED_READING>;
+export function defineRegisteredOperation<
+  const Config extends RegisteredOperationConfig & { readonly effect: "changing" }
+>(config: Config): Operation<Config & typeof REGISTERED_CHANGING>;
+export function defineRegisteredOperation(config: RegisteredOperationConfig): Operation {
+  return defineOperation({
+    ...config,
+    ...(config.effect === "changing" ? REGISTERED_CHANGING : REGISTERED_READING),
+    errors: [
+      ...config.errors,
+      ...REGISTERED_ERRORS,
+      ...(config.effect === "changing" ? REGISTERED_CHANGING_ERRORS : [])
+    ]
+  });
+}
+
+/** Whether every call of the operation is an Operation Run. */
+export function isRegisteredOperation(operation: Operation): boolean {
+  return operation.headers?.response?.includes("Operation-Run-Id") ?? false;
 }
 
 /** The names of the `:param` segments of a path template, as a union. */

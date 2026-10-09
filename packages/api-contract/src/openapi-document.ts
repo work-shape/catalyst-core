@@ -3,13 +3,16 @@ import { z } from "zod";
 const jsonSchemaSchema = z.record(z.string(), z.unknown());
 const mediaTypesSchema = z.record(z.string(), z.object({ schema: jsonSchemaSchema }));
 const referenceSchema = z.object({ $ref: z.string() });
+const headerSchema = z.object({ description: z.string(), schema: jsonSchemaSchema });
 const responseSchema = z.object({
   description: z.string(),
+  headers: z.record(z.string(), referenceSchema).optional(),
   content: mediaTypesSchema.optional()
 });
 const parameterSchema = z.object({
   name: z.string(),
-  in: z.enum(["path", "query"]),
+  in: z.enum(["path", "query", "header"]),
+  description: z.string().optional(),
   required: z.boolean(),
   schema: jsonSchemaSchema
 });
@@ -44,6 +47,7 @@ export const openApiDocumentSchema = z.object({
   components: z.object({
     securitySchemes: z.record(z.string(), securitySchemeSchema),
     responses: z.record(z.string(), responseSchema),
+    headers: z.record(z.string(), headerSchema).optional(),
     schemas: z.record(z.string(), jsonSchemaSchema)
   })
 });

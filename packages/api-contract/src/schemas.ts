@@ -8,5 +8,6 @@ export * from "./errors";
 export * from "./governance";
 export * from "./identity";
 export * from "./openapi-document";
+export * from "./operation-runs";
 export * from "./shared";
 export * from "./system";

@@ -1,4 +1,4 @@
-import { APP_ERROR_STATUS_CODES } from "@vivd-catalyst/core";
+import { APP_ERROR_STATUS_CODES, IDEMPOTENCY_KEY_MAX_LENGTH } from "@vivd-catalyst/core";
 import { z } from "zod";
 import packageManifest from "../package.json" with { type: "json" };
 import { API_ERROR_MEANINGS, appErrorCodeSchema, type ApiErrorCode } from "./errors";
@@ -12,8 +12,10 @@ import { apiOperations } from "./operations";
 import {
   API_VERSION_PREFIX,
   COMMON_OPERATION_ERRORS,
+  OPERATION_HEADERS,
   operationPathParamNames,
-  type Operation
+  type Operation,
+  type OperationResponseHeader
 } from "./operations/define-operation";
 import * as contractSchemas from "./schemas";
 
@@ -45,20 +47,39 @@ export function createOpenApiDocumentFromOperations(
     );
 
   const paths: OpenApiDocument["paths"] = {};
-  const errorCodes = new Set<ApiErrorCode>();
+  const errorAnswers = new Map<string, readonly ApiErrorCode[]>();
+  const responseHeaders = new Set<OperationResponseHeader>();
   for (const operation of documented) {
-    const codes = operationErrorCodes(operation);
-    codes.forEach((code) => errorCodes.add(code));
+    const answers = errorAnswersByStatus(operationErrorCodes(operation));
+    answers.forEach((codes) => errorAnswers.set(errorResponseName(codes), codes));
+    operation.headers?.response?.forEach((header) => responseHeaders.add(header));
     (paths[toOpenApiPath(operation.path)] ??= {})[operation.method.toLowerCase()] =
-      createOpenApiOperation(operation, codes);
+      createOpenApiOperation(operation, answers);
   }
 
   const responses = Object.fromEntries(
-    API_ERROR_CODE_ORDER.filter((code) => errorCodes.has(code)).map((code) => [
-      errorResponseName(code),
+    [...errorAnswers.values()]
+      .sort(
+        (left, right) =>
+          left.length - right.length ||
+          API_ERROR_CODE_ORDER.indexOf(required(left[0])) -
+            API_ERROR_CODE_ORDER.indexOf(required(right[0])) ||
+          compareText(errorResponseName(left), errorResponseName(right))
+      )
+      .map((codes) => [
+        errorResponseName(codes),
+        {
+          description: codes.map((code) => `\`${code}\`: ${API_ERROR_MEANINGS[code]}`).join(" "),
+          content: { "application/json": { schema: schemaFor(errorResponseSchema, "output") } }
+        }
+      ])
+  );
+  const headers = Object.fromEntries(
+    RESPONSE_HEADER_ORDER.filter((header) => responseHeaders.has(header)).map((header) => [
+      headerComponentName(header),
       {
-        description: `\`${code}\`: ${API_ERROR_MEANINGS[code]}`,
-        content: { "application/json": { schema: schemaFor(errorResponseSchema, "output") } }
+        description: `\`${header}\`: ${OPERATION_HEADERS.response[header]}`,
+        schema: { type: "string" }
       }
     ])
   );
@@ -78,6 +99,7 @@ export function createOpenApiDocumentFromOperations(
     components: {
       securitySchemes: SECURITY_SCHEMES,
       responses,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
       schemas: usedComponents({ paths, responses })
     }
   };
@@ -86,6 +108,30 @@ export function createOpenApiDocumentFromOperations(
 const METHOD_ORDER: readonly Operation["method"][] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const API_ERROR_CODE_ORDER: readonly ApiErrorCode[] = appErrorCodeSchema.options;
 const errorResponseSchema = contractSchemas.apiErrorResponseSchema;
+const RESPONSE_HEADER_ORDER: readonly OperationResponseHeader[] = [
+  "Operation-Run-Id",
+  "Location",
+  "Idempotent-Replayed"
+];
+
+/** One answer per status: the codes that share a status share its answer. */
+function errorAnswersByStatus(codes: readonly ApiErrorCode[]): Map<string, ApiErrorCode[]> {
+  const answers = new Map<string, ApiErrorCode[]>();
+  for (const code of codes) {
+    const status = String(APP_ERROR_STATUS_CODES[code]);
+    answers.set(status, [...(answers.get(status) ?? []), code]);
+  }
+  return answers;
+}
+
+function headerComponentName(header: string): string {
+  return header.replaceAll("-", "");
+}
+
+function required<Value>(value: Value | undefined): Value {
+  if (value === undefined) throw new Error("Expected a value");
+  return value;
+}
 
 const SECURITY_SCHEMES = {
   sessionCookie: {
@@ -155,7 +201,7 @@ function operationErrorCodes(operation: Operation): ApiErrorCode[] {
 
 function createOpenApiOperation(
   operation: Operation,
-  errorCodes: readonly ApiErrorCode[]
+  errorAnswers: ReadonlyMap<string, readonly ApiErrorCode[]>
 ): OpenApiOperation {
   const requestBody = createRequestBody(operation);
   return {
@@ -168,9 +214,9 @@ function createOpenApiOperation(
     responses: Object.fromEntries(
       [
         ...Object.entries(createSuccessResponses(operation)),
-        ...errorCodes.map((code): [string, { $ref: string }] => [
-          String(APP_ERROR_STATUS_CODES[code]),
-          { $ref: `#/components/responses/${errorResponseName(code)}` }
+        ...[...errorAnswers].map(([status, codes]): [string, { $ref: string }] => [
+          status,
+          { $ref: `#/components/responses/${errorResponseName(codes)}` }
         ])
       ].sort(([left], [right]) => compareText(left, right))
     ),
@@ -194,6 +240,13 @@ function createParameters(operation: Operation): OpenApiOperation["parameters"] 
       in: "query" as const,
       required: !schema.safeParse(undefined).success,
       schema: schemaFor(schema, "input")
+    })),
+    ...(operation.headers?.request ?? []).map((name) => ({
+      name,
+      in: "header" as const,
+      description: OPERATION_HEADERS.request[name],
+      required: false,
+      schema: { type: "string", minLength: 1, maxLength: IDEMPOTENCY_KEY_MAX_LENGTH }
     }))
   ];
 }
@@ -222,7 +275,41 @@ function createRequestBody(operation: Operation): OpenApiOperation["requestBody"
   return undefined;
 }
 
+/** The success answers, each naming the headers the operation sets on it. */
 function createSuccessResponses(operation: Operation): Record<string, OpenApiResponse> {
+  const declared = operation.headers?.response ?? [];
+  const headersOf = (status: string) => {
+    // `Location` leads to the run of a call that waits; a replay answers what was recorded.
+    const set = declared.filter((header) => header !== "Location" || status === "202");
+    return set.length > 0
+      ? {
+          headers: Object.fromEntries(
+            set.map((header) => [
+              header,
+              { $ref: `#/components/headers/${headerComponentName(header)}` }
+            ])
+          )
+        }
+      : {};
+  };
+  const answers: Record<string, OpenApiResponse> = {
+    ...createResultResponses(operation),
+    ...(operation.accepted
+      ? {
+          "202": {
+            description:
+              "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            content: { "application/json": { schema: schemaFor(operation.accepted, "output") } }
+          }
+        }
+      : {})
+  };
+  return Object.fromEntries(
+    Object.entries(answers).map(([status, answer]) => [status, { ...answer, ...headersOf(status) }])
+  );
+}
+
+function createResultResponses(operation: Operation): Record<string, OpenApiResponse> {
   const { response } = operation;
   switch (response.kind) {
     case "json":
@@ -426,12 +513,17 @@ function jsonObject(value: unknown): OpenApiJsonSchema {
   return z.record(z.string(), z.unknown()).parse(value);
 }
 
-function errorResponseName(code: ApiErrorCode): string {
-  return code
-    .toLowerCase()
-    .split("_")
-    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-    .join("");
+function errorResponseName(codes: ApiErrorCode | readonly ApiErrorCode[]): string {
+  return [codes]
+    .flat()
+    .map((code) =>
+      code
+        .toLowerCase()
+        .split("_")
+        .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+        .join("")
+    )
+    .join("Or");
 }
 
 function compareText(left: string, right: string): number {
