@@ -14,7 +14,9 @@
   },
   "files": [
     "dist",
-    "migrations"
+    "migrations",
+    "src/migration-statements.js",
+    "src/migration-statements.d.ts"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,6 +25,10 @@
       "types": "./dist/index.d.ts",
       "development": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./migration-statements": {
+      "types": "./src/migration-statements.d.ts",
+      "import": "./src/migration-statements.js"
     }
   },
   "publishConfig": {
@@ -32,6 +38,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./migration-statements": {
+        "types": "./src/migration-statements.d.ts",
+        "import": "./src/migration-statements.js"
       }
     }
   },

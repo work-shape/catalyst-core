@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readMigrationFiles } from "drizzle-orm/migrator";
-import postgres, { type Sql } from "postgres";
+import postgres, { type ReservedSql } from "postgres";
+import {
+  concurrentIndexName,
+  parseSqlChunk,
+  runsOutsideTransaction,
+  type MigrationStatement
+} from "./migration-statements.js";
 
 const committedMigrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -10,12 +16,16 @@ const committedMigrationsDirectory = resolve(
 );
 const migrationLockKey = "vivd-catalyst:postgres-store:migrations";
 
+/** Any query runner: the migration session, or the pool a starting process reads through. */
+type Queries = Pick<ReservedSql, "unsafe">;
+
 interface CommittedMigration {
   name: string;
   /** The journal timestamp. It orders migrations and is what the database records as applied. */
   when: number;
   hash: string;
-  statements: string[];
+  /** The query texts between drizzle's breakpoints, with the statements each one holds. */
+  chunks: { text: string; statements: MigrationStatement[] }[];
 }
 
 export interface MigrateDatabaseInput {
@@ -25,37 +35,53 @@ export interface MigrateDatabaseInput {
 }
 
 /**
- * The one way a database reaches the committed schema. It holds a Postgres advisory lock for the
- * whole run, so two callers apply every migration once, and returns the names it applied in order.
+ * The one way a database reaches the committed schema. One reserved session holds a Postgres
+ * advisory lock for the whole run and executes every statement, so two callers apply every
+ * migration once. Returns the names it applied, in order.
  */
 export async function migrateDatabase(input: MigrateDatabaseInput): Promise<string[]> {
   const migrations = readCommittedMigrations(input.migrationsDirectory);
-  // One connection: the advisory lock belongs to the session that runs the migrations.
-  const sql = postgres(input.databaseUrl, { max: 1, onnotice() {} });
+  const pool = postgres(input.databaseUrl, { max: 1, onnotice() {} });
   try {
-    await sql`select pg_advisory_lock(hashtextextended(${migrationLockKey}, 0))`;
+    // The advisory lock belongs to a session. The pool may replace its connection after the
+    // connection's lifetime; a reserved one stays with this run until it is released.
+    const session = await pool.reserve();
     try {
-      await sql`create schema if not exists drizzle`;
-      await sql`
-        create table if not exists drizzle.__drizzle_migrations (
-          id serial primary key,
-          hash text not null,
-          created_at bigint
-        )
-      `;
-      const lastApplied = await readLastAppliedMigration(sql);
-      const applied: string[] = [];
-      for (const migration of migrations) {
-        if (lastApplied !== undefined && migration.when <= lastApplied) continue;
-        await applyMigration(sql, migration);
-        applied.push(migration.name);
+      await session.unsafe("select pg_advisory_lock(hashtextextended($1, 0))", [migrationLockKey]);
+      try {
+        await session.unsafe("create schema if not exists drizzle");
+        await session.unsafe(`
+          create table if not exists drizzle.__drizzle_migrations (
+            id serial primary key,
+            hash text not null,
+            created_at bigint
+          )
+        `);
+        const lastApplied = await readLastAppliedMigration(session);
+        const applied: string[] = [];
+        for (const migration of migrations) {
+          if (lastApplied !== undefined && migration.when <= lastApplied) continue;
+          try {
+            await applyMigration(session, migration);
+          } catch (error) {
+            throw new Error(
+              `Migration ${migration.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+              { cause: error }
+            );
+          }
+          applied.push(migration.name);
+        }
+        return applied;
+      } finally {
+        await session.unsafe("select pg_advisory_unlock(hashtextextended($1, 0))", [
+          migrationLockKey
+        ]);
       }
-      return applied;
     } finally {
-      await sql`select pg_advisory_unlock(hashtextextended(${migrationLockKey}, 0))`;
+      session.release();
     }
   } finally {
-    await sql.end();
+    await pool.end();
   }
 }
 
@@ -64,7 +90,7 @@ export async function migrateDatabase(input: MigrateDatabaseInput): Promise<stri
  * behind is migrated by the explicit migration step, and one that is ahead belongs to a newer
  * release this process may still serve.
  */
-export async function assertDatabaseMigrated(sql: Sql): Promise<void> {
+export async function assertDatabaseMigrated(sql: Queries): Promise<void> {
   const lastApplied = await readLastAppliedMigration(sql);
   const missing = readCommittedMigrations()
     .filter((migration) => lastApplied === undefined || migration.when > lastApplied)
@@ -84,35 +110,69 @@ export class DatabaseBehindError extends Error {
   }
 }
 
-async function applyMigration(sql: Sql, migration: CommittedMigration): Promise<void> {
+async function applyMigration(session: Queries, migration: CommittedMigration): Promise<void> {
   const record = () =>
-    sql`insert into drizzle.__drizzle_migrations (hash, created_at) values (${migration.hash}, ${migration.when})`;
+    session.unsafe("insert into drizzle.__drizzle_migrations (hash, created_at) values ($1, $2)", [
+      migration.hash,
+      migration.when
+    ]);
   // Postgres refuses a concurrent index build inside a transaction. The migration lint admits
   // such a migration only when every statement can be repeated after a partial run.
-  if (migration.statements.some((statement) => /\bconcurrently\b/iu.test(statement))) {
-    for (const statement of migration.statements) await sql.unsafe(statement);
-    await record();
+  const concurrent = migration.chunks.some((chunk) =>
+    chunk.statements.some(runsOutsideTransaction)
+  );
+  if (!concurrent) {
+    await session.unsafe("begin");
+    try {
+      for (const chunk of migration.chunks) await session.unsafe(chunk.text);
+      await record();
+      await session.unsafe("commit");
+    } catch (error) {
+      await session.unsafe("rollback");
+      throw error;
+    }
     return;
   }
-  await sql.unsafe("begin");
-  try {
-    for (const statement of migration.statements) await sql.unsafe(statement);
-    await record();
-    await sql.unsafe("commit");
-  } catch (error) {
-    await sql.unsafe("rollback");
-    throw error;
+
+  for (const chunk of migration.chunks) {
+    // A build that failed earlier left an invalid index of this name. IF NOT EXISTS would skip
+    // it, so it is dropped and the statement builds it again.
+    for (const statement of chunk.statements) {
+      const index = concurrentIndexName(statement);
+      if (index !== undefined && (await invalidIndexes(session)).includes(index))
+        await session.unsafe(`drop index concurrently if exists "${index.replaceAll('"', '""')}"`);
+    }
+    await session.unsafe(chunk.text);
   }
+  const invalid = await invalidIndexes(session);
+  if (invalid.length > 0)
+    throw new Error(
+      `it left an invalid index (${invalid.join(", ")}). Repair what stopped the build and run the migration step again.`
+    );
+  await record();
 }
 
-async function readLastAppliedMigration(sql: Sql): Promise<number | undefined> {
-  const [table] = await sql<{ name: string | null }[]>`
-    select to_regclass('drizzle.__drizzle_migrations')::text as name
-  `;
+/** Indexes of the product's schema that a concurrent build left unusable. */
+async function invalidIndexes(session: Queries): Promise<string[]> {
+  const rows = await session.unsafe<{ name: string }[]>(`
+    select c.relname as name
+    from pg_index i
+    join pg_class c on c.oid = i.indexrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = current_schema() and not i.indisvalid
+    order by c.relname
+  `);
+  return rows.map((row) => row.name);
+}
+
+async function readLastAppliedMigration(sql: Queries): Promise<number | undefined> {
+  const [table] = await sql.unsafe<{ name: string | null }[]>(
+    "select to_regclass('drizzle.__drizzle_migrations')::text as name"
+  );
   if (!table?.name) return undefined;
-  const [last] = await sql<{ created_at: string | null }[]>`
-    select created_at from drizzle.__drizzle_migrations order by created_at desc limit 1
-  `;
+  const [last] = await sql.unsafe<{ created_at: string | null }[]>(
+    "select created_at from drizzle.__drizzle_migrations order by created_at desc limit 1"
+  );
   return last?.created_at ? Number(last.created_at) : undefined;
 }
 
@@ -127,7 +187,9 @@ function readCommittedMigrations(directory = committedMigrationsDirectory): Comm
       name,
       when: migration.folderMillis,
       hash: migration.hash,
-      statements: migration.sql.filter((statement) => statement.trim().length > 0)
+      chunks: migration.sql
+        .filter((text) => text.trim().length > 0)
+        .map((text) => ({ text, statements: parseSqlChunk(text) }))
     };
   });
 }

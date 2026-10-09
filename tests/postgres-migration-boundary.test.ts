@@ -145,12 +145,12 @@ describe("the migration boundary", () => {
     }
   });
 
-  it("rolls a failed migration back and builds a concurrent index outside a transaction", async () => {
-    const databaseUrl = await emptyDatabase("statements");
+  /** A migrations directory of its own: one file per entry, in order. */
+  function migrations(files: Record<string, string>): string {
     const directory = mkdtempSync(join(tmpdir(), "catalyst-migration-boundary-"));
     directories.push(directory);
     mkdirSync(join(directory, "meta"));
-    const entries = ["0000_table", "0001_index", "0002_broken"].map((tag, idx) => ({
+    const entries = Object.keys(files).map((tag, idx) => ({
       idx,
       version: "7",
       when: idx + 1,
@@ -158,29 +158,132 @@ describe("the migration boundary", () => {
       breakpoints: true
     }));
     writeFileSync(join(directory, "meta/_journal.json"), JSON.stringify({ entries }));
-    writeFileSync(join(directory, "0000_table.sql"), "create table probe (id text primary key);");
-    writeFileSync(
-      join(directory, "0001_index.sql"),
-      "create index concurrently if not exists probe_id_idx on probe (id);"
-    );
-    writeFileSync(
-      join(directory, "0002_broken.sql"),
-      "create table half_applied (id text);--> statement-breakpoint\nselect missing_function();"
-    );
+    for (const [tag, text] of Object.entries(files))
+      writeFileSync(join(directory, `${tag}.sql`), text);
+    return directory;
+  }
 
-    await expect(migrateDatabase({ databaseUrl, migrationsDirectory: directory })).rejects.toThrow(
-      "missing_function"
-    );
+  async function read<T>(
+    databaseUrl: string,
+    query: (sql: postgres.Sql) => Promise<T>
+  ): Promise<T> {
     const sql = postgres(databaseUrl, { max: 1 });
     try {
-      expect(
-        await sql`select to_regclass('probe_id_idx')::text as index, to_regclass('half_applied')::text as half_applied`
-      ).toEqual([{ index: "probe_id_idx", half_applied: null }]);
-      expect(
-        await sql`select created_at::int as applied from drizzle.__drizzle_migrations order by 1`
-      ).toEqual([{ applied: 1 }, { applied: 2 }]);
+      return await query(sql);
     } finally {
       await sql.end();
     }
+  }
+
+  const indexes = (databaseUrl: string) =>
+    read(
+      databaseUrl,
+      (sql) => sql<{ name: string; valid: boolean }[]>`
+        select c.relname as name, i.indisvalid as valid
+        from pg_index i join pg_class c on c.oid = i.indexrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' order by 1
+      `
+    );
+  const applied = (databaseUrl: string) =>
+    read(databaseUrl, async (sql) =>
+      (
+        await sql<{ applied: number }[]>`
+          select created_at::int as applied from drizzle.__drizzle_migrations order by 1
+        `
+      ).map((row) => row.applied)
+    );
+
+  it("names the migration that failed and rolls it back", async () => {
+    const databaseUrl = await emptyDatabase("failure");
+    const migrationsDirectory = migrations({
+      "0000_table": "create table probe (id text primary key);",
+      // A comment that mentions CONCURRENTLY must not take the migration out of its transaction.
+      "0001_broken":
+        "-- Not built CONCURRENTLY: the table is new.\ncreate table half_applied (id text);--> statement-breakpoint\nselect missing_function();"
+    });
+    await expect(migrateDatabase({ databaseUrl, migrationsDirectory })).rejects.toThrow(
+      /^Migration 0001_broken failed: .*missing_function/u
+    );
+    expect(
+      await read(
+        databaseUrl,
+        (sql) =>
+          sql`select to_regclass('probe')::text as probe, to_regclass('half_applied')::text as half_applied`
+      )
+    ).toEqual([{ probe: "probe", half_applied: null }]);
+    expect(await applied(databaseUrl)).toEqual([1]);
+  });
+
+  it("runs every statement on the session that holds the advisory lock", async () => {
+    const databaseUrl = await emptyDatabase("session");
+    const heldByThisSession =
+      "select count(*)::int from pg_locks where locktype = 'advisory' and granted and pid = pg_backend_pid()";
+    const migrationsDirectory = migrations({
+      "0000_first": `create table lock_probe (held int);--> statement-breakpoint\ninsert into lock_probe ${heldByThisSession};`,
+      "0001_second": `insert into lock_probe ${heldByThisSession};`,
+      "0002_index": "create index concurrently if not exists lock_probe_idx on lock_probe (held);",
+      "0003_third": `insert into lock_probe ${heldByThisSession};`
+    });
+    await migrateDatabase({ databaseUrl, migrationsDirectory });
+    expect(await read(databaseUrl, (sql) => sql`select held from lock_probe`)).toEqual([
+      { held: 1 },
+      { held: 1 },
+      { held: 1 }
+    ]);
+    expect(await indexes(databaseUrl)).toEqual([{ name: "lock_probe_idx", valid: true }]);
+  });
+
+  it("rebuilds a concurrent index that a failed run left invalid", async () => {
+    const databaseUrl = await emptyDatabase("invalid-index");
+    const migrationsDirectory = migrations({
+      "0000_table":
+        "create table duplicates (value int);--> statement-breakpoint\ninsert into duplicates values (1), (1);",
+      "0001_unique":
+        "create unique index concurrently if not exists duplicates_value_idx on duplicates (value);"
+    });
+    await expect(migrateDatabase({ databaseUrl, migrationsDirectory })).rejects.toThrow(
+      /^Migration 0001_unique failed: /u
+    );
+    expect(await indexes(databaseUrl)).toEqual([{ name: "duplicates_value_idx", valid: false }]);
+    expect(await applied(databaseUrl)).toEqual([1]);
+
+    // Not repaired yet: the rerun fails again instead of skipping the index that exists.
+    await expect(migrateDatabase({ databaseUrl, migrationsDirectory })).rejects.toThrow(
+      /^Migration 0001_unique failed: /u
+    );
+    await read(
+      databaseUrl,
+      (sql) => sql`delete from duplicates where ctid = (select min(ctid) from duplicates)`
+    );
+    expect(await migrateDatabase({ databaseUrl, migrationsDirectory })).toEqual(["0001_unique"]);
+    expect(await indexes(databaseUrl)).toEqual([{ name: "duplicates_value_idx", valid: true }]);
+    expect(await applied(databaseUrl)).toEqual([1, 2]);
+  });
+
+  it("does not record a concurrent index migration while the schema holds an invalid index", async () => {
+    const databaseUrl = await emptyDatabase("invalid-left");
+    const migrationsDirectory = migrations({
+      "0000_table":
+        "create table duplicates (value int, other int);--> statement-breakpoint\ninsert into duplicates values (1, 1), (1, 2);",
+      "0001_index":
+        "create index concurrently if not exists duplicates_other_idx on duplicates (other);"
+    });
+    await migrateDatabase({
+      databaseUrl,
+      migrationsDirectory: migrations({
+        "0000_table":
+          "create table duplicates (value int, other int);--> statement-breakpoint\ninsert into duplicates values (1, 1), (1, 2);"
+      })
+    });
+    await read(databaseUrl, async (sql) => {
+      await expect(
+        sql.unsafe("create unique index concurrently left_invalid_idx on duplicates (value)")
+      ).rejects.toThrow();
+    });
+    await expect(migrateDatabase({ databaseUrl, migrationsDirectory })).rejects.toThrow(
+      "Migration 0001_index failed: it left an invalid index (left_invalid_idx)"
+    );
+    expect(await applied(databaseUrl)).toEqual([1]);
   });
 });
