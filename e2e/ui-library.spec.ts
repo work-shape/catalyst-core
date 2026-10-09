@@ -315,7 +315,7 @@ test("a confirmation names its object and holds both buttons while the action ru
   );
   const confirm = dialog.getByRole("button", { name: "Delete", exact: true });
   expect(await computed(confirm, "background-color")).toBe(
-    await resolved(root, "background-color", "var(--destructive)")
+    await resolved(root, "background-color", "var(--destructive-soft)")
   );
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
@@ -323,7 +323,7 @@ test("a confirmation names its object and holds both buttons while the action ru
   await entry.getByRole("button", { name: "Publish changes" }).click();
   const publish = root.getByRole("dialog", { name: "Publish Support assistant?" });
   expect(await computed(publish.getByRole("button", { name: "Publish" }), "background-color")).toBe(
-    await resolved(root, "background-color", "var(--primary)")
+    await resolved(root, "background-color", "var(--primary-soft)")
   );
   await publish.getByRole("button", { name: "Publish" }).click();
   await expect(publish).toBeHidden();
