@@ -24,7 +24,8 @@ import {
 } from "./conversation-file-content";
 import { NativeFilePreview } from "./artifact-preview-shell";
 import { useTranslation } from "./i18n";
-import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
+import type { Surface, SurfaceOf } from "./surface/surface";
+import { useToolDisplayPanel } from "./tool-display-panel";
 import {
   artifactDisplayFilename,
   artifactDownloadFilename,
@@ -227,8 +228,9 @@ export function createConversationFilePanelEntry({
   client: ApiClient;
   conversationId: string;
   file: ConversationFilePresentation;
-}): ToolDisplayPanelEntry {
+}): SurfaceOf<"file_preview"> {
   return {
+    kind: "file_preview",
     key: file.key,
     title: file.title,
     subtitle: file.subtitle,
@@ -580,12 +582,8 @@ function FileDetails({
   );
 }
 
-function createPanelStatusEntry(
-  key: string,
-  title: string,
-  content: ReactNode
-): ToolDisplayPanelEntry {
-  return { key, title, node: <PanelLoading>{content}</PanelLoading> };
+function createPanelStatusEntry(key: string, title: string, content: ReactNode): Surface {
+  return { kind: "file_preview", key, title, node: <PanelLoading>{content}</PanelLoading> };
 }
 
 function PanelLoading({ children, label }: { children?: ReactNode; label?: string }) {

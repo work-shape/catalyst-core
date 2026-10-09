@@ -25,10 +25,7 @@ import {
   conversationFileFromArtifact
 } from "../packages/chat-ui/src/conversation-file-presentation";
 import { ToolCallPart } from "../packages/chat-ui/src/tool-call";
-import {
-  ToolDisplayPanelFrame,
-  ToolDisplayPanelProvider
-} from "../packages/chat-ui/src/tool-display-panel";
+import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
 
 describe("chat UI artifact download cards", () => {
   it("surfaces promoted final artifacts on the final assistant message for common formats", () => {
@@ -518,20 +515,11 @@ describe("chat UI artifact download cards", () => {
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     };
     const markup = renderToStaticMarkup(
-      createElement(ToolDisplayPanelFrame, {
-        entry: {
-          key: "artifact-preview:art_workbook",
-          title: artifact.filename,
-          subtitle: "Spreadsheet · spreadsheet.workbook",
-          headerActions: createElement(ConversationFileDownloadButton, {
-            client,
-            conversationId: "conv_test",
-            file: conversationFileFromArtifact(artifact),
-            variant: "panel"
-          }),
-          node: createElement("div")
-        },
-        onClose() {}
+      createElement(ConversationFileDownloadButton, {
+        client,
+        conversationId: "conv_test",
+        file: conversationFileFromArtifact(artifact),
+        variant: "panel"
       })
     );
 

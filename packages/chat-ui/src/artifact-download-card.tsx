@@ -9,7 +9,8 @@ import {
   createConversationFilePanelEntry
 } from "./conversation-file-presentation";
 import { useTranslation } from "./i18n";
-import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
+import type { Surface } from "./surface/surface";
+import { useToolDisplayPanel } from "./tool-display-panel";
 import {
   artifactDisplayFilename,
   getArtifactFileType,
@@ -36,7 +37,7 @@ export function ToolArtifactList({
   const downloadAvailable = Boolean(client && conversationId);
 
   const previewPanelEntry = useCallback(
-    (artifact: ToolArtifactDownloadRef): ToolDisplayPanelEntry | undefined => {
+    (artifact: ToolArtifactDownloadRef): Surface | undefined => {
       const fileType = getArtifactFileType(artifact);
       const file = conversationFileFromArtifact(artifact, artifactDetail(fileType, artifact));
       if (!client || !conversationId || !conversationFilePreviewAvailable(file)) {

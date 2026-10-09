@@ -9,6 +9,7 @@ const LOCALE_STORAGE_KEY = "vivd-catalyst:locale";
 const CONTEXT_INDICATOR_STORAGE_KEY = "vivd-catalyst:show-context-indicator";
 const RESOURCES_PANEL_STORAGE_KEY = "vivd-catalyst:resources-panel";
 const COLLABORATION_WORKSPACE_STORAGE_PREFIX = "vivd-catalyst:collaboration-workspace";
+const SURFACE_WIDTH_STORAGE_PREFIX = "vivd-catalyst:surface-width";
 
 export type ResourcesPanelPreference = "open" | "closed";
 
@@ -89,6 +90,26 @@ export function readStoredResourcesPanelPreference(): ResourcesPanelPreference |
 
 export function writeStoredResourcesPanelPreference(preference: ResourcesPanelPreference): void {
   window.localStorage.setItem(RESOURCES_PANEL_STORAGE_KEY, preference);
+}
+
+/**
+ * The width a person gave the surface slot, in pixels, kept per surface kind under a key of
+ * its own. What is stored is the width that was chosen; `limits` clamps it on every read, so
+ * a width chosen in a wider window never takes the other side below its minimum.
+ */
+export function readStoredSurfaceWidth(
+  kind: string,
+  limits: { min: number; max: number }
+): number | undefined {
+  const width = Number(window.localStorage.getItem(`${SURFACE_WIDTH_STORAGE_PREFIX}:${kind}`));
+  if (!Number.isFinite(width) || width <= 0) {
+    return undefined;
+  }
+  return Math.round(Math.min(Math.max(width, limits.min), Math.max(limits.min, limits.max)));
+}
+
+export function writeStoredSurfaceWidth(kind: string, width: number): void {
+  window.localStorage.setItem(`${SURFACE_WIDTH_STORAGE_PREFIX}:${kind}`, String(Math.round(width)));
 }
 
 /**

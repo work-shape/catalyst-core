@@ -14,7 +14,8 @@ import {
   readDisplayMode,
   renderBuiltInDisplay
 } from "./tool-display-rendering";
-import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
+import type { Surface } from "./surface/surface";
+import { useToolDisplayPanel } from "./tool-display-panel";
 import type { ToolSurfaceRef } from "./tool-surfaces";
 
 export function ToolSurfaceList({
@@ -172,7 +173,7 @@ export function createToolSurfacePanelEntry({
   fallbackTitle: string;
   locale: LocaleCode;
   surface: ToolSurfaceRef;
-}): ToolDisplayPanelEntry | undefined {
+}): Surface | undefined {
   const display = surface.display;
   if (!isToolDisplayPayload(display) || readDisplayMode(display) === "inline") {
     return undefined;
@@ -204,8 +205,9 @@ function surfacePanelEntry({
   displayNode: ReactNode;
   surface: ToolSurfaceRef;
   title: string;
-}): ToolDisplayPanelEntry {
+}): Surface {
   return {
+    kind: "tool_display",
     key: displayPanelKey(display, surface.surfaceId),
     title,
     node: displayNode

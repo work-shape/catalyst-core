@@ -25,7 +25,8 @@ import {
 } from "./resources-panel-model";
 import { StructuredDataCopyAllButton, StructuredDataView } from "./structured-data-view";
 import { displayPanelKey, renderBuiltInDisplay } from "./tool-display-rendering";
-import { useToolDisplayPanel, type ToolDisplayPanelEntry } from "./tool-display-panel";
+import type { Surface } from "./surface/surface";
+import { useToolDisplayPanel } from "./tool-display-panel";
 import { getArtifactFileType } from "./tool-artifacts";
 import { useWorkspacePreferences } from "./workspace/workspace-ui-state";
 
@@ -117,13 +118,10 @@ export function ResourcesPanel({
   const displayPanel = useToolDisplayPanel();
   const sections = groupConversationResources(resources);
 
-  const showEntry = useCallback(
-    (entry: ToolDisplayPanelEntry) => displayPanel.show(entry),
-    [displayPanel]
-  );
+  const showEntry = useCallback((entry: Surface) => displayPanel.show(entry), [displayPanel]);
 
   const fileEntry = useCallback(
-    (resource: ConversationFileResource): ToolDisplayPanelEntry =>
+    (resource: ConversationFileResource): Surface =>
       createConversationFilePanelEntry({
         client,
         conversationId,
@@ -157,6 +155,7 @@ export function ResourcesPanel({
         fallback
       );
       showEntry({
+        kind: "tool_display",
         key: displayPanelKey(display, resource.resourceId),
         title: resource.title,
         subtitle: resource.subtitle,
@@ -182,6 +181,7 @@ export function ResourcesPanel({
       }
     };
     showEntry({
+      kind: "tool_display",
       key: `resource:${resource.resourceId}`,
       title: resource.title,
       subtitle: resource.subtitle,

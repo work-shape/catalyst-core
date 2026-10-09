@@ -314,6 +314,7 @@ function SidePanelToolCall({
         type="button"
         onClick={() =>
           panel.show({
+            kind: "tool_display",
             key: panelKey,
             title,
             subtitle,
@@ -364,6 +365,7 @@ function SidePanelDataPart({
       return;
     }
     panel.showOnce({
+      kind: "tool_display",
       key: panelKey,
       title,
       subtitle,
@@ -377,6 +379,7 @@ function SidePanelDataPart({
         type="button"
         onClick={() =>
           panel.show({
+            kind: "tool_display",
             key: panelKey,
             title,
             subtitle,

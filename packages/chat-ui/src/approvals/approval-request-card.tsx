@@ -89,6 +89,9 @@ export function ApprovalRequestCard({ requestId }: { requestId: string }) {
         request && displayPanel.available
           ? () =>
               displayPanel.show({
+                // The details of a request stand in the slot as a tool display until the
+                // Inbox renders its own kind, `inbox_item`.
+                kind: "tool_display",
                 key: `approval-request:${request.id}`,
                 title: request.summary.trim() || t("approvalFallbackTitle"),
                 subtitle: approvalRequestSubject(request, t),

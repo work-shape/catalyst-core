@@ -44,7 +44,6 @@
     "packages/chat-ui/src/styles.css": {"hex":2},
     "packages/chat-ui/src/tool-artifacts.ts": {"palette":10},
     "packages/chat-ui/src/tool-call.tsx": {"elements":6,"font-size":1},
-    "packages/chat-ui/src/tool-display-panel.tsx": {"elements":3,"palette":1},
     "packages/chat-ui/src/tool-surface-card.tsx": {"elements":1},
     "packages/chat-ui/src/workspace/agent-selector.tsx": {"elements":2,"roles":1},
     "packages/chat-ui/src/workspace/user-menu.tsx": {"elements":1,"palette":1},

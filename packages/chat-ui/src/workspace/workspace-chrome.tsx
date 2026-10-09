@@ -162,7 +162,7 @@ export function WorkspaceChrome({
 
       <header
         className={cn(
-          "pointer-events-none absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 px-4 transition-[left,right,top] duration-200 lg:right-[var(--display-panel-width)]",
+          "pointer-events-none absolute inset-x-0 z-40 flex h-16 min-w-0 items-center justify-between gap-3 px-4 transition-[left,top] duration-200 right-[var(--display-panel-width)]",
           isStaging ? "top-6" : "top-0",
           sidebarOpen && "max-md:hidden md:left-80"
         )}

@@ -2574,6 +2574,124 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   expect(consoleErrors).toEqual([]);
 });
 
+test("the surface slot keeps a width per kind, leaves both sides 380 px and covers a narrow main area", async ({
+  page
+}) => {
+  const widthKey = (kind: string) => `vivd-catalyst:surface-width:${kind}`;
+  const storedWidth = (kind: string) =>
+    page.evaluate((key) => window.localStorage.getItem(key), widthKey(kind));
+  const slot = page.locator("aside[data-surface-kind]");
+  const chat = page.getByRole("region", { name: "Chat" });
+  const separator = page.getByRole("separator", { name: "Resize display panel" });
+  const showChat = page.getByRole("button", { name: "Show chat" });
+  const fullscreen = page.getByRole("button", { name: "View fullscreen" });
+  const close = page.getByRole("button", { name: "Close display panel" });
+  // The card of the view in the conversation; it holds a button of the same name.
+  const card = page.locator('div[role="button"][aria-label="Open in side panel"]');
+  const width = async (locator: Locator) => Math.round((await locator.boundingBox())?.width ?? 0);
+  /** Whether the surface lies over the composer, so the conversation cannot be reached. */
+  const composerCovered = () =>
+    page.getByPlaceholder("Message").evaluate((composer) => {
+      const box = composer.getBoundingClientRect();
+      const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return Boolean(top?.closest("aside[data-surface-kind]"));
+    });
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaUi(page, normalUser);
+  // Another kind has a width of its own, which this surface must neither take nor change.
+  await page.evaluate((key) => window.localStorage.setItem(key, "500"), widthKey("file_preview"));
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `/tool show_view ${JSON.stringify({ html: "<p>Surface body</p>", mode: "side_panel", title: "Surface view" })}`
+    );
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  // It opens beside the conversation at the default width, with nothing animating.
+  await expect(slot).toHaveAttribute("data-surface-kind", "tool_display");
+  await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  await expect(slot.getByRole("heading", { name: "Surface view" })).toBeVisible();
+  await expect.poll(() => width(slot)).toBe(560);
+  await expect(slot).toHaveCSS("transition-duration", "0s");
+  await expect(showChat).toHaveCount(0);
+  // The main area is the window without the 320 px rail: 960 px, so the surface may take 580.
+  await expect(separator).toHaveAttribute("aria-valuemin", "380");
+  await expect(separator).toHaveAttribute("aria-valuemax", "580");
+  await expect(separator).toHaveAttribute("aria-valuenow", "400");
+  expect((await separator.boundingBox())?.width).toBe(12);
+
+  // The keyboard moves the line 16 px, and Home and End take it to the limits.
+  await separator.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(separator).toHaveAttribute("aria-valuenow", "416");
+  await expect.poll(() => width(slot)).toBe(544);
+  await page.keyboard.press("ArrowLeft");
+  await expect(separator).toHaveAttribute("aria-valuenow", "400");
+  await page.keyboard.press("Home");
+  await expect(separator).toHaveAttribute("aria-valuenow", "380");
+  await expect.poll(() => width(slot)).toBe(580);
+  await page.keyboard.press("End");
+  await expect(separator).toHaveAttribute("aria-valuenow", "580");
+  await expect.poll(() => width(slot)).toBe(380);
+
+  // The pointer drags the line; the width follows it and is kept for this kind alone.
+  const handle = await separator.boundingBox();
+  if (!handle) {
+    throw new Error("The separator has no box.");
+  }
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 - 100, handle.y + 200, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(() => width(slot)).toBe(480);
+  await expect.poll(() => storedWidth("tool_display")).toBe("480");
+  expect(await storedWidth("file_preview")).toBe("500");
+
+  // After a reload the card in the conversation reopens the surface at the kept width.
+  await page.reload();
+  await expect(card).toBeVisible();
+  await expect(slot).toBeHidden();
+  await card.click();
+  await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  await expect.poll(() => width(slot)).toBe(480);
+  expect(await storedWidth("file_preview")).toBe("500");
+
+  // A stored width wider than the window is clamped, so the conversation keeps 380 px.
+  await page.evaluate((key) => window.localStorage.setItem(key, "5000"), widthKey("tool_display"));
+  await page.reload();
+  await card.click();
+  await expect.poll(() => width(slot)).toBe(580);
+  await expect.poll(() => width(chat)).toBe(380);
+
+  // Fullscreen covers the window, hides the conversation and offers the way back to it.
+  await fullscreen.click();
+  await expect(slot).toHaveAttribute("data-surface-mode", "fullscreen");
+  await expect.poll(() => width(slot)).toBe(1280);
+  await expect(showChat).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exit fullscreen" })).toBeVisible();
+  await expect(close).toBeVisible();
+  await expect.poll(composerCovered).toBe(true);
+  await showChat.click();
+  await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  await expect.poll(composerCovered).toBe(false);
+
+  // Below 760 px of main area the surface covers it and its header offers "Show chat" alone.
+  await page.setViewportSize({ width: 1024, height: 720 });
+  await expect(slot).toHaveAttribute("data-surface-mode", "covering");
+  await expect.poll(() => width(slot)).toBe(704);
+  await expect(page.getByRole("complementary", { name: "Conversations" })).toBeInViewport();
+  await expect.poll(composerCovered).toBe(true);
+  await expect(showChat).toBeVisible();
+  await expect(fullscreen).toHaveCount(0);
+  await expect(close).toHaveCount(0);
+  await expect(separator).toHaveCount(0);
+  await showChat.click();
+  await expect(slot).toBeHidden();
+  await card.click();
+  await expect(slot).toHaveAttribute("data-surface-mode", "covering");
+});
+
 test("superadmin resets a user's password from the users panel", async ({ page }) => {
   // Make sure the normal user exists in the platform user store before administering it.
   await signInViaApi(page, normalUser);

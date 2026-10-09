@@ -48,12 +48,21 @@ contain breaking changes; a patch version does not.
 
 ### Changed
 
+- **Chat:** the display panel is the surface slot. A tool display or a file preview stands
+  beside the conversation while both sides keep 380 px, which is from 760 px of main area, and
+  covers the main area below that, where its header offers "Show chat" alone. The former drawer
+  below 1024 px is gone. The width is free, is remembered in the browser per kind of surface
+  and is clamped so neither side falls below 380 px. The handle is the line between the two
+  sides: the arrow keys move it 16 px, Home and End go to the limits. Fullscreen shows "Show
+  chat" beside its controls. Nothing animates when the surface opens or resizes.
+- **Chat UI:** `ToolDisplayPanel` and `ToolDisplayPanelFrame` are replaced by `SurfaceSlot` and
+  the library's `SurfaceFrame`. The standalone app builds its routes from one table,
+  `chat-ui/src/routes.ts`; every address keeps its path.
 - **API contract (breaking):** `@vivd-catalyst/api-contract` no longer exports the constant
   `openApiDocument`; call `createOpenApiDocument()`. `createOpenApiDocumentFromOperations`
   takes the operations alone: title and version are those of the release. An operation that
   answers a file states its content type (`blob("text/html")`), and an operation of a
   signed-in caller may state `scope: null` when it asks for no scope.
-
 - **Platform store (breaking):** Postgres is the only platform store. The `STORE` environment
   variable is no longer read, so `STORE=memory` no longer starts an instance without a
   database; every process needs `DATABASE_URL`. Remove `STORE` from environment files. The

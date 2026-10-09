@@ -1,11 +1,5 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import {
-  createToolDisplayPanelAutoShowTracker,
-  ToolDisplayPanelFrame
-} from "../packages/chat-ui/src/tool-display-panel";
+import { createToolDisplayPanelAutoShowTracker } from "../packages/chat-ui/src/tool-display-panel";
 
 describe("chat UI tool display panel", () => {
   it("auto-opens each display key once", () => {
@@ -14,29 +8,5 @@ describe("chat UI tool display panel", () => {
     expect(tracker.shouldAutoShow("review:call_1")).toBe(true);
     expect(tracker.shouldAutoShow("review:call_1")).toBe(false);
     expect(tracker.shouldAutoShow("review:call_2")).toBe(true);
-  });
-
-  it("renders localized fullscreen and restore controls", () => {
-    const entry = {
-      key: "preview:1",
-      title: "Preview",
-      node: createElement("div")
-    };
-    const renderFrame = (fullscreen: boolean) =>
-      renderToStaticMarkup(
-        createElement(
-          TranslationProvider,
-          { children: null, locale: "de" },
-          createElement(ToolDisplayPanelFrame, {
-            entry,
-            fullscreen,
-            onClose() {},
-            onToggleFullscreen() {}
-          })
-        )
-      );
-
-    expect(renderFrame(false)).toContain('aria-label="Im Vollbild anzeigen"');
-    expect(renderFrame(true)).toContain('aria-label="Vollbild schließen"');
   });
 });

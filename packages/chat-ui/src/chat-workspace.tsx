@@ -13,7 +13,8 @@ import { TranslationProvider, useTranslation } from "./i18n";
 import { LoginPanel } from "./login-panel";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
-import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
+import { SurfaceSlot } from "./surface/surface-slot";
+import { useToolDisplayPanel } from "./tool-display-panel";
 import { uiLabelsFor } from "./ui-labels";
 import { ViewPolicyProvider } from "./view-policy";
 import { agentChipDisplayFor } from "./workspace/agent-selector";
@@ -103,7 +104,8 @@ function ChatWorkspaceContent({
     collaborationWorkspacesAvailable
   });
   const onStartPage = model.route.view === "chat" && !model.route.selectedConversationId;
-  const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
+  // What the surface takes of the main area beside the conversation; 0 when it does not.
+  const [surfaceBesideWidth, setSurfaceBesideWidth] = useState(0);
   const [passwordSetupToken, setPasswordSetupToken] = useState(readPasswordSetupToken);
 
   function clearPasswordSetupToken() {
@@ -282,8 +284,8 @@ function ChatWorkspaceContent({
         <WorkspaceChrome
           agents={model.config.config.agents}
           agentDisplay={agentChipDisplayFor(model.config.config.ui)}
-          displayPanelOpen={model.toolDisplay.open}
-          displayPanelWidth={displayPanelWidth}
+          displayPanelOpen={surfaceBesideWidth > 0}
+          displayPanelWidth={surfaceBesideWidth}
           environment={model.config.config.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
@@ -329,7 +331,7 @@ function ChatWorkspaceContent({
                 <div className="flex h-full min-h-0 min-w-0">
                   <div
                     className={cn(
-                      "relative h-full min-h-0 min-w-0 flex-1 transition-[width] duration-300 ease-out",
+                      "relative h-full min-h-0 min-w-0 flex-1",
                       // 23.5rem = panel width (22rem) + its right-6 offset, so the
                       // thread centers with equal gaps to sidebar and panel edge
                       resourcesVisible && "lg:[--resources-inset:23.5rem]"
@@ -364,7 +366,7 @@ function ChatWorkspaceContent({
                       )
                     ) : null}
                   </div>
-                  <ToolDisplayPanel onWidthChange={setDisplayPanelWidth} />
+                  <SurfaceSlot onBesideWidthChange={setSurfaceBesideWidth} />
                 </div>
               </AttachmentContentProvider>
             </section>
