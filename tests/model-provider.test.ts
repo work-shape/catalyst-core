@@ -1532,6 +1532,45 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("reports a rate limit inside a Responses stream as a 429 with the pause the provider asks for", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            createSseStream(
+              [{ type: "error", code: "rate_limit_exceeded", message: "Rate limit reached" }],
+              false
+            ),
+            { status: 200, headers: { "content-type": "text/event-stream", "retry-after": "20" } }
+          )
+      )
+    );
+    const provider = new OpenAiCompatibleChatProvider({
+      id: "openai",
+      api: "responses",
+      model: "gpt-5.5",
+      baseUrl: "https://example.test/v1",
+      apiKey: "test"
+    });
+
+    const stream = provider
+      .stream(
+        {
+          providerId: "openai",
+          model: "gpt-5.5",
+          messages: [{ role: "user", content: "hello" }],
+          tools: []
+        },
+        createModelProviderTestContext()
+      )
+      [Symbol.asyncIterator]();
+
+    await expect(stream.next()).rejects.toMatchObject({
+      details: { status: 429, providerErrorCode: "rate_limit_exceeded", retryAfterMs: 20_000 }
+    });
+  });
+
   it("gives up a Responses stream that goes silent as a retryable timeout", async () => {
     vi.useFakeTimers();
     try {

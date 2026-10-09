@@ -69,8 +69,8 @@ contain breaking changes; a patch version does not.
   the library's `SurfaceFrame`. The standalone app builds its routes from one table,
   `chat-ui/src/routes.ts`; every address keeps its path.
 - **Limits:** five defaults that failed honest use are raised. A model call is tried three
-  times, waiting about 1 s and then about 4 s, so a run survives two rate limit answers in a
-  row. An approval check may take 60 s (was 10 s); a blocking rule that runs out of time says
+  times, waiting about 1 s and then about 4 s, so a run survives two provider errors in a row
+  (a rate limit waits longer, see Fixed). An approval check may take 60 s (was 10 s); a blocking rule that runs out of time says
   so. A spreadsheet previews up to 50,000 cells per sheet or range (was 5,000), and the stored
   failure names the limit. A preview embedded in a message is read up to 500 pages (was 200),
   the same ceiling the preview worker uses, exported as `ARTIFACT_PREVIEW_MAX_PAGES` from
@@ -359,6 +359,13 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   from the conversation's history, so affected conversations answer again without a migration.
   A provider's 400 `context_length_exceeded` fails the run with "This conversation is too long
   for the model. Start a new conversation." instead of an internal error.
+- **Models:** a run waits out a provider's per-minute rate limit. On HTTP 429, or the same
+  refusal inside a stream, a model call waits about 4 s, 8 s, 16 s and 32 s, up to 60 s in
+  total, and never sooner than the provider's `Retry-After`; a `Retry-After` beyond what is
+  left of the 60 s fails the run at once. As before, this applies only while nothing of the
+  answer was shown, and no wait starts past the run's deadline or continues after a cancel. A
+  run that still fails on a rate limit reads "The model is receiving too many requests. Try
+  again in a minute." with code `RATE_LIMITED` instead of an internal error.
 - **Retention:** conversation expiry decides under the conversation's row lock and removes
   data only afterwards. A conversation is expired only if it is still due, or still an
   abandoned draft, at that moment, so a message, an upload or a restored draft attachment that

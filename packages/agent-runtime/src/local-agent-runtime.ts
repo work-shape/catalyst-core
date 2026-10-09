@@ -117,14 +117,20 @@ export interface LocalAgentRunFailureReport {
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
 const DEFAULT_MAX_STEPS = 64;
 const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
-// Protects a run from a provider's rate limit or dropped connection: the wait before the second
-// and the third attempt. After the third attempt the run fails with the provider's error.
+// Protects a run from a provider's server error or dropped connection: the wait before the
+// second and the third attempt. After the third attempt the run fails with the provider's error.
 const MODEL_PROVIDER_RETRY_WAITS_MS = [1_000, 4_000];
-const MODEL_PROVIDER_MAX_ATTEMPTS = MODEL_PROVIDER_RETRY_WAITS_MS.length + 1;
+// Protects a run from a provider's per-minute rate limit, which the short waits above cannot
+// outlast: all waits of one model call on a rate limit add up to at most this. Then the run
+// fails and the user reads that the model is receiving too many requests.
+const MODEL_PROVIDER_RATE_LIMIT_WAIT_TOTAL_MS = 60_000;
+// The first wait on a rate limit that names no pause in `Retry-After`; each later one doubles.
+const MODEL_PROVIDER_RATE_LIMIT_FIRST_WAIT_MS = 4_000;
 // Each wait varies by this share in both directions, so runs that failed together do not retry together.
 const MODEL_PROVIDER_RETRY_JITTER_RATIO = 0.2;
-// Protects a run from waiting on a provider that asks for a long pause in `Retry-After`. A
-// shorter pause replaces the fixed wait; a longer one fails the run with the provider's error.
+// Protects a run from waiting on a provider that asks for a long pause in `Retry-After` on an
+// error other than a rate limit. A shorter pause replaces the fixed wait; a longer one fails the
+// run with the provider's error.
 const MODEL_PROVIDER_RETRY_AFTER_MAX_MS = 60_000;
 const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
   toolOutput: {
@@ -960,7 +966,10 @@ export class LocalAgentRuntime implements AgentRuntime {
     state: RunState,
     execute: (attempt: ModelProviderAttempt) => Promise<T>
   ): Promise<T> {
-    for (let attempt = 1; attempt <= MODEL_PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+    let transientFailures = 0;
+    let rateLimitFailures = 0;
+    let rateLimitWaitLeftMs = MODEL_PROVIDER_RATE_LIMIT_WAIT_TOTAL_MS;
+    for (;;) {
       if (context.signal?.aborted) {
         throw new AppError(
           "CONFLICT",
@@ -977,20 +986,39 @@ export class LocalAgentRuntime implements AgentRuntime {
       try {
         return await execute(progress);
       } catch (error) {
+        const failure = rateLimitFailureFor(error);
         if (
-          attempt === MODEL_PROVIDER_MAX_ATTEMPTS ||
           !progress.retrySafe ||
           context.signal?.aborted ||
           !isTransientModelProviderError(error)
         ) {
-          throw error;
+          throw failure;
         }
-        const waitMs = readRetryAfterMs(error) ?? modelProviderRetryWaitMs(attempt);
-        if (
-          waitMs > MODEL_PROVIDER_RETRY_AFTER_MAX_MS ||
-          (context.deadline && Date.now() + waitMs >= context.deadline.getTime())
-        ) {
-          throw error;
+        const retryAfterMs = readRetryAfterMs(error);
+        let waitMs: number;
+        if (failure !== error) {
+          rateLimitFailures += 1;
+          // Never sooner than the provider asks, and never past what is left of the minute.
+          waitMs = Math.min(
+            Math.max(retryAfterMs ?? 0, modelProviderRateLimitWaitMs(rateLimitFailures)),
+            rateLimitWaitLeftMs
+          );
+          if (waitMs <= 0 || (retryAfterMs ?? 0) > rateLimitWaitLeftMs) {
+            throw failure;
+          }
+          rateLimitWaitLeftMs -= waitMs;
+        } else {
+          transientFailures += 1;
+          if (transientFailures > MODEL_PROVIDER_RETRY_WAITS_MS.length) {
+            throw failure;
+          }
+          waitMs = retryAfterMs ?? modelProviderRetryWaitMs(transientFailures);
+          if (waitMs > MODEL_PROVIDER_RETRY_AFTER_MAX_MS) {
+            throw failure;
+          }
+        }
+        if (context.deadline && Date.now() + waitMs >= context.deadline.getTime()) {
+          throw failure;
         }
         for (const toolCallId of progress.preparingToolCallIds) {
           state.emit({
@@ -1002,11 +1030,10 @@ export class LocalAgentRuntime implements AgentRuntime {
         try {
           await waitUnlessAborted(waitMs, context.signal);
         } catch {
-          throw error;
+          throw failure;
         }
       }
     }
-    throw new AppError("INTERNAL", "Model provider retry loop ended unexpectedly");
   }
 }
 
@@ -1031,8 +1058,37 @@ function waitUnlessAborted(waitMs: number, signal: AbortSignal | undefined): Pro
 }
 
 function modelProviderRetryWaitMs(failedAttempt: number): number {
-  const waitMs = MODEL_PROVIDER_RETRY_WAITS_MS[failedAttempt - 1] ?? 0;
+  return withRetryJitter(MODEL_PROVIDER_RETRY_WAITS_MS[failedAttempt - 1] ?? 0);
+}
+
+function modelProviderRateLimitWaitMs(failedAttempt: number): number {
+  return withRetryJitter(MODEL_PROVIDER_RATE_LIMIT_FIRST_WAIT_MS * 2 ** (failedAttempt - 1));
+}
+
+function withRetryJitter(waitMs: number): number {
   return Math.round(waitMs * (1 + (Math.random() * 2 - 1) * MODEL_PROVIDER_RETRY_JITTER_RATIO));
+}
+
+/**
+ * What a run fails with: the error itself, or for a provider's rate limit (HTTP 429, or the same
+ * refusal inside a stream) an error whose message the user may read.
+ */
+function rateLimitFailureFor(error: unknown): unknown {
+  let candidate = error;
+  for (let depth = 0; depth < 4 && candidate instanceof Error; depth += 1) {
+    const details =
+      candidate instanceof AppError && isRecord(candidate.details) ? candidate.details : undefined;
+    if (details?.status === 429) {
+      const failure = new AppError(
+        "RATE_LIMITED",
+        "The model is receiving too many requests. Try again in a minute."
+      );
+      failure.cause = error;
+      return failure;
+    }
+    candidate = candidate.cause;
+  }
+  return error;
 }
 
 /** The pause a provider asked for with its refusal, read from the error or what caused it. */

@@ -1854,7 +1854,7 @@ describe("local agent runtime", () => {
     expect(interruptedEvents.map((event) => event.type)).toEqual(["message_delta", "run_failed"]);
   });
 
-  it("survives two consecutive rate limit answers and gives up after the third", async () => {
+  it("waits out a rate limit with growing pauses and gives up after a minute of waiting", async () => {
     const f = await rateLimitFixture("provider-rate-limit-retry");
     const stepMs = 50;
     // The largest jitter: each wait is its base plus 20 percent.
@@ -1867,27 +1867,63 @@ describe("local agent runtime", () => {
       expect(survived).toEqual(["message_delta", "message_completed", "run_completed"]);
       expect(f.attemptTimes).toHaveLength(3);
       const waits = waitsBetween(f.attemptTimes);
-      expect(waits[0]).toBeGreaterThanOrEqual(1_200);
-      expect(waits[0]).toBeLessThan(1_200 + 4 * stepMs);
-      expect(waits[1]).toBeGreaterThanOrEqual(4_800);
-      expect(waits[1]).toBeLessThan(4_800 + 4 * stepMs);
+      expect(waits[0]).toBeGreaterThanOrEqual(4_800);
+      expect(waits[0]).toBeLessThan(4_800 + 4 * stepMs);
+      expect(waits[1]).toBeGreaterThanOrEqual(9_600);
+      expect(waits[1]).toBeLessThan(9_600 + 4 * stepMs);
 
-      // The smallest jitter: each wait is its base minus 20 percent.
+      // The smallest jitter: each wait is its base minus 20 percent, the last what is left.
       random.mockReturnValue(0);
       f.attemptTimes.length = 0;
-      f.rateLimitedAnswers = 3;
-      const failed = await advanceFakeClockUntilSettled(f.runToEnd("hello again"), stepMs);
+      f.rateLimitedAnswers = 99;
+      const failed = await advanceFakeClockUntilSettled(f.runToEnd("hello again"), stepMs, 2_000);
 
       expect(failed).toEqual(["run_failed"]);
-      expect(f.attemptTimes).toHaveLength(3);
+      expect(f.lastFailure).toEqual({
+        code: "RATE_LIMITED",
+        message: "The model is receiving too many requests. Try again in a minute.",
+        category: "app_error"
+      });
       const failedWaits = waitsBetween(f.attemptTimes);
-      expect(failedWaits[0]).toBeGreaterThanOrEqual(800);
-      expect(failedWaits[0]).toBeLessThan(800 + 4 * stepMs);
-      expect(failedWaits[1]).toBeGreaterThanOrEqual(3_200);
-      expect(failedWaits[1]).toBeLessThan(3_200 + 4 * stepMs);
+      expect(failedWaits).toHaveLength(5);
+      [3_200, 6_400, 12_800, 25_600, 12_000].forEach((expected, index) => {
+        expect(failedWaits[index]).toBeGreaterThanOrEqual(expected);
+        expect(failedWaits[index]).toBeLessThan(expected + 4 * stepMs);
+      });
     } finally {
       vi.useRealTimers();
       random.mockRestore();
+    }
+  });
+
+  it("clears the rate limit wait when the run is cancelled during it", async () => {
+    const f = await rateLimitFixture("provider-rate-limit-cancel");
+    const stepMs = 50;
+    useFakeClockBesidePostgres();
+    try {
+      f.rateLimitedAnswers = 99;
+      const cancellation = new AbortController();
+      const attempted = new Promise<void>((resolve) => {
+        f.onAttempt = resolve;
+      });
+      const run = f.runToEnd("hello", { signal: cancellation.signal });
+      await advanceFakeClockUntilSettled(attempted, stepMs);
+      const timersWhileWaiting = vi.getTimerCount();
+      const cancelledAt = Date.now();
+
+      cancellation.abort();
+      const cancelled = await advanceFakeClockUntilSettled(run, stepMs);
+
+      expect(cancelled).toEqual(["run_failed"]);
+      expect(f.attemptTimes).toHaveLength(1);
+      // The first wait would have lasted at least 3.2 s.
+      expect(Date.now() - cancelledAt).toBeLessThan(1_000);
+      // The wait's timer is gone, so no later attempt starts either.
+      expect(vi.getTimerCount()).toBeLessThan(timersWhileWaiting);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(f.attemptTimes).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
     }
   });
 
@@ -1927,17 +1963,18 @@ describe("local agent runtime", () => {
     const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
     useFakeClockBesidePostgres();
     try {
-      // The first wait of 1 s fits before the deadline; the second of 4 s would end after it.
+      // The first wait of 4 s fits before the deadline; the second of 8 s would end after it.
       f.rateLimitedAnswers = 3;
       const startedAt = Date.now();
       const bounded = await advanceFakeClockUntilSettled(
-        f.runToEnd("hello", { deadline: new Date(startedAt + 3_000) }),
+        f.runToEnd("hello", { deadline: new Date(startedAt + 10_000) }),
         stepMs
       );
 
       expect(bounded).toEqual(["run_failed"]);
+      expect(f.lastFailure).toMatchObject({ code: "RATE_LIMITED" });
       expect(f.attemptTimes).toHaveLength(2);
-      expect(Date.now() - startedAt).toBeLessThan(3_000);
+      expect(Date.now() - startedAt).toBeLessThan(5_000);
 
       f.attemptTimes.length = 0;
       const expired = await advanceFakeClockUntilSettled(
@@ -3168,6 +3205,8 @@ async function rateLimitFixture(name: string) {
     rateLimitedAnswers: 0,
     retryAfterMs: undefined as number | undefined,
     attemptTimes: [] as number[],
+    onAttempt: undefined as (() => void) | undefined,
+    lastFailure: undefined as unknown,
     async runToEnd(text: string, overrides: Partial<RuntimeCallContext> = {}): Promise<string[]> {
       const runContext = { ...context, ...overrides };
       const conversationId = await createConversationWithMessages(store, {
@@ -3181,6 +3220,9 @@ async function rateLimitFixture(name: string) {
       const types: string[] = [];
       for await (const event of runtime.observe(run.runId, runContext)) {
         types.push(event.type);
+        if (event.type === "run_failed") {
+          fixture.lastFailure = event.error;
+        }
       }
       return types;
     }
@@ -3192,6 +3234,7 @@ async function rateLimitFixture(name: string) {
     },
     async *stream(): AsyncIterable<ModelCompletionStreamEvent> {
       fixture.attemptTimes.push(Date.now());
+      fixture.onAttempt?.();
       if (fixture.attemptTimes.length <= fixture.rateLimitedAnswers) {
         throw new AppError("INTERNAL", "Model provider request failed", {
           status: 429,
