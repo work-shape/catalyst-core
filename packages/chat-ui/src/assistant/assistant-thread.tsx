@@ -8,7 +8,6 @@ import {
 import { ArrowDown, CircleAlert, Lock, Sparkles } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import { useAgentChipFlight } from "../workspace/agent-chip-flight";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,
@@ -151,6 +150,8 @@ export function AssistantThread({
                 agent={agent}
                 agentDisplay={agentChipDisplayFor(config?.ui)}
                 agents={agents}
+                // An opened conversation that is still empty has the agent in the header.
+                showAgent={!messagesEnabled}
                 fallbackWelcomeMessage={config?.ui.welcomeMessage ?? t("genericWelcome")}
                 onSelectAgent={onSelectAgent}
               />
@@ -333,33 +334,26 @@ function useComposerSettleTransition(
   return composerRef;
 }
 
-/**
- * The start page heading with the agent above the welcome message. Once the
- * header shows the agent, the chip here only keeps its place, so nothing below
- * it moves.
- */
+/** The start page heading with the agent above the welcome message. */
 export function ThreadWelcomeHeading({
   agent,
   agentDisplay,
   agents,
+  showAgent,
   fallbackWelcomeMessage,
   onSelectAgent
 }: {
   agent: SafeConfig["agents"][number] | undefined;
   agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
+  showAgent: boolean;
   fallbackWelcomeMessage: string | undefined;
   onSelectAgent: (agentName: string) => void;
 }) {
-  const agentChipFlight = useAgentChipFlight();
-
   return (
     <div className="flex flex-[2] basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
-      {agents.length > 0 ? (
-        <div
-          ref={agentChipFlight.originRef}
-          className={cn("max-w-full min-w-0", agentChipFlight.chipInHeader && "invisible")}
-        >
+      {showAgent && agents.length > 0 ? (
+        <div className="max-w-full min-w-0">
           <AgentSelector
             agents={agents}
             display={agentDisplay}

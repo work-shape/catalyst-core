@@ -40,9 +40,8 @@ contain breaking changes; a patch version does not.
   form is edited again.
 - **Chat:** the start page introduces the agent with its icon and name, centred above the
   composer: several agents make the name a picker that opens on click, a single agent a plain
-  label. When a conversation starts the icon moves to the top left of the header while the name
-  fades out; in a conversation the header shows the icon alone, and pointing at it opens the
-  agent list, with a single agent too. `ui.showAgentName` is now `true` by default, decides
+  label. In a conversation the header shows the icon alone, and pointing at it opens the agent
+  list, with a single agent too. `ui.showAgentName` is now `true` by default, decides
   only whether the start page shows the name beside the icon, and no longer adds the client
   name beneath the agent; with `ui.showAgentName: false` the start page shows the icon alone
   as well.

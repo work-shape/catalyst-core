@@ -1,6 +1,6 @@
 import { PanelLeft } from "lucide-react";
 import { type SafeConfig } from "@vivd-catalyst/api-client";
-import type { CSSProperties, ReactNode, Ref } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { AgentSelector, type AgentChipDisplay } from "./agent-selector";
 import { useTranslation } from "../i18n";
 import { type ResolvedThemeMode } from "../theme";
@@ -88,7 +88,6 @@ function StatusPanel({
 }
 
 export function WorkspaceChrome({
-  agentChipRef,
   agentDisplay,
   agents,
   displayPanelOpen,
@@ -102,8 +101,6 @@ export function WorkspaceChrome({
   onToggleSidebar,
   onToggleTheme
 }: {
-  /** The element the start page's agent chip flies into. */
-  agentChipRef?: Ref<HTMLDivElement>;
   agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
   displayPanelOpen: boolean;
@@ -168,15 +165,13 @@ export function WorkspaceChrome({
             </button>
           ) : null}
           {showAgentSelector && agents.length > 0 ? (
-            <div ref={agentChipRef} className="min-w-0">
-              <AgentSelector
-                agents={agents}
-                display={agentDisplay}
-                placement="header"
-                selectedAgentName={selectedAgentName}
-                onSelectAgent={onSelectAgent}
-              />
-            </div>
+            <AgentSelector
+              agents={agents}
+              display={agentDisplay}
+              placement="header"
+              selectedAgentName={selectedAgentName}
+              onSelectAgent={onSelectAgent}
+            />
           ) : null}
         </div>
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">

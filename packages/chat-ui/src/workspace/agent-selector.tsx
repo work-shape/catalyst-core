@@ -17,11 +17,6 @@ type Agent = SafeConfig["agents"][number];
 /** The start page introduces the agent; the header of a conversation only keeps its icon. */
 type AgentChipPlacement = "header" | "start-page";
 
-/** Finds the icon of a chip: the part that flies from the start page into the header. */
-export const AGENT_CHIP_ICON_SELECTOR = "[data-agent-chip-icon]";
-/** Finds what stands beside the icon on the start page and stays behind when it leaves. */
-export const AGENT_CHIP_BESIDE_ICON_SELECTOR = "[data-agent-chip-beside-icon]";
-
 /**
  * What an instance shows of its agents: `ui.showAgentName` puts the name beside
  * the icon on the start page, `ui.showAgentDescriptions` the descriptions in the
@@ -109,10 +104,7 @@ function AgentChip({
   );
   const content = (
     <>
-      <span
-        className="grid size-8 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,var(--background))] text-primary"
-        data-agent-chip-icon=""
-      >
+      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,var(--background))] text-primary">
         {/*
           Alone, the icon is also the only sign that the list is open. Both
           icons stay mounted: replacing the one under a resting pointer makes
@@ -125,9 +117,7 @@ function AgentChip({
         )}
       </span>
       {showName ? (
-        <span className="min-w-0 truncate text-sm font-semibold" data-agent-chip-beside-icon="">
-          {agentLabel}
-        </span>
+        <span className="min-w-0 truncate text-sm font-semibold">{agentLabel}</span>
       ) : null}
       {showName && picker ? (
         <ChevronDown
@@ -137,7 +127,6 @@ function AgentChip({
             picker.open && "rotate-180"
           )}
           aria-hidden="true"
-          data-agent-chip-beside-icon=""
         />
       ) : null}
     </>

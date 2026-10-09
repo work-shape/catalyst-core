@@ -14,7 +14,6 @@ import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { ToolDisplayPanel, useToolDisplayPanel } from "./tool-display-panel";
 import { cn } from "./ui/cn";
-import { AgentChipFlightProvider, useAgentChipFlightState } from "./workspace/agent-chip-flight";
 import { agentChipDisplayFor } from "./workspace/agent-selector";
 import { ClientBrandingHeader } from "./workspace/client-branding";
 import { UserMenu } from "./workspace/user-menu";
@@ -88,9 +87,7 @@ function ChatWorkspaceContent({
     manageDocumentTitle,
     collaborationWorkspacesAvailable
   });
-  const agentChipFlight = useAgentChipFlightState(
-    model.route.view === "chat" && !model.route.selectedConversationId
-  );
+  const onStartPage = model.route.view === "chat" && !model.route.selectedConversationId;
   const [displayPanelWidth, setDisplayPanelWidth] = useState(0);
   const [passwordSetupToken, setPasswordSetupToken] = useState(readPasswordSetupToken);
 
@@ -233,7 +230,6 @@ function ChatWorkspaceContent({
         ) : null}
 
         <WorkspaceChrome
-          agentChipRef={agentChipFlight.destinationRef}
           agents={model.config.config.agents}
           agentDisplay={agentChipDisplayFor(model.config.config.ui)}
           displayPanelOpen={model.toolDisplay.open}
@@ -241,7 +237,7 @@ function ChatWorkspaceContent({
           environment={model.config.config.clientInstance.environment}
           sidebarOpen={model.chrome.sidebarOpen}
           selectedAgentName={model.config.activeAgentName}
-          showAgentSelector={agentChipFlight.chipInHeader}
+          showAgentSelector={!onStartPage}
           themeMode={model.config.resolvedThemeMode}
           onSelectAgent={model.config.selectAgentName}
           onToggleSidebar={model.chrome.toggleSidebar}
@@ -293,9 +289,7 @@ function ChatWorkspaceContent({
                     onDragLeave={chat.fileDropzone.onChatDragLeave}
                     onDrop={chat.fileDropzone.onChatDrop}
                   >
-                    <AgentChipFlightProvider flight={agentChipFlight}>
-                      <AssistantRuntimePanel chat={chat} />
-                    </AgentChipFlightProvider>
+                    <AssistantRuntimePanel chat={chat} />
                     {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
                     {resourcesAvailable &&
                     resourcesConversationId &&

@@ -3,10 +3,6 @@ import { renderToStaticMarkup } from "../packages/chat-ui/node_modules/react-dom
 import { describe, expect, it } from "vitest";
 import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
 import { TranslationProvider } from "../packages/chat-ui/src/i18n";
-import {
-  AgentChipFlightProvider,
-  useAgentChipFlightState
-} from "../packages/chat-ui/src/workspace/agent-chip-flight";
 import { agentChipDisplayFor, AgentList } from "../packages/chat-ui/src/workspace/agent-selector";
 import { WorkspaceChrome } from "../packages/chat-ui/src/workspace/workspace-chrome";
 
@@ -67,30 +63,19 @@ function renderHeader({
   );
 }
 
-function renderStartPage(agents: typeof severalAgents, chipInHeader = false, showAgentName = true) {
+function renderStartPage(agents: typeof severalAgents, showAgentName = true, showAgent = true) {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
       { locale: "en" as const },
-      createElement(
-        AgentChipFlightProvider,
-        {
-          flight: {
-            chipInHeader,
-            originRef: { current: null },
-            destinationRef: { current: null },
-            depart: noop,
-            cancel: noop
-          }
-        },
-        createElement(ThreadWelcomeHeading, {
-          agent: agents[0],
-          agentDisplay: display({ showAgentName }),
-          agents,
-          fallbackWelcomeMessage: "How can I help?",
-          onSelectAgent: noop
-        })
-      )
+      createElement(ThreadWelcomeHeading, {
+        agent: agents[0],
+        agentDisplay: display({ showAgentName }),
+        agents,
+        showAgent,
+        fallbackWelcomeMessage: "How can I help?",
+        onSelectAgent: noop
+      })
     )
   );
 }
@@ -125,7 +110,6 @@ describe("agent chip in the header", () => {
         expect(markup).toContain("<svg");
         expect(markup).not.toContain(">Catalyst Assistant<");
         expect(markup).not.toContain("Research Assistant");
-        expect(markup).not.toContain("data-agent-chip-beside-icon");
       }
     }
   );
@@ -185,26 +169,21 @@ describe("named agent chip on the start page", () => {
     expect(renderStartPage(severalAgents)).toContain(`${label}<svg`);
   });
 
-  it("marks the icon that flies and everything beside it that stays behind", () => {
-    const one = renderStartPage(oneAgent);
-    const several = renderStartPage(severalAgents);
-
-    for (const markup of [one, several]) {
-      expect(markup.match(/data-agent-chip-icon/gu)).toHaveLength(1);
-      expect(markup).toMatch(/data-agent-chip-beside-icon="">Catalyst Assistant</u);
+  it("is never a hidden placeholder, and leaves none in the header", () => {
+    for (const agents of [oneAgent, severalAgents]) {
+      expect(renderStartPage(agents)).not.toContain("invisible");
+      expect(renderHeader({ agents, showAgentSelector: false })).not.toContain("invisible");
     }
-    // The name, and with several agents the picker's chevron.
-    expect(one.match(/data-agent-chip-beside-icon/gu)).toHaveLength(1);
-    expect(several.match(/data-agent-chip-beside-icon/gu)).toHaveLength(2);
-    expect(renderHeader({ agents: severalAgents }).match(/data-agent-chip-icon/gu)).toHaveLength(1);
   });
 
-  it("only keeps its place once the header shows the agent", () => {
+  it("is gone without a trace where the header shows the agent", () => {
     for (const agents of [oneAgent, severalAgents]) {
-      const markup = renderStartPage(agents, true);
+      const markup = renderStartPage(agents, true, false);
 
-      expect(markup).toContain("invisible");
-      expect(markup).toContain("How can I help?");
+      expect(markup).not.toContain("Catalyst Assistant");
+      expect(markup).not.toContain("<svg");
+      // Nothing stands above the welcome message, not even an empty slot.
+      expect(markup).toMatch(/^<div class="[^"]*"><div class="[^"]*"><h2[^>]*>How can I help\?</u);
     }
   });
 });
@@ -212,28 +191,23 @@ describe("named agent chip on the start page", () => {
 describe("agent chip on the start page without the name", () => {
   it("is the icon alone on a button that announces the agent list", () => {
     for (const agents of [oneAgent, severalAgents]) {
-      const markup = renderStartPage(agents, false, false);
+      const markup = renderStartPage(agents, false);
 
       expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
       expect(markup).toContain('title="Catalyst Assistant"');
       expect(markup).toContain('aria-haspopup="listbox"');
       expect(markup).toContain("<svg");
       expect(markup).not.toContain(">Catalyst Assistant<");
-      expect(markup).not.toContain("data-agent-chip-beside-icon");
     }
   });
 
   it("is the same chip as in the header, so only its place changes", () => {
     for (const agents of [oneAgent, severalAgents]) {
-      const start = chipButton(renderStartPage(agents, false, false));
+      const start = chipButton(renderStartPage(agents, false));
 
       expect(start).toBeDefined();
       expect(chipButton(renderHeader({ agents, showAgentName: false }))).toBe(start);
     }
-  });
-
-  it("only keeps its place once the header shows the agent", () => {
-    expect(renderStartPage(oneAgent, true, false)).toContain("invisible");
   });
 });
 
@@ -282,18 +256,5 @@ describe("agent settings", () => {
       showName: false,
       showDescriptions: true
     });
-  });
-});
-
-describe("agent chip placement", () => {
-  function renderPlacement(onStartPage: boolean) {
-    return renderToStaticMarkup(
-      createElement(() => (useAgentChipFlightState(onStartPage).chipInHeader ? "header" : "start"))
-    );
-  }
-
-  it("is the start page's while no conversation is selected, otherwise the header's", () => {
-    expect(renderPlacement(true)).toBe("start");
-    expect(renderPlacement(false)).toBe("header");
   });
 });

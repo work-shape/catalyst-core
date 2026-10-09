@@ -28,6 +28,7 @@ function renderWelcomeHeading(availableAgents: typeof agents) {
         agent: availableAgents.at(-1),
         agentDisplay: { showName: true, showDescriptions: false },
         agents: availableAgents,
+        showAgent: true,
         fallbackWelcomeMessage: "How can I help?",
         onSelectAgent: () => undefined
       })

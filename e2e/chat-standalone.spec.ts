@@ -269,10 +269,10 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect.poll(async () => (await composerPlacement()).bottomGap).toBeLessThan(40);
 });
 
-test("the agent's icon flies into the header once while its name fades on the start page", async ({
+test("the first message puts the agent's icon in the header at once, without its name", async ({
   page
 }) => {
-  const headerAnimations = await recordHeaderAnimations(page, true);
+  const chipAnimations = await recordAgentChipAnimations(page);
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   const releaseCreateRun = await holdCreateRun(page);
@@ -283,113 +283,54 @@ test("the agent's icon flies into the header once while its name fades on the st
   const headerChip = header.getByRole("button", { name: "Select agent" });
   const heading = chat.getByRole("heading", { name: "E2E ready." });
   const composer = chat.locator("form").filter({ has: page.getByPlaceholder("Message") });
-  // The name and the picker's chevron: what stands beside the icon on the start page.
-  const besideIcon = chat.locator("[data-agent-chip-beside-icon]");
-  const startName = besideIcon.filter({ hasText: "Application Assistant" });
-  const messageText = `Agent chip flight ${Date.now()}`;
+  const messageText = `Agent chip placed ${Date.now()}`;
 
-  await expect(startChip).toContainText("Application Assistant");
+  await expect(startChip).toHaveText("Application Assistant");
   await expect(headerChip).toHaveCount(0);
-  await expect(besideIcon).toHaveCount(2);
-  await expect(startName).toBeVisible();
-  const startIconBox = await chat.locator("[data-agent-chip-icon]").boundingBox();
-  const startNameBox = await startName.boundingBox();
-  const besideIconBoxes = await Promise.all(
-    (await besideIcon.all()).map((element) => element.boundingBox())
-  );
+  const startChipBox = await startChip.boundingBox();
   const headingBox = await heading.boundingBox();
   const composerBox = await composer.boundingBox();
-  if (!startIconBox) throw new Error("start page agent icon is not laid out");
 
   await page.getByPlaceholder("Message").fill(messageText);
+  const createRun = waitForCreateRun(page);
   await page.getByRole("button", { name: "Send message" }).click();
+  await createRun;
 
-  // The icon leaves with the click, before the server has answered, and nothing else moves.
-  await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(startChip).toHaveCount(0);
+  // Until the server has answered the start page is as it was: the chip with its name, and
+  // nothing in the header yet.
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  await expect(startChip).toHaveText("Application Assistant");
+  await expect(headerChip).toHaveCount(0);
+  expect(await startChip.boundingBox()).toEqual(startChipBox);
   expect(await heading.boundingBox()).toEqual(headingBox);
   expect(await composer.boundingBox()).toEqual(composerBox);
-  // Only the icon moves in the header, and it brings no name along.
-  expect(await headerAnimations()).toHaveLength(1);
-  await expect(headerChip).toHaveText("");
-  await expect(header.locator("[data-agent-chip-beside-icon]")).toHaveCount(0);
-  await headerChip.evaluate((chip) => chip.setAttribute("data-flown", "true"));
 
-  const flight = await agentChipFlight(headerChip);
-  expectFlightFrom(flight, startIconBox);
-
-  // The start page's own icon is gone, so the icon is on screen once. The name stays where it
-  // stood and fades out within the first part of the flight, and the chevron with it.
-  await expect(chat.locator("[data-agent-chip-icon]")).toBeHidden();
-  expect(await startName.boundingBox()).toEqual(startNameBox);
-  const fades = await besideIcon.evaluateAll((elements) =>
-    elements.map((element) => {
-      const [animation, ...others] = element.getAnimations();
-      const duration = animation?.effect?.getTiming().duration;
-      if (!animation || others.length > 0 || typeof duration !== "number") {
-        throw new Error("fade of what stands beside the agent icon not found");
-      }
-      const at = (time: number) => {
-        animation.currentTime = time;
-        const { opacity, visibility } = getComputedStyle(element);
-        const { x, y, width, height } = element.getBoundingClientRect();
-        return { opacity: Number(opacity), visibility, box: { x, y, width, height } };
-      };
-      animation.pause();
-      const fade = { duration, start: at(0), midpoint: at(duration / 2), end: at(duration - 1) };
-      animation.finish();
-      return { ...fade, after: getComputedStyle(element).visibility };
-    })
-  );
-  expect(fades).toHaveLength(2);
-  for (const [index, fade] of fades.entries()) {
-    // A third of the flight.
-    expect(fade.duration).toBe(120);
-    expect(fade.start).toMatchObject({ opacity: 1, visibility: "visible" });
-    expect(fade.midpoint.visibility).toBe("visible");
-    // The name and the chevron fade where they stood: neither travels with the icon.
-    for (const moment of [fade.start, fade.midpoint, fade.end]) {
-      expect(moment.box).toEqual(besideIconBoxes[index]);
-    }
-    expect(fade.midpoint.opacity).toBeGreaterThan(fade.end.opacity);
-    expect(fade.midpoint.opacity).toBeLessThan(1);
-    expect(fade.end.opacity).toBeLessThan(0.05);
-    // Faded out, it is simply hidden with the rest of the start page's chip: nothing to jump.
-    expect(fade.after).toBe("hidden");
-  }
-  await expect(startName).toBeHidden();
-  expect(await startName.boundingBox()).toEqual(startNameBox);
-
-  await expect(headerChip).toBeVisible();
-  await header.evaluate((element) => {
-    for (const animation of element.getAnimations({ subtree: true })) {
-      if (animation.playState === "paused") animation.play();
-    }
-  });
-  await expect
-    .poll(() => header.evaluate((element) => element.getAnimations({ subtree: true }).length))
-    .toBe(0);
-
-  // The route change keeps the icon that flew in instead of repeating its arrival.
+  // With the conversation the start page is gone and its chip with it. The header has the
+  // icon alone, where it stays, and nothing on either chip was ever animated.
   releaseCreateRun();
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
   await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
-  await expect(headerChip).toHaveAttribute("data-flown", "true");
+  await expect(startChip).toHaveCount(0);
+  await expect(heading).toHaveCount(0);
+  await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveText("");
-  expect(await headerAnimations()).toHaveLength(1);
+  expect(await runningAnimations(headerChip)).toBe(0);
+  expect(await chipAnimations()).toEqual({ animations: 0, mostChipsAtOnce: 1 });
+  const headerChipBox = await headerChip.boundingBox();
+  expect(headerChipBox?.width).toBe(40);
+  expect(headerChipBox?.height).toBe(40);
 
-  // Reloading the conversation shows the icon without a flight. Back on the start page the
-  // name is there again, and opening the conversation from the list brings the icon alone.
+  // Reloading the conversation shows the icon in the same place. Back on the start page the name is there
+  // again, and opening the conversation from the list brings the icon alone.
   await page.reload();
   await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveText("");
+  expect(await headerChip.boundingBox()).toEqual(headerChipBox);
   await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(startChip).toHaveText("Application Assistant");
-  await expect(startName).toBeVisible();
-  await expect(startName).toHaveCSS("opacity", "1");
   await expect(headerChip).toHaveCount(0);
+  expect(await startChip.boundingBox()).toEqual(startChipBox);
   await page
     .getByTestId("conversation-row")
     .filter({ hasText: messageText })
@@ -398,11 +339,15 @@ test("the agent's icon flies into the header once while its name fades on the st
     .click();
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveText("");
-  expect(await headerAnimations()).toHaveLength(0);
+  expect(await runningAnimations(headerChip)).toBe(0);
+  expect(await chipAnimations()).toEqual({ animations: 0, mostChipsAtOnce: 1 });
+  await expectRecorderToSeeWrapperOf(headerChip, chipAnimations);
 });
 
-test("a first message that fails brings the fading agent name back at once", async ({ page }) => {
-  await recordHeaderAnimations(page, true);
+test("a first message that fails leaves the start page with the agent and its name", async ({
+  page
+}) => {
+  const chipAnimations = await recordAgentChipAnimations(page);
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -422,99 +367,74 @@ test("a first message that fails brings the fading agent name back at once", asy
   const chat = page.getByRole("region", { name: "Chat" });
   const startChip = chat.getByRole("button", { name: "Select agent" });
   const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
-  const besideIcon = chat.locator("[data-agent-chip-beside-icon]");
   await expect(startChip).toHaveText("Application Assistant");
-  // Where the name and the chevron stand, measured from the icon they belong to.
-  const besideIconOffsets = () =>
-    chat.locator("[data-agent-chip-icon]").evaluate((icon) => {
-      const origin = icon.getBoundingClientRect();
-      const chip = icon.parentElement;
-      if (!chip) throw new Error("agent chip not found");
-      return Array.from(chip.querySelectorAll("[data-agent-chip-beside-icon]"), (element) => {
-        const { x, y } = element.getBoundingClientRect();
-        return { x: x - origin.x, y: y - origin.y };
-      });
-    });
-  const offsetsBefore = await besideIconOffsets();
-  expect(offsetsBefore).toHaveLength(2);
+  const startChipBox = await startChip.boundingBox();
 
-  await page.getByPlaceholder("Message").fill(`Agent chip turned back ${Date.now()}`);
+  await page.getByPlaceholder("Message").fill(`Agent chip stays ${Date.now()}`);
+  const createRun = waitForCreateRun(page);
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(startChip).toHaveCount(0);
-
-  // Halfway through the fade the name and the chevron are partly transparent.
-  const midFade = await besideIcon.evaluateAll((elements) =>
-    elements.map((element) => {
-      const [animation] = element.getAnimations();
-      if (!animation) throw new Error("fade of what stands beside the agent icon not found");
-      animation.currentTime = 60;
-      return Number(getComputedStyle(element).opacity);
-    })
-  );
-  expect(midFade).toHaveLength(2);
-  for (const opacity of midFade) {
-    expect(opacity).toBeGreaterThan(0);
-    expect(opacity).toBeLessThan(1);
-  }
-
-  // The request fails: the chip is back on the start page, fully visible, with nothing left
-  // fading.
-  failCreateRun();
+  await createRun;
   await expect(startChip).toHaveText("Application Assistant");
   await expect(headerChip).toHaveCount(0);
-  expect(
-    await besideIcon.evaluateAll((elements) =>
-      elements.map((element) => ({
-        animations: element.getAnimations().length,
-        opacity: getComputedStyle(element).opacity,
-        visibility: getComputedStyle(element).visibility
-      }))
-    )
-  ).toEqual([
-    { animations: 0, opacity: "1", visibility: "visible" },
-    { animations: 0, opacity: "1", visibility: "visible" }
-  ]);
-  // The failure notice may move the heading; the chip itself is put together as before.
-  expect(await besideIconOffsets()).toEqual(offsetsBefore);
-  await expect(chat.locator("[data-agent-chip-icon]")).toBeVisible();
+
+  // The request fails: the chip never left the start page, and the header never had one.
+  failCreateRun();
+  await expect(chat.getByRole("alert")).toBeVisible();
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+  await expect(startChip).toBeVisible();
+  await expect(startChip).toHaveText("Application Assistant");
+  await expect(headerChip).toHaveCount(0);
+  // The failure notice may move the chip down; its size and place across the page are the same.
+  const failedChipBox = await startChip.boundingBox();
+  expect(failedChipBox?.x).toBe(startChipBox?.x);
+  expect(failedChipBox?.width).toBe(startChipBox?.width);
+  expect(failedChipBox?.height).toBe(startChipBox?.height);
+  expect(await runningAnimations(startChip)).toBe(0);
+  expect(await chipAnimations()).toEqual({ animations: 0, mostChipsAtOnce: 1 });
+  await expectRecorderToSeeWrapperOf(startChip, chipAnimations);
 });
 
-test("the agent's icon is simply in the header and its name gone when motion is reduced", async ({
+test("an opened conversation without messages has the agent in the header only", async ({
   page
 }) => {
-  const headerAnimations = await recordHeaderAnimations(page);
-  await page.emulateMedia({ reducedMotion: "reduce" });
+  const chipAnimations = await recordAgentChipAnimations(page);
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
-  const releaseCreateRun = await holdCreateRun(page);
 
   const chat = page.getByRole("region", { name: "Chat" });
   const startChip = chat.getByRole("button", { name: "Select agent" });
   const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
-  const besideIcon = chat.locator("[data-agent-chip-beside-icon]");
-  await expect(startChip).toContainText("Application Assistant");
-  await expect(besideIcon).toHaveCount(2);
+  const heading = chat.getByRole("heading", { name: "E2E ready." });
+  const composer = chat.locator("form").filter({ has: page.getByPlaceholder("Message") });
+  // The welcome heading: the chip, where there is one, above the block with the message.
+  const welcomeHeading = heading.locator("xpath=../..");
 
-  await page.getByPlaceholder("Message").fill(`Agent chip without motion ${Date.now()}`);
-  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(startChip).toHaveText("Application Assistant");
+  await expect(welcomeHeading.locator("> *")).toHaveCount(2);
+  const headingBox = await heading.boundingBox();
+  const composerBox = await composer.boundingBox();
 
-  // With the click the icon is in the header and the name hidden, neither of them animated.
+  // The chat itself never leaves a conversation without a message behind, the API does.
+  const workspaceUrl = page.url();
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/conversations`, {
+    data: { collaborationWorkspaceId: decodeURIComponent(workspaceUrl.split("/w/")[1] ?? "") }
+  });
+  expect(created.ok()).toBe(true);
+  const conversation = (await created.json()) as { id: string };
+  await page.goto(`${workspaceUrl}/c/${encodeURIComponent(conversation.id)}`);
+
+  // The welcome heading is there, as on the start page, but the agent is in the header alone:
+  // no second chip above the welcome message and no empty slot in its place.
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveText("");
-  await expect(startChip).toHaveCount(0);
-  await expect(besideIcon.first()).toBeHidden();
-  expect(
-    await besideIcon.evaluateAll((elements) =>
-      elements.map((element) => element.getAnimations().length)
-    )
-  ).toEqual([0, 0]);
-  expect(await headerAnimations()).toHaveLength(0);
-
-  releaseCreateRun();
-  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
-  await expect(headerChip).toHaveText("");
-  expect(await headerAnimations()).toHaveLength(0);
+  await expect(heading).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select agent" })).toHaveCount(1);
+  await expect(chat.getByText("Application Assistant")).toHaveCount(0);
+  await expect(welcomeHeading.locator("> *")).toHaveCount(1);
+  expect(await heading.boundingBox()).toEqual(headingBox);
+  expect(await composer.boundingBox()).toEqual(composerBox);
+  expect(await chipAnimations()).toEqual({ animations: 0, mostChipsAtOnce: 1 });
+  await expectRecorderToSeeWrapperOf(headerChip, chipAnimations);
 });
 
 test("without its name the agent chip is an icon that opens the agent list under the pointer", async ({
@@ -545,7 +465,6 @@ test("without its name the agent chip is an icon that opens the agent list under
     await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
     await expect(chip).toHaveAttribute("title", "Application Assistant");
     await expect(chip).toHaveText("");
-    await expect(chip.locator("[data-agent-chip-beside-icon]")).toHaveCount(0);
     const chipBox = await boxOf(chip);
     expect(chipBox.width).toBe(40);
     expect(chipBox.height).toBe(40);
@@ -747,71 +666,39 @@ for (const showAgentName of [false, true]) {
   });
 }
 
-test("the agent icon alone flies from the start page into the header", async ({ page }) => {
-  const headerAnimations = await recordHeaderAnimations(page, true);
+test("without its name the agent icon is in the header at once after the first message", async ({
+  page
+}) => {
+  const chipAnimations = await recordAgentChipAnimations(page);
   await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
-  const releaseCreateRun = await holdCreateRun(page);
 
   const chat = page.getByRole("region", { name: "Chat" });
-  const header = page.locator("header");
   const startChip = chat.getByRole("button", { name: "Select agent" });
-  const headerChip = header.getByRole("button", { name: "Select agent" });
-  const heading = chat.getByRole("heading", { name: "E2E ready." });
-  const messageText = `Agent icon flight ${Date.now()}`;
+  const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
+  const messageText = `Agent icon placed ${Date.now()}`;
 
   await expect(startChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveCount(0);
   const startChipBox = await startChip.boundingBox();
-  const startIconBox = await startChip.locator("[data-agent-chip-icon]").boundingBox();
-  const headingBox = await heading.boundingBox();
-  if (!startChipBox || !startIconBox) throw new Error("start page agent chip is not laid out");
 
   await page.getByPlaceholder("Message").fill(messageText);
   await page.getByRole("button", { name: "Send message" }).click();
 
-  // The icon leaves with the click, before the server has answered, and the heading stays.
-  await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  await expect(startChip).toHaveCount(0);
-  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
-  expect(await heading.boundingBox()).toEqual(headingBox);
-  // Only the movement: there is no name whose colour could change.
-  expect(await headerAnimations()).toHaveLength(1);
-  await expect(header.locator("[data-agent-chip-beside-icon]")).toHaveCount(0);
-  await expect(headerChip).toHaveText("");
-  await headerChip.evaluate((chip) => chip.setAttribute("data-flown", "true"));
-
-  const flight = await agentChipFlight(headerChip);
-  expectFlightFrom(flight, startIconBox);
-  // The same icon arrives that left.
-  const headerChipBox = await headerChip.boundingBox();
-  expect(headerChipBox?.width).toBe(startChipBox.width);
-  expect(headerChipBox?.height).toBe(startChipBox.height);
-
-  await header.evaluate((element) => {
-    for (const animation of element.getAnimations({ subtree: true })) {
-      if (animation.playState === "paused") animation.play();
-    }
-  });
-  await expect
-    .poll(() => header.evaluate((element) => element.getAnimations({ subtree: true }).length))
-    .toBe(0);
-
-  // The route change keeps the icon that flew in, and the pointer on the send button did not
-  // open the agent list.
-  releaseCreateRun();
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
   await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
-  await expect(headerChip).toHaveAttribute("data-flown", "true");
-  expect(await headerAnimations()).toHaveLength(1);
-  await expect(page.getByRole("listbox")).toHaveCount(0);
-
-  // Reloading the conversation shows the icon without a flight.
-  await page.reload();
-  await expect(chat.locator('[data-role="user"]').filter({ hasText: messageText })).toHaveCount(1);
+  await expect(startChip).toHaveCount(0);
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
-  expect(await headerAnimations()).toHaveLength(0);
+  await expect(headerChip).toHaveText("");
+  // The same icon as on the start page, not animated, and the pointer on the send button did
+  // not open the agent list.
+  const headerChipBox = await headerChip.boundingBox();
+  expect(headerChipBox?.width).toBe(startChipBox?.width);
+  expect(headerChipBox?.height).toBe(startChipBox?.height);
+  expect(await runningAnimations(headerChip)).toBe(0);
+  expect(await chipAnimations()).toEqual({ animations: 0, mostChipsAtOnce: 1 });
+  await expect(page.getByRole("listbox")).toHaveCount(0);
 });
 
 test("a single agent's icon names it in the list it opens under the pointer", async ({ page }) => {
@@ -2750,39 +2637,87 @@ async function signInViaUi(
 }
 
 /**
- * Records every animation started inside the header, where the agent icon's flight is the
- * only one. Optionally pauses it at departure, and with it the fade of what stood beside the
- * icon on the start page, so checks cannot miss a short animation.
+ * Watches the two places of the agent chip from the first page load on, the header and the
+ * start page's welcome heading: how many animations and transitions ever started there, on
+ * the chip, inside it or on anything around it, and the most chips, or slots kept for one,
+ * that were on the page at once.
  */
-async function recordHeaderAnimations(
-  page: Page,
-  pauseAtDeparture = false
-): Promise<() => Promise<string[]>> {
-  await page.addInitScript((pauseAtDeparture) => {
+async function recordAgentChipAnimations(
+  page: Page
+): Promise<() => Promise<{ animations: number; mostChipsAtOnce: number }>> {
+  await page.addInitScript(() => {
+    const count = (key: "agentChipAnimations" | "agentChips", next: (seen: number) => number) => {
+      const { dataset } = document.documentElement;
+      dataset[key] = String(next(Number(dataset[key] ?? 0)));
+    };
+    // The welcome heading holds the chip, if any, above the block with the welcome message.
+    const welcomeHeading = () =>
+      document.querySelector('section[aria-label="Chat"] h2')?.parentElement?.parentElement;
+    const aroundChip = (target: unknown) =>
+      target instanceof Element &&
+      (target.closest("header") !== null || welcomeHeading()?.contains(target) === true);
+
     const animate = Element.prototype.animate;
     Element.prototype.animate = function (this: Element, ...args: Parameters<Element["animate"]>) {
-      const animation = animate.apply(this, args);
-      if (this.closest("header")) {
-        const { dataset } = document.documentElement;
-        const seen: unknown = JSON.parse(dataset.headerAnimations ?? "[]");
-        const [firstKeyframe] = Array.isArray(args[0]) ? args[0] : [];
-        dataset.headerAnimations = JSON.stringify([
-          ...(Array.isArray(seen) ? seen : []),
-          String(firstKeyframe?.transform ?? "")
-        ]);
-      }
-      if (pauseAtDeparture && this.closest("header, [data-agent-chip-beside-icon]")) {
-        animation.pause();
-        animation.currentTime = 0;
-      }
-      return animation;
+      if (aroundChip(this)) count("agentChipAnimations", (seen) => seen + 1);
+      return animate.apply(this, args);
     };
-  }, pauseAtDeparture);
+    for (const started of ["animationstart", "transitionrun"] as const) {
+      document.addEventListener(
+        started,
+        (event) => {
+          // Pointing at a control tints it; only what moves or fades counts.
+          const colourOnly = event instanceof TransitionEvent && /color$/u.test(event.propertyName);
+          if (aroundChip(event.target) && !colourOnly) {
+            count("agentChipAnimations", (seen) => seen + 1);
+          }
+        },
+        true
+      );
+    }
+    new MutationObserver(() => {
+      const inHeader = document.querySelectorAll('header [aria-label^="Select agent"]').length;
+      // Whatever stands above the welcome message is the chip or a slot kept for it.
+      const onStartPage = (welcomeHeading()?.children.length ?? 1) - 1;
+      count("agentChips", (seen) => Math.max(seen, inHeader + onStartPage));
+    }).observe(document, { childList: true, subtree: true });
+  });
   return () =>
     page.evaluate(() => {
-      const seen: unknown = JSON.parse(document.documentElement.dataset.headerAnimations ?? "[]");
-      return Array.isArray(seen) ? seen.map(String) : [];
+      const { agentChipAnimations, agentChips } = document.documentElement.dataset;
+      return {
+        animations: Number(agentChipAnimations ?? 0),
+        mostChipsAtOnce: Number(agentChips ?? 0)
+      };
     });
+}
+
+/**
+ * Proves that the recorder is watching: an animation on what a chip stands in, which is what
+ * would move it, is counted. Comes last in a test, since it leaves that animation on record.
+ */
+async function expectRecorderToSeeWrapperOf(
+  chip: Locator,
+  chipAnimations: () => Promise<{ animations: number }>
+): Promise<void> {
+  const before = (await chipAnimations()).animations;
+  await chip.evaluate((element) => {
+    const wrapper = element.parentElement?.parentElement;
+    if (!wrapper) throw new Error("agent chip wrapper not found");
+    wrapper.animate([{ opacity: 0.99 }, { opacity: 1 }], { duration: 50 });
+  });
+  expect((await chipAnimations()).animations).toBe(before + 1);
+}
+
+/** The animations running on a chip, on anything inside it and on what it stands in. */
+async function runningAnimations(chip: Locator): Promise<number> {
+  return chip.evaluate((element) => {
+    const around = element.parentElement ?? element;
+    return (
+      around.getAnimations({ subtree: true }).length +
+      (around.parentElement?.getAnimations().length ?? 0)
+    );
+  });
 }
 
 /**
@@ -2832,84 +2767,12 @@ async function holdCreateRun(page: Page): Promise<() => void> {
   return () => release();
 }
 
-interface AgentChipFlight {
-  duration: number;
-  firstTransform: string;
-  lastTransform: string;
-  origin: { x: number; y: number };
-  destination: { x: number; y: number };
-  midpoint: { x: number; y: number };
-}
-
-/**
- * Inspects the real Web Animation of the chip, paused by the recorder before it can finish, by
- * where it puts the agent's icon.
- */
-async function agentChipFlight(headerChip: Locator): Promise<AgentChipFlight> {
-  return headerChip.evaluate((chip) => {
-    const header = chip.closest("header");
-    const [animation] = (header?.getAnimations({ subtree: true }) ?? []).filter(
-      ({ effect }) =>
-        effect instanceof KeyframeEffect &&
-        effect.target instanceof Element &&
-        effect.target !== header &&
-        effect.target.contains(chip)
-    );
-    const effect = animation?.effect;
-    if (
-      !animation ||
-      !(effect instanceof KeyframeEffect) ||
-      !(effect.target instanceof Element) ||
-      !effect.target.contains(chip)
-    ) {
-      throw new Error("header agent chip flight not found");
-    }
-    const duration = effect.getTiming().duration;
-    if (typeof duration !== "number") throw new Error("chip flight duration is not numeric");
-    const keyframes = effect.getKeyframes();
-    const icon = chip.querySelector("[data-agent-chip-icon]");
-    if (!icon) throw new Error("header agent icon not found");
-    const position = () => {
-      const { x, y } = icon.getBoundingClientRect();
-      return { x, y };
-    };
-    animation.pause();
-    animation.currentTime = 0;
-    const origin = position();
-    animation.currentTime = duration;
-    const destination = position();
-    animation.currentTime = duration / 2;
-    return {
-      duration,
-      firstTransform: String(keyframes[0]?.transform ?? ""),
-      lastTransform: String(keyframes.at(-1)?.transform ?? ""),
-      origin,
-      destination,
-      midpoint: position()
-    };
-  });
-}
-
-/** One eased movement of 360 ms from where the start page showed the agent's icon. */
-function expectFlightFrom(flight: AgentChipFlight, startChipBox: { x: number; y: number }): void {
-  expect(flight.duration).toBe(360);
-  expect(flight.lastTransform).toBe("none");
-  const [fromX, fromY] = (/translate\((.+)px, (.+)px\)/u.exec(flight.firstTransform) ?? []).slice(
-    1
+/** Resolves once the browser has sent the first message of a new conversation. */
+function waitForCreateRun(page: Page): Promise<unknown> {
+  return page.waitForRequest(
+    (request) =>
+      request.method() === "POST" && request.url() === `${apiBaseUrl}/api/conversations/runs`
   );
-  expect(Number(fromX)).toBeCloseTo(startChipBox.x - flight.destination.x, 0);
-  expect(Number(fromY)).toBeCloseTo(startChipBox.y - flight.destination.y, 0);
-  expect(flight.origin.x).toBeCloseTo(startChipBox.x, 0);
-  expect(flight.origin.y).toBeCloseTo(startChipBox.y, 0);
-  expect(flight.destination.y).toBeLessThan(startChipBox.y);
-  for (const axis of ["x", "y"] as const) {
-    expect(flight.midpoint[axis]).toBeGreaterThan(
-      Math.min(flight.origin[axis], flight.destination[axis])
-    );
-    expect(flight.midpoint[axis]).toBeLessThan(
-      Math.max(flight.origin[axis], flight.destination[axis])
-    );
-  }
 }
 
 async function signInViaApi(page: Page, user: { email: string; password: string }): Promise<void> {
