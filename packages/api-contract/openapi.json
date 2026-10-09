@@ -9483,8 +9483,8 @@
                       "description": {
                         "type": "string"
                       },
-                      "residency": {
-                        "$ref": "#/components/schemas/ModelResidency"
+                      "region": {
+                        "$ref": "#/components/schemas/ModelRegion"
                       },
                       "usageTier": {
                         "$ref": "#/components/schemas/ModelUsageTier"
@@ -11388,12 +11388,11 @@
         "type": "number",
         "const": 1
       },
-      "ModelResidency": {
+      "ModelRegion": {
         "type": "string",
         "enum": [
-          "global",
           "eu",
-          "unknown"
+          "global"
         ]
       },
       "ModelUsageBillableCost": {
@@ -12701,8 +12700,8 @@
                       "description": {
                         "type": "string"
                       },
-                      "residency": {
-                        "$ref": "#/components/schemas/ModelResidency"
+                      "region": {
+                        "$ref": "#/components/schemas/ModelRegion"
                       },
                       "usageTier": {
                         "$ref": "#/components/schemas/ModelUsageTier"
