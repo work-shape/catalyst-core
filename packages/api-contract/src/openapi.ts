@@ -1,6 +1,6 @@
 import { APP_ERROR_STATUS_CODES } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { version as releaseVersion } from "../package.json";
+import packageManifest from "../package.json" with { type: "json" };
 import { API_ERROR_MEANINGS, appErrorCodeSchema, type ApiErrorCode } from "./errors";
 import type {
   OpenApiDocument,
@@ -16,6 +16,8 @@ import {
   type Operation
 } from "./operations/define-operation";
 import * as contractSchemas from "./schemas";
+
+const releaseVersion = packageManifest.version;
 
 export type ApiOperationCatalog = Record<string, Operation>;
 
