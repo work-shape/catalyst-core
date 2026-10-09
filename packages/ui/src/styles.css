@@ -130,6 +130,10 @@
   --layout-content: 64rem;
   --layout-split-min: 23.75rem;
 
+  /* The room a Page needs to keep a SubRail beside its content: the rail, one gutter and the
+     40rem the content keeps. Below it the SubRail is a Select above the content. */
+  --container-subrail: 55.5rem;
+
   /* Layer order. Dialog uses the browser's top layer and needs no entry. */
   --layer-sidebar-edge: 20;
   --layer-sticky-header: 30;

@@ -240,6 +240,12 @@ function SubRailRoutesSample({ text }: { text: GalleryText }) {
     {
       id: "workspace",
       label: text.subRailWorkspace,
+      // The scope of one group: the workspace its pages change.
+      scope: (
+        <Select size="sm" aria-label={text.subRailScope}>
+          <option>{text.navWorkspace}</option>
+        </Select>
+      ),
       items: [
         item("general", text.subRailGeneral),
         { ...item("members", text.subRailMembers, 3), countTone: "primary" },
@@ -265,11 +271,6 @@ function SubRailRoutesSample({ text }: { text: GalleryText }) {
             groups={groups}
             value={route}
             onValueChange={(id) => setRoute(toSettingsRoute(id, route))}
-            scope={
-              <Select size="sm" aria-label={text.subRailScope}>
-                <option>{text.navWorkspace}</option>
-              </Select>
-            }
           />
         }
       >

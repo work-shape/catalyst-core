@@ -168,7 +168,7 @@ test("the sub-rail navigates routes, scrolls to anchors and follows the scroll",
   const anchors = root.locator('[data-gallery-sample="subrail-anchors"]');
   const openRoute = routes.locator('[data-gallery-sample="subrail-route"]');
 
-  // From 1024 px it is a rail of links.
+  // While its page keeps 40rem for the content beside it, it is a rail of links.
   const routeSelect = routes.getByRole("combobox", { name: "Settings pages" });
   await expect(routeSelect).toBeHidden();
   const rail = routes.getByRole("navigation");
@@ -191,7 +191,7 @@ test("the sub-rail navigates routes, scrolls to anchors and follows the scroll",
   await anchors.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
   await expect(anchorRail.locator("[aria-current]")).toHaveText(/History/u);
 
-  // Below 1024 px it is the library's native select.
+  // With less room in the page it is the library's native select.
   await page.setViewportSize({ width: 1000, height: 800 });
   await expect(rail).toBeHidden();
   await expect(routeSelect).toBeVisible();

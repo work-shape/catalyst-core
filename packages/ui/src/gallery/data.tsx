@@ -5,6 +5,7 @@ import { IconButton } from "../actions/icon-button";
 import { FilterBar } from "../data/filter-bar";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
 import { List, ListRow, type ListRowSize } from "../data/list-row";
+import { Pagination } from "../data/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../data/table";
 import { Input } from "../forms/input";
 import { Select } from "../forms/select";
@@ -228,6 +229,37 @@ function FilterBarSamples({ text }: { text: GalleryText }) {
   );
 }
 
+const PAGINATION_SAMPLE_TOTAL = 42;
+
+function PaginationSample({ text }: { text: GalleryText }) {
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const pageCount = Math.ceil(PAGINATION_SAMPLE_TOTAL / rowsPerPage);
+  const current = Math.min(page, pageCount);
+  const from = (current - 1) * rowsPerPage + 1;
+  const to = Math.min(current * rowsPerPage, PAGINATION_SAMPLE_TOTAL);
+  return (
+    <Pagination
+      data-gallery-sample="pagination"
+      page={current}
+      pageCount={pageCount}
+      onPageChange={setPage}
+      range={text.paginationRange.replace("{from}", String(from)).replace("{to}", String(to))}
+      rowsPerPage={rowsPerPage}
+      onRowsPerPageChange={(next) => {
+        setRowsPerPage(next);
+        setPage(1);
+      }}
+      labels={{
+        rows: text.paginationRows,
+        rowsPerPage: text.paginationRowsPerPage,
+        previous: text.paginationPrevious,
+        next: text.paginationNext
+      }}
+    />
+  );
+}
+
 export const dataGallery: GalleryGroup = {
   id: "data",
   entries: [
@@ -278,6 +310,11 @@ export const dataGallery: GalleryGroup = {
       name: "FilterBar",
       components: ["FilterBar"],
       render: (text) => <FilterBarSamples text={text} />
+    },
+    {
+      name: "Pagination",
+      components: ["Pagination"],
+      render: (text) => <PaginationSample text={text} />
     },
     {
       name: "KeyValue",

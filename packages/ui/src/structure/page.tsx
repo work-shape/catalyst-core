@@ -12,7 +12,10 @@ const contentWidths: Record<PageWidth, string> = {
 
 export interface PageProps extends HTMLAttributes<HTMLDivElement> {
   width?: PageWidth;
-  /** A `SubRail` in its own column beside the content. Below 1024 px it sits above it. */
+  /**
+   * A `SubRail` in its own column beside the content while the content keeps 40rem. With less
+   * room in the page it sits above the content.
+   */
   subRail?: ReactNode;
 }
 
@@ -35,16 +38,16 @@ export function Page({ className, width = "default", subRail, children, ...props
       </div>
     );
   }
+  // The page is the container its sub-rail measures: the room the page has, not the window.
   return (
     <div
-      className={cn(
-        "flex w-full min-w-0 flex-col gap-x-(--layout-gutter) gap-y-2 px-(--layout-gutter) py-6 max-lg:pt-0 lg:flex-row",
-        className
-      )}
+      className={cn("@container/page w-full min-w-0 px-(--layout-gutter)", className)}
       {...props}
     >
-      {subRail}
-      <div className={cn("min-w-0 flex-1", contentWidths[width])}>{children}</div>
+      <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) gap-y-2 pb-6 @subrail/page:flex-row @subrail/page:pt-6">
+        {subRail}
+        <div className={cn("min-w-0 flex-1", contentWidths[width])}>{children}</div>
+      </div>
     </div>
   );
 }

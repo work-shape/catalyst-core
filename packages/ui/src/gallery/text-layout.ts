@@ -122,6 +122,11 @@ export interface LayoutGalleryText {
   filterNoResults: string;
   filterEmpty: string;
   filterClear: string;
+  paginationRange: string;
+  paginationRows: string;
+  paginationRowsPerPage: string;
+  paginationPrevious: string;
+  paginationNext: string;
   tableOwner: string;
   keyUserId: string;
   keyUserIdValue: string;
@@ -261,6 +266,11 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     filterNoResults: "0 results",
     filterEmpty: "No agent matches these filters.",
     filterClear: "Clear filters",
+    paginationRange: "{from}-{to} of 42",
+    paginationRows: "Rows",
+    paginationRowsPerPage: "Rows per page",
+    paginationPrevious: "Previous page",
+    paginationNext: "Next page",
     tableOwner: "Owner",
     keyUserId: "User ID",
     keyUserIdValue: "usr_01HZX4M7Q2K9",
@@ -399,6 +409,11 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     filterNoResults: "0 Ergebnisse",
     filterEmpty: "Kein Agent passt zu diesen Filtern.",
     filterClear: "Filter zurücksetzen",
+    paginationRange: "{from}–{to} von 42",
+    paginationRows: "Zeilen",
+    paginationRowsPerPage: "Zeilen pro Seite",
+    paginationPrevious: "Vorherige Seite",
+    paginationNext: "Nächste Seite",
     tableOwner: "Verantwortlich",
     keyUserId: "Benutzer-ID",
     keyUserIdValue: "usr_01HZX4M7Q2K9",

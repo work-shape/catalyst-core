@@ -65,7 +65,13 @@ export function PageHeader({
         {back}
         <div className="grid min-w-0 gap-0.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Heading className={cn("min-w-0 break-words", detail ? "text-title" : "text-title-lg")}>
+            <Heading
+              // An area puts the focus here when it opens; a title is no control and shows no ring.
+              className={cn(
+                "min-w-0 break-words outline-none",
+                detail ? "text-title" : "text-title-lg"
+              )}
+            >
               {title}
             </Heading>
             {scope}

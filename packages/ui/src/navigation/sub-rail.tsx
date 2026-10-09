@@ -28,11 +28,17 @@ export interface SubRailItem {
 export interface SubRailGroup {
   id: string;
   label?: string;
+  /**
+   * Under the group's label, for a control that switches what this group alone is about, such
+   * as the workspace its pages change. As a select the rail shows it while one of the group's
+   * items is open.
+   */
+  scope?: ReactNode;
   items: readonly SubRailItem[];
 }
 
 interface SubRailBaseProps {
-  /** Names the navigation, and the select that replaces it below 1024 px. */
+  /** Names the navigation, and the select that replaces it where the page lacks the room. */
   label: string;
   groups: readonly SubRailGroup[];
   /** Above the groups, for a control that switches what the whole rail is about. */
@@ -61,8 +67,9 @@ export interface SubRailAnchorsProps extends SubRailBaseProps {
 export type SubRailProps = SubRailRoutesProps | SubRailAnchorsProps;
 
 /**
- * Grouped navigation inside a page, 14rem wide and built from `NavItem`. Below 1024 px it is
- * the library's `Select` above the content.
+ * Grouped navigation inside a page, 14rem wide and built from `NavItem`. It stands beside the
+ * content only while the content keeps 40rem; with less room in its `Page` it is the library's
+ * `Select` above the content. It measures the page, not the window, so an open sidebar counts.
  */
 export function SubRail(props: SubRailProps) {
   const { label, groups, scope, belowHeader = false, className } = props;
@@ -78,20 +85,26 @@ export function SubRail(props: SubRailProps) {
   });
   const value = props.mode === "routes" ? props.value : anchors.value;
   const choose = props.mode === "routes" ? props.onValueChange : anchors.scrollTo;
+  const openGroupScope = groups.find((group) =>
+    group.items.some((item) => item.id === value)
+  )?.scope;
 
   return (
     <div
       ref={rootRef}
       data-mode={props.mode}
       className={cn(
-        "sticky z-(--layer-sticky-header) grid w-full shrink-0 gap-3 self-start bg-background py-2 lg:w-(--layout-subrail) lg:py-0",
+        "sticky z-(--layer-sticky-header) grid w-full shrink-0 gap-3 self-start bg-background py-2 @subrail/page:w-(--layout-subrail) @subrail/page:py-0",
         belowHeader ? "top-(--layout-header)" : "top-0",
         className
       )}
     >
       {scope}
+      {openGroupScope === undefined ? null : (
+        <div className="min-w-0 @subrail/page:hidden">{openGroupScope}</div>
+      )}
       <Select
-        className="lg:hidden"
+        className="@subrail/page:hidden"
         aria-label={label}
         value={value}
         onChange={(event) => choose(event.currentTarget.value)}
@@ -108,9 +121,12 @@ export function SubRail(props: SubRailProps) {
           )
         )}
       </Select>
-      <nav ref={railRef} aria-label={label} className="hidden gap-4 lg:grid">
+      <nav ref={railRef} aria-label={label} className="hidden gap-4 @subrail/page:grid">
         {groups.map((group) => (
           <NavGroup key={group.id} label={group.label}>
+            {group.scope === undefined ? null : (
+              <div className="min-w-0 px-2 pb-1">{group.scope}</div>
+            )}
             {group.items.map((item) => (
               <SubRailNavItem
                 key={item.id}
