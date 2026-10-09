@@ -31,14 +31,23 @@ export function toolFailureLogRecord(
   request: ToolExecutionRequest,
   context: ToolExecutionContext
 ): ToolFailureLogRecord {
-  const stack = error instanceof Error ? stackFrames(error.stack) : undefined;
-  const database = findDatabaseError(error);
   return {
     correlationId: context.correlationId,
     toolName: request.toolName,
     toolCallId: request.toolCallId,
     agentName: request.agentName,
     conversationId: request.conversationId,
+    ...failureLogFields(error)
+  };
+}
+
+/** What a log may keep of any thrown error, by the rule above. */
+export function failureLogFields(
+  error: unknown
+): Pick<ToolFailureLogRecord, "errorName" | "stack" | "database"> {
+  const stack = error instanceof Error ? stackFrames(error.stack) : undefined;
+  const database = findDatabaseError(error);
+  return {
     errorName: error instanceof Error ? error.name : typeof error,
     ...(stack ? { stack } : {}),
     ...(database ? { database } : {})
