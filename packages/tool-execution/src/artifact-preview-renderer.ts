@@ -137,7 +137,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
         const rasterInput = { input, outputDirectory, pageNumber, pdfPath };
         const bytes = await this.rasterizePdfPage(rasterInput);
         const modelImage = await this.rasterizeModelImage(rasterInput);
-        outputBytes += bytes.byteLength + modelImage.bytes.byteLength;
+        outputBytes += bytes.byteLength + (modelImage?.bytes.byteLength ?? 0);
         if (outputBytes > input.maxOutputBytes) {
           throw previewFailure("output_too_large", false);
         }
@@ -191,7 +191,7 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       const rasterInput = { input, outputDirectory, pageNumber: 1, pdfPath };
       const bytes = await this.rasterizePdfPage(rasterInput);
       const modelImage = await this.rasterizeModelImage(rasterInput);
-      outputBytes += bytes.byteLength + modelImage.bytes.byteLength;
+      outputBytes += bytes.byteLength + (modelImage?.bytes.byteLength ?? 0);
       if (outputBytes > input.maxOutputBytes) {
         throw previewFailure("output_too_large", false);
       }
@@ -236,13 +236,17 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
     }
   }
 
-  /** A second, smaller rendering of the page for the model; the page image is left as it is. */
+  /**
+   * A second, smaller rendering of the page for the model; the page image is left as it is.
+   * A failure here leaves the page without one, and the model then reads the page image, as it
+   * does for a preview made before this rendition existed. Only an abort ends the preview.
+   */
   private async rasterizeModelImage(input: {
     input: ArtifactPreviewRenderInput;
     outputDirectory: string;
     pageNumber: number;
     pdfPath: string;
-  }): Promise<ArtifactPreviewRenderedModelImage> {
+  }): Promise<ArtifactPreviewRenderedModelImage | undefined> {
     try {
       const { pageSize } = await inspectPdf({
         command: this.pdfInfoCommand,
@@ -269,7 +273,13 @@ export class LibreOfficeArtifactPreviewRenderer implements ArtifactPreviewRender
       });
       return { bytes, mimeType: MODEL_PAGE_IMAGE_MIME_TYPE, ...readJpegDimensions(bytes) };
     } catch (error) {
-      throw mapNativePreviewFailure(error, "rasterization_failed", "rasterization_failed");
+      if (
+        input.input.signal?.aborted ||
+        (error instanceof NativeProcessError && error.reason === "aborted")
+      ) {
+        throw mapNativePreviewFailure(error, "rasterization_failed", "rasterization_failed");
+      }
+      return undefined;
     }
   }
 

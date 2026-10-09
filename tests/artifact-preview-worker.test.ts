@@ -644,6 +644,59 @@ describe("ArtifactPreviewWorker", () => {
     }
   });
 
+  it("keeps the preview when the rendition for the model fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "artifact-preview-renderer-model-failure-"));
+    try {
+      const pdfInfo = join(root, "fake-pdfinfo");
+      const pdfToPpm = join(root, "fake-pdftoppm");
+      await writeExecutable(
+        pdfInfo,
+        `#!/usr/bin/env node\nconsole.log("Pages: 1\\nPage    1 size: 595 x 842 pts (A4)");\n`
+      );
+      await writeExecutable(
+        pdfToPpm,
+        [
+          "#!/usr/bin/env node",
+          'const fs = require("node:fs");',
+          "const args = process.argv.slice(2);",
+          'if (args.includes("-jpeg")) {',
+          "  process.exit(1);",
+          "}",
+          `fs.writeFileSync(args.at(-1) + ".png", Buffer.from("${onePixelPngHex()}", "hex"));`,
+          ""
+        ].join("\n")
+      );
+
+      const result = await new LibreOfficeArtifactPreviewRenderer({
+        pdfInfoCommand: pdfInfo,
+        pdfToPpmCommand: pdfToPpm
+      }).render({
+        sourceKind: "pdf",
+        filename: "source.pdf",
+        mimeType: "application/pdf",
+        bytes: bytes("%PDF fake"),
+        maxPages: 1,
+        maxConvertedPdfBytes: 1024 * 1024,
+        maxOutputBytes: 1024 * 1024,
+        maxRasterDimension: 4096,
+        previewDpi: 144,
+        outputFormat: "png",
+        conversionTimeoutMs: 1000,
+        rasterizationTimeoutMs: 1000
+      });
+
+      const [page] = result.pages;
+      if (!page || result.pages.length !== 1) {
+        throw new Error("Expected one rendered page");
+      }
+      expect(Buffer.from(page.bytes).toString("hex")).toBe(onePixelPngHex());
+      expect(page).toMatchObject({ mimeType: "image/png", pageNumber: 1, width: 1, height: 1 });
+      expect(page.modelImage).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("renders each page a second time for the model and leaves the page image as it was", async () => {
     const root = await mkdtemp(join(tmpdir(), "artifact-preview-renderer-model-image-"));
     try {
