@@ -22,11 +22,26 @@ Caddy is the default reverse proxy/TLS choice for the first VPS or VM deployment
 The API limits how often one caller may call an operation, and counts a caller who is not
 signed in by client address. It reads that address from `X-Forwarded-For` only when the request
 comes from a loopback or private address, which is the reverse proxy on the Compose network.
-Caddy as the outermost proxy passes the real client address without configuration. Where
-another proxy or load balancer stands in front of Caddy, name it under `trusted_proxies` in
-the Caddyfile's `servers` options; without that Caddy reports the outer proxy as the client and
-all callers share one count. The counters live in the API process, so an instance runs exactly
-one API process.
+Caddy as the outermost proxy passes the real client address without configuration.
+
+Where another proxy or load balancer stands in front of Caddy (Traefik, a cloud load
+balancer), Caddy must be told to trust it. Without this Caddy reports the outer proxy as the
+client, and everyone who signs in shares one count:
+
+```caddyfile
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+```
+
+Name the outer proxy's addresses instead of `private_ranges` where they are known. After the
+change, sign in from two networks and check that the API's request log shows two different
+`remoteAddress` values.
+
+The counters live in the API process, so an instance runs exactly one API process. The numbers
+are set in the release config, see [Rate limits](/configure/release-config/#rate-limits).
 
 ## Deployment Flow
 

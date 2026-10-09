@@ -19,6 +19,9 @@ const fixtureOperation = (method: "GET" | "POST", path: string) => ({
   buildPath: (input?: BuildApiPathOptions) => buildApiPath(path, input)
 });
 
+/** A path under the sign-in library's mount that the library does not serve. */
+export const inventedAuthPath = (name: string | number): string => `/api/auth/invented-${name}`;
+
 /** Operations a test registers through the route helper to exercise the helper itself. */
 const testIdentityOperation = {
   summary: "Report the authenticated caller",
@@ -62,6 +65,17 @@ export const routeTestOperations = {
     auth: "public",
     effect: "reading",
     response: testResult
+  }),
+  /** Takes a key from a caller it does not know, as the API key exchange does. */
+  testKey: defineOperation({
+    ...testOperation,
+    id: "testKey",
+    method: "POST",
+    path: "/test/key",
+    auth: "public",
+    effect: "changing",
+    response: testResult,
+    rateClass: "auth"
   }),
   testServerCredential: defineOperation({
     ...testOperation,

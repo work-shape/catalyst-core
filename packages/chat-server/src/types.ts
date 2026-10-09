@@ -90,6 +90,7 @@ export interface ChatServerOptions {
   standaloneAuth?: Pick<
     StandaloneAuthRuntime,
     | "handleRequest"
+    | "routeKind"
     | "baseUrl"
     | "setPassword"
     | "setOrCreatePasswordSignIn"

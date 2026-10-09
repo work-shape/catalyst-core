@@ -378,8 +378,39 @@ mail:
 Reset links are valid for 60 minutes and invitation links for 7 days. A link stops working once
 it is used, once a newer link is issued, or once the password changes another way. A reset
 request therefore also replaces a pending invitation link for the same user. Reset
-requests always get the same answer, whether or not an account exists, and are limited to three
-per address per hour.
+requests always get the same answer, whether or not an account exists. At most three reset
+mails an hour go to one mailbox, and at most 200 an hour are sent for requests from one client
+address.
+
+## Rate limits
+
+The API limits how often one caller may call one operation. The limits are there to stop
+spamming and password guessing; the defaults are far above anything a person or a host
+backend does in ordinary use. An instance without the section gets the defaults.
+
+```yaml
+rateLimits:
+  enabled: true
+  readPerMinute: 6000
+  writePerMinute: 1200
+  signInPerAccountPerMinute: 10
+  signInPerAddressPerMinute: 300
+```
+
+- `enabled`: `false` turns every limit on API calls off.
+- `readPerMinute`: calls to one reading operation, per signed-in person or service. A host
+  backend's session-token calls are counted in this class, under its server credential.
+- `writePerMinute`: calls to one changing operation, per signed-in person or service.
+- `signInPerAccountPerMinute`: sign-in, password reset and password change tries on one account
+  from one client address.
+- `signInPerAddressPerMinute`: the same tries from one client address, whatever the account.
+  Size it for the largest office that reaches the instance through one address.
+
+There are no settings per operation. A refused API key or server credential is counted per
+client address at 60 a minute, which is not a setting. A caller over a limit receives 429 with
+the code `RATE_LIMITED`, the seconds to wait in `details.retryAfterSeconds` and in the
+`Retry-After` header. Behind a second proxy the client address needs
+[`trusted_proxies`](/operate/deployment/).
 
 ## Config Is Not A Secret Store
 

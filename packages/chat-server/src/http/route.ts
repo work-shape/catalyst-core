@@ -2,7 +2,6 @@ import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
 import {
   operationPathParamNames,
-  rateLimitedDetailsSchema,
   type Operation,
   type OperationPathParamName
 } from "@vivd-catalyst/api-contract";
@@ -11,6 +10,7 @@ import {
   AppError,
   authContextFromUser,
   createPlatformId,
+  isAppError,
   isAuthenticatedServicePrincipal,
   legacyPermissionFor,
   normalizeAuthenticatedUser,
@@ -25,7 +25,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ResolvedChatServerOptions } from "../types";
-import { countOperationCall, type RateLimitedCaller } from "./rate-limit";
+import { accountTried, requireWithinLimit } from "./rate-limit";
 
 type RouteServerOptions = Pick<
   ResolvedChatServerOptions,
@@ -137,21 +137,26 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       handler: async (request, reply) => {
         const correlationId = createCorrelationId(request);
         void reply.header("x-correlation-id", correlationId);
-        // A call without a principal is counted by its address before anything else runs, a
-        // call with one by that principal as soon as it is known. A refused credential is not
-        // counted: the credentials these operations accept are too long to guess.
-        if (operation.auth === "public" || operation.auth === "serverCredential") {
-          await limitRate(options, operation, { address: request.ip }, reply);
+        // A public call is counted by its address before anything else runs, a call with a
+        // principal by that principal as soon as it is known.
+        if (operation.auth === "public") {
+          await requireWithinLimit(options, operation, { address: request.ip }, reply);
         }
-        const caller = await authenticate(options, operation, request, correlationId);
+        const caller = await authenticate(options, operation, request, reply, correlationId);
         if (caller.identity) {
-          await limitRate(options, operation, { identity: caller.identity }, reply);
+          await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
         }
         if (caller.identity && operation.scope) {
           requireAuthScope(caller.identity, operation.scope);
         }
         const query = parseInput(operation.query, request.query, "Request query is invalid");
         const body = parseInput(operation.body, request.body ?? {}, "Request body is invalid");
+        const takesCredential = operation.auth === "public" && operation.rateClass === "auth";
+        const account = takesCredential ? accountTried(body) : undefined;
+        if (account !== undefined) {
+          // The tight limit: tries on one account from one address.
+          await requireWithinLimit(options, operation, { address: request.ip, account }, reply);
+        }
         if (caller.identity) {
           for (const action of operation.requires ?? []) {
             // AP-1 replaces this line with `access.require(action)`.
@@ -163,15 +168,18 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           operation.response.kind === "page"
             ? storePage(query, operation.response.order, pageScope(operation.id, params, query))
             : undefined;
-        const result = await handler({
-          ...caller,
-          params,
-          paging,
-          query,
-          body,
-          request,
-          reply
-        });
+        const result = await runHandler();
+        async function runHandler(): Promise<unknown> {
+          try {
+            return await handler({ ...caller, params, paging, query, body, request, reply });
+          } catch (error) {
+            if (takesCredential && isAppError(error) && error.code === "UNAUTHENTICATED") {
+              // A key or token this operation refused, counted under the address that sent it.
+              await requireWithinLimit(options, operation, { refusedAddress: request.ip }, reply);
+            }
+            throw error;
+          }
+        }
         if (operation.response.kind === "page") {
           const resultPage = paginate(
             z.array(z.unknown()).parse(result),
@@ -197,6 +205,7 @@ async function authenticate(
   options: RouteServerOptions,
   operation: Operation,
   request: FastifyRequest,
+  reply: FastifyReply,
   correlationId: string
 ): Promise<Pick<AssembledCall, "user" | "identity" | "context">> {
   const context: RequestContext = { clientInstanceId: options.clientInstanceId, correlationId };
@@ -204,7 +213,14 @@ async function authenticate(
     case "public":
       return { context };
     case "serverCredential":
-      requireServerCredential(options, request);
+      // Every user of an embedding host arrives through the host's one backend, so its calls
+      // are counted under the credential, not the address. A refused credential is counted
+      // under the address that sent it, on a counter the accepted one never touches.
+      if (!acceptsServerCredential(options, request)) {
+        await requireWithinLimit(options, operation, { refusedAddress: request.ip }, reply);
+        throw new AppError("FORBIDDEN", "Invalid server credential");
+      }
+      await requireWithinLimit(options, operation, { serverCredential: true }, reply);
       return { context };
     case "principal": {
       const authenticated = await authenticateIdentity(options, request, correlationId);
@@ -227,23 +243,6 @@ async function authenticate(
         context: { ...context, user, ...authContextFromUser(user) }
       };
     }
-  }
-}
-
-async function limitRate(
-  options: RouteServerOptions,
-  operation: Operation,
-  caller: RateLimitedCaller,
-  reply: FastifyReply
-): Promise<void> {
-  const retryAfterSeconds = await countOperationCall(options.rateLimiter, operation, caller);
-  if (retryAfterSeconds !== undefined) {
-    void reply.header("retry-after", retryAfterSeconds);
-    throw new AppError(
-      "RATE_LIMITED",
-      "Too many requests. Try again later.",
-      rateLimitedDetailsSchema.parse({ retryAfterSeconds })
-    );
   }
 }
 
@@ -284,17 +283,14 @@ async function authenticateIdentity(
 }
 
 /** The instance's one server credential is the one that issues session tokens. */
-function requireServerCredential(options: RouteServerOptions, request: FastifyRequest): void {
+function acceptsServerCredential(options: RouteServerOptions, request: FastifyRequest): boolean {
   if (!options.sessionToken) {
     throw new AppError("NOT_FOUND", "Session token issuing is not configured");
   }
   const credential = request.headers["x-server-credential"];
-  if (
-    typeof credential !== "string" ||
-    !safeEqual(credential, options.sessionToken.serverCredential)
-  ) {
-    throw new AppError("FORBIDDEN", "Invalid server credential");
-  }
+  return (
+    typeof credential === "string" && safeEqual(credential, options.sessionToken.serverCredential)
+  );
 }
 
 function safeEqual(left: string, right: string): boolean {

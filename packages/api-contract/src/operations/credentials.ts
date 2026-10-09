@@ -17,7 +17,8 @@ export const credentialOperations = {
     body: issueSessionTokenRequestSchema,
     response: json(issueSessionTokenResponseSchema),
     errors: ["NOT_FOUND"],
-    rateClass: "auth"
+    // Counted per server credential: a host backend issues tokens for all of its users.
+    rateClass: "read"
   }),
   "access_tokens.exchange": defineOperation({
     id: "access_tokens.exchange",

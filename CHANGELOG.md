@@ -74,29 +74,37 @@ contain breaking changes; a patch version does not.
   takes the operations alone: title and version are those of the release. An operation that
   answers a file states its content type (`blob("text/html")`), and an operation of a
   signed-in caller may state `scope: null` when it asks for no scope.
-- **API (operator-relevant):** every operation is rate limited. A call is counted per
-  operation and per caller: the signed-in person or service where the operation authenticates
-  one, the client address where it does not. Reading operations allow 600 calls a minute,
-  changing operations 120 a minute, credential operations (password change, password reset
-  and setup, API-key exchange, session-token issuing) 20 in five minutes. A caller over the
+- **API (operator-relevant):** every operation is rate limited, against spamming and guessing
+  only. A call is counted per operation and per caller: the signed-in person or service where
+  the operation authenticates one, the client address where it does not. The defaults are 6000
+  calls a minute to a reading operation and 1200 a minute to a changing one. A host backend's
+  session-token calls are counted under its server credential, 6000 a minute. A caller over a
   limit receives 429 with the code `RATE_LIMITED`, `details.retryAfterSeconds` and a
-  `Retry-After` header. The counters live in the API process: they start empty after a restart,
+  `Retry-After` header; the chat interface waits that long and sends an upload again. The new
+  release config section `rateLimits` sets `enabled`, `readPerMinute`, `writePerMinute`,
+  `signInPerAccountPerMinute` and `signInPerAddressPerMinute`; an instance without the section
+  gets the defaults. The counters live in the API process: they start empty after a restart,
   and an instance must run one API process. The client address is taken from
   `X-Forwarded-For` only when the direct peer is a loopback or private address, so the reverse
-  proxy in front of the API has to pass the real client address on; a proxy that sits behind
-  another proxy must be told to trust it, or every caller is counted as one address.
-- **Sign-in (operator-relevant):** the sign-in routes under `/api/auth/*` are rate limited on
-  every instance whose `clientInstance.environment` is not `development`: three calls in ten
-  seconds per client address to sign in, a hundred in ten seconds to any other of these
-  routes. Until now this limit depended on `NODE_ENV=production`, which the reference Compose
-  files do not set, so it was off. The address is the one the API established for the
-  request; a caller cannot choose it with a header.
+  proxy in front of the API has to pass the real client address on. Where Caddy sits behind
+  another proxy, its Caddyfile needs `servers { trusted_proxies static private_ranges }`, or
+  every caller is counted as one address.
+- **Sign-in (operator-relevant):** sign-in and password reset are limited to
+  10 tries a minute on one account from one client address, and 300 a minute from one address
+  whatever the account, so an office behind one address is not locked out by one person. A
+  refused API key or server credential is counted per address, 60 a minute, on a counter the
+  accepted credential never touches. The sign-in routes under `/api/auth/*` are counted by the
+  API before a password is checked and answer with the same 429 as every operation. Until now
+  their limit depended on `NODE_ENV=production`, which the reference Compose files do not
+  set, so it was off. Reset mails for requests from one client address are capped at 200 an
+  hour, up from 20; the cap of three an hour per mailbox stays.
 - **Server runtime (breaking):** `createChatServer`, `ClientInstanceApp` and the document
   worker expose `{ fetch(request), listen, close }` and no web framework type.
   `ClientInstanceApp.server` and the worker's `server` are gone: call `app.fetch(new
-  Request(url))` where code called `app.server.inject(...)`. `listen` resolves with the base
+Request(url))` where code called `app.server.inject(...)`. `listen` resolves with the base
   URL. `createRoute` and `Route` are no longer exported from `@vivd-catalyst/chat-server`.
-  `createStandaloneAuthRuntime` requires `rateLimit`.
+  The object `createStandaloneAuthRuntime` returns has `routeKind(pathname)`, which the server
+  uses to count calls to the sign-in routes.
 - **Platform store (breaking):** Postgres is the only platform store. The `STORE` environment
   variable is no longer read, so `STORE=memory` no longer starts an instance without a
   database; every process needs `DATABASE_URL`. Remove `STORE` from environment files. The

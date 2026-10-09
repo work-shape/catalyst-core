@@ -1,7 +1,7 @@
 import { addTestRoute, createTestInstance } from "./support/test-instance";
 
 import { describe, expect, it, vi } from "vitest";
-import { type ChatServerOptions } from "@vivd-catalyst/chat-server";
+import { createInProcessRateLimiter, type ChatServerOptions } from "@vivd-catalyst/chat-server";
 import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   AppError,
@@ -254,10 +254,10 @@ describe("password setup by email", () => {
         payload: { email }
       });
 
-    // One client exhausts its own allowance through the proxy; another client is unaffected.
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await reset("172.18.0.5", "203.0.113.7", `nobody-${attempt}@example.test`);
-    }
+    // One client exhausts its own allowance of 200 an hour through the proxy; another client
+    // is unaffected.
+    await harness.countResetRequests("203.0.113.7", 199);
+    await reset("172.18.0.5", "203.0.113.7", "nobody@example.test");
     await reset("172.18.0.5", "203.0.113.7", "ada@example.test");
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(harness.transport.list()).toHaveLength(0);
@@ -265,9 +265,8 @@ describe("password setup by email", () => {
     await vi.waitFor(() => expect(harness.transport.list()).toHaveLength(1));
 
     // A public peer cannot escape its allowance by rotating X-Forwarded-For.
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await reset("198.51.100.9", `203.0.113.${100 + attempt}`, `nobody-${attempt}@example.test`);
-    }
+    await harness.countResetRequests("198.51.100.9", 199);
+    await reset("198.51.100.9", "203.0.113.100", "nobody@example.test");
     await reset("198.51.100.9", "203.0.113.200", "ada@example.test");
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(harness.transport.list()).toHaveLength(1);
@@ -467,6 +466,7 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
     async handleRequest() {
       return new Response(null, { status: 404 });
     },
+    routeKind: () => undefined,
     async setPassword(command) {
       passwords.set(command.externalUserId, command.password);
     },
@@ -503,9 +503,11 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
     }
   };
 
+  const rateLimiter = createInProcessRateLimiter();
   const server = await createTestInstance({
     server: {
       config,
+      rateLimiter,
       clientInstanceId,
       authAdapter: {
         credentialMode: "ambient",
@@ -540,6 +542,15 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
     server,
     transport,
     passwords,
+    /** Counts reset requests from an address as the workflow does, without sending them. */
+    async countResetRequests(address: string, count: number) {
+      for (let request = 0; request < count; request += 1) {
+        await rateLimiter.consume(`password-reset-mail|address:${address}`, {
+          limit: 200,
+          windowMs: 60 * 60 * 1000
+        });
+      }
+    },
     requestReset: (email: string) => server.call("password_reset.request", { payload: { email } }),
     listAuditEvents: () => store.audit.listAuditEvents({ clientInstanceId }),
     async addPasswordUser(email: string, displayLabel: string) {

@@ -1,9 +1,4 @@
-import type {
-  OperationEffect,
-  OperationScope,
-  PlatformAction,
-  RateLimitRule
-} from "@vivd-catalyst/core";
+import type { OperationEffect, OperationScope, PlatformAction } from "@vivd-catalyst/core";
 import { listEnvelopeSchema } from "../shared";
 import type { z } from "zod";
 import type { ApiErrorCode } from "../errors";
@@ -20,26 +15,16 @@ export type OperationMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
  */
 export type OperationAuth = "public" | "user" | "principal" | "serverCredential";
 
-/** The limiter bucket an operation counts against. */
-export type OperationRateClass = "read" | "write" | "auth";
-
-const MINUTE_MS = 60 * 1000;
-
 /**
- * How often one caller may call one operation of each class. A call is counted per operation
- * and per caller: the signed-in person or service where the operation authenticates one, the
- * client address where it does not. A caller over the limit receives 429 `RATE_LIMITED` with
- * `details.retryAfterSeconds` and the same number in the `Retry-After` header.
- *
- * Reading is sized for an open interface, which loads its lists in parallel and reconnects to
- * a run's events. Writing is sized for a person sending messages and adding a folder of files.
- * Credential operations are sized for a person or a script, never for a guesser.
+ * The limit an operation's calls are counted against. A call is counted per operation and per
+ * caller: the signed-in person or service where the operation authenticates one, the client
+ * address where it does not. `auth` marks an operation that takes a password, a key or a
+ * token: it is counted per account being tried, with a high cap per address alone. The
+ * numbers are the instance's, set in its release config under `rateLimits`. A caller over a
+ * limit receives 429 `RATE_LIMITED` with `details.retryAfterSeconds` and the same number in
+ * the `Retry-After` header.
  */
-export const OPERATION_RATE_LIMITS = {
-  read: { limit: 600, windowMs: MINUTE_MS },
-  write: { limit: 120, windowMs: MINUTE_MS },
-  auth: { limit: 20, windowMs: 5 * MINUTE_MS }
-} as const satisfies Record<OperationRateClass, RateLimitRule>;
+export type OperationRateClass = "read" | "write" | "auth";
 
 export type OperationResponse =
   | { readonly kind: "json"; readonly schema: z.ZodType }

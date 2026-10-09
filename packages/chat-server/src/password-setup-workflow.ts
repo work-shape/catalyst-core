@@ -12,12 +12,12 @@ export const PASSWORD_RESET_VALID_MINUTES = 60;
 export const PLATFORM_INVITATION_VALID_DAYS = 7;
 
 const HOUR_MS = 60 * 60 * 1000;
-// Caps on the mail this workflow sends, beside the limit every call to the operation is under.
-// A request over a cap is answered like any other, so the answer says nothing about a mailbox.
-const RESET_MAILS_PER_MAILBOX = { limit: 3, windowMs: HOUR_MS };
-// Per client when the reverse proxy forwards the client address (see trustProxy in index.ts);
-// otherwise every request shares the proxy address and this is an instance-wide cap.
-const RESET_MAILS_PER_ADDRESS = { limit: 20, windowMs: HOUR_MS };
+// Protects a mailbox from being flooded with reset mails. Over it no mail is sent; the caller
+// reads the same answer as always, so the answer says nothing about a mailbox.
+const RESET_MAILS_PER_MAILBOX_PER_HOUR = 3;
+// Protects the mail sender from one address requesting resets for many mailboxes, and is sized
+// for an office behind one address. Over it no mail is sent, and the answer stays the same.
+const RESET_MAILS_PER_ADDRESS_PER_HOUR = 200;
 
 interface RequestPasswordResetCommand {
   email: string;
@@ -61,13 +61,17 @@ export class PasswordSetupWorkflow {
     const limiter = this.options.rateLimiter;
     const allowed =
       (
-        await limiter.consume(
-          `password-reset-mail|address:${command.remoteAddress}`,
-          RESET_MAILS_PER_ADDRESS
-        )
+        await limiter.consume(`password-reset-mail|address:${command.remoteAddress}`, {
+          limit: RESET_MAILS_PER_ADDRESS_PER_HOUR,
+          windowMs: HOUR_MS
+        })
       ).allowed &&
-      (await limiter.consume(`password-reset-mail|mailbox:${email}`, RESET_MAILS_PER_MAILBOX))
-        .allowed;
+      (
+        await limiter.consume(`password-reset-mail|mailbox:${email}`, {
+          limit: RESET_MAILS_PER_MAILBOX_PER_HOUR,
+          windowMs: HOUR_MS
+        })
+      ).allowed;
     if (allowed) {
       void this.deliverPasswordReset(email, command.locale, context).catch(command.onDeliveryError);
     }

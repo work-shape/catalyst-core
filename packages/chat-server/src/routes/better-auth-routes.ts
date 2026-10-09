@@ -3,11 +3,16 @@ import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { hasExplicitCredentials, STANDALONE_AUTH_CLIENT_ADDRESS_HEADER } from "@vivd-catalyst/auth";
 import { AppError } from "@vivd-catalyst/core";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { ChatServerOptions } from "../types";
+import { accountTried, requireWithinLimit } from "../http/rate-limit";
+import type { ResolvedChatServerOptions } from "../types";
+
+// The library's routes are counted in two groups, not one counter for every route.
+const SIGN_IN_ROUTES = { id: "auth.sign-in", rateClass: "auth" } as const;
+const SESSION_ROUTES = { id: "auth.session", rateClass: "read" } as const;
 
 export function registerBetterAuthRoutes(
   app: FastifyInstance,
-  options: Pick<ChatServerOptions, "standaloneAuth">
+  options: Pick<ResolvedChatServerOptions, "standaloneAuth" | "rateLimiter" | "config">
 ): void {
   const standaloneAuth = options.standaloneAuth;
   if (!standaloneAuth) {
@@ -18,6 +23,24 @@ export function registerBetterAuthRoutes(
     method: ["GET", "POST"],
     url: "/api/auth/*",
     handler: async (request, reply) => {
+      // Counted here, before the library sees the call, so that attempts sent side by side
+      // are refused before any of them has a password checked. A path the library does not
+      // serve is not counted at all.
+      const kind = standaloneAuth.routeKind(request.url.split("?", 1)[0] ?? request.url);
+      if (kind === "credential") {
+        await requireWithinLimit(options, SIGN_IN_ROUTES, { address: request.ip }, reply);
+        const account = accountTried(request.body);
+        if (account !== undefined) {
+          await requireWithinLimit(
+            options,
+            SIGN_IN_ROUTES,
+            { address: request.ip, account },
+            reply
+          );
+        }
+      } else if (kind === "other") {
+        await requireWithinLimit(options, SESSION_ROUTES, { address: request.ip }, reply);
+      }
       if (hasExplicitCredentials(request.headers)) {
         throw new AppError(
           "UNAUTHENTICATED",
@@ -62,8 +85,8 @@ function toAuthRequestUrl(requestUrl: string, baseUrl: string): string {
 }
 
 /**
- * The sign-in library limits its own routes per client address. It reads that address from
- * the one header set here, so a caller cannot choose the address it is counted under.
+ * The sign-in library reads the client address from the one header set here, so a caller
+ * cannot choose the address a session is recorded under.
  */
 function toRequestHeaders(
   headers: Record<string, string | string[] | undefined>,

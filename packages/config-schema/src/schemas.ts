@@ -879,6 +879,29 @@ export const mailConfigSchema = z
     }
   });
 
+const perMinuteSchema = z.number().int().positive();
+/**
+ * How often one caller may call one operation, per minute. The defaults stop spamming and
+ * guessing only: nothing a person or a host backend does in ordinary use comes near them. A
+ * caller over a limit reads 429 `RATE_LIMITED` with the seconds to wait. The defaults here are
+ * the only copy.
+ */
+export const rateLimitsConfigSchema = z
+  .object({
+    /** False turns every limit on API calls off. */
+    enabled: z.boolean().default(true),
+    /** Calls to one reading operation, per signed-in person or service. */
+    readPerMinute: perMinuteSchema.default(6000),
+    /** Calls to one changing operation, per signed-in person or service. */
+    writePerMinute: perMinuteSchema.default(1200),
+    /** Sign-in and password tries on one account from one client address. */
+    signInPerAccountPerMinute: perMinuteSchema.default(10),
+    /** Sign-in and password tries from one client address, whatever the account. */
+    signInPerAddressPerMinute: perMinuteSchema.default(300)
+  })
+  .strict()
+  .prefault({});
+
 export const clientInstanceConfigSchema = z.object({
   version: z.literal(1).default(1),
   clientInstance: z.object({
@@ -938,6 +961,7 @@ export const clientInstanceConfigSchema = z.object({
   executionWorkspaces: executionWorkspacesConfigSchema,
   administration: administrationConfigSchema,
   mail: mailConfigSchema,
+  rateLimits: rateLimitsConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z
     .object({
@@ -1013,4 +1037,5 @@ export type {
   WebAccessConfig
 };
 export type MailConfig = z.infer<typeof mailConfigSchema>;
+export type RateLimitsConfig = z.infer<typeof rateLimitsConfigSchema>;
 export type ClientInstanceConfig = z.infer<typeof clientInstanceConfigSchema>;

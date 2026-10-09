@@ -38,12 +38,13 @@ export interface StandaloneAuthOptions {
   baseUrl: string;
   trustedOrigins?: string[];
   seedUsers?: StandaloneAuthSeedUser[];
-  /**
-   * Whether the sign-in library limits calls to its own routes per client address. The library
-   * decides this from `NODE_ENV` on its own, which an operated instance does not set.
-   */
-  rateLimit: boolean;
 }
+
+/**
+ * What a call to one of the sign-in library's routes is counted as: one that takes a
+ * password, or any other.
+ */
+export type StandaloneAuthRouteKind = "credential" | "other";
 
 export const STANDALONE_AUTH_SOURCE = "better-auth";
 
@@ -104,6 +105,13 @@ export interface CompletedStandalonePasswordSetup {
 
 export interface StandaloneAuthRuntime {
   handleRequest(request: Request): Promise<Response>;
+  /**
+   * How the server that mounts the routes counts a call before it hands it to
+   * `handleRequest`. Nothing for a path the library does not serve. The library's own limiter
+   * stays off: it counts after it has answered, and keeps a counter for every path a caller
+   * invents.
+   */
+  routeKind(pathname: string): StandaloneAuthRouteKind | undefined;
   authAdapter: AuthAdapter;
   baseUrl: string;
   seedUsers(): Promise<void>;
@@ -156,9 +164,7 @@ export async function createStandaloneAuthRuntime(
     secret: options.secret,
     baseURL: options.baseUrl,
     trustedOrigins: options.trustedOrigins ?? [],
-    // The library's own limits: three calls in ten seconds to sign in or change a password,
-    // a hundred in ten seconds to any other of its routes, per client address and path.
-    rateLimit: { enabled: options.rateLimit },
+    rateLimit: { enabled: false },
     advanced: { ipAddress: { ipAddressHeaders: [STANDALONE_AUTH_CLIENT_ADDRESS_HEADER] } },
     emailAndPassword: {
       enabled: true,
@@ -175,8 +181,13 @@ export async function createStandaloneAuthRuntime(
 
   await seedUsers();
 
+  const routePatterns = Object.values(auth.api).flatMap((endpoint) =>
+    typeof endpoint.path === "string" ? [endpoint.path] : []
+  );
+
   return {
     handleRequest: (request) => auth.handler(request),
+    routeKind: (pathname) => standaloneAuthRouteKind(routePatterns, pathname),
     authAdapter: new BetterAuthAdapter(auth, profileStore),
     baseUrl: options.baseUrl,
     seedUsers,
@@ -191,6 +202,39 @@ export async function createStandaloneAuthRuntime(
       await sql.end();
     }
   };
+}
+
+const AUTH_BASE_PATH = "/api/auth";
+const CREDENTIAL_ROUTES = [
+  "/sign-in",
+  "/sign-up",
+  "/change-password",
+  "/change-email",
+  "/verify-password",
+  "/reset-password",
+  "/request-password-reset",
+  "/send-verification-email"
+];
+
+function standaloneAuthRouteKind(
+  patterns: string[],
+  pathname: string
+): StandaloneAuthRouteKind | undefined {
+  if (!pathname.startsWith(`${AUTH_BASE_PATH}/`)) {
+    return undefined;
+  }
+  const segments = pathname.slice(AUTH_BASE_PATH.length).replace(/\/+$/u, "").split("/");
+  const route = patterns.find((pattern) => {
+    const expected = pattern.split("/");
+    return (
+      expected.length === segments.length &&
+      expected.every((segment, index) => segment.startsWith(":") || segment === segments[index])
+    );
+  });
+  if (route === undefined) {
+    return undefined;
+  }
+  return CREDENTIAL_ROUTES.some((prefix) => route.startsWith(prefix)) ? "credential" : "other";
 }
 
 class BetterAuthAdapter implements AuthAdapter {

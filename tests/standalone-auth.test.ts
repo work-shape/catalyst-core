@@ -10,7 +10,9 @@ import { testOperations } from "./support/operations";
 
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { API_VERSION_PREFIX, issueSessionTokenResponseSchema } from "@vivd-catalyst/api-contract";
+import { createInProcessRateLimiter } from "@vivd-catalyst/chat-server";
 import { asClientInstanceId } from "@vivd-catalyst/core";
+import { createTestConfig } from "./support/fixtures";
 
 import {
   CompositeAuthAdapter,
@@ -42,8 +44,7 @@ describe("standalone auth email routes", () => {
       clientInstanceId: asClientInstanceId("standalone_auth_test"),
       databaseUrl,
       secret: "test-secret-at-least-32-characters-long",
-      baseUrl,
-      rateLimit: false
+      baseUrl
     });
     const signIn = await auth.setOrCreatePasswordSignIn({
       email,
@@ -283,7 +284,11 @@ describe("standalone auth email routes", () => {
     const httpServer = Fastify();
     const server = await bindTestTransport(httpServer, () => httpServer.close());
     installErrorHandler(httpServer);
-    registerBetterAuthRoutes(httpServer, { standaloneAuth: auth });
+    registerBetterAuthRoutes(httpServer, {
+      standaloneAuth: auth,
+      rateLimiter: createInProcessRateLimiter(),
+      config: createTestConfig()
+    });
     try {
       const sessionBefore = await sql`select * from session order by id`;
       for (const value of [

@@ -491,6 +491,7 @@ describe("client instance app vertical slice", () => {
           async handleRequest() {
             return new Response(null, { status: 404 });
           },
+          routeKind: () => undefined,
           async setOrCreatePasswordSignIn(input) {
             createdPasswordSignIns.push({
               email: input.email,
