@@ -1,5 +1,5 @@
-import { Blocks, MessagesSquare, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
-import type { ReactNode } from "react";
+import { Blocks, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import {
   Avatar,
@@ -12,7 +12,6 @@ import {
   Skeleton,
   useSidebarCollapsed
 } from "@vivd-catalyst/ui";
-import { RAIL_RECENT_LIMIT } from "../api/workspace-queries";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -27,7 +26,7 @@ import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
 export type WorkspaceView = WorkspaceRouteView;
 
-export { RAIL_RECENT_LIMIT, railSections, shownRailSections, type RailSection };
+export { railSections, shownRailSections, type RailSection };
 
 interface WorkspaceRailProps {
   config: SafeConfig;
@@ -35,13 +34,16 @@ interface WorkspaceRailProps {
   collaborationWorkspaceSelector?: ReactNode;
   /** The section rows. */
   sections?: readonly RailSection[];
-  /**
-   * The latest conversations of the workspace, and at most one more than the rail lists: the
-   * one more says that the workspace holds older ones.
-   */
-  conversations: ConversationListItem[];
-  /** The conversation on screen, which may be older than the latest ones. */
+  /** The conversations of the workspace that are loaded, latest activity first. */
+  conversations: readonly ConversationListItem[];
+  /** The conversation on screen, which may be older than the loaded ones. */
   openConversation?: ConversationListItem;
+  /** The workspace holds older conversations than the loaded ones. */
+  hasMoreConversations?: boolean;
+  loadingMoreConversations?: boolean;
+  /** The last request for older conversations failed. The loaded ones stay. */
+  loadMoreConversationsFailed?: boolean;
+  onLoadMoreConversations?: () => void;
   conversationsStatus: "loading" | "failed" | "ready";
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
@@ -61,8 +63,6 @@ interface WorkspaceRailProps {
   onOpenSearch: () => void;
   onViewChange: (view: WorkspaceView) => void;
   onCreateConversation: () => void;
-  /** Opens the list of every conversation of the workspace. */
-  onShowAllConversations: () => void;
   onSelectConversation: (conversationId: string) => void;
   onReloadConversations: () => void;
   onRenameConversation: (conversationId: string, title: string) => Promise<void>;
@@ -72,8 +72,8 @@ interface WorkspaceRailProps {
 
 /**
  * The frame's navigation: the workspace selector with search and collapse, New chat, the
- * section rows, the latest conversations under "Recent" with the way to all of them, and a
- * footer with the account menu and the settings. Collapsed it is a strip of icons; under
+ * section rows, the workspace's conversations under "Recent", which load page by page as a
+ * person scrolls, and a footer with the account menu and the settings. Collapsed it is a strip of icons; under
  * 768 px it is a drawer.
  */
 export function WorkspaceRail(props: WorkspaceRailProps) {
@@ -104,8 +104,7 @@ function RailHeader({
   onToggleCollapsed,
   onOpenSearch,
   onViewChange,
-  onCreateConversation,
-  onShowAllConversations
+  onCreateConversation
 }: WorkspaceRailProps & { sections: readonly RailSection[] }) {
   const { t } = useTranslation();
   // A drawer is never collapsed, so the sidebar says what it shows.
@@ -139,16 +138,6 @@ function RailHeader({
       {t("nav.newChat")}
     </NavItem>
   );
-  // The strip hides the list under "Recent", so it carries the way to the conversations itself.
-  const allConversations = (
-    <NavItem
-      icon={<MessagesSquare aria-hidden="true" />}
-      selected={view === "conversations"}
-      onClick={onShowAllConversations}
-    >
-      {t("nav.conversations")}
-    </NavItem>
-  );
   const sectionRows = sections.map((section) => {
     const count = section.count?.({ inbox }) ?? 0;
     return (
@@ -173,7 +162,6 @@ function RailHeader({
         <div className="grid h-(--layout-header) place-items-center">{collapse}</div>
         {search}
         {newChat}
-        {allConversations}
         {sectionRows}
       </NavGroup>
     );
@@ -219,12 +207,14 @@ function RecentConversations({
   config,
   conversations,
   openConversation,
+  hasMoreConversations = false,
+  loadingMoreConversations = false,
+  loadMoreConversationsFailed = false,
   conversationsStatus,
   selectedConversationId,
-  view,
   deletingConversation,
   canMoveConversation,
-  onShowAllConversations,
+  onLoadMoreConversations,
   onSelectConversation,
   onReloadConversations,
   onRenameConversation,
@@ -279,31 +269,87 @@ function RecentConversations({
           {t("noConversations")}
         </EmptyState>
       )}
-      {conversations.length > RAIL_RECENT_LIMIT ? (
-        <NavItem
-          className={view === "conversations" ? undefined : "text-muted-foreground"}
-          selected={view === "conversations"}
-          onClick={onShowAllConversations}
-        >
-          {t("nav.showAll")}
-        </NavItem>
+      {hasMoreConversations && onLoadMoreConversations ? (
+        <OlderConversations
+          loading={loadingMoreConversations}
+          failed={loadMoreConversationsFailed}
+          onLoad={onLoadMoreConversations}
+        />
       ) : null}
     </NavGroup>
   );
 }
 
 /**
- * The conversations the rail lists: the latest ones, and after them the open conversation when
- * it is an older one, so the row a person is in is always there to be the current one.
+ * The conversations the rail lists: the loaded ones, and before them the open conversation
+ * when it is older than those, so the row a person is in is always there to be the current one.
  */
 export function recentConversations(
   conversations: readonly ConversationListItem[],
   openConversation: ConversationListItem | undefined
 ): readonly ConversationListItem[] {
-  const latest = conversations.slice(0, RAIL_RECENT_LIMIT);
-  return openConversation && !latest.some(({ id }) => id === openConversation.id)
-    ? [...latest, openConversation]
-    : latest;
+  return openConversation && !conversations.some(({ id }) => id === openConversation.id)
+    ? [openConversation, ...conversations]
+    : conversations;
+}
+
+/**
+ * The end of the loaded conversations while the workspace holds older ones. The row loads the
+ * next page when it scrolls into view, and on a click or a key for a person who does not
+ * scroll. A failed load stays in view and is tried again only on request.
+ */
+function OlderConversations({
+  loading,
+  failed,
+  onLoad
+}: {
+  loading: boolean;
+  failed: boolean;
+  onLoad: () => void;
+}) {
+  const { t } = useTranslation();
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row || loading || failed) {
+      return undefined;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        onLoad();
+      }
+    });
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [failed, loading, onLoad]);
+
+  return (
+    <div ref={rowRef} data-testid="conversations-older">
+      {failed ? (
+        <EmptyState
+          layout="inline"
+          className="px-2 py-1.5"
+          role="alert"
+          action={
+            <Button variant="link" size="sm" className="px-0" onClick={onLoad}>
+              {t("tryAgain")}
+            </Button>
+          }
+        >
+          {t("nav.loadMoreFailed")}
+        </EmptyState>
+      ) : (
+        <NavItem
+          className="text-muted-foreground"
+          disabled={loading}
+          aria-busy={loading}
+          onClick={onLoad}
+        >
+          {t(loading ? "nav.loadingMore" : "nav.loadMore")}
+        </NavItem>
+      )}
+    </div>
+  );
 }
 
 const SKELETON_ROW_WIDTHS = ["w-3/4", "w-1/2", "w-2/3"];

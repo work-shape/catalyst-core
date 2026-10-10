@@ -113,8 +113,6 @@ export interface CollaborationWorkspaceModelInput {
     options?: { replace?: true }
   ): void;
   showSettings(group: string, page: string): void;
-  /** Opens the list of every conversation of a workspace. */
-  showConversationList(collaborationWorkspaceId: string, options?: { replace?: true }): void;
 }
 
 export function useCollaborationWorkspaceModel(
@@ -132,8 +130,7 @@ export function useCollaborationWorkspaceModel(
     legacyConversationUnavailable,
     goToCollaborationWorkspace,
     showConversation,
-    showSettings,
-    showConversationList
+    showSettings
   } = input;
   const [dialog, setDialog] = useState<CollaborationWorkspaceDialogState>({ kind: "none" });
   const [settingsCollaborationWorkspaceId, setSettingsCollaborationWorkspaceId] = useState<
@@ -182,14 +179,10 @@ export function useCollaborationWorkspaceModel(
     (collaborationWorkspace) => collaborationWorkspace.id === activeCollaborationWorkspaceId
   );
 
-  // Application root, and the conversation list without a workspace: restore the
-  // browser-local last workspace, validated against the memberships the server
-  // actually returns.
+  // Application root: restore the browser-local last workspace, validated
+  // against the memberships the server actually returns.
   useEffect(() => {
-    if (
-      (route.kind !== "collaboration-workspace-root" && route.kind !== "conversation-list-root") ||
-      !collaborationWorkspacesLoaded
-    ) {
+    if (route.kind !== "collaboration-workspace-root" || !collaborationWorkspacesLoaded) {
       return;
     }
     const storedCollaborationWorkspaceId = userId
@@ -199,12 +192,7 @@ export function useCollaborationWorkspaceModel(
       (collaborationWorkspace) => collaborationWorkspace.id === storedCollaborationWorkspaceId
     );
     const target = restored?.id ?? fallbackCollaborationWorkspaceId;
-    if (!target) {
-      return;
-    }
-    if (route.kind === "conversation-list-root") {
-      showConversationList(target, { replace: true });
-    } else {
+    if (target) {
       goToCollaborationWorkspace(target, { replace: true });
     }
   }, [
@@ -214,7 +202,6 @@ export function useCollaborationWorkspaceModel(
     fallbackCollaborationWorkspaceId,
     goToCollaborationWorkspace,
     route.kind,
-    showConversationList,
     userId
   ]);
 
@@ -286,14 +273,9 @@ export function useCollaborationWorkspaceModel(
       if (collaborationWorkspaceId === routedCollaborationWorkspaceId) {
         return;
       }
-      // The list of every conversation stays open and shows the chosen workspace's.
-      if (route.kind === "conversation-list") {
-        showConversationList(collaborationWorkspaceId);
-        return;
-      }
       goToCollaborationWorkspace(collaborationWorkspaceId);
     },
-    [goToCollaborationWorkspace, route.kind, routedCollaborationWorkspaceId, showConversationList]
+    [goToCollaborationWorkspace, routedCollaborationWorkspaceId]
   );
 
   const openCreateDialog = useCallback(() => setDialog({ kind: "create" }), []);

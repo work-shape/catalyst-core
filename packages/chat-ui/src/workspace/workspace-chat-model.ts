@@ -31,11 +31,11 @@ import {
   useRenameConversationMutation,
   useWorkspaceSignOutMutation
 } from "../api/workspace-mutations";
+import { useRailConversations } from "../api/rail-conversations";
 import {
   useCollaborationWorkspaceAgentsQuery,
   useWorkspaceCacheActions,
   useWorkspaceConfigQuery,
-  useRecentConversationsQuery,
   useWorkspaceMeQuery,
   useWorkspaceModelPreferenceQuery,
   useWorkspaceThreadQuery
@@ -60,7 +60,7 @@ import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
 import { inboxRailEntry } from "../inbox/inbox-model";
-import { conversationListRoute, type WorkspaceRoute } from "./workspace-route";
+import type { WorkspaceRoute } from "./workspace-route";
 import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
 import {
   agentModelSelection,
@@ -241,10 +241,16 @@ export interface WorkspaceChromeModel {
 }
 
 export interface ConversationRailModel {
-  /** The latest conversations of the active workspace, and one more when it holds older ones. */
-  conversations: ConversationListItem[];
+  /** The conversations of the active workspace the rail has loaded, latest activity first. */
+  conversations: readonly ConversationListItem[];
   /** The conversation on screen as a row, once its thread is there. */
   openConversation: ConversationListItem | undefined;
+  /** The workspace holds older conversations than the loaded ones. */
+  hasMoreConversations: boolean;
+  loadingMoreConversations: boolean;
+  /** The last request for older conversations failed. The loaded ones stay. */
+  loadMoreConversationsFailed: boolean;
+  loadMoreConversations(): void;
   /** How the list stands: still on its first load, failed without a list to show, or there. */
   conversationsStatus: "loading" | "failed" | "ready";
   reloadConversations(): void;
@@ -257,8 +263,6 @@ export interface ConversationRailModel {
   deletingConversation: boolean;
   canMoveConversation: boolean;
   startNewConversation(): void;
-  /** Opens the list of every conversation of the active workspace. */
-  showAllConversations(): void;
   selectConversation(conversationId: string): void;
   renameConversation(conversationId: string, title: string): Promise<void>;
   moveConversation(conversationId: string, title: string): void;
@@ -393,12 +397,6 @@ export function useWorkspaceChatModel({
     threadQuery.data?.conversation.id === selectedConversationId && !threadQuery.isFetching
       ? threadQuery.data?.conversation
       : undefined;
-  const { showRoute } = routeState;
-  const showConversationList = useCallback(
-    (collaborationWorkspaceId: string | undefined, options?: { replace?: true }) =>
-      showRoute(conversationListRoute(collaborationWorkspaceId), options),
-    [showRoute]
-  );
   const collaborationWorkspace = useCollaborationWorkspaceModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -412,11 +410,10 @@ export function useWorkspaceChatModel({
       route.kind === "legacy-conversation" && Boolean(threadQuery.error),
     goToCollaborationWorkspace: routeState.goToDefaultChat,
     showConversation: routeState.showConversation,
-    showSettings: routeState.showSettings,
-    showConversationList
+    showSettings: routeState.showSettings
   });
   const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
-  const conversationsQuery = useRecentConversationsQuery({
+  const railConversations = useRailConversations({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
@@ -451,7 +448,8 @@ export function useWorkspaceChatModel({
     onToolCallCompleted: workspaceCache.invalidateConversationResources,
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
   });
-  const serverConversations = conversationsQuery.data ?? [];
+  const conversationsQuery = railConversations.query;
+  const serverConversations = conversationsQuery.data?.conversations ?? NO_CONVERSATIONS;
   const selectedConversationRunning = Boolean(
     controller.activeRun && isLiveRunStatus(controller.activeRun.run.status)
   );
@@ -459,7 +457,7 @@ export function useWorkspaceChatModel({
     enabled: isAuthenticated,
     conversations: serverConversations,
     streamedConversationId: selectedConversationRunning ? selectedConversationId : undefined,
-    refresh: workspaceCache.refreshRecentConversations
+    refresh: workspaceCache.refreshRailConversations
   });
 
   useEffect(() => {
@@ -492,8 +490,8 @@ export function useWorkspaceChatModel({
   }, [conversationActivity.locallyUnreadConversationIds, serverConversations]);
   const messages = selectedConversationId ? controller.messages : [];
   const messagesLoaded = !selectedConversationId || controller.snapshotStatus === "ready";
-  // The rail reads the latest conversations only. The open one may be older than those, and
-  // the thread on screen already holds what its row shows.
+  // The rail holds the pages a person has loaded. The open conversation may be older than
+  // those, and the thread on screen already holds what its row shows.
   const openThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
   const openConversation = useMemo((): ConversationListItem | undefined => {
@@ -947,6 +945,10 @@ export function useWorkspaceChatModel({
     conversationRail: {
       conversations,
       openConversation,
+      hasMoreConversations: railConversations.hasMore,
+      loadingMoreConversations: railConversations.loadingMore,
+      loadMoreConversationsFailed: railConversations.loadMoreFailed,
+      loadMoreConversations: railConversations.loadMore,
       conversationsStatus:
         conversationsQuery.data !== undefined
           ? "ready"
@@ -966,11 +968,6 @@ export function useWorkspaceChatModel({
       deletingConversation: deleteConversationMutation.isPending,
       canMoveConversation: collaborationWorkspace.canMoveConversation,
       startNewConversation,
-      showAllConversations: () => {
-        // The list reports what goes wrong on it, not what went wrong in the conversation left.
-        setNotice(undefined);
-        showConversationList(activeCollaborationWorkspaceId);
-      },
       selectConversation,
       renameConversation: async (conversationId, title) => {
         await renameConversationMutation.mutateAsync({ conversationId, title });
@@ -1083,6 +1080,8 @@ export function useWorkspaceChatModel({
     }
   };
 }
+
+const NO_CONVERSATIONS: readonly ConversationListItem[] = [];
 
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";

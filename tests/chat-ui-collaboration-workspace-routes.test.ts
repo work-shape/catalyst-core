@@ -1,4 +1,9 @@
-import { ApiError, createApiClient, type Conversation } from "@vivd-catalyst/api-client";
+import {
+  ApiError,
+  createApiClient,
+  type Conversation,
+  type ConversationListItem
+} from "@vivd-catalyst/api-client";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import {
   asClientInstanceId,
@@ -8,7 +13,6 @@ import {
 import { describe, expect, it } from "vitest";
 import { workspaceRouteFromPath, workspaceRouteNavigation } from "../packages/chat-ui/src/routes";
 import {
-  conversationListRoute,
   routeCollaborationWorkspaceId,
   workspaceRouteView
 } from "../packages/chat-ui/src/workspace/workspace-route";
@@ -16,17 +20,23 @@ import { canonicalConversationRedirect } from "../packages/chat-ui/src/collabora
 import { collaborationWorkspaceErrorKey } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-errors";
 import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
 import {
-  PERSONAL_DEFAULT_CONVERSATION_LIST,
   conversationListCacheKey,
   listCollaborationWorkspacesWithPersonal,
-  RAIL_RECENT_LIMIT,
-  recentConversationsQueryOptions,
-  refreshRecentConversations,
   cacheStartedRunThread,
   createWorkspaceQueryClient,
   readThreadAgain
 } from "../packages/chat-ui/src/api/workspace-queries";
 import { workspaceQueryKeys } from "../packages/chat-ui/src/api/workspace-query-keys";
+import {
+  RAIL_PAGE_SIZE,
+  loadOlderRailConversations,
+  railConversationsQueryOptions,
+  refreshRailConversations,
+  updateRailConversations,
+  withFirstPage,
+  withOlderPage,
+  type RailConversations
+} from "../packages/chat-ui/src/api/rail-conversations";
 import { createTestFetch, createTestInstance } from "./support/test-instance";
 
 describe("collaboration workspace routes", () => {
@@ -98,29 +108,6 @@ describe("collaboration workspace routes", () => {
     expect(
       routeCollaborationWorkspaceId({ kind: "new-conversation", collaborationWorkspaceId: "cw_1" })
     ).toBe("cw_1");
-  });
-});
-
-// Both fail without the list of every conversation: it had no route and no pages to key.
-describe("conversation list address", () => {
-  it("belongs to its workspace, and waits for one while none is known", () => {
-    const route = conversationListRoute("cw_1");
-
-    expect(route).toEqual({ kind: "conversation-list", collaborationWorkspaceId: "cw_1" });
-    expect(routeCollaborationWorkspaceId(route)).toBe("cw_1");
-    expect(workspaceRouteView(route)).toBe("conversations");
-    expect(conversationListRoute(undefined)).toEqual({ kind: "conversation-list-root" });
-    expect(workspaceRouteView({ kind: "conversation-list-root" })).toBe("conversations");
-  });
-
-  it("keys its pages under the workspace's list, so a change to the list reaches them", () => {
-    const list = workspaceQueryKeys.conversations("http://api", "scope", "cw_1");
-    const pages = workspaceQueryKeys.conversationPages("http://api", "scope", "cw_1", "steuer");
-
-    expect(pages.slice(0, list.length)).toEqual([...list]);
-    expect(pages).not.toEqual(
-      workspaceQueryKeys.conversationPages("http://api", "scope", "cw_1", "")
-    );
   });
 });
 
@@ -231,146 +218,6 @@ describe("conversation list cache targeting", () => {
       conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_b"))
     );
   });
-
-  it("enables the embedded Personal Workspace list and targets its stable cache key", async () => {
-    const listArguments: Array<string | undefined> = [];
-    const options = recentConversationsQueryOptions({
-      apiBaseUrl,
-      authScope,
-      client: {
-        conversations: {
-          list: async (input: { query: { collaborationWorkspaceId?: string } }) => {
-            listArguments.push(input.query.collaborationWorkspaceId);
-            return { items: [] };
-          }
-        }
-      } as never,
-      collaborationWorkspaceId: undefined,
-      collaborationWorkspacesAvailable: false,
-      enabled: true
-    });
-
-    expect(options.enabled).toBe(true);
-    expect(options.queryKey).toEqual(
-      workspaceQueryKeys.conversations(apiBaseUrl, authScope, PERSONAL_DEFAULT_CONVERSATION_LIST)
-    );
-    await options.queryFn();
-    expect(listArguments).toEqual([undefined]);
-    expect(
-      conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_personal"), false)
-    ).toEqual(options.queryKey);
-  });
-});
-
-// Fails without the change: the rail read every page of the list, which is 5 requests at 1,000
-// conversations and 50 at 10,000, and what refreshed it during a run read them all again
-// together with every loaded page of the full list.
-describe("the rail's conversations in a workspace of 1,000", () => {
-  const apiBaseUrl = "https://catalyst.test";
-  const authScope = "standalone";
-  const seeded = 1_000;
-
-  it("costs one list request on load and one per refresh during a run", async () => {
-    const instance = await createTestInstance();
-    const created = await instance.call("conversations.create", {
-      payload: { title: "Conversation 0" }
-    });
-    expect(created.statusCode).toBe(200);
-    const first = created.json<Conversation>();
-    const clientInstanceId = asClientInstanceId(first.clientInstanceId);
-    const collaborationWorkspaceId = asCollaborationWorkspaceId(first.collaborationWorkspaceId);
-    const { conversations } = instance.stores;
-    // A conversation is listed once it holds a message.
-    const seedMessage = (conversationId: string) =>
-      conversations.appendMessage({
-        clientInstanceId,
-        conversationId: asConversationId(conversationId),
-        role: "user",
-        text: "First message"
-      });
-    const seedOne = async (index: number) => {
-      const conversation = await conversations.createConversation({
-        clientInstanceId,
-        collaborationWorkspaceId,
-        createdByUserId: first.createdByUserId,
-        createdByExternalUserId: first.createdByExternalUserId,
-        visibility: "workspace",
-        title: `Conversation ${index}`,
-        retainedUntil: first.retainedUntil
-      });
-      await seedMessage(conversation.id);
-    };
-    const atOnce = 20;
-    await seedMessage(first.id);
-    for (let done = 1; done < seeded; done += atOnce) {
-      await Promise.all(
-        Array.from({ length: Math.min(atOnce, seeded - done) }, (_, index) => seedOne(done + index))
-      );
-    }
-
-    const testFetch = createTestFetch(instance);
-    const listRequests: URLSearchParams[] = [];
-    const client = createApiClient({
-      baseUrl: apiBaseUrl,
-      fetchImpl: async (input, init) => {
-        const request = new Request(input, init);
-        const url = new URL(request.url);
-        if (
-          request.method === apiOperations["conversations.list"].method &&
-          url.pathname === apiOperations["conversations.list"].path
-        ) {
-          listRequests.push(url.searchParams);
-        }
-        return testFetch(request);
-      }
-    });
-    const queryClient = createWorkspaceQueryClient();
-    const rail = recentConversationsQueryOptions({
-      apiBaseUrl,
-      authScope,
-      client,
-      collaborationWorkspaceId,
-      collaborationWorkspacesAvailable: true,
-      enabled: true
-    });
-    // The full list page with pages loaded, under the key that continues the rail's.
-    let fullListReads = 0;
-    await queryClient.fetchQuery({
-      queryKey: workspaceQueryKeys.conversationPages(
-        apiBaseUrl,
-        authScope,
-        collaborationWorkspaceId,
-        ""
-      ),
-      queryFn: async () => {
-        fullListReads += 1;
-        return [];
-      }
-    });
-
-    // Load: one request for the rows the rail shows and the one that says there are more.
-    const loaded = await queryClient.fetchQuery(rail);
-    expect(listRequests).toHaveLength(1);
-    expect(listRequests[0]?.get("limit")).toBe(String(RAIL_RECENT_LIMIT + 1));
-    expect(listRequests[0]?.get("cursor")).toBeNull();
-    expect(loaded).toHaveLength(RAIL_RECENT_LIMIT + 1);
-
-    // During a run: each refresh is one request again, and the full list's pages stay.
-    const refreshes = 3;
-    for (let refresh = 0; refresh < refreshes; refresh += 1) {
-      await refreshRecentConversations(queryClient, rail.queryKey);
-    }
-    expect(listRequests).toHaveLength(1 + refreshes);
-    expect(fullListReads).toBe(1);
-    expect(queryClient.getQueryData(rail.queryKey)).toHaveLength(RAIL_RECENT_LIMIT + 1);
-
-    // Two refreshes at once wait for one answer instead of asking twice.
-    await Promise.all([
-      refreshRecentConversations(queryClient, rail.queryKey),
-      refreshRecentConversations(queryClient, rail.queryKey)
-    ]);
-    expect(listRequests).toHaveLength(2 + refreshes);
-  }, 120_000);
 });
 
 describe("personal workspace on the workspace list", () => {
@@ -519,5 +366,232 @@ describe("the cached thread of a conversation", () => {
         throw refused;
       })
     ).rejects.toBe(refused);
+  });
+});
+
+// Each of these fails without the paged rail: it kept a plain array of one page, so a reading
+// of the first page replaced whatever was loaded, and there was no page after it.
+describe("the rail's loaded conversations", () => {
+  const at = (minute: number) => `2026-08-01T10:${String(minute).padStart(2, "0")}:00.000Z`;
+  const row = (id: string, minute: number): ConversationListItem => ({
+    id,
+    clientInstanceId: "client",
+    collaborationWorkspaceId: "cw_shared",
+    createdByUserId: "user_1",
+    createdByExternalUserId: "external_1",
+    visibility: "workspace",
+    title: `Titel ${id}`,
+    status: "active",
+    createdAt: at(minute),
+    updatedAt: at(minute),
+    retainedUntil: "2027-08-01T10:00:00.000Z"
+  });
+  const ids = (loaded: RailConversations | undefined) => loaded?.conversations.map(({ id }) => id);
+
+  it("takes the first page as it is while nothing older is loaded or the list ends on it", () => {
+    const page = { items: [row("b", 2), row("a", 1)], nextCursor: "after-a" };
+
+    expect(withFirstPage(undefined, page)).toEqual({
+      conversations: page.items,
+      nextCursor: "after-a"
+    });
+    // The whole list fits the page: rows that were loaded and are gone do not stay.
+    const loaded = { conversations: [row("b", 2), row("a", 1), row("z", 0)], nextCursor: "x" };
+    expect(withFirstPage(loaded, { items: [row("b", 2)] })).toEqual({
+      conversations: [row("b", 2)],
+      nextCursor: undefined
+    });
+  });
+
+  it("keeps the older rows a person loaded when the first page is read again", () => {
+    const loaded = {
+      conversations: [row("d", 4), row("c", 3), row("b", 2), row("a", 1)],
+      nextCursor: "after-a"
+    };
+    // "d" was deleted elsewhere, "c" got a message and moved up, "e" is new.
+    const again = withFirstPage(loaded, {
+      items: [row("e", 6), row("c", 5), row("b", 2)],
+      nextCursor: "after-b"
+    });
+
+    // What the first page covers is as the server has it; "a" is older than it and stays.
+    expect(ids(again)).toEqual(["e", "c", "b", "a"]);
+    // The place the next older page starts at is still the one after the loaded rows.
+    expect(again.nextCursor).toBe("after-a");
+  });
+
+  it("keeps a row that a new conversation pushed off the first page", () => {
+    const loaded = { conversations: [row("c", 3), row("b", 2)], nextCursor: "after-b" };
+    const again = withFirstPage(loaded, {
+      items: [row("d", 4), row("c", 3)],
+      nextCursor: "after-c"
+    });
+
+    expect(ids(again)).toEqual(["d", "c", "b"]);
+    expect(again.nextCursor).toBe("after-b");
+  });
+
+  it("adds an older page once, and drops one asked for from a place the list has left", () => {
+    const loaded = { conversations: [row("c", 3), row("b", 2)], nextCursor: "after-b" };
+    // "b" moved between the two requests and is on both pages.
+    const page = { items: [row("b", 2), row("a", 1)] };
+
+    const added = withOlderPage(loaded, "after-b", page);
+    expect(ids(added)).toEqual(["c", "b", "a"]);
+    expect(added?.nextCursor).toBeUndefined();
+    expect(withOlderPage(loaded, "after-c", page)).toBe(loaded);
+    expect(withOlderPage(undefined, "after-b", page)).toBeUndefined();
+  });
+});
+
+// Fails without the change: the rail read every page of the list (200 a page), which is 5
+// requests at 1,000 conversations and 50 at 10,000, and what refreshed it during a run read
+// them all again.
+describe("the rail's requests in a workspace of 1,000 conversations", () => {
+  const apiBaseUrl = "https://catalyst.test";
+  const authScope = "standalone";
+  const seeded = 1_000;
+
+  it("costs one request to load, one per further page and one per refresh during a run", async () => {
+    const instance = await createTestInstance();
+    const created = await instance.call("conversations.create", {
+      payload: { title: "Conversation 0" }
+    });
+    expect(created.statusCode).toBe(200);
+    const first = created.json<ConversationListItem>();
+    const clientInstanceId = asClientInstanceId(first.clientInstanceId);
+    const collaborationWorkspaceId = asCollaborationWorkspaceId(first.collaborationWorkspaceId);
+    const { conversations } = instance.stores;
+    // A conversation is listed once it holds a message.
+    const seedMessage = (conversationId: string) =>
+      conversations.appendMessage({
+        clientInstanceId,
+        conversationId: asConversationId(conversationId),
+        role: "user",
+        text: "First message"
+      });
+    const seedOne = async (index: number) => {
+      const stored = await conversations.createConversation({
+        clientInstanceId,
+        collaborationWorkspaceId,
+        createdByUserId: first.createdByUserId,
+        createdByExternalUserId: first.createdByExternalUserId,
+        visibility: "workspace",
+        title: `Conversation ${index}`,
+        retainedUntil: first.retainedUntil
+      });
+      await seedMessage(stored.id);
+    };
+    const atOnce = 20;
+    await seedMessage(first.id);
+    for (let done = 1; done < seeded; done += atOnce) {
+      await Promise.all(
+        Array.from({ length: Math.min(atOnce, seeded - done) }, (_, index) => seedOne(done + index))
+      );
+    }
+
+    const testFetch = createTestFetch(instance);
+    const listRequests: URLSearchParams[] = [];
+    const client = createApiClient({
+      baseUrl: apiBaseUrl,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        if (
+          request.method === apiOperations["conversations.list"].method &&
+          url.pathname === apiOperations["conversations.list"].path
+        ) {
+          listRequests.push(url.searchParams);
+        }
+        return testFetch(request);
+      }
+    });
+    const source = {
+      apiBaseUrl,
+      authScope,
+      client,
+      collaborationWorkspaceId,
+      collaborationWorkspacesAvailable: true,
+      enabled: true
+    };
+    const rail = railConversationsQueryOptions(source);
+    const queryClient = createWorkspaceQueryClient();
+    const loaded = () => queryClient.getQueryData<RailConversations>(rail.queryKey);
+
+    // Load: one request for one page.
+    await queryClient.fetchQuery(rail);
+    expect(listRequests).toHaveLength(1);
+    expect(listRequests[0]?.get("limit")).toBe(String(RAIL_PAGE_SIZE));
+    expect(listRequests[0]?.get("cursor")).toBeNull();
+    expect(loaded()?.conversations).toHaveLength(RAIL_PAGE_SIZE);
+    expect(loaded()?.nextCursor).toBeDefined();
+
+    // Scrolling: every further page is one request, from where the last one ended.
+    const furtherPages = 3;
+    for (let page = 1; page <= furtherPages; page += 1) {
+      const cursor = loaded()?.nextCursor;
+      await loadOlderRailConversations(queryClient, source);
+      expect(listRequests).toHaveLength(1 + page);
+      expect(listRequests.at(-1)?.get("cursor")).toBe(cursor);
+      expect(listRequests.at(-1)?.get("limit")).toBe(String(RAIL_PAGE_SIZE));
+      expect(loaded()?.conversations).toHaveLength(RAIL_PAGE_SIZE * (page + 1));
+    }
+    const rows = loaded()?.conversations.map(({ id }) => id) ?? [];
+    expect(new Set(rows).size).toBe(rows.length);
+
+    // During a run: a refresh reads the first page alone, and the loaded pages stay.
+    const before = listRequests.length;
+    const refreshes = 3;
+    for (let refresh = 0; refresh < refreshes; refresh += 1) {
+      await refreshRailConversations(queryClient, rail.queryKey);
+    }
+    expect(listRequests).toHaveLength(before + refreshes);
+    for (const request of listRequests.slice(before)) {
+      expect(request.get("cursor")).toBeNull();
+      expect(request.get("limit")).toBe(String(RAIL_PAGE_SIZE));
+    }
+    expect(loaded()?.conversations.map(({ id }) => id)).toEqual(rows);
+
+    // Two refreshes at once wait for one answer instead of asking twice.
+    await Promise.all([
+      refreshRailConversations(queryClient, rail.queryKey),
+      refreshRailConversations(queryClient, rail.queryKey)
+    ]);
+    expect(listRequests).toHaveLength(before + refreshes + 1);
+
+    // A rename, a delete or a new chat changes the loaded rows without a request.
+    updateRailConversations(queryClient, rail.queryKey, (current) => current.slice(1));
+    expect(loaded()?.conversations).toHaveLength(rows.length - 1);
+    expect(loaded()?.nextCursor).toBeDefined();
+    expect(listRequests).toHaveLength(before + refreshes + 1);
+  }, 120_000);
+
+  it("reads the one list of a session without workspaces under its stable cache key", async () => {
+    const listed: unknown[] = [];
+    const options = railConversationsQueryOptions({
+      apiBaseUrl,
+      authScope,
+      client: createApiClient({
+        baseUrl: apiBaseUrl,
+        fetchImpl: async (input, init) => {
+          listed.push(
+            new URL(new Request(input, init).url).searchParams.get("collaborationWorkspaceId")
+          );
+          return Response.json({ items: [] });
+        }
+      }),
+      collaborationWorkspaceId: undefined,
+      collaborationWorkspacesAvailable: false,
+      enabled: true
+    });
+    const queryClient = createWorkspaceQueryClient();
+
+    expect(options.enabled).toBe(true);
+    expect(options.queryKey[3]).toBe("personal-default");
+    await expect(queryClient.fetchQuery(options)).resolves.toEqual({
+      conversations: [],
+      nextCursor: undefined
+    });
+    expect(listed).toEqual([null]);
   });
 });

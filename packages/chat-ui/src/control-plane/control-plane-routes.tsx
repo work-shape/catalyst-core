@@ -6,7 +6,6 @@ import type { ControlPlaneModel } from "./control-plane-model";
 export function ControlPlaneRoutes({
   controlPlane,
   inboxArea,
-  conversationListArea,
   children
 }: {
   controlPlane: ControlPlaneModel;
@@ -15,18 +14,12 @@ export function ControlPlaneRoutes({
    * areas, but it is not part of the administration and needs no administration access.
    */
   inboxArea?: ReactNode;
-  /** The list of every conversation, present while its route is open. */
-  conversationListArea?: ReactNode;
   children: ReactNode;
 }) {
   const { settings, build } = controlPlane;
 
   if (inboxArea) {
     return <>{inboxArea}</>;
-  }
-
-  if (conversationListArea) {
-    return <>{conversationListArea}</>;
   }
 
   if (build) {

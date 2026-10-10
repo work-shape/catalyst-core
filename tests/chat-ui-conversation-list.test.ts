@@ -5,12 +5,6 @@ import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
 import { describe, expect, it } from "vitest";
 import {
-  ConversationListView,
-  formatLastActivity,
-  type ConversationListState
-} from "../packages/chat-ui/src/conversation/conversation-list-area";
-import {
-  RAIL_RECENT_LIMIT,
   railSections,
   recentConversations,
   shownRailSections,
@@ -21,7 +15,8 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 import { createTestConfig } from "./support/fixtures";
 
 const noop = () => undefined;
-const now = new Date("2026-08-03T10:00:00.000Z");
+/** As many conversations as the rail asks for at once (`RAIL_PAGE_SIZE`). */
+const RAIL_PAGE_SIZE = 30;
 
 function conversation(
   id: string,
@@ -43,134 +38,6 @@ function conversation(
     retainedUntil: "2027-08-01T10:00:00.000Z"
   };
 }
-
-function ready(
-  conversations: ConversationListItem[],
-  overrides: Partial<Extract<ConversationListState, { status: "ready" }>> = {}
-): ConversationListState {
-  return {
-    status: "ready",
-    conversations,
-    searched: "",
-    hasMore: false,
-    loadingMore: false,
-    moreFailed: false,
-    onShowMore: noop,
-    ...overrides
-  };
-}
-
-function renderList(
-  state: ConversationListState,
-  locale: LocaleCode = "en",
-  overrides: Partial<Parameters<typeof ConversationListView>[0]> = {}
-): string {
-  return renderToStaticMarkup(
-    createElement(
-      TranslationProvider,
-      { children: null, locale },
-      createElement(ConversationListView, {
-        state,
-        query: "",
-        deleting: false,
-        now,
-        onQueryChange: noop,
-        onOpen: noop,
-        onNewChat: noop,
-        onRename: async () => undefined,
-        onDelete: noop,
-        ...overrides
-      })
-    )
-  );
-}
-
-// Every test here fails without the list of every conversation: there was no such page.
-describe("conversation list page", () => {
-  const rows = [
-    conversation("conv_new", "Angebot Q3", "2026-08-03T08:00:00.000Z"),
-    conversation("conv_old", "Mietvertrag", "2026-07-20T10:00:00.000Z", "private")
-  ];
-
-  it("names the page and its search field in both languages", () => {
-    const english = renderList(ready(rows));
-    const german = renderList(ready(rows), "de");
-
-    expect(english).toMatch(/<h1[^>]*>Conversations<\/h1>/u);
-    expect(english).toMatch(/<input[^>]*type="search"[^>]*aria-label="Search conversations"/u);
-    expect(german).toMatch(/<h1[^>]*>Unterhaltungen<\/h1>/u);
-    expect(german).toMatch(/<input[^>]*aria-label="Unterhaltungen durchsuchen"/u);
-  });
-
-  it("shows each conversation as a row that opens it, with its last activity and its menu", () => {
-    const markup = renderList(ready(rows));
-
-    expect(markup.match(/data-testid="conversation-list-row"/gu)).toHaveLength(2);
-    expect(markup.indexOf("Angebot Q3")).toBeLessThan(markup.indexOf("Mietvertrag"));
-    expect(markup).toMatch(/<time dateTime="2026-08-03T08:00:00.000Z">2 hr\. ago<\/time>/u);
-    // After a week the row says the day, and the year once it is another one.
-    expect(markup).toMatch(/<time dateTime="2026-07-20T10:00:00.000Z">Jul 20<\/time>/u);
-    expect(formatLastActivity("2025-03-04T10:00:00.000Z", "de", now)).toBe("4. März 2025");
-    expect(markup).toContain('aria-label="Conversation options for Angebot Q3"');
-    expect(markup).toContain('aria-label="Private, only you can open it"');
-    // The row is a button, so the keyboard reaches and opens it.
-    expect(markup).toMatch(/<button type="button"[^>]*>(?:(?!<\/button>).)*Angebot Q3/u);
-  });
-
-  it("offers the older rows only while the server has more", () => {
-    expect(renderList(ready(rows))).not.toContain("Show more");
-    expect(renderList(ready(rows, { hasMore: true }))).toContain("Show more");
-    expect(renderList(ready(rows, { hasMore: true }), "de")).toContain("Mehr anzeigen");
-
-    const failed = renderList(ready(rows, { hasMore: true, moreFailed: true }));
-    expect(failed).toContain("More conversations could not be loaded.");
-    expect(failed).toContain("Try again");
-    // The rows that had arrived stay.
-    expect(failed).toContain("Angebot Q3");
-  });
-
-  it("says that a workspace has no conversations and offers New chat", () => {
-    const markup = renderList(ready([]));
-
-    expect(markup).toContain('data-testid="conversation-list-empty"');
-    expect(markup).toContain("No conversations yet.");
-    expect(markup).toContain("New chat");
-    expect(renderList(ready([]), "de")).toContain("Noch keine Unterhaltungen.");
-  });
-
-  it("names the searched text and the workspace when nothing matches", () => {
-    const markup = renderList(ready([], { searched: "Steuer" }), "en", {
-      workspaceName: { kind: "shared", name: "Kai Spezis" }
-    });
-
-    expect(markup).toContain('data-testid="conversation-list-no-match"');
-    expect(markup).toContain("No results for &quot;Steuer&quot; in Kai Spezis.");
-    expect(markup).not.toContain("New chat");
-  });
-
-  it("says that the list failed, in words, and offers to load it again", () => {
-    const markup = renderList({ status: "failed", onRetry: noop });
-
-    expect(markup).toMatch(/role="alert"[^>]*>Conversations could not be loaded\./u);
-    expect(markup).toContain("Try again");
-    expect(renderList({ status: "failed", onRetry: noop }, "de")).toContain(
-      "Unterhaltungen konnten nicht geladen werden."
-    );
-  });
-
-  it("shows placeholder rows while the first page is on its way", () => {
-    const markup = renderList({ status: "loading" });
-
-    expect(markup).toContain('data-testid="conversation-list-loading"');
-    expect(markup).not.toContain("No conversations yet.");
-  });
-
-  it("reports a change that went wrong above the rows", () => {
-    expect(renderList(ready(rows), "en", { notice: "Delete failed" })).toMatch(
-      /role="alert"[^>]*>Delete failed/u
-    );
-  });
-});
 
 const testConfig = createTestConfig();
 const railConfig: SafeConfig = safeConfigSchema.parse(
@@ -209,7 +76,6 @@ function renderRail(
         onOpenSearch: noop,
         onViewChange: noop,
         onCreateConversation: noop,
-        onShowAllConversations: noop,
         onSelectConversation: noop,
         onReloadConversations: noop,
         onRenameConversation: async () => undefined,
@@ -293,70 +159,95 @@ describe("workspace rail without a Chat row", () => {
     expect(inConversation).toMatch(currentRow("Titel 1\\."));
   });
 
-  it("gives the collapsed strip a way to the conversations, which it marks on their list", () => {
-    const markup = renderRail(many(1), { collapsed: true, view: "conversations" });
+  // Fails with the list page: the strip then held a "Conversations" icon that opened it.
+  it("keeps New chat and the search in the collapsed strip, and no entry for a list page", () => {
+    const markup = renderRail(many(1), { collapsed: true });
 
-    expect(markup).toContain('<span class="sr-only">Conversations</span>');
-    expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
-    expect(markup.indexOf("lucide-square-pen")).toBeLessThan(
-      markup.indexOf("lucide-messages-square")
-    );
-    expect(renderRail(many(1), { collapsed: true }, "de")).toContain(
-      '<span class="sr-only">Unterhaltungen</span>'
-    );
+    expect(markup).toContain('<span class="sr-only">New chat</span>');
+    expect(markup).not.toContain("lucide-messages-square");
+    expect(markup).not.toContain("Conversations");
+    expect(markup).not.toContain("aria-current");
   });
 });
 
-// Each of these fails without the cap: the rail listed every conversation and had no such row.
-describe("workspace rail Show all", () => {
-  it("is absent while the rail shows every conversation there is", () => {
-    const markup = renderRail(many(RAIL_RECENT_LIMIT));
+// Each of these fails with the "Show all" row: the rail then ended in a way to a list page,
+// held one page, and put the open conversation after its rows.
+describe("workspace rail as the list of conversations", () => {
+  it("ends with its rows while the workspace holds no older conversations", () => {
+    const markup = renderRail(many(RAIL_PAGE_SIZE));
 
-    expect(markup.match(/data-testid="conversation-row"/gu)).toHaveLength(RAIL_RECENT_LIMIT);
+    expect(markup.match(/data-testid="conversation-row"/gu)).toHaveLength(RAIL_PAGE_SIZE);
+    expect(markup).not.toContain("Load more");
     expect(markup).not.toContain("Show all");
   });
 
-  it("ends the list once there are more conversations than the rail shows", () => {
-    const markup = renderRail(many(RAIL_RECENT_LIMIT + 1));
+  it("ends with a quiet Load more row while there are older ones, in both languages", () => {
+    const more = { hasMoreConversations: true, onLoadMoreConversations: noop };
+    const markup = renderRail(many(RAIL_PAGE_SIZE), more);
 
-    expect(markup.match(/data-testid="conversation-row"/gu)).toHaveLength(RAIL_RECENT_LIMIT);
-    expect(markup).not.toContain(`Titel ${RAIL_RECENT_LIMIT}.`);
-    expect(markup.lastIndexOf("Show all")).toBeGreaterThan(
+    // Every loaded row shows, however many pages they are.
+    expect(
+      renderRail(many(3 * RAIL_PAGE_SIZE), more).match(/data-testid="conversation-row"/gu)
+    ).toHaveLength(3 * RAIL_PAGE_SIZE);
+    expect(markup.lastIndexOf("Load more")).toBeGreaterThan(
       markup.lastIndexOf('data-testid="conversation-row"')
     );
-    expect(renderRail(many(RAIL_RECENT_LIMIT + 1), {}, "de")).toContain("Alle anzeigen");
+    expect(markup).toMatch(/<button[^>]*aria-busy="false"[^>]*>(?:(?!<\/button>).)*Load more/u);
+    expect(markup).not.toContain("Show all");
+    expect(renderRail(many(RAIL_PAGE_SIZE), more, "de")).toContain("Mehr laden");
   });
 
-  it("is the current row on the list of every conversation", () => {
-    const markup = renderRail(many(RAIL_RECENT_LIMIT + 1), { view: "conversations" });
+  it("says that a page is loading, and holds the row still meanwhile", () => {
+    const loading = {
+      hasMoreConversations: true,
+      loadingMoreConversations: true,
+      onLoadMoreConversations: noop
+    };
+    const markup = renderRail(many(RAIL_PAGE_SIZE), loading);
 
-    expect(markup).toMatch(currentRow("Show all"));
-    expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
+    expect(markup).toMatch(
+      /<button[^>]*(?:disabled=""[^>]*aria-busy="true"|aria-busy="true"[^>]*disabled="")[^>]*>(?:(?!<\/button>).)*Loading/u
+    );
+    expect(renderRail(many(RAIL_PAGE_SIZE), loading, "de")).toContain("Wird geladen");
   });
 
-  // Fails without the change: the rail looked for the open conversation in a list of every
-  // conversation, which it no longer loads, and took an id instead of the conversation.
-  it("keeps the open conversation in the rail when it is an older one", () => {
-    // What the rail is given: the latest conversations and one more.
-    const conversations = many(RAIL_RECENT_LIMIT + 1);
+  it("keeps the rows and offers a retry after a page failed to load", () => {
+    const failed = {
+      hasMoreConversations: true,
+      loadMoreConversationsFailed: true,
+      onLoadMoreConversations: noop
+    };
+    const markup = renderRail(many(RAIL_PAGE_SIZE), failed);
+
+    expect(markup.match(/data-testid="conversation-row"/gu)).toHaveLength(RAIL_PAGE_SIZE);
+    expect(markup).toMatch(
+      /role="alert"[^>]*>(?:(?!<\/div>).)*More conversations could not be loaded\./u
+    );
+    expect(markup).toContain("Try again");
+    expect(markup).not.toContain("Load more");
+    expect(renderRail(many(RAIL_PAGE_SIZE), failed, "de")).toContain(
+      "Weitere Unterhaltungen konnten nicht geladen werden."
+    );
+  });
+
+  it("puts the open conversation first and marks it while it is older than the loaded ones", () => {
+    const conversations = many(RAIL_PAGE_SIZE);
     const older = conversation("conv_old", "Mietvertrag Altbau", "2026-07-01T10:00:00.000Z");
 
-    expect(recentConversations(conversations, conversations[2])).toHaveLength(RAIL_RECENT_LIMIT);
-    expect(recentConversations(conversations, undefined)).toHaveLength(RAIL_RECENT_LIMIT);
+    expect(recentConversations(conversations, conversations[2])).toBe(conversations);
+    expect(recentConversations(conversations, undefined)).toBe(conversations);
     const shown = recentConversations(conversations, older);
-    expect(shown).toHaveLength(RAIL_RECENT_LIMIT + 1);
-    expect(shown.at(-1)?.id).toBe(older.id);
+    expect(shown).toHaveLength(RAIL_PAGE_SIZE + 1);
+    expect(shown[0]?.id).toBe(older.id);
 
     const markup = renderRail(conversations, {
       openConversation: older,
-      selectedConversationId: older.id
+      selectedConversationId: older.id,
+      hasMoreConversations: true,
+      onLoadMoreConversations: noop
     });
     expect(markup).toMatch(currentRow("Mietvertrag Altbau"));
     expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
-    // The open conversation stands after the latest ones and before the way to all of them.
-    expect(markup.indexOf("Mietvertrag Altbau")).toBeGreaterThan(
-      markup.indexOf(`Titel ${RAIL_RECENT_LIMIT - 1}.`)
-    );
-    expect(markup.indexOf("Mietvertrag Altbau")).toBeLessThan(markup.lastIndexOf("Show all"));
+    expect(markup.indexOf("Mietvertrag Altbau")).toBeLessThan(markup.indexOf("Titel 0."));
   });
 });

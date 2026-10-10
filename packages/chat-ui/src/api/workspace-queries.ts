@@ -12,7 +12,6 @@ import {
   listAll,
   type ApiClient,
   type Conversation,
-  type ConversationListItem,
   type ConversationThreadSnapshot,
   type DraftAttachment,
   type LocaleCode,
@@ -20,7 +19,8 @@ import {
   type StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
 import { approvalRequestQueryKeys } from "../approvals/approval-request-api";
-import { workspaceQueryKeys } from "./workspace-query-keys";
+import { refreshRailConversations, updateRailConversations } from "./rail-conversations";
+import { PERSONAL_DEFAULT_CONVERSATION_LIST, workspaceQueryKeys } from "./workspace-query-keys";
 
 interface WorkspaceQueryInput {
   apiBaseUrl: string;
@@ -28,7 +28,6 @@ interface WorkspaceQueryInput {
   client: ApiClient;
 }
 
-export const PERSONAL_DEFAULT_CONVERSATION_LIST = "personal-default";
 const CURRENT_USER_DEADLINE_MS = 15_000;
 
 export function useWorkspaceMeQuery(input: Pick<WorkspaceQueryInput, "apiBaseUrl" | "client">) {
@@ -114,50 +113,6 @@ function isTransientFailure(error: unknown): boolean {
 
 export function useWorkspaceConfigQuery(input: Parameters<typeof workspaceConfigQueryOptions>[0]) {
   return useQuery(workspaceConfigQueryOptions(input));
-}
-
-/** How many conversations the rail lists under "Recent". The rest are on the full list. */
-export const RAIL_RECENT_LIMIT = 30;
-
-/**
- * The rail's conversations: the latest ones of a workspace and one more, whose presence says
- * that there are older ones. One request for one page, whatever the number of conversations.
- */
-export function recentConversationsQueryOptions(
-  input: WorkspaceQueryInput & {
-    collaborationWorkspaceId: string | undefined;
-    collaborationWorkspacesAvailable: boolean;
-    enabled: boolean;
-  }
-) {
-  const { collaborationWorkspaceId, collaborationWorkspacesAvailable } = input;
-  const workspace = collaborationWorkspacesAvailable ? { collaborationWorkspaceId } : {};
-  const cacheWorkspaceId = collaborationWorkspacesAvailable
-    ? collaborationWorkspaceId
-    : PERSONAL_DEFAULT_CONVERSATION_LIST;
-  return {
-    queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope, cacheWorkspaceId),
-    queryFn: async () => {
-      const query = { ...workspace, limit: RAIL_RECENT_LIMIT + 1 };
-      return (await input.client.conversations.list({ query })).items;
-    },
-    enabled:
-      input.enabled && (!collaborationWorkspacesAvailable || Boolean(collaborationWorkspaceId))
-  };
-}
-
-export function useRecentConversationsQuery(
-  input: Parameters<typeof recentConversationsQueryOptions>[0]
-) {
-  return useQuery(recentConversationsQueryOptions(input));
-}
-
-/**
- * Reads the rail's conversations again and nothing else: the pages of the full list, whose keys
- * continue this one, stay. A read still on its way is kept, so nothing is asked twice at once.
- */
-export function refreshRecentConversations(queryClient: QueryClient, key: QueryKey): Promise<void> {
-  return queryClient.refetchQueries({ queryKey: key, exact: true }, { cancelRefetch: false });
 }
 
 export function useCollaborationWorkspacesQuery(
@@ -560,8 +515,8 @@ export interface WorkspaceCacheActions {
   refreshThreadSnapshot(conversationId: string): Promise<ConversationThreadSnapshot>;
   invalidateCurrentUser(): void;
   invalidateConversations(): void;
-  /** Reads the rail's one page again and leaves the pages of the full list alone. */
-  refreshRecentConversations(): void;
+  /** Reads the rail's first page again: one request, whatever the rail has loaded. */
+  refreshRailConversations(): void;
   removeThreadSnapshot(conversationId: string): void;
   invalidateConversationStarted(conversationId: string): void;
   invalidateConversationResources(conversationId: string): void;
@@ -599,8 +554,8 @@ export function useWorkspaceCacheActions(
     });
   }, [apiBaseUrl, authScope, conversationListWorkspaceId, queryClient]);
 
-  const refreshRecent = useCallback(() => {
-    refreshRecentConversations(
+  const refreshRail = useCallback(() => {
+    refreshRailConversations(
       queryClient,
       workspaceQueryKeys.conversations(apiBaseUrl, authScope, conversationListWorkspaceId)
     ).catch(() => undefined);
@@ -729,26 +684,22 @@ export function useWorkspaceCacheActions(
         workspaceQueryKeys.thread(apiBaseUrl, authScope, response.conversation.id),
         response.thread
       );
-      queryClient.setQueryData<ConversationListItem[]>(
+      updateRailConversations(
+        queryClient,
         conversationListCacheKey(
           apiBaseUrl,
           authScope,
           response.conversation,
           collaborationWorkspacesAvailable
         ),
-        (currentConversations = []) => {
-          const existing = currentConversations.filter(
-            (conversation) => conversation.id !== response.conversation.id
-          );
-          return [
-            {
-              ...response.conversation,
-              activeRun: response.thread.activeRun?.run,
-              latestMessageAt: response.userMessage.createdAt
-            },
-            ...existing
-          ];
-        }
+        (conversations) => [
+          {
+            ...response.conversation,
+            activeRun: response.thread.activeRun?.run,
+            latestMessageAt: response.userMessage.createdAt
+          },
+          ...conversations.filter((conversation) => conversation.id !== response.conversation.id)
+        ]
       );
     },
     [apiBaseUrl, authScope, collaborationWorkspacesAvailable, queryClient]
@@ -768,7 +719,7 @@ export function useWorkspaceCacheActions(
       refreshThreadSnapshot,
       invalidateCurrentUser,
       invalidateConversations,
-      refreshRecentConversations: refreshRecent,
+      refreshRailConversations: refreshRail,
       removeThreadSnapshot,
       invalidateConversationStarted,
       invalidateConversationResources,
@@ -784,7 +735,7 @@ export function useWorkspaceCacheActions(
       invalidateConversationResources,
       invalidateConversations,
       invalidateCurrentUser,
-      refreshRecent,
+      refreshRail,
       removeThreadSnapshot,
       invalidateStreamError,
       invalidateTerminalRunObservation,

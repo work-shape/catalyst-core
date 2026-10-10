@@ -4,10 +4,12 @@ import { defineTranslations } from "./translation-area";
 export const navigation = defineTranslations({
   en: {
     "nav.collapse": "Collapse sidebar",
-    "nav.conversations": "Conversations",
     "nav.expand": "Expand sidebar",
     "nav.inbox": "Inbox",
     "nav.label": "Main navigation",
+    "nav.loadMore": "Load more",
+    "nav.loadMoreFailed": "More conversations could not be loaded.",
+    "nav.loadingMore": "Loading",
     "nav.newChat": "New chat",
     "nav.paletteConversations": "Conversations",
     "nav.paletteFailed": "Search is not available right now.",
@@ -17,17 +19,18 @@ export const navigation = defineTranslations({
     "nav.recentLoadFailed": "Conversations could not be loaded.",
     "nav.search": "Search",
     "nav.settings": "Settings",
-    "nav.showAll": "Show all",
     "nav.showChat": "Show chat",
     "nav.skipToContent": "Skip to content",
     "nav.surfaceNoRenderer": "This content cannot be shown yet."
   },
   de: {
     "nav.collapse": "Seitenleiste einklappen",
-    "nav.conversations": "Unterhaltungen",
     "nav.expand": "Seitenleiste ausklappen",
     "nav.inbox": "Eingang",
     "nav.label": "Hauptnavigation",
+    "nav.loadMore": "Mehr laden",
+    "nav.loadMoreFailed": "Weitere Unterhaltungen konnten nicht geladen werden.",
+    "nav.loadingMore": "Wird geladen",
     "nav.newChat": "Neuer Chat",
     "nav.paletteConversations": "Unterhaltungen",
     "nav.paletteFailed": "Die Suche ist gerade nicht verfügbar.",
@@ -37,7 +40,6 @@ export const navigation = defineTranslations({
     "nav.recentLoadFailed": "Unterhaltungen konnten nicht geladen werden.",
     "nav.search": "Suchen",
     "nav.settings": "Einstellungen",
-    "nav.showAll": "Alle anzeigen",
     "nav.showChat": "Chat anzeigen",
     "nav.skipToContent": "Zum Inhalt springen",
     "nav.surfaceNoRenderer": "Dieser Inhalt kann noch nicht angezeigt werden."

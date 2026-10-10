@@ -1,6 +1,5 @@
 /** The areas of the interface: what a route shows. */
-export type WorkspaceRouteView =
-  "chat" | "conversations" | "settings" | "inbox" | "build" | "ui-library";
+export type WorkspaceRouteView = "chat" | "settings" | "inbox" | "build" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -12,13 +11,6 @@ export type WorkspaceRoute =
   | { kind: "legacy-conversation"; conversationId: string }
   | { kind: "new-conversation"; collaborationWorkspaceId: string }
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
-  /** Every conversation of one workspace, as a list with a search. */
-  | { kind: "conversation-list"; collaborationWorkspaceId: string }
-  /**
-   * The same list before its workspace is known. It is unresolved like the chat root: a session
-   * with workspaces replaces it with the list of the active one. A session without them stays.
-   */
-  | { kind: "conversation-list-root" }
   /** One page of the Settings area. The Settings catalog knows the groups and the pages. */
   | { kind: "settings"; group: string; page: string }
   /**
@@ -44,7 +36,7 @@ interface AreaRoutePath {
   path: string;
   /** The route the address resolves to. Its fields are the path's parameters, by name. */
   route?: WorkspaceRoute["kind"];
-  /** Where the address leads instead of resolving by itself. */
+  /** Where the address leads instead of resolving by itself. It may name the path's parameters. */
   redirectTo?: string;
 }
 
@@ -66,14 +58,14 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/", route: "collaboration-workspace-root" },
       { path: "/w/$collaborationWorkspaceId", route: "new-conversation" },
       { path: "/w/$collaborationWorkspaceId/c/$conversationId", route: "conversation" },
-      { path: "/c/$conversationId", route: "legacy-conversation" }
-    ]
-  },
-  {
-    area: "conversations",
-    paths: [
-      { path: "/w/$collaborationWorkspaceId/conversations", route: "conversation-list" },
-      { path: "/conversations", route: "conversation-list-root" }
+      { path: "/c/$conversationId", route: "legacy-conversation" },
+      // The list of every conversation was a page of its own for one release. The rail is
+      // that list now, so its addresses lead to the start page of the workspace.
+      {
+        path: "/w/$collaborationWorkspaceId/conversations",
+        redirectTo: "/w/$collaborationWorkspaceId"
+      },
+      { path: "/conversations", redirectTo: "/" }
     ]
   },
   {
@@ -133,7 +125,7 @@ export function workspaceRouteFromPath(pathname: string): WorkspaceRoute {
       continue;
     }
     if (redirectTo !== undefined) {
-      return workspaceRouteFromPath(redirectTo);
+      return workspaceRouteFromPath(pathWith(redirectTo, params));
     }
     const resolved = route === undefined ? undefined : routeOf(route, params);
     if (resolved) {
@@ -156,7 +148,12 @@ export function workspaceRouteNavigation(route: WorkspaceRoute): {
 /** The path of a route, as a link's `href` takes it: the row's pattern with the route's fields. */
 export function workspaceRoutePath(route: WorkspaceRoute): string {
   const { to, params = {} } = workspaceRouteNavigation(route);
-  return to
+  return pathWith(to, params);
+}
+
+/** A path pattern with its `$name` segments filled from `params`. */
+function pathWith(pattern: string, params: Record<string, string>): string {
+  return pattern
     .split("/")
     .map((part) => (part.startsWith("$") ? encodeURIComponent(params[part.slice(1)] ?? "") : part))
     .join("/");
@@ -169,7 +166,6 @@ function routeOf(
   const { collaborationWorkspaceId, conversationId, group, page, itemId } = params;
   switch (kind) {
     case "collaboration-workspace-root":
-    case "conversation-list-root":
     case "administration":
     case "build":
     case "inbox":
@@ -186,7 +182,6 @@ function routeOf(
         ? { kind, assetKind: params.assetKind, name: params.name }
         : undefined;
     case "new-conversation":
-    case "conversation-list":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
     case "conversation":
       return collaborationWorkspaceId && conversationId

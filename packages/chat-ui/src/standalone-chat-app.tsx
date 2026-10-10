@@ -80,8 +80,8 @@ function createStandaloneChatRouter(options: StandaloneChatRouterOptions) {
         getParentRoute: () => rootRoute,
         path,
         beforeLoad: redirectTo
-          ? () => {
-              throw redirect({ to: redirectTo });
+          ? ({ params }) => {
+              throw redirect({ to: redirectTo, params });
             }
           : undefined
       })

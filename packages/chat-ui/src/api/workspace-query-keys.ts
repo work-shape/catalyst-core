@@ -1,5 +1,8 @@
 import type { LocaleCode } from "@vivd-catalyst/api-client";
 
+/** The cache name of the one conversation list a session without workspaces has. */
+export const PERSONAL_DEFAULT_CONVERSATION_LIST = "personal-default";
+
 export const workspaceQueryKeys = {
   me: (apiBaseUrl: string) => ["me", apiBaseUrl] as const,
   modelPreference: (apiBaseUrl: string) => ["me", apiBaseUrl, "model-preference"] as const,
@@ -14,24 +17,6 @@ export const workspaceQueryKeys = {
     authScope: string,
     collaborationWorkspaceId: string | undefined
   ) => ["conversations", apiBaseUrl, authScope, collaborationWorkspaceId] as const,
-  /**
-   * The pages of a workspace's conversation list. The key continues the list's, so whatever
-   * marks the list as changed marks its pages too.
-   */
-  conversationPages: (
-    apiBaseUrl: string,
-    authScope: string,
-    collaborationWorkspaceId: string | undefined,
-    titleQuery: string
-  ) =>
-    [
-      "conversations",
-      apiBaseUrl,
-      authScope,
-      collaborationWorkspaceId,
-      "pages",
-      titleQuery
-    ] as const,
   conversationSearch: (
     apiBaseUrl: string,
     authScope: string,

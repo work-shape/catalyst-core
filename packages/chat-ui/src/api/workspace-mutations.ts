@@ -22,6 +22,7 @@ import type {
 import { signOut } from "@vivd-catalyst/api-client";
 import { apiErrorMessage } from "../workspace-utils";
 import { createAssetWrites } from "./asset-writes";
+import { updateRailConversations } from "./rail-conversations";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 import {
   createApiAccessRevealController,
@@ -142,13 +143,14 @@ export function useDeleteConversationMutation(
     onSuccess: (deletedConversation) => {
       let nextSelectedConversationId: string | undefined;
       const deletedActiveConversation = input.selectedConversationId === deletedConversation.id;
-      queryClient.setQueryData<ConversationListItem[]>(
+      updateRailConversations(
+        queryClient,
         workspaceQueryKeys.conversations(
           input.apiBaseUrl,
           input.authScope,
           input.collaborationWorkspaceId
         ),
-        (currentConversations = []) => {
+        (currentConversations) => {
           const remainingConversations = currentConversations.filter(
             (conversation) => conversation.id !== deletedConversation.id
           );
@@ -203,13 +205,14 @@ export function useRenameConversationMutation(
     mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
       input.client.conversations.rename({ params: { conversationId }, body: { title } }),
     onSuccess: (updatedConversation) => {
-      queryClient.setQueryData<ConversationListItem[]>(
+      updateRailConversations(
+        queryClient,
         workspaceQueryKeys.conversations(
           input.apiBaseUrl,
           input.authScope,
           input.collaborationWorkspaceId
         ),
-        (currentConversations = []) =>
+        (currentConversations) =>
           currentConversations.map((conversation) =>
             conversation.id === updatedConversation.id
               ? { ...conversation, ...updatedConversation }
@@ -269,9 +272,10 @@ export function useMoveConversationMutation(
     onSuccess: (movedConversation, { collaborationWorkspaceId }) => {
       // Dropped from the source list before the refetch lands so the rail never
       // shows a conversation that now lives in another workspace.
-      queryClient.setQueryData<ConversationListItem[]>(
+      updateRailConversations(
+        queryClient,
         conversationsKey(input.sourceCollaborationWorkspaceId),
-        (currentConversations = []) =>
+        (currentConversations) =>
           currentConversations.filter((conversation) => conversation.id !== movedConversation.id)
       );
       for (const listCollaborationWorkspaceId of new Set(

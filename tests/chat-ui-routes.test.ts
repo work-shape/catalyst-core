@@ -23,13 +23,6 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
     "chat"
   ],
   ["/c/conv_2", { kind: "legacy-conversation", conversationId: "conv_2" }, "chat"],
-  // These two fail without the list of every conversation: the paths opened the application root.
-  [
-    "/w/cw_1/conversations",
-    { kind: "conversation-list", collaborationWorkspaceId: "cw_1" },
-    "conversations"
-  ],
-  ["/conversations", { kind: "conversation-list-root" }, "conversations"],
   ["/settings/you/profile", { kind: "settings", group: "you", page: "profile" }, "settings"],
   [
     "/settings/workspace/members",
@@ -54,7 +47,7 @@ describe("area route table", () => {
   it("has one row per area", () => {
     const areas = areaRoutes.map((row) => row.area);
 
-    expect(areas).toEqual(["chat", "conversations", "settings", "inbox", "build", "ui-library"]);
+    expect(areas).toEqual(["chat", "settings", "inbox", "build", "ui-library"]);
   });
 
   it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {
@@ -102,6 +95,24 @@ describe("area route table", () => {
     expect(workspaceRouteNavigation({ kind: "inbox-item", itemId: "apr_1" })).toEqual({
       to: "/inbox/$itemId",
       params: { itemId: "apr_1" }
+    });
+  });
+
+  // Fails with the list page: these addresses then opened the list of every conversation,
+  // which no longer exists.
+  it("leads the addresses of the former conversation list to the start page of the workspace", () => {
+    const row = areaRoutePaths().find(
+      (candidate) => candidate.path === "/w/$collaborationWorkspaceId/conversations"
+    );
+
+    expect(row?.route).toBeUndefined();
+    expect(row?.redirectTo).toBe("/w/$collaborationWorkspaceId");
+    expect(workspaceRouteFromPath("/w/cw%201/conversations")).toEqual({
+      kind: "new-conversation",
+      collaborationWorkspaceId: "cw 1"
+    });
+    expect(workspaceRouteFromPath("/conversations")).toEqual({
+      kind: "collaboration-workspace-root"
     });
   });
 
