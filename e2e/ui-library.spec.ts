@@ -294,6 +294,83 @@ test("a picker inside a dialog opens in the dialog and Escape closes the picker 
   await expect(dialog).toBeHidden();
 });
 
+test("the command palette filters, follows the arrow keys, chooses with Enter and gives the focus back", async ({
+  page
+}) => {
+  await signInViaApi(page, adminUser);
+  await page.goto("/ui-library");
+  await openSection(page, "Overlays");
+  const entry = page.locator('[data-gallery-entry="CommandPalette"]').first();
+  const opener = entry.getByRole("button", { name: "Open palette" });
+  const palette = page.getByRole("dialog", { name: "Search" });
+  const field = palette.getByRole("combobox", { name: "Search" });
+  const options = palette.getByRole("option");
+  const lease = "Check the lease";
+  const tax = "Tax: depreciation over the remaining useful life";
+  const offer = "Draft an offer";
+
+  // Open: the field holds the focus, the unnamed command stands before the named group.
+  await opener.click();
+  await expect(palette).toBeVisible();
+  await expect(field).toBeFocused();
+  await expect(options).toHaveText([/^New chat/u, lease, tax, offer]);
+  await expect(options.first()).toContainText("⌘⇧O");
+  await expect(palette.getByRole("group", { name: "Recent" }).getByRole("option")).toHaveCount(3);
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+
+  // Arrow keys move through the items and wrap at both ends; the focus stays in the field.
+  await page.keyboard.press("ArrowDown");
+  await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await expect(options.nth(3)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await expect(field).toBeFocused();
+
+  // Escape closes it, chooses nothing and returns the focus to the opener.
+  await page.keyboard.press("Escape");
+  await expect(palette).toBeHidden();
+  await expect(opener).toBeFocused();
+  await expect(entry.locator('[data-gallery-sample="palette-chosen"]')).toHaveCount(0);
+
+  // Filter: the caller narrows the groups, and the first match is the one Enter chooses.
+  await page.keyboard.press("Enter");
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("");
+  await page.keyboard.type("DRAFT");
+  await expect(options).toHaveText([offer]);
+  await expect(palette.getByRole("group", { name: "Conversations" })).toBeVisible();
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+
+  // Empty state: no group is left, the message stands as a status.
+  await field.fill("nothing like it");
+  await expect(options).toHaveCount(0);
+  await expect(palette.getByRole("group")).toHaveCount(0);
+  await expect(palette.getByRole("status")).toHaveText("No results.");
+  // Enter chooses nothing while there is nothing to choose.
+  await page.keyboard.press("Enter");
+  await expect(palette).toBeVisible();
+
+  // Enter chooses the item the arrow keys reached, and the focus goes back to the opener.
+  await field.fill("t");
+  await expect(options).toHaveText([lease, tax, offer]);
+  await page.keyboard.press("ArrowDown");
+  await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
+  await expect(palette).toBeHidden();
+  await expect(entry.locator('[data-gallery-sample="palette-chosen"]')).toHaveText(tax);
+  await expect(opener).toBeFocused();
+
+  // A click chooses too, and every opening starts at the top with an empty field.
+  await opener.click();
+  await expect(field).toHaveValue("");
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await options.filter({ hasText: lease }).click();
+  await expect(palette).toBeHidden();
+  await expect(entry.locator('[data-gallery-sample="palette-chosen"]')).toHaveText(lease);
+});
+
 test("a confirmation names its object and holds both buttons while the action runs", async ({
   page
 }) => {
