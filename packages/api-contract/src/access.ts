@@ -24,9 +24,12 @@ export const permissionGrantSchema = z.object({
   namespace: z.string().optional(),
   /**
    * The asset behind `scopeId`, for asset scope. A deny stays when its asset is deleted and
-   * applies again when the name is created again; `active` is false in between.
+   * applies again when the name is created again; `active` is false in between. `name` is
+   * left out for a caller who may not read every asset of that kind.
    */
-  scopeAsset: z.object({ kind: z.string(), name: z.string(), active: z.boolean() }).optional(),
+  scopeAsset: z
+    .object({ kind: z.string(), name: z.string().optional(), active: z.boolean() })
+    .optional(),
   /** Left out when the user who wrote the row is hidden from the caller. */
   grantedBy: z.string().optional(),
   createdAt: timestampSchema

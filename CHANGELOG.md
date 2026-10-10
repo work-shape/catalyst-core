@@ -25,7 +25,8 @@ contain breaking changes; a patch version does not.
   Deleting a user deletes the user's grant rows. The page **Instance > Access** in the settings
   writes and shows all of this in three tabs, Namespaces, Grants and Check, and is shown to holders
   of `users.manage`; a grant row of asset scope answers with `scopeAsset`, the kind and name of
-  its asset and whether it still exists. A migration adds
+  its asset and whether it still exists. `scopeAsset.name` is left out for a caller who may not
+  read that kind of asset; the row still carries `scopeId`. A migration adds
   the tables `permission_grants` and `namespaces` and changes no other table; no user, service
   principal or API key gains or loses a right. `node --experimental-strip-types
 scripts/verify-permissions.ts` with `DATABASE_URL` set compares every holder's rights with what
