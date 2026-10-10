@@ -76,7 +76,7 @@ export default defineConfig({
         },
         {
           label: "Reference",
-          items: ["reference/current-status", "reference/framework-choice", "reference/glossary"]
+          items: ["reference/current-status", "reference/glossary"]
         }
       ]
     })
