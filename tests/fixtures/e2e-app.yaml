@@ -115,6 +115,9 @@ tools:
     enabled: true
   - name: demo.weather_forecast
     enabled: true
+  # A fixture of the browser suite, brought by clients/demo/src/e2e-server.ts.
+  - name: e2e.record_note
+    enabled: true
 ui:
   clientName: E2E Customer
   title: Workshape Catalyst E2E

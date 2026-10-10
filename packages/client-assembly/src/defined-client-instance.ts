@@ -53,6 +53,8 @@ export interface DefinedClientInstance {
     port?: number;
     configPath?: string;
     allowedOrigins?: string | string[];
+    /** What the calls of operations run with beyond the instance's own defaults. For tests. */
+    operations?: CreateClientInstanceAppInput["operations"];
   }): Promise<ClientInstanceApp>;
   createAgentRunWorker(
     input?: Omit<
@@ -173,7 +175,8 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
       const app = await createApp({
         env: listenInput.env,
         configPath: listenInput.configPath,
-        allowedOrigins: listenInput.allowedOrigins
+        allowedOrigins: listenInput.allowedOrigins,
+        operations: listenInput.operations
       });
       await app.listen({
         host: listenInput.host,

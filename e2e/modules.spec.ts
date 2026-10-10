@@ -268,7 +268,7 @@ test.describe("with the resources module off", () => {
       offConfigPath,
       config.replace(section, "modules:\n  resources:\n    enabled: false\n")
     );
-    offApi = spawn(process.execPath, ["clients/demo/dist/server.js"], {
+    offApi = spawn(process.execPath, ["clients/demo/dist/e2e-server.js"], {
       env: {
         ...process.env,
         HOST: host,

@@ -109,7 +109,7 @@ test.describe("with a provider that does not answer", () => {
     expect(config).toContain(localModel);
     await mkdir(dirname(brokenConfigPath), { recursive: true });
     await writeFile(brokenConfigPath, config.replace(localModel, `${localModel}${brokenModel}`));
-    brokenApi = spawn(process.execPath, ["clients/demo/dist/server.js"], {
+    brokenApi = spawn(process.execPath, ["clients/demo/dist/e2e-server.js"], {
       env: {
         ...process.env,
         HOST: host,

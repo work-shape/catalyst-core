@@ -38,7 +38,7 @@ export default defineConfig({
             `${shellEnv({ COMPOSE_PROJECT_NAME: e2eComposeProject, POSTGRES_HOST_PORT: e2ePostgresPort })} docker compose -f clients/demo/docker-compose.yml up -d --wait postgres && ` +
             // The API never migrates when it starts, so the explicit step runs first.
             `${shellEnv({ DATABASE_URL: e2eDatabaseUrl })} node clients/demo/dist/migrate.js && ` +
-            `${shellEnv(createApiServerEnv())} node clients/demo/dist/server.js`,
+            `${shellEnv(createApiServerEnv())} node clients/demo/dist/e2e-server.js`,
           url: `${e2eApiUrl}/health`,
           reuseExistingServer: false,
           timeout: 60_000

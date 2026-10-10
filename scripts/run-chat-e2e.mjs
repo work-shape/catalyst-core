@@ -235,7 +235,7 @@ async function migrateDatabase() {
 }
 
 function startApiServer() {
-  return spawnManaged(process.execPath, ["clients/demo/dist/server.js"], {
+  return spawnManaged(process.execPath, ["clients/demo/dist/e2e-server.js"], {
     cwd: repoRoot,
     label: "chat api",
     env: {

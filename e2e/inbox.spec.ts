@@ -1,11 +1,13 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { requestWithOrigin } from "./request-with-origin";
-import type { Page } from "@playwright/test";
+import type { Page, Response } from "@playwright/test";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Holds no right to decide anything. */
 const member = { email: "e2e-user@example.test", password: "e2e-user-password" };
-/** May decide skill changes. */
+/** May decide skill changes and operation calls, and may view the audit log. */
 const reviewer = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 
 const skillName = "inbox_e2e_checklist";
@@ -231,6 +233,211 @@ test("a decision on a request that was decided meanwhile is refused in a sentenc
   await expect(surface.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
   await reviewerContext.close();
 });
+
+// An agent's tool call that an admin set to approval, from the request in a conversation to
+// the decision in the Inbox, the one execution, and the record under Instance > Operations.
+// The suite's server holds the calls of `e2e.record_note` for an approval
+// (clients/demo/src/e2e-server.ts). Fails without OP-1b: the tool ran unasked, nothing reached
+// the Inbox and there was no Operations page.
+
+/** Where the pictures of a run go. Without it the test takes none. */
+const shotsDir = process.env.E2E_SHOTS_DIR;
+
+const TOOL = "e2e.record_note";
+const NOTE = "Call the tenant about the meter reading";
+const INPUT_MARKER = "meter reading";
+
+test("an agent's tool call waits for approval, is approved in the Inbox, runs once and is on record", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors
+}) => {
+  test.setTimeout(shotsDir ? 180_000 : 90_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  // The member asks the agent for the change. The tool does not run: the agent reads that
+  // its call waits, and says so.
+  await signIn(page, member);
+  await page.getByPlaceholder("Message").fill(`/tool ${TOOL} ${JSON.stringify({ text: NOTE })}`);
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText("This call has NOT run").first()).toBeVisible();
+  await expect(page.getByText(`"recorded"`)).toHaveCount(0);
+
+  // The member has no Operations page: it needs the right to view the audit log.
+  await page.goto("/settings");
+  const memberPages = page.getByRole("navigation", { name: "Settings pages" });
+  await expect(memberPages.getByRole("button").first()).toBeVisible();
+  await expect(memberPages.getByRole("button", { name: "Operations", exact: true })).toHaveCount(0);
+
+  // The approver finds the call in the Inbox, with who called, through which agent, and the
+  // input the call is frozen with.
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 1280, height: 900 }
+  });
+  await pageErrors.watch(context);
+  const approverPage = await context.newPage();
+  await signIn(approverPage, reviewer);
+  await approverPage.goto("/inbox");
+  const inbox = approverPage.getByRole("region", { name: "Inbox", exact: true });
+  const row = inbox.getByTestId("inbox-row").filter({ hasText: TOOL });
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button").click();
+  await expect(approverPage).toHaveURL(/\/inbox\/[^/]+$/u);
+  const call = approverPage.getByTestId("operation-call");
+  await expect(call).toBeVisible();
+  await expect(call.locator('[data-field="operation"]')).toContainText(TOOL);
+  await expect(call.locator('[data-field="actor"]')).toContainText("E2E User");
+  await expect(call.locator('[data-field="origin"]')).toContainText(
+    "Agent, through agent Application Assistant"
+  );
+  await expect(call.locator('[data-input-key="text"]')).toContainText(NOTE);
+  await expect(call).toContainText("Approving runs this call once, as E2E User.");
+  const runId = await call.getAttribute("data-run-id");
+  expect(runId).toBeTruthy();
+
+  // While it waits, the run is on record as waiting and nothing ran.
+  const waiting = await approverPage.request.get(`${apiBaseUrl}/api/v1/operations/runs/${runId}`);
+  expect(waiting.ok()).toBe(true);
+  expect(await waiting.json()).toMatchObject({ status: "pending_approval", operation: TOOL });
+
+  await shoot(approverPage, "inbox-operation-call", async () => {
+    await expect(approverPage.getByTestId("operation-call")).toBeVisible();
+  });
+
+  // In German the same item.
+  await approverPage.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+  await approverPage.reload();
+  await expect(call).toContainText("Mit der Freigabe läuft dieser Aufruf einmal, als E2E User.");
+  await expect(approverPage.locator('button[data-decision="approve"]')).toHaveText("Freigeben");
+  await expect(approverPage.locator('button[data-decision="reject"]')).toHaveText("Ablehnen");
+  await approverPage.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
+  await approverPage.reload();
+  await expect(call).toBeVisible();
+
+  // Approving executes the call.
+  const [decided] = await Promise.all([
+    approverPage.waitForResponse(
+      (response) =>
+        /\/api\/v1\/approval-requests\/[^/]+\/decide$/u.test(new URL(response.url()).pathname) &&
+        response.request().method() === "POST"
+    ),
+    approverPage.locator('button[data-decision="approve"]').click()
+  ]);
+  expect(decided.status()).toBe(200);
+  await expect(approverPage.getByTestId("inbox-item")).toContainText("Decision by E2E Superadmin");
+  await expect(approverPage.locator('button[data-decision="approve"]')).toHaveCount(0);
+  // A second decision on the same request is refused and says why.
+  const requestId = new URL(approverPage.url()).pathname.split("/").pop();
+  const again = await requestWithOrigin(
+    approverPage,
+    "post",
+    `${apiBaseUrl}/api/v1/approval-requests/${requestId}/decide`,
+    { data: { decision: "approve" } }
+  );
+  expect(again.status()).toBe(409);
+
+  // Instance > Operations lists the call: done, for the member, approved by the approver.
+  const answers: Promise<string>[] = [];
+  const collect = (response: Response): void => {
+    if (/\/api\/v1\/operations\/runs/u.test(response.url())) answers.push(response.text());
+  };
+  approverPage.on("response", collect);
+  await approverPage.goto("/settings/instance/operations");
+  await expect(approverPage.getByRole("heading", { name: "Operations", level: 1 })).toBeVisible();
+  await expect(
+    approverPage
+      .getByRole("navigation", { name: "Settings pages" })
+      .getByRole("button", { name: "Operations", exact: true })
+  ).toBeVisible();
+  const runRow = approverPage.locator(`tr[data-operation-run-id="${runId}"]`);
+  await expect(runRow).toHaveAttribute("data-status", "done");
+  await expect(runRow).toContainText(TOOL);
+  await expect(runRow).toContainText("E2E User");
+  await expect(runRow).toContainText("Done");
+
+  // The filters narrow the list and say when nothing matches.
+  const filters = approverPage.locator("[data-operation-run-filters]");
+  await filters.getByRole("searchbox", { name: "Operation, exact name" }).fill(TOOL);
+  await expect(runRow).toBeVisible();
+  await expect(approverPage.locator("tr[data-operation-run-id]")).toHaveCount(1);
+  await filters.getByRole("searchbox", { name: "Operation, exact name" }).fill("no.such_operation");
+  await expect(approverPage.getByText("No call matches these filters.")).toBeVisible();
+  await approverPage.getByRole("button", { name: "Clear filters" }).first().click();
+  await expect(runRow).toBeVisible();
+
+  // The detail names the decision and the correlation id, and carries no input or output.
+  await runRow.getByRole("button", { name: `Show the call of ${TOOL}` }).click();
+  const detail = approverPage.getByRole("dialog", { name: "Call of an operation" });
+  await expect(detail.locator(`[data-operation-run-detail="${runId}"]`)).toBeVisible();
+  await expect(detail.locator('[data-field="decision"]')).toContainText("Approved");
+  await expect(detail.locator('[data-field="decision"]')).toContainText("E2E Superadmin");
+  await expect(detail.locator('[data-field="correlationId"]')).not.toBeEmpty();
+  await expect(detail.locator("a[data-approval-request-link]")).toHaveAttribute(
+    "href",
+    `/inbox/${requestId}`
+  );
+  await expect(detail).not.toContainText(INPUT_MARKER);
+  await expect(detail).not.toContainText("recorded");
+  approverPage.off("response", collect);
+  for (const answer of await Promise.all(answers)) {
+    expect(answer).not.toContain(INPUT_MARKER);
+  }
+  expect(answers.length).toBeGreaterThan(0);
+
+  await approverPage.keyboard.press("Escape");
+  await shoot(approverPage, "operations-detail", async () => {
+    // The detail is not part of the address: every reload opens it again.
+    await runRow.getByRole("button").first().click();
+    await expect(approverPage.locator("[data-operation-run-detail]")).toBeVisible();
+  });
+  await approverPage.keyboard.press("Escape");
+  await shoot(approverPage, "operations", async () => {
+    await expect(approverPage.locator(`tr[data-operation-run-id="${runId}"]`)).toBeVisible();
+  });
+
+  // In German the same page.
+  await approverPage.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+  await approverPage.reload();
+  await expect(approverPage.getByRole("heading", { name: "Operationen", level: 1 })).toBeVisible();
+  await expect(runRow).toContainText("Erledigt");
+  await runRow.getByRole("button", { name: `Aufruf von ${TOOL} anzeigen` }).click();
+  const germanDetail = approverPage.getByRole("dialog", { name: "Aufruf einer Operation" });
+  await expect(germanDetail.locator('[data-field="decision"]')).toContainText("Freigegeben");
+  await approverPage.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
+  await context.close();
+
+  // The address is refused to the member too, not only hidden.
+  const refused = await page.request.get(`${apiBaseUrl}/api/v1/operations/runs`);
+  expect(refused.status()).toBe(403);
+});
+
+/** The same view in both languages and both themes, 1280 wide. */
+async function shoot(page: Page, name: string, ready: () => Promise<void>): Promise<void> {
+  if (!shotsDir) return;
+  await mkdir(shotsDir, { recursive: true });
+  for (const locale of ["en", "de"] as const) {
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate(
+        ([localeValue, themeValue]) => {
+          window.localStorage.setItem("vivd-catalyst:locale", localeValue);
+          window.localStorage.setItem("vivd-catalyst:theme", themeValue);
+        },
+        [locale, theme] as const
+      );
+      await page.reload();
+      await ready();
+      await page.screenshot({ path: join(shotsDir, `${name}-${theme}-${locale}-1280.png`) });
+    }
+  }
+  await page.evaluate(() => {
+    window.localStorage.removeItem("vivd-catalyst:locale");
+    window.localStorage.removeItem("vivd-catalyst:theme");
+  });
+  await page.reload();
+  await ready();
+}
 
 async function signIn(page: Page, user: { email: string; password: string }): Promise<void> {
   const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {

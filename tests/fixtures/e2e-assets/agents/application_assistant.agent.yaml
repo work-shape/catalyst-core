@@ -10,6 +10,7 @@ toolNames:
   - show_view
   - read_skill
   - propose_skill_change
+  - e2e.record_note
 initialPrompts:
   - title: Find review risks
     prompt: List the most important application or document review risks I should check first.
