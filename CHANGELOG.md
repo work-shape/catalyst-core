@@ -673,7 +673,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   - The answer of a run and the end of the run are stored in one transaction. A worker that is
     killed at the end of a run leaves either the answer with a completed run, or a failed run
     without the answer; the previous state of this release could show the full answer beside
-    a failed run.
+    a failed run. Every event the worker takes after the answer is held with it until the
+    event that ends the run, since such an event may be older than the answer. Above
+    `AGENT_RUN_HELD_END_MAX_EVENTS` (1000) held events the answer and those events are stored
+    at once and that run goes on without this guarantee.
   - An approval request a tool proposes and a provider continuation the runtime drops carry
     the lease of the run's job into their transaction (`RuntimeCallContext.runFence`), like
     the events and messages, so a run that lost its lease leaves none of them behind. Usage
@@ -686,10 +689,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     to it. A job copies its lease onto the lease columns of its run row, so a worker and the
     API of the previous release leave the row alone; a job that finds its run held by a
     worker of the previous release ends without waiting; and the schedule `agent_run.adopt`,
-    served by the API process and by every Agent Run worker, gives every run in progress that
-    has no live job and that nobody holds under a live lease a job every 15 seconds, which
-    covers runs the previous release's API accepts. A run whose previous-release worker died
-    gets its job, and fails as lost, when that lease has run out. After a
+    served by the API process and by every Agent Run worker, gives every queued run that
+    has no live job a job every 15 seconds, which covers runs the previous release's API
+    accepts. The same tick fails a started run as lost when the lease on its row has run out
+    and no job of it is running, so a run whose previous-release worker died ends within 15
+    seconds of its lease, also while no Agent Run worker is up. After a
     rollback the previous release's worker claims the queued runs this release accepted, and
     its recovery fails the runs this release's worker held once their lease has run out. An
     API of the previous release that kept runs in its own memory (`agentRuntimeMode:
@@ -714,7 +718,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     The run store loses `claimNextAgentRun`, `heartbeatAgentRun`, `recoverExpiredAgentRuns`,
     `listStaleActiveAgentRuns` and `recoverStaleAgentRun` and gains `claimAgentRunForJob`,
     `renewAgentRunJobLease`, `failLostAgentRun`, `failAgentRunsQueuedTooLong`,
-    `appendClaimedAgentRunEnd` and `listAgentRunsWithoutJob`; the fenced
+    `failAgentRunsWithoutWorker`, `appendClaimedAgentRunEnd` and `listAgentRunsWithoutJob`; the fenced
     writes take `lease: { jobId, leaseToken }`. `UserStore` gains `getUser`.
     `JobWorker.stop` takes `{ drainMs }`. `@vivd-catalyst/core` gains `defineJobBurial`, which
     registers only the burial of a kind's dead jobs in a process that does not execute the
