@@ -9,7 +9,10 @@ import { CountBadge } from "../status/count-badge";
 const tabClassName =
   "-mb-px inline-flex h-9 shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-label whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50";
 const selectedTabClassName = "border-primary text-foreground";
-const tabRowClassName = "flex min-w-0 gap-1 overflow-x-auto border-b [scrollbar-width:none]";
+// Bottom padding contains the tabs' negative margin so neither their underline nor their
+// inset focus line is clipped when vertical overflow is hidden.
+const tabRowClassName =
+  "flex min-w-0 gap-1 overflow-x-auto overflow-y-hidden border-b pb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 export interface TabsProps extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "dir"> {
   value?: string;

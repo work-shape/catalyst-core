@@ -75,6 +75,59 @@ describe("navigation, page structure and data components", () => {
     expect(markup).not.toContain('role="tab"');
   });
 
+  it("keeps both tab rows scrolling sideways without scrollbars or clipped tab lines", () => {
+    const viewTabs = render(
+      createElement(
+        Tabs,
+        { defaultValue: "a" },
+        createElement(
+          TabsList,
+          { label: "Views" },
+          createElement(TabsTrigger, { value: "a" }, "First")
+        )
+      )
+    );
+    const routeTabs = render(
+      createElement(
+        TabsNav,
+        { label: "Workspace" },
+        createElement(TabsLink, { selected: true, href: "/general" }, "General")
+      )
+    );
+
+    for (const [markup, rowPattern, tabPattern, selectedLine] of [
+      [
+        viewTabs,
+        /<div[^>]*role="tablist"[^>]*class="([^"]*)"/u,
+        /<button[^>]*role="tab"[^>]*class="([^"]*)"/u,
+        "data-[state=active]:border-primary"
+      ],
+      [routeTabs, /<nav[^>]*class="([^"]*)"/u, /<a[^>]*class="([^"]*)"/u, "border-primary"]
+    ] as const) {
+      const rowClasses = markup.match(rowPattern)?.[1]?.replaceAll("&amp;", "&").split(" ");
+      expect(rowClasses).toEqual(
+        expect.arrayContaining([
+          "overflow-x-auto",
+          "overflow-y-hidden",
+          "[scrollbar-width:none]",
+          "[&::-webkit-scrollbar]:hidden",
+          "pb-px"
+        ])
+      );
+      const tabClasses = markup.match(tabPattern)?.[1]?.split(" ");
+      expect(tabClasses).toEqual(
+        expect.arrayContaining([
+          "-mb-px",
+          "border-b-2",
+          selectedLine,
+          "focus-visible:outline-2",
+          "focus-visible:-outline-offset-2",
+          "focus-visible:outline-ring"
+        ])
+      );
+    }
+  });
+
   it("makes a segmented control a named radio group", () => {
     const markup = render(
       createElement(
