@@ -1,5 +1,13 @@
 import { expect, test as base, type BrowserContext } from "@playwright/test";
-import { pageExitTitle, pageLoadExits, pageNavigationExits, pageTestTitles } from "./page-exits";
+import {
+  REPLACED_BUILT_INS_LINK,
+  pageExitTitle,
+  pageLinkTitle,
+  pageLoadExits,
+  pageNavigationExits,
+  pageTestTitles,
+  tabOpeningClicks
+} from "./page-exits";
 
 /**
  * A message a page may report as an error without failing its test. Every entry names one
@@ -119,7 +127,7 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     matches: new RegExp(
       [
         /^Framing '[^']*' violates the following Content Security Policy directive: "frame-(?:src 'none'|ancestors 'self' [^"]*)"\. The request has been blocked\.\s*$/u,
-        /^(?:Connecting to|Fetching content from|Loading the (?:image|script|stylesheet|font)|Loading media from {2}|Setting the document's base URI to) '[^']*' violates the following Content Security Policy directive: "[^"]*"\. (?:Note that '[a-z-]+' was not explicitly set, so '[a-z-]+' is used as a fallback\. )?The action has been blocked\.\s*$/u,
+        /^(?:Connecting to|Fetching content from|Loading the (?:image|script|stylesheet|font)|Loading media from |Setting the document's base URI to) '[^']*' violates the following Content Security Policy directive: "[^"]*"\. (?:Note that '[a-z-]+' was not explicitly set, so '[a-z-]+' is used as a fallback\. )?The action has been blocked\.\s*$/u,
         /^Fetch API cannot load \S+ Refused to connect because it violates the document's Content Security Policy\.$/u,
         /^Executing inline script violates the following Content Security Policy directive 'script-src 'self''\. Either the 'unsafe-inline' keyword, a hash \('sha256-[A-Za-z0-9+/=]+'\), or a nonce \('nonce-\.\.\.'\) is required to enable inline execution\. The action has been blocked\.\s*$/u,
         /^Blocked form submission to '[^']*' because the form's frame is sandboxed and the 'allow-forms' permission is not set\.\s*$/u,
@@ -151,6 +159,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
         pageLoadExits.find((exit) => exit.name === "a base address") ?? { name: "a base address" }
       )
     ]
+  },
+  {
+    name: "page-that-replaced-the-built-in-methods",
+    reason:
+      "Thrown by the test runner, not by the product: the Page of this test replaces the " +
+      "built-in methods of its document on purpose, and the recorder of a trace, which the " +
+      "runner puts into the same document, reads the page with them on every step.",
+    matches: /^Cannot read properties of undefined \(reading '0'\)$/u,
+    tests: tabOpeningClicks.map((click) => pageLinkTitle({ name: REPLACED_BUILT_INS_LINK }, click))
   },
   {
     name: "page-address-in-a-tab",

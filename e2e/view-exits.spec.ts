@@ -486,6 +486,15 @@ function watchOpened(page: Page): string[] {
   return opened;
 }
 
+/**
+ * The tab still shows the interface. The interface moves between its own addresses while it
+ * loads, so the origin is what is compared: another host and the instance's API are both
+ * another origin.
+ */
+function expectOnInterface(page: Page): void {
+  expect(new URL(page.url()).origin).toBe(uiOrigin);
+}
+
 async function expectPageExitRefused(
   page: Page,
   exit: PageExit,
@@ -498,7 +507,6 @@ async function expectPageExitRefused(
     script: exit.script?.(otherHost.origin),
     files: { "assets/worker.js": 'postMessage("started");' }
   });
-  const held = page.url();
 
   if (exit.refusal) {
     await expectRefused(page, otherHost, refusals, exit.refusal);
@@ -510,7 +518,7 @@ async function expectPageExitRefused(
     await expect(view.locator("body")).toHaveAttribute(exit.shows.attribute, exit.shows.value);
   }
   expect(opened).toEqual([]);
-  expect(page.url()).toBe(held);
+  expectOnInterface(page);
   expect(otherHost.requests).toEqual([]);
   expect(otherHost.connections).toBe(0);
 }
@@ -533,7 +541,7 @@ exitTest.describe("a Page cannot reach another host or the page that holds it", 
         .click({ modifiers: ["ControlOrMeta"] });
 
       await expect.poll(() => otherHost.requests).toEqual(["GET /hit?click=control"]);
-      expect(opened).toHaveLength(1);
+      await expect.poll(() => opened).toHaveLength(1);
     }
   );
 
@@ -575,7 +583,6 @@ exitTest.describe("a Page cannot reach another host or the page that holds it", 
           script: link.script?.(address)
         });
         await expectPageRan(page);
-        const held = page.url();
         const target = view.locator(link.target);
         await expect(target).toBeVisible();
         if (!link.hidden) {
@@ -595,7 +602,7 @@ exitTest.describe("a Page cannot reach another host or the page that holds it", 
 
         await page.waitForTimeout(SETTLE_MS);
         expect(opened).toEqual([]);
-        expect(page.url()).toBe(held);
+        expectOnInterface(page);
         expect(otherHost.requests).toEqual([]);
         expect(otherHost.connections).toBe(0);
       });
@@ -709,7 +716,8 @@ exitTest.describe("a Page is held where the interface put it", () => {
     const session = `${apiOrigin}/api/v1/me`;
     const asked: string[] = [];
     page.on("request", (request) => {
-      if (request.url() === session) {
+      // The interface asks for the session itself. What counts is a request out of a frame.
+      if (request.url() === session && request.frame() !== page.mainFrame()) {
         asked.push(request.url());
       }
     });

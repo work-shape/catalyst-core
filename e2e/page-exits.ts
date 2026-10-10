@@ -281,6 +281,10 @@ export const pageLoadExits: readonly PageExit[] = [
 ];
 
 /** A link a person clicks, in the ways a Page could keep an address on it. */
+/** The link whose script replaces the built-in methods of its document before it adds the link. */
+export const REPLACED_BUILT_INS_LINK =
+  "a link of a script that replaced the built-in methods first";
+
 export interface PageLink {
   name: string;
   html?(address: string): string;
@@ -347,7 +351,7 @@ export const pageLinks: readonly PageLink[] = [
     hidden: true
   },
   {
-    name: "a link of a script that replaced the built-in methods first",
+    name: REPLACED_BUILT_INS_LINK,
     bypass: true,
     script: (address) =>
       [
@@ -376,7 +380,7 @@ export const pageLinks: readonly PageLink[] = [
 /** The titles of the tests `view-exits.spec.ts` makes of the lists above. */
 export const pageExitTitle = (exit: PageExit) =>
   `a Page reaches no other host through ${exit.name}`;
-export const pageLinkTitle = (link: PageLink, click: string) =>
+export const pageLinkTitle = (link: Pick<PageLink, "name">, click: string) =>
   `${click} in a Page reaches no other host (${link.name})`;
 /** The clicks that open a link in a tab of its own. A way around the guard is tried with these. */
 export const tabOpeningClicks: readonly string[] = [
