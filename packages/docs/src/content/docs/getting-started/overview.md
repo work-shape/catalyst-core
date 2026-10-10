@@ -43,6 +43,19 @@ Do not put customer-specific prompts, labels, examples, or tool behavior into pl
 
 Do not treat audit logs as full transcripts. Audit events should be minimized governance metadata.
 
+## First Decisions
+
+Before writing tools or deploying anything, decide:
+
+- who operates the instance
+- what the agent is allowed to help with
+- which users may access it
+- which customer systems and documents it may touch
+- what should be retained, audited, deleted, and backed up
+- which model provider and region are acceptable
+
+Start with [Operating Models](/getting-started/operating-models/) and then write the [Instance Brief](/operate/instance-brief/).
+
 ## How Work Flows
 
 ```text

@@ -1,0 +1,39 @@
+---
+title: Workshape Catalyst documentation
+description: Configure, extend, and operate a dedicated AI agent chat instance.
+tableOfContents: false
+head:
+  - tag: title
+    content: Workshape Catalyst documentation
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+export const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+Workshape Catalyst is a platform for running a dedicated AI agent chat instance for one organization, assembled from reusable platform packages, release config, and a thin layer of your own code.
+
+<CardGrid>
+  <LinkCard
+    title="Get started"
+    description="What the platform provides, who operates an instance, and how to run the demo locally."
+    href={`${base}/getting-started/overview/`}
+  />
+  <LinkCard
+    title="Configure"
+    description="Client assembly, release config, modules, agents and skills, and the chat experience."
+    href={`${base}/configure/client-assembly/`}
+  />
+  <LinkCard
+    title="Extend"
+    description="Write custom code tools that let the agent act in your systems."
+    href={`${base}/extend/custom-tools/`}
+  />
+  <LinkCard
+    title="Operate"
+    description="The instance brief, deployment, sign-in and embedding, governance, and rights."
+    href={`${base}/operate/instance-brief/`}
+  />
+</CardGrid>
+
+Workshape Catalyst is an early product. [Current Status](/reference/current-status/) lists what the current release contains and what it does not contain yet. The chat API is described in the [API reference](/reference/api/).
