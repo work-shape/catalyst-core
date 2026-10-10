@@ -4043,23 +4043,35 @@ test("a surface yields Escape to the layer above it, returns the focus to its op
 });
 
 test("superadmin resets a user's password from the users panel", async ({ page }) => {
-  // Make sure the normal user exists in the platform user store before administering it.
-  await signInViaApi(page, normalUser);
-  const normalMe = await page.request.get(`${apiBaseUrl}/api/v1/me`);
-  expect(normalMe.ok()).toBe(true);
-  await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`, { data: {} });
-  await page.context().clearCookies();
+  // A user of this test's own: the seeded users sign in from every other spec file at the same
+  // time, and a seeded password that is another one for a moment refuses them.
+  const timestamp = Date.now();
+  const resetUser = {
+    displayLabel: `E2E Reset ${timestamp}`,
+    email: `e2e-reset-${timestamp}@example.test`,
+    password: `e2e-initial-${timestamp}`
+  };
+  await signInViaApi(page, superadminUser);
+  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
+    data: {
+      displayLabel: resetUser.displayLabel,
+      email: resetUser.email,
+      roles: ["user"],
+      passwordSignIn: { password: resetUser.password }
+    }
+  });
+  expect(created.ok()).toBe(true);
 
-  await signInViaUi(page, superadminUser);
+  await page.goto("/");
   await settingsGear(page).click();
   await expect(settingsPages(page)).toBeVisible();
 
   await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
-  await page.getByRole("button", { name: `E2E User ${normalUser.email}` }).click();
+  await page.getByRole("button", { name: `${resetUser.displayLabel} ${resetUser.email}` }).click();
   await expect(page.getByRole("heading", { name: "Sign-in identities" })).toBeVisible();
 
-  const temporaryPassword = `e2e-reset-${Date.now()}`;
-  await page.getByLabel("New password").fill(temporaryPassword);
+  const newPassword = `e2e-reset-${timestamp}`;
+  await page.getByLabel("New password").fill(newPassword);
   await page.getByRole("button", { name: "Reset password" }).click();
   await expect(page.getByText("Password updated", { exact: false })).toBeVisible();
 
@@ -4067,31 +4079,19 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
 
+  // The password the user was created with is no longer one, and the new one signs in.
+  const refused = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: { email: resetUser.email, password: resetUser.password, rememberMe: true }
+  });
+  expect(refused.status()).toBe(401);
   await signInViaUi(
     page,
-    { email: normalUser.email, password: temporaryPassword },
+    { email: resetUser.email, password: newPassword },
     { alreadyOnLogin: true }
   );
-  await expect(page.getByText("E2E User")).toBeVisible();
-
-  // Restore the seeded password so reruns against a reused server stay consistent.
-  await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-out`, { data: {} });
-  await page.context().clearCookies();
-  await signInViaApi(page, superadminUser);
-  const administeredUsers = await readPagedList(
-    page,
-    "/api/v1/instance/users",
-    apiOperations["users.list"].response.schema
-  );
-  const target = administeredUsers.find((candidate) => candidate.email === normalUser.email);
-  expect(target).toBeDefined();
-  const restored = await requestWithOrigin(
-    page,
-    "post",
-    `${apiBaseUrl}/api/v1/instance/users/${target?.id}/password`,
-    { data: { password: normalUser.password } }
-  );
-  expect(restored.ok()).toBe(true);
+  await expect(
+    page.getByRole("button", { name: `${resetUser.displayLabel} account` })
+  ).toBeVisible();
 });
 
 test("superadmin creates a user with a password from the users panel", async ({ page }) => {
