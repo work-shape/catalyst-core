@@ -28,15 +28,22 @@ export function usageRegion(region: string | undefined, t: TranslationContextVal
   return label ? t(label) : region;
 }
 
+type UsageEvent = UsageSummary["recentEvents"][number];
+
+/** Where the amounts of a call that ended with usage come from. */
+const SOURCE_LABELS: Record<UsageEvent["source"], TranslationKey> = {
+  provider_reported: "settings.usageStatusReported",
+  estimated: "settings.usageStatusEstimated",
+  not_reported: "settings.usageStatusNothingReported"
+};
+
 /**
- * Where the amounts of a call come from. A call that has not ended has none yet, and a call
- * that ended without an answer has none its provider reported: both are said in words.
+ * How a call stands, in words: running, failed or abandoned, and for a call that ended with
+ * usage where its amounts come from. No value of the record is shown as it is stored.
  */
-export function usageSource(
-  event: UsageSummary["recentEvents"][number],
-  t: TranslationContextValue["t"]
-): string {
+export function usageStatus(event: UsageEvent, t: TranslationContextValue["t"]): string {
   if (event.status === "pending") return t("settings.usageStatusRunning");
-  if (event.source === "not_reported") return t("settings.usageStatusNothingReported");
-  return event.source;
+  if (event.status === "failed") return t("settings.usageStatusFailed");
+  if (event.status === "abandoned") return t("settings.usageStatusAbandoned");
+  return t(SOURCE_LABELS[event.source]);
 }

@@ -5,6 +5,15 @@ export function formatDateTime(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleString(locale);
 }
 
+/** The day of a moment, and its time of day: the two lines of a moment in a narrow column. */
+export function formatDate(value: string, locale: LocaleCode): string {
+  return new Date(value).toLocaleDateString(locale);
+}
+
+export function formatTime(value: string, locale: LocaleCode): string {
+  return new Date(value).toLocaleTimeString(locale);
+}
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;

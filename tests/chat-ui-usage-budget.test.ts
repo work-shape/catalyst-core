@@ -42,14 +42,17 @@ describe("usage spend budget progress", () => {
     expect(markup).not.toContain("Billed");
   });
 
-  // Fails without the change: a call in flight and a call that ended without an answer both
-  // showed as a call of zero tokens with the source "estimated".
-  it("says in words that a call is running and that a call reported no usage", () => {
+  // Fails without the change: a failed and an abandoned call both read "No usage reported",
+  // and a call with usage showed the stored value of its source, such as `provider_reported`.
+  it("says in words how each call stands, in English and German, and shows no stored value", () => {
     const usage = createUsageSummary();
     usage.recentEvents = [
       createEvent("usage_running", "pending"),
       createEvent("usage_failed", "failed"),
-      createEvent("usage_lost", "abandoned")
+      createEvent("usage_lost", "abandoned"),
+      createEvent("usage_silent", "settled"),
+      { ...createEvent("usage_reported", "settled"), source: "provider_reported", totalTokens: 9 },
+      { ...createEvent("usage_estimated", "settled"), source: "estimated", totalTokens: 7 }
     ];
 
     const english = renderToStaticMarkup(createElement(UsageView, { usage }));
@@ -60,13 +63,59 @@ describe("usage spend budget progress", () => {
       })
     );
 
-    expect(english.split(">Running<")).toHaveLength(2);
-    expect(english.split(">No usage reported<")).toHaveLength(3);
+    const statuses = (markup: string): string[] =>
+      [...markup.matchAll(/<span[^>]*>([^<]*)<\/span><\/td><\/tr>/gu)].map((cell) => cell[1] ?? "");
+    expect(statuses(english).slice(-6)).toEqual([
+      "Running",
+      "Failed",
+      "Abandoned",
+      "No usage reported",
+      "Reported by provider",
+      "Estimated"
+    ]);
+    expect(statuses(german).slice(-6)).toEqual([
+      "Läuft",
+      "Fehlgeschlagen",
+      "Aufgegeben",
+      "Keine Nutzung gemeldet",
+      "Vom Anbieter gemeldet",
+      "Geschätzt"
+    ]);
+    for (const markup of [english, german]) {
+      for (const stored of ["not_reported", "provider_reported", "estimated", "abandoned"]) {
+        expect(markup).not.toContain(stored);
+      }
+    }
     expect(english).toContain("Provider and region");
-    expect(english).not.toContain("not_reported");
-    expect(german.split(">Läuft<")).toHaveLength(2);
-    expect(german.split(">Keine Nutzung gemeldet<")).toHaveLength(3);
     expect(german).toContain("Anbieter und Region");
+  });
+
+  // Fails without the change: the table had eight columns, ten with web search, and at the
+  // width of the page the last ones lay outside its box.
+  it("shows a call in five columns, with the time, the model, the region, the cached input and the status as second lines", () => {
+    const usage = createUsageSummary();
+    usage.recentEvents = [
+      {
+        ...createEvent("usage_reported", "settled"),
+        source: "provider_reported",
+        totalTokens: 1200,
+        cachedInputTokens: 800
+      }
+    ];
+
+    const markup = renderToStaticMarkup(createElement(UsageView, { usage }));
+    const recent = markup.slice(markup.indexOf("Recent model usage"));
+
+    expect([...recent.matchAll(/<th[^>]*>([^<]*)<\/th>/gu)].map((head) => head[1])).toEqual([
+      "Time",
+      "Caller and model",
+      "Provider and region",
+      "Tokens",
+      "Billable and status"
+    ]);
+    expect(recent).toContain(">gpt-main</span>");
+    expect(recent).toContain(">EU</span>");
+    expect(recent).toContain(">800 from cache</span>");
   });
 });
 

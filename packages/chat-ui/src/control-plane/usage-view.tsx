@@ -19,12 +19,13 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableCellDetail,
   TableHead,
   TableHeader,
   TableRow
 } from "@vivd-catalyst/ui";
-import { formatDateTime } from "./locale-format";
-import { usageCaller, usageRegion, usageSource } from "./usage-attribution-labels";
+import { formatDate, formatTime } from "./locale-format";
+import { usageCaller, usageRegion, usageStatus } from "./usage-attribution-labels";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 
 export function UsageView({
@@ -204,70 +205,64 @@ export function UsageView({
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("settings.time")}</TableHead>
-                    <TableHead>{t("settings.usageCaller")}</TableHead>
-                    <TableHead>{t("settings.usageModel")}</TableHead>
+                    <TableHead>{t("settings.usageCallerAndModel")}</TableHead>
                     <TableHead>{t("settings.usageProviderAndRegion")}</TableHead>
                     <TableHead>{t("settings.usageTokens")}</TableHead>
-                    <TableHead>{t("settings.usageCachedInput")}</TableHead>
-                    <TableHead>{t("settings.usageBillable")}</TableHead>
-                    {showWebSearchCosts ? (
-                      <TableHead>{t("settings.usageWebSearch")}</TableHead>
-                    ) : null}
-                    {showWebSearchCosts ? (
-                      <TableHead>{t("settings.usageSearchBillable")}</TableHead>
-                    ) : null}
-                    <TableHead>{t("settings.usageSource")}</TableHead>
+                    <TableHead>{t("settings.usageBillableAndStatus")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentEvents.map((event) => (
-                    <TableRow key={event.id}>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatDateTime(event.createdAt, locale)}
-                      </TableCell>
-                      <TableCell className="break-words">{usageCaller(event, t)}</TableCell>
-                      <TableCell className="font-medium break-words">
-                        {event.billedAsFast
-                          ? t("settings.usageModelFast", { model: event.model })
-                          : event.model}
-                      </TableCell>
-                      <TableCell className="break-words text-muted-foreground">
-                        {event.providerId}
-                        <span className="block whitespace-nowrap">
-                          {usageRegion(event.region, t)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {event.status === "pending"
-                          ? t("settings.usageUnknown")
-                          : event.totalTokens.toLocaleString(locale)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {(event.status === "pending"
-                          ? undefined
-                          : event.cachedInputTokens?.toLocaleString(locale)) ??
-                          t("settings.usageUnknown")}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {event.status === "pending"
-                          ? t("settings.usageUnknown")
-                          : formatBillableCost(event.cost, i18n)}
-                      </TableCell>
-                      {showWebSearchCosts ? (
-                        <TableCell className="whitespace-nowrap text-muted-foreground">
-                          {event.webSearchCallCount.toLocaleString(locale)}
+                  {recentEvents.map((event) => {
+                    const running = event.status === "pending";
+                    return (
+                      <TableRow key={event.id}>
+                        <TableCell className="whitespace-nowrap">
+                          {formatDate(event.createdAt, locale)}
+                          <TableCellDetail>{formatTime(event.createdAt, locale)}</TableCellDetail>
                         </TableCell>
-                      ) : null}
-                      {showWebSearchCosts ? (
-                        <TableCell className="whitespace-nowrap text-muted-foreground">
-                          {formatWebSearchBillableCost(event.cost, i18n)}
+                        <TableCell className="break-words">
+                          {usageCaller(event, t)}
+                          <TableCellDetail>
+                            {event.billedAsFast
+                              ? t("settings.usageModelFast", { model: event.model })
+                              : event.model}
+                          </TableCellDetail>
                         </TableCell>
-                      ) : null}
-                      <TableCell className="text-muted-foreground">
-                        {usageSource(event, t)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        <TableCell className="break-words">
+                          {event.providerId}
+                          <TableCellDetail>{usageRegion(event.region, t)}</TableCellDetail>
+                        </TableCell>
+                        <TableCell>
+                          {running
+                            ? t("settings.usageUnknown")
+                            : event.totalTokens.toLocaleString(locale)}
+                          {running || event.totalTokens === 0 ? null : (
+                            <TableCellDetail>
+                              {event.cachedInputTokens === undefined
+                                ? t("settings.usageCachedNotReported")
+                                : t("settings.usageCachedCount", {
+                                    count: event.cachedInputTokens.toLocaleString(locale)
+                                  })}
+                            </TableCellDetail>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {running
+                            ? t("settings.usageUnknown")
+                            : formatBillableCost(event.cost, i18n)}
+                          {showWebSearchCosts && event.webSearchCallCount > 0 ? (
+                            <TableCellDetail>
+                              {t("settings.usageDaySearches", {
+                                count: event.webSearchCallCount.toLocaleString(locale),
+                                amount: formatWebSearchBillableCost(event.cost, i18n)
+                              })}
+                            </TableCellDetail>
+                          ) : null}
+                          <TableCellDetail>{usageStatus(event, t)}</TableCellDetail>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : (
