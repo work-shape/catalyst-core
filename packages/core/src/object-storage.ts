@@ -87,17 +87,29 @@ export interface ObjectStorageFailureDiagnostics {
   /** A code from the provider's own closed list, such as `AccessDenied` or `ENOSPC`. */
   providerErrorCode?: string;
   httpStatusCode?: number;
+  /**
+   * Where the store's entry sits in the instance config, such as
+   * `infrastructure.objectStorage.files`. The guard of the port adds it; a provider leaves it out.
+   */
+  entryPath?: string;
 }
 
-const FAILURE_MESSAGES: Record<ObjectStorageFailure, string> = {
-  store_missing:
-    "Object storage is not available: its bucket or directory does not exist. Create it or correct the entry under 'infrastructure.objectStorage'.",
-  access_denied:
-    "Object storage is not available: its credentials cannot access the store. Check the credentials and permissions of the entry under 'infrastructure.objectStorage'.",
-  unreachable:
-    "Object storage is not reachable. Check the endpoint of the entry under 'infrastructure.objectStorage' and network access.",
-  request_failed: "The object storage request failed."
-};
+/** The message of a failure. It names the config entry when the store knows which one it is. */
+function failureMessage(failure: ObjectStorageFailure, entryPath: string | undefined): string {
+  const entry = entryPath
+    ? `the entry '${entryPath}'`
+    : "its entry under 'infrastructure.objectStorage'";
+  switch (failure) {
+    case "store_missing":
+      return `Object storage is not available: its bucket or directory does not exist. Create it or correct ${entry}.`;
+    case "access_denied":
+      return `Object storage is not available: its credentials cannot access the store. Check the credentials and permissions of ${entry}.`;
+    case "unreachable":
+      return `Object storage is not reachable. Check the endpoint of ${entry} and network access.`;
+    case "request_failed":
+      return "The object storage request failed.";
+  }
+}
 
 /**
  * The store did not serve the request. It carries the failure, a provider code from a closed
@@ -105,14 +117,16 @@ const FAILURE_MESSAGES: Record<ObjectStorageFailure, string> = {
  */
 export class ObjectStorageUnavailable extends AppError {
   readonly failure: ObjectStorageFailure;
+  private readonly diagnostics: ObjectStorageFailureDiagnostics;
 
   constructor(failure: ObjectStorageFailure, diagnostics: ObjectStorageFailureDiagnostics = {}) {
     super(
       failure === "request_failed" ? "INTERNAL" : "VALIDATION_FAILED",
-      FAILURE_MESSAGES[failure],
+      failureMessage(failure, diagnostics.entryPath),
       {
         stage: "store",
         failure,
+        ...(diagnostics.entryPath ? { entry: diagnostics.entryPath } : {}),
         ...(diagnostics.providerErrorCode
           ? { providerErrorCode: diagnostics.providerErrorCode }
           : {}),
@@ -123,6 +137,14 @@ export class ObjectStorageUnavailable extends AppError {
     );
     this.name = "ObjectStorageUnavailable";
     this.failure = failure;
+    this.diagnostics = diagnostics;
+  }
+
+  /** The same failure, naming the config entry of the store it came from. */
+  forEntry(entryPath: string | undefined): ObjectStorageUnavailable {
+    return entryPath === undefined || this.diagnostics.entryPath !== undefined
+      ? this
+      : new ObjectStorageUnavailable(this.failure, { ...this.diagnostics, entryPath });
   }
 }
 
@@ -162,6 +184,10 @@ export function normalizeObjectKey(key: string): string {
 /**
  * A prefix that selects whole key segments only. It must end with `/`, which is what keeps
  * `usr_1/` from matching `usr_10/`. `allowAll` admits the empty prefix, for listing a store.
+ *
+ * Unlike a key, a prefix is never rewritten: one that is not already in its normal form is
+ * refused. Rewriting `users/usr_1/../` would give `users/`, and a delete of it would take
+ * every neighbour with it.
  */
 export function normalizeObjectPrefix(prefix: string, options: { allowAll: boolean }): string {
   if (prefix === "" && options.allowAll) {
@@ -170,7 +196,16 @@ export function normalizeObjectPrefix(prefix: string, options: { allowAll: boole
   if (!prefix.endsWith("/")) {
     throw refuse("a prefix must end with '/', so it cannot match a neighbouring key");
   }
-  return normalizeObjectKey(prefix);
+  if (prefix.includes("\0") || prefix.includes("\\")) {
+    throw refuse("the prefix holds a character no key may hold");
+  }
+  const segments = prefix.slice(0, -1).split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    throw refuse(
+      "a prefix names whole segments: no leading '/', no empty segment, no '.' and no '..'"
+    );
+  }
+  return prefix;
 }
 
 /**
@@ -180,8 +215,32 @@ export function normalizeObjectPrefix(prefix: string, options: { allowAll: boole
  * `ObjectStorageUnavailable` without its message. Every provider returns its store through
  * this function.
  */
-export function guardObjectStorage(provider: ObjectStorage): ObjectStorage {
+export function guardObjectStorage(
+  provider: ObjectStorage,
+  options: { entryPath?: string } = {}
+): ObjectStorage {
   const signedGetUrl = provider.signedGetUrl?.bind(provider);
+  const sealedError = (error: unknown): Error =>
+    error instanceof ObjectNotFound
+      ? error
+      : (error instanceof ObjectStorageUnavailable
+          ? error
+          : new ObjectStorageUnavailable("request_failed")
+        ).forEntry(options.entryPath);
+  async function sealed<Result>(run: () => Promise<Result>): Promise<Result> {
+    try {
+      return await run();
+    } catch (error: unknown) {
+      throw sealedError(error);
+    }
+  }
+  async function* sealedBody(body: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
+    try {
+      yield* body;
+    } catch (error: unknown) {
+      throw sealedError(error);
+    }
+  }
   return {
     async put(key, body, options) {
       const normalized = normalizeObjectKey(key);
@@ -253,24 +312,4 @@ export async function readObjectBytes(storage: ObjectStorage, key: string): Prom
     offset += chunk.byteLength;
   }
   return bytes;
-}
-
-function isPortError(error: unknown): error is ObjectNotFound | ObjectStorageUnavailable {
-  return error instanceof ObjectNotFound || error instanceof ObjectStorageUnavailable;
-}
-
-async function sealed<Result>(run: () => Promise<Result>): Promise<Result> {
-  try {
-    return await run();
-  } catch (error: unknown) {
-    throw isPortError(error) ? error : new ObjectStorageUnavailable("request_failed");
-  }
-}
-
-async function* sealedBody(body: AsyncIterable<Uint8Array>): AsyncIterable<Uint8Array> {
-  try {
-    yield* body;
-  } catch (error: unknown) {
-    throw isPortError(error) ? error : new ObjectStorageUnavailable("request_failed");
-  }
 }

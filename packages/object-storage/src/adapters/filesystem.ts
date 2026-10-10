@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -24,8 +24,8 @@ export const filesystemObjectStorageProvider = defineProvider({
   type: "filesystem",
   configSchema: z.object({ root: z.string().min(1) }),
   external: false,
-  create(config): ObjectStorage {
-    return createFilesystemObjectStorage(config.root);
+  create(config, { entryPath }): ObjectStorage {
+    return guardObjectStorage(new FilesystemObjectStorage(config.root), { entryPath });
   },
   describe(config) {
     return { root: config.root };
@@ -105,9 +105,14 @@ class FilesystemObjectStorage implements ObjectStorage {
 
   async deletePrefix(prefix: string): Promise<{ deleted: number }> {
     try {
+      const directory = this.pathOf(prefix);
+      // `u/file/` names the objects below `u/file`, never the object `u/file` itself: only a
+      // directory is removed, and a file at that path stays.
+      if (!(await isDirectory(directory))) {
+        return { deleted: 0 };
+      }
       const objects = await this.objectsBelow(prefix);
-      // The prefix ends with a separator, so it names exactly this directory.
-      await rm(this.pathOf(prefix), { recursive: true, force: true });
+      await rm(directory, { recursive: true, force: true });
       return { deleted: objects.length };
     } catch (error: unknown) {
       throw toPortError(error, "write");
@@ -171,6 +176,17 @@ class FilesystemObjectStorage implements ObjectStorage {
       throw new ObjectStorageUnavailable("request_failed");
     }
     return target;
+  }
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isDirectory();
+  } catch (error: unknown) {
+    if (codeOf(error) === "ENOENT" || codeOf(error) === "ENOTDIR") {
+      return false;
+    }
+    throw error;
   }
 }
 

@@ -302,6 +302,54 @@ describe.each(subjects)("object storage contract: $name", (subject) => {
     await expect(storage.deletePrefix(`${base}users/usr_x1/`)).resolves.toEqual({ deleted: 0 });
   });
 
+  it("refuses a prefix that is not in its normal form instead of rewriting it", async () => {
+    const storage = subject.storage();
+    const base = scope();
+    await storage.put(`${base}u/usr_1/a.txt`, encode("a"));
+    await storage.put(`${base}u/usr_10/b.txt`, encode("b"));
+
+    // Rewritten, `u/usr_1/../` is `u/`: the delete would take the neighbour `usr_10` with it.
+    const unsafe = [
+      `${base}u/usr_1/../`,
+      `${base}u/./`,
+      `${base}u//usr_1/`,
+      `${base}u/usr_1//`,
+      `/${base}u/usr_1/`,
+      `${base}u\\usr_1/`,
+      `${base}u/usr_1\0/`,
+      "../",
+      "./"
+    ];
+    for (const prefix of unsafe) {
+      await expect(storage.deletePrefix(prefix)).rejects.toThrow("Object storage refused");
+      await expect(storage.list(prefix)).rejects.toThrow("Object storage refused");
+    }
+
+    expect((await listAll(storage, base)).sort()).toEqual([
+      `${base}u/usr_1/a.txt`,
+      `${base}u/usr_10/b.txt`
+    ]);
+  });
+
+  it("keeps the object whose key is the prefix without its separator", async () => {
+    const storage = subject.storage();
+    const base = scope();
+    await storage.put(`${base}u/file`, encode("kept"));
+    await storage.put(`${base}u/other/a.txt`, encode("a"));
+
+    // `u/file/` names what lies below `u/file`. Nothing does, so nothing is deleted.
+    await expect(storage.deletePrefix(`${base}u/file/`)).resolves.toEqual({ deleted: 0 });
+    await expect(storage.list(`${base}u/file/`)).resolves.toEqual({ objects: [] });
+
+    await expect(text(storage, `${base}u/file`)).resolves.toBe("kept");
+    expect((await listAll(storage, base)).sort()).toEqual([
+      `${base}u/file`,
+      `${base}u/other/a.txt`
+    ]);
+    await expect(storage.deletePrefix(`${base}u/other/`)).resolves.toEqual({ deleted: 1 });
+    await expect(text(storage, `${base}u/file`)).resolves.toBe("kept");
+  });
+
   it("lists a prefix in pages, in key order, with sizes", async () => {
     const storage = subject.storage();
     const base = scope();
@@ -507,6 +555,15 @@ describe("object storage failures", () => {
         statusCode: 422,
         details: { stage: "store", providerErrorCode: "NoSuchBucket", httpStatusCode: 404 }
       });
+      // The answer names the store's own config entry, so the operator knows which of the
+      // two stores to repair.
+      expect(noBucket).toMatchObject({
+        message: expect.stringContaining("the entry 'infrastructure.objectStorage.files'"),
+        details: { entry: "infrastructure.objectStorage.files" }
+      });
+      expect(denied).toMatchObject({
+        message: expect.stringContaining("the entry 'infrastructure.objectStorage.files'")
+      });
       // A bucket that is gone is not reported as an object that is gone.
       expect(noBucketOnRead).toMatchObject({ failure: "store_missing" });
       expect(denied).toMatchObject({
@@ -551,6 +608,9 @@ describe("object storage failures", () => {
     const failure = await storage.put("a/b.txt", encode("x")).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(ObjectStorageUnavailable);
+    expect(failure).toMatchObject({
+      details: { entry: "infrastructure.objectStorage.workspaces" }
+    });
     expect(String(failure)).not.toContain(root);
     expect(failure).not.toHaveProperty("cause");
     await expect(storage.get("a/b.txt")).rejects.toBeInstanceOf(ObjectNotFound);

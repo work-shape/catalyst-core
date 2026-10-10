@@ -40,7 +40,7 @@ export const s3ObjectStorageProvider = defineProvider({
   type: "s3",
   configSchema: s3ConfigSchema,
   external: true,
-  async create(config, { secrets }): Promise<ObjectStorage> {
+  async create(config, { secrets, entryPath }): Promise<ObjectStorage> {
     return guardObjectStorage(
       new S3ObjectStorage(
         config.bucket,
@@ -53,7 +53,8 @@ export const s3ObjectStorageProvider = defineProvider({
             secretAccessKey: await secrets.resolve(config.secretKeySecret)
           }
         })
-      )
+      ),
+      { entryPath }
     );
   },
   describe(config) {

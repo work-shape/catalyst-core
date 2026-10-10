@@ -44,6 +44,12 @@ export interface ProviderCreateContext {
   logger: Logger;
 }
 
+/** What an adapter's factory gets: the caller's context and where its entry sits in the config. */
+export interface ProviderFactoryContext extends ProviderCreateContext {
+  /** Such as `infrastructure.objectStorage.files`, for a message that names the entry. */
+  entryPath: string;
+}
+
 /** Display fields of a configured provider. Never a secret value. */
 export type ProviderDescription = Record<string, string | number | boolean>;
 
@@ -64,7 +70,7 @@ export interface ProviderDefinitionInput<
    * it depends on the entry, such as an engine that is local unless an endpoint names a host.
    */
   external: boolean | ((config: z.output<Schema>) => boolean);
-  create(config: z.output<Schema>, context: ProviderCreateContext): Instance | Promise<Instance>;
+  create(config: z.output<Schema>, context: ProviderFactoryContext): Instance | Promise<Instance>;
   /** Never a prompt, a mail or a user-visible write. */
   check?(instance: Instance): Promise<ProviderCheckResult>;
   describe(config: z.output<Schema>): ProviderDescription;
@@ -180,7 +186,7 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
           throw error;
         }
       }
-      return input.create(config, context);
+      return input.create(config, { ...context, entryPath: entry.path });
     }
   };
 }

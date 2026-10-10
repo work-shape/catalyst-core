@@ -192,7 +192,8 @@ id from config_assets where status = 'deleted')`.
   crosses the port. A setup failure of the store (missing bucket, refused credentials,
   unreachable endpoint) still answers an upload with `422`; its message names the config entry
   and no longer the bucket. `deletePrefix` and `list` refuse a prefix that does not end with
-  `/`, so `users/usr_1` can never reach `users/usr_10/`. A signed read address lives at most
+  `/`, so `users/usr_1` can never reach `users/usr_10/`, and refuse one that holds `.`, `..`, an
+  empty segment, a leading `/`, a backslash or a null byte instead of rewriting it. A signed read address lives at most
   300 seconds and is never logged; nothing in the platform asks for one yet.
 - **Rights:** every rights check of the API and of tool calls is answered by one evaluator,
   `evaluateAccess` in `@vivd-catalyst/core`. `InProcessToolExecution` takes an optional
