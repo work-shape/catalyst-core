@@ -51,10 +51,7 @@ export interface ToolDisplayRenderInput {
   actions?: ToolDisplayActions;
 }
 
-export type ToolDisplayWidget = ((input: ToolDisplayRenderInput) => ReactNode) & {
-  /** Tool calls that use this widget, registered with the assistant UI by the client. */
-  toolNames?: readonly string[];
-};
+export type ToolDisplayWidget = (input: ToolDisplayRenderInput) => ReactNode;
 export type ToolDisplayWidgetRegistry = Record<string, ToolDisplayWidget>;
 
 export interface StandardSchemaV1<Input = unknown, Output = Input> {
@@ -98,13 +95,11 @@ export interface StandardSchemaV1Issue {
  */
 export function defineToolDisplayWidget<TData>({
   kind,
-  toolNames,
   version,
   dataSchema,
   render
 }: {
   kind: string;
-  toolNames?: readonly string[];
   version: number;
   dataSchema: StandardSchemaV1<unknown, TData>;
   render: (props: { data: TData; input: ToolDisplayRenderInput }) => ReactNode;
@@ -122,7 +117,7 @@ export function defineToolDisplayWidget<TData>({
     return render({ data: result.value, input });
   };
 
-  return Object.assign(widget, { kind, toolNames });
+  return Object.assign(widget, { kind });
 }
 
 export function toolDisplayWidgetRegistry(
@@ -156,15 +151,6 @@ export function ToolDisplayWidgetProvider({
       {children}
     </ToolDisplayWidgetContext.Provider>
   );
-}
-
-export function toolDisplayWidgetToolNames(widgets: ToolDisplayWidgetRegistry = {}): string[] {
-  return [...new Set(Object.values(widgets).flatMap((widget) => widget.toolNames ?? []))];
-}
-
-export function useToolDisplayToolNames(): string[] {
-  const { widgets } = useContext(ToolDisplayWidgetContext);
-  return useMemo(() => toolDisplayWidgetToolNames(widgets), [widgets]);
 }
 
 interface ToolDisplayActionsContextValue {

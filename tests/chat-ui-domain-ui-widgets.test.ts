@@ -3,26 +3,11 @@ import { z } from "zod";
 import {
   defineToolDisplayWidget,
   toolDisplayWidgetRegistry,
-  toolDisplayWidgetToolNames,
   type StandardSchemaV1,
   type ToolDisplayRenderInput
 } from "../packages/chat-ui/src/domain-ui-widgets";
 
 describe("chat UI domain UI widgets", () => {
-  it("collects client tool names while retaining display-kind lookup", () => {
-    const widget = defineToolDisplayWidget({
-      kind: "example.count",
-      toolNames: ["example.count", "example.summary"],
-      version: 1,
-      dataSchema: z.object({ count: z.number() }),
-      render: ({ data }) => `count:${data.count}`
-    });
-    const registry = toolDisplayWidgetRegistry(widget);
-    expect(toolDisplayWidgetToolNames(registry)).toEqual(["example.count", "example.summary"]);
-    expect(registry["example.count"]?.(createRenderInput({ data: { count: 7 } }))).toBe("count:7");
-    expect(toolDisplayWidgetToolNames()).toEqual([]);
-  });
-
   it("declines rendering on version mismatch", () => {
     const widget = defineToolDisplayWidget({
       kind: "demo.count",
