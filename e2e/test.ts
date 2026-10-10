@@ -99,6 +99,22 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "asset-changed-or-gone-in-build",
+    reason:
+      "Chromium's own log lines: these tests save an agent that somebody saved or deleted " +
+      "meanwhile and read one that is gone or whose read they cut off. They assert what the " +
+      "page shows for the 409, the 404 and the failed read.",
+    matches: new RegExp(
+      `${requestAnswered(409).source}|${requestAnswered(404).source}|net::ERR_FAILED`,
+      "u"
+    ),
+    path: /^\/api\/v1\/assets\/agent\/e2e_(?:reload|deleted)_probe$/u,
+    tests: [
+      "a newer version that cannot be loaded leaves the page as it is and says so",
+      "an asset that was deleted meanwhile says so, keeps the text and offers the way out"
+    ]
+  },
+  {
     name: "grant-already-there",
     reason:
       "Chromium's own log line: the test asks for three grants of which two exist, the " +

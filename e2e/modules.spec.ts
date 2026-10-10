@@ -1,3 +1,4 @@
+import { loadNewerVersion } from "./build-fixtures";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -175,7 +176,7 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     const conflict = page.locator("[data-build-conflict]");
     await expect(async () => {
       if (await conflict.isVisible()) {
-        await conflict.getByRole("button", { name: "Load the newer version", exact: true }).click();
+        await loadNewerVersion(page);
         await expect(conflict).toHaveCount(0);
       }
       if (await stale.isVisible()) await stale.getByRole("button", { name: "Remove" }).click();

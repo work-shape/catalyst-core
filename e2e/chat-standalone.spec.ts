@@ -1,3 +1,4 @@
+import { loadNewerVersion } from "./build-fixtures";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { randomUUID } from "node:crypto";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
@@ -3300,7 +3301,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(conflict).toContainText("Somebody saved this while you were editing.");
     await expect(instructions).toHaveValue(unsaved);
     await expectVersion(original.version + 5);
-    await conflict.getByRole("button", { name: "Load the newer version", exact: true }).click();
+    await loadNewerVersion(page);
     await expect(conflict).toHaveCount(0);
     await expect(instructions).toHaveValue(serverInstructions);
   } finally {
