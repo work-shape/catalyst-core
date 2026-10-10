@@ -4,6 +4,7 @@ import { createTypeScriptImportResolver } from "eslint-import-resolver-typescrip
 import { importX } from "eslint-plugin-import-x";
 import tseslint from "typescript-eslint";
 import { leaseExemptions, processLocalTimers } from "./job-executor-exemptions.mjs";
+import { modelGatewayRules } from "./model-gateway-rules.mjs";
 
 /**
  * @typedef {import("eslint").Rule.RuleContext} Context
@@ -710,7 +711,8 @@ const plugin = {
         context.sourceCode.text.includes("POSTGRES_STORE_TEST_DATABASE_URL")
           ? { "MemberExpression[property.name=/^(skip|skipIf|runIf)$/]": report }
           : {}
-    )
+    ),
+    ...modelGatewayRules({ root, rule, packageAt, keyName, loadedModule })
   }
 };
 

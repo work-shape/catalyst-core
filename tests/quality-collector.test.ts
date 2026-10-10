@@ -64,6 +64,7 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
     "@fixture/ghost": [],
     "@fixture/chat-server": [],
     "@fixture/document-worker": [],
+    "@fixture/model-provider": [],
     "@fixture/postgres-store": [],
     "@fixture/tool-execution": [],
     "@fixture/auth": []
@@ -247,6 +248,80 @@ app.get("/ready", handler);
 app.get("/internal/pages", handler);
 app.get("/api/pages", handler);
 export const register = (path: string) => app.get(path, handler);
+`,
+
+  // The model gateway: who calls an adapter, who writes usage, who knows a provider type
+  "packages/model-provider/package.json": JSON.stringify({ name: "@fixture/model-provider" }),
+  "packages/model-provider/src/types.ts": `export interface ModelAdapter {
+  complete(): void;
+  stream(): void;
+}
+export interface ModelGateway {
+  complete(): void;
+}
+`,
+  "packages/model-provider/src/adapters/openai.ts": `export const adapter = 1;\n`,
+  // The gateway calls the adapter, registration loads it, and anyone may call the gateway.
+  "packages/model-provider/src/gateway.ts": `import type { ModelAdapter } from "./types";
+export const send = (adapter: ModelAdapter) => adapter.complete();
+`,
+  "packages/model-provider/src/registration.ts": `export { adapter } from "./adapters/openai";\n`,
+  "packages/model-provider/src/gateway-caller.ts": `import type { ModelGateway } from "./types";
+export const send = (gateway: ModelGateway) => gateway.complete();
+`,
+  "packages/model-provider/src/adapter-call.ts": `import type { ModelAdapter } from "./types";
+export const send = (adapter: ModelAdapter) => adapter.complete();
+`,
+  "packages/model-provider/src/adapter-destructured.ts": `import type { ModelAdapter } from "./types";
+export const read = (adapter: ModelAdapter) => {
+  const { stream } = adapter;
+  return stream;
+};
+`,
+  "packages/model-provider/src/adapter-picked.ts": `import type { ModelAdapter } from "./types";
+export const send = (provider: Pick<ModelAdapter, "complete">) => provider.complete();
+`,
+  "packages/model-provider/src/adapter-load.ts": `export { adapter } from "./adapters/openai";\n`,
+  // Inside model-provider a provider type may be named.
+  "packages/model-provider/src/provider-type.ts": `declare const type: string;
+export const openAi = type === "openai-compatible";
+`,
+  [`${source}/usage-write.ts`]: `declare const store: Record<string, () => void>;
+store.appendModelUsageEvent?.();
+`,
+  [`${source}/usage-record.ts`]: `declare const governance: Record<string, () => void>;
+export const { recordModelUsage } = governance;
+`,
+  [`${source}/usage-picked.ts`]: `declare const governance: Record<"recordModelUsage", () => void>;
+export const recorder = governance;
+`,
+  [`${source}/usage-insert.ts`]: `export const text = "insert into model_usage_events (id) values ($1)";\n`,
+  [`${source}/usage-table.ts`]: `declare const db: { insert(table: unknown): void };
+declare const modelUsageEvents: unknown;
+db.insert(modelUsageEvents);
+`,
+  [`${source}/provider-type.ts`]: `declare const type: string;
+export const openAi = type === "openai-compatible";
+`,
+  [`${source}/provider-type-list.ts`]: `declare const type: string;
+export const known = ["openai-compatible"].includes(type);
+`,
+  [`${source}/provider-type-switch.ts`]: `declare const type: string;
+export function streams() {
+  switch (type) {
+    case "openai-compatible":
+      return true;
+    default:
+      return false;
+  }
+}
+`,
+  [`${source}/provider-type-read.ts`]: `interface ModelProviderConfig {
+  type: string;
+}
+declare const provider: ModelProviderConfig;
+declare const other: string;
+export const same = provider.type === other;
 `,
 
   // Claim queries and interval timers outside the job executor
@@ -575,6 +650,20 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
         "catalyst/workspace-command-boundary packages/tool-execution/src/workspace-tools/queue-member.ts",
         "catalyst/workspace-command-boundary packages/tool-execution/src/workspace-tools/queue-destructured.ts",
+        "catalyst/gateway-boundary packages/model-provider/src/adapter-call.ts",
+        "catalyst/gateway-boundary packages/model-provider/src/adapter-destructured.ts",
+        "catalyst/gateway-boundary packages/model-provider/src/adapter-picked.ts",
+        "catalyst/gateway-boundary packages/model-provider/src/adapter-load.ts",
+        "catalyst/adapter-import packages/model-provider/src/adapter-load.ts",
+        `catalyst/usage-write-boundary ${source}/usage-write.ts`,
+        `catalyst/usage-write-boundary ${source}/usage-record.ts`,
+        `catalyst/usage-write-boundary ${source}/usage-picked.ts`,
+        `catalyst/usage-write-boundary ${source}/usage-insert.ts`,
+        `catalyst/usage-write-boundary ${source}/usage-table.ts`,
+        `catalyst/provider-type-literal ${source}/provider-type.ts`,
+        `catalyst/provider-type-literal ${source}/provider-type-list.ts`,
+        `catalyst/provider-type-literal ${source}/provider-type-switch.ts`,
+        `catalyst/provider-type-literal ${source}/provider-type-read.ts`,
         `catalyst/memory-store ${source}/memory-store.ts`,
         "catalyst/test-api-path tests/api-path.test.ts",
         "catalyst/test-api-path tests/api-template.test.ts",
