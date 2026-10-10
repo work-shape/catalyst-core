@@ -3559,7 +3559,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(configuredSafeguards).toContainText("25,000");
   await expect(page.getByText("Recent model usage")).toBeVisible();
   await expect(page.getByText("deterministic-local").first()).toBeVisible();
-  await expect(page.getByText("not_reported").first()).toBeVisible();
+  await expect(page.getByText("No usage reported").first()).toBeVisible();
   await settingsPages(page).getByRole("button", { name: "Audit", exact: true }).click();
   await expect(page.getByText("Recent activity")).toBeVisible();
   // Tool runs are folded into their activity as evidence; expand the rows to reveal them.
