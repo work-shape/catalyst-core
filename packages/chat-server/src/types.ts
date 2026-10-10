@@ -66,7 +66,11 @@ export interface ChatServerOptions {
     /** The registered asset kinds, assembled once with the instance. */
     kinds: AssetKindRegistry<WorkflowAssetKind>;
     validationRefs: ConfigAssetValidationRefs;
-    validateAgents?(agents: AgentConfig[]): string[];
+    /**
+     * Issues of the agents a write would leave. `changed` are those the write adds or changes;
+     * a rule that tolerates what is stored already reads only them.
+     */
+    validateAgents?(agents: AgentConfig[], changed: AgentConfig[]): string[];
   };
   agentRuntime: AgentRuntime;
   attachments?: ChatAttachmentService;

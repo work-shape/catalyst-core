@@ -38,30 +38,33 @@ interface ErrorBody {
   error: { code: string; message: string; details?: { reason?: string; module?: string } };
 }
 
-function fixture() {
+/** `bringsTool: false` is the capability as a real one is while its module is off. */
+function fixture(bringsTool = true) {
   const executed: string[] = [];
   const capability = defineCapability({
     name: "documents-stand-in",
     modules: [defineModule({ name: "documents", tools: [TOOL], jobKinds: [JOB_KIND] })],
     create: () => ({
-      tools: [
-        defineTool({
-          name: TOOL,
-          description: "Reads a document for tests.",
-          inputSchema: z.object({}),
-          async execute() {
-            executed.push(TOOL);
-            return toolSuccess({ read: true });
-          }
-        })
-      ]
+      tools: !bringsTool
+        ? []
+        : [
+            defineTool({
+              name: TOOL,
+              description: "Reads a document for tests.",
+              inputSchema: z.object({}),
+              async execute() {
+                executed.push(TOOL);
+                return toolSuccess({ read: true });
+              }
+            })
+          ]
     })
   });
   return { capability, executed };
 }
 
-const agent = (toolNames: string[]): JsonObject => ({
-  name: "test_agent",
+const agent = (toolNames: string[], name = "test_agent"): JsonObject => ({
+  name,
   displayName: "Test Agent",
   instructions: "Use configured tools only.",
   modelProviderId: "local",
@@ -69,8 +72,14 @@ const agent = (toolNames: string[]): JsonObject => ({
   initialPrompts: []
 });
 
+interface Switches {
+  resources: boolean;
+  documents: boolean;
+  assetManagement?: boolean;
+}
+
 /** An instance whose stored agent names the stand-in tool, with the two modules as given. */
-function configWith(modules: { resources: boolean; documents: boolean }) {
+function configWith(modules: Switches) {
   const config = parseClientInstanceConfig({
     ...createTestConfig({
       tools: [{ name: TOOL, enabled: true }],
@@ -88,26 +97,57 @@ function configWith(modules: { resources: boolean; documents: boolean }) {
     }),
     modules: {
       resources: { enabled: modules.resources },
-      documents: { enabled: modules.documents }
-    }
+      documents: { enabled: modules.documents },
+      ...(modules.assetManagement ? { assetManagement: { enabled: true } } : {})
+    },
+    ...(modules.assetManagement
+      ? { administration: { agentConfiguration: { enabled: true, allowSkillEditing: true } } }
+      : {})
   });
   setTestAgent(config, agent([TOOL]));
   return config;
 }
 
-async function startInstance(modules: { resources: boolean; documents: boolean }) {
-  const { capability, executed } = fixture();
+/**
+ * `restarted` starts the instance on what the one before it left in the database, with the
+ * capability as a real one is: it brings its tool only while its module is on.
+ */
+async function startInstance(modules: Switches, restarted = false) {
+  const { capability, executed } = fixture(!restarted || modules.documents);
   const config = configWith(modules);
   const instance = await createTestInstance({
     config,
     env: {},
     tools: [],
-    capabilities: [capability]
+    capabilities: [capability],
+    ...(restarted ? { seedAssets: false } : {})
   });
   return { instance, executed, config, capability };
 }
 
-async function runToolCommand(instance: Awaited<ReturnType<typeof startInstance>>["instance"]) {
+type Instance = Awaited<ReturnType<typeof startInstance>>["instance"];
+
+/** Replaces the asset bundle, as a config push does. */
+async function push(instance: Instance, agents: JsonObject[], skills: JsonObject[] = []) {
+  const overview = await instance.call("config_assets.get_overview", {});
+  return instance.call("config_assets.replace", {
+    payload: {
+      baseVersion: overview.json<{ version: number }>().version,
+      defaultAgentName: "test_agent",
+      agents,
+      skills
+    }
+  });
+}
+
+const skill = (content: string): JsonObject => ({
+  name: "research",
+  title: "Research",
+  description: "Research guidance",
+  content
+});
+
+async function runToolCommand(instance: Instance) {
   const created = await instance.call("conversations.create", { payload: { title: "Module" } });
   const conversation = created.json<{ id: string }>();
   const started = await injectStartConversationRun(instance, conversation.id, `/tool ${TOOL} {}`);
@@ -263,6 +303,68 @@ describe("a module that is off", () => {
       }
     });
     expect(written.statusCode).toBe(200);
+  });
+
+  it("starts and serves after it is turned off under an agent that uses its tool", async () => {
+    const on = await startInstance({ resources: true, documents: true });
+    const stored = { ...agent([TOOL]), displayName: "Stored Agent" };
+    expect((await push(on.instance, [stored])).statusCode).toBe(200);
+    await on.instance.close();
+
+    // The release config still enables the tool, and the capability brings none: the API
+    // starts, the stored agent is as it was, and a run of it is not offered the tool.
+    const off = await startInstance({ resources: true, documents: false }, true);
+    const kept = await off.instance.call("config_assets.get", {
+      params: { kind: "agent", name: "test_agent" }
+    });
+    expect(kept.statusCode).toBe(200);
+    expect(kept.json<{ config: JsonObject }>().config).toMatchObject({
+      displayName: "Stored Agent",
+      toolNames: [TOOL]
+    });
+    const { events } = await runToolCommand(off.instance);
+    expect(events).toContain(`Tool '${TOOL}' is not available to this agent`);
+  });
+
+  it("tolerates a stored agent that names its tool in a write to another agent or a skill", async () => {
+    const on = await startInstance({ resources: true, documents: true });
+    const first = agent([TOOL]);
+    const second = agent([TOOL], "second_agent");
+    expect((await push(on.instance, [first, second])).statusCode).toBe(200);
+    await on.instance.close();
+    const { instance } = await startInstance(
+      { resources: true, documents: false, assetManagement: true },
+      true
+    );
+
+    // One of the two is repaired while the other still names the tool.
+    expect((await push(instance, [agent([]), second])).statusCode).toBe(200);
+    // A skill is written under the agent that still names it.
+    expect((await push(instance, [agent([]), second], [skill("First")])).statusCode).toBe(200);
+    const written = await instance.call("config_assets.put", {
+      params: { kind: "skill", name: "research" },
+      payload: { config: skill("Second") }
+    });
+    expect(written.statusCode, written.body).toBe(200);
+
+    // A change to the agent that names the tool is a write of that agent, and is refused.
+    const changed = await push(instance, [
+      agent([]),
+      { ...second, instructions: "Changed while it names the tool." }
+    ]);
+    expect(changed.statusCode).toBe(422);
+    expect(JSON.stringify(changed.json<ErrorBody>().error.details)).toContain(
+      `Agent 'second_agent' references tool '${TOOL}' of module 'documents', which is off`
+    );
+    // Without the tool the same change is written.
+    expect(
+      (
+        await push(instance, [
+          agent([]),
+          { ...agent([], "second_agent"), instructions: "Changed while it names the tool." }
+        ])
+      ).statusCode
+    ).toBe(200);
   });
 
   it("does not claim a queued job of its kind, which stays queued for Instance > Jobs", async () => {

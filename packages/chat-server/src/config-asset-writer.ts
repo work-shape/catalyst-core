@@ -3,7 +3,11 @@ import {
   assertSpendBudgetPricingCoverage,
   validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
-import type { ConfigAssetBundle } from "./asset-kinds/shared";
+import {
+  configValuesEqual,
+  readDefinitionName,
+  type ConfigAssetBundle
+} from "./asset-kinds/shared";
 import type { ChatServerOptions } from "./types";
 
 export type ConfigAssetWriterOptions = Pick<
@@ -12,14 +16,20 @@ export type ConfigAssetWriterOptions = Pick<
 >;
 export function validateConfigAssetCandidate(
   options: ConfigAssetWriterOptions,
-  input: ConfigAssetBundle
+  input: ConfigAssetBundle,
+  /** The agents as they are stored now. Without them every agent counts as changed. */
+  storedAgents: readonly unknown[] = []
 ) {
   const validated = validateConfigAssetBundle({
     ...input,
     refs: options.configAssets.validationRefs
   });
   assertSpendBudgetPricingCoverage(options.config, validated.agents);
-  const issues = options.configAssets.validateAgents?.(validated.agents) ?? [];
+  const stored = new Map(storedAgents.map((config) => [readDefinitionName(config), config]));
+  const changed = validated.agents.filter(
+    (agent) => !configValuesEqual(stored.get(agent.name), agent)
+  );
+  const issues = options.configAssets.validateAgents?.(validated.agents, changed) ?? [];
   if (issues.length) {
     throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", {
       issues: issues.map((message) => ({ message }))
@@ -81,7 +91,8 @@ export async function applyValidatedConfigAssetMutations(
       (bundle, kind) =>
         kind.withDefinitions(bundle, [...(definitions.get(kind.kind)?.values() ?? [])]),
       { agents: [], skills: [], defaultAgentName }
-    )
+    ),
+    assets.filter((asset) => asset.kind === "agent").map((asset) => asset.config)
   );
   return options.configAssets.store.applyConfigAssetMutations(input);
 }

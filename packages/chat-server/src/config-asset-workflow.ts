@@ -124,7 +124,7 @@ export class ConfigAssetWorkflow {
     const candidate = setInitialDefault
       ? { ...replaced, defaultAgentName: command.name }
       : replaced;
-    const validated = this.validateBundle(candidate);
+    const validated = this.validateBundle(candidate, current);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
     const namespaces = await this.assertNamespaceAllowlists(access, current, validated.agents);
     const config = findValidatedConfig(validated, kind, command.name);
@@ -189,7 +189,7 @@ export class ConfigAssetWorkflow {
     const candidate = clearLastDefault
       ? { agents: removed.agents, skills: removed.skills }
       : removed;
-    this.validateBundle(candidate);
+    this.validateBundle(candidate, current);
     const mutations: ConfigAssetMutation[] = [
       { type: "delete", kind: command.kind, name: command.name }
     ];
@@ -221,11 +221,14 @@ export class ConfigAssetWorkflow {
       throw new AppError("FORBIDDEN", "Interactive default-agent changes are disabled");
     }
     const current = await this.loadCurrentBundle();
-    this.validateBundle({
-      agents: current.agents,
-      skills: current.skills,
-      ...(command.agentName === undefined ? {} : { defaultAgentName: command.agentName })
-    });
+    this.validateBundle(
+      {
+        agents: current.agents,
+        skills: current.skills,
+        ...(command.agentName === undefined ? {} : { defaultAgentName: command.agentName })
+      },
+      current
+    );
     const result = await applyValidatedConfigAssetMutations(this.options, {
       clientInstanceId: this.options.clientInstanceId,
       baseVersion: command.baseVersion,
@@ -349,7 +352,7 @@ export class ConfigAssetWorkflow {
     const candidate = setInitialDefault
       ? { ...replaced, defaultAgentName: command.name }
       : replaced;
-    const validated = this.validateBundle(candidate);
+    const validated = this.validateBundle(candidate, current);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
     const namespaces = await this.assertNamespaceAllowlists(access, current, validated.agents);
     const config = findValidatedConfig(validated, kind, command.name);
@@ -505,7 +508,7 @@ export class ConfigAssetWorkflow {
         current
       );
     }
-    const validated = this.validateBundle(candidate);
+    const validated = this.validateBundle(candidate, currentBundle);
     this.assertChangedUserSelectableModelsEligible(currentBundle, validated.agents);
     await this.assertNamespaceAllowlists(access, currentBundle, validated.agents);
     const validatedBundle: ConfigAssetBundleInput = validated;
@@ -579,8 +582,8 @@ export class ConfigAssetWorkflow {
     command: ConfigAssetBundleInput
   ): Promise<{ valid: true }> {
     await this.recordAccess(user, context, "governance.config_assets_release_authorized");
-    const validated = this.validateBundle(command);
     const current = await this.loadCurrentBundle();
+    const validated = this.validateBundle(command, current);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
     await this.assertNamespaceAllowlists(access, current, validated.agents);
     return { valid: true };
@@ -740,11 +743,15 @@ export class ConfigAssetWorkflow {
     }
   }
 
-  private validateBundle(input: ConfigAssetBundleInput): {
+  /** `current` is the stored bundle: an agent the write leaves as it is stored is tolerated. */
+  private validateBundle(
+    input: ConfigAssetBundleInput,
+    current: ConfigAssetBundleInput
+  ): {
     agents: AgentConfig[];
     skills: SkillConfig[];
   } {
-    return validateConfigAssetCandidate(this.options, input);
+    return validateConfigAssetCandidate(this.options, input, current.agents);
   }
 
   private async loadCurrentBundle(): Promise<ConfigAssetBundleInput> {

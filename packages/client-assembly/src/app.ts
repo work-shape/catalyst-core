@@ -321,10 +321,11 @@ export async function createClientInstanceExecutionAssembly(
     reasoningEfforts: [...REASONING_EFFORTS],
     enabledToolNames: [...getEnabledToolNames(config)]
   };
-  // A write is refused for a tool of a module that is off. A stored agent that still names
-  // one starts and runs without it, so turning a module off never stops the instance.
-  const validateAgents = (agents: AgentConfig[]) => [
-    ...findModuleOffToolIssues(modules, agents),
+  // A write is refused for an agent it adds or changes that names a tool of a module that is
+  // off. A stored agent that still names one starts and runs without it, and does not stand in
+  // the way of a write to another agent or a skill.
+  const validateAgents = (agents: AgentConfig[], changed: AgentConfig[]) => [
+    ...findModuleOffToolIssues(modules, changed),
     ...findConfigAssetAgentValidationIssues(config, agents, (binding) =>
       modelGateway.capabilities(binding)
     )
@@ -334,7 +335,12 @@ export async function createClientInstanceExecutionAssembly(
     source: assetSource,
     // Every asset kind of this build. A later kind is one more registration in this list.
     kinds: createAssetKindRegistry([
-      createAgentAssetKind({ config, validationRefs, validateAgents }),
+      createAgentAssetKind({
+        config,
+        validationRefs,
+        // A definition handed to the kind is one that is being written.
+        validateAgents: (agents) => validateAgents(agents, agents)
+      }),
       createSkillAssetKind({ config })
     ]),
     validationRefs,
@@ -423,7 +429,7 @@ export async function createClientInstanceExecutionAssembly(
       ...input.tools
     ]
   });
-  assertClientAssemblyValid({ config, tools, approvalRequestHandlers });
+  assertClientAssemblyValid({ config, tools, approvalRequestHandlers, modules });
   const toolRegistry = new ToolRegistry({
     tools,
     enabledToolNames: getEnabledToolNames(config),

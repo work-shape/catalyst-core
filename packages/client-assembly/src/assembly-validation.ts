@@ -21,6 +21,8 @@ export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;
   tools: AnyToolDefinition[];
   approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
+  /** With the modules given, a tool of a module that is off needs no implementation. */
+  modules?: ModuleSnapshot;
 }): void {
   const issues = [
     ...findDuplicateToolImplementations(input.tools),
@@ -32,7 +34,7 @@ export function assertClientAssemblyValid(input: {
           ]
     ),
     ...findModelProviderReferenceIssues(input.config),
-    ...findToolReferenceIssues(input.config, input.tools)
+    ...findToolReferenceIssues(input.config, input.tools, input.modules)
   ];
 
   if (issues.length > 0) {
@@ -178,7 +180,8 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
 
 function findToolReferenceIssues(
   config: ClientInstanceConfig,
-  tools: AnyToolDefinition[]
+  tools: AnyToolDefinition[],
+  modules?: ModuleSnapshot
 ): string[] {
   const issues: string[] = [];
   const providedTools = new Map(tools.map((tool) => [tool.name, tool]));
@@ -186,6 +189,11 @@ function findToolReferenceIssues(
 
   for (const tool of config.tools) {
     if (tool.name === WEB_SEARCH_MODEL_TOOL_NAME) {
+      continue;
+    }
+    // The capability of a module that is off brings no tools, and the config that enables
+    // them stays as it is: the instance starts, and nobody is offered the tool.
+    if (modules?.offModuleOf("tool", tool.name) !== undefined) {
       continue;
     }
     if (tool.enabled && !providedToolNames.has(tool.name)) {
