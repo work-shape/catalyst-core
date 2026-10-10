@@ -132,13 +132,12 @@ describe("the migration boundary", () => {
       const migration = migrateDatabase({ databaseUrl }).finally(() => {
         settled = true;
       });
-      await expect
-        .poll(
-          async () =>
-            (await holder`select 1 from pg_locks where locktype = 'advisory' and not granted`)
-              .length
-        )
-        .toBe(1);
+      // The run asks for the lock again every 100 ms and holds no statement open meanwhile: a
+      // session blocked in pg_advisory_lock would deadlock with a concurrent index build.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(
+        await holder`select 1 from pg_locks where locktype = 'advisory' and not granted`
+      ).toHaveLength(0);
       expect(settled).toBe(false);
       expect(await schemaObjects(databaseUrl)).toEqual([]);
       await holder`select pg_advisory_unlock(hashtextextended('vivd-catalyst:postgres-store:migrations', 0))`;

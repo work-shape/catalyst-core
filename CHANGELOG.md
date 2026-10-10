@@ -864,6 +864,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   release.
 - **Audit:** `conversation.cleanup_failed` and `conversation.cleanup_completed` appear in the
   governance tier, and the four new event types have labels in the activity view.
+- **Migrations:** two migration steps that start at once no longer deadlock on a migration
+  that builds an index concurrently. The step asks for its lock again every 100 ms instead of
+  waiting inside one statement.
 
 ## 0.6.3 — 2026-10-08
 

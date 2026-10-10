@@ -47,7 +47,7 @@ export async function migrateDatabase(input: MigrateDatabaseInput): Promise<stri
     // connection's lifetime; a reserved one stays with this run until it is released.
     const session = await pool.reserve();
     try {
-      await session.unsafe("select pg_advisory_lock(hashtextextended($1, 0))", [migrationLockKey]);
+      await takeMigrationLock(session);
       try {
         await session.unsafe("create schema if not exists drizzle");
         await session.unsafe(`
@@ -82,6 +82,26 @@ export async function migrateDatabase(input: MigrateDatabaseInput): Promise<stri
     }
   } finally {
     await pool.end();
+  }
+}
+
+/** How long a caller waits before it asks for the migration lock again. */
+const MIGRATION_LOCK_RETRY_MS = 100;
+
+/**
+ * Waits for the advisory lock by asking again instead of blocking in one statement. A session
+ * blocked in `pg_advisory_lock` holds a snapshot for as long as it waits, and a concurrent index
+ * build of the run that holds the lock waits for every older snapshot to end: the two would
+ * wait for each other and Postgres would stop one with a deadlock.
+ */
+async function takeMigrationLock(session: Queries): Promise<void> {
+  for (;;) {
+    const [row] = await session.unsafe(
+      "select pg_try_advisory_lock(hashtextextended($1, 0)) as locked",
+      [migrationLockKey]
+    );
+    if (row?.locked === true) return;
+    await new Promise((resolve) => setTimeout(resolve, MIGRATION_LOCK_RETRY_MS));
   }
 }
 
