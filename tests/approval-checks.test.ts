@@ -35,6 +35,7 @@ import { createProposeSkillChangeTool } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
 import { createConfigAssetSource } from "../packages/client-assembly/src/config-asset-source";
 import { createTestConfig } from "./support/fixtures";
+import { eventually } from "./support/assertions";
 
 const clientInstanceId = asClientInstanceId("test-client");
 const user: AuthenticatedUser = {
@@ -301,7 +302,7 @@ describe("approval check runner", () => {
         })
     );
     const pending = f.runner.run(handler, command, context);
-    await vi.waitFor(() => expect(f.complete).toHaveBeenCalledTimes(2));
+    await eventually(() => expect(f.complete).toHaveBeenCalledTimes(2));
     releaseSecond?.(completion("invalid"));
     releaseFirst?.(completion('{"violates":false,"reason":"OK"}'));
     expect(await pending).toEqual([

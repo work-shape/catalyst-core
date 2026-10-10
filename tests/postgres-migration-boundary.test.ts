@@ -6,6 +6,7 @@ import { afterEach, describe, expect, inject, it, vi } from "vitest";
 import { createPlatformStore } from "@vivd-catalyst/client-assembly";
 import { migrateDatabase } from "@vivd-catalyst/postgres-store";
 import { PostgresFixtures } from "./support/postgres-fixtures";
+import { eventually } from "./support/assertions";
 
 const migrationsDirectory = resolve("packages/postgres-store/migrations");
 const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
@@ -138,7 +139,7 @@ describe("the migration boundary", () => {
         settled = true;
       });
       // It says once that it waits: by then it has asked for the lock and was refused.
-      await vi.waitFor(() =>
+      await eventually(() =>
         expect(lines).toEqual(["Waiting for the migration lock: another migration step holds it."])
       );
       // The run asks for the lock again every 100 ms and holds no statement open meanwhile: a
@@ -158,7 +159,7 @@ describe("the migration boundary", () => {
       const realNow = Date.now.bind(Date);
       const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + 31_000);
       try {
-        await vi.waitFor(() => expect(lines).toHaveLength(2));
+        await eventually(() => expect(lines).toHaveLength(2));
       } finally {
         clock.mockRestore();
       }
@@ -184,7 +185,7 @@ describe("the migration boundary", () => {
         () => undefined,
         (error: unknown) => error
       );
-      await vi.waitFor(() => expect(lines).toHaveLength(1));
+      await eventually(() => expect(lines).toHaveLength(1));
       expect(
         await holder`
           select pg_terminate_backend(pid) as ended from pg_stat_activity

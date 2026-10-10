@@ -25,6 +25,7 @@ import {
   silentTestLogger,
   type RecordingGovernance
 } from "./support/model-gateway";
+import { eventually } from "./support/assertions";
 
 /**
  * The contract every model adapter keeps, run for each of them against recorded exchanges and
@@ -425,7 +426,7 @@ describe.each(conformanceAdapters)("model adapter conformance: $type", (adapter)
     const pending = f.gateway.complete(
       f.call({ messages: [user("Say hello.")], signal: stop.signal })
     );
-    await vi.waitFor(() => expect(f.replayed.count()).toBe(1));
+    await eventually(() => expect(f.replayed.count()).toBe(1));
     stop.abort();
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });

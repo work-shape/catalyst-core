@@ -27,6 +27,7 @@ import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./supp
 import { ALL_MODEL_CAPABILITIES, silentTestLogger } from "./support/model-gateway";
 import { createTestInstance } from "./support/test-instance";
 import { ensureTestUser } from "./support/test-store";
+import { eventually } from "./support/assertions";
 
 const provider: ModelProviderConfig = { id: "main", type: "fake", model: "entry-model" };
 const clientInstanceId = asClientInstanceId("client-gateway-usage");
@@ -83,7 +84,7 @@ describe("model gateway usage recording", () => {
     );
 
     const stopped = f.gateway.complete(call({ signal: stop.signal }));
-    await vi.waitFor(() => expect(f.requests).toHaveLength(1));
+    await eventually(() => expect(f.requests).toHaveLength(1));
     stop.abort();
 
     await expect(stopped).rejects.toBe(abort);

@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { z } from "zod";
 export function required<T>(value: T | null | undefined): T {
   if (value === undefined || value === null)
@@ -31,17 +32,34 @@ export function array(value: unknown): unknown[] {
 }
 
 /**
+ * How long a wait on a condition may last before it fails. It is a bound on a hang, not a
+ * pause: a wait ends as soon as its condition holds. What is waited for is work of the
+ * database, a server in this process or a child process, and on a machine that runs several
+ * suites at once such work has taken more than the second that Vitest gives a wait by default.
+ */
+export const CONDITION_WAIT_MS = 15_000;
+
+/**
  * Resolves once `condition` holds and fails when it does not within the deadline. Tests wait on
  * conditions with this, never with a fixed sleep.
  */
 export async function waitUntil(
   condition: () => boolean | Promise<boolean>,
   description: string,
-  timeoutMs = 15_000
+  timeoutMs = CONDITION_WAIT_MS
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!(await condition())) {
     if (Date.now() > deadline) throw new Error(`Timed out waiting until ${description}`);
     await new Promise<void>((resolve) => setTimeout(resolve, 20));
   }
+}
+
+/**
+ * Resolves with what `assertion` returns once it no longer throws, and fails with its last
+ * failure when it still throws at the deadline. For an expectation that comes true a moment
+ * after the call that causes it.
+ */
+export function eventually<Result>(assertion: () => Result | Promise<Result>): Promise<Result> {
+  return vi.waitFor(assertion, { timeout: CONDITION_WAIT_MS, interval: 20 });
 }

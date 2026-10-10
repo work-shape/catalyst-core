@@ -12,6 +12,7 @@ import {
 } from "@vivd-catalyst/core";
 
 import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
+import { eventually } from "./support/assertions";
 
 const clientInstanceId = asClientInstanceId("approval_test");
 const context = { correlationId: "approval_correlation" };
@@ -279,7 +280,7 @@ describe("approval request workflow", () => {
       requestId: request.id,
       decision: "approve"
     });
-    await vi.waitFor(() => expect(f.apply).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(f.apply).toHaveBeenCalledTimes(1));
     // The approval holds the row lock until its handler returns, so the other two wait on it.
     const rejection = f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
       requestId: request.id,

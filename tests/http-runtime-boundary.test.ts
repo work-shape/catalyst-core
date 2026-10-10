@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import type { Logger } from "@vivd-catalyst/core";
+import { CONDITION_WAIT_MS } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import {
   addTestRoute,
@@ -70,14 +71,14 @@ describe("the public runtime boundary", () => {
       expect(running).toBe(1);
       abort.abort();
       await expect(abortedReader?.read()).rejects.toMatchObject({ name: "AbortError" });
-      await expect.poll(() => running).toBe(0);
+      await expect.poll(() => running, { timeout: CONDITION_WAIT_MS }).toBe(0);
 
       const cancelled = await runtime.fetch(new Request("http://instance.test/stream"));
       const cancelledReader = cancelled.body?.getReader();
       await cancelledReader?.read();
       expect(running).toBe(1);
       await cancelledReader?.cancel();
-      await expect.poll(() => running).toBe(0);
+      await expect.poll(() => running, { timeout: CONDITION_WAIT_MS }).toBe(0);
 
       // A request aborted before it is sent is not answered.
       await expect(
@@ -135,9 +136,9 @@ describe("the public runtime boundary", () => {
     await delay(20);
     abort.abort();
     expect(await outcome).toBe("AbortError");
-    await expect.poll(() => cancelled).toBe(true);
+    await expect.poll(() => cancelled, { timeout: CONDITION_WAIT_MS }).toBe(true);
     // The server has let go of the request too: it has finished it.
-    await expect.poll(() => completed.length).toBe(before + 1);
+    await expect.poll(() => completed.length, { timeout: CONDITION_WAIT_MS }).toBe(before + 1);
   });
 
   it("stops reading a body at the server's limit", async () => {
@@ -171,7 +172,7 @@ describe("the public runtime boundary", () => {
     );
     expect(response.ok).toBe(false);
     expect(pulled).toBeLessThan(64);
-    await expect.poll(() => cancelled).toBe(true);
+    await expect.poll(() => cancelled, { timeout: CONDITION_WAIT_MS }).toBe(true);
   });
 
   it("answers in process, listens and closes as a chat server", async () => {

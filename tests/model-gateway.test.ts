@@ -25,6 +25,7 @@ import {
 } from "@vivd-catalyst/model-provider";
 import { createFakeSecrets } from "./support/fixtures";
 import { ALL_MODEL_CAPABILITIES, createRecordingGovernance } from "./support/model-gateway";
+import { eventually } from "./support/assertions";
 
 const provider: ModelProviderConfig = {
   id: "main",
@@ -326,7 +327,7 @@ describe("model gateway", () => {
     });
 
     const stopped = f.gateway.complete(call({ signal: stop.signal }));
-    await vi.waitFor(() => expect(f.requests).toHaveLength(1));
+    await eventually(() => expect(f.requests).toHaveLength(1));
     stop.abort();
 
     await expect(stopped).rejects.toBe(abort);
@@ -638,7 +639,7 @@ describe("model gateway", () => {
     const stopped = f.gateway.complete(
       call({ signal: stop.signal, deadline: new Date(Date.now() + 60_000) })
     );
-    await vi.waitFor(() => expect(f.requests).toHaveLength(1));
+    await eventually(() => expect(f.requests).toHaveLength(1));
     stop.abort();
 
     await expect(stopped).rejects.toBe(abort);

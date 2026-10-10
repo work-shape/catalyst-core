@@ -23,6 +23,7 @@ import {
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createTestConfig } from "./support/fixtures";
 import { createMissingRuntime, createUnusedModelProvider } from "./support/chat-server-run-harness";
+import { eventually } from "./support/assertions";
 
 const identity: MailSenderIdentity = {
   fromAddress: "noreply@mail.example.test",
@@ -215,7 +216,7 @@ describe("password setup by email", () => {
 
     expect(unknownResponse.statusCode).toBe(200);
     expect(unknownResponse.json()).toEqual(knownResponse.json());
-    await vi.waitFor(() => expect(harness.transport.list()).toHaveLength(1));
+    await eventually(() => expect(harness.transport.list()).toHaveLength(1));
     const [mail] = harness.transport.list();
     expect(mail!.to.email).toBe("ada@example.test");
     const token = readToken(mail!.text);
@@ -246,7 +247,7 @@ describe("password setup by email", () => {
       expect((await harness.requestReset("ada@example.test")).statusCode).toBe(200);
     }
 
-    await vi.waitFor(() => expect(harness.transport.list()).toHaveLength(3));
+    await eventually(() => expect(harness.transport.list()).toHaveLength(3));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(harness.transport.list()).toHaveLength(3);
   });
@@ -269,7 +270,7 @@ describe("password setup by email", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(harness.transport.list()).toHaveLength(0);
     await reset("172.18.0.5", "203.0.113.8", "ada@example.test");
-    await vi.waitFor(() => expect(harness.transport.list()).toHaveLength(1));
+    await eventually(() => expect(harness.transport.list()).toHaveLength(1));
 
     // A public peer cannot escape its allowance by rotating X-Forwarded-For.
     await harness.countResetRequests("198.51.100.9", 199);
@@ -348,7 +349,7 @@ describe("password setup by email", () => {
 
     await harness.requestReset("ada@example.test");
 
-    await vi.waitFor(async () =>
+    await eventually(async () =>
       expect((await harness.listAuditEvents()).map((event) => event.type)).toContain(
         "user.password_reset_requested"
       )

@@ -32,6 +32,7 @@ import type { ModelAdapterFactory } from "@vivd-catalyst/model-provider";
 import { createFakeSecrets } from "./support/fixtures";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { createTestInstanceWith, getTestJobs } from "./support/test-instance";
+import { eventually } from "./support/assertions";
 
 // Instance > Infrastructure over HTTP: what an operator reads of the providers, that a check
 // always ends, and that neither a secret nor a provider's own words leave the instance.
@@ -508,7 +509,7 @@ describe("Instance > Infrastructure: the checks", () => {
     const { server, runChecks } = await createServer({ extraEntries: [slow] });
 
     const checking = server.call("instance.infrastructure.check", {}, administrator);
-    await vi.waitFor(() => expect(asked).toBe(1));
+    await eventually(() => expect(asked).toBe(1));
     // The run is under way and has not ended.
     const during = await server.call("instance.infrastructure.get", {}, administrator);
     expect(during.statusCode).toBe(200);
