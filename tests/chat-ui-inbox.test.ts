@@ -474,6 +474,117 @@ describe("inbox item", () => {
   });
 });
 
+// Fails without the kind `operation_call`: the item was one the frame could not decide.
+describe("inbox item of an operation call", () => {
+  const callPreview = {
+    runId: "opr_1",
+    operation: "workspace.apply_patch",
+    effect: "changing",
+    actor: { kind: "user", id: "user-anna", label: "Anna Beispiel" },
+    origin: { kind: "agent", agentName: "payroll-agent", toolName: "workspace_apply_patch" },
+    workspaceId: "cw_team",
+    inputs: [
+      { key: "path", value: "docs/plan.md" },
+      { key: "patch", value: "+ Neue Zeile", truncated: true }
+    ],
+    expiresAt: "2026-10-12T08:00:00Z"
+  };
+  const call = (overrides: Partial<ApprovalRequestView> = {}, locale: "de" | "en" = "de") =>
+    renderItem(
+      {
+        kind: "operation_call",
+        summary: "workspace.apply_patch",
+        preview: callPreview,
+        canDecide: true,
+        ...overrides
+      },
+      { locale }
+    );
+
+  it("says what approving does and shows the call with its inputs", () => {
+    const markup = call();
+
+    expect(markup).toContain('data-testid="operation-call"');
+    expect(markup).toContain(
+      "Mit der Freigabe läuft dieser Aufruf einmal, als Anna Beispiel. Wenn du ablehnst, läuft nichts."
+    );
+    expect(markup).toMatch(/data-field="operation".*workspace\.apply_patch/u);
+    expect(markup).toMatch(/data-field="origin".*Agent, über Agent payroll-agent/u);
+    expect(markup).toMatch(/data-field="tool".*workspace_apply_patch/u);
+    expect(markup).toContain('data-field="expiresAt"');
+    expect(markup).toContain("Danach verfällt der Aufruf und läuft nicht.");
+    expect(markup).toMatch(/data-input-key="path".*docs\/plan\.md/u);
+    expect(markup).toMatch(
+      /data-input-key="patch" data-truncated="true".*\+ Neue Zeile.*Gekürzt\./u
+    );
+    expect(markup.match(/data-input-key=/gu)).toHaveLength(2);
+    const english = call({}, "en");
+    expect(english).toContain(
+      "Approving runs this call once, as Anna Beispiel. If you decline, nothing runs."
+    );
+    expect(english).toContain("Shortened. The call runs with the full value.");
+  });
+
+  it("offers approve and decline and no request for changes", () => {
+    const markup = call();
+
+    expect(markup).toMatch(/data-decision="reject"[^>]*>Ablehnen<\/button>/u);
+    expect(markup).toMatch(/data-decision="approve"[^>]*>Freigeben<\/button>/u);
+    expect(markup).not.toContain('data-decision="request_changes"');
+    expect(markup.match(/data-decision=/gu)).toHaveLength(2);
+    const english = call({}, "en");
+    expect(english).toMatch(/data-decision="reject"[^>]*>Decline<\/button>/u);
+    expect(english).toMatch(/data-decision="approve"[^>]*>Approve<\/button>/u);
+  });
+
+  it("names the surface and the row by the operation and who called", () => {
+    const kindOf = (kind: string) => inboxItemKinds.find((entry) => entry.kind === kind);
+    const surface = (preview: ApprovalRequestView["preview"], locale: "de" | "en") =>
+      inboxItemSurface(
+        "apr_1",
+        item({ kind: "operation_call", preview }),
+        kindOf,
+        createTranslationContext(locale).t
+      );
+
+    expect(surface(callPreview, "de")).toMatchObject({
+      title: "Aufruf einer Operation",
+      subtitle: "workspace.apply_patch für Anna Beispiel"
+    });
+    expect(surface(callPreview, "en")).toMatchObject({
+      title: "Operation call",
+      subtitle: "workspace.apply_patch for Anna Beispiel"
+    });
+    expect(surface({ operation: "assets.put" }, "en").subtitle).toBeUndefined();
+  });
+
+  it("shows a sentence instead of half a call when the preview cannot be read", () => {
+    for (const preview of [
+      undefined,
+      { operation: "assets.put" },
+      { ...callPreview, origin: { kind: "carrier_pigeon" } },
+      { ...callPreview, actor: { kind: "user" } },
+      { ...callPreview, effect: "deleting" }
+    ]) {
+      const markup = call({ preview });
+      expect(markup).toContain('data-testid="operation-call-unreadable"');
+      expect(markup).toContain("Die Details dieses Aufrufs können nicht angezeigt werden.");
+      expect(markup).not.toContain('data-testid="operation-call"');
+    }
+    // An input that cannot be read is left out; the call still shows.
+    const partial = call({
+      preview: {
+        ...callPreview,
+        inputs: [{ key: "path", value: "a.md" }, { key: "n", value: 3 }, 7]
+      }
+    });
+    expect(partial.match(/data-input-key=/gu)).toHaveLength(1);
+    expect(call({ preview: { ...callPreview, inputs: [] } })).toContain(
+      "Dieser Aufruf hat keine Eingabe."
+    );
+  });
+});
+
 describe("inbox area", () => {
   function renderArea(
     counts: InboxCounts,

@@ -11,6 +11,7 @@ export const inbox = defineTranslations({
     "inbox.emptyMyRequests":
       "You have not requested anything that needs a decision. When an agent needs someone's approval, it shows up here.",
     "inbox.emptyToDecide": "Nothing to decide.",
+    "inbox.kindOperationCall": "Operation call",
     "inbox.kindSkillChange": "Skill change",
     "inbox.kindUnknown": "Request",
     "inbox.loadFailed": "The requests could not be loaded.",
@@ -33,6 +34,7 @@ export const inbox = defineTranslations({
     "inbox.emptyMyRequests":
       "Du hast nichts angefragt, das eine Entscheidung braucht. Wenn ein Agent die Freigabe von jemandem braucht, erscheint sie hier.",
     "inbox.emptyToDecide": "Nichts zu entscheiden.",
+    "inbox.kindOperationCall": "Aufruf einer Operation",
     "inbox.kindSkillChange": "Änderung einer Fähigkeit",
     "inbox.kindUnknown": "Anfrage",
     "inbox.loadFailed": "Die Anfragen konnten nicht geladen werden.",
