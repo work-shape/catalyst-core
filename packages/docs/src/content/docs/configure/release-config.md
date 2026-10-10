@@ -620,23 +620,34 @@ The platform takes its own secrets from the same provider by fixed names: `DATAB
 
 The page **Instance > Infrastructure** in the settings and `GET /api/v1/instance/infrastructure`
 list every configured entry of this section and the database: the provider, its region, the host
-it calls or its bucket, the names of its secrets with whether each is set, and the result of its
-last check. Both need `users.manage` and change nothing. A secret value, a connection string, a
-key and a path on the host are never part of the answer.
+it calls or its bucket, its secrets with whether each is set, and the result of its last check.
+Both need `users.manage` and change nothing. A secret value, a connection string, a key and a
+path on the host are never part of the answer.
 
-A check is the cheapest authenticated call a provider has: the list of models of a model
-endpoint, the account of a Mailjet key pair, the `head` of a key that is never written in an
-object store, one query against the database. It generates nothing, sends no mail and writes
-nothing. The instance runs the checks every five minutes, all at once, and each check ends after
-five seconds as `timeout`. **Check now** and `POST /api/v1/instance/infrastructure/check` run
-them once more, at most once a minute for the whole instance; a call inside that minute answers
-`429 RATE_LIMITED`. Opening the page asks no provider.
+A secret that is set is shown by its name. One that is missing is shown by the key of the config
+that names it, such as `credentialSecret`: what stands there resolves to nothing, so the page
+does not repeat it. A host is shown when it is a bare host with an optional port and a bucket
+when it reads as an S3 bucket name. Anything else is shown as "not shown", and the server log
+names the provider and the field in a warning, without the value.
+
+A check is the cheapest authenticated read a provider has: the list of models of a model
+endpoint, the account of a Mailjet key pair, one `HEAD` of the bucket of an S3 store, the `head`
+of a key that is never written in a filesystem store, one query against the database, the
+version of the Docker engine for the sandbox. It generates nothing, sends no mail, writes nothing
+and creates no bucket. Creating the provider and asking it end together after five seconds as
+`timeout`. The API runs its checks every five minutes, all at once. The workspace command worker
+checks the sandbox on the same schedule, because it alone reaches it; an instance without that
+worker shows the sandbox with no check reported. **Check now** and
+`POST /api/v1/instance/infrastructure/check` run the API's checks once more, at most once a
+minute for the whole instance; a call inside that minute answers `429 RATE_LIMITED`. Opening the
+page asks no provider.
 
 A failed check shows a class and a sentence of the product: `unreachable`, `timeout`,
-`access_denied`, `not_found`, `rejected` or `failed`. What the provider itself answered is not
-shown, logged or returned. The results are kept in the memory of the API process and start empty
-after a restart. A failing provider does not change `/ready`. The command sandbox is listed and
-not checked, because the workspace command worker reaches it and the API does not.
+`access_denied`, `not_found`, `bucket_missing`, `rejected` or `failed`. What the provider itself
+answered is not shown, logged or returned. The outcomes and the time of the last manual check are
+kept in the database, in one row of `infrastructure_check_state` per instance, so every API
+process shows the same and the results survive a restart. A failing provider does not change
+`/ready`.
 
 The keys `modelProviders`, `mail`, `executionWorkspaces.runner` and
 `capabilities.documentProcessing.objectStorage` moved into this section. Config that still

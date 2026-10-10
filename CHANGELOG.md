@@ -10,14 +10,24 @@ contain breaking changes; a patch version does not.
 - **Infrastructure:** the page **Instance > Infrastructure** in the settings and
   `GET /api/v1/instance/infrastructure` list what the instance runs on: every entry of the
   `infrastructure` section and the database, each with its provider, region, endpoint host or
-  bucket, the names of its secrets with "set" or "missing", and the result of its last check.
-  Both need `users.manage` and change nothing. No secret value, connection string, key or host
-  path is returned. Every provider now has a check, the cheapest authenticated call it has, which
-  ends after five seconds. The new job kind `infrastructure.check` runs all checks every five
-  minutes, and `POST /api/v1/instance/infrastructure/check` runs them once more, at most once a
+  bucket, its secrets with "set" or "missing", and the result of its last check. Both need
+  `users.manage` and change nothing. No secret value, connection string, key or host path is
+  returned. A secret is shown by its name while it is set; one that is missing is shown by the
+  config key that names it. A host or a bucket that does not read as one is shown as "not shown"
+  and named in a warning of the server log by provider and field. Every provider now has a
+  check, the cheapest authenticated read it has, which ends after five seconds together with the
+  creation of the provider. An S3 store is asked with one `HEAD` of its bucket; a missing bucket
+  is the class `bucket_missing` and is not created. The new job kind `infrastructure.check` runs
+  the checks of the API every five minutes, the workspace command worker checks the sandbox
+  with the kind `infrastructure.check_sandbox`, and
+  `POST /api/v1/instance/infrastructure/check` runs the API's checks once more, at most once a
   minute for the instance. A failed check carries a class from a closed list and never the
   provider's own error text. A provider that fails does not change `/ready`.
   `defineProvider` requires `check`: a capability that registers a provider must add one.
+- **Database:** migration `0046_infrastructure_check_state` adds the table
+  `infrastructure_check_state`, one row per instance with the last check outcome of each
+  provider and the time of the last manual check. Every API process reads it, so the page shows
+  the same health whichever process answers.
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
   `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
   caller who is authenticated; a call without a credential gets `401` as on any route. Its agent tools are not offered to the model and cannot be called,
