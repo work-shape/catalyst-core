@@ -19,6 +19,10 @@ export const build = defineTranslations({
     "build.listActions": "More actions",
     "build.loadFailed": "Build could not be loaded.",
     "build.matchCount": "{count} of {total}",
+    "build.leaveConfirm": "Discard changes",
+    "build.leaveDescription":
+      "What you changed on this page is not saved yet. Leaving discards it.",
+    "build.leaveTitle": "Leave without saving?",
     "build.noKinds": "There is nothing to build on this instance yet.",
     "build.noMatch": "Nothing matches “{query}”.",
     "build.skillMissing": "There is no skill with the id {name}.",
@@ -45,6 +49,10 @@ export const build = defineTranslations({
     "build.listActions": "Weitere Aktionen",
     "build.loadFailed": "Bauen konnte nicht geladen werden.",
     "build.matchCount": "{count} von {total}",
+    "build.leaveConfirm": "Änderungen verwerfen",
+    "build.leaveDescription":
+      "Was Sie auf dieser Seite geändert haben, ist noch nicht gespeichert. Beim Verlassen geht es verloren.",
+    "build.leaveTitle": "Ohne Speichern verlassen?",
     "build.noKinds": "Auf dieser Instanz gibt es noch nichts zu bauen.",
     "build.noMatch": "Nichts passt zu „{query}“.",
     "build.skillMissing": "Es gibt keinen Skill mit der Kennung {name}.",

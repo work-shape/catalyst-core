@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import {
   createRoute,
@@ -6,6 +6,7 @@ import {
   createRouter,
   redirect,
   RouterProvider,
+  useBlocker,
   useLocation,
   useRouter
 } from "@tanstack/react-router";
@@ -14,6 +15,7 @@ import { ChatShell } from "./chat-shell";
 import type { ChatShellAdministration } from "./settings/page-definition";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
 import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./assistant/tool-activity";
+import { hasLeaveGuard, mayLeave, subscribeLeaveGuard } from "./leave-guard";
 import { installStaleChunkRecovery } from "./stale-chunk-recovery";
 import { applyDocumentThemeMode } from "./theme";
 import { areaRoutePaths, workspaceRouteFromPath, workspaceRouteNavigation } from "./routes";
@@ -95,6 +97,13 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
   const router = useRouter();
   const location = useLocation();
   const route = workspaceRouteFromPath(location.pathname);
+  // A page with unsaved changes is asked before any navigation, the browser's Back included.
+  const guarded = useSyncExternalStore(subscribeLeaveGuard, hasLeaveGuard, () => false);
+  useBlocker({
+    shouldBlockFn: async () => !(await mayLeave()),
+    enableBeforeUnload: false,
+    disabled: !guarded
+  });
 
   function onRouteChange(
     nextRoute: WorkspaceRoute,

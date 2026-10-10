@@ -38,6 +38,8 @@ export interface BuildAssetEditorProps {
   asset: BuildAsset | undefined;
   /** The way back to the kind's list, for the start of the page head. */
   back: ReactNode;
+  /** Hears whether the page holds changes that are not saved: the frame asks before it is left. */
+  onUnsavedChange(unsaved: boolean): void;
   /** Runs a change. The frame answers a conflict with the instance; any other failure comes back as a message. */
   run(action: () => Promise<unknown>): Promise<BuildMutationOutcome>;
   /** A new asset was saved: the frame opens its page. */

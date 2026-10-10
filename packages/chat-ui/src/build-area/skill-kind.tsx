@@ -29,6 +29,7 @@ export const skillKind: BuildAssetKind = {
 function SkillAssetEditor({
   asset,
   back,
+  onUnsavedChange,
   run,
   onCreated,
   onDeleted,
@@ -43,6 +44,7 @@ function SkillAssetEditor({
   return (
     <SkillEditor
       back={back}
+      onUnsavedChange={onUnsavedChange}
       initialForm={asset ? skillConfigToForm(asset.config) : emptySkillForm()}
       isNew={asset === undefined}
       editable={editable}

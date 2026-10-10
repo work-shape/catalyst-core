@@ -1,9 +1,10 @@
 import { ArrowLeft, MoreHorizontal, Plus, Search, SearchX, Terminal } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
   Button,
   Card,
+  ConfirmDialog,
   Dialog,
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +27,7 @@ import {
 import { configAssetMutationErrorMessage } from "../control-plane/config-assets-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
+import { holdLeaveGuard } from "../leave-guard";
 import { apiErrorStatus } from "../workspace-utils";
 import type { BuildAsset, BuildAssetKind, BuildMutationOutcome } from "./build-asset-kind";
 import { useBuildAssetKinds } from "./build-asset-kinds";
@@ -95,6 +97,57 @@ export function BuildFrame({ data }: { data: BuildData }) {
     }
   }, [corrected, placePath]);
 
+  // An editor with unsaved changes is not left without a question. The question is one promise:
+  // the back button, the router and a second attempt while it is open all wait for one answer.
+  const [unsaved, setUnsaved] = useState(false);
+  const [leaveAsked, setLeaveAsked] = useState(false);
+  const leaveQuestion = useRef<{ promise: Promise<boolean>; answer(leave: boolean): void }>(
+    undefined
+  );
+  // Set by an exit that needs no question: the answer "discard", a save that opens the new
+  // asset, a delete. It ends with the place it was set on.
+  const leaveAllowed = useRef(false);
+  const askToLeave = useCallback((): Promise<boolean> => {
+    if (leaveAllowed.current) {
+      return Promise.resolve(true);
+    }
+    if (leaveQuestion.current) {
+      return leaveQuestion.current.promise;
+    }
+    let answer: (leave: boolean) => void = () => undefined;
+    const promise = new Promise<boolean>((resolve) => {
+      answer = resolve;
+    });
+    leaveQuestion.current = { promise, answer };
+    setLeaveAsked(true);
+    return promise;
+  }, []);
+  const answerLeave = (leave: boolean) => {
+    leaveAllowed.current = leave;
+    leaveQuestion.current?.answer(leave);
+    leaveQuestion.current = undefined;
+    setLeaveAsked(false);
+  };
+  useEffect(() => {
+    if (!unsaved) {
+      return;
+    }
+    const release = holdLeaveGuard(askToLeave);
+    // Closing or reloading the tab is the browser's own question.
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      release();
+      window.removeEventListener("beforeunload", warn);
+      leaveQuestion.current?.answer(true);
+      leaveQuestion.current = undefined;
+      setLeaveAsked(false);
+    };
+  }, [unsaved, askToLeave]);
+  useEffect(() => {
+    leaveAllowed.current = false;
+  }, [locationKey, creating]);
+
   // Between a list and an asset the page changes under the reader: the focus goes to its
   // heading. The area focuses the first heading itself, and the rail keeps the focus on a kind.
   const pageRef = useRef<HTMLDivElement>(null);
@@ -122,8 +175,22 @@ export function BuildFrame({ data }: { data: BuildData }) {
 
   const { entry, state } = place.kind;
   const openList = () => {
-    setCreating(false);
-    open({ kindPath: entry.path });
+    const leave = () => {
+      setCreating(false);
+      open({ kindPath: entry.path });
+    };
+    if (!unsaved) {
+      leave();
+      return;
+    }
+    askToLeave().then(
+      (answer) => {
+        if (answer) {
+          leave();
+        }
+      },
+      () => undefined
+    );
   };
   const run = async (action: () => Promise<unknown>): Promise<BuildMutationOutcome> => {
     try {
@@ -189,9 +256,16 @@ export function BuildFrame({ data }: { data: BuildData }) {
               key={`${editorVersion}:${entry.kind}:${asset?.name ?? ""}`}
               asset={asset}
               back={back}
+              onUnsavedChange={setUnsaved}
               run={run}
-              onCreated={(name) => open({ kindPath: entry.path, name })}
-              onDeleted={() => open({ kindPath: entry.path }, { replace: true })}
+              onCreated={(name) => {
+                leaveAllowed.current = true;
+                open({ kindPath: entry.path, name });
+              }}
+              onDeleted={() => {
+                leaveAllowed.current = true;
+                open({ kindPath: entry.path }, { replace: true });
+              }}
               onReloaded={() => setEditorVersion((version) => version + 1)}
             />
           </Card>
@@ -220,6 +294,15 @@ export function BuildFrame({ data }: { data: BuildData }) {
         >
           <p className="text-body text-muted-foreground">{t("configChangedDescription")}</p>
         </Dialog>
+        <ConfirmDialog
+          open={leaveAsked && unsaved}
+          title={t("build.leaveTitle")}
+          confirmLabel={t("build.leaveConfirm")}
+          onConfirm={() => answerLeave(true)}
+          onClose={() => answerLeave(false)}
+        >
+          {t("build.leaveDescription")}
+        </ConfirmDialog>
       </Page>
     );
   }

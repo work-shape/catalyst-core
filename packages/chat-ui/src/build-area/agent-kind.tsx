@@ -68,6 +68,7 @@ function availabilityLabel(asset: BuildAsset, { t, locale }: BuildKindTexts): st
 function AgentAssetEditor({
   asset,
   back,
+  onUnsavedChange,
   run,
   onCreated,
   onDeleted,
@@ -91,6 +92,7 @@ function AgentAssetEditor({
   return (
     <AgentEditor
       back={back}
+      onUnsavedChange={onUnsavedChange}
       initialForm={asset ? agentConfigToForm(asset.config) : emptyAgentForm()}
       isNew={asset === undefined}
       isDefault={asset?.isDefault ?? false}

@@ -1,5 +1,5 @@
 import { ChevronDown, FileText, History, Plus, Star, Trash2, X } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type {
   AdministeredCollaborationWorkspace,
   ConfigAssetKind,
@@ -51,8 +51,23 @@ interface MutationOutcome {
   error?: string;
 }
 
+/**
+ * Tells the page that holds an editor whether the form differs from what was opened or last
+ * saved, and that it does not once the editor is gone.
+ */
+function useUnsavedReport(
+  unsaved: boolean,
+  onUnsavedChange: ((unsaved: boolean) => void) | undefined
+) {
+  useEffect(() => {
+    onUnsavedChange?.(unsaved);
+    return () => onUnsavedChange?.(false);
+  }, [unsaved, onUnsavedChange]);
+}
+
 export function AgentEditor({
   back,
+  onUnsavedChange,
   initialForm,
   isNew,
   isDefault,
@@ -69,6 +84,8 @@ export function AgentEditor({
 }: {
   /** The way back to the list. With it the editor is a page of its own and its name the page's heading. */
   back?: React.ReactNode;
+  /** Hears whether the form holds changes that are not saved. */
+  onUnsavedChange?(unsaved: boolean): void;
   initialForm: AgentFormState;
   isNew: boolean;
   isDefault: boolean;
@@ -87,10 +104,12 @@ export function AgentEditor({
 }) {
   const { locale, t } = useTranslation();
   const [form, setForm] = useState(initialForm);
+  const [openedForm] = useState(form);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
   // The form as last saved; any edit replaces `form` and so ends the confirmation.
   const [savedForm, setSavedForm] = useState<typeof form | undefined>(undefined);
+  useUnsavedReport(form !== openedForm && form !== savedForm, onUnsavedChange);
   const canEdit = (field: string) => editableAgentFields.includes(field);
   const canEditModel = canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
@@ -605,6 +624,7 @@ function modelBindingLabel(
 
 export function SkillEditor({
   back,
+  onUnsavedChange,
   initialForm,
   isNew,
   editable,
@@ -615,6 +635,8 @@ export function SkillEditor({
 }: {
   /** The way back to the list. With it the editor is a page of its own and its name the page's heading. */
   back?: React.ReactNode;
+  /** Hears whether the form holds changes that are not saved. */
+  onUnsavedChange?(unsaved: boolean): void;
   initialForm: SkillFormState;
   isNew: boolean;
   editable: boolean;
@@ -625,10 +647,12 @@ export function SkillEditor({
 }) {
   const { t } = useTranslation();
   const [form, setForm] = useState(initialForm);
+  const [openedForm] = useState(form);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
   // The form as last saved; any edit replaces `form` and so ends the confirmation.
   const [savedForm, setSavedForm] = useState<typeof form | undefined>(undefined);
+  useUnsavedReport(form !== openedForm && form !== savedForm, onUnsavedChange);
   const [selectedResource, setSelectedResource] = useState<"root" | number>("root");
 
   const update = (patch: Partial<SkillFormState>) => setForm((value) => ({ ...value, ...patch }));

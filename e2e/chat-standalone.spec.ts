@@ -2926,7 +2926,10 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(page).toHaveURL(/\/build\/agents$/u);
 });
 
-test("a Build row is a link, and the heading takes the focus", async ({ page, context }) => {
+test("a Build row is a link, the heading takes the focus, and unsaved changes are asked about", async ({
+  page,
+  context
+}) => {
   await signInViaApi(page, superadminUser);
   await page.goto("/build/agents");
   const agents = page.getByRole("list", { name: "Agents" });
@@ -2949,6 +2952,43 @@ test("a Build row is a link, and the heading takes the focus", async ({ page, co
   await expect(page.getByRole("heading", { name: "Research Assistant", level: 1 })).toBeFocused();
   await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeFocused();
+
+  // Unsaved changes: the back button asks, and staying keeps what was typed.
+  await research.click();
+  const instructions = page.locator("form").getByLabel("Instructions", { exact: true });
+  await instructions.fill("Unsaved instructions.");
+  const question = page.getByRole("dialog", { name: "Leave without saving?", exact: true });
+  await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
+  await expect(question).toBeVisible();
+  await question.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(question).toBeHidden();
+  await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
+  await expect(instructions).toHaveValue("Unsaved instructions.");
+
+  // The browser's Back asks the same question.
+  await page.goBack();
+  await expect(question).toBeVisible();
+  await question.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
+  await expect(instructions).toHaveValue("Unsaved instructions.");
+
+  // So does a way out of Build; discarding leaves, and nothing was stored.
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(question).toBeVisible();
+  await question.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await expect(page).not.toHaveURL(/\/build\//u);
+  await page.goto("/build/agents/research_assistant");
+  await expect(instructions).not.toHaveValue("Unsaved instructions.");
+
+  // Closing or reloading the tab with unsaved changes is the browser's own question.
+  await instructions.fill("Unsaved instructions.");
+  let asked = false;
+  page.once("dialog", (dialog) => {
+    asked = dialog.type() === "beforeunload";
+    dialog.accept().catch(() => undefined);
+  });
+  await page.reload();
+  expect(asked).toBe(true);
 });
 
 test("superadmin config follows the German locale", async ({ page }) => {
