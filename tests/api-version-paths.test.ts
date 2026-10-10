@@ -130,6 +130,7 @@ describe("the operation catalog", () => {
         "permissions.grant  POST /api/v1/instance/access/grants",
         "permissions.list  GET /api/v1/instance/access/grants",
         "permissions.revoke  DELETE /api/v1/instance/access/grants/:grantId",
+        "platform.context.get  GET /api/v1/context",
         "ready.get  GET /ready",
         "service_principals.create  POST /api/v1/instance/service-principals",
         "service_principals.list  GET /api/v1/instance/service-principals",
@@ -199,6 +200,7 @@ describe("the operation catalog", () => {
     expect([...scopes].sort()).toEqual([
       "approval-requests",
       "auth",
+      "context",
       "conversations",
       "dev",
       "docs",
@@ -333,7 +335,8 @@ describe("a running instance", () => {
       "instance.jobs.summary",
       "instance.jobs.list",
       "instance.jobs.retry",
-      "approval_requests.list_mine"
+      "approval_requests.list_mine",
+      "platform.context.get"
     ];
     expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });
