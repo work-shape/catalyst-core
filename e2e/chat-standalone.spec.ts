@@ -127,6 +127,36 @@ test("floating chrome toggles sidebar, agent, and theme", async ({ page }) => {
     .not.toBe(backgroundBefore);
 });
 
+test("an agent list opened right after a conversation stays open", async ({ page }) => {
+  await serveAgentSettings(page, { showAgentDescriptions: true });
+  await signInViaApi(page, normalUser);
+  const conversationTitle = `Agent list after open ${randomUUID()}`;
+  await createListedConversation(page, conversationTitle);
+  await page.clock.install();
+  await page.goto("/");
+  const row = page.getByTestId("conversation-row").filter({ hasText: conversationTitle });
+  await expect(row).toBeVisible();
+
+  // The page's timers stand still from here and move only as far as the test says, so the
+  // list is open before the composer tries for the focus a last time.
+  await page.clock.pauseAt(Date.now() + 1000);
+  await row.getByRole("button").first().click();
+  // One frame: the composer has the focus, and its last try is still to come.
+  await page.clock.runFor(20);
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await expect(composer).toBeFocused();
+  const agentSelector = page.locator("header").getByRole("button", { name: "Select agent" });
+  await agentSelector.click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+
+  // Past every try the composer had planned: the focus stays where the person put it.
+  await page.clock.runFor(200);
+  await expect(composer).not.toBeFocused();
+  await page.clock.resume();
+  await page.getByRole("option", { name: /Research Assistant/ }).click();
+  await expect(agentSelector).toHaveAccessibleName("Select agent: Research Assistant");
+});
+
 test("conversation rail keeps dense histories readable and scrollable", async ({ page }) => {
   await signInViaApi(page, normalUser);
   const titlePrefix = `Dense rail ${Date.now()}`;

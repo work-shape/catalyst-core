@@ -7,6 +7,7 @@ import { Button, cn, Spinner } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
+import { useComposerFocusRequest } from "./composer-focus-request";
 import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../i18n";
 import { shouldQueueSend, type SendBlock } from "./send-block";
@@ -139,42 +140,7 @@ export function AssistantComposer({
     [currentText, onSubmitMessage, queueSend, runtimeReady, submitBlocked]
   );
 
-  useLayoutEffect(() => {
-    if (focusRequestId === 0) {
-      return;
-    }
-
-    let cancelled = false;
-    const animationFrameIds: number[] = [];
-    const timeoutIds: number[] = [];
-
-    function focusInput() {
-      if (cancelled) {
-        return;
-      }
-      const input = composerInputRef.current;
-      if (!input || input.disabled) {
-        return;
-      }
-      input.focus({ preventScroll: true });
-      input.setSelectionRange(input.value.length, input.value.length);
-    }
-
-    focusInput();
-    animationFrameIds.push(window.requestAnimationFrame(focusInput));
-    timeoutIds.push(window.setTimeout(focusInput, 0));
-    timeoutIds.push(window.setTimeout(focusInput, 50));
-
-    return () => {
-      cancelled = true;
-      for (const frameId of animationFrameIds) {
-        window.cancelAnimationFrame(frameId);
-      }
-      for (const timeoutId of timeoutIds) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [focusRequestId]);
+  useComposerFocusRequest(composerInputRef, focusRequestId);
 
   useLayoutEffect(() => {
     const shell = composerShellRef.current;

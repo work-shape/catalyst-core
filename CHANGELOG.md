@@ -713,6 +713,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Chat:** a list or menu opened right after a conversation stays open. The composer tried
+  for the focus once more 50 milliseconds after a conversation was opened, and took it out of
+  an agent list opened in that time, which closed the list. The composer now stops trying once
+  a pointer or a key is pressed.
+
 - **Chat:** an answer that has just finished gets its work history, its actions and the next
   turn without a reload. An instance that runs its agents in the API process announced the end
   of a run before its stores had recorded it, so a page that read the conversation back at that
