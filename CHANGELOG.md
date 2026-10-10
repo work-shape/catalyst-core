@@ -34,7 +34,7 @@ contain breaking changes; a patch version does not.
   frames, `document.write` is refused and the WebRTC constructors are removed by name; this
   part runs in the Page's own realm and is hardening, not a boundary. WebRTC from a scripted
   frame stays a known open exit. Tested in Chromium only.
-- **Database:** migration `0051_pages` adds the tables `pages` and `file_sets`.
+- **Database:** migration `0050_pages` adds the tables `pages` and `file_sets`.
 
 - **Infrastructure:** the page **Instance > Infrastructure** in the settings and
   `GET /api/v1/instance/infrastructure` list what the instance runs on: every entry of the
