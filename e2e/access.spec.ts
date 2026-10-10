@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 import { requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -29,6 +30,9 @@ function checkRow(page: Page, verb: "read" | "write" | "delete"): Locator {
 async function pick(page: Page, trigger: Locator, option: string | RegExp): Promise<void> {
   await trigger.click();
   await page.getByRole("option", { name: option }).click();
+  // The list is gone before the next step, as it is for a person: a press on a checkbox while
+  // the list still fades out is a press outside it.
+  await expect(page.getByRole("listbox")).toHaveCount(0);
 }
 
 /** Asks the Check tab what E2E User may do with one agent name. */
@@ -203,7 +207,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
 
     // At 390 wide the page keeps inside the window, on the result and on the grant list,
     // and nothing in the list scrolls sideways: a row stacks and keeps its menu in reach.
-    await page.getByRole("button", { name: "Close sidebar" }).click();
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
     await page.setViewportSize(NARROW);
     await checkRow(page, "write").scrollIntoViewIfNeeded();
     await expect(checkRow(page, "write")).toBeInViewport();
@@ -220,7 +224,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
       });
     }
     await page.setViewportSize(WIDE);
-    await page.getByRole("button", { name: "Open sidebar" }).click();
+    await page.getByRole("button", { name: "Expand sidebar" }).click();
   } finally {
     const deleted = await requestWithOrigin(page, "post", `${assetPath}/delete`, { data: {} });
     expect(deleted.ok()).toBe(true);

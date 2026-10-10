@@ -66,6 +66,18 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["superadmin manages config assets with validation and conflict protection"]
   },
   {
+    name: "grant-already-there",
+    reason:
+      "Chromium's own log line: the test asks for three grants of which two exist, the " +
+      "instance answers 409 for each of the two, and the page says that it left them alone, " +
+      "which the test asserts.",
+    matches: requestAnswered(409),
+    path: /^\/api\/v1\/instance\/access\/grants$/u,
+    tests: [
+      "an administrator registers a Namespace, grants in it, checks, denies, revokes and deletes"
+    ]
+  },
+  {
     name: "planted-policy-refusal",
     reason:
       "Chromium's own log line for a load the policy of a generated view refused. These tests " +
