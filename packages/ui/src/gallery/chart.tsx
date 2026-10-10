@@ -1,5 +1,5 @@
 import { Chart, type ChartProps } from "../data/chart";
-import type { ChartRow, ChartSeries } from "../data/chart-data";
+import { CHART_MAX_ROWS, type ChartRow, type ChartSeries } from "../data/chart-data";
 import { Samples, type GalleryEntry } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -42,6 +42,12 @@ function shareRows(text: GalleryText): ChartRow[] {
 }
 
 const FIRST_SERIES = 3;
+
+/** More rows than a chart draws: a slow wave, numbered from one. */
+const MANY_ROWS: readonly ChartRow[] = Array.from({ length: CHART_MAX_ROWS + 200 }, (_, index) => ({
+  month: index + 1,
+  chat: Math.round(400 + 150 * Math.sin(index / 60) + index / 10)
+}));
 
 function ChartSamples({ text }: { text: GalleryText }) {
   const rows = runRows(text.chartLocale);
@@ -88,6 +94,7 @@ function ChartSamples({ text }: { text: GalleryText }) {
       {runs(text.chartEmpty, { type: "bar", rows: [] })}
       {runs(text.chartSixSeriesLine, { type: "line", series })}
       {runs(text.chartSixSeriesBar, { type: "bar", series })}
+      {runs(text.chartTruncated, { type: "line", rows: MANY_ROWS, series: series.slice(0, 1) })}
     </div>
   );
 }

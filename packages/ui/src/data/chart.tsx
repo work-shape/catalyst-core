@@ -1,6 +1,7 @@
-import { memo, Suspense, use, useEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, use, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Skeleton } from "../feedback/skeleton";
 import type { ThemeTokenName } from "../theme";
+import { useUiLabels } from "../ui-root";
 import { readChart, type ChartData } from "./chart-data";
 import type { ChartHandle, ChartPalette, ChartSpec } from "./chart-engine";
 
@@ -16,11 +17,18 @@ export interface ChartProps extends ChartData {
 const CHART_DEFAULT_HEIGHT = 280;
 
 type ChartEngine = typeof import("./chart-engine");
-let chartEngine: Promise<ChartEngine> | undefined;
+let chartEngine: Promise<ChartEngine | undefined> | undefined;
 
-/** The engine is one chunk, requested when the first chart mounts. */
-function loadChartEngine(): Promise<ChartEngine> {
-  chartEngine ??= import("./chart-engine");
+/**
+ * The engine is one chunk, requested when the first chart mounts. A failed request resolves to
+ * `undefined` and is forgotten, so the chart that asked shows its empty box and the next chart
+ * to mount asks again.
+ */
+function loadChartEngine(): Promise<ChartEngine | undefined> {
+  chartEngine ??= import("./chart-engine").catch(() => {
+    chartEngine = undefined;
+    return undefined;
+  });
   return chartEngine;
 }
 
@@ -70,14 +78,21 @@ interface Drawing {
   handle: ChartHandle | undefined;
 }
 
-function ChartCanvas({ spec }: { spec: ChartSpec }) {
-  const engine = use(loadChartEngine());
+interface ChartCanvasProps {
+  spec: ChartSpec;
+  loading: Promise<ChartEngine | undefined>;
+  /** Shown when the engine could not be loaded. */
+  fallback: ReactNode;
+}
+
+function ChartCanvas({ spec, loading, fallback }: ChartCanvasProps) {
+  const engine = use(loading);
   const containerRef = useRef<HTMLDivElement>(null);
   const drawingRef = useRef<Drawing>({ spec, palette: undefined, handle: undefined });
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) {
+    if (!container || !engine) {
       return undefined;
     }
     const drawing = drawingRef.current;
@@ -132,7 +147,7 @@ function ChartCanvas({ spec }: { spec: ChartSpec }) {
     }
   }, [spec]);
 
-  return <div ref={containerRef} className="size-full" />;
+  return engine ? <div ref={containerRef} className="size-full" /> : fallback;
 }
 
 /** The chart's data for a reader who does not see the drawing. */
@@ -170,7 +185,8 @@ const ChartTable = memo(function ChartTable({ spec }: { spec: ChartSpec }) {
  * A bar, line, area or pie chart of the caller's rows. Its colours are the chart tokens of the
  * theme it sits in and follow a theme or mode change. Nothing animates. The drawing is hidden
  * from assistive technology, which gets `ariaLabel` and the same data as a table. The engine is
- * loaded when the first chart mounts; until then the box shows a skeleton.
+ * loaded when the first chart mounts; until then the box shows a skeleton. A chart that had to
+ * cut rows or series says so under its box.
  */
 export function Chart({
   type,
@@ -184,6 +200,7 @@ export function Chart({
   ariaLabel,
   emptyLabel
 }: ChartProps) {
+  const labels = useUiLabels("Chart");
   // A caller writes these inline, so they are compared by content and not by identity.
   const stableSeries = useStable(series);
   const stableFormat = useStable(format);
@@ -191,30 +208,37 @@ export function Chart({
     () => readChart({ type, rows, x, series: stableSeries, stacked, format: stableFormat, locale }),
     [type, rows, x, stableSeries, stacked, stableFormat, locale]
   );
+  // One request per mounted chart: a chart whose request failed does not ask again by itself.
+  const [loading] = useState(loadChartEngine);
+  const emptyBox = (
+    <div className="flex size-full items-center justify-center rounded-md border border-dashed px-4 text-center text-body text-muted-foreground">
+      {emptyLabel}
+    </div>
+  );
 
   return (
     <figure
       aria-label={ariaLabel}
       data-chart={type}
       data-truncated={truncated}
-      className="m-0 w-full min-w-0"
+      className="m-0 grid w-full min-w-0 gap-2"
     >
       {drawable ? (
         <>
           <div aria-hidden="true" className="w-full text-caption" style={{ height }}>
             <Suspense fallback={<Skeleton shape="block" className="h-full" />}>
-              <ChartCanvas spec={spec} />
+              <ChartCanvas spec={spec} loading={loading} fallback={emptyBox} />
             </Suspense>
           </div>
           <ChartTable spec={spec} />
         </>
       ) : (
-        <div
-          className="flex items-center justify-center rounded-md border border-dashed px-4 text-center text-body text-muted-foreground"
-          style={{ height }}
-        >
-          {emptyLabel}
-        </div>
+        <div style={{ height }}>{emptyBox}</div>
+      )}
+      {truncated === undefined ? null : (
+        <figcaption className="text-caption text-muted-foreground">
+          {labels.chartTruncated}
+        </figcaption>
       )}
     </figure>
   );

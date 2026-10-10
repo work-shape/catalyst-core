@@ -9,6 +9,7 @@ import {
   CHART_MAX_SERIES,
   ChartFieldError,
   UiRoot,
+  uiLabelsDe,
   uiLabelsEn,
   type ChartProps,
   type ChartRow
@@ -31,6 +32,7 @@ const palette: chartEngine.ChartPalette = {
 };
 const size = { width: 640, height: 280 };
 const chartTypes = ["bar", "line", "area", "pie"] as const;
+const captionClass = "text-caption text-muted-foreground";
 
 const base: ChartProps = {
   type: "bar",
@@ -63,13 +65,9 @@ const baseSpec: ChartSpec = {
 const chatSpec = { series: baseSpec.series.slice(0, 1) };
 
 /** What the component renders before the engine has loaded: the box and the data table. */
-function render(props: Partial<ChartProps>): string {
+function render(props: Partial<ChartProps>, labels = uiLabelsEn): string {
   return renderToStaticMarkup(
-    createElement(
-      UiRoot,
-      { mode: "light", labels: uiLabelsEn },
-      createElement(Chart, { ...base, ...props })
-    )
+    createElement(UiRoot, { mode: "light", labels }, createElement(Chart, { ...base, ...props }))
   );
 }
 
@@ -129,7 +127,7 @@ describe("Chart", () => {
   it("shows the empty label in the chart's box when there are no rows", () => {
     const markup = render({ rows: [], height: 200 });
 
-    expect(markup).toMatch(/style="height:200px">No runs in this period\.<\/div><\/figure>/u);
+    expect(markup).toMatch(/style="height:200px"><div[^>]*>No runs in this period\.<\/div>/u);
     expect(markup).not.toContain("<table");
     expect(markup).not.toContain("aria-hidden");
   });
@@ -155,9 +153,9 @@ describe("Chart", () => {
       ["Feb", "25", "-5"]
     ]);
     expect(render({ rows, type: "pie" })).toContain("<table");
-    expect(render({ rows: [{ month: "Jan", chat: -40 }], series: chatOnly, type: "pie" })).toMatch(
-      />No runs in this period\.<\/div><\/figure>/u
-    );
+    expect(
+      render({ rows: [{ month: "Jan", chat: -40 }], series: chatOnly, type: "pie" })
+    ).toContain(">No runs in this period.</div></div></figure>");
   });
 
   it("reads a missing, empty or non-numeric value as a gap and a numeric text as its number", () => {
@@ -187,7 +185,7 @@ describe("Chart", () => {
 
     vi.stubEnv("NODE_ENV", "production");
     expect(tableHead(render(wrong))).toEqual(["Chat", "Apps"]);
-    expect(render(absent)).toMatch(/>No runs in this period\.<\/div><\/figure>/u);
+    expect(render(absent)).toContain(">No runs in this period.</div></div></figure>");
   });
 
   it("draws a series that is empty in every row as a series without data", () => {
@@ -222,6 +220,10 @@ describe("Chart", () => {
 
     const cutRows = render({ rows: manyRows(CHART_MAX_ROWS + 1), series: chatOnly });
     expect(cutRows).toContain('data-truncated="rows"');
+    expect(cutRows).toContain(`<figcaption class="${captionClass}">${uiLabelsEn.chartTruncated}`);
+    expect(render({ rows: manyRows(CHART_MAX_ROWS + 1), series: chatOnly }, uiLabelsDe)).toContain(
+      `${uiLabelsDe.chartTruncated}</figcaption>`
+    );
     expect(tableRows(cutRows)).toHaveLength(CHART_MAX_ROWS);
     expect(tableRows(cutRows).at(-1)?.[0]).toBe(`M${CHART_MAX_ROWS - 1}`);
 
@@ -235,6 +237,7 @@ describe("Chart", () => {
     );
     const atTheCaps = { rows: manyRows(CHART_MAX_ROWS), series: series.slice(0, CHART_MAX_SERIES) };
     expect(render(atTheCaps)).not.toContain("data-truncated");
+    expect(render(atTheCaps)).not.toContain("<figcaption");
   });
 
   it("gives a pie its first series only, which is no cut", () => {
@@ -415,6 +418,42 @@ describe("chart engine", () => {
   });
 });
 
+describe("chart labels from untrusted data", () => {
+  const script = "<script>alert(1)</script>";
+  const image = '<img src=x onerror="alert(1)">';
+
+  it("escapes markup in labels and series names, in the table and in every drawing", () => {
+    const markup = render({
+      rows: [
+        { month: script, chat: 1, apps: 2 },
+        { month: image, chat: 2, apps: 1 }
+      ],
+      series: [
+        { field: "chat", label: script },
+        { field: "apps", label: image }
+      ],
+      ariaLabel: image,
+      emptyLabel: script
+    });
+    expect(markup).not.toMatch(/<script|<img/u);
+    expect(markup).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(render({ rows: [], emptyLabel: script })).not.toContain("<script");
+
+    for (const type of chartTypes) {
+      const drawn = draw({
+        type,
+        categories: [script, image],
+        series: [
+          { label: script, values: [1, 2] },
+          { label: image, values: [2, 1] }
+        ]
+      });
+      expect(drawn).not.toMatch(/<script|<img|<foreignObject/u);
+      expect(drawn).toContain("&lt;");
+    }
+  });
+});
+
 describe("chart boundary", () => {
   const source = (file: string) =>
     readFileSync(
@@ -457,6 +496,12 @@ describe("chart boundary", () => {
     expect(imports(engine).filter((name) => !name.startsWith("echarts/"))).toEqual([]);
     // The engine hands out drawing functions over product-owned types and no option object.
     expect(Object.keys(chartEngine).sort()).toEqual(["drawChart", "renderChartSvg"]);
+    // The package does not export the engine: a test reaches it through a source alias only.
+    const manifest = readFileSync(
+      fileURLToPath(new URL("../packages/ui/package.json", import.meta.url)),
+      "utf8"
+    );
+    expect(manifest).not.toContain("chart-engine");
     expectTypeOf(renderChartSvg).returns.toEqualTypeOf<string>();
   });
 

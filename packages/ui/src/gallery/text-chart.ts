@@ -11,6 +11,7 @@ export interface ChartGalleryText {
   chartPie: string;
   chartSixSeriesLine: string;
   chartSixSeriesBar: string;
+  chartTruncated: string;
   chartEmpty: string;
   chartEmptyLabel: string;
   chartSeriesChat: string;
@@ -33,6 +34,7 @@ export const chartGalleryText: Record<"en" | "de", ChartGalleryText> = {
     chartPie: "Pie",
     chartSixSeriesLine: "Line, six series: the sixth repeats the first colour, dashed",
     chartSixSeriesBar: "Bar, six series: the sixth repeats the first colour, lighter",
+    chartTruncated: "Line, more rows than a chart draws: it says that it cut",
     chartEmpty: "Without rows",
     chartEmptyLabel: "No runs in this period.",
     chartSeriesChat: "Chat",
@@ -53,6 +55,7 @@ export const chartGalleryText: Record<"en" | "de", ChartGalleryText> = {
     chartPie: "Kreis",
     chartSixSeriesLine: "Linie, sechs Reihen: die sechste wiederholt die erste Farbe, gestrichelt",
     chartSixSeriesBar: "Balken, sechs Reihen: die sechste wiederholt die erste Farbe, heller",
+    chartTruncated: "Linie, mehr Zeilen als ein Diagramm zeichnet: es sagt, dass es gekürzt hat",
     chartEmpty: "Ohne Zeilen",
     chartEmptyLabel: "Keine Läufe in diesem Zeitraum.",
     chartSeriesChat: "Chat",

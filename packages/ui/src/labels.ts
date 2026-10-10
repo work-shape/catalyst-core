@@ -19,6 +19,8 @@ export interface UiLabels {
   collapse: string;
   required: string;
   optional: string;
+  /** Under a chart that drew only the first rows or series of its data. */
+  chartTruncated: string;
 }
 
 export const uiLabelsEn: UiLabels = {
@@ -37,7 +39,8 @@ export const uiLabelsEn: UiLabels = {
   expand: "Expand",
   collapse: "Collapse",
   required: "Required",
-  optional: "Optional"
+  optional: "Optional",
+  chartTruncated: "Only part of the data is shown."
 };
 
 export const uiLabelsDe: UiLabels = {
@@ -56,5 +59,6 @@ export const uiLabelsDe: UiLabels = {
   expand: "Aufklappen",
   collapse: "Zuklappen",
   required: "Pflichtfeld",
-  optional: "Optional"
+  optional: "Optional",
+  chartTruncated: "Nur ein Teil der Daten wird angezeigt."
 };

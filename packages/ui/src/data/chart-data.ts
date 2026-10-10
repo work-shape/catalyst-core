@@ -31,8 +31,11 @@ export interface ChartData {
   locale: string;
 }
 
-/** A chart draws the first rows and series up to these caps and marks itself `data-truncated`. */
-export const CHART_MAX_ROWS = 5000;
+/**
+ * A chart draws the first rows and series up to these caps and says that it cut. A thousand
+ * rows is more than a chart shows legibly, and the drawing grows with rows times series.
+ */
+export const CHART_MAX_ROWS = 1000;
 export const CHART_MAX_SERIES = 24;
 
 /** A series names a field that holds a number in no row, which is a mistake in the caller. */

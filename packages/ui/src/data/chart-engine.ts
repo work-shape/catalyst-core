@@ -19,9 +19,9 @@ import { SVGRenderer } from "echarts/renderers";
 
 /**
  * The chart engine: the one file of the library that imports ECharts. `Chart` loads it with a
- * dynamic `import()`, so it stays out of the entry chunk, and it is the package's
- * `chart-engine` entry for a caller that draws without the component. The chart types and how
- * a series looks are decided here and nowhere else. No ECharts type leaves this file.
+ * dynamic `import()`, so it stays out of the entry chunk, and the package does not export it.
+ * The chart types and how a series looks are decided here and nowhere else. No ECharts type
+ * leaves this file.
  *
  * It imports the modular ESM build (`echarts/core` with the bar, line and pie charts) and the
  * SVG renderer. That build has no `eval` and no `new Function`, and the tooltip is drawn inside
@@ -86,9 +86,8 @@ type FillPattern = NonNullable<BarSeriesOption["itemStyle"]>["decal"];
 
 /** How a series is told apart without its colour: a marker on a line, a pattern on a bar. */
 interface SeriesMark {
-  symbol: "circle" | "rect" | "triangle" | "diamond";
-  /** Degrees the marker is turned by. */
-  turned?: number;
+  /** An ECharts symbol name, or a path the engine centres on the data point. */
+  symbol: string;
   pattern(color: string): FillPattern;
 }
 
@@ -104,13 +103,16 @@ const stripes =
     rotation
   });
 
+/** A triangle that points down. A turned symbol would sit beside its data point. */
+const TRIANGLE_DOWN = "path://M0 0L2 0L1 2Z";
+
 const SERIES_MARKS: readonly SeriesMark[] = [
   { symbol: "circle", pattern: () => undefined },
   { symbol: "rect", pattern: stripes(Math.PI / 4) },
   { symbol: "triangle", pattern: stripes(-Math.PI / 4) },
   { symbol: "diamond", pattern: stripes(Math.PI / 2) },
   // Level stripes come last: on a stacked bar they are the closest to a segment's edge.
-  { symbol: "triangle", turned: 180, pattern: stripes(0) }
+  { symbol: TRIANGLE_DOWN, pattern: stripes(0) }
 ];
 
 const LINE_WIDTH = 2;
@@ -184,7 +186,6 @@ function lineSeries(
     stack: filled && spec.stacked ? STACK_NAME : undefined,
     connectNulls: false,
     symbol: look.mark.symbol,
-    symbolRotate: look.mark.turned,
     symbolSize: MARKER_SIZE,
     // A single point has no line to show it, so its marker always shows.
     showSymbol: true,

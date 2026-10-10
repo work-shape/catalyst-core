@@ -34,11 +34,6 @@
       "development": "./src/gallery/index.tsx",
       "import": "./dist/gallery/index.js"
     },
-    "./chart-engine": {
-      "types": "./dist/data/chart-engine.d.ts",
-      "development": "./src/data/chart-engine.ts",
-      "import": "./dist/data/chart-engine.js"
-    },
     "./styles.css": "./src/styles.css"
   },
   "publishConfig": {
@@ -57,15 +52,11 @@
         "types": "./dist/gallery/index.d.ts",
         "import": "./dist/gallery/index.js"
       },
-      "./chart-engine": {
-        "types": "./dist/data/chart-engine.d.ts",
-        "import": "./dist/data/chart-engine.js"
-      },
       "./styles.css": "./src/styles.css"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/theme/index.ts src/gallery/index.tsx src/data/chart-engine.ts --format esm --dts --external react --external react-dom",
+    "build": "tsup src/index.ts src/theme/index.ts src/gallery/index.tsx --format esm --dts --external react --external react-dom",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
