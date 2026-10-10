@@ -1,0 +1,2 @@
+ALTER TABLE "product_users" ADD COLUMN "deletion_requested_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "collaboration_workspaces" ADD COLUMN "deletion_requested_at" timestamp with time zone;

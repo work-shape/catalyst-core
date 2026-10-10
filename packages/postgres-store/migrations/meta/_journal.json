@@ -246,6 +246,13 @@
       "when": 1791592182464,
       "tag": "0034_access_grants_namespaces",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791599020139,
+      "tag": "0035_deletion_requested",
+      "breakpoints": true
     }
   ]
 }
