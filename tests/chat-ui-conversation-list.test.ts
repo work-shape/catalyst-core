@@ -261,6 +261,29 @@ describe("workspace rail without a Chat row", () => {
     expect(markup.indexOf("Inbox")).toBeLessThan(markup.indexOf("Settings"));
   });
 
+  // Fails with the sections in a group of their own: a group's space then stood between New
+  // chat and the Inbox, in the open rail and not in the strip.
+  it("keeps New chat and the sections in one group, with or without a section and in the strip", () => {
+    const [inboxSection] = railSections;
+    if (!inboxSection) {
+      throw new Error("The rail has no Inbox section.");
+    }
+    const second: RailSection = { ...inboxSection, id: "second", label: "nav.build" };
+    const groupStarts = (markup: string, from: string, to: string) =>
+      markup.slice(markup.indexOf(from), markup.indexOf(to)).match(/role="group"/gu) ?? [];
+
+    for (const collapsed of [false, true]) {
+      const several = renderRail(many(1), { inbox, collapsed, sections: [inboxSection, second] });
+      expect(groupStarts(several, "New chat", "Inbox")).toHaveLength(0);
+      expect(groupStarts(several, "Inbox", "Build")).toHaveLength(0);
+    }
+    // The next group is the list under "Recent", with or without a section before it.
+    for (const markup of [renderRail(many(1), { inbox }), renderRail(many(1))]) {
+      expect(groupStarts(markup, "New chat", "Recent")).toHaveLength(1);
+      expect(markup).not.toContain("mt-4");
+    }
+  });
+
   it("marks nothing as current on the start page, and the open conversation's row in one", () => {
     const conversations = many(2);
 

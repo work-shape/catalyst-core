@@ -149,38 +149,33 @@ function RailHeader({
       {t("nav.conversations")}
     </NavItem>
   );
-  const sectionRows =
-    sections.length === 0 ? null : (
-      <NavGroup className={iconsOnly ? undefined : "mt-4"}>
-        {sections.map((section) => {
-          const count = section.count?.({ inbox }) ?? 0;
-          return (
-            <NavItem
-              key={section.id}
-              icon={<section.icon aria-hidden="true" />}
-              selected={view === section.view}
-              count={count > 0 ? count : undefined}
-              aria-label={
-                count > 0 && section.countLabel ? t(section.countLabel, { count }) : undefined
-              }
-              onClick={() => onViewChange(section.view)}
-            >
-              {t(section.label)}
-            </NavItem>
-          );
-        })}
-      </NavGroup>
+  const sectionRows = sections.map((section) => {
+    const count = section.count?.({ inbox }) ?? 0;
+    return (
+      <NavItem
+        key={section.id}
+        icon={<section.icon aria-hidden="true" />}
+        selected={view === section.view}
+        count={count > 0 ? count : undefined}
+        aria-label={count > 0 && section.countLabel ? t(section.countLabel, { count }) : undefined}
+        onClick={() => onViewChange(section.view)}
+      >
+        {t(section.label)}
+      </NavItem>
     );
+  });
 
+  // New chat and the sections are one group of rows, in the strip as in the open rail: the
+  // wider space stands only before "Recent".
   if (iconsOnly) {
     return (
-      <div className="grid justify-items-center gap-0.5">
+      <NavGroup>
         <div className="grid h-(--layout-header) place-items-center">{collapse}</div>
         {search}
         {newChat}
         {allConversations}
         {sectionRows}
-      </div>
+      </NavGroup>
     );
   }
   return (
@@ -192,8 +187,10 @@ function RailHeader({
         {search}
         {collapse}
       </div>
-      {newChat}
-      {sectionRows}
+      <NavGroup>
+        {newChat}
+        {sectionRows}
+      </NavGroup>
     </>
   );
 }
