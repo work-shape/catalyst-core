@@ -685,6 +685,43 @@ const plugin = {
         };
       }
     ),
+    // The switches are resolved once, with their legacy keys, and validated against the
+    // registry of what this build ships. A second reader would decide from raw switches.
+    "module-snapshot-boundary": rule(
+      "config.modules is read by config-schema only; take the ModuleSnapshot the assembly resolves",
+      (filename) =>
+        isServerSource(filename) && packageAt(filename)?.directory !== "packages/config-schema",
+      (_context, report) => {
+        /** @param {AnyNode} node */
+        const isConfig = (node) =>
+          (node.type === "Identifier" && node.name === "config") ||
+          (node.type === "MemberExpression" && keyName(node.property, node.computed) === "config");
+        return {
+          /** @param {AnyNode} node */
+          MemberExpression: (node) => {
+            if (
+              node.type === "MemberExpression" &&
+              keyName(node.property, node.computed) === "modules" &&
+              isConfig(node.object)
+            )
+              report(node);
+          },
+          /** @param {AnyNode} node */
+          VariableDeclarator: (node) => {
+            if (
+              node.type === "VariableDeclarator" &&
+              node.id.type === "ObjectPattern" &&
+              node.init &&
+              isConfig(node.init) &&
+              node.id.properties.some(
+                (item) => item.type === "Property" && keyName(item.key, item.computed) === "modules"
+              )
+            )
+              report(node);
+          }
+        };
+      }
+    ),
     "memory-store": rule(
       "Postgres is the only platform store; STORE=memory and InMemoryPlatformStore stay removed",
       () => true,

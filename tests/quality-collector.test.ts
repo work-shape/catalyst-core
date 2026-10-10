@@ -63,6 +63,7 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
     "@fixture/config-cli": [],
     "@fixture/ghost": [],
     "@fixture/chat-server": [],
+    "@fixture/config-schema": [],
     "@fixture/document-worker": [],
     "@fixture/model-provider": [],
     "@fixture/postgres-store": [],
@@ -241,6 +242,21 @@ export const b: number = a;
   "packages/chat-server/src/http/route.ts": `${httpServer}export const register = (url: string) => app.route({ method: "GET", url, handler });\n`,
   "packages/chat-server/src/routes/better-auth-routes.ts": `${httpServer}app.route({ method: "GET", url: "/api/auth/*", handler });
 app.route({ method: "GET", url: "/api/users", handler });
+`,
+  // The module switches: refused however a server source reads them from the config, and
+  // allowed in the package that parses and resolves them.
+  "packages/chat-server/src/module-member.ts": `declare const options: { config: { modules: object } };
+export const switches = options.config.modules;
+`,
+  "packages/chat-server/src/module-destructured.ts": `declare const config: { modules: object };
+export const { modules } = config;
+`,
+  "packages/chat-server/src/module-snapshot.ts": `declare const options: { modules: object };
+export const snapshot = options.modules;
+`,
+  "packages/config-schema/package.json": JSON.stringify({ name: "@fixture/config-schema" }),
+  "packages/config-schema/src/normalization.ts": `declare const config: { modules: object };
+export const normalized = config.modules;
 `,
   "packages/document-worker/package.json": JSON.stringify({ name: "@fixture/document-worker" }),
   "packages/document-worker/src/index.ts": `${httpServer}app.get("/health", handler);
@@ -664,6 +680,8 @@ describe("quality collector", { timeout: 180_000 }, () => {
         `catalyst/provider-type-literal ${source}/provider-type-list.ts`,
         `catalyst/provider-type-literal ${source}/provider-type-switch.ts`,
         `catalyst/provider-type-literal ${source}/provider-type-read.ts`,
+        "catalyst/module-snapshot-boundary packages/chat-server/src/module-member.ts",
+        "catalyst/module-snapshot-boundary packages/chat-server/src/module-destructured.ts",
         `catalyst/memory-store ${source}/memory-store.ts`,
         "catalyst/test-api-path tests/api-path.test.ts",
         "catalyst/test-api-path tests/api-template.test.ts",
