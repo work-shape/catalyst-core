@@ -1,6 +1,5 @@
 import {
   AppError,
-  assetScopesEqual,
   findNamespaceOfAssetName,
   isJsonObject,
   moduleOffError,
@@ -9,7 +8,6 @@ import {
   type AccessResource,
   type ActorAccess,
   type AgentConfig,
-  type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
@@ -69,8 +67,8 @@ const UNREAD_ASSET_ISSUE = "The change would break an asset the caller may not r
 /** The stored assets as one caller's change is checked against them. */
 interface ReferableAssets {
   /**
-   * What a definition of the caller is resolved against: the assets the caller may read, the
-   * unread ones beside the written asset in its Namespace, and the instance's default.
+   * What a definition of the caller is resolved against: the assets the caller may read and
+   * the instance's default.
    */
   set: AssetSet;
   /** The assets the caller may read, and no other. */
@@ -80,19 +78,16 @@ interface ReferableAssets {
 }
 
 /**
- * What a caller's definition is resolved against: the stored assets the caller may read, and
- * those beside the written asset in its Namespace, which it may refer to whoever writes it.
- * A name outside every Namespace has no such neighbours. Every other asset is left out, so a
+ * What a caller's definition is resolved against: the stored assets the caller may read.
+ * Every other asset is left out, one beside the written asset in its Namespace included, so a
  * reference to it reads as a reference to nothing. The instance's default stays in, because
  * the rule that an instance with agents has one is about the set and not about the change.
  */
-export async function loadReferableAssets(
+export function loadReferableAssets(
   options: ChatServerOptions,
   access: ActorAccess,
-  stored: StoredAssets,
-  /** The owner of what is written, and a name of it, or the prefix of its Namespace. */
-  written: { scope: AssetScope; name: string | undefined }
-): Promise<ReferableAssets> {
+  stored: StoredAssets
+): ReferableAssets {
   const isReadable = (asset: ConfigAssetRecord) => {
     const kind = options.configAssets.kinds.get(asset.kind);
     return (
@@ -108,27 +103,13 @@ export async function loadReferableAssets(
   if (unread.size === 0) {
     return { set: stored.set, readable: stored.set, complete: true };
   }
-  const namespaces =
-    written.scope.kind === "instance"
-      ? await options.stores.access.listNamespaceRecords({
-          clientInstanceId: options.clientInstanceId
-        })
-      : [];
-  const namespaceOf = (name: string) => findNamespaceOfAssetName(namespaces, name)?.prefix;
-  const namespace = written.name === undefined ? undefined : namespaceOf(written.name);
-  const isNeighbour = (asset: ConfigAssetRecord) =>
-    namespace !== undefined &&
-    assetScopesEqual(asset.scope, written.scope) &&
-    namespaceOf(asset.name) === namespace;
   const isInstanceDefault = (asset: ConfigAssetRecord) =>
     asset.name === stored.state.defaultAgentName &&
     options.configAssets.kinds.get(asset.kind)?.holdsInstanceDefault === true;
   const { defaultAgentName } = stored.state;
   return {
     set: assetSetOf(
-      stored.assets.filter(
-        (asset) => !unread.has(asset) || isNeighbour(asset) || isInstanceDefault(asset)
-      ),
+      stored.assets.filter((asset) => !unread.has(asset) || isInstanceDefault(asset)),
       defaultAgentName
     ),
     readable: assetSetOf(

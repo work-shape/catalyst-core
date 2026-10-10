@@ -2,10 +2,13 @@ import {
   AppError,
   INSTANCE_ASSET_SCOPE,
   asCollaborationWorkspaceId,
+  asUserId,
   assetScopesEqual,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
+  getSubjectUserId,
   isAppError,
+  isAuthenticatedServicePrincipal,
   type AccessResource,
   type ActorAccess,
   type AgentAvailability,
@@ -232,7 +235,7 @@ export class AssetWorkflow {
     const [namespaces, defaultName, availability] = await Promise.all([
       this.namespaces(target.scope),
       this.defaultName(target.kind, target.scope),
-      this.availability(target.kind, asset.name)
+      this.availability(call, target.kind, asset.name)
     ]);
     const namespace = findNamespaceOfAssetName(namespaces, asset.name);
     return {
@@ -249,7 +252,7 @@ export class AssetWorkflow {
     };
   }
 
-  /** The history of a name stays readable after its asset is deleted. */
+  /** One page of the history, newest first. It stays readable after its asset is deleted. */
   async listRevisions(call: AssetCall, address: AssetAddress, page: StorePage | undefined) {
     const target = await this.target(address);
     call.access.require(target.kind.actions.read, target.resource);
@@ -260,7 +263,8 @@ export class AssetWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       kind: target.kind.kind,
       name: target.name,
-      page
+      page,
+      newestFirst: true
     });
     return revisions.map((revision) => ({
       revision: revision.revision,
@@ -309,12 +313,12 @@ export class AssetWorkflow {
     if (target.asset.revision !== input.expectedRevision) {
       throw conflict(target.kind.kind, target.name, target.asset.revision);
     }
-    const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
+    const restored = await this.options.configAssets.store.getConfigAssetRevision({
       clientInstanceId: this.options.clientInstanceId,
       kind: target.kind.kind,
-      name: target.name
+      name: target.name,
+      revision: input.revision
     });
-    const restored = revisions.find((revision) => revision.revision === input.revision);
     if (!restored || restored.config === null) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -350,7 +354,7 @@ export class AssetWorkflow {
       const removed = withoutDefinition(set, kind.kind, name);
       return clearsDefault ? withDefaultAgentName(removed, undefined) : removed;
     };
-    await this.requireTellableChange(call, target, stored, deleted);
+    this.requireTellableChange(call, target, stored, deleted);
     validateAssetSet(this.options.configAssets.kinds.kinds, deleted(stored.set), stored.set);
     const result = await this.apply(call, {
       baseRevisions: { [assetKey(kind.kind, name)]: input.expectedRevision },
@@ -387,10 +391,7 @@ export class AssetWorkflow {
     call.access.require(kind.actions.read, target.resource);
     const kinds = this.options.configAssets.kinds.kinds;
     const stored = await loadStoredAssets(this.options);
-    const view = await loadReferableAssets(this.options, call.access, stored, {
-      scope: target.scope,
-      name
-    });
+    const view = loadReferableAssets(this.options, call.access, stored);
     const current = name === undefined ? undefined : findDefinition(view.set, kind.kind, name);
     const prepared = kind.prepareInteractiveUpsert({ current, next: input.config });
     const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
@@ -470,7 +471,7 @@ export class AssetWorkflow {
       const replaced = withDefinition(set, kind.kind, name, definition);
       return setsDefault ? withDefaultAgentName(replaced, name) : replaced;
     };
-    await this.requireTellableChange(call, target, stored, written);
+    this.requireTellableChange(call, target, stored, written);
     const validated = validateAssetSet(kinds, written(stored.set), stored.set);
     const namespaces = await assertChangedAgentsAllowed(
       this.options,
@@ -526,14 +527,14 @@ export class AssetWorkflow {
    * not read in the words of a reference to nothing, and an issue of such an asset without
    * its name. A caller who reads everything is left to the check of the whole set after it.
    */
-  private async requireTellableChange(
+  private requireTellableChange(
     call: AssetCall,
     target: AssetTarget,
     stored: StoredAssets,
     written: (set: AssetSet) => AssetSet
-  ): Promise<void> {
-    const { kind, name, scope } = target;
-    const view = await loadReferableAssets(this.options, call.access, stored, { scope, name });
+  ): void {
+    const { kind, name } = target;
+    const view = loadReferableAssets(this.options, call.access, stored);
     if (view.complete) return;
     const issues = findIssuesOfChange(
       this.options.configAssets.kinds.kinds,
@@ -613,8 +614,14 @@ export class AssetWorkflow {
     return state.defaultAgentName;
   }
 
-  /** The workspaces one asset is offered in, where its kind is offered per workspace. */
+  /**
+   * The workspaces one asset is offered in, where its kind is offered per workspace, as far as
+   * the caller sees them. Whoever holds the kind's write right on the whole instance sets the
+   * availability and lists every Shared Workspace for it, so reads them all. Anyone else reads
+   * the workspaces they are a member of, and a service principal is a member of none.
+   */
   private async availability(
+    call: AssetCall,
     kind: WorkflowAssetKind,
     name: string
   ): Promise<AgentAvailability | undefined> {
@@ -625,7 +632,27 @@ export class AssetWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       agentName: name
     });
-    return stored.get(name);
+    const availability = stored.get(name);
+    if (
+      !availability ||
+      availability.collaborationWorkspaceIds.length === 0 ||
+      call.access.authorize(kind.actions.write).allowed
+    ) {
+      return availability;
+    }
+    const memberOf = isAuthenticatedServicePrincipal(call.actor)
+      ? []
+      : await this.options.stores.workspaces.listWorkspacesForUser({
+          clientInstanceId: this.options.clientInstanceId,
+          userId: asUserId(getSubjectUserId(call.actor))
+        });
+    const visible = new Set<string>(memberOf.map((workspace) => workspace.id));
+    return {
+      ...availability,
+      collaborationWorkspaceIds: availability.collaborationWorkspaceIds.filter((id) =>
+        visible.has(id)
+      )
+    };
   }
 
   private async target(address: AssetAddress): Promise<AssetTarget> {

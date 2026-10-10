@@ -355,10 +355,10 @@ describe("assets.put, assets.delete and assets.revert", () => {
       .object({ items: z.array(z.object({ revision: z.number(), operation: z.string() })) })
       .parse((await t.expectOk(t.kai.id, "assets.revisions.list", address)).json());
     expect(history.items.map((item) => [item.revision, item.operation])).toEqual([
-      [1, "create"],
-      [2, "update"],
+      [4, "delete"],
       [3, "revert"],
-      [4, "delete"]
+      [2, "update"],
+      [1, "create"]
     ]);
     await t.expectRefused(t.lena.id, "assets.revisions.list", address, {
       ...t.forbidden("agent.read", "no_grant")

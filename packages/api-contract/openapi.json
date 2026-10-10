@@ -1424,7 +1424,7 @@
     "/api/v1/assets/{kind}/{name}/revisions": {
       "get": {
         "operationId": "assets.revisions.list",
-        "summary": "List the revisions of one asset",
+        "summary": "List the revisions of one asset, newest first",
         "tags": [
           "Assets"
         ],

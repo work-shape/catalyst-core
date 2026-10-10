@@ -1,6 +1,6 @@
 import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { and, asc, eq, ilike, inArray, like, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, like, sql } from "drizzle-orm";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
@@ -184,6 +184,7 @@ export async function listConfigAssetRevisions(
   if (!asset) {
     return [];
   }
+  const newestFirst = input.newestFirst === true;
   const rows = await db
     .select()
     .from(configAssetRevisions)
@@ -191,12 +192,33 @@ export async function listConfigAssetRevisions(
       and(
         eq(configAssetRevisions.clientInstanceId, input.clientInstanceId),
         eq(configAssetRevisions.assetId, asset.id),
-        keysetFilter(input.page, [configAssetRevisions.revision], false)
+        keysetFilter(input.page, [configAssetRevisions.revision], newestFirst)
       )
     )
-    .orderBy(asc(configAssetRevisions.revision))
+    .orderBy(newestFirst ? desc(configAssetRevisions.revision) : asc(configAssetRevisions.revision))
     .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapConfigAssetRevision);
+}
+
+export async function getConfigAssetRevision(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["getConfigAssetRevision"]>[0]
+): Promise<ConfigAssetRevisionRecord | undefined> {
+  const [row] = await db
+    .select({ revision: configAssetRevisions })
+    .from(configAssetRevisions)
+    .innerJoin(configAssets, eq(configAssets.id, configAssetRevisions.assetId))
+    .where(
+      and(
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.kind, input.kind),
+        eq(configAssets.name, input.name),
+        eq(configAssetRevisions.clientInstanceId, input.clientInstanceId),
+        eq(configAssetRevisions.revision, input.revision)
+      )
+    )
+    .limit(1);
+  return row ? mapConfigAssetRevision(row.revision) : undefined;
 }
 
 export async function applyConfigAssetMutations(

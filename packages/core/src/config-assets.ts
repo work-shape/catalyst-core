@@ -163,12 +163,22 @@ export interface ConfigAssetStore {
     kind: ConfigAssetKind;
     name: string;
   }): Promise<ConfigAssetRecord | undefined>;
+  /** The revisions of one asset, oldest first unless `newestFirst` is set. */
   listConfigAssetRevisions(input: {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     name: string;
     page?: StorePage;
+    /** Orders the revisions from the latest down, and reads `page.after` in that order. */
+    newestFirst?: boolean;
   }): Promise<ConfigAssetRevisionRecord[]>;
+  /** One revision of one asset, read without the others. */
+  getConfigAssetRevision(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    revision: number;
+  }): Promise<ConfigAssetRevisionRecord | undefined>;
   applyConfigAssetMutations(input: {
     clientInstanceId: ClientInstanceId;
     baseVersion?: number;

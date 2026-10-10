@@ -194,6 +194,27 @@ describe("named store keyset paging", () => {
         })
       ).map((row) => row.revision)
     ).toEqual([3]);
+    // Newest first, the cursor continues downwards: no revision twice and none left out.
+    const newest = (after?: number) =>
+      suite.store.configAssets
+        .listConfigAssetRevisions({
+          clientInstanceId,
+          kind: "agent",
+          name: "test",
+          page: { limit: 2, ...(after === undefined ? {} : { after: [after] }) },
+          newestFirst: true
+        })
+        .then((rows) => rows.map((row) => row.revision));
+    expect([await newest(), await newest(2)]).toEqual([[3, 2], [1]]);
+    const read = (revision: number) =>
+      suite.store.configAssets.getConfigAssetRevision({
+        clientInstanceId,
+        kind: "agent",
+        name: "test",
+        revision
+      });
+    expect(await read(2)).toMatchObject({ revision: 2, config: { instructions: "1" } });
+    expect(await read(4)).toBeUndefined();
     const requests = await suite.store.approvals.listApprovalRequests({
       clientInstanceId,
       kinds: ["test"],

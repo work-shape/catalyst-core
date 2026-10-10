@@ -83,15 +83,72 @@ describe("a reference to an asset the caller may not read", () => {
       valid: false,
       issues: [missing("kai-intake", "lena-rules")]
     });
-    // An agent may refer to what lies beside it in its Namespace, whoever writes it: Lena
-    // may write agents in `kai-` and read no skill at all.
+    // A skill beside the agent in its Namespace is no exception: Lena may write agents in
+    // `kai-` and reads no skill at all, so none is a reference of hers.
     for (const action of ["agent.read", "agent.write"]) {
       await t.grant(t.lena.id, action, { namespace: "kai-" });
     }
-    expect(await check(t.lena.id, "kai-guide")).toEqual(valid);
-    expect(await check(t.lena.id, "lena-guide")).toEqual({
-      valid: false,
-      issues: [missing("kai-intake", "lena-guide")]
+    for (const hidden of ["kai-guide", "lena-guide"]) {
+      expect(await check(t.lena.id, hidden), hidden).toEqual({
+        valid: false,
+        issues: [missing("kai-intake", hidden)]
+      });
+    }
+  });
+
+  it("refuses a put and a revert that attach a skill of the same Namespace under a read deny", async () => {
+    const { t } = await setup();
+    const address = { params: { kind: "agent", name: "kai-intake" } };
+    const write = async (
+      userId: string,
+      operation: "assets.put" | "assets.revert",
+      payload: Record<string, unknown>
+    ) => {
+      const response = await t.call(userId, operation, { ...address, payload });
+      if (response.statusCode === 200) return { status: 200 };
+      const { error } = errorSchema.parse(response.json());
+      return {
+        status: response.statusCode,
+        message: error.message,
+        issues: issuesSchema.parse(error.details).issues.map((issue) => issue.message)
+      };
+    };
+    const refused = {
+      status: 422,
+      message: "Config asset bundle is invalid",
+      issues: [missing("kai-intake", "kai-guide")]
+    };
+    const wired = reader("kai-intake", ["kai-guide"]);
+    const bare = reader("kai-intake", []);
+
+    // Kai reads the skill, attaches it at revision 1 and takes it off again at revision 2.
+    expect(await write(t.kai.id, "assets.put", { config: wired })).toEqual({ status: 200 });
+    expect(await write(t.kai.id, "assets.put", { config: bare })).toEqual({ status: 200 });
+    await t.grant(
+      t.kai.id,
+      "skill.read",
+      { assetId: await t.assetId("skill", "kai-guide") },
+      "deny"
+    );
+
+    // Now he may not read it: neither a put nor a restore of revision 1 attaches it again.
+    expect(await write(t.kai.id, "assets.put", { config: wired })).toEqual(refused);
+    expect(await write(t.kai.id, "assets.revert", { revision: 1 })).toEqual(refused);
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({
+      revision: 2,
+      config: { skillNames: [] }
+    });
+
+    // The administrator attaches it at revision 3. Kai keeps what is stored: an edit and a
+    // restore of that revision leave the reference as it is.
+    expect(await write(t.admin.id, "assets.put", { config: wired })).toEqual({ status: 200 });
+    expect(
+      await write(t.kai.id, "assets.put", { config: { ...wired, instructions: "Help well." } })
+    ).toEqual({ status: 200 });
+    expect(await write(t.kai.id, "assets.revert", { revision: 3 })).toEqual({ status: 200 });
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({
+      revision: 5,
+      config: { instructions: "Help.", skillNames: ["kai-guide"] }
     });
   });
 

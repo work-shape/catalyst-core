@@ -25,9 +25,9 @@ contain breaking changes; a patch version does not.
   `docker/nginx-spa.conf` are changed accordingly. An HTML file is never answered as stored: the
   answer is a shell that holds it in a frame with `sandbox="allow-scripts"`, under the header
   `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'self'
-  'sha256-<the platform's script>'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
-  connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none';
-  frame-ancestors 'self' <allowed origins>`. A Page therefore has no origin, sends no form,
+'sha256-<the platform's script>'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none';
+frame-ancestors 'self' <allowed origins>`. A Page therefore has no origin, sends no form,
   opens no window, reaches no other host and cannot move its frame. The platform's script is the
   only content of the frame's document and writes the stored HTML into it as its last step, so
   there is no Page where that script did not run. In a Page a link has no address, there are no
@@ -100,8 +100,8 @@ contain breaking changes; a patch version does not.
   thought signatures: a call with tools or with a tool call in its history is refused with
   `VALIDATION_FAILED`, and a binding on such a provider must state `agentSelectable: false`, or
   startup stops with: `Model binding '<id>' can be chosen for agents, but provider '<id>' does
-  not support tool calls, which every agent run needs: set 'agentSelectable: false' on the
-  binding`. The check on **Instance > Infrastructure** asks Google for a token with the key; it
+not support tool calls, which every agent run needs: set 'agentSelectable: false' on the
+binding`. The check on **Instance > Infrastructure** asks Google for a token with the key; it
   does not call Vertex. A model message can carry a PDF document; the
   gateway refuses such a call for a model that does not read documents, and fails a call that
   asked for a JSON format with `invalid_response` when the answer is not JSON, after settling
@@ -120,7 +120,8 @@ contain breaking changes; a patch version does not.
   `assets.revert`, `assets.validate`, `assets.sync` and `platform.context.get`. Each call is one
   Operation Run and is decided by the right on the one asset (`<kind>.read`, `.write`, `.delete`),
   so a holder of rights in a Namespace lists, reads and writes the assets of that Namespace.
-  `assets.list` answers summaries in pages, filtered by name prefix and text. A write names the
+  `assets.list` answers summaries in pages, filtered by name prefix and text.
+  `assets.revisions.list` answers the revisions of one asset in pages, newest first. A write names the
   revision it was made against in `expectedRevision` and answers `409 CONFLICT` with
   `details.currentRevision` when the asset stands at another one; a put without it creates the
   asset and is refused when the name is taken. `assets.sync` applies up to 200 puts and deletes
@@ -128,7 +129,10 @@ contain breaking changes; a patch version does not.
   prefix. The right on every item is decided before the policy is asked, and a policy setting
   narrowed to a kind or a Namespace applies to every asset call that names one of that kind or in
   that Namespace. A reference to an asset the caller may not read is answered like a reference to
-  an asset that does not exist. `platform.context.get` now also answers a service principal and names only the actions
+  an asset that does not exist, on a put and on a revert, also for an asset in the same Namespace;
+  a reference the stored asset already holds may stay. `assets.get` names of an agent's
+  availability only the workspaces the caller is a member of, and all of them to a holder of the
+  instance-wide write right. `platform.context.get` now also answers a service principal and names only the actions
   the credential's scopes allow. **Breaking:** the five old asset addresses are gone. Scripts that
   called them use `/api/v1/assets/...`; the CLI is unaffected. The operations
   `config_assets.get`, `put`, `delete`, `revert` and `revisions.list` under
@@ -412,9 +416,9 @@ id from config_assets where status = 'deleted')`.
 - **Views:** a view can no longer move its own frame to another host. Every view is framed in
   a shell document the instance serves at `/app-runtime/view-shell/1/shell.html`, with the
   header `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'self'
-  'unsafe-inline' 'unsafe-eval' <views.allowedScriptSrc>; style-src 'unsafe-inline'; img-src
-  data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none';
-  form-action 'none'`. Under `frame-src 'none'` the browser refuses `location`, a refresh tag, a
+'unsafe-inline' 'unsafe-eval' <views.allowedScriptSrc>; style-src 'unsafe-inline'; img-src
+data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none';
+form-action 'none'`. Under `frame-src 'none'` the browser refuses `location`, a refresh tag, a
   clicked link and a download link in a view before it sends a request, to the instance's own
   addresses as well. The shell answers a frame only: another `Sec-Fetch-Dest` gets `403`, and
   both answers carry `Vary: Sec-Fetch-Dest`. A
@@ -932,9 +936,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     rollback the previous release's worker claims the queued runs this release accepted, and
     its recovery fails the runs this release's worker held once their lease has run out. An
     API of the previous release that kept runs in its own memory (`agentRuntimeMode:
-    "local"`) cannot run beside this release: stop it before the new processes start.
+"local"`) cannot run beside this release: stop it before the new processes start.
   - Rollback in the single-process topology: the previous release with `agentRuntimeMode:
-    "local"` executes only runs it accepted itself. A run that was in flight on this release
+"local"` executes only runs it accepted itself. A run that was in flight on this release
     at the rollback stays `running` on the previous release until that release's recovery
     fails it, up to 30 minutes later, and its conversation answers the next message with 409
     until then. Let the runs end before a rollback, or expect that wait.

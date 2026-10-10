@@ -211,10 +211,7 @@ export async function syncAssets(
   stopIfRefused();
 
   // What the batch refers to and its caller may not read is refused as a reference to nothing.
-  const view = await loadReferableAssets(options, call.access, stored, {
-    scope: INSTANCE_ASSET_SCOPE,
-    name: input.namespace
-  });
+  const view = loadReferableAssets(options, call.access, stored);
   if (!view.complete) {
     const written = new Set(ready().map((entry) => assetKey(entry.kind.kind, entry.name)));
     const left = (set: AssetSet) =>

@@ -147,14 +147,14 @@ describe("config asset admin routes", () => {
     expect(revisionsBeforeRevert.statusCode).toBe(200);
     expect(revisionsBeforeRevert.json().items).toMatchObject([
       {
-        revision: 1,
-        operation: "create",
-        config: { instructions: "Original instructions" }
-      },
-      {
         revision: 2,
         operation: "update",
         config: { instructions: "Changed instructions" }
+      },
+      {
+        revision: 1,
+        operation: "create",
+        config: { instructions: "Original instructions" }
       }
     ]);
 
