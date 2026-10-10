@@ -5,8 +5,21 @@ import type { WorkspaceCommand } from "@vivd-catalyst/core";
 export const DEFAULT_WORKSPACE_COMMAND_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 export const DEFAULT_WORKSPACE_COMMAND_SHELL = "/bin/bash";
 
+/**
+ * What a sandbox reads of a command: a name for what it starts, the shell text and the limits
+ * of the process. A workspace command is one; so is a command the platform runs itself.
+ */
+export interface SandboxCommand {
+  id: string;
+  command: string;
+  limits: Pick<
+    WorkspaceCommand["limits"],
+    "timeoutSeconds" | "idleTimeoutSeconds" | "maxStdoutBytes" | "maxStderrBytes"
+  >;
+}
+
 export interface WorkspaceCommandProcessInput {
-  command: WorkspaceCommand;
+  command: SandboxCommand;
   workspaceDirectory: string;
   workspaceCwd: string;
   cwd: string;

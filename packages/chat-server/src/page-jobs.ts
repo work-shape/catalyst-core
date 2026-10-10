@@ -1,11 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  DEFAULT_PAGE_BUILD_LIMITS,
-  runPageBuild,
-  type PageBuildLimits,
-  type PageBuildOutcome,
-  type PageFile
-} from "@vivd-catalyst/app-build";
+import type { PageBuildLimits, PageFile } from "@vivd-catalyst/app-build";
 import {
   createPageBuildId,
   defineJobHandler,
@@ -32,13 +26,15 @@ import {
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
 import { z } from "zod";
+import type { PageBuildRunner } from "./page-build-sandbox";
 import { storePageFileSet } from "./page-file-sets";
 import type { ChatServerOptions } from "./types";
 
 // Building a Page when it is saved. The save writes a row with the snapshot of the folder and
-// enqueues `page.bundle`; the handler reads the files, has them built in a process of their own
-// (`runPageBuild`), stores the file set and writes the result on the row, where the save reads
-// it. The handler never loads a file of the Page as code, and neither does the build.
+// enqueues `page.bundle`; the handler reads the files, has them built by a command in the
+// sandbox (`createSandboxPageBuild`), stores the file set and writes the result on the row,
+// where the save reads it. The handler never loads a file of the Page as code. The process that
+// serves the kind is the workspace command worker, the one process that reaches the sandbox.
 
 /**
  * The lease of a running build. A worker that was killed is noticed after this long, and the
@@ -48,9 +44,9 @@ export const PAGE_BUNDLE_LEASE_MS = 2 * 60 * 1000;
 /** Three heartbeats may fail before the lease runs out. */
 export const PAGE_BUNDLE_HEARTBEAT_MS = 30 * 1000;
 /**
- * How many builds one worker process runs at once unless told otherwise. A build is one extra
- * process with its own heap for a few seconds, so the number is bound by the memory of the
- * worker's host: at most this many times `PAGE_BUILD_MAX_HEAP_MB`.
+ * How many builds one worker process runs at once unless told otherwise. A build is one
+ * container for a few seconds, so the number is bound by the memory of the sandbox's host: at
+ * most this many times the memory the sandbox gives a command.
  */
 export const PAGE_BUNDLE_DEFAULT_SLOTS = 2;
 /** How many files of a snapshot are read from the object store at a time. */
@@ -93,20 +89,15 @@ export interface PageBundleJobsOptions {
   logger: Logger;
   slots?: number;
   limits?: Partial<PageBuildLimits>;
-  /** Replaces the build process. For tests. */
-  build?: (input: {
-    files: readonly PageFile[];
-    signal: AbortSignal;
-    limits: Partial<PageBuildLimits>;
-  }) => Promise<PageBuildOutcome>;
+  /** Builds the files in the sandbox. */
+  build: PageBuildRunner;
 }
 
 /** The handler of `page.bundle`, for the process that serves it. */
 export function createPageBundleJobs(options: PageBundleJobsOptions): {
   handlers: RegisteredJobHandler[];
 } {
-  const build = options.build ?? runPageBuild;
-  const limits = { ...DEFAULT_PAGE_BUILD_LIMITS, ...options.limits };
+  const { build, limits } = options;
   const finish = (control: JobControl, buildId: PageBuildId, result: PageSaveOutcome) =>
     control.transaction((stores) =>
       stores.pages.finishPageBuild({
@@ -145,7 +136,12 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
             await finish(control, buildId, snapshot.result);
             return;
           }
-          const outcome = await build({ files: snapshot.files, signal: control.signal, limits });
+          const outcome = await build({
+            id: buildId,
+            files: snapshot.files,
+            signal: control.signal,
+            ...(limits ? { limits } : {})
+          });
           if (outcome.status === "errors") {
             await finish(control, buildId, { status: "errors", errors: outcome.errors });
             return;

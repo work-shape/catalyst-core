@@ -11,10 +11,15 @@ import type { PageBuildError, PageFile, PageRoute } from "./types";
 // What the generator does with a route file was read in its source (version pinned in this
 // package's dependencies): it lists the directory, reads each file as text, rewrites the route
 // path in the text and writes the route tree. It opens no socket. It executes a file in exactly
-// one case: a file named `__virtual.ts` (or `.js`, `.mjs`, `.cjs`, `.mts`, `.cts`) in the routes
-// directory is a "virtual route config" and is imported. Such a file is refused below before
-// anything is written, and is never written to the directory. The generator's formatter is
-// turned off, and no config file is read: the config is built here.
+// one case: a file whose name ends in `__virtual.ts` (or `.js`, `.mjs`, `.cjs`, `.mts`, `.cts`),
+// in the routes directory or any folder below it, is a "virtual route config" and is imported.
+// The generator tests the end of the name only, so `a__virtual.js` is such a file too. A Page
+// with a path that ends this way is refused below before anything is written. The generator's
+// formatter is turned off, and no config file is read: the config is built here.
+//
+// This refusal is a second line. The build runs in the sandbox, where a file of the Page that
+// did run would reach nothing: `tests/page-build-surface.test.ts` holds the generator to the
+// version and the loading code that were read.
 
 export const PAGE_ROUTES_DIRECTORY = "src/routes";
 /** The route tree the generator writes, as a file of the Page beside its sources. */
@@ -22,8 +27,12 @@ export const PAGE_ROUTE_TREE_FILE = "src/routeTree.gen.ts";
 
 /** The files the generator reads as routes. Nothing else is written to its directory. */
 const ROUTE_FILE = /\.(?:tsx|ts|jsx|js)$/u;
-/** The one name the generator would import and run. */
-const VIRTUAL_ROUTE_CONFIG = /(?:^|\/)__virtual\.[mc]?[jt]s$/u;
+/**
+ * The names the generator would import and run: its own pattern, as written in its source
+ * (`virtualConfigFileRegExp`). It is tested against the end of a path, as the generator tests
+ * the end of a file name.
+ */
+export const ROUTE_GENERATOR_EXECUTED_FILE = /__virtual\.[mc]?[jt]s$/u;
 
 export type GeneratedRoutes =
   | {
@@ -34,9 +43,12 @@ export type GeneratedRoutes =
     }
   | { status: "errors"; errors: PageBuildError[] };
 
-/** Whether a path of a Page is a file the route generator would execute. */
+/**
+ * Whether a path of a Page ends like a file the route generator would execute. Asked of every
+ * file of the Page, not only of its routes: no file of a Page has such a name.
+ */
 export function isVirtualRouteConfig(path: string): boolean {
-  return path.startsWith(`${PAGE_ROUTES_DIRECTORY}/`) && VIRTUAL_ROUTE_CONFIG.test(path);
+  return ROUTE_GENERATOR_EXECUTED_FILE.test(path);
 }
 
 /**
@@ -55,7 +67,7 @@ export async function generateRouteTree(files: readonly PageFile[]): Promise<Gen
         file: file.path,
         code: "routes_invalid" as const,
         message:
-          "A file named '__virtual' in the routes folder is a route config the generator would run. A Page declares its routes with files only."
+          "A file whose name ends in '__virtual' with a script extension is a route config the generator would run. A Page declares its routes with files only; rename the file."
       }))
     };
   }

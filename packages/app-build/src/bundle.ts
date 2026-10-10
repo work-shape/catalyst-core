@@ -2,6 +2,11 @@ import { context, transform, type Loader, type Message, type Plugin } from "esbu
 import { fileSetPathIssue } from "@vivd-catalyst/core";
 import { resolveReference, rewriteHtml } from "./html";
 import { APP_KIT_PACKAGE, KIT_IMPORT_NAMES, kitFilePath, kitImportPath } from "./kit";
+import {
+  PAGE_BUILD_MAX_ERRORS,
+  PAGE_BUILD_MAX_MESSAGE_CHARS,
+  PAGE_BUILD_MAX_OUTPUT_BYTES
+} from "./limits";
 import { PAGE_MANIFEST_FILE, parsePageManifest, type PageManifest } from "./manifest";
 import { generateRouteTree, PAGE_ROUTE_TREE_FILE } from "./routes";
 import type { PageBuildError, PageBuildResult, PageFile, PageRoute } from "./types";
@@ -14,13 +19,6 @@ import type { PageBuildError, PageBuildResult, PageFile, PageRoute } from "./typ
 // about, so esbuild's own resolver, which looks on disk and in `node_modules`, is never reached.
 // An import is one of three things: a file of the Page, a name the kit provides, which stays an
 // import of a path on the instance, or an error.
-
-/** The most a build may produce, all built files together. More is an error of the Page. */
-export const PAGE_BUILD_MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
-/** How many errors one build reports. A Page with more shows the first ones. */
-export const PAGE_BUILD_MAX_ERRORS = 50;
-/** The longest message of one error, in characters. */
-const PAGE_BUILD_MAX_MESSAGE_CHARS = 2000;
 
 const NAMESPACE = "page";
 // esbuild compiles a filter as a Go expression, which has no `u` flag.

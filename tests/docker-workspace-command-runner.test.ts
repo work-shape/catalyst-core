@@ -6,8 +6,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
-  asConversationId,
-  asExecutionWorkspaceId,
   asToolCallId,
   asWorkspaceCommandId,
   type AgentRunId,
@@ -43,17 +41,8 @@ describe("docker workspace command runner", () => {
       {
         command: {
           id: asWorkspaceCommandId("wcmd_docker_args"),
-          workspaceId: asExecutionWorkspaceId("ews_docker_args"),
-          clientInstanceId: asClientInstanceId("client_docker_args"),
-          conversationId: asConversationId("conv_docker_args"),
-          ownerUserId: "user-1",
           command: "node build.js",
-          status: "running",
-          limits: { timeoutSeconds: 60 },
-          expectedOutputs: [],
-          attempts: 1,
-          queuedAt: "2026-06-29T10:00:00.000Z",
-          updatedAt: "2026-06-29T10:00:00.000Z"
+          limits: { timeoutSeconds: 60 }
         },
         workspaceDirectory: "/host/workspace",
         workspaceCwd: "reports",
@@ -332,17 +321,8 @@ function dockerProcessInput(
   return {
     command: {
       id: asWorkspaceCommandId("wcmd_docker_cancel"),
-      workspaceId: asExecutionWorkspaceId("ews_docker_cancel"),
-      clientInstanceId: asClientInstanceId("client_docker_cancel"),
-      conversationId: asConversationId("conv_docker_cancel"),
-      ownerUserId: "user-1",
       command: "sleep 600",
-      status: "running",
-      limits: { timeoutSeconds: 60 },
-      expectedOutputs: [],
-      attempts: 1,
-      queuedAt: "2026-06-29T10:00:00.000Z",
-      updatedAt: "2026-06-29T10:00:00.000Z"
+      limits: { timeoutSeconds: 60 }
     },
     workspaceDirectory: "/host/workspace",
     workspaceCwd: ".",

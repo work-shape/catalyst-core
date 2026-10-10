@@ -14,13 +14,10 @@ import {
   type ClientInstanceId,
   type JobWorker,
   type Logger,
-  type ModuleSnapshot,
-  type PlatformStores,
-  type RegisteredJobHandler
+  type PlatformStores
 } from "@vivd-catalyst/core";
 import type { ClientInstanceEnv } from "./env";
 import { createJobWorker } from "./job-worker";
-import { assertAgentWorkerServesModuleJobKinds } from "./modules";
 
 // How many runs one process executes at once unless `AGENT_RUN_WORKER_CONCURRENCY` says
 // otherwise. A run waits on its model and its tools most of the time, so the number is bound
@@ -42,21 +39,14 @@ interface AgentRunExecutionAssembly {
   store: PlatformStores;
   env: ClientInstanceEnv;
   localAgentRuntimeOptions: WorkerLocalAgentRuntimeOptions;
-  modules: ModuleSnapshot;
-  /** The handlers of the modules' job kinds that run in the Agent Run worker. */
-  moduleJobHandlers: readonly RegisteredJobHandler[];
 }
 
-/**
- * The job kinds of the Agent Run worker, for the process that serves them: the runs, and what
- * the modules that are on build beside them, such as a Page. Refuses a worker that does not
- * serve a kind a module needs of it.
- */
+/** The job kinds that execute Agent Runs, for the process that serves them. */
 export function createClientInstanceAgentRunJobs(
   execution: AgentRunExecutionAssembly,
   options: { onObservation?: (runId: AgentRunId) => void; cancellations?: AgentRunSignal } = {}
 ): AgentRunJobs {
-  const runs = createAgentRunJobs({
+  return createAgentRunJobs({
     clientInstanceId: execution.clientInstanceId,
     stores: execution.store,
     slots: readAgentRunWorkerConcurrency(execution.env) ?? DEFAULT_AGENT_RUN_WORKER_SLOTS,
@@ -65,9 +55,6 @@ export function createClientInstanceAgentRunJobs(
     onObservation: options.onObservation,
     cancellations: options.cancellations
   });
-  const handlers = [...runs.handlers, ...execution.moduleJobHandlers];
-  assertAgentWorkerServesModuleJobKinds(execution.modules, handlers);
-  return { ...runs, handlers };
 }
 
 /**

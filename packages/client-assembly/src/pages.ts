@@ -1,6 +1,8 @@
+import { pageBuildCommandFile } from "@vivd-catalyst/app-build";
 import {
   createPageBuildClient,
   createPageBundleJobs,
+  createSandboxPageBuild,
   deriveAppContentKey,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
@@ -14,7 +16,11 @@ import {
   type PlatformStores,
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
-import type { PageSaveToolOptions, WorkspaceCommandService } from "@vivd-catalyst/tool-execution";
+import type {
+  PageSaveToolOptions,
+  WorkspaceCommandProcessExecutor,
+  WorkspaceCommandService
+} from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceEnv } from "./env";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
@@ -53,10 +59,11 @@ export async function createInstancePages(input: {
       ? { objects: await createFilesStore(input.config, input.infrastructure.context) }
       : undefined;
   }
-  if (!hasFilesStore) {
+  requireFilesStore(input.config);
+  if (!input.config.executionWorkspaces.enabled) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `'modules.apps.enabled' is true, but '${FILES_STORE_PATH}' is not configured. Pages keep their files there. Configure the store, or turn the module off`
+      "'modules.apps.enabled' is true, but 'executionWorkspaces.enabled' is not. A Page is saved from a folder of an Execution Workspace and built in its sandbox by the workspace command worker. Enable Execution Workspaces and run that worker, or turn the module off"
     );
   }
   let secret: string | undefined;
@@ -78,56 +85,65 @@ export async function createInstancePages(input: {
   };
 }
 
-/** What the instance builds Pages with: the tool that saves one and the job that builds it. */
-export interface InstancePageBuilds {
-  /** What `page.save` needs. Missing without Execution Workspaces: there is no folder to save. */
-  tool?: PageSaveToolOptions;
-  /** The handler of `page.bundle`, for the Agent Run worker. Empty with the module off. */
-  handlers: RegisteredJobHandler[];
+/**
+ * What `page.save` needs, for the process that runs the tools. Nothing with the module off.
+ */
+export function createInstancePageSave(input: {
+  modules: ModuleSnapshot;
+  stores: PlatformStores;
+  workspaceService: WorkspaceCommandService | undefined;
+}): PageSaveToolOptions | undefined {
+  if (!input.modules.isEnabled("apps") || !input.workspaceService) {
+    return undefined;
+  }
+  return {
+    workspace: input.workspaceService.dependencies,
+    builds: createPageBuildClient({ stores: input.stores })
+  };
 }
 
 /**
- * The save tool and the build job of the `apps` module. The three settings are protective
- * limits of the worker's host, which only its operator knows: how many builds a worker process
- * runs at once, how long one may take and how much memory its process may use.
+ * The handler of `page.bundle`, for the workspace command worker: the one process that reaches
+ * the sandbox. Nothing with the module off. The two settings are protective limits of the
+ * sandbox's host, which only its operator knows: how many builds a worker process runs at once
+ * and how long one may take.
  */
-export function createInstancePageBuilds(input: {
+export async function createInstancePageBuildJobs(input: {
+  config: ClientInstanceConfig;
   modules: ModuleSnapshot;
+  infrastructure: InstanceInfrastructure;
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
-  pages: ChatServerOptions["pages"];
-  workspaceObjects: ObjectStorage | undefined;
-  workspaceService: WorkspaceCommandService | undefined;
+  workspaceObjects: ObjectStorage;
+  sandbox: WorkspaceCommandProcessExecutor;
+  tempRoot: string;
   env: ClientInstanceEnv;
   logger: Logger;
-}): InstancePageBuilds {
-  if (!input.modules.isEnabled("apps") || !input.pages) {
-    return { handlers: [] };
+}): Promise<RegisteredJobHandler[]> {
+  if (!input.modules.isEnabled("apps")) {
+    return [];
   }
+  requireFilesStore(input.config);
   const timeoutMs = readPositiveInteger("PAGE_BUILD_TIMEOUT_MS", input.env.PAGE_BUILD_TIMEOUT_MS);
-  const maxHeapMb = readPositiveInteger("PAGE_BUILD_MAX_HEAP_MB", input.env.PAGE_BUILD_MAX_HEAP_MB);
-  return {
-    ...(input.workspaceService
-      ? {
-          tool: {
-            workspace: input.workspaceService.dependencies,
-            builds: createPageBuildClient({ stores: input.stores })
-          }
-        }
-      : {}),
-    handlers: createPageBundleJobs({
-      clientInstanceId: input.clientInstanceId,
-      stores: input.stores,
-      pages: input.pages,
-      workspaceObjects: input.workspaceObjects,
-      logger: input.logger,
-      slots: readPositiveInteger("PAGE_BUILD_CONCURRENCY", input.env.PAGE_BUILD_CONCURRENCY),
-      limits: {
-        ...(timeoutMs === undefined ? {} : { timeoutMs }),
-        ...(maxHeapMb === undefined ? {} : { maxHeapMb })
-      }
-    }).handlers
-  };
+  return createPageBundleJobs({
+    clientInstanceId: input.clientInstanceId,
+    stores: input.stores,
+    pages: { objects: await createFilesStore(input.config, input.infrastructure.context) },
+    workspaceObjects: input.workspaceObjects,
+    logger: input.logger,
+    slots: readPositiveInteger("PAGE_BUILD_CONCURRENCY", input.env.PAGE_BUILD_CONCURRENCY),
+    ...(timeoutMs === undefined ? {} : { limits: { timeoutMs } }),
+    build: createSandboxPageBuild({
+      sandbox: input.sandbox,
+      tempRoot: input.tempRoot,
+      // The local sandbox runs commands as processes of this worker, on a machine that has no
+      // runner image: the command is the script of this checkout. Config validation keeps that
+      // sandbox to development instances.
+      ...(input.config.infrastructure.sandbox?.provider === "local"
+        ? { command: `'${process.execPath}' '${pageBuildCommandFile()}'` }
+        : {})
+    })
+  }).handlers;
 }
 
 function readPositiveInteger(name: string, raw: string | undefined): number | undefined {
@@ -137,4 +153,13 @@ function readPositiveInteger(name: string, raw: string | undefined): number | un
     throw new AppError("VALIDATION_FAILED", `${name} must be a positive integer`);
   }
   return value;
+}
+
+function requireFilesStore(config: ClientInstanceConfig): void {
+  if (config.infrastructure.objectStorage.files === undefined) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'modules.apps.enabled' is true, but '${FILES_STORE_PATH}' is not configured. Pages keep their files there. Configure the store, or turn the module off`
+    );
+  }
 }

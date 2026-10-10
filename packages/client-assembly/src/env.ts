@@ -10,7 +10,6 @@ interface NamedClientInstanceEnv {
   AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS?: string | undefined;
   PAGE_BUILD_CONCURRENCY?: string | undefined;
   PAGE_BUILD_TIMEOUT_MS?: string | undefined;
-  PAGE_BUILD_MAX_HEAP_MB?: string | undefined;
   WORKSPACE_COMMAND_TEMP_ROOT?: string | undefined;
   WORKSPACE_COMMAND_WORKER_ID?: string | undefined;
   EXECUTION_WORKSPACE_RUNNER_IMAGE?: string | undefined;

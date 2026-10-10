@@ -44,7 +44,8 @@ const userInvitationsModule = defineModule({
 
 /**
  * Pages: the file sets a conversation keeps, their history, the route that serves them, the
- * tool that saves one and the job that builds it. The build runs in the Agent Run worker.
+ * tool that saves one and the job that builds it. The build runs in the sandbox, so the
+ * workspace command worker serves it.
  */
 const appsModule = defineModule({
   name: "apps",
@@ -57,7 +58,7 @@ const appsModule = defineModule({
   ],
   tools: ["page.save"],
   jobKinds: ["page.bundle"],
-  agentWorkerJobKinds: ["page.bundle"]
+  commandWorkerJobKinds: ["page.bundle"]
 });
 
 /** The modules whose code ships with the platform. A capability declares its own. */
@@ -91,11 +92,11 @@ export function resolveInstanceModules(
 }
 
 /**
- * Refuses an assembly whose Agent Run worker does not serve a job kind that a module that is
- * on needs it to serve. `handlers` are the handlers of that worker. A save of a Page would
+ * Refuses a workspace command worker that does not serve a job kind that a module that is on
+ * needs it to serve. `handlers` are the handlers of that worker. A save of a Page would
  * otherwise queue a build that no process ever takes.
  */
-export function assertAgentWorkerServesModuleJobKinds(
+export function assertCommandWorkerServesModuleJobKinds(
   modules: ModuleSnapshot,
   handlers: readonly RegisteredJobHandler[]
 ): void {
@@ -106,11 +107,11 @@ export function assertAgentWorkerServesModuleJobKinds(
     if (!module.enabled) {
       continue;
     }
-    const missing = module.definition?.agentWorkerJobKinds?.find((kind) => !served.has(kind));
+    const missing = module.definition?.commandWorkerJobKinds?.find((kind) => !served.has(kind));
     if (missing !== undefined) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `'${moduleConfigKey(module.name)}' is true, but the Agent Run worker of this assembly does not serve the job kind '${missing}'. The module needs a worker that serves it. Assemble the worker with the platform's Agent Run jobs, or turn the module off`
+        `'${moduleConfigKey(module.name)}' is true, but the workspace command worker of this assembly does not serve the job kind '${missing}'. The module needs that worker to serve it. Assemble the worker with 'createClientInstanceWorkspaceCommandWorker', or turn the module off`
       );
     }
   }

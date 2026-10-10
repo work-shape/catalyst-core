@@ -6,19 +6,19 @@ import type { PageFile } from "@vivd-catalyst/app-build";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/app-build");
 
-let processEntry: Promise<string> | undefined;
+let command: Promise<string> | undefined;
 
 /**
- * The script of the Page build process, bundled from the sources as they are now. The package
- * ships `dist/build-process.js`; a test that used it would test the last build of the package.
- * The file lies inside the package so that it finds the package's dependencies.
+ * The build command as shell text, bundled from the sources as they are now. The package ships
+ * `dist/cli.js`; a test that used it would test the last build of the package. The file lies
+ * inside the package so that it finds the package's dependencies.
  */
-export function pageBuildProcessEntryFromSource(): Promise<string> {
-  processEntry ??= (async () => {
-    const outfile = resolve(packageRoot, `.tmp/build-process-${process.pid}.mjs`);
+export function pageBuildCommandFromSource(): Promise<string> {
+  command ??= (async () => {
+    const outfile = resolve(packageRoot, `.tmp/cli-${process.pid}.mjs`);
     await mkdir(dirname(outfile), { recursive: true });
     await build({
-      entryPoints: [resolve(packageRoot, "src/build-process.ts")],
+      entryPoints: [resolve(packageRoot, "src/cli.ts")],
       outfile,
       bundle: true,
       platform: "node",
@@ -26,9 +26,9 @@ export function pageBuildProcessEntryFromSource(): Promise<string> {
       packages: "external",
       logLevel: "silent"
     });
-    return outfile;
+    return `'${process.execPath}' '${outfile}'`;
   })();
-  return processEntry;
+  return command;
 }
 
 /** The files of a Page from texts by path. */

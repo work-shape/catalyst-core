@@ -1,26 +1,14 @@
 import { runInThisContext } from "node:vm";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  buildPage,
-  parsePageManifest,
-  refuseNetwork,
-  runPageBuild,
-  type PageBuildResult,
-  type PageFile
-} from "@vivd-catalyst/app-build";
-import {
-  fileRoute,
-  htmlManifest,
-  pageBuildProcessEntryFromSource,
-  pageFiles,
-  reactManifest,
-  rootRoute
-} from "./support/page-build";
+import type { PageBuildResult, PageFile } from "@vivd-catalyst/app-build";
+import { buildPage, parsePageManifest } from "@vivd-catalyst/app-build/build";
+import { fileRoute, htmlManifest, pageFiles, reactManifest, rootRoute } from "./support/page-build";
+import { refuseNetwork } from "./support/refuse-network";
 
 const decoder = new TextDecoder();
 
@@ -216,37 +204,46 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     }
   });
 
-  it("refuses the one file name the route generator would execute", async () => {
-    const marker = join(directory, "marker-virtual");
+  // The generator imports and runs a file whose name ends in `__virtual` and a script
+  // extension, wherever it lies below the routes. Its pattern tests the end of the name, so a
+  // prefixed name is such a file too. Each of these ran its code before the refusal matched
+  // the generator's own pattern.
+  it.each([
+    "src/routes/__virtual.ts",
+    "src/routes/a__virtual.js",
+    "src/routes/sub/a__virtual.js",
+    "src/routes/sub/deeper/route__virtual.mts",
+    "src/routes/sub/__virtual.cjs",
+    "src/lib/a__virtual.js"
+  ])("refuses %s, a name the route generator would execute, and does not run it", async (path) => {
+    const marker = join(directory, `marker-${path.replaceAll("/", "-")}`);
     const result = await buildPage({
       files: [
         ...reactPage({ "index.tsx": fileRoute("/") }),
-        ...pageFiles({
-          "src/routes/__virtual.ts": `import { writeFileSync } from "node:fs";
-writeFileSync(${JSON.stringify(marker)}, "ran");
-export default [];
-`
-        })
+        ...pageFiles({ [path]: `${writeMarker(marker)}\nexport default [];\n` })
       ]
     });
 
     expect(errorsOf(result)).toEqual([
-      expect.objectContaining({ file: "src/routes/__virtual.ts", code: "routes_invalid" })
+      expect.objectContaining({ file: path, code: "routes_invalid" })
     ]);
     expect(existsSync(marker)).toBe(false);
   });
 
-  it("builds the same Page in the build process, which leaves no file behind", async () => {
-    const marker = join(directory, "marker-process");
-    const before = await temporaryBuildDirectories();
-    const outcome = await runPageBuild({
-      processEntry: await pageBuildProcessEntryFromSource(),
-      files: reactPage({ "index.tsx": hostileRoute(marker) })
+  it("builds a Page whose file names only resemble that name", async () => {
+    const marker = join(directory, "marker-resembling");
+    const result = await buildPage({
+      files: [
+        ...reactPage({ "index.tsx": fileRoute("/") }),
+        ...pageFiles({
+          "src/routes/__virtual.txt": writeMarker(marker),
+          "src/lib/virtual.ts": `export const note = "plain";\n${writeMarker(marker)}\n`
+        })
+      ]
     });
 
-    expect(outcome.status).toBe("built");
+    expect(result.status).toBe("built");
     expect(existsSync(marker)).toBe(false);
-    expect(await temporaryBuildDirectories()).toEqual(before);
   });
 });
 
@@ -463,108 +460,3 @@ externalHosts: [api.example.com]
     ]);
   });
 });
-
-describe("the build process", () => {
-  let directory: string;
-
-  beforeAll(async () => {
-    directory = await mkdtemp(join(tmpdir(), "page-build-process-test-"));
-  });
-  afterAll(async () => {
-    await rm(directory, { recursive: true, force: true });
-  });
-
-  const script = async (name: string, source: string): Promise<string> => {
-    const path = join(directory, name);
-    await writeFile(path, source);
-    return path;
-  };
-  const files = pageFiles({ "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
-
-  it("returns what the build returns", async () => {
-    const outcome = await runPageBuild({
-      processEntry: await pageBuildProcessEntryFromSource(),
-      files: pageFiles({
-        "app.yaml": htmlManifest,
-        "index.html": '<button onclick="x()">Go</button>'
-      })
-    });
-
-    expect(outcome).toMatchObject({
-      status: "errors",
-      errors: [{ code: "inline_event_handler", file: "index.html", element: "button" }]
-    });
-  });
-
-  it("is killed when it takes longer than the time limit, and its directory is removed", async () => {
-    const before = await temporaryBuildDirectories();
-    const started = Date.now();
-    const outcome = await runPageBuild({
-      processEntry: await script("hang.mjs", "setInterval(() => undefined, 1000);\n"),
-      files,
-      limits: { timeoutMs: 500 }
-    });
-
-    expect(outcome).toMatchObject({ status: "failed", reason: "timeout" });
-    expect(Date.now() - started).toBeLessThan(10_000);
-    expect(await temporaryBuildDirectories()).toEqual(before);
-  });
-
-  it("is killed when it writes more than the output limit", async () => {
-    const outcome = await runPageBuild({
-      processEntry: await script(
-        "flood.mjs",
-        "const chunk = Buffer.alloc(1024 * 1024);\nconst write = () => { while (process.stdout.write(chunk)); process.stdout.once('drain', write); };\nwrite();\n"
-      ),
-      files,
-      limits: { maxOutputBytes: 2 * 1024 * 1024, timeoutMs: 20_000 }
-    });
-
-    expect(outcome).toMatchObject({ status: "failed", reason: "output_too_large" });
-  });
-
-  it("ends as crashed when it needs more memory than its heap limit", async () => {
-    const outcome = await runPageBuild({
-      processEntry: await script(
-        "grow.mjs",
-        "const held = [];\nfor (;;) held.push(new Array(1_000_000).fill(held.length));\n"
-      ),
-      files,
-      limits: { maxHeapMb: 32, timeoutMs: 25_000 }
-    });
-
-    expect(outcome).toMatchObject({ status: "failed", reason: "crashed" });
-  });
-
-  it("gets nothing of the worker's environment and can be stopped", async () => {
-    process.env.PAGE_BUILD_TEST_SECRET = "must-not-leak";
-    try {
-      const outcome = await runPageBuild({
-        processEntry: await script(
-          "env.mjs",
-          "process.stderr.write(JSON.stringify(Object.keys(process.env).sort()));\nprocess.exit(3);\n"
-        ),
-        files
-      });
-      expect(outcome).toMatchObject({ status: "failed", reason: "crashed" });
-      const detail = outcome.status === "failed" ? (outcome.detail ?? "") : "";
-      expect(detail).not.toContain("PAGE_BUILD_TEST_SECRET");
-      expect(detail).not.toContain("PATH");
-    } finally {
-      delete process.env.PAGE_BUILD_TEST_SECRET;
-    }
-
-    const stop = new AbortController();
-    const stopped = runPageBuild({
-      processEntry: await script("wait.mjs", "setInterval(() => undefined, 1000);\n"),
-      files,
-      signal: stop.signal
-    });
-    stop.abort();
-    expect(await stopped).toMatchObject({ status: "failed", reason: "stopped" });
-  });
-});
-
-async function temporaryBuildDirectories(): Promise<string[]> {
-  return (await readdir(tmpdir())).filter((name) => name.startsWith("catalyst-page-")).sort();
-}

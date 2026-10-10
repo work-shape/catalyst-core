@@ -1,7 +1,8 @@
 import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
+import { fileSetPathIssue } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { RELEASED_KIT_VERSIONS } from "./kit";
-import type { PageBuildError } from "./types";
+import type { PageBuildError } from "./errors";
 
 /** The file of a Page that says what it is. */
 export const PAGE_MANIFEST_FILE = "app.yaml";
@@ -67,6 +68,19 @@ export const pageManifestSchema = z.strictObject({
 });
 
 export type PageManifest = z.infer<typeof pageManifestSchema>;
+
+/** The manifest as a build writes it: the author's, with the entry and the pages it derived. */
+export const builtPageManifestSchema = pageManifestSchema.extend({
+  entry: z.string().refine((value) => fileSetPathIssue(value) === undefined, {
+    message: "a path of a built file"
+  }),
+  pages: z
+    .array(z.strictObject({ path: z.string().min(1).max(512) }))
+    .max(1000)
+    .optional()
+});
+
+export type BuiltPageManifest = z.infer<typeof builtPageManifestSchema>;
 
 export type ParsedPageManifest =
   { status: "valid"; manifest: PageManifest } | { status: "errors"; errors: PageBuildError[] };

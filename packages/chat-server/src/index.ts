@@ -113,6 +113,12 @@ export {
   type PageBuildClientOptions,
   type PageBundleJobsOptions
 } from "./page-jobs";
+export {
+  createSandboxPageBuild,
+  type PageBuildRunner,
+  type SandboxPageBuildInput,
+  type SandboxPageBuildOptions
+} from "./page-build-sandbox";
 export type { PageFileInput, StorePageFileSetInput } from "./page-file-sets";
 export { createInProcessRateLimiter } from "./http/rate-limit";
 export { createHttpRuntime } from "./http/runtime";

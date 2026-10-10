@@ -1,15 +1,19 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { runPageBuild, type PageBuildLimits } from "@vivd-catalyst/app-build";
-import { createPageBuildClient, createPageBundleJobs } from "@vivd-catalyst/chat-server";
+import type { PageBuildLimits } from "@vivd-catalyst/app-build";
 import {
-  assertAgentWorkerServesModuleJobKinds,
-  createClientInstanceAgentRunWorker,
+  createPageBuildClient,
+  createPageBundleJobs,
+  createSandboxPageBuild
+} from "@vivd-catalyst/chat-server";
+import {
+  assertCommandWorkerServesModuleJobKinds,
+  createClientInstanceWorkspaceCommandWorker,
   platformModules
 } from "@vivd-catalyst/client-assembly";
 import {
@@ -25,15 +29,16 @@ import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
 import {
   createPageSaveTool,
   InProcessToolExecution,
+  LocalWorkspaceCommandProcessExecutor,
   ToolRegistry,
   WorkspaceCommandService
 } from "@vivd-catalyst/tool-execution";
-import { createTestConfig } from "./support/fixtures";
+import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import {
   fileRoute,
   htmlManifest,
-  pageBuildProcessEntryFromSource,
+  pageBuildCommandFromSource,
   reactManifest,
   rootRoute
 } from "./support/page-build";
@@ -41,8 +46,9 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // Saving a Page through the tool an agent calls: the folder in the conversation's Execution
-// Workspace is snapshotted, built by the `page.bundle` job in a process of its own and stored
-// as a file set. The job worker here is the executor's, on Postgres.
+// Workspace is snapshotted, built by the `page.bundle` job as a command in the sandbox and
+// stored as a file set. The job worker here is the executor's, on Postgres; the sandbox is the
+// local one, which runs the command as a process.
 
 const silent: Logger = {
   debug() {},
@@ -66,12 +72,12 @@ const saveOutputSchema = z.looseObject({
   errors: z.array(issueSchema).optional()
 });
 
-let processEntry: string;
+let buildCommand: string;
 let scratch: string;
 const workers: JobWorker[] = [];
 
 beforeAll(async () => {
-  processEntry = await pageBuildProcessEntryFromSource();
+  buildCommand = await pageBuildCommandFromSource();
   scratch = await mkdtemp(join(tmpdir(), "page-save-test-"));
 });
 afterEach(async () => {
@@ -85,7 +91,8 @@ async function createSaveHarness(
   options: {
     /** Without a worker nothing serves `page.bundle`. */
     worker?: boolean;
-    processEntry?: string;
+    /** Replaces the build command, as shell text. */
+    command?: string;
     limits?: Partial<PageBuildLimits>;
     builds?: (client: PageBuildClient) => PageBuildClient;
     waitMs?: number;
@@ -123,9 +130,12 @@ async function createSaveHarness(
       pages: { objects: files },
       workspaceObjects: objectStore,
       logger: silent,
-      limits: options.limits,
-      build: (input) =>
-        runPageBuild({ ...input, processEntry: options.processEntry ?? processEntry })
+      ...(options.limits ? { limits: options.limits } : {}),
+      build: createSandboxPageBuild({
+        sandbox: new LocalWorkspaceCommandProcessExecutor(),
+        tempRoot: join(scratch, "builds"),
+        command: options.command ?? buildCommand
+      })
     }).handlers
   });
   workers.push(worker);
@@ -298,6 +308,23 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     expect(existsSync(marker)).toBe(false);
   });
 
+  // Ran the file before the refusal matched the route generator's own pattern.
+  it("refuses a route config the generator would run, by any prefix and in any folder, and stores nothing", async () => {
+    const harness = await createSaveHarness();
+    const marker = join(scratch, "marker-virtual");
+    const payload = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "ran");\nmodule.exports = [];\n`;
+    await harness.write("bypass", {
+      ...reactPage({ "index.tsx": fileRoute("/") }),
+      "src/routes/sub/a__virtual.js": payload
+    });
+
+    expect((await harness.save("Bypass", "bypass")).output?.errors).toEqual([
+      expect.objectContaining({ file: "src/routes/sub/a__virtual.js", code: "routes_invalid" })
+    ]);
+    expect(existsSync(marker)).toBe(false);
+    expect(await harness.fileSets()).toEqual([]);
+  });
+
   it("moves inline script and style of an HTML Page into files, and refuses an inline handler until it is a listener", async () => {
     const harness = await createSaveHarness();
     await harness.write("plain", {
@@ -376,9 +403,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
   });
 
   it("fails the save when the build is killed at its time limit, and stores nothing", async () => {
-    const hang = join(scratch, "hang.mjs");
-    await writeFile(hang, "setInterval(() => undefined, 1000);\n");
-    const harness = await createSaveHarness({ processEntry: hang, limits: { timeoutMs: 400 } });
+    const harness = await createSaveHarness({ command: "sleep 30 #", limits: { timeoutMs: 1000 } });
     await harness.write("slow", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
 
     const result = await harness.save("Slow", "slow");
@@ -425,46 +450,66 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
   });
 });
 
-describe("the apps module and the Agent Run worker", () => {
+describe("the apps module and the workspace command worker", () => {
   const snapshot = (enabled: boolean) =>
     createModuleRegistry(platformModules).snapshot({ apps: { enabled } });
 
-  it("refuses an assembly with the module on whose worker does not serve page.bundle", async () => {
+  it("refuses a worker that does not serve page.bundle with the module on", async () => {
     const harness = await createWorkspaceHarness();
     const { handlers } = createPageBundleJobs({
       clientInstanceId: harness.clientInstanceId,
       stores: harness.store,
       pages: { objects: new MemoryObjectStorage() },
       workspaceObjects: harness.objectStore,
-      logger: silent
+      logger: silent,
+      build: createSandboxPageBuild({
+        sandbox: new LocalWorkspaceCommandProcessExecutor(),
+        tempRoot: join(scratch, "builds")
+      })
     });
 
-    expect(() => assertAgentWorkerServesModuleJobKinds(snapshot(true), [])).toThrow(
-      "'modules.apps.enabled' is true, but the Agent Run worker of this assembly does not serve the job kind 'page.bundle'"
+    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), [])).toThrow(
+      "'modules.apps.enabled' is true, but the workspace command worker of this assembly does not serve the job kind 'page.bundle'"
     );
-    expect(() => assertAgentWorkerServesModuleJobKinds(snapshot(true), handlers)).not.toThrow();
-    expect(() => assertAgentWorkerServesModuleJobKinds(snapshot(false), [])).not.toThrow();
+    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), handlers)).not.toThrow();
+    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(false), [])).not.toThrow();
   });
 
-  it("assembles the platform's Agent Run worker with the module on", async () => {
-    const root = await mkdtemp(join(scratch, "files-"));
+  const workerConfig = (input: { files: boolean }) => {
     const base = createTestConfig();
-    const worker = await createClientInstanceAgentRunWorker({
-      config: parseClientInstanceConfig({
-        ...base,
-        modules: { apps: { enabled: true } },
-        infrastructure: {
-          ...base.infrastructure,
-          objectStorage: { files: { provider: "filesystem", root } }
+    const root = join(scratch, "worker-objects");
+    return parseClientInstanceConfig({
+      ...base,
+      modules: { apps: { enabled: true } },
+      executionWorkspaces: { enabled: true },
+      infrastructure: {
+        ...base.infrastructure,
+        ...workspaceInfrastructure(join(root, "workspaces")),
+        objectStorage: {
+          workspaces: { provider: "filesystem", root: join(root, "workspaces") },
+          ...(input.files ? { files: { provider: "filesystem", root: join(root, "files") } } : {})
         }
-      }),
-      env: {
-        BETTER_AUTH_SECRET: "a-secret-of-the-instance-with-enough-characters",
-        DATABASE_URL: await fileTestDatabaseUrl()
-      },
-      tools: []
+      }
+    });
+  };
+
+  it("assembles the platform's workspace command worker with the module on", async () => {
+    const worker = await createClientInstanceWorkspaceCommandWorker({
+      config: workerConfig({ files: true }),
+      env: { DATABASE_URL: await fileTestDatabaseUrl() }
     });
     await worker.close();
+  });
+
+  it("does not start that worker without the store it puts built Pages in", async () => {
+    await expect(
+      createClientInstanceWorkspaceCommandWorker({
+        config: workerConfig({ files: false }),
+        env: { DATABASE_URL: await fileTestDatabaseUrl() }
+      })
+    ).rejects.toThrow(
+      "'modules.apps.enabled' is true, but 'infrastructure.objectStorage.files' is not configured"
+    );
   });
 });
 

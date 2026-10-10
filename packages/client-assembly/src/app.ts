@@ -73,7 +73,7 @@ import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
-import { createInstancePageBuilds, createInstancePages } from "./pages";
+import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
@@ -404,20 +404,11 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
-  const pageBuilds = createInstancePageBuilds({
-    modules,
-    clientInstanceId,
-    stores: store,
-    pages,
-    workspaceObjects: workspaceObjectStore,
-    workspaceService,
-    env,
-    logger
-  });
+  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService });
   const tools = createToolDefinitions({
     config,
     tools: [
-      ...createBuiltInToolDefinitions(config.views, { apps: pageBuilds.tool }),
+      ...createBuiltInToolDefinitions(config.views, { apps: pageSave }),
       ...(workspaceService ? createWorkspaceToolDefinitions({ service: workspaceService }) : []),
       ...createStructuredDataToolDefinitions({
         store,
@@ -516,7 +507,6 @@ export async function createClientInstanceExecutionAssembly(
     jobRetries,
     workspaceObjectStore,
     pages,
-    moduleJobHandlers: pageBuilds.handlers,
     auditRecorder,
     assetSource,
     usageGovernance,

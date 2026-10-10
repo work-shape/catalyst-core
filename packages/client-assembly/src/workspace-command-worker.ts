@@ -22,10 +22,13 @@ import {
   createSandbox,
   createSandboxCheckJobs,
   createWorkspacesStore,
+  FILES_STORE_PATH,
   SANDBOX_PATH,
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
+import { assertCommandWorkerServesModuleJobKinds, resolveInstanceModules } from "./modules";
+import { createInstancePageBuildJobs } from "./pages";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
@@ -38,7 +41,7 @@ export interface CreateClientInstanceWorkspaceCommandWorkerInput {
 
 export interface ClientInstanceWorkspaceCommandWorker {
   readonly config: ClientInstanceConfig;
-  /** The job worker that serves `workspace.command`. */
+  /** The job worker that serves `workspace.command` and, with the `apps` module on, `page.bundle`. */
   readonly worker: JobWorker;
   /** Starts the worker and resolves once `stop` has ended its commands. */
   runUntilStopped(): Promise<void>;
@@ -60,12 +63,18 @@ export async function createClientInstanceWorkspaceCommandWorker(
     throw new AppError("VALIDATION_FAILED", "Execution workspaces are disabled in release config");
   }
 
+  const modules = resolveInstanceModules(config).snapshot;
   const infrastructure = await createInstanceInfrastructure({
     config,
     env,
     logger,
     secrets: input.secrets,
-    uses: [WORKSPACE_STORE_PATH, SANDBOX_PATH]
+    // With the `apps` module on this worker also stores the Pages it builds.
+    uses: [
+      WORKSPACE_STORE_PATH,
+      SANDBOX_PATH,
+      ...(modules.isEnabled("apps") ? [FILES_STORE_PATH] : [])
+    ]
   });
   const store = await createPlatformStore({
     secrets: infrastructure.secrets,
@@ -107,12 +116,26 @@ export async function createClientInstanceWorkspaceCommandWorker(
     sandbox: processExecutor,
     stores: store
   });
+  const pageBuildHandlers = await createInstancePageBuildJobs({
+    config,
+    modules,
+    infrastructure,
+    clientInstanceId,
+    stores: store,
+    workspaceObjects: byteStore,
+    sandbox: processExecutor,
+    tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
+    env,
+    logger
+  });
+  const handlers = [...commandJobs.handlers, ...sandboxCheck.handlers, ...pageBuildHandlers];
+  assertCommandWorkerServesModuleJobKinds(modules, handlers);
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,
     // The worker id names this process in the log lines of its jobs.
     logger: workerId ? logger.child({ workerId }) : logger,
-    handlers: [...commandJobs.handlers, ...sandboxCheck.handlers],
+    handlers,
     schedules: [...commandJobs.schedules, ...sandboxCheck.schedules]
   });
   let stopped: (() => void) | undefined;

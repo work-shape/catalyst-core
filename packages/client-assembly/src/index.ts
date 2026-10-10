@@ -34,7 +34,7 @@ export {
 } from "./seed-auth";
 export { createJobWorker, type CreateJobWorkerInput } from "./job-worker";
 export {
-  assertAgentWorkerServesModuleJobKinds,
+  assertCommandWorkerServesModuleJobKinds,
   platformModules,
   resolveInstanceModules,
   type InstanceModules

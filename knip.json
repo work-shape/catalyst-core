@@ -17,7 +17,7 @@
       "vite": false
     },
     "packages/app-build": {
-      "entry": ["src/index.ts", "src/build-process.ts"],
+      "entry": ["src/index.ts", "src/build.ts", "src/cli.ts"],
       "project": ["src/**/*.ts"],
       "vite": false
     },

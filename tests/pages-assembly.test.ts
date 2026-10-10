@@ -6,7 +6,7 @@ import { storePageFileSet } from "@vivd-catalyst/chat-server";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { asClientInstanceId, asConversationId } from "@vivd-catalyst/core";
 import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
-import { createTestConfig } from "./support/fixtures";
+import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 
 // What an instance assembled from its configuration does with Pages: what it needs to start
@@ -16,6 +16,7 @@ import { createTestInstance } from "./support/test-instance";
 const text = (value: string) => new TextEncoder().encode(value);
 /** Where the filesystem store of an assembled test instance would keep its files. */
 const filesRoot = join(tmpdir(), "catalyst-app-content-test-files");
+const workspacesRoot = join(tmpdir(), "catalyst-app-content-test-workspaces");
 const INDEX_HTML = `<!doctype html><title>Offer</title><script type="module" src="./assets/main.js"></script>`;
 const builtFiles = [
   { path: "index.html", bytes: text(INDEX_HTML) },
@@ -28,15 +29,24 @@ interface ErrorBody {
 }
 
 describe("an assembled instance with the apps module on", () => {
-  const config = (files: boolean) =>
-    parseClientInstanceConfig({
+  const raw = (files: boolean, workspaces = true) => {
+    const execution = workspaces ? workspaceInfrastructure() : {};
+    return {
       ...createTestConfig(),
       modules: { apps: { enabled: true } },
+      ...(workspaces ? { executionWorkspaces: { enabled: true } } : {}),
       infrastructure: {
         ...createTestConfig().infrastructure,
-        ...(files ? { objectStorage: { files: { provider: "filesystem", root: filesRoot } } } : {})
+        ...execution,
+        objectStorage: {
+          ...(workspaces ? { workspaces: { provider: "filesystem", root: workspacesRoot } } : {}),
+          ...(files ? { files: { provider: "filesystem", root: filesRoot } } : {})
+        }
       }
-    });
+    };
+  };
+  const config = (files: boolean, workspaces = true) =>
+    parseClientInstanceConfig(raw(files, workspaces));
   const secret = "a-secret-of-the-instance-with-enough-characters";
 
   it("does not start without the store its Pages keep their files in", async () => {
@@ -44,6 +54,33 @@ describe("an assembled instance with the apps module on", () => {
       createTestInstance({ config: config(false), env: { BETTER_AUTH_SECRET: secret }, tools: [] })
     ).rejects.toThrow(
       "'modules.apps.enabled' is true, but 'infrastructure.objectStorage.files' is not configured"
+    );
+  });
+
+  it("does not start without the Execution Workspaces a Page is saved from and built in", async () => {
+    await expect(
+      createTestInstance({
+        config: config(true, false),
+        env: { BETTER_AUTH_SECRET: secret },
+        tools: []
+      })
+    ).rejects.toThrow(
+      /'modules\.apps\.enabled' is true, but 'executionWorkspaces\.enabled' is not\..*Enable Execution Workspaces and run that worker, or turn the module off/su
+    );
+  });
+
+  it("is refused outside development with a sandbox that is no container", () => {
+    // The build of a Page runs what its author wrote next to a third-party generator. Outside
+    // development that may only happen in the container sandbox, which the rule for Execution
+    // Workspaces already says; with the module on there is no instance that escapes it.
+    const base = raw(true);
+    expect(() =>
+      parseClientInstanceConfig({
+        ...base,
+        clientInstance: { ...createTestConfig().clientInstance, environment: "staging" }
+      })
+    ).toThrow(
+      "'infrastructure.sandbox.provider': the local sandbox is only allowed for development client instances"
     );
   });
 
