@@ -3,6 +3,7 @@ import { dirname, relative, resolve, sep } from "node:path";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import { importX } from "eslint-plugin-import-x";
 import tseslint from "typescript-eslint";
+import { envBoundaryRule } from "./env-boundary-rule.mjs";
 import { leaseExemptions, processLocalTimers } from "./job-executor-exemptions.mjs";
 import { moduleSnapshotBoundaryRule } from "./module-snapshot-rule.mjs";
 import { modelGatewayRules } from "./model-gateway-rules.mjs";
@@ -55,17 +56,6 @@ const packageAt = (filename) => {
 const isPackageFile = (filename, path) => {
   const pkg = packageAt(filename);
   return pkg !== undefined && resolve(root, pkg.directory, path) === filename;
-};
-
-/**
- * The one module of a package that may read the environment is `src/env.ts`. These two
- * packages keep theirs elsewhere: the Vite plugin of chat-ui is plain JavaScript that loads
- * without a build, and the artifact helpers keep their library under `src/lib`.
- * @type {Record<string, string>}
- */
-const ENV_MODULE_ELSEWHERE = {
-  "packages/chat-ui": "src/env.js",
-  "packages/artifact-helpers": "src/lib/env.ts"
 };
 
 /**
@@ -392,54 +382,15 @@ const plugin = {
         "TSTypeAliasDeclaration[id.name=/Logger$/]": report
       })
     ),
-    "env-boundary": rule(
-      "Environment reads belong in the package's src/env.ts",
-      (filename) => {
-        const pkg = packageAt(filename);
-        return (
-          pkg !== undefined &&
-          !isPackageFile(filename, ENV_MODULE_ELSEWHERE[pkg.directory] ?? "src/env.ts")
-        );
-      },
-      (context, report) => {
-        /** @param {AnyNode} node */
-        const check = (node) => {
-          const loaded = loadedModule(node);
-          if (loaded === "process" || loaded === "node:process") report(node);
-        };
-        return {
-          // `process` may only be the object of a static read of something other than `env`.
-          // Any other use, and any `process` taken from a host object, could reach `env`.
-          "Program:exit": () =>
-            [
-              ...[...globalUses(context, ["process"])].filter(
-                (process) => staticReads(process)?.includes("env") ?? true
-              ),
-              ...hostMemberUses(context, ["process"])
-            ].forEach(report),
-          // Vite injects these values into four explicitly named frontend entry files.
-          MetaProperty: (node) => {
-            if (node.meta.name !== "import" || node.property.name !== "meta") return;
-            const frontendEntries = [
-              "/packages/chat-standalone/src/main.tsx",
-              "/clients/demo/src/chat-main.tsx",
-              "/deployment.musterbau/src/chat-main.tsx",
-              "/deployment.catalyst/src/chat-main.tsx"
-            ];
-            const filename = context.filename.replaceAll("\\", "/");
-            if (
-              !frontendEntries.some((entry) => filename.endsWith(entry)) &&
-              (staticReads(node)?.includes("env") ?? true)
-            )
-              report(node);
-          },
-          // The global `process` keeps environment reads visible to this rule.
-          ImportDeclaration: check,
-          ImportExpression: check,
-          CallExpression: check
-        };
-      }
-    ),
+    "env-boundary": envBoundaryRule({
+      rule,
+      packageAt,
+      isPackageFile,
+      globalUses,
+      staticReads,
+      hostMemberUses,
+      loadedModule
+    }),
     // A provider enters the product through its package's registration and nowhere else, so
     // no other file can construct an adapter or read a vendor type from one.
     "adapter-import": rule(
