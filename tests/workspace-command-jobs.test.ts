@@ -240,15 +240,19 @@ describe("workspace commands on the job executor", () => {
     for (const execution of started) execution.complete(successResult());
     await firstPass;
     const secondPass = worker.runDue();
-    (await fixture.executor.next()).complete(successResult());
+    const secondExecution = await fixture.executor.next();
+    // Observe the first command's recorded end when the second process starts. Their
+    // timestamps come from different clocks: completedAt from Node, startedAt from Postgres.
+    expect(await fixture.command(first)).toMatchObject({ status: "completed" });
+    expect(await fixture.command(second)).toMatchObject({ status: "running", attempts: 1 });
+    secondExecution.complete(successResult());
     await secondPass;
 
     expect(fixture.executor.calls.map((call) => call.command.command)).toEqual([
       ...started.map((execution) => execution.command.command),
       "second"
     ]);
-    const [ranFirst, ranSecond] = [await fixture.command(first), await fixture.command(second)];
-    expect(required(ranSecond?.startedAt) >= required(ranFirst?.completedAt)).toBe(true);
+    expect(await fixture.command(second)).toMatchObject({ status: "completed" });
   });
 
   it("cancels the running command when the worker stops, and no worker runs it again", async () => {
