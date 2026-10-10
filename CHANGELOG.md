@@ -300,13 +300,14 @@ id from config_assets where status = 'deleted')`.
   the usage.
 - **Navigation:** the sidebar has one entry for a chat. The row "Chat" is gone; "New chat" starts
   a conversation, and inside a conversation its row under "Recent" is the current item. A section
-  that stands alone, such as the Inbox, now shows its row. "Recent" lists the 30 latest
-  conversations of the workspace and ends with "Show all" once there are more. "Show all" opens
-  the new page `/w/<workspace>/conversations` with every conversation of the workspace by last
-  activity, a search by title that the server answers, and the row menu of the sidebar (rename,
-  move, delete). The page reads 50 conversations at a time and the older ones on request;
-  `/conversations` leads to the list of the active workspace. The collapsed sidebar has an icon
-  "Conversations" that opens the same page.
+  that stands alone, such as the Inbox, now shows its row, in one group with "New chat". "Recent"
+  is the list of the workspace's conversations: it reads the 30 latest, and the next 30 when a
+  person scrolls to its end or picks "Load more". A page that fails to load says so and offers
+  "Try again". The search in the sidebar's header finds a conversation that is not loaded, and
+  an open conversation older than the loaded rows is the first row. During a run the sidebar no
+  longer reads the whole list every second: the open conversation follows its event stream, and
+  one page is read every two seconds only while another listed conversation runs or a new one
+  waits for its title.
 - **Branding:** the platform's default favicon is the Catalyst mark, an orange field with a small
   dark square at the bottom right that follows the colour scheme by itself. It replaces the
   shield in `packages/chat-ui/assets/favicon.svg`, the standalone app, the demo client and the
