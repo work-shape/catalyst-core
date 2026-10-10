@@ -153,9 +153,9 @@ async function createServer(options: { extraEntries?: InfrastructureEntry[] } = 
     providers: [throwingModelProvider]
   });
   let now = new Date("2026-10-10T08:00:00.000Z");
-  const server = await createTestInstanceWith((stores) => ({
-    authAdapter: createCallerAuthAdapter(),
-    infrastructure: new InfrastructureWorkflow({
+  let workflow: InfrastructureWorkflow | undefined;
+  const server = await createTestInstanceWith((stores) => {
+    workflow = new InfrastructureWorkflow({
       entries: [
         ...infrastructureOverview({ config, infrastructure, stores }),
         ...(options.extraEntries ?? [])
@@ -163,10 +163,16 @@ async function createServer(options: { extraEntries?: InfrastructureEntry[] } = 
       secrets,
       logger,
       now: () => now
-    })
-  }));
+    });
+    return { authAdapter: createCallerAuthAdapter(), infrastructure: workflow };
+  });
   return {
     server,
+    /** What the scheduled job calls. */
+    runChecks(): Promise<void> {
+      if (!workflow) throw new Error("The API process has not started");
+      return workflow.runChecks();
+    },
     lines,
     root,
     advance(ms: number) {
@@ -389,7 +395,7 @@ describe("Instance > Infrastructure: the checks", () => {
         });
       }
     };
-    const { server } = await createServer({ extraEntries: [slow] });
+    const { server, runChecks } = await createServer({ extraEntries: [slow] });
 
     const checking = server.call("instance.infrastructure.check", {}, administrator);
     await vi.waitFor(() => expect(asked).toBe(1));
@@ -398,12 +404,12 @@ describe("Instance > Infrastructure: the checks", () => {
     expect(during.statusCode).toBe(200);
     expect(byId(read(during))["models.slow"]?.check).toEqual({ status: "pending" });
     // The scheduled run that falls into it joins it: the provider is not asked twice at once.
-    const scheduled = getTestJobs(server).runDue();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const scheduled = runChecks();
     expect(asked).toBe(1);
 
     answer?.();
     await scheduled;
+    expect(asked).toBe(1);
     expect(byId(read(await checking))["models.slow"]?.check.status).toBe("ok");
   });
 });
