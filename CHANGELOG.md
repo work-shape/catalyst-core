@@ -123,6 +123,31 @@ id from config_assets where status = 'deleted')`.
   Private conversations stay with their author and Personal Workspaces with their user. A
   workspace in the API carries `membershipRole` (`null` without a membership) next to `role`,
   which is what the caller may do.
+- **Interface, Settings:** Instance > Jobs shows what the instance works on in the background.
+  A table counts the queued, running, failed and dead jobs of each kind, kinds with failures
+  first, and names how long the oldest due job has waited. Below it the jobs are listed under
+  Failed and dead, Running and Queued, newest first; a kind in the table narrows the list to
+  itself. A job shows its kind, status, attempts, when it was created and ended, the class of
+  its last error and the id of the record it works on. It never shows the job's payload or an
+  error message. The page asks again every ten seconds while its tab is visible. It needs
+  `audit.view`.
+- **Jobs:** a superadmin can retry a failed or dead job from that page. The job is queued
+  again with its attempts reset and, in the same transaction, the record it works on is put
+  back into the state the job starts from: a failed preview is pending again, a failed draft
+  attachment is queued again. A job is not retried when a newer job already does its work,
+  when its record can no longer be worked on, or when its kind is not retried by hand; a
+  schedule tick is such a kind, because the next tick is its retry. The audit log records
+  `job.retried` with the job and its kind.
+- **API:** `GET /api/v1/instance/jobs/summary` and `GET /api/v1/instance/jobs` (filters `kind`
+  and `status`, 50 per page) need `audit.view` and the scope `governance:read`.
+  `POST /api/v1/instance/jobs/{jobId}/retry` is an operation of the registry that only a
+  superadmin may call; it answers `409 CONFLICT` with `details.status`, or with
+  `details.reason` `superseded`, `kind_not_retried` or `subject_not_restorable`.
+- **Extension API:** a job kind can declare `manualRetry: false`. A capability hands the API
+  `jobRetries` in its contribution: one entry per kind whose ended jobs may be retried by
+  hand, with an optional `restoreSubject` that runs in the retry's transaction. The API
+  retries no job of a kind it was given no entry for. `ChatServerOptions.jobRetries` carries
+  them to the server. `PlatformFileStore` gains `restoreFailedArtifactPreviewJob`.
 
 ### Changed
 

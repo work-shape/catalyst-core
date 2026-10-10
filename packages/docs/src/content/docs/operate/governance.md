@@ -69,6 +69,23 @@ Every model call leaves one record, including conversation titles and approval c
 
 Use provider-side billing alerts or budgets as an external backstop.
 
+## Background Jobs
+
+Settings > Instance > Jobs shows what the instance works on in the background: per job kind the
+queued, running, failed and dead jobs, and below that the jobs themselves under Failed and dead,
+Running and Queued. Everyone with `audit.view` can read it. A job is shown with its kind,
+status, attempts, the class of its last error and the id of the record it works on. The page
+and its API never show a job's payload or an error message, because either can quote a
+provider or a record.
+
+A job is `dead` when its attempts are used up, and `failed` when another attempt could not
+help or when a schedule tick failed. A superadmin can retry a failed or dead job. The retry
+queues the job again and puts the record it works on back into the state the job starts from,
+so a preview that failed is rendered again and a draft attachment that failed is preprocessed
+again. There is no retry for a schedule tick, since the next tick does its work, and none for
+a kind whose capability names no way to retry it. Every retry is written to the audit log as
+`job.retried`.
+
 ## Admin Access
 
 Admin and superadmin access should be explicit, permissioned, and audited.
