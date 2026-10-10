@@ -204,6 +204,29 @@ describe("navigation, page structure and data components", () => {
     expect(counted).toMatch(/absolute -top-0\.5 -right-0\.5[^>]*>7<\/span>/u);
   });
 
+  it("ends the sidebar's scrolling body with a line above the footer, and draws none without one", () => {
+    const item = createElement(NavItem, { key: "a" }, "Lease");
+    const withFooter = render(
+      createElement(Sidebar, { label: "Main navigation", footer: "Account" }, item)
+    );
+    const footerClasses = withFooter
+      .match(/<div data-sidebar-footer="" class="([^"]*)">Account<\/div>/u)?.[1]
+      ?.split(" ");
+    expect(footerClasses).toEqual(
+      expect.arrayContaining(["shrink-0", "border-t", "border-sidebar-border", "p-2"])
+    );
+    // The body grows, so the footer and its line stay at the bottom under a short list, and
+    // the last item scrolls a group's distance clear of the line.
+    const bodyClasses = withFooter.match(/data-sidebar-body="" class="([^"]*)"/u)?.[1]?.split(" ");
+    expect(bodyClasses).toEqual(
+      expect.arrayContaining(["min-h-0", "flex-1", "overflow-y-auto", "pb-4"])
+    );
+
+    const withoutFooter = render(createElement(Sidebar, { label: "Main navigation" }, item));
+    expect(withoutFooter).not.toContain("data-sidebar-footer");
+    expect(withoutFooter).not.toContain("border-t");
+  });
+
   it("links past the navigation without changing the address by itself", () => {
     const markup = render(
       createElement(SkipLink, { target: "content", children: "Skip to content" })

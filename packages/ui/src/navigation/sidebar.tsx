@@ -21,7 +21,7 @@ export interface SidebarProps extends Omit<HTMLAttributes<HTMLElement>, "aria-la
    * `--layout-header` high where it should meet the header of the page beside it.
    */
   header?: ReactNode;
-  /** Stays in place below the scrolling body, such as the account menu. */
+  /** Stays in place below the scrolling body, under a line, such as the account menu. */
   footer?: ReactNode;
   /** Shows icons only. A drawer is never collapsed. */
   collapsed?: boolean;
@@ -78,11 +78,18 @@ export function Sidebar({
         data-sidebar-body=""
         // Positioned, so that what an item places absolutely or hides for screen readers
         // scrolls with the list and does not lengthen the page.
-        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2 [scrollbar-width:thin]"
+        // The room under the last item is that between two groups, so the last item scrolls
+        // clear of the footer's line.
+        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pt-2 pb-4 [scrollbar-width:thin]"
       >
         <div className="flex flex-col gap-4">{children}</div>
       </div>
-      {footer === undefined ? null : <div className="shrink-0 px-2 pb-2">{footer}</div>}
+      {footer === undefined ? null : (
+        // A line ends the scrolling body, so its last item does not read as part of the footer.
+        <div data-sidebar-footer="" className="shrink-0 border-t border-sidebar-border p-2">
+          {footer}
+        </div>
+      )}
     </nav>
   );
 

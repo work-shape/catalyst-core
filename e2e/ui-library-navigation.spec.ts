@@ -169,14 +169,32 @@ test("the sidebar is 280 px wide, collapses to icons and is a drawer under 768 p
 
   expect((await sidebar.boundingBox())?.width).toBe(280);
   expect(await style(sidebar.locator("[data-sidebar-body]"), "padding-left")).toBe("8px");
-  // No rule between the header, the list and the footer.
+  // One rule, above the footer: without it the last item of the list read as part of the
+  // footer. It has the colour of the sidebar's own edge, and the list ends a group's distance
+  // before it when scrolled to its end.
   const innerRules = await sidebar.evaluate((element) =>
     Array.from(element.children).map((child) => {
       const computed = getComputedStyle(child);
-      return computed.borderTopWidth + computed.borderBottomWidth;
+      return {
+        footer: child.hasAttribute("data-sidebar-footer"),
+        top: computed.borderTopWidth,
+        bottom: computed.borderBottomWidth,
+        sameColourAsEdge: computed.borderTopColor === getComputedStyle(element).borderRightColor
+      };
     })
   );
-  expect(new Set(innerRules)).toEqual(new Set(["0px0px"]));
+  expect(innerRules.map(({ footer, top, bottom }) => ({ footer, top, bottom }))).toEqual([
+    { footer: false, top: "0px", bottom: "0px" },
+    { footer: false, top: "0px", bottom: "0px" },
+    { footer: true, top: "1px", bottom: "0px" }
+  ]);
+  expect(innerRules.at(-1)?.sameColourAsEdge).toBe(true);
+  expect(await style(sidebar.locator("[data-sidebar-body]"), "padding-bottom")).toBe("16px");
+  const footerBox = await sidebar.locator("[data-sidebar-footer]").boundingBox();
+  const sidebarBox = await sidebar.boundingBox();
+  expect((footerBox?.y ?? 0) + (footerBox?.height ?? 0)).toBe(
+    (sidebarBox?.y ?? 0) + (sidebarBox?.height ?? 0)
+  );
 
   await entry.getByRole("button", { name: "Collapse sidebar" }).click();
   expect((await sidebar.boundingBox())?.width).toBe(48);
