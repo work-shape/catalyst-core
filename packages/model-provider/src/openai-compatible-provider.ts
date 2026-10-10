@@ -87,6 +87,7 @@ export function openAiCompatibleCapabilities(entry: ModelProviderConfig): ModelC
     fastTier: true,
     imageInput: true,
     documentInput: false,
+    toolCalls: true,
     structuredOutput: false,
     streaming: true
   };

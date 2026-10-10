@@ -418,11 +418,16 @@ secret: the API and the agent run worker create every entry of `infrastructure.m
 document worker creates the entry behind the extraction binding. A key that is not a service
 account key stops startup; the message names the secret and none of its content.
 
-The adapter reads text, images and PDF documents, calls tools, answers in a JSON format and
-streams. It declares no web search, no reasoning efforts, no fast tier and no server-side
+The adapter reads text, images and PDF documents, answers in a JSON format and streams. It
+declares no tool calls, no web search, no reasoning efforts, no fast tier and no server-side
 compaction, so a call that asks for one of them is refused before it is sent. In this version
-the adapter serves the product's own calls, such as document extraction. Do not offer a
-`google-vertex` binding to agents yet: tool use over several turns is not verified for it.
+the adapter serves the product's own calls, such as document extraction, and no agent: every
+agent run offers tools, and Gemini needs its thought signatures sent back with a tool call,
+which the adapter does not carry yet. A binding on a `google-vertex` entry must therefore state
+`agentSelectable: false`; startup stops on one that does not and names the binding.
+
+The provider's check on **Instance > Infrastructure** asks Google for a token with the key. It
+shows that the key is taken. It does not show that the account may call the model on Vertex.
 
 Document extraction of the document processing capability, a paid capability, names its model
 binding in `capabilities.documentProcessing.extraction.modelBindingId`. The binding's model must

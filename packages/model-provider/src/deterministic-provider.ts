@@ -20,6 +20,7 @@ export const DETERMINISTIC_CAPABILITIES: ModelCapabilities = {
   fastTier: false,
   imageInput: false,
   documentInput: false,
+  toolCalls: true,
   structuredOutput: false,
   streaming: true
 };

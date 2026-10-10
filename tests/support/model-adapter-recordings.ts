@@ -3,8 +3,18 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { vi } from "vitest";
-import { createProvider, type ModelProviderConfig, type SecretResolver } from "@vivd-catalyst/core";
-import { modelProviderDefinitions, type ModelAdapter } from "@vivd-catalyst/model-provider";
+import {
+  createProvider,
+  runProviderCheck,
+  type ModelProviderConfig,
+  type ProviderCheckResult,
+  type SecretResolver
+} from "@vivd-catalyst/core";
+import {
+  modelProviderDefinitions,
+  type ModelAdapter,
+  type ModelAdapterFactory
+} from "@vivd-catalyst/model-provider";
 import { silentTestLogger } from "./model-gateway";
 
 /**
@@ -41,6 +51,8 @@ export interface ReplayedRequests {
   credentials: (string | null)[];
   /** How many requests reached the provider. */
   count(): number;
+  /** How many answer streams the adapter cancelled before they ended. */
+  cancelled(): number;
 }
 
 const RECORDINGS_DIRECTORY = resolve(
@@ -67,11 +79,19 @@ export function loadModelAdapterRecording(adapter: string, name: string): ModelA
  * Replaces `fetch` by the recording until `vi.unstubAllGlobals()`. A request that differs from
  * the recorded one fails the call with both, so a change of the wire format shows as a diff.
  */
-export function replayModelAdapterRecording(recording: ModelAdapterRecording): ReplayedRequests {
+export function replayModelAdapterRecording(
+  recording: ModelAdapterRecording,
+  /** The status the token endpoint answers with. A refusal carries no token. */
+  tokenStatus = 200
+): ReplayedRequests {
   const credentials: (string | null)[] = [];
   let next = 0;
+  let cancelled = 0;
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
+    if (url === GOOGLE_TOKEN_URL && tokenStatus !== 200) {
+      return Response.json({ error: "invalid_grant" }, { status: tokenStatus });
+    }
     if (url === GOOGLE_TOKEN_URL) {
       return Response.json({
         access_token: REPLAY_ACCESS_TOKEN,
@@ -90,9 +110,11 @@ export function replayModelAdapterRecording(recording: ModelAdapterRecording): R
     if (JSON.stringify(sent) !== JSON.stringify(exchange.request)) {
       throw new RecordingMismatch(sent, exchange.request);
     }
-    return answer(exchange.response, init?.signal ?? undefined);
+    return answer(exchange.response, init?.signal ?? undefined, () => {
+      cancelled += 1;
+    });
   });
-  return { credentials, count: () => next };
+  return { credentials, count: () => next, cancelled: () => cancelled };
 }
 
 /** Thrown into the adapter when it sends something else than the recording holds. */
@@ -110,7 +132,8 @@ class RecordingMismatch extends Error {
 
 function answer(
   recorded: RecordedExchange["response"],
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  onCancel: () => void
 ): Response | Promise<Response> {
   const stopped = (): DOMException => new DOMException("This operation was aborted", "AbortError");
   if (recorded.neverAnswers) {
@@ -139,6 +162,9 @@ function answer(
         return;
       }
       signal?.addEventListener("abort", () => controller.error(stopped()), { once: true });
+    },
+    cancel() {
+      onCancel();
     }
   });
   headers.set("content-type", "text/event-stream");
@@ -152,12 +178,14 @@ export interface ConformanceAdapter {
   /** The header value the adapter must send as its credential. */
   credential: string;
   create(): Promise<ModelAdapter>;
+  /** The provider's check, as the Infrastructure page runs it. */
+  check(): Promise<ProviderCheckResult>;
 }
 
 let serviceAccountKey: string | undefined;
 
 /** A service account key made for this test run. It belongs to no account. */
-function replayServiceAccountKey(): string {
+export function replayServiceAccountKey(): string {
   serviceAccountKey ??= JSON.stringify({
     type: "service_account",
     client_email: "replay@recorded-project.iam.gserviceaccount.test",
@@ -190,18 +218,23 @@ function conformanceAdapter(
     model: entry.model,
     region: entry.region
   };
+  const factory = (): Promise<ModelAdapterFactory> =>
+    createProvider(
+      modelProviderDefinitions,
+      "models",
+      { path: `infrastructure.models.${id}`, entry },
+      { secrets: replaySecrets, logger: silentTestLogger }
+    );
   return {
     type: entry.provider,
     provider,
     credential,
     async create() {
-      const build = await createProvider(
-        modelProviderDefinitions,
-        "models",
-        { path: `infrastructure.models.${id}`, entry },
-        { secrets: replaySecrets, logger: silentTestLogger }
-      );
-      return build(provider);
+      return (await factory())(provider);
+    },
+    async check() {
+      const build = await factory();
+      return runProviderCheck(async (context) => (await build.check?.(context)) ?? { ok: true });
     }
   };
 }

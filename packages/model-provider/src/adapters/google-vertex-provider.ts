@@ -36,10 +36,15 @@ const GOOGLE_VERTEX_ROUTES: Record<ProviderRegion, { location: string; endpoint:
 /**
  * What a Gemini model on Vertex does through this adapter. Web search is not declared: it is a
  * route of its own that an instance has to approve first. Reasoning efforts are not mapped yet.
+ * Tool calls are not declared either: Gemini signs a function call with a thought signature and
+ * refuses a later turn that sends the call back without it, and this adapter does not carry
+ * signatures yet. The mapping of tools is in place and the gateway refuses a call that would
+ * use it.
  */
 export const GOOGLE_VERTEX_CAPABILITIES: ModelCapabilities = {
   reasoningEfforts: [],
   nativeTools: [],
+  toolCalls: false,
   serverCompaction: false,
   continuation: false,
   fastTier: false,
@@ -68,14 +73,10 @@ export class GoogleVertexProvider {
     const response = await this.post(request, "generateContent");
     const payload = await this.readJson(response);
     const answer = readVertexAnswerPiece(payload);
-    this.assertAnswered(answer, response.status);
-    return {
-      text: answer.text,
-      toolCalls: answer.toolCalls,
-      sources: [],
-      citations: [],
-      usage: toVertexModelUsage(payload.usageMetadata)
-    };
+    // Read before the answer is judged: Vertex bills an answer it blocked or could not form.
+    const usage = toVertexModelUsage(payload.usageMetadata);
+    this.assertAnswered(answer, response.status, usage);
+    return { text: answer.text, toolCalls: answer.toolCalls, sources: [], citations: [], usage };
   }
 
   async *stream(request: ModelAdapterRequest): AsyncIterable<ModelAdapterStreamEvent> {
@@ -180,7 +181,11 @@ export class GoogleVertexProvider {
     return payload;
   }
 
-  private assertAnswered(answer: VertexAnswerPiece, status: number): void {
+  private assertAnswered(
+    answer: VertexAnswerPiece,
+    status: number,
+    usage?: ModelCompletion["usage"]
+  ): void {
     if (!isVertexAnswerMissing(answer)) {
       return;
     }
@@ -188,6 +193,7 @@ export class GoogleVertexProvider {
       kind: "invalid_response",
       message: "Model provider returned no answer",
       status,
+      ...(usage?.source === "provider_reported" ? { usage } : {}),
       // Why Vertex gave none, as its own identifier: a block reason or a finish reason.
       providerCode: identifier(answer.blockReason) ?? identifier(answer.finishReason),
       details: { providerId: this.options.id, status }

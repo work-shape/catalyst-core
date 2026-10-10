@@ -1,6 +1,11 @@
 import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
 import { z } from "zod";
-import { AppError } from "@vivd-catalyst/core";
+import {
+  AppError,
+  providerCheckResultOfStatus,
+  type ProviderCheckContext,
+  type ProviderCheckResult
+} from "@vivd-catalyst/core";
 import {
   ModelProviderError,
   modelProviderErrorKindForStatus,
@@ -35,6 +40,12 @@ const tokenResponseSchema = z.object({
 /** Hands out the access token of one service account and renews it before it ends. */
 export interface GoogleAccessTokenSource {
   accessToken(signal?: AbortSignal): Promise<string>;
+  /**
+   * Asks Google for a token with the key, whatever token is held. It proves that the token
+   * endpoint is reached and takes the key; it generates nothing and costs nothing. It does not
+   * ask Vertex whether the account may call the model.
+   */
+  check(context: ProviderCheckContext): Promise<ProviderCheckResult>;
 }
 
 /**
@@ -80,38 +91,49 @@ export function createGoogleAccessTokenSource(
     return `${unsigned}.${createSign("RSA-SHA256").update(unsigned).sign(privateKey, "base64url")}`;
   };
 
-  const renew = async (): Promise<string> => {
-    let response: Response;
-    try {
-      response = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-          assertion: assertion()
-        }).toString(),
-        signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS)
-      });
-    } catch {
-      throw toModelTransportFailure(new Error("The token request failed"));
-    }
+  /** Trades an assertion for a token. Resolves with the status and, on success, the token. */
+  const exchange = async (signal: AbortSignal): Promise<{ status: number; token?: string }> => {
+    const response = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: assertion()
+      }).toString(),
+      signal
+    });
     // The answer names the account on a refusal and holds the token on success: neither is kept
     // beyond the token itself, and nothing of it reaches an error.
     const payload: unknown = await response.json().catch(() => undefined);
     const parsed = tokenResponseSchema.safeParse(payload);
     if (!response.ok || !parsed.success) {
-      throw new ModelProviderError({
-        kind: response.ok ? "invalid_response" : modelProviderErrorKindForStatus(response.status),
-        message: "Model provider authentication failed",
-        status: response.status,
-        details: { status: response.status, stage: "authentication" }
-      });
+      return { status: response.status };
     }
     current = {
       token: parsed.data.access_token,
       renewAtMs: Date.now() + parsed.data.expires_in * 1000 - TOKEN_RENEWAL_MARGIN_MS
     };
-    return current.token;
+    return { status: response.status, token: current.token };
+  };
+
+  const renew = async (): Promise<string> => {
+    let exchanged: Awaited<ReturnType<typeof exchange>>;
+    try {
+      exchanged = await exchange(AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS));
+    } catch {
+      throw toModelTransportFailure(new Error("The token request failed"));
+    }
+    const { status, token } = exchanged;
+    if (token === undefined) {
+      const refused = status < 200 || status >= 300;
+      throw new ModelProviderError({
+        kind: refused ? modelProviderErrorKindForStatus(status) : "invalid_response",
+        message: "Model provider authentication failed",
+        status,
+        details: { status, stage: "authentication" }
+      });
+    }
+    return token;
   };
 
   return {
@@ -125,6 +147,20 @@ export function createGoogleAccessTokenSource(
         pending = undefined;
       });
       return signal ? untilStopped(pending, signal) : pending;
+    },
+    async check({ signal }) {
+      let exchanged: Awaited<ReturnType<typeof exchange>>;
+      try {
+        exchanged = await exchange(signal);
+      } catch {
+        return { ok: false, errorClass: "unreachable" };
+      }
+      if (exchanged.token !== undefined) {
+        return { ok: true };
+      }
+      const refused = providerCheckResultOfStatus(exchanged.status);
+      // An answer of success without a token is no token.
+      return refused.ok ? { ok: false, errorClass: "rejected" } : refused;
     }
   };
 }

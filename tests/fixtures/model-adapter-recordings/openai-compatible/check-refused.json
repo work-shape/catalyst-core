@@ -1,0 +1,19 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/models"
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT",
+            "type": "invalid_request_error",
+            "code": "invalid_api_key"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -33,12 +33,19 @@ contain breaking changes; a patch version does not.
   abort. An entry under `infrastructure.models` takes `projectId` and `credentialSecret` (default
   `GOOGLE_VERTEX_CREDENTIALS`, the JSON key of a service account), and its `region` decides the
   endpoint and location: `eu` stays on `aiplatform.eu.rep.googleapis.com`. Web search, reasoning
-  efforts, the fast tier and server-side compaction are not declared, so a call that asks for one
-  is refused before it is sent. Do not offer a `google-vertex` binding to agents yet: tool use
-  over several turns is not verified for it. A model message can carry a PDF document; the
+  efforts, the fast tier, server-side compaction and tool calls are not declared, so a call that
+  asks for one is refused before it is sent. Tool calls wait until the adapter carries Gemini's
+  thought signatures: a call with tools or with a tool call in its history is refused with
+  `VALIDATION_FAILED`, and a binding on such a provider must state `agentSelectable: false`, or
+  startup stops with: `Model binding '<id>' can be chosen for agents, but provider '<id>' does
+  not support tool calls, which every agent run needs: set 'agentSelectable: false' on the
+  binding`. The check on **Instance > Infrastructure** asks Google for a token with the key; it
+  does not call Vertex. A model message can carry a PDF document; the
   gateway refuses such a call for a model that does not read documents, and fails a call that
   asked for a JSON format with `invalid_response` when the answer is not JSON, after settling
-  what the call used. A conformance suite runs the same recorded cases against both adapters.
+  what the call used. An answer the provider counted and then blocked or could not form is
+  settled with the usage it reported. A conformance suite runs the same recorded cases against
+  both adapters.
 - **Capability SDK:** the capability context has `models`, the instance's model gateway for a
   capability's own calls. `models.complete` takes a model binding, a purpose, text and PDF
   content and an optional JSON format, and `models.describeBinding` says what the binding's
@@ -1022,6 +1029,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   the number of an item's count on its icon.
 
 ### Fixed
+
+- **Models:** a caller that stops reading a streamed answer without stopping the call now ends
+  the request to the provider, for every adapter. Before, the provider kept generating, and
+  billing, after the call was settled.
 
 - **Chat:** a list or menu opened right after a conversation stays open. The composer tried
   for the focus once more 50 milliseconds after a conversation was opened, and took it out of

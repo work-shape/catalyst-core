@@ -250,6 +250,8 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         const error = normalizeModelAdapterError(thrown);
         if (error instanceof ModelProviderError) {
           logProviderError(error, target, call.attribution);
+          // The provider counted an answer it then refused: the call is settled with that.
+          if (error.usage) seen.reportedUsage = error.usage;
         }
         const waitMs = policy.waitBeforeRetryMs(error, attempt);
         for (const toolCallId of preparingToolCallIds) {
@@ -526,6 +528,9 @@ function assertWithinCapabilities(
       missing.push(`native tool '${tool.name}'`);
     }
   }
+  if (!capabilities.toolCalls && (call.tools.some(isModelFunctionTool) || carriesToolUse(call))) {
+    missing.push("tool calls");
+  }
   if (call.continuation !== undefined && !capabilities.continuation) {
     missing.push("continuation");
   }
@@ -544,6 +549,15 @@ function assertWithinCapabilities(
       `Model '${target.model}' of provider '${target.provider.id}' does not support: ${missing.join(", ")}`
     );
   }
+}
+
+/** Whether the call's history holds a tool call or the result of one. */
+function carriesToolUse(call: ModelCall): boolean {
+  return call.messages.some(
+    (message) =>
+      message.role === "tool" ||
+      (message.role === "assistant" && (message.toolCalls?.length ?? 0) > 0)
+  );
 }
 
 function carriesDocument(message: ModelMessage): boolean {

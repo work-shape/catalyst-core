@@ -50,6 +50,8 @@ export interface RecordingGovernance extends ModelCallGovernance {
   /** One record per admitted call: zero tokens from admission, the call's usage once settled. */
   recorded: ModelUsageEventInput[];
   admitted: number;
+  /** How often a call was settled. A call is settled once, whatever became of it. */
+  settled: number;
   /** Set to refuse every admission with this error. */
   refuseAdmission: Error | undefined;
   /** Set to fail every settlement with this error. */
@@ -65,6 +67,7 @@ export function createRecordingGovernance(): RecordingGovernance {
   const governance: RecordingGovernance = {
     recorded: [],
     admitted: 0,
+    settled: 0,
     refuseAdmission: undefined,
     failSettlement: undefined,
     async admitModelCall(call) {
@@ -92,6 +95,7 @@ export function createRecordingGovernance(): RecordingGovernance {
       };
     },
     async settleModelCall(admitted, usage) {
+      governance.settled += 1;
       if (governance.failSettlement) throw governance.failSettlement;
       const record = records.get(admitted.id);
       if (record && usage) Object.assign(record, usage);
@@ -109,6 +113,7 @@ export const ALL_MODEL_CAPABILITIES: ModelCapabilities = {
   fastTier: true,
   imageInput: true,
   documentInput: true,
+  toolCalls: true,
   structuredOutput: true,
   streaming: true
 };

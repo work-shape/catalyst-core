@@ -25,7 +25,7 @@ export const googleVertexModelProvider = defineProvider({
       await secrets.resolve(config.credentialSecret),
       config.credentialSecret
     );
-    return (entry) => {
+    const build: ModelAdapterFactory = (entry) => {
       if (!entry.region) {
         throw new AppError("VALIDATION_FAILED", `'${entryPath}.region' is required`);
       }
@@ -41,6 +41,11 @@ export const googleVertexModelProvider = defineProvider({
         stream: (request) => provider.stream(request)
       };
     };
+    build.check = (context) => tokens.check(context);
+    return build;
+  },
+  async check(build, context) {
+    return (await build.check?.(context)) ?? { ok: true };
   },
   describe(config) {
     return { projectId: config.projectId };

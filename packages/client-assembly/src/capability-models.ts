@@ -107,6 +107,19 @@ export async function createInstanceModels(input: {
     bindings,
     governance
   });
+  for (const binding of bindings) {
+    // Every agent run offers tools. A binding agents can choose must be on a model that calls
+    // them through its adapter, or each run on it would be refused at its first model call.
+    if (
+      binding.agentSelectable !== false &&
+      !gateway.capabilities({ bindingId: binding.id }).toolCalls
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model binding '${binding.id}' can be chosen for agents, but provider '${binding.providerId}' does not support tool calls, which every agent run needs: set 'agentSelectable: false' on the binding`
+      );
+    }
+  }
   return {
     governance,
     gateway,

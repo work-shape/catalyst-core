@@ -441,15 +441,25 @@ export async function* readServerSentEventData(
   const decoder = new TextDecoder();
   const parser = new ServerSentEventDataLineParser();
 
-  while (true) {
-    const { done, value } = await readWithinIdleLimit(reader);
-    if (done) {
-      break;
+  let ended = false;
+  try {
+    while (true) {
+      const { done, value } = await readWithinIdleLimit(reader);
+      if (done) {
+        ended = true;
+        break;
+      }
+      yield* parser.push(decoder.decode(value, { stream: true }));
     }
-    yield* parser.push(decoder.decode(value, { stream: true }));
-  }
 
-  yield* parser.push(decoder.decode(), true);
+    yield* parser.push(decoder.decode(), true);
+  } finally {
+    // A consumer that stops reading, or fails, leaves a response the provider still writes.
+    // Cancelling the body ends the request, so the provider stops generating.
+    if (!ended) {
+      await reader.cancel().catch(() => undefined);
+    }
+  }
 }
 
 /**

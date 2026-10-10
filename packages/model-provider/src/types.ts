@@ -171,6 +171,8 @@ export interface ModelCapabilities {
   /** Reasoning efforts the model accepts. Empty when it takes none. */
   reasoningEfforts: readonly ReasoningEffortConfig[];
   nativeTools: readonly ModelNativeToolId[];
+  /** The model calls the product's tools and reads their results in later turns. */
+  toolCalls: boolean;
   /** The provider compacts the context itself and hands back a checkpoint. */
   serverCompaction: boolean;
   /** The provider accepts the continuation an earlier answer returned. */

@@ -8,6 +8,7 @@ import {
   SecretNotResolvedError
 } from "@vivd-catalyst/core";
 import { createDataSourceRegistry } from "@vivd-catalyst/data-source";
+import { replayServiceAccountKey } from "./support/model-adapter-recordings";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 
 const SECRET_VALUE = "sk-live-4f9c2d7e1a8b-never-printed";
@@ -79,6 +80,39 @@ async function failure(run: () => Promise<unknown>): Promise<Error> {
 }
 
 describe("infrastructure section", () => {
+  it("stops startup on a binding agents can choose whose provider does not support tool calls", async () => {
+    const vertex = {
+      provider: "google-vertex",
+      region: "eu",
+      model: "recorded-gemini-model",
+      projectId: "recorded-project",
+      credentialSecret: "VERTEX_KEY"
+    };
+    const start = async (agentSelectable: boolean): Promise<void> => {
+      const { instance } = await createTestInstanceOnSecrets(
+        {
+          config: parseClientInstanceConfig(
+            config(
+              { models: { ...models, vertex } },
+              { modelBindings: [{ id: "extraction", providerId: "vertex", agentSelectable }] }
+            )
+          ),
+          tools: [],
+          seedAssets: false
+        },
+        { VERTEX_KEY: replayServiceAccountKey() }
+      );
+      await instance.close();
+    };
+
+    const error = await failure(() => start(true));
+    expect(error.message).toBe(
+      "Model binding 'extraction' can be chosen for agents, but provider 'vertex' does not support tool calls, which every agent run needs: set 'agentSelectable: false' on the binding"
+    );
+    // The same entry serves the product's own calls once no agent can be given the binding.
+    await start(false);
+  });
+
   it("stops startup on a provider type that is not registered, naming the port and the field", async () => {
     const error = await startupFailure({
       models: { main: { provider: "acme-llm", region: "eu", model: "m" } }

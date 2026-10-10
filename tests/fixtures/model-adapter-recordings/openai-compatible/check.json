@@ -1,0 +1,16 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/models"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "object": "list",
+          "data": []
+        }
+      }
+    }
+  ]
+}

@@ -93,6 +93,7 @@ describe("model gateway", () => {
           nativeTools: [],
           continuation: false,
           fastTier: false,
+          toolCalls: true,
           structuredOutput: false
         }
       );

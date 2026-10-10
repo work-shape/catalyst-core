@@ -1,4 +1,4 @@
-import { AppError, type AppErrorCode } from "@vivd-catalyst/core";
+import { AppError, type AppErrorCode, type ModelTokenUsage } from "@vivd-catalyst/core";
 
 // Protects logs from a provider's error body, which can repeat what a user sent: the provider's
 // message is kept up to this length, for the log only. Nobody sees it in the product.
@@ -34,7 +34,14 @@ export interface ModelProviderErrorInput {
   providerMessage?: string;
   /** Bounded identifiers for diagnostics, as `AppError.details`. */
   details?: Record<string, unknown>;
+  /**
+   * What the provider reported it used for the answer it then refused or could not form. A
+   * completion that fails after the provider counted it is settled with this, not with nothing.
+   */
+  usage?: ModelProviderReportedUsage;
 }
+
+export type ModelProviderReportedUsage = ModelTokenUsage & { webSearchCallCount: number };
 
 const RETRYABLE_KINDS: ReadonlySet<ModelProviderErrorKind> = new Set([
   "rate_limit",
@@ -54,6 +61,7 @@ export class ModelProviderError extends AppError {
   readonly providerCode?: string | number;
   readonly providerRequestId?: string;
   readonly retryAfterMs?: number;
+  readonly #usage: ModelProviderReportedUsage | undefined;
   readonly #providerMessage: string | undefined;
 
   constructor(input: ModelProviderErrorInput) {
@@ -65,7 +73,13 @@ export class ModelProviderError extends AppError {
     if (input.providerCode !== undefined) this.providerCode = input.providerCode;
     if (input.providerRequestId !== undefined) this.providerRequestId = input.providerRequestId;
     if (input.retryAfterMs !== undefined) this.retryAfterMs = input.retryAfterMs;
+    this.#usage = input.usage;
     this.#providerMessage = boundProviderMessage(input.providerMessage);
+  }
+
+  /** For the gateway's settlement of the failed call. */
+  get usage(): ModelProviderReportedUsage | undefined {
+    return this.#usage;
   }
 
   /** For the gateway's log line only. Never part of a message, a response or `details`. */
