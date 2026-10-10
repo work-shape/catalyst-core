@@ -87,7 +87,11 @@ export async function resolveWorkspacePreviewImages(
     clientInstanceId: context.clientInstanceId,
     artifactId: asManagedArtifactId(input.artifactId)
   });
-  if (!source || source.conversationId !== options.conversationId || source.status !== "available") {
+  if (
+    !source ||
+    source.conversationId !== options.conversationId ||
+    source.status !== "available"
+  ) {
     return failed("handler_failed", "Managed artifact is not available in this conversation", {
       artifactId: input.artifactId
     });
