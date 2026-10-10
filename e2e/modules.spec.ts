@@ -51,12 +51,12 @@ test("an operator reads the modules of the instance, in English and in German", 
       .getByRole("button", { name: "Modules" })
   ).toBeVisible();
   // Every module the product knows has a row, in the order of the registry.
-  await expect(page.locator("[data-module]")).toHaveCount(4);
+  await expect(page.locator("[data-module]")).toHaveCount(5);
   expect(
     await page
       .locator("[data-module]")
       .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-module")))
-  ).toEqual(["documents", "resources", "assetManagement", "userInvitations"]);
+  ).toEqual(["documents", "resources", "assetManagement", "userInvitations", "apps"]);
 
   const resources = moduleRow(page, "resources");
   await expect(resources).toContainText("Resources");
@@ -261,7 +261,13 @@ test.describe("with the resources module off", () => {
     const offConfigPath = resolve(dirname(resolve(configPath)), "e2e-app-resources-off.yaml");
     const config = (await readFile(configPath, "utf8")).replaceAll(apiBaseUrl, offApiUrl);
     await mkdir(dirname(offConfigPath), { recursive: true });
-    await writeFile(offConfigPath, `${config}\nmodules:\n  resources:\n    enabled: false\n`);
+    // The config has a `modules` section already; the switch goes into it.
+    const section = /^modules:\n/mu;
+    expect(section.test(config)).toBe(true);
+    await writeFile(
+      offConfigPath,
+      config.replace(section, "modules:\n  resources:\n    enabled: false\n")
+    );
     offApi = spawn(process.execPath, ["clients/demo/dist/server.js"], {
       env: {
         ...process.env,

@@ -1,4 +1,5 @@
 import { expect, test as base, type BrowserContext } from "@playwright/test";
+import { pageExitTitle, pageLoadExits, pageNavigationExits, pageTestTitles } from "./page-exits";
 
 /**
  * A message a page may report as an error without failing its test. Every entry names one
@@ -110,6 +111,57 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "planted-page-exit",
+    reason:
+      "Chromium's own log line for what it refused a Page: a move of its frame or of a frame " +
+      "that holds it, a window, a form, or a load its policy names no host for. These tests " +
+      "plant each of them in a Page and assert that nothing reached the other host.",
+    matches: new RegExp(
+      [
+        /^Framing '[^']*' violates the following Content Security Policy directive: "frame-(?:src 'none'|ancestors 'self' [^"]*)"\. The request has been blocked\.\s*$/u,
+        /^(?:Connecting to|Fetching content from|Loading the (?:image|script|stylesheet|font)|Loading media from {2}|Setting the document's base URI to) '[^']*' violates the following Content Security Policy directive: "[^"]*"\. (?:Note that '[a-z-]+' was not explicitly set, so '[a-z-]+' is used as a fallback\. )?The action has been blocked\.\s*$/u,
+        /^Fetch API cannot load \S+ Refused to connect because it violates the document's Content Security Policy\.$/u,
+        /^Executing inline script violates the following Content Security Policy directive 'script-src 'self''\. Either the 'unsafe-inline' keyword, a hash \('sha256-[A-Za-z0-9+/=]+'\), or a nonce \('nonce-\.\.\.'\) is required to enable inline execution\. The action has been blocked\.\s*$/u,
+        /^Blocked form submission to '[^']*' because the form's frame is sandboxed and the 'allow-forms' permission is not set\.\s*$/u,
+        /^Blocked opening '[^']*' in a new window because the request was made in a sandboxed frame whose 'allow-popups' permission is not set\.\s*$/u,
+        /^Unsafe attempt to initiate navigation for frame with (?:URL|origin) '[^']*' from frame with URL 'about:srcdoc'\. The frame attempting navigation (?:is sandboxed, and is therefore disallowed from navigating its ancestors|of the top-level window is sandboxed, but the flag of 'allow-top-navigation' or 'allow-top-navigation-by-user-activation' is not set)\.\s*$/u,
+        /^Unsafe attempt to load URL \S+ from frame with URL about:srcdoc\. Domains, protocols and ports must match\.\s*$/u
+      ]
+        .map((line) => line.source)
+        .join("|"),
+      "u"
+    ),
+    tests: [
+      ...[...pageNavigationExits, ...pageLoadExits].map(pageExitTitle),
+      pageTestTitles.instanceAddress,
+      pageTestTitles.otherSite,
+      pageTestTitles.noOrigin
+    ]
+  },
+  {
+    name: "page-file-that-is-not-there",
+    reason:
+      "Chromium's own log line: the Page of this test names a base address, the policy " +
+      "refuses it, and the image beside it is then asked of the Page's own file set, which " +
+      "holds no such file.",
+    matches: requestAnswered(404),
+    path: /^\/app-content\//u,
+    tests: [
+      pageExitTitle(
+        pageLoadExits.find((exit) => exit.name === "a base address") ?? { name: "a base address" }
+      )
+    ]
+  },
+  {
+    name: "page-address-in-a-tab",
+    reason:
+      "Chromium's own log line: the test opens the address of a Page in a tab of its own, " +
+      "the instance answers 403 because only a frame is given a Page, which the test asserts.",
+    matches: requestAnswered(403),
+    path: /^\/app-content\//u,
+    tests: [pageTestTitles.ownTab]
+  },
+  {
     name: "script-in-scriptless-view",
     reason:
       "Chromium's own log line for a script in a frame that runs none. A view that holds " +
@@ -189,7 +241,7 @@ function isAllowed(text: string, address: string, testTitle: string): boolean {
   );
 }
 
-interface PageErrorWatch {
+export interface PageErrorWatch {
   /** Watches a context a test opened itself, such as a second user's, before it opens a page. */
   watch(context: BrowserContext): Promise<void>;
 }

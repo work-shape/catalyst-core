@@ -1,8 +1,26 @@
-import { createSocket } from "node:dgram";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
-import type { Locator, Page } from "@playwright/test";
-import { expect, test } from "./test";
+import type { Page } from "@playwright/test";
+import {
+  SETTLE_MS,
+  WEBRTC_WAIT_MS,
+  exitTest,
+  expectRefused,
+  linkClicks,
+  refusedByShell,
+  type LinkClick,
+  type OtherHost
+} from "./exit-fixtures";
+import {
+  pageExitTitle,
+  pageLinkTitle,
+  pageLinks,
+  pageLoadExits,
+  pageNavigationExits,
+  pageTestTitles,
+  tabOpeningClicks,
+  type PageExit
+} from "./page-exits";
+import { expectPageRan, openPage, storePage } from "./page-fixtures";
+import { expect } from "./test";
 import {
   apiOrigin,
   rewriteStoredDisplay,
@@ -18,80 +36,6 @@ import {
 // test: the other host is a real server on this machine that counts what reaches it, and it
 // must count nothing. That the browser refused the move is read from its own log line, so a
 // test cannot pass because the view never tried.
-
-/** How long a refused move is given to reach the other host after all. */
-const SETTLE_MS = 1_000;
-/** How long a view is given to send WebRTC packets. One that may send them does so at once. */
-const WEBRTC_WAIT_MS = 3_000;
-
-const refusedByShell =
-  /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\./u;
-
-interface OtherHost {
-  origin: string;
-  /** Method and address of every HTTP request that arrived. */
-  requests: string[];
-  /** TCP connections opened, whether or not a request followed. */
-  connections: number;
-  /** Where a WebRTC connection is told to find its STUN server. */
-  stunServer: string;
-  /** UDP packets that arrived there. */
-  packets: number;
-  close(): Promise<void>;
-}
-
-/** A second host: another name and another port than the instance, on this machine. */
-async function startOtherHost(): Promise<OtherHost> {
-  const server = createServer((request, response) => {
-    host.requests.push(`${request.method ?? ""} ${request.url ?? ""}`);
-    response.writeHead(200, { "content-type": "text/html" });
-    response.end("<!doctype html><title>Other host</title><p>Other host</p>");
-  });
-  server.on("connection", () => {
-    host.connections += 1;
-  });
-  // No address: both of the machine's loopback addresses answer, whichever the name finds.
-  await new Promise<void>((done) => server.listen(0, done));
-  const udp = createSocket("udp4");
-  udp.on("message", () => {
-    host.packets += 1;
-  });
-  await new Promise<void>((done) => udp.bind(0, "127.0.0.1", done));
-  const name = new URL(apiOrigin).hostname === "localhost" ? "127.0.0.1" : "localhost";
-  const port = (address: string | AddressInfo | null) =>
-    typeof address === "object" && address ? address.port : 0;
-  const host: OtherHost = {
-    origin: `http://${name}:${port(server.address())}`,
-    requests: [],
-    connections: 0,
-    stunServer: `stun:127.0.0.1:${udp.address().port}`,
-    packets: 0,
-    async close() {
-      server.closeAllConnections();
-      await new Promise((done) => server.close(done));
-      await new Promise<void>((done) => udp.close(done));
-    }
-  };
-  return host;
-}
-
-const exitTest = test.extend<{ otherHost: OtherHost; refusals: string[] }>({
-  otherHost: async ({ page: _page }, use) => {
-    const host = await startOtherHost();
-    await use(host);
-    await host.close();
-  },
-  // What the browser logged about a move or a script it refused, in every frame of the page.
-  refusals: async ({ page }, use) => {
-    const refusals: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") {
-        refusals.push(message.text());
-      }
-    });
-    await use(refusals);
-  }
-});
 
 type ViewKind = "html.rendered" | "private_hydrated_view";
 
@@ -147,38 +91,9 @@ const frameExits: Exit[] = [
   }
 ];
 
-/** The browser said it refused, and after a while the other host has still seen nothing. */
-async function expectRefused(
-  page: Page,
-  otherHost: OtherHost,
-  refusals: string[],
-  refusal: RegExp
-): Promise<void> {
-  await expect.poll(() => refusals.filter((text) => refusal.test(text))).toHaveLength(1);
-  await page.waitForTimeout(SETTLE_MS);
-  expect(otherHost.requests).toEqual([]);
-  expect(otherHost.connections).toBe(0);
-}
-
 // A click with a modifier key or the middle button does not move the frame. It opens the
 // address in a new tab or window, or downloads it, and the shell has no say in that. So a
 // link in a view has no address: these tests click one in every way and count.
-
-interface LinkClick {
-  name: string;
-  attributes?: string;
-  options?: Parameters<Locator["click"]>[0];
-}
-
-const linkClicks: LinkClick[] = [
-  { name: "a click on a link" },
-  { name: "a click on a download link", attributes: "download" },
-  // The key that opens a link in a new tab: Meta on macOS, Control elsewhere.
-  { name: "a Control or Meta click on a link", options: { modifiers: ["ControlOrMeta"] } },
-  { name: "a Shift click on a link", options: { modifiers: ["Shift"] } },
-  { name: "an Alt click on a link", options: { modifiers: ["Alt"] } },
-  { name: "a middle click on a link", options: { button: "middle" } }
-];
 
 /** Shows a view with one link to the other host, clicks it, and counts what left. */
 async function expectClickReachesNothing(
@@ -555,5 +470,281 @@ exitTest.describe("WebRTC from a view", () => {
     // Its frame runs no script, so nothing in it can open a connection.
     await expect(viewFrame(page).locator("body")).not.toHaveAttribute("data-offered");
     expect(otherHost.packets).toBe(0);
+  });
+});
+
+// A Page is HTML and script an agent wrote, served by the instance as files. It is held like a
+// view: the instance answers every HTML file as a shell with the Page in a frame inside, and
+// the header of that answer is the policy of both. The Page runs scripts, so every way out is
+// tried here by a script or by a person, with the same other host counting what arrives.
+
+/** What a click opened: a tab, a window or a download. */
+function watchOpened(page: Page): string[] {
+  const opened: string[] = [];
+  page.context().on("page", (popup) => opened.push(popup.url()));
+  page.on("download", (download) => opened.push(download.url()));
+  return opened;
+}
+
+async function expectPageExitRefused(
+  page: Page,
+  exit: PageExit,
+  otherHost: OtherHost,
+  refusals: string[]
+): Promise<void> {
+  const opened = watchOpened(page);
+  const view = await openPage(page, {
+    html: exit.html?.(otherHost.origin),
+    script: exit.script?.(otherHost.origin),
+    files: { "assets/worker.js": 'postMessage("started");' }
+  });
+  const held = page.url();
+
+  if (exit.refusal) {
+    await expectRefused(page, otherHost, refusals, exit.refusal);
+  } else {
+    await expectPageRan(page);
+    await page.waitForTimeout(SETTLE_MS);
+  }
+  if (exit.shows) {
+    await expect(view.locator("body")).toHaveAttribute(exit.shows.attribute, exit.shows.value);
+  }
+  expect(opened).toEqual([]);
+  expect(page.url()).toBe(held);
+  expect(otherHost.requests).toEqual([]);
+  expect(otherHost.connections).toBe(0);
+}
+
+exitTest.describe("a Page cannot reach another host or the page that holds it", () => {
+  exitTest.setTimeout(60_000);
+
+  exitTest(
+    "the other host counts a click that opens a tab from a frame nothing guards",
+    async ({ page, otherHost }) => {
+      // What the tests below would see if a Page kept an address on a link.
+      const opened = watchOpened(page);
+      await page.goto(`${apiOrigin}/health`);
+      await page.setContent(
+        `<iframe sandbox="allow-scripts" srcdoc="<a id='go' href='${otherHost.origin}/hit?click=control'>Open</a>"></iframe>`
+      );
+      await page
+        .frameLocator("iframe")
+        .locator("#go")
+        .click({ modifiers: ["ControlOrMeta"] });
+
+      await expect.poll(() => otherHost.requests).toEqual(["GET /hit?click=control"]);
+      expect(opened).toHaveLength(1);
+    }
+  );
+
+  for (const exit of [...pageNavigationExits, ...pageLoadExits]) {
+    exitTest(pageExitTitle(exit), async ({ page, otherHost, refusals }) => {
+      await expectPageExitRefused(page, exit, otherHost, refusals);
+    });
+  }
+
+  exitTest(pageTestTitles.instanceAddress, async ({ page, otherHost, refusals }) => {
+    const address = `${apiOrigin}/health?from=page`;
+    const asked: string[] = [];
+    page.on("request", (request) => {
+      if (request.url() === address) {
+        asked.push(request.url());
+      }
+    });
+
+    await openPage(page, { script: `location.href = ${JSON.stringify(address)};` });
+
+    // `frame-src 'none'` names no address at all: a Page can navigate nowhere, also not to
+    // another file of its own file set.
+    await expectRefused(page, otherHost, refusals, refusedByShell);
+    expect(asked).toEqual([]);
+  });
+
+  for (const link of pageLinks) {
+    const clicks = linkClicks.filter(
+      (click) =>
+        click.attributes === undefined && (!link.bypass || tabOpeningClicks.includes(click.name))
+    );
+    for (const click of clicks) {
+      exitTest(pageLinkTitle(link, click.name), async ({ page, otherHost }) => {
+        const opened = watchOpened(page);
+        const address = `${otherHost.origin}/hit?click=${encodeURIComponent(click.name)}&rows=secret`;
+
+        const view = await openPage(page, {
+          html: link.html?.(address),
+          script: link.script?.(address)
+        });
+        await expectPageRan(page);
+        const held = page.url();
+        const target = view.locator(link.target);
+        await expect(target).toBeVisible();
+        if (!link.hidden) {
+          // The link is there to be clicked. Its address is gone.
+          await expect(target).toHaveText("Open");
+          await expect(target).not.toHaveAttribute("href");
+          await expect(target).not.toHaveAttribute("xlink:href");
+          await expect(target).not.toHaveAttribute("ping");
+        }
+        if (link.shows) {
+          await expect(view.locator("body")).toHaveAttribute(
+            link.shows.attribute,
+            link.shows.value
+          );
+        }
+        await target.click(click.options);
+
+        await page.waitForTimeout(SETTLE_MS);
+        expect(opened).toEqual([]);
+        expect(page.url()).toBe(held);
+        expect(otherHost.requests).toEqual([]);
+        expect(otherHost.connections).toBe(0);
+      });
+    }
+  }
+});
+
+exitTest.describe("a Page is held where the interface put it", () => {
+  exitTest.setTimeout(60_000);
+
+  exitTest(pageTestTitles.ownTab, async ({ page }) => {
+    const headers = await signIn(page, uiOrigin);
+    const stored = await storePage(page, headers, { html: '<p id="planted">planted</p>' });
+
+    // Opened in a tab, the shell would be a page an agent wrote under the instance's address.
+    const answer = await page.goto(stored.url);
+    expect(answer?.status()).toBe(403);
+    await expect(page.locator("iframe")).toHaveCount(0);
+    for (const file of ["index.html", "assets/main.js", "assets/style.css"]) {
+      const asTab = await page.goto(`${stored.url}${file}`);
+      expect(asTab?.status(), file).toBe(403);
+    }
+    // The address is bound to its file set: with one character of the token changed it is
+    // nothing, and every answer carries the header that holds a Page in.
+    const altered = stored.url.replace(/.\/$/u, (end) => (end === "A/" ? "B/" : "A/"));
+    const refused = await page.request.get(`${altered}assets/main.js`);
+    expect(refused.status()).toBe(404);
+    expect(refused.headers()["content-security-policy"]).toContain("sandbox allow-scripts;");
+  });
+
+  exitTest(pageTestTitles.otherSite, async ({ page, otherHost, refusals }) => {
+    const headers = await signIn(page, uiOrigin);
+    const stored = await storePage(page, headers, {});
+
+    await page.goto(`${otherHost.origin}/holder`);
+    await page.evaluate((address) => {
+      const frame = document.createElement("iframe");
+      frame.src = address;
+      document.body.appendChild(frame);
+    }, stored.url);
+
+    await expect
+      .poll(() =>
+        refusals.filter((text) =>
+          /^Framing '[^']*' violates the following Content Security Policy directive: "frame-ancestors 'self' /u.test(
+            text
+          )
+        )
+      )
+      .toHaveLength(1);
+    await expect(
+      page.frameLocator("iframe").frameLocator("iframe").locator("#page-title")
+    ).toHaveCount(0);
+  });
+
+  exitTest(pageTestTitles.noFrames, async ({ page, otherHost }) => {
+    const inner = `${apiOrigin}/never`;
+    const asked: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().endsWith("/assets/inner.js")) {
+        asked.push(request.url());
+      }
+    });
+    const link = `<a id='go' href='${otherHost.origin}/hit?nested=1'>Open</a>`;
+    const nested = `${link}<script src='assets/inner.js'></script>`;
+
+    // A frame a Page writes is a document of its own: its links keep their addresses and the
+    // Page's guard does not run in it. So a Page has none, however often it adds one.
+    const view = await openPage(page, {
+      html: `<iframe srcdoc="${nested}"></iframe><p id="after">after</p>`,
+      script: `const add = () => { const frame = document.createElement("iframe"); frame.srcdoc = ${JSON.stringify(nested)}; document.body.appendChild(frame); const host = document.createElement("div"); document.body.appendChild(host); const inShadow = document.createElement("iframe"); inShadow.srcdoc = ${JSON.stringify(nested)}; host.attachShadow({ mode: "closed" }).appendChild(inShadow); }; add(); setInterval(add, 5);`,
+      files: { "assets/inner.js": `fetch(${JSON.stringify(inner)});` }
+    });
+    await expectPageRan(page);
+    await expect(view.locator("#after")).toHaveText("after");
+    await page.waitForTimeout(SETTLE_MS);
+
+    await expect(view.locator("iframe, frame, object, embed")).toHaveCount(0);
+    expect(asked).toEqual([]);
+    expect(otherHost.requests).toEqual([]);
+    expect(otherHost.connections).toBe(0);
+  });
+
+  // WebRTC is known and open for a view that runs scripts, and the test above that says so
+  // stands. A Page is not a boundary against it either: nothing but its guard, a script in the
+  // Page's own realm, is in the way. What this test holds is narrower. The names are gone, and
+  // the way a view gets them back, a frame of its own, is not there in a Page.
+  exitTest(pageTestTitles.webRtc, async ({ page, otherHost }) => {
+    const open = `var peer = new RTCPeerConnection({ iceServers: [{ urls: ${JSON.stringify(otherHost.stunServer)} }] }); peer.createDataChannel("rows"); peer.createOffer().then(function (offer) { return peer.setLocalDescription(offer); }).then(function () { parent.postMessage("offered", "*"); });`;
+
+    const view = await openPage(page, {
+      script: [
+        `document.body.setAttribute("data-webrtc", [typeof RTCPeerConnection, typeof webkitRTCPeerConnection, typeof mozRTCPeerConnection].join(","));`,
+        `addEventListener("message", (event) => { if (event.data === "offered") { document.body.setAttribute("data-offered", "true"); } });`,
+        `const frame = document.createElement("iframe"); frame.srcdoc = "<script src='assets/rtc.js'></scr" + "ipt>"; document.body.appendChild(frame);`
+      ].join("\n"),
+      files: { "assets/rtc.js": open }
+    });
+    await expectPageRan(page);
+    await expect(view.locator("body")).toHaveAttribute(
+      "data-webrtc",
+      "undefined,undefined,undefined"
+    );
+    await page.waitForTimeout(WEBRTC_WAIT_MS);
+
+    await expect(view.locator("body")).not.toHaveAttribute("data-offered");
+    expect(otherHost.packets).toBe(0);
+  });
+
+  exitTest(pageTestTitles.noOrigin, async ({ page, otherHost, refusals }) => {
+    const session = `${apiOrigin}/api/v1/me`;
+    const asked: string[] = [];
+    page.on("request", (request) => {
+      if (request.url() === session) {
+        asked.push(request.url());
+      }
+    });
+
+    const view = await openPage(page, {
+      script: [
+        `const read = (name, get) => { try { document.body.setAttribute(name, String(get())); } catch (error) { document.body.setAttribute(name, "threw " + error.name); } };`,
+        `read("data-origin", () => self.origin);`,
+        `read("data-cookie", () => document.cookie);`,
+        `read("data-storage", () => localStorage.length);`,
+        `read("data-session-storage", () => sessionStorage.length);`,
+        `read("data-databases", () => indexedDB.open("rows"));`,
+        `read("data-parent", () => parent.document.title);`,
+        `read("data-top", () => top.document.cookie);`,
+        `fetch(${JSON.stringify(session)}, { credentials: "include" }).then((answer) => document.body.setAttribute("data-session", String(answer.status)), (error) => document.body.setAttribute("data-session", "failed " + error.name));`
+      ].join("\n")
+    });
+    await expectPageRan(page);
+    const body = view.locator("body");
+
+    // The Page's own files loaded and its stylesheet applies: it is not held by being broken.
+    await expect(view.locator("#page-title")).toHaveCSS("color", "rgb(1, 2, 3)");
+    await expect(body).toHaveAttribute("data-origin", "null");
+    await expect(body).toHaveAttribute("data-cookie", "threw SecurityError");
+    await expect(body).toHaveAttribute("data-storage", "threw SecurityError");
+    await expect(body).toHaveAttribute("data-session-storage", "threw SecurityError");
+    await expect(body).toHaveAttribute("data-databases", "threw SecurityError");
+    await expect(body).toHaveAttribute("data-parent", "threw SecurityError");
+    await expect(body).toHaveAttribute("data-top", "threw SecurityError");
+    // The instance's own API is another host to a Page: the policy names none.
+    await expect(body).toHaveAttribute("data-session", "failed TypeError");
+    await expect
+      .poll(() => refusals.filter((text) => text.includes(`"connect-src 'none'"`)))
+      .toHaveLength(1);
+    expect(asked).toEqual([]);
+    expect(otherHost.requests).toEqual([]);
   });
 });
