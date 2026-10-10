@@ -39,6 +39,8 @@ export { createPlatformStore } from "./store";
 export {
   createEnvironmentSecrets,
   createInstanceInfrastructure,
+  createSandbox,
+  createSandboxCheckJobs,
   declaredSecretNames,
   infrastructureEntries,
   infrastructureOverview,

@@ -49,6 +49,8 @@ export {
   DELETION_MAX_ATTEMPTS,
   INFRASTRUCTURE_CHECK_INTERVAL_MS,
   checkInfrastructureJob,
+  checkSandboxJob,
+  checkSandboxSchedule,
   cleanUpExecutionWorkspacesJob,
   deleteAccountJob,
   deleteWorkspaceJob,
@@ -59,7 +61,8 @@ export {
 } from "./job-kinds";
 export {
   INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS,
-  InfrastructureWorkflow
+  InfrastructureWorkflow,
+  logProviderCheckChange
 } from "./infrastructure-workflow";
 export type { InfrastructureEntry } from "./infrastructure-workflow";
 export {

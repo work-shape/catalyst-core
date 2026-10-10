@@ -1,14 +1,23 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
-import { InfrastructureWorkflow, type InfrastructureEntry } from "@vivd-catalyst/chat-server";
+import {
+  checkSandboxJob,
+  checkSandboxSchedule,
+  InfrastructureWorkflow,
+  logProviderCheckChange,
+  type InfrastructureEntry
+} from "@vivd-catalyst/chat-server";
 import { getClientInstanceId, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createEnvironmentSecretResolver,
   createProvider,
+  defineJobHandler,
   defineProvider,
   ProviderRegistry,
   readDatabaseReadiness,
   runProviderCheck,
+  type InfrastructureCheckOutcome,
+  type JobSchedule,
   type Logger,
   type ObjectStorage,
   type PlatformStores,
@@ -16,6 +25,7 @@ import {
   type ProviderDefinition,
   type ProviderEntry,
   type ProviderPort,
+  type RegisteredJobHandler,
   type RegisteredProviderDefinition,
   type SecretResolver
 } from "@vivd-catalyst/core";
@@ -170,6 +180,47 @@ export async function createSandbox(
   );
 }
 
+/**
+ * The check of the command sandbox, for the job worker of the process that runs it. That
+ * process alone reaches the sandbox, so it asks on the instance's schedule and writes the
+ * outcome where the API reads it for Instance > Infrastructure.
+ */
+export function createSandboxCheckJobs(input: {
+  config: ClientInstanceConfig;
+  infrastructure: InstanceInfrastructure;
+  /** The sandbox this process runs commands in. */
+  sandbox: Awaited<ReturnType<typeof createSandbox>>;
+  stores: PlatformStores;
+  now?: () => Date;
+}): { handlers: RegisteredJobHandler[]; schedules: JobSchedule[] } {
+  const entry = { path: SANDBOX_PATH, entry: input.config.infrastructure.sandbox };
+  const definition = input.infrastructure.registry.find("sandbox", entry);
+  const provider = { id: overviewId(entry), type: definition.validate(entry).type };
+  const clientInstanceId = getClientInstanceId(input.config);
+  const now = input.now ?? (() => new Date());
+  return {
+    handlers: [
+      defineJobHandler({
+        kind: checkSandboxJob,
+        slots: 1,
+        // A sandbox that fails is a result, not a failed job.
+        async run() {
+          const result = await definition.check(input.sandbox);
+          const checkedAt = now().toISOString();
+          const outcome: InfrastructureCheckOutcome = result.ok
+            ? { ok: true, checkedAt }
+            : { ok: false, checkedAt, errorClass: result.errorClass };
+          const store = input.stores.infrastructureChecks;
+          const before = (await store.read({ clientInstanceId })).outcomes[provider.id];
+          await store.recordOutcomes({ clientInstanceId, outcomes: { [provider.id]: outcome } });
+          logProviderCheckChange(input.infrastructure.context.logger, provider, before, outcome);
+        }
+      })
+    ],
+    schedules: [checkSandboxSchedule]
+  };
+}
+
 /** The id of an entry on Instance > Infrastructure: its place in the section. */
 function overviewId(entry: ProviderEntry): string {
   return entry.path.slice("infrastructure.".length);
@@ -178,7 +229,8 @@ function overviewId(entry: ProviderEntry): string {
 /**
  * The ports whose providers the API process uses itself, so it can ask them. The sandbox runs
  * in the workspace command worker, which alone reaches the Docker engine: asked from the API
- * it would read as down on an instance where it works.
+ * it would read as down on an instance where it works. That worker checks it, with
+ * `createSandboxCheckJobs`.
  */
 const PORTS_CHECKED_BY_THE_API: ReadonlySet<ProviderPort> = new Set([
   "secrets",

@@ -90,8 +90,9 @@ export const administration = defineTranslations({
     "infrastructure.checkOk": "Answers",
     "infrastructure.checkFailed": "Does not answer",
     "infrastructure.checkPending": "Not checked yet",
-    "infrastructure.checkNotChecked": "Not checked here",
-    "infrastructure.checkNotCheckedDetail": "The worker that runs it reaches it. The API does not.",
+    "infrastructure.checkNotChecked": "No check reported",
+    "infrastructure.checkNotCheckedDetail":
+      "The worker that runs it checks it. It has not reported a check yet.",
     "infrastructure.checkedAt": "Checked {time}",
     "infrastructure.errorUnreachable": "The provider could not be reached.",
     "infrastructure.errorTimeout": "The provider did not answer in time.",
@@ -258,9 +259,9 @@ export const administration = defineTranslations({
     "infrastructure.checkOk": "Antwortet",
     "infrastructure.checkFailed": "Antwortet nicht",
     "infrastructure.checkPending": "Noch nicht geprüft",
-    "infrastructure.checkNotChecked": "Hier nicht geprüft",
+    "infrastructure.checkNotChecked": "Keine Prüfung gemeldet",
     "infrastructure.checkNotCheckedDetail":
-      "Der Worker, der sie ausführt, erreicht sie. Die API erreicht sie nicht.",
+      "Der Worker, der sie ausführt, prüft sie. Er hat noch keine Prüfung gemeldet.",
     "infrastructure.checkedAt": "Geprüft {time}",
     "infrastructure.errorUnreachable": "Der Anbieter war nicht erreichbar.",
     "infrastructure.errorTimeout": "Der Anbieter hat nicht rechtzeitig geantwortet.",

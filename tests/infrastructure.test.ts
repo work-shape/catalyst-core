@@ -12,6 +12,9 @@ import {
 } from "@vivd-catalyst/chat-server";
 import {
   createInstanceInfrastructure,
+  createJobWorker,
+  createSandbox,
+  createSandboxCheckJobs,
   declaredSecretNames,
   infrastructureOverview
 } from "@vivd-catalyst/client-assembly";
@@ -559,6 +562,37 @@ describe("Instance > Infrastructure: several processes of one instance", () => {
       )
     );
     expect(together.map((response) => response.statusCode).sort()).toEqual([200, 429]);
+  });
+
+  it("shows the sandbox as the worker that runs it found it", async () => {
+    stubProviders();
+    const { server, config, infrastructure, lines } = await createServer();
+    await server.call("instance.infrastructure.check", {}, administrator);
+    const before = byId(read(await server.call("instance.infrastructure.get", {}, administrator)));
+    // The API has no way to ask it, also on "Check now".
+    expect(before.sandbox?.check).toEqual({ status: "not_checked" });
+
+    // The command worker's own job worker, with the check it registers beside its commands.
+    const worker = createJobWorker({
+      stores: server.stores,
+      clientInstanceId: getClientInstanceId(config),
+      logger: recordingLogger().logger,
+      ...createSandboxCheckJobs({
+        config,
+        infrastructure,
+        sandbox: await createSandbox(config, infrastructure),
+        stores: server.stores,
+        now: () => new Date("2026-10-10T08:03:00.000Z")
+      })
+    });
+    await worker.runDue();
+
+    const after = byId(read(await server.call("instance.infrastructure.get", {}, administrator)));
+    expect(after.sandbox?.check).toEqual({ status: "ok", checkedAt: "2026-10-10T08:03:00.000Z" });
+    // The worker wrote its own outcome and left the API's as they were.
+    expect(after.database?.check).toEqual(before.database?.check);
+    expect(after["models.main"]?.check).toEqual(before["models.main"]?.check);
+    expect(JSON.stringify(lines)).not.toContain(MARKER);
   });
 });
 

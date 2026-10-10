@@ -20,6 +20,7 @@ import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
   createSandbox,
+  createSandboxCheckJobs,
   createWorkspacesStore,
   SANDBOX_PATH,
   WORKSPACE_STORE_PATH
@@ -89,21 +90,30 @@ export async function createClientInstanceWorkspaceCommandWorker(
     telemetry
   });
   const workerId = env.WORKSPACE_COMMAND_WORKER_ID;
+  const commandJobs = createWorkspaceCommandJobs({
+    stores: store,
+    runner,
+    workerId,
+    slots: config.executionWorkspaces.worker.concurrency,
+    tempStateCleanupIntervalMs: config.executionWorkspaces.cleanup.tempStateCleanupIntervalMs,
+    hydratedWorkspaceIdleTtlMs: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs,
+    auditRecorder,
+    telemetry
+  });
+  // This process alone reaches the sandbox, so it is the one that checks it.
+  const sandboxCheck = createSandboxCheckJobs({
+    config,
+    infrastructure,
+    sandbox: processExecutor,
+    stores: store
+  });
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,
     // The worker id names this process in the log lines of its jobs.
     logger: workerId ? logger.child({ workerId }) : logger,
-    ...createWorkspaceCommandJobs({
-      stores: store,
-      runner,
-      workerId,
-      slots: config.executionWorkspaces.worker.concurrency,
-      tempStateCleanupIntervalMs: config.executionWorkspaces.cleanup.tempStateCleanupIntervalMs,
-      hydratedWorkspaceIdleTtlMs: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs,
-      auditRecorder,
-      telemetry
-    })
+    handlers: [...commandJobs.handlers, ...sandboxCheck.handlers],
+    schedules: [...commandJobs.schedules, ...sandboxCheck.schedules]
   });
   let stopped: (() => void) | undefined;
   const untilStopped = new Promise<void>((resolve) => {

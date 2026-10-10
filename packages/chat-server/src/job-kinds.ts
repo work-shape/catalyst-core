@@ -123,6 +123,12 @@ export const reconcileUsageJob = defineScheduledKind("usage.reconcile");
 export const checkInfrastructureJob = defineScheduledKind("infrastructure.check", 2 * MINUTE_MS);
 
 /**
+ * Asks the command sandbox. Only the workspace command worker serves it: that process alone
+ * reaches the sandbox, and it writes what it found where the API reads the other outcomes.
+ */
+export const checkSandboxJob = defineScheduledKind("infrastructure.check_sandbox", 2 * MINUTE_MS);
+
+/**
  * How often the instance checks its providers by itself. A run is one cheap call per configured
  * provider, all at once, each ended after `PROVIDER_CHECK_TIMEOUT_MS`: 288 runs a day.
  */
@@ -166,5 +172,10 @@ export const checkInfrastructureSchedule = defineSchedule({
   kind: checkInfrastructureJob,
   every: INFRASTRUCTURE_CHECK_INTERVAL_MS,
   // The Infrastructure page shows no health until the first run after a start is through.
+  dueAtStart: true
+});
+export const checkSandboxSchedule = defineSchedule({
+  kind: checkSandboxJob,
+  every: INFRASTRUCTURE_CHECK_INTERVAL_MS,
   dueAtStart: true
 });
