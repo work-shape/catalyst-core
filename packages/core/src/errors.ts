@@ -57,6 +57,20 @@ export class AppError extends Error {
   }
 }
 
+/**
+ * A model call that a usage limit of the instance refused before it was sent. A caller that
+ * answers for the refusal can say that the limit is the cause.
+ */
+export class ModelUsageLimitReachedError extends AppError {
+  constructor(message: string) {
+    super("FORBIDDEN", message);
+  }
+}
+
+export function isModelUsageLimitReached(error: unknown): error is ModelUsageLimitReachedError {
+  return error instanceof ModelUsageLimitReachedError;
+}
+
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   isAppError,
+  isModelUsageLimitReached,
   type ApprovalCheckConfig,
   type ApprovalCheckResult,
   type ApprovalRequest,
@@ -20,6 +21,8 @@ import {
 // the proposal and names this limit; a warning rule stores the proposal as not evaluated.
 const APPROVAL_CHECK_TIMEOUT_MS = 60_000;
 const APPROVAL_CHECK_TIMEOUT_MESSAGE = `did not answer within ${APPROVAL_CHECK_TIMEOUT_MS / 1000} seconds`;
+const APPROVAL_CHECK_LIMIT_MESSAGE =
+  "could not run because the model usage limit of this instance is reached";
 const verdictSchema = z
   .object({
     violates: z.boolean(),
@@ -115,12 +118,17 @@ export class ApprovalCheckRunner {
           isAppError(error) &&
           error.code === "TIMEOUT" &&
           Date.now() >= ownDeadline.getTime();
+        // The agent reads this reason. A refusal by a usage limit names the limit as the cause,
+        // so nobody looks for a fault in the rule or its model.
+        const cause = isModelUsageLimitReached(error)
+          ? APPROVAL_CHECK_LIMIT_MESSAGE
+          : ranOutOfItsOwnTime
+            ? APPROVAL_CHECK_TIMEOUT_MESSAGE
+            : "could not be evaluated";
         return {
           id: check.id,
           status: "blocked",
-          message: ranOutOfItsOwnTime
-            ? `Check '${check.id}' ${APPROVAL_CHECK_TIMEOUT_MESSAGE}. Try again later.`
-            : `Check '${check.id}' could not be evaluated. Try again later.`
+          message: `Check '${check.id}' ${cause}. Try again later.`
         };
       }
       // No message: the card words an unevaluated check in the reader's language.

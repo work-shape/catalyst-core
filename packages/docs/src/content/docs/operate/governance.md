@@ -65,7 +65,7 @@ Record:
 - correlation id
 - persisted customer billable cost and completeness state
 
-Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped: such a call is recorded with zero tokens and counts toward the daily call limit.
+Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped: such a call is recorded with zero tokens and counts toward the daily call limit. Titles and approval checks count toward the limits of the instance like every other call. A record names no user yet; usage per user comes with a later release.
 
 Use provider-side billing alerts or budgets as an external backstop.
 

@@ -146,7 +146,7 @@ approvalChecks:
 
 Checks run concurrently when a request is created. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the usage budgets and safeguards and leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
 
-`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking rule never lets unchecked content through. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking rule never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
 
 Creation audit metadata contains only check ids and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
 
@@ -224,7 +224,7 @@ webAccess:
 - `webAccess.fetch` enables the `web_fetch` tool and bounds what one fetch may read.
 
 `webAccess.search.mode` and `webAccess.search.managedProvider` were removed. A config that
-still sets either is refused at startup with a message naming the key; delete them.
+still sets either is refused at startup with one message naming every such key; delete them.
 
 An agent with `web_search` also needs a customer price for web search calls of its provider
 under `usage.costs.customer.webSearch`.

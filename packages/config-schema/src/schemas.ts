@@ -468,18 +468,20 @@ const REMOVED_WEB_SEARCH_KEYS = ["mode", "managedProvider"] as const;
 /**
  * The instance switch for web search. The two keys that chose between a provider's own search
  * and a managed one are refused by name: a model's adapter declares whether it can search.
+ * One issue names every removed key that is present, because startup reports the first issue.
  */
 const webSearchConfigSchema = z.preprocess(
   (raw, context) => {
     if (typeof raw === "object" && raw !== null) {
-      for (const key of REMOVED_WEB_SEARCH_KEYS) {
-        if (key in raw) {
-          context.addIssue({
-            code: "custom",
-            path: [key],
-            message: `'webAccess.search.${key}' was removed: whether a model can search the web is declared by its provider, and 'webAccess.search.enabled' is the only switch. Delete the key`
-          });
-        }
+      const present = REMOVED_WEB_SEARCH_KEYS.filter((key) => key in raw).map(
+        (key) => `'webAccess.search.${key}'`
+      );
+      if (present.length > 0) {
+        const several = present.length > 1;
+        context.addIssue({
+          code: "custom",
+          message: `${present.join(" and ")} ${several ? "were" : "was"} removed: whether a model can search the web is declared by its provider, and 'webAccess.search.enabled' is the only switch. Delete the ${several ? "keys" : "key"}`
+        });
       }
     }
     return raw;

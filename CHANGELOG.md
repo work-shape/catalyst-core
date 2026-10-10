@@ -209,6 +209,43 @@ id from config_assets where status = 'deleted')`.
   `modelProvider` and `usageGovernance`. `ModelUsageEventInput` carries an `attribution` in
   place of `conversationId`, `agentRunId` and `agentName`, and `runModelCall` takes the call's
   instance and attribution.
+- **Breaking, release config:** `webAccess.search.mode` and `webAccess.search.managedProvider`
+  are removed. Delete both before the upgrade; `webAccess.search.enabled` is the only switch.
+  A config that still sets one does not start and says: "Client instance config is invalid:
+  webAccess.search: 'webAccess.search.mode' was removed: whether a model can search the web is
+  declared by its provider, and 'webAccess.search.enabled' is the only switch. Delete the key".
+  With both keys the one message names both ("'webAccess.search.mode' and
+  'webAccess.search.managedProvider' were removed: ... Delete the keys"). Whether a model can
+  search is declared by its adapter: an `openai-compatible` entry with `api: responses` can,
+  one on `chat_completions` and the `deterministic` provider cannot. Saving an agent that
+  lists `web_search` on a model that cannot is refused with "Agent '<name>' references
+  web_search but the model of this agent cannot search the web".
+- **Usage:** conversation titles and approval checks are model calls through the gateway and
+  now appear in usage. Each leaves one record, also when it failed, timed out or was refused
+  by the provider, and counts toward the daily call limit and the other limits of the
+  instance. Such a record carries the purpose (`conversation_title`, `guardrail_judge`) where
+  an agent run's record carries the agent name, names the conversation when one caused the
+  call, and names no agent run. No record names a user yet: everything is counted toward the
+  instance's limits, and usage per user comes with a later release. A title that a limit
+  refuses fails only its job and never a user's message. An approval check that a limit
+  refuses blocks under `onFail: block` with the reason "Check '<id>' could not run because
+  the model usage limit of this instance is reached. Try again later."; under `onFail: warn`
+  the request is stored as not evaluated.
+- **Usage:** a title call ends after 60 seconds like an approval check, is recorded once
+  without tokens and frees its job slot and its place in admission. The gateway enforces the
+  deadline of a call itself, also against a provider that ignores cancellation.
+- **Database:** migration `0036_usage_system_calls` drops `NOT NULL` from
+  `model_usage_events.conversation_id` and `agent_run_id`; it moves no data. In the API,
+  `conversationId` and `agentRunId` of a usage event are optional. **Rollback:** the previous
+  release keeps summing usage and admitting calls correctly with such rows, but its Usage
+  page fails for as long as a record of a title or an approval check is among the recent
+  events it lists.
+- **Breaking, extension API:** `ChatServerOptions` takes `modelGateway` in place of
+  `modelProvider`; `ApprovalCheckRunner` takes `{ clientInstanceId, config, modelGateway }`;
+  `reasoningEffortChoiceForBinding` takes the efforts the model's adapter declares as its
+  second argument, and `createSafeConfigView` offers a reasoning effort choice only when it is
+  given `reasoningEffortsOfBinding`. `WebAccessSearchModeConfig`,
+  `OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID` and the gateway's `unsettled` door are gone.
 - **Retention:** a conversation's deletion date counts from the last message a user sent, no
   longer from its creation: accepting a message moves the date to `retention.conversationDays`
   later, in the transaction that stores the message. Opening, reading, renaming, moving, the

@@ -23,6 +23,7 @@ import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-cl
 import { createFailingTestLogger, createTestConfig } from "./support/fixtures";
 import {
   createScriptedInstanceModelGateway,
+  silentTestLogger,
   type ScriptedModelProvider
 } from "./support/model-gateway";
 import { createRetentionOptions } from "./support/retention-harness";
@@ -106,6 +107,105 @@ describe("a conversation title through the gateway", () => {
       source: "provider_reported"
     });
   });
+
+  it("ends a title call at its deadline, records it once and frees its place", async () => {
+    const store = (await createTestInstance()).stores;
+    const converse = async (text: string) => {
+      const conversation = await store.createConversationForTesting({
+        clientInstanceId,
+        createdByUserId: "user-1",
+        createdByExternalUserId: "external-user-1",
+        title: text,
+        retainedUntil: new Date(Date.now() + 30 * DAY_MS).toISOString()
+      });
+      await store.conversations.appendMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        role: "user",
+        text
+      });
+      return conversation;
+    };
+    const unanswered = await converse("what is our refund policy");
+    const answered = await converse("please summarize the release notes");
+    const enqueueTitle = (conversationId: string) =>
+      store.jobs.enqueue(
+        generateConversationTitleJob,
+        { conversationId, userId: "user-1" },
+        { clientInstanceId, dedupeKey: conversationId }
+      );
+
+    let attempts = 0;
+    let deadline: Date | undefined;
+    let called: () => void = () => undefined;
+    const reachedProvider = new Promise<void>((resolve) => {
+      called = resolve;
+    });
+    const worker = createJobWorker({
+      stores: store,
+      clientInstanceId,
+      logger: silentTestLogger,
+      ...createChatServerJobs(
+        createRetentionOptions({
+          clientInstanceId,
+          store,
+          // The second call is admitted only when the first no longer holds its place.
+          modelCallsPerDay: 2,
+          modelProvider: {
+            // The first call is never answered and ignores the stop; later ones are answered.
+            complete(_request, context) {
+              attempts += 1;
+              if (attempts > 1) return Promise.resolve(answer("Release Notes Summary"));
+              deadline = context.deadline;
+              called();
+              return new Promise<ModelCompletion>(() => {});
+            }
+          }
+        })
+      )
+    });
+    await enqueueTitle(unanswered.id);
+    useFakeClockBesidePostgres();
+
+    let ended = false;
+    const pass = worker.runDue().finally(() => {
+      ended = true;
+    });
+    await settleOnFakeClock(reachedProvider);
+    if (!deadline) throw new Error("The title call carried no deadline");
+
+    // One millisecond before the deadline the call is still open, however long the test waits.
+    await vi.advanceTimersByTimeAsync(deadline.getTime() - Date.now() - 1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(Date.now()).toBe(deadline.getTime() - 1);
+    expect(ended).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await settleOnFakeClock(pass);
+    vi.useRealTimers();
+
+    expect(attempts).toBe(1);
+    const afterDeadline = await store.usage.listModelUsageEvents({ clientInstanceId });
+    expect(afterDeadline).toHaveLength(1);
+    expectSystemEvent(afterDeadline[0], {
+      agentName: "conversation_title",
+      conversationId: unanswered.id,
+      totalTokens: 0,
+      source: "estimated"
+    });
+    await expect(
+      store.conversations.getConversation(clientInstanceId, unanswered.id)
+    ).resolves.toMatchObject({ title: unanswered.title });
+
+    await enqueueTitle(answered.id);
+    await worker.runDue();
+    await worker.stop();
+
+    await expect(
+      store.conversations.getConversation(clientInstanceId, answered.id)
+    ).resolves.toMatchObject({ title: "Release Notes Summary" });
+    expect(await store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(2);
+  });
 });
 
 describe("an approval check through the gateway", () => {
@@ -143,7 +243,10 @@ describe("an approval check through the gateway", () => {
   };
   const proposal = { kind: "fake", summary: "A proposal", payload: { newText: "New text" } };
 
-  async function judge(modelProvider: ScriptedModelProvider) {
+  async function judge(
+    modelProvider: ScriptedModelProvider,
+    safeguards: { modelCallsPerDay?: number } = {}
+  ) {
     const config = createTestConfig({
       modelBindings: [
         { id: "judge", providerId: "local", model: "cheap-check", agentSelectable: false }
@@ -160,7 +263,7 @@ describe("an approval check through the gateway", () => {
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
-          safeguards: {}
+          safeguards
         })
       })
     });
@@ -198,6 +301,32 @@ describe("an approval check through the gateway", () => {
     expect(events).toHaveLength(1);
     expectSystemEvent(events[0], { agentName: "guardrail_judge", totalTokens: 42 });
     expect(events[0]).not.toHaveProperty("conversationId");
+  });
+
+  it("blocks and names the limit when the instance's call limit refuses the check", async () => {
+    let attempts = 0;
+    const f = await judge(
+      {
+        complete: async () => {
+          attempts += 1;
+          return answer('{"violates":false,"reason":"Nothing personal."}');
+        }
+      },
+      { modelCallsPerDay: 1 }
+    );
+    await f.runner.run(handler, { ...proposal, origin }, context);
+
+    await expect(f.runner.run(handler, { ...proposal, origin }, context)).resolves.toEqual([
+      {
+        id: rule.id,
+        status: "blocked",
+        message: `Check '${rule.id}' could not run because the model usage limit of this instance is reached. Try again later.`
+      }
+    ]);
+
+    // The refused check was not sent and records nothing.
+    expect(attempts).toBe(1);
+    expect(await f.events()).toHaveLength(1);
   });
 
   it("settles a check that ran out of time once, without tokens", async () => {

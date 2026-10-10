@@ -206,4 +206,26 @@ describe("web search as a capability of the model", () => {
       });
     }
   );
+
+  it("names every removed key in the one message startup reports", () => {
+    expect(() =>
+      parseClientInstanceConfig({
+        version: 1,
+        clientInstance: {
+          id: "web-search-capability-test",
+          displayName: "Web Search Capability Test",
+          environment: "development"
+        },
+        auth: { development: { enabled: true } },
+        infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
+        webAccess: {
+          enabled: true,
+          search: { enabled: true, mode: "native_or_managed", managedProvider: "none" }
+        },
+        tools: []
+      })
+    ).toThrow(
+      "Client instance config is invalid: webAccess.search: 'webAccess.search.mode' and 'webAccess.search.managedProvider' were removed: whether a model can search the web is declared by its provider, and 'webAccess.search.enabled' is the only switch. Delete the keys"
+    );
+  });
 });

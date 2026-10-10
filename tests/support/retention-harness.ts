@@ -58,6 +58,8 @@ export function createRetentionOptions(input: {
   authenticate?: (userId: string | undefined) => AuthenticatedUser;
   /** What answers the server's own model calls. Only the tests of such a call need it. */
   modelProvider?: ScriptedModelProvider;
+  /** The instance's daily model call limit. Left out, there is none. */
+  modelCallsPerDay?: number;
 }): ChatServerOptions {
   const { store } = input;
   const config = parseClientInstanceConfig({
@@ -79,6 +81,9 @@ export function createRetentionOptions(input: {
       allowUserDelete: true
     },
     infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
+    ...(input.modelCallsPerDay
+      ? { usage: { safeguards: { modelCallsPerDay: input.modelCallsPerDay } } }
+      : {}),
     tools: []
   });
   return completeServerOptions(

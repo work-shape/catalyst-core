@@ -87,6 +87,9 @@ export interface StartedConversationMessageRun {
 }
 
 const MAX_TITLE_SOURCE_CHARS = 800;
+// Protects a title slot and a place in admission from a model that never answers. Past it the
+// title call ends, is recorded once without tokens, and the conversation keeps its first title.
+const CONVERSATION_TITLE_TIMEOUT_MS = 60_000;
 // How long a repeated run start waits for the first one with the same idempotency key, and how
 // often it looks. A caller that waits longer gets 409 "Run start command is still pending".
 const IDEMPOTENCY_WAIT_MS = 10_000;
@@ -924,7 +927,8 @@ export class ConversationWorkflow {
         },
         clientInstanceId: this.options.clientInstanceId,
         correlationId: input.correlationId,
-        signal: control.signal
+        signal: control.signal,
+        deadline: new Date(Date.now() + CONVERSATION_TITLE_TIMEOUT_MS)
       });
       const title = normalizeGeneratedConversationTitle(completion.text);
       if (!isUsableGeneratedTitle(title) || title === conversation.title) {

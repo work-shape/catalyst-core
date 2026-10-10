@@ -1,5 +1,6 @@
 import {
   AppError,
+  ModelUsageLimitReachedError,
   type ClientInstanceId,
   type ModelAttribution,
   type ModelUsageEvent,
@@ -325,7 +326,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
         this.safeguards.tokensPerMonth &&
         currentMonth.totalTokens >= this.safeguards.tokensPerMonth
       ) {
-        throw new AppError("FORBIDDEN", "Monthly model token safeguard has been reached");
+        throw new ModelUsageLimitReachedError("Monthly model token safeguard has been reached");
       }
 
       if (this.budget.monthlySpendLimit) {
@@ -415,6 +416,8 @@ export type UsageCostEvent = Pick<
 /**
  * Where a usage event says its call came from. A call the product made for itself has no run;
  * until the event has a column for the purpose, the purpose stands where the agent's name does.
+ * No event names a user yet: every call counts toward the limits of the instance, and usage
+ * per user comes with S3-09.
  */
 function usageEventOrigin(
   attribution: ModelAttribution
@@ -778,10 +781,10 @@ function assertDailySafeguards(
     safeguards.modelCallsPerDay &&
     summary.modelCallCount + inFlightCalls >= safeguards.modelCallsPerDay
   ) {
-    throw new AppError("FORBIDDEN", "Daily model call safeguard has been reached");
+    throw new ModelUsageLimitReachedError("Daily model call safeguard has been reached");
   }
   if (safeguards.tokensPerDay && summary.totalTokens >= safeguards.tokensPerDay) {
-    throw new AppError("FORBIDDEN", "Daily model token safeguard has been reached");
+    throw new ModelUsageLimitReachedError("Daily model token safeguard has been reached");
   }
 }
 
@@ -807,7 +810,7 @@ function assertSpendBudget(
     0
   );
   if (total * costSafetyMultiplier >= toMicros(limit)) {
-    throw new AppError("FORBIDDEN", `${label} model spend budget has been reached`);
+    throw new ModelUsageLimitReachedError(`${label} model spend budget has been reached`);
   }
 }
 
