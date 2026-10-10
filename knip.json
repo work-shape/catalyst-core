@@ -16,6 +16,11 @@
       ],
       "vite": false
     },
+    "packages/app-build": {
+      "entry": ["src/index.ts", "src/build-process.ts"],
+      "project": ["src/**/*.ts"],
+      "vite": false
+    },
     "packages/ui": {
       "entry": ["src/index.ts", "src/theme/index.ts", "src/gallery/index.tsx"],
       "project": ["src/**/*.{ts,tsx}"],

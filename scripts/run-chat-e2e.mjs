@@ -23,6 +23,7 @@ const requiredBuilds = [
   ["packages/data-source", "build"],
   ["packages/document-execution", "build"],
   ["packages/tool-execution", "build"],
+  ["packages/app-build", "build"],
   ["packages/postgres-store", "build"],
   ["packages/agent-runtime", "build"],
   ["packages/chat-server", "build"],
