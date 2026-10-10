@@ -58,6 +58,18 @@ jobs:
       - name: Packages are fit to publish
         timeout-minutes: 5
         run: pnpm release:check --skip-build
+  # Builds the API and UI images of the demo client in the layout of a deployment's build
+  # workspace, where only the client and what it depends on is installed. A package that uses
+  # something only this repository's root declares passes `pnpm check` and fails here.
+  # Locally it is `pnpm check:images`.
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: bash scripts/check-image-build.sh
   # The whole browser suite, beside the job above. It is not part of `pnpm check`, because it
   # needs a browser and ports of its own; locally it is `pnpm test:e2e`.
   browser:

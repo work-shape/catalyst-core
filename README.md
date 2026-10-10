@@ -52,11 +52,17 @@ pnpm test
 pnpm build
 pnpm check
 pnpm check:local
+pnpm check:images
 pnpm test:e2e
 pnpm test:e2e:chat-state
 ```
 
 `pnpm check:local` is `pnpm check` with a throwaway Postgres 17 container of its own; it needs Docker.
+
+`pnpm check:images` builds the API and UI images of the demo client in the layout of a deployment's
+build workspace, where only the client and what it depends on is installed, and keeps no image. It
+needs Docker and is its own job in the hosted check. Run it after changing a package manifest, a
+`tsconfig.json` or `docker/vivd-client.Dockerfile`.
 
 `pnpm test:e2e` uses a deterministic fixture config so it does not require an OpenAI key.
 It runs the standalone chat Playwright suite through `scripts/run-chat-e2e.mjs`, which builds

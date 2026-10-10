@@ -8,6 +8,7 @@
     "build:demo": "pnpm -r --filter './packages/*' build && pnpm --filter @vivd-catalyst/demo build",
     "check": "pnpm build && pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:openapi && pnpm check:contract && pnpm check:migrations && pnpm test && pnpm test:upgrade",
     "check:local": "node scripts/check-local.mjs",
+    "check:images": "bash scripts/check-image-build.sh",
     "check:contract": "pnpm --filter @vivd-catalyst/api-contract check:contract",
     "check:openapi": "pnpm --filter @vivd-catalyst/api-contract check:openapi",
     "generate:openapi": "pnpm --filter @vivd-catalyst/api-contract generate:openapi",
