@@ -91,6 +91,7 @@ export default defineConfig({
           items: [
             "operate/instance-brief",
             "operate/deployment",
+            "operate/capacity-and-limits",
             "operate/auth-and-embedding",
             "operate/governance",
             "operate/rights-and-namespaces",
