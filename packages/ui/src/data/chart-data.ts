@@ -1,3 +1,4 @@
+import { isDevelopment } from "../env";
 import type { ChartSpec, ChartType } from "./chart-engine";
 
 /** One row of data. A value that is no number, such as a numeric text, is read as one where it can be. */
@@ -169,16 +170,4 @@ function numberFormatter(
     }
   }
   return String;
-}
-
-// The library has no Node types. A bundler replaces the expression; without one there is no
-// `process`, and the chart behaves as in production.
-declare const process: { env: { NODE_ENV?: string } };
-
-function isDevelopment(): boolean {
-  try {
-    return process.env.NODE_ENV !== "production";
-  } catch {
-    return false;
-  }
 }

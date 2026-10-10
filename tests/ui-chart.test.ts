@@ -490,7 +490,8 @@ describe("chart boundary", () => {
     expect(component.match(/^import .* from "\.\/chart-engine";$/gmu)).toEqual([
       'import type { ChartHandle, ChartPalette, ChartSpec } from "./chart-engine";'
     ]);
-    expect(imports(source("chart-data.ts"))).toEqual(["./chart-engine"]);
+    // Beside the engine's types, the one module of the package that reads the environment.
+    expect(imports(source("chart-data.ts"))).toEqual(["../env", "./chart-engine"]);
     expect(source("chart-data.ts")).toContain("import type { ChartSpec, ChartType } from");
     expect(component).toContain('import("./chart-engine")');
     expect(imports(engine).filter((name) => !name.startsWith("echarts/"))).toEqual([]);
