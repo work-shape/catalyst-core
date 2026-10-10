@@ -11,9 +11,6 @@
 // names taken from the lists, so nothing in the output was markup in the input unless the
 // list allows it. An element that is not listed is left out with everything inside it.
 
-const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 
 /** Allowed on every element. `style` is allowed with the check of `isInertCss`. */
@@ -121,11 +118,16 @@ function escapeAttribute(value: string): string {
   return escapeText(value).replaceAll('"', "&quot;");
 }
 
+/**
+ * The attributes an element may carry besides the global ones, or undefined for an element
+ * that is not written. The lists are read by what the parser made of the element: an HTML
+ * element, an SVG element, or neither, such as MathML.
+ */
 function allowedAttributes(element: Element): readonly string[] | undefined {
-  if (element.namespaceURI === HTML_NAMESPACE) {
+  if (element instanceof HTMLElement) {
     return HTML_ELEMENTS.get(element.localName);
   }
-  if (element.namespaceURI === SVG_NAMESPACE) {
+  if (element instanceof SVGElement) {
     const own = SVG_ELEMENTS.get(element.localName);
     return own ? [...own, ...SVG_PAINT_ATTRIBUTES] : undefined;
   }
@@ -133,7 +135,7 @@ function allowedAttributes(element: Element): readonly string[] | undefined {
 }
 
 function isAllowedValue(element: Element, name: string, value: string): boolean {
-  if (element.namespaceURI === SVG_NAMESPACE || name === "style") {
+  if (element instanceof SVGElement || name === "style") {
     return isInertCss(value);
   }
   return element.localName !== "img" || name !== "src" || isEmbeddedImage(value);
@@ -154,7 +156,7 @@ function writeNode(node: Node): string {
   if (node.nodeType === TEXT_NODE) {
     return escapeText(node.nodeValue ?? "");
   }
-  if (node.nodeType !== ELEMENT_NODE || !(node instanceof Element)) {
+  if (!(node instanceof Element)) {
     return "";
   }
   const allowed = allowedAttributes(node);
@@ -163,12 +165,12 @@ function writeNode(node: Node): string {
   }
   const name = node.localName;
   const open = `<${name}${writeAttributes(node, allowed)}>`;
-  if (node.namespaceURI === HTML_NAMESPACE && name === "style") {
+  if (node instanceof HTMLStyleElement) {
     // The one element whose text is written as it is: the parser reads it as CSS, not markup.
     const css = node.textContent;
     return isInertCss(css) && !css.includes("<") ? `${open}${css}</style>` : "";
   }
-  if (node.namespaceURI === HTML_NAMESPACE && VOID_ELEMENTS.has(name)) {
+  if (node instanceof HTMLElement && VOID_ELEMENTS.has(name)) {
     return open;
   }
   return `${open}${writeNodes(node.childNodes)}</${name}>`;
