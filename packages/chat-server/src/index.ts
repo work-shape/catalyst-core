@@ -52,11 +52,8 @@ export {
   expireConversationsJob,
   generateConversationTitleJob,
   pruneAuditEventsJob,
-  pruneJobsJob,
-  recoverAgentRunsJob
+  pruneJobsJob
 } from "./job-kinds";
-export { RUN_RECOVERY_ERROR, RunRecoveryWatchdog, recoverStaleRun } from "./run-recovery";
-export type { RunRecoverySweepSummary } from "./run-recovery";
 export {
   ExecutionWorkspaceCleanupWorkflow,
   cleanupExecutionWorkspaceForConversation
@@ -65,8 +62,7 @@ export type { ExecutionWorkspaceCleanupRunSummary } from "./workspace-cleanup";
 export type {
   ChatServerOptions,
   ConversationRetentionOptions,
-  ExecutionWorkspaceCleanupJobOptions,
-  RunRecoveryOptions
+  ExecutionWorkspaceCleanupJobOptions
 } from "./types";
 export { loadViewRuntimeFiles } from "./view-runtime";
 export { createInProcessRateLimiter } from "./http/rate-limit";

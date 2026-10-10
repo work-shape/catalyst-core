@@ -12,6 +12,7 @@ export type {
 } from "./capabilities";
 export {
   createClientInstanceApp,
+  type AgentRunWorkerPlacement,
   type ClientInstanceApp,
   type CreateClientInstanceAppInput
 } from "./app";

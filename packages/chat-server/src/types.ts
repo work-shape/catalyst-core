@@ -37,11 +37,6 @@ export interface ConversationRetentionOptions {
   now?: () => Date;
 }
 
-export interface RunRecoveryOptions {
-  staleActiveRunMs?: number;
-  batchSize?: number;
-}
-
 export interface ExecutionWorkspaceCleanupJobOptions {
   batchSize?: number;
   /** Milliseconds between two runs of the `execution_workspace.cleanup` job. */

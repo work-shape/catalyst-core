@@ -385,8 +385,7 @@ export const claimNextWorkspaceCommand = () => "select id from c for update skip
 export const recoverStaleWorkspaceCommands = () => "select id from c for update skip locked";
 `,
   "packages/agent-runtime/package.json": JSON.stringify({ name: "@fixture/agent-runtime" }),
-  // Two timers in this method are a named exemption. The third is the fifth occurrence. The
-  // same timer under another name is not the exempted one.
+  // The run lease left the list last, with the list itself: every timer here is a finding.
   "packages/agent-runtime/src/agent-run-worker.ts": `export class AgentRunWorker {
   runClaimed() {
     return [
@@ -731,6 +730,8 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
         "catalyst/job-executor-boundary packages/postgres-store/src/postgres-execution-workspace-operations.ts",
         "catalyst/job-executor-boundary packages/postgres-store/src/postgres-execution-workspace-operations.ts",
+        "catalyst/job-executor-boundary packages/agent-runtime/src/agent-run-worker.ts",
+        "catalyst/job-executor-boundary packages/agent-runtime/src/agent-run-worker.ts",
         "catalyst/job-executor-boundary packages/agent-runtime/src/agent-run-worker.ts",
         "catalyst/job-executor-boundary packages/agent-runtime/src/agent-run-worker.ts",
         "catalyst/workspace-command-boundary packages/tool-execution/src/workspace-tools/queue-member.ts",

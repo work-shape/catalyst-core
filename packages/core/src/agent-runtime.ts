@@ -9,12 +9,13 @@ import type {
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 import type { ManagedFileRef } from "./files";
-import type { AttachmentManifest } from "./files";
+import type { AttachmentManifest, SubjectRowClaim } from "./files";
 import type { AuthPrincipal, AuthScope, DelegatedActor, RuntimeCallContext } from "./identity";
 import type { LocaleCode } from "./localization";
 import type { ReasoningEffortConfig } from "./config";
 import type { ToolExecutionResult } from "./tool-execution";
 import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
+import type { JobId } from "./jobs";
 
 export interface StartAgentRunInput {
   agentName: string;
@@ -328,11 +329,6 @@ export interface AgentRuntime {
     context: RuntimeCallContext
   ): Promise<void>;
   cancel(runId: AgentRunId, reason: string | undefined, context: RuntimeCallContext): Promise<void>;
-  /**
-   * Whether this process holds the state of the run. Only a runtime that keeps runs in its own
-   * process implements it; a runtime whose runs live in the store with their workers does not.
-   */
-  holdsRun?(runId: AgentRunId): boolean;
 }
 
 export interface CreateAgentRunInput {
@@ -395,29 +391,35 @@ export interface UpdateAgentRunStatusInput {
   error?: AgentRunError;
 }
 
-export interface RecoverStaleAgentRunInput {
-  clientInstanceId: ClientInstanceId;
-  runId: AgentRunId;
-  ownerUserId: string;
-  staleUpdatedBefore: ISODateString;
-  recoveredAt: ISODateString;
-  error: AgentRunError;
+/**
+ * The hold of one attempt of an `agent_run.execute` job on its run: the fence every write of
+ * the run carries. A write is stored only while the job is running under this token.
+ */
+export interface AgentRunJobLease {
+  jobId: JobId;
+  leaseToken: string;
 }
 
-export interface ClaimAgentRunInput {
-  clientInstanceId: ClientInstanceId;
-  workerId: string;
-  leaseToken: string;
-  now: ISODateString;
-  leaseExpiresAt: ISODateString;
-}
-
-export interface HeartbeatAgentRunInput {
+export interface ClaimAgentRunForJobInput {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
-  leaseToken: string;
-  heartbeatAt: ISODateString;
-  leaseExpiresAt: ISODateString;
+  lease: AgentRunJobLease;
+  /** The lease copied onto the row lasts this long from now. */
+  leaseMs: number;
+}
+
+/**
+ * `claimed`: the run was queued and is this attempt's now. `finished`: the run has ended.
+ * `held`: a worker of the previous release holds the run under a live lease. `started`: the
+ * run was started before and nothing holds it; it must not be executed again.
+ */
+export type AgentRunJobClaim = SubjectRowClaim<AgentRun> | { status: "started" };
+
+export interface RenewAgentRunJobLeaseInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  lease: AgentRunJobLease;
+  leaseMs: number;
 }
 
 export interface RequestAgentRunCancellationInput {
@@ -430,42 +432,35 @@ export interface RequestAgentRunCancellationInput {
 export interface AppendClaimedRunObservationInput {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
-  leaseToken: string;
+  lease: AgentRunJobLease;
   event: AgentRuntimeEvent;
-}
-
-export interface RecoverExpiredAgentRunsInput {
-  clientInstanceId: ClientInstanceId;
-  leaseExpiredBefore: ISODateString;
-  recoveredAt: ISODateString;
-  error: AgentRunError;
-  limit: number;
 }
 
 export interface AssertClaimedAgentRunInput {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
-  leaseToken: string;
+  lease: AgentRunJobLease;
 }
 
 export interface AppendClaimedAgentRunMessageInput {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
-  leaseToken: string;
+  lease: AgentRunJobLease;
   message:
     ({ role: "assistant" } & AppendAssistantMessageInput) | ({ role: "tool" } & CreateMessageInput);
 }
 
-export type RecoverStaleAgentRunResult =
-  | {
-      status: "recovered";
-      run: AgentRun;
-      observation?: RunObservation;
-    }
-  | {
-      status: "not_recovered";
-      run?: AgentRun;
-    };
+export interface FailLostAgentRunInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  error: AgentRunError;
+}
+
+/** A run in progress without a job, as the adoption enqueues it. */
+export interface AgentRunWithoutJob {
+  id: AgentRunId;
+  correlationId: string;
+}
 
 export interface ClaimRunStartCommandInput {
   clientInstanceId: ClientInstanceId;
@@ -522,14 +517,16 @@ export interface AgentRunStore {
     conversationId: ConversationId;
   }): Promise<AgentRun | undefined>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
-  listStaleActiveAgentRuns(input: {
-    clientInstanceId: ClientInstanceId;
-    staleUpdatedBefore: ISODateString;
-    limit: number;
-  }): Promise<AgentRun[]>;
-  recoverStaleAgentRun(input: RecoverStaleAgentRunInput): Promise<RecoverStaleAgentRunResult>;
-  claimNextAgentRun(input: ClaimAgentRunInput): Promise<AgentRun | undefined>;
-  heartbeatAgentRun(input: HeartbeatAgentRunInput): Promise<AgentRun>;
+  /**
+   * The first step of an `agent_run.execute` job: moves a queued run to running under the
+   * job's lease. A run is executed only by the attempt this resolves `claimed` for.
+   */
+  claimAgentRunForJob(input: ClaimAgentRunForJobInput): Promise<AgentRunJobClaim>;
+  /**
+   * Extends the copy of the job's lease on the row, so a worker of the previous release sees
+   * the run as held. False when the row no longer carries the token.
+   */
+  renewAgentRunJobLease(input: RenewAgentRunJobLeaseInput): Promise<boolean>;
   requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun>;
   /**
    * The runs that have not ended, a cancelling one included: those a user started, or those
@@ -540,15 +537,36 @@ export interface AgentRunStore {
       { ownerUserId: string } | { collaborationWorkspaceId: CollaborationWorkspaceId }
     )
   ): Promise<AgentRun[]>;
+  /**
+   * Stores the next event of the run. Throws `JobLeaseLostError` when the job is no longer
+   * running under the lease, and `CONFLICT` when the run has ended or the sequence is not the
+   * next one. Nothing is stored in either case.
+   */
   appendClaimedRunObservation(input: AppendClaimedRunObservationInput): Promise<RunObservation>;
+  /** Throws `JobLeaseLostError` when the job is no longer running under the lease. */
   assertClaimedAgentRun(input: AssertClaimedAgentRunInput): Promise<AgentRun>;
   /**
-   * Stores a message of the run under the Conversation row lock. Refused when the Conversation
-   * is no longer active, or when the user who started the run or the workspace of the
-   * Conversation is being deleted: nothing is written back after an erasure began.
+   * Stores a message of the run under the job's lease and the Conversation row lock. Refused
+   * with `JobLeaseLostError` after lease loss, and when the Conversation is no longer active
+   * or the user who started the run or the workspace of the Conversation is being deleted:
+   * nothing is written back after an erasure began.
    */
   appendClaimedAgentRunMessage(input: AppendClaimedAgentRunMessageInput): Promise<ChatMessage>;
-  recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]>;
+  /**
+   * Ends a run that was started and whose worker is gone: failed with `error` and a
+   * `run_failed` event. A queued run was never started and is left for a new job; an ended
+   * run is left alone. Resolves with the run when it was failed here.
+   */
+  failLostAgentRun(input: FailLostAgentRunInput): Promise<AgentRun | undefined>;
+  /**
+   * The runs in progress that have no queued or running job of `jobKind`, oldest first. The
+   * adoption enqueues a job for each.
+   */
+  listAgentRunsWithoutJob(input: {
+    clientInstanceId: ClientInstanceId;
+    jobKind: string;
+    limit: number;
+  }): Promise<AgentRunWithoutJob[]>;
 }
 
 export interface AppendRunObservationInput {

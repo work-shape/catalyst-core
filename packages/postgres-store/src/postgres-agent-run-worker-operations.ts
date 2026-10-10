@@ -1,23 +1,27 @@
-import { and, eq, gt, inArray, lt, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
+  JobLeaseLostError,
   type AgentRun,
-  type AgentRunId,
+  type AgentRunJobClaim,
+  type AgentRunJobLease,
   type AgentRunStore,
+  type AgentRunWithoutJob,
   type AgentRuntimeEvent,
   type AppendClaimedAgentRunMessageInput,
   type AppendClaimedRunObservationInput,
   type AssertClaimedAgentRunInput,
-  type ClaimAgentRunInput,
+  type ClaimAgentRunForJobInput,
   type ClientInstanceId,
-  type HeartbeatAgentRunInput,
-  type RecoverExpiredAgentRunsInput,
+  type FailLostAgentRunInput,
+  type RenewAgentRunJobLeaseInput,
   type RequestAgentRunCancellationInput,
   type RunObservation,
   asAgentRunId,
   asConversationId,
   asUserId,
-  createPlatformId
+  createPlatformId,
+  subjectRowLeaseOwnerId
 } from "@vivd-catalyst/core";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import type { PostgresConnection } from "./postgres-database";
@@ -27,62 +31,78 @@ import {
   agentRuns,
   conversations,
   messages,
-  modelProviderContinuations
+  modelProviderContinuations,
+  platformJobs
 } from "./schema";
 
-export async function claimNextAgentRun(
-  db: PostgresConnection,
-  input: ClaimAgentRunInput
-): Promise<AgentRun | undefined> {
-  return db.transaction(async (tx) => {
-    const rows = (await tx.execute(drizzleSql<{ id: string }>`
-      with candidate as (
-        select id
-        from agent_runs
-        where client_instance_id = ${input.clientInstanceId}
-          and status = 'queued'
-        order by started_at asc, id asc
-        limit 1
-        for update skip locked
-      )
-      update agent_runs ar
-      set status = 'running',
-          lease_owner = ${input.workerId},
-          lease_token = ${input.leaseToken},
-          lease_expires_at = ${input.leaseExpiresAt}::timestamptz,
-          heartbeat_at = ${input.now}::timestamptz,
-          updated_at = ${input.now}::timestamptz
-      from candidate
-      where ar.id = candidate.id
-      returning ar.id
-    `)) as unknown as Array<{ id: string }>;
-    const runId = rows[0]?.id;
-    if (!runId) return undefined;
-    const [row] = await tx
-      .select()
-      .from(agentRuns)
-      .where(and(eq(agentRuns.clientInstanceId, input.clientInstanceId), eq(agentRuns.id, runId)))
-      .limit(1);
-    return row ? mapAgentRun(row) : undefined;
-  });
-}
+const STARTED_STATUSES: AgentRun["status"][] = ["running", "waiting_for_permission", "cancelling"];
 
-export async function heartbeatAgentRun(
+/**
+ * A run is executed only by the attempt whose claim moves the row from queued to running here.
+ * A row that is already past queued was started by someone: a worker of the previous release
+ * that still holds it, or a worker that is gone.
+ */
+export async function claimAgentRunForJob(
   db: PostgresConnection,
-  input: HeartbeatAgentRunInput
-): Promise<AgentRun> {
-  const heartbeatAt = new Date(input.heartbeatAt);
-  const [row] = await db
+  input: ClaimAgentRunForJobInput
+): Promise<AgentRunJobClaim> {
+  const ofRow = and(
+    eq(agentRuns.clientInstanceId, input.clientInstanceId),
+    eq(agentRuns.id, input.runId)
+  );
+  const leaseOwnerId = subjectRowLeaseOwnerId(input.lease.jobId);
+  const [claimed] = await db
     .update(agentRuns)
     .set({
-      heartbeatAt,
-      leaseExpiresAt: new Date(input.leaseExpiresAt),
-      updatedAt: heartbeatAt
+      status: "running",
+      leaseOwner: leaseOwnerId,
+      leaseToken: input.lease.leaseToken,
+      leaseExpiresAt: leaseExpiry(input.leaseMs),
+      heartbeatAt: drizzleSql`now()`,
+      updatedAt: drizzleSql`now()`
     })
-    .where(activeLeaseWhere(input))
+    .where(and(ofRow, eq(agentRuns.status, "queued")))
     .returning();
-  if (!row) throw new AppError("CONFLICT", "Agent run lease is no longer active");
-  return mapAgentRun(row);
+  if (claimed) return { status: "claimed", row: mapAgentRun(claimed) };
+  const [current] = await db
+    .select({
+      status: agentRuns.status,
+      heldByAnother: drizzleSql<boolean>`(
+        ${agentRuns.leaseExpiresAt} is not null
+        and ${agentRuns.leaseExpiresAt} > now()
+        and ${agentRuns.leaseOwner} is distinct from ${leaseOwnerId}
+      )`
+    })
+    .from(agentRuns)
+    .where(ofRow)
+    .limit(1);
+  if (!current || !STARTED_STATUSES.includes(current.status)) return { status: "finished" };
+  return current.heldByAnother ? { status: "held" } : { status: "started" };
+}
+
+export async function renewAgentRunJobLease(
+  db: PostgresConnection,
+  input: RenewAgentRunJobLeaseInput
+): Promise<boolean> {
+  const rows = await db
+    .update(agentRuns)
+    // `updated_at` moves too, as the heartbeat of the previous release moved it: the API of
+    // that release ends a run in progress whose row stood still for half an hour.
+    .set({
+      leaseExpiresAt: leaseExpiry(input.leaseMs),
+      heartbeatAt: drizzleSql`now()`,
+      updatedAt: drizzleSql`now()`
+    })
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, input.clientInstanceId),
+        eq(agentRuns.id, input.runId),
+        eq(agentRuns.leaseToken, input.lease.leaseToken),
+        inArray(agentRuns.status, STARTED_STATUSES)
+      )
+    )
+    .returning({ id: agentRuns.id });
+  return rows.length > 0;
 }
 
 export async function requestAgentRunCancellation(
@@ -176,6 +196,7 @@ export async function appendClaimedRunObservation(
     throw new AppError("VALIDATION_FAILED", "Run observation belongs to another agent run");
   }
   return db.transaction(async (tx) => {
+    await requireJobLease(tx, input.lease);
     const terminal = terminalStatusPatch(input.event);
     const [run] = await tx
       .update(agentRuns)
@@ -187,9 +208,24 @@ export async function appendClaimedRunObservation(
           : {}),
         ...terminal
       })
-      .where(and(eventLeaseWhere(input), eq(agentRuns.lastSequence, input.event.sequence - 1)))
+      .where(
+        and(
+          claimedRunWhere(input),
+          eq(agentRuns.lastSequence, input.event.sequence - 1),
+          // A run that was asked to cancel ends as cancelled and as nothing else. What it
+          // still writes on its way there is stored.
+          endsOrSuspendsRun(input.event)
+            ? inArray(agentRuns.status, ["running", "waiting_for_permission"])
+            : undefined
+        )
+      )
       .returning();
-    if (!run) throw new AppError("CONFLICT", "Agent run lease or observation sequence is stale");
+    if (!run) {
+      throw new AppError(
+        "CONFLICT",
+        "Agent run has ended, was asked to cancel, or its sequence is stale"
+      );
+    }
 
     const [row] = await tx
       .insert(agentRunObservations)
@@ -212,9 +248,12 @@ export async function assertClaimedAgentRun(
   db: PostgresConnection,
   input: AssertClaimedAgentRunInput
 ): Promise<AgentRun> {
-  const [row] = await db.select().from(agentRuns).where(effectLeaseWhere(input)).limit(1);
-  if (!row) throw new AppError("CONFLICT", "Agent run lease is no longer active");
-  return mapAgentRun(row);
+  return db.transaction(async (tx) => {
+    await requireJobLease(tx, input.lease);
+    const [row] = await tx.select().from(agentRuns).where(claimedRunWhere(input)).limit(1);
+    if (!row) throw new AppError("CONFLICT", "Agent run has ended");
+    return mapAgentRun(row);
+  });
 }
 
 const RUN_IN_PROGRESS_STATUSES: AgentRun["status"][] = [
@@ -261,13 +300,14 @@ export async function appendClaimedAgentRunMessage(
   input: AppendClaimedAgentRunMessageInput
 ) {
   return db.transaction(async (tx) => {
+    await requireJobLease(tx, input.lease);
     const [run] = await tx
       .select()
       .from(agentRuns)
-      .where(effectLeaseWhere(input))
+      .where(claimedRunWhere(input))
       .limit(1)
       .for("update");
-    if (!run) throw new AppError("CONFLICT", "Agent run lease is no longer active");
+    if (!run) throw new AppError("CONFLICT", "Agent run has ended");
     if (input.message.conversationId !== run.conversationId) {
       throw new AppError("CONFLICT", "Agent run message belongs to another conversation");
     }
@@ -333,105 +373,124 @@ export async function appendClaimedAgentRunMessage(
   });
 }
 
-export async function recoverExpiredAgentRuns(
+export async function failLostAgentRun(
   db: PostgresConnection,
-  input: RecoverExpiredAgentRunsInput
-): Promise<AgentRun[]> {
-  if (input.limit <= 0) return [];
+  input: FailLostAgentRunInput
+): Promise<AgentRun | undefined> {
   return db.transaction(async (tx) => {
-    const staleRows = (await tx.execute(drizzleSql<{ id: string }>`
-      select id
-      from agent_runs
-      where client_instance_id = ${input.clientInstanceId}
-        and status in ('running', 'waiting_for_permission', 'cancelling')
-        and lease_expires_at is not null
-        and lease_expires_at < ${input.leaseExpiredBefore}::timestamptz
-      order by lease_expires_at asc, id asc
-      limit ${input.limit}
-      for update skip locked
-    `)) as unknown as Array<{ id: string }>;
-    const recovered: AgentRun[] = [];
-    for (const stale of staleRows) {
-      const [row] = await tx
-        .update(agentRuns)
-        .set({
-          status: "failed",
-          failedAt: new Date(input.recoveredAt),
-          updatedAt: new Date(input.recoveredAt),
-          lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`,
-          error: input.error,
-          leaseOwner: null,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          heartbeatAt: null
-        })
-        .where(
-          and(
-            eq(agentRuns.clientInstanceId, input.clientInstanceId),
-            eq(agentRuns.id, stale.id),
-            drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission', 'cancelling')`
-          )
+    const [row] = await tx
+      .update(agentRuns)
+      .set({
+        status: "failed",
+        failedAt: drizzleSql`now()`,
+        updatedAt: drizzleSql`now()`,
+        lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`,
+        error: input.error,
+        leaseOwner: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        heartbeatAt: null
+      })
+      .where(
+        and(
+          eq(agentRuns.clientInstanceId, input.clientInstanceId),
+          eq(agentRuns.id, input.runId),
+          inArray(agentRuns.status, STARTED_STATUSES)
         )
-        .returning();
-      if (!row) continue;
-      const event = {
-        type: "run_failed" as const,
-        runId: asAgentRunId(row.id),
-        sequence: row.lastSequence,
-        createdAt: input.recoveredAt,
-        error: input.error
-      };
-      await tx.insert(agentRunObservations).values({
-        clientInstanceId: row.clientInstanceId,
-        runId: row.id,
-        conversationId: row.conversationId,
-        ownerUserId: row.ownerUserId,
-        sequence: event.sequence,
-        type: event.type,
-        payload: event,
-        createdAt: new Date(input.recoveredAt)
-      });
-      recovered.push(mapAgentRun(row));
-    }
-    return recovered;
+      )
+      .returning();
+    if (!row?.failedAt) return undefined;
+    const event = {
+      type: "run_failed" as const,
+      runId: asAgentRunId(row.id),
+      sequence: row.lastSequence,
+      createdAt: row.failedAt.toISOString(),
+      error: input.error
+    };
+    await tx.insert(agentRunObservations).values({
+      clientInstanceId: row.clientInstanceId,
+      runId: row.id,
+      conversationId: row.conversationId,
+      ownerUserId: row.ownerUserId,
+      sequence: event.sequence,
+      type: event.type,
+      payload: event,
+      createdAt: row.failedAt
+    });
+    return mapAgentRun(row);
   });
 }
 
-function activeLeaseWhere(input: {
+export async function listAgentRunsWithoutJob(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; jobKind: string; limit: number }
+): Promise<AgentRunWithoutJob[]> {
+  const rows = await db
+    .select({ id: agentRuns.id, correlationId: agentRuns.correlationId })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, input.clientInstanceId),
+        inArray(agentRuns.status, RUN_IN_PROGRESS_STATUSES),
+        drizzleSql`not exists (
+          select 1 from platform_jobs job
+          where job.client_instance_id = ${agentRuns.clientInstanceId}
+            and job.kind = ${input.jobKind}
+            and job.dedupe_key = ${input.jobKind} || ':' || ${agentRuns.id}
+            and job.status in ('queued', 'running')
+        )`
+      )
+    )
+    .orderBy(asc(agentRuns.startedAt), asc(agentRuns.id))
+    .limit(input.limit);
+  return rows.map((row) => ({ id: asAgentRunId(row.id), correlationId: row.correlationId }));
+}
+
+/**
+ * The fence of every write of a run. The job row is read under a share lock, so the executor
+ * cannot bury or release the job before this transaction ends: what the transaction stores
+ * was stored while the lease was this attempt's.
+ */
+async function requireJobLease(tx: PostgresConnection, lease: AgentRunJobLease): Promise<void> {
+  const [held] = await tx
+    .select({ id: platformJobs.id })
+    .from(platformJobs)
+    .where(
+      and(
+        eq(platformJobs.id, lease.jobId),
+        eq(platformJobs.leaseToken, lease.leaseToken),
+        eq(platformJobs.status, "running"),
+        gt(platformJobs.leaseExpiresAt, drizzleSql`clock_timestamp()`)
+      )
+    )
+    .for("share");
+  if (!held) throw new JobLeaseLostError(lease.jobId);
+}
+
+/** The run is this attempt's and has not ended. A cancelling run still takes its last writes. */
+function claimedRunWhere(input: {
   clientInstanceId: ClientInstanceId;
-  runId: AgentRunId;
-  leaseToken: string;
+  runId: AgentRun["id"];
+  lease: AgentRunJobLease;
 }) {
   return and(
     eq(agentRuns.clientInstanceId, input.clientInstanceId),
     eq(agentRuns.id, input.runId),
-    eq(agentRuns.leaseToken, input.leaseToken),
-    gt(agentRuns.leaseExpiresAt, drizzleSql`now()`),
-    drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission', 'cancelling')`
+    eq(agentRuns.leaseToken, input.lease.leaseToken),
+    inArray(agentRuns.status, STARTED_STATUSES)
   );
 }
 
-function eventLeaseWhere(input: AppendClaimedRunObservationInput) {
-  return and(
-    activeLeaseWhere(input),
-    input.event.type === "run_cancelled"
-      ? drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission', 'cancelling')`
-      : drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission')`
+function endsOrSuspendsRun(event: AgentRuntimeEvent): boolean {
+  return (
+    event.type === "run_completed" ||
+    event.type === "run_failed" ||
+    event.type === "tool_permission_requested"
   );
 }
 
-function effectLeaseWhere(input: {
-  clientInstanceId: ClientInstanceId;
-  runId: AgentRunId;
-  leaseToken: string;
-}) {
-  return and(
-    eq(agentRuns.clientInstanceId, input.clientInstanceId),
-    eq(agentRuns.id, input.runId),
-    eq(agentRuns.leaseToken, input.leaseToken),
-    gt(agentRuns.leaseExpiresAt, drizzleSql`now()`),
-    drizzleSql`${agentRuns.status} in ('running', 'waiting_for_permission')`
-  );
+function leaseExpiry(leaseMs: number) {
+  return drizzleSql<Date>`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
 }
 
 function terminalStatusPatch(event: AgentRuntimeEvent): Partial<typeof agentRuns.$inferInsert> {

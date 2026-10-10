@@ -95,8 +95,8 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
 
 const clientSource = await readDeploymentFile("src/client.ts");
 assert(
-  clientSource.includes('agentRuntimeMode: "worker"'),
-  "src/client.ts: operated API must dispatch durable worker runs"
+  clientSource.includes('agentRunWorker: "separate"'),
+  "src/client.ts: the operated API must leave agent runs to the agent-run-worker service"
 );
 
 const deployScript = await readRemoteDeployScript();

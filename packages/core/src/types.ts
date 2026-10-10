@@ -17,6 +17,7 @@ export * from "./usage";
 export * from "./jobs";
 export * from "./job-handlers";
 export * from "./artifact-preview-jobs";
+export * from "./agent-run-jobs";
 export * from "./platform-store";
 export * from "./config";
 export * from "./asset-kinds";

@@ -4,7 +4,6 @@ import { createTypeScriptImportResolver } from "eslint-import-resolver-typescrip
 import { importX } from "eslint-plugin-import-x";
 import tseslint from "typescript-eslint";
 import { envBoundaryRule } from "./env-boundary-rule.mjs";
-import { leaseExemptions, processLocalTimers } from "./job-executor-exemptions.mjs";
 import { moduleSnapshotBoundaryRule } from "./module-snapshot-rule.mjs";
 import { modelGatewayRules } from "./model-gateway-rules.mjs";
 
@@ -26,6 +25,22 @@ import { modelGatewayRules } from "./model-gateway-rules.mjs";
  */
 
 const root = process.cwd();
+
+/**
+ * Interval timers that are not jobs and stay: each keeps state of one process, which a job in
+ * the database could not reach. `within` is the function that holds the timer and `count` how
+ * many it holds. An entry needs the reason; a timer that does work for the instance is a
+ * schedule on the job executor.
+ * @type {{ file: string, within: string, count: number, why: string }[]}
+ */
+const processLocalTimers = [
+  {
+    file: "packages/chat-server/src/http/rate-limit.ts",
+    within: "count",
+    count: 1,
+    why: "removes the rate limiter's run-out counters from this process's memory"
+  }
+];
 
 /** @type {Map<string, WorkspacePackage>} */
 const workspacePackages = new Map();
@@ -629,9 +644,8 @@ const plugin = {
             for (const node of found) {
               const within = enclosingFunctionName(context, node);
               const allowed =
-                [...leaseExemptions, ...processLocalTimers].find(
-                  (entry) => entry.file === file && entry.within === within
-                )?.count ?? 0;
+                processLocalTimers.find((entry) => entry.file === file && entry.within === within)
+                  ?.count ?? 0;
               const count = (seen.get(within ?? "") ?? 0) + 1;
               seen.set(within ?? "", count);
               if (count > allowed) report(node);

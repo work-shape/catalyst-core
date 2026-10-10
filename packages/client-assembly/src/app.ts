@@ -1,7 +1,7 @@
 import { createLogger } from "./logger";
 import {
-  LocalAgentRuntime,
   StoreBackedAgentRuntime,
+  createAgentRunSignal,
   type WorkerLocalAgentRuntimeOptions
 } from "@vivd-catalyst/agent-runtime";
 import {
@@ -77,6 +77,7 @@ import type {
 } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
+import { createClientInstanceAgentRunJobs } from "./agent-run-jobs";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
@@ -98,8 +99,16 @@ export interface CreateClientInstanceAppInput {
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
   allowedOrigins?: string | string[];
-  agentRuntimeMode?: "local" | "worker";
+  agentRunWorker?: AgentRunWorkerPlacement;
 }
+
+/**
+ * Where the Agent Runs of the instance execute. `in_process`, the default: this process serves
+ * `agent_run.execute` beside the API, which is all a single-process instance needs.
+ * `separate`: only the worker processes started with `runAgentRunWorker` serve it, and the API
+ * executes no run.
+ */
+export type AgentRunWorkerPlacement = "in_process" | "separate";
 
 /** Listens on `HOST` and `PORT` of the instance's environment unless told otherwise. */
 export interface ClientInstanceApp extends HttpRuntime {
@@ -107,6 +116,11 @@ export interface ClientInstanceApp extends HttpRuntime {
   readonly store: PlatformStores;
   /** Serves the API process's job kinds. `listen` starts it and `close` stops it. */
   readonly jobs: JobWorker;
+  /**
+   * Serves `agent_run.execute` when the runs execute in this process. `listen` starts it and
+   * `close` stops it. Missing when the instance has worker processes of its own for them.
+   */
+  readonly agentRunJobs?: JobWorker;
 }
 
 export async function createClientInstanceApp(
@@ -125,18 +139,15 @@ export async function createClientInstanceApp(
     workspaceObjectStore,
     auditRecorder,
     usageGovernance,
-    modelGateway,
-    localAgentRuntimeOptions
+    modelGateway
   } = execution;
-  const agentRuntime =
-    input.agentRuntimeMode === "worker"
-      ? new StoreBackedAgentRuntime({ store: store.agentRuns })
-      : new LocalAgentRuntime({
-          ...localAgentRuntimeOptions,
-          conversationHistory: store.conversations,
-          agentRunStore: store.agentRuns,
-          runObservationStore: store.agentRuns
-        });
+  // A run is a row and a job. The API reads its events from the store; a worker executes it.
+  // Where that worker is in this process, the two tell each other and need not poll.
+  const inProcess =
+    (input.agentRunWorker ?? "in_process") === "in_process"
+      ? { observations: createAgentRunSignal(), cancellations: createAgentRunSignal() }
+      : undefined;
+  const agentRuntime = new StoreBackedAgentRuntime({ store: store.agentRuns, ...inProcess });
   const { authAdapter, standaloneAuth, sessionToken, serviceAccessToken, allowedOrigins } =
     await createClientInstanceAuth({
       config,
@@ -195,11 +206,24 @@ export async function createClientInstanceApp(
     modules: execution.modules,
     ...createChatServerJobs(serverOptions)
   });
+  // A worker of its own, so the runs keep their slots and stop apart from the API's jobs.
+  const agentRunJobs = inProcess
+    ? createJobWorker({
+        stores: store,
+        clientInstanceId,
+        logger,
+        ...createClientInstanceAgentRunJobs(execution, {
+          onObservation: (runId) => inProcess.observations.notify(runId),
+          cancellations: inProcess.cancellations
+        })
+      })
+    : undefined;
 
   return {
     config,
     store,
     jobs,
+    agentRunJobs,
     // The server's own function, unwrapped.
     fetch: server.fetch,
     async listen(listenInput = {}) {
@@ -208,11 +232,13 @@ export async function createClientInstanceApp(
         port: Number(listenInput.port ?? env.PORT ?? 4100)
       });
       jobs.start();
+      agentRunJobs?.start();
       return baseUrl;
     },
     async close() {
-      // The worker goes first: it gives its jobs back while the database is still open.
-      await jobs.stop();
+      // The workers go first: they give their jobs back while the database is still open. A
+      // run that is executing here is ended as interrupted.
+      await Promise.all([jobs.stop(), agentRunJobs?.stop()]);
       await server.close();
       await standaloneAuth?.close();
       await execution.close();
@@ -221,7 +247,7 @@ export async function createClientInstanceApp(
 }
 
 export async function createClientInstanceExecutionAssembly(
-  input: Omit<CreateClientInstanceAppInput, "agentRuntimeMode" | "allowedOrigins">
+  input: Omit<CreateClientInstanceAppInput, "agentRunWorker" | "allowedOrigins">
 ) {
   const logger = createLogger();
   const env = readClientInstanceEnv(input.env);

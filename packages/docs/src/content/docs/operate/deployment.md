@@ -43,6 +43,35 @@ change, sign in from two networks and check that the API's request log shows two
 The counters live in the API process, so an instance runs exactly one API process. The numbers
 are set in the release config, see [Rate limits](/configure/release-config/#rate-limits).
 
+## Agent Runs
+
+An Agent Run is a row and a job of the kind `agent_run.execute`. The API writes both in the
+transaction that accepts the message and never executes a run itself. A job worker claims the
+job, the job claims the run, and every event and message of the run is stored under the lease
+of that job.
+
+Where the worker runs is set in the client assembly with `agentRunWorker`:
+
+- `"in_process"` (default): the API process serves the runs with a second job worker. Closing
+  the API process ends its runs as interrupted at once.
+- `"separate"`: only the processes started with `runAgentRunWorker` serve the runs. On SIGTERM
+  such a process takes no new run and gives its runs `AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS` to
+  end, 15 minutes unless set. A second signal ends the drain.
+
+One process executes `AGENT_RUN_WORKER_CONCURRENCY` runs at once, 8 unless set. The runs of an
+instance that execute at once are that number times its worker processes; further runs wait
+queued in the order they were accepted. A run is never executed twice:
+
+- The worker of a run was killed: after the lease time of 90 seconds the next pass of any
+  Agent Run worker fails the run with `AGENT_RUN_WORKER_LOST`, the reply is shown as
+  interrupted and the conversation takes the next message. Until then the reply stands still.
+- The worker was stopped and the run did not end within the drain time: the run fails with
+  `AGENT_RUN_RUNTIME_INTERRUPTED`.
+- A run stored no event for 30 minutes: it fails as interrupted.
+- No Agent Run worker is running: accepted runs wait queued until one starts.
+
+A stop request reaches the worker within about a second.
+
 ## Deployment Flow
 
 Separate publishing from deployment:

@@ -1,521 +1,495 @@
-import { randomUUID } from "node:crypto";
 import {
+  AGENT_RUN_ADOPTION_BATCH_SIZE,
+  AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS,
+  AGENT_RUN_INTERRUPTED_ERROR,
+  AGENT_RUN_WORKER_LOST_ERROR,
   AppError,
+  JobLeaseLostError,
+  adoptAgentRunsJob,
+  adoptAgentRunsSchedule,
+  agentRunJobOptions,
+  asAgentRunId,
+  defineJobHandler,
+  executeAgentRunJob,
+  getSubjectUserId,
   type AgentRun,
-  type AgentRunStore,
+  type AgentRunError,
+  type AgentRunId,
+  type AgentRunJobLease,
   type AgentRuntimeEvent,
   type AuthenticatedUser,
   type ClientInstanceId,
-  type ConversationHistoryReader,
   type ConversationHistoryStore,
+  type JobControl,
+  type JobSchedule,
+  type PlatformStores,
+  type RegisteredJobHandler,
   type RuntimeCallContext,
-  type StartAgentRunInput,
-  getSubjectUserId
+  type StartAgentRunInput
 } from "@vivd-catalyst/core";
+import { setTimeout as delay } from "node:timers/promises";
 import { readUserAttachmentManifest } from "./model-context-projection";
 import { LocalAgentRuntime, type LocalAgentRuntimeOptions } from "./local-agent-runtime";
+import type { AgentRunSignal } from "./store-backed-agent-runtime";
 
-const DEFAULT_POLL_INTERVAL_MS = 1000;
-const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
-const DEFAULT_HEARTBEAT_INTERVAL_MS = 5000;
-const DEFAULT_CANCELLATION_POLL_INTERVAL_MS = 1000;
-const DEFAULT_STALE_RECOVERY_INTERVAL_MS = 30000;
-const DEFAULT_STALE_RECOVERY_LIMIT = 50;
+// A run that stored no event for this long is ended as interrupted, so a model or a tool that
+// never answers cannot hold its conversation closed. Every stored event starts the time anew.
+export const AGENT_RUN_IDLE_LIMIT_MS = 30 * 60 * 1000;
 
-export type AgentRunWorkerStore = Pick<
-  AgentRunStore,
-  | "appendClaimedRunObservation"
-  | "appendClaimedAgentRunMessage"
-  | "assertClaimedAgentRun"
-  | "claimNextAgentRun"
-  | "getAgentRun"
-  | "heartbeatAgentRun"
-  | "recoverExpiredAgentRuns"
->;
+/** One run in execution: its events in order, and the way to cancel it. */
+export interface AgentRunExecution {
+  events: AsyncIterable<AgentRuntimeEvent>;
+  /**
+   * Ends the run as cancelled. What the model wrote so far is stored as the assistant message
+   * of the run, and the events end with `run_cancelled`.
+   */
+  cancel(reason: string | undefined): Promise<void>;
+}
 
 export type ExecuteAgentRun = (
   input: StartAgentRunInput,
   context: RuntimeCallContext,
   control: AgentRunExecutionControl
-) => AsyncIterable<AgentRuntimeEvent> | Promise<AsyncIterable<AgentRuntimeEvent>>;
+) => Promise<AgentRunExecution>;
 
 export interface AgentRunExecutionControl {
+  /** Rejects when the job no longer holds the run. Called before every effect of the run. */
   assertLease(): Promise<void>;
+  /** The conversation of the run. Its writes carry the lease of the job. */
   conversationHistory: ConversationHistoryStore;
 }
 
-export interface AgentRunWorkerOptions {
+export interface AgentRunJobsOptions {
   clientInstanceId: ClientInstanceId;
-  store: AgentRunWorkerStore;
-  conversationHistory: ConversationHistoryReader;
+  stores: PlatformStores;
   loadCurrentUser(run: AgentRun): Promise<AuthenticatedUser>;
   execute: ExecuteAgentRun;
-  workerId?: string;
-  concurrency?: number;
-  pollIntervalMs?: number;
-  leaseDurationMs?: number;
-  heartbeatIntervalMs?: number;
-  cancellationPollIntervalMs?: number;
-  staleRecoveryIntervalMs?: number;
-  staleRecoveryLimit?: number;
-  now?: () => string;
+  /** How many runs this process executes at once. */
+  slots: number;
+  /**
+   * Called after an event of a run was stored. A process that serves the API too wakes its
+   * observers with it; a worker process of its own has no use for it.
+   */
+  onObservation?(runId: AgentRunId): void;
+  /**
+   * Told by an API in this process when a run was asked to cancel, so the request is found at
+   * once. Without it, and across processes, it is found at the next look at the row.
+   */
+  cancellations?: AgentRunSignal;
 }
 
-export interface AgentRunWorkerStopInput {
-  interruptActive?: boolean;
-  drainTimeoutMs?: number;
-  reason?: string;
+/** The job kinds the Agent Run worker serves, with their schedule. */
+export interface AgentRunJobs {
+  handlers: RegisteredJobHandler[];
+  schedules: JobSchedule[];
 }
 
-export interface AgentRunWorkerRunOnceResult {
-  status: "claimed" | "idle";
-  run?: AgentRun;
-}
-
-export const AGENT_RUN_INTERRUPTED_ERROR = {
-  code: "AGENT_RUN_RUNTIME_INTERRUPTED",
-  message: "Agent run lease expired before the worker completed it",
-  category: "runtime_interrupted" as const
-};
-
-export class AgentRunWorker {
-  private readonly workerId: string;
-  private readonly concurrency: number;
-  private readonly pollIntervalMs: number;
-  private readonly leaseDurationMs: number;
-  private readonly heartbeatIntervalMs: number;
-  private readonly cancellationPollIntervalMs: number;
-  private readonly staleRecoveryIntervalMs: number;
-  private readonly staleRecoveryLimit: number;
-  private readonly now: () => string;
-  private readonly activeControllers = new Set<AbortController>();
-  private readonly interruptedControllers = new WeakSet<AbortController>();
-  private stopping = false;
-  private loopPromise?: Promise<void>;
-  private lastStaleRecoveryMs = 0;
-
-  constructor(private readonly options: AgentRunWorkerOptions) {
-    this.workerId = options.workerId ?? `agent-run-worker-${randomUUID()}`;
-    this.concurrency = options.concurrency ?? 1;
-    this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
-    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
-    this.cancellationPollIntervalMs =
-      options.cancellationPollIntervalMs ?? DEFAULT_CANCELLATION_POLL_INTERVAL_MS;
-    this.staleRecoveryIntervalMs =
-      options.staleRecoveryIntervalMs ?? DEFAULT_STALE_RECOVERY_INTERVAL_MS;
-    this.staleRecoveryLimit = options.staleRecoveryLimit ?? DEFAULT_STALE_RECOVERY_LIMIT;
-    this.now = options.now ?? (() => new Date().toISOString());
-  }
-
-  async runOnce(input: { recoverExpired?: boolean } = {}): Promise<AgentRunWorkerRunOnceResult> {
-    if (input.recoverExpired ?? true) await this.recoverExpiredRuns();
-    const now = this.now();
-    const claimed = await this.options.store.claimNextAgentRun({
-      clientInstanceId: this.options.clientInstanceId,
-      workerId: this.workerId,
-      leaseToken: randomUUID(),
-      now,
-      leaseExpiresAt: addMilliseconds(now, this.leaseDurationMs)
-    });
-    if (!claimed) return { status: "idle" };
-    return { status: "claimed", run: await this.runClaimed(claimed) };
-  }
-
-  recoverExpiredRuns(): Promise<AgentRun[]> {
-    const now = this.now();
-    this.lastStaleRecoveryMs = Date.now();
-    return this.options.store.recoverExpiredAgentRuns({
-      clientInstanceId: this.options.clientInstanceId,
-      leaseExpiredBefore: now,
-      recoveredAt: now,
-      error: AGENT_RUN_INTERRUPTED_ERROR,
-      limit: this.staleRecoveryLimit
-    });
-  }
-
-  start(): Promise<void> {
-    if (!this.loopPromise) {
-      this.stopping = false;
-      this.loopPromise = Promise.all(
-        Array.from({ length: this.concurrency }, () => this.runLoop())
-      ).then(() => undefined);
-    }
-    return this.loopPromise;
-  }
-
-  runUntilStopped(): Promise<void> {
-    return this.start();
-  }
-
-  // Stops claiming new runs. Active runs finish on their own unless interruptActive is set
-  // or drainTimeoutMs elapses first; then they end as runtime_interrupted.
-  async stop(input: AgentRunWorkerStopInput = {}): Promise<void> {
-    this.stopping = true;
-    const interrupt = () => {
-      for (const controller of this.activeControllers) {
-        this.interruptedControllers.add(controller);
-        controller.abort(input.reason ?? "Agent run worker is stopping");
-      }
-    };
-    let drainTimer: ReturnType<typeof setTimeout> | undefined;
-    if (input.interruptActive) interrupt();
-    else if (input.drainTimeoutMs !== undefined) {
-      drainTimer = setTimeout(interrupt, input.drainTimeoutMs);
-    }
-    try {
-      await this.loopPromise;
-    } finally {
-      clearTimeout(drainTimer);
-    }
-    this.loopPromise = undefined;
-  }
-
-  private async runLoop(): Promise<void> {
-    while (!this.stopping) {
-      if (Date.now() - this.lastStaleRecoveryMs >= this.staleRecoveryIntervalMs) {
-        await this.recoverExpiredRuns();
-      }
-      const result = await this.runOnce({ recoverExpired: false });
-      if (result.status === "idle") await sleep(this.pollIntervalMs);
-    }
-  }
-
-  private async runClaimed(run: AgentRun): Promise<AgentRun> {
-    const leaseToken = run.leaseToken;
-    if (!leaseToken) throw new AppError("INTERNAL", "Claimed agent run has no lease token");
-    const controller = new AbortController();
-    this.activeControllers.add(controller);
-    let cancellationRequested = run.status === "cancelling";
-    let cancellationReason = run.cancellationReason;
-    let leaseLost = false;
-    let terminalWritten = false;
-    let heartbeatInFlight = false;
-    let cancellationInFlight = false;
-
-    const heartbeatTimer = setInterval(() => {
-      if (heartbeatInFlight || controller.signal.aborted) return;
-      heartbeatInFlight = true;
-      const heartbeatAt = this.now();
-      this.options.store
-        .heartbeatAgentRun({
-          clientInstanceId: run.clientInstanceId,
-          runId: run.id,
-          leaseToken,
-          heartbeatAt,
-          leaseExpiresAt: addMilliseconds(heartbeatAt, this.leaseDurationMs)
-        })
-        .catch(() => {
-          leaseLost = true;
-          controller.abort("Agent run lease was lost");
-        })
-        .finally(() => {
-          heartbeatInFlight = false;
-        });
-    }, this.heartbeatIntervalMs);
-    const cancellationTimer = setInterval(() => {
-      if (cancellationInFlight || controller.signal.aborted) return;
-      cancellationInFlight = true;
-      this.options.store
-        .getAgentRun({ clientInstanceId: run.clientInstanceId, runId: run.id })
-        .then((latest) => {
-          if (latest?.status === "cancelling") {
-            cancellationRequested = true;
-            cancellationReason = latest.cancellationReason;
-            controller.abort(latest.cancellationReason ?? "Agent run was cancelled");
+/**
+ * The one way a run executes: a worker claims its `agent_run.execute` job, the job claims the
+ * run row, and every write of the run carries the lease of the job.
+ */
+export function createAgentRunJobs(options: AgentRunJobsOptions): AgentRunJobs {
+  const { clientInstanceId, stores } = options;
+  return {
+    handlers: [
+      defineJobHandler({
+        kind: executeAgentRunJob,
+        slots: options.slots,
+        async run(job, control) {
+          const runId = asAgentRunId(job.payload.runId);
+          const lease: AgentRunJobLease = { jobId: job.id, leaseToken: control.leaseToken };
+          const claim = await control.transaction(async (txStores) => {
+            const claimed = await txStores.agentRuns.claimAgentRunForJob({
+              clientInstanceId,
+              runId,
+              lease,
+              leaseMs: executeAgentRunJob.leaseMs
+            });
+            // Someone started this run and is gone. It called models and tools already, so it
+            // is ended here and never executed again.
+            if (claimed.status === "started") await failLostRun(txStores, clientInstanceId, runId);
+            return claimed;
+          });
+          if (claim.status !== "claimed") {
+            // Transition release only: a worker of the previous release holds the run. This
+            // job ends without waiting, so it keeps no slot, and the adoption gives the run a
+            // job again for as long as it is in progress. Once that worker is done the next
+            // job finds the run ended, and once its lease ran out the next job ends the run.
+            if (claim.status === "held")
+              control.logger.info({ runId }, "Agent run is held by a worker of the last release");
+            else options.onObservation?.(runId);
+            return;
           }
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          cancellationInFlight = false;
-        });
-    }, this.cancellationPollIntervalMs);
+          const run = claim.row;
+          await executeClaimedRun(options, run, lease, control);
+        },
+        async onHeartbeat(job, mirror, txStores) {
+          await txStores.agentRuns.renewAgentRunJobLease({
+            clientInstanceId,
+            runId: asAgentRunId(job.payload.runId),
+            lease: { jobId: job.id, leaseToken: mirror.leaseToken },
+            leaseMs: executeAgentRunJob.leaseMs
+          });
+        },
+        // The worker of the run was killed or lost its lease: the run ends in the transaction
+        // that marks its job dead.
+        async onExhausted(job, txStores) {
+          await failLostRun(txStores, clientInstanceId, asAgentRunId(job.payload.runId));
+        }
+      }),
+      defineJobHandler({
+        kind: adoptAgentRunsJob,
+        slots: 1,
+        async run(_job, control) {
+          // An enqueue under a live dedupe key inserts nothing, so a tick may run twice.
+          const runs = await stores.agentRuns.listAgentRunsWithoutJob({
+            clientInstanceId,
+            jobKind: executeAgentRunJob.kind,
+            limit: AGENT_RUN_ADOPTION_BATCH_SIZE
+          });
+          for (const run of runs) {
+            await stores.jobs.enqueue(
+              executeAgentRunJob,
+              { runId: run.id },
+              agentRunJobOptions({ clientInstanceId, ...run })
+            );
+          }
+          if (runs.length > 0) control.logger.info({ runs: runs.length }, "Adopted agent runs");
+        }
+      })
+    ],
+    schedules: [adoptAgentRunsSchedule]
+  };
+}
 
+async function failLostRun(
+  stores: PlatformStores,
+  clientInstanceId: ClientInstanceId,
+  runId: AgentRunId
+): Promise<void> {
+  const failed = await stores.agentRuns.failLostAgentRun({
+    clientInstanceId,
+    runId,
+    error: AGENT_RUN_WORKER_LOST_ERROR
+  });
+  if (!failed) return;
+  await stores.audit.appendAuditEvent({
+    clientInstanceId,
+    type: "agent_run.recovered",
+    status: "failed",
+    subject: failed.id,
+    correlationId: failed.correlationId,
+    metadata: {
+      conversationId: failed.conversationId,
+      errorCategory: AGENT_RUN_WORKER_LOST_ERROR.category,
+      errorCode: AGENT_RUN_WORKER_LOST_ERROR.code
+    }
+  });
+}
+
+/** Why the execution of a run was stopped from outside. */
+type StopCause = "lease_lost" | "worker_stopping" | "idle";
+
+async function executeClaimedRun(
+  options: AgentRunJobsOptions,
+  run: AgentRun,
+  lease: AgentRunJobLease,
+  control: JobControl
+): Promise<void> {
+  const store = options.stores.agentRuns;
+  const ofRun = { clientInstanceId: run.clientInstanceId, runId: run.id };
+  const now = () => new Date().toISOString();
+  const controller = new AbortController();
+  let stopCause: StopCause | undefined;
+  let cancellation: { reason?: string } | undefined;
+  let cancelExecution: ((reason: string | undefined) => Promise<void>) | undefined;
+  let cancelSent = false;
+  let terminalWritten = false;
+
+  const stop = (cause: StopCause, reason: string) => {
+    // The first cause stands, but a lost lease outranks the others: nothing more is stored.
+    if (stopCause === undefined || cause === "lease_lost") stopCause = cause;
+    controller.abort(reason);
+  };
+  const onJobAborted = () => {
+    if (control.signal.reason instanceof JobLeaseLostError) {
+      stop("lease_lost", "Agent run lease was lost");
+    } else {
+      stop("worker_stopping", "Agent run worker is stopping");
+    }
+  };
+  if (control.signal.aborted) onJobAborted();
+  else control.signal.addEventListener("abort", onJobAborted, { once: true });
+
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const restartIdleTimer = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () => stop("idle", "Agent run stored no event within the idle limit"),
+      AGENT_RUN_IDLE_LIMIT_MS
+    );
+    idleTimer.unref();
+  };
+  restartIdleTimer();
+
+  /** Every write of the run goes through here: the first refusal stops the run. */
+  const fenced = async <Result>(write: () => Promise<Result>): Promise<Result> => {
     try {
-      const input = await this.reconstructInput(run);
-      const user = await this.options.loadCurrentUser(run);
+      return await write();
+    } catch (error) {
+      if (error instanceof JobLeaseLostError) stop("lease_lost", "Agent run lease was lost");
+      throw error;
+    }
+  };
+  const storeEvent = (event: AgentRuntimeEvent) =>
+    fenced(() => store.appendClaimedRunObservation({ ...ofRun, lease, event }));
+  const append = async (event: AgentRuntimeEvent): Promise<void> => {
+    try {
+      await storeEvent(event);
+    } catch (error) {
+      // The store refuses to end a run as completed or failed once it was asked to cancel.
+      // The request came between the last look at the row and this event: the run ends as
+      // cancelled, with what it stored so far.
+      if (event.type !== "run_completed" && event.type !== "run_failed") throw error;
+      if (error instanceof JobLeaseLostError) throw error;
+      const latest = await store.getAgentRun(ofRun);
+      if (latest?.status !== "cancelling") throw error;
+      cancellation ??= { reason: latest.cancellationReason };
+      await storeEvent(cancelledEvent(run, latest.lastSequence + 1, now(), cancellation.reason));
+    }
+    if (isTerminalEvent(event)) terminalWritten = true;
+    restartIdleTimer();
+    options.onObservation?.(run.id);
+  };
+
+  const sendCancel = () => {
+    if (!cancellation || !cancelExecution || cancelSent) return;
+    cancelSent = true;
+    cancelExecution(cancellation.reason).catch(() => {
+      // The execution could not end itself as cancelled; the run is ended as cancelled below.
+      controller.abort(cancellation?.reason ?? "Agent run was cancelled");
+    });
+  };
+  // Looks for a cancellation request on the row until one is found or the execution ended.
+  const watchForCancellation = async (): Promise<void> => {
+    while (!cancellation) {
+      const told = options.cancellations?.subscribe(run.id);
+      try {
+        await Promise.race([
+          delay(AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS, undefined, { signal: controller.signal }),
+          ...(told ? [told.wait] : [])
+        ]);
+      } catch {
+        return;
+      } finally {
+        told?.stop();
+      }
+      if (controller.signal.aborted) return;
+      const latest = await store.getAgentRun(ofRun).catch(() => undefined);
+      if (latest?.status !== "cancelling") continue;
+      cancellation = { reason: latest.cancellationReason };
+      sendCancel();
+    }
+  };
+  watchForCancellation().catch(() => undefined);
+
+  /** The event that ends a run whose execution did not end it, or ended it as aborted. */
+  const closingEvent = (sequence: number, failure: AgentRunError): AgentRuntimeEvent => {
+    if (cancellation) return cancelledEvent(run, sequence, now(), cancellation.reason);
+    if (stopCause === "worker_stopping")
+      return failedEvent(run, sequence, now(), AGENT_RUN_INTERRUPTED_ERROR);
+    if (stopCause === "idle") return failedEvent(run, sequence, now(), AGENT_RUN_IDLE_ERROR);
+    return failedEvent(run, sequence, now(), failure);
+  };
+  const closeRun = async (failure: AgentRunError): Promise<void> => {
+    const latest = await store.getAgentRun(ofRun);
+    if (!latest) return;
+    if (ENDED_STATUSES.has(latest.status)) {
+      // Someone else ended the run, a worker of the previous release for one. Nothing is left
+      // to store.
+      terminalWritten = true;
+      return;
+    }
+    if (latest.status === "cancelling") {
+      cancellation ??= { reason: latest.cancellationReason };
+    }
+    await append(closingEvent(latest.lastSequence + 1, failure));
+  };
+
+  try {
+    try {
+      const input = await reconstructInput(options, run);
+      const user = await options.loadCurrentUser(run);
       const authorization = requireAuthorization(run, user);
-      const executionUser: AuthenticatedUser = {
-        ...user,
-        principal: authorization.principal,
-        subjectUserId: authorization.subjectUserId,
-        delegatedActor: authorization.delegatedActor,
-        scopes: authorization.scopes
-      };
       const context: RuntimeCallContext = {
-        user: executionUser,
+        user: { ...user, ...authorization },
         clientInstanceId: run.clientInstanceId,
         correlationId: run.correlationId,
         locale: run.locale,
         ...authorization,
         signal: controller.signal
       };
-      const assertLease = async () => {
-        try {
-          await this.options.store.assertClaimedAgentRun({
-            clientInstanceId: run.clientInstanceId,
-            runId: run.id,
-            leaseToken
-          });
-        } catch (error) {
-          const latest = await this.options.store.getAgentRun({
-            clientInstanceId: run.clientInstanceId,
-            runId: run.id
-          });
-          if (
-            !latest ||
-            latest.leaseToken !== leaseToken ||
-            !latest.leaseExpiresAt ||
-            latest.leaseExpiresAt <= this.now()
-          ) {
-            leaseLost = true;
-            controller.abort("Agent run lease was lost");
-          }
-          throw error;
-        }
-      };
-      const conversationHistory = this.workerConversationHistory(run, leaseToken);
-      const events = await this.options.execute(input, context, {
-        assertLease,
-        conversationHistory
+      const execution = await options.execute(input, context, {
+        assertLease: async () => {
+          await fenced(() => store.assertClaimedAgentRun({ ...ofRun, lease }));
+        },
+        conversationHistory: fencedConversationHistory(options, run, lease, fenced)
       });
-      for await (const sourceEvent of events) {
-        if (leaseLost) break;
-        const event = cancellationRequested
-          ? cancelledEvent(run, sourceEvent.sequence, this.now(), cancellationReason)
-          : this.interruptedControllers.has(controller)
-            ? interruptedEvent(run, sourceEvent.sequence, this.now())
+      cancelExecution = (reason) => execution.cancel(reason);
+      sendCancel();
+      // The events are left the moment the run is stopped, whatever the execution does then.
+      for await (const sourceEvent of eventsUntilAborted(
+        execution.events,
+        run.id,
+        controller.signal
+      )) {
+        if (stopCause === "lease_lost") break;
+        const event =
+          sourceEvent.type === "run_failed" && (cancellation || stopCause)
+            ? closingEvent(sourceEvent.sequence, sourceEvent.error)
             : sourceEvent.type === "tool_permission_requested"
-              ? permissionUnsupportedEvent(run, sourceEvent.sequence, this.now())
+              ? failedEvent(run, sourceEvent.sequence, now(), PERMISSION_UNSUPPORTED_ERROR)
               : sourceEvent;
-        const persistedEvent = await this.appendObservationWithCancellationFallback(
-          run,
-          leaseToken,
-          event
-        );
-        if (isTerminalEvent(persistedEvent)) {
-          terminalWritten = true;
-          controller.abort("Agent run reached a terminal state");
-          break;
-        }
+        await append(event);
+        if (terminalWritten) break;
       }
-      if (!terminalWritten && !leaseLost) {
-        const latest = await this.options.store.getAgentRun({
-          clientInstanceId: run.clientInstanceId,
-          runId: run.id
-        });
-        if (latest?.leaseToken === leaseToken) {
-          const event =
-            cancellationRequested || latest.status === "cancelling"
-              ? cancelledEvent(run, latest.lastSequence + 1, this.now(), latest.cancellationReason)
-              : this.interruptedControllers.has(controller)
-                ? interruptedEvent(run, latest.lastSequence + 1, this.now())
-                : failedEvent(run, latest.lastSequence + 1, this.now(), {
-                    code: "AGENT_RUN_EXECUTOR_ENDED",
-                    message: "Agent run executor ended without a terminal event",
-                    category: "internal_error"
-                  });
-          await this.appendObservationWithCancellationFallback(run, leaseToken, event);
-        }
+      if (!terminalWritten && stopCause !== "lease_lost") {
+        await closeRun(EXECUTOR_ENDED_ERROR);
       }
     } catch (error) {
-      if (!leaseLost) {
-        await this.finishAfterError(
-          run,
-          leaseToken,
-          cancellationRequested,
-          this.interruptedControllers.has(controller),
-          error
-        ).catch(() => undefined);
-      }
-    } finally {
-      clearInterval(heartbeatTimer);
-      clearInterval(cancellationTimer);
-      this.activeControllers.delete(controller);
+      if (terminalWritten || stopCause === "lease_lost") throw error;
+      await closeRun(workerFailure(error));
     }
-    return (
-      (await this.options.store.getAgentRun({
-        clientInstanceId: run.clientInstanceId,
-        runId: run.id
-      })) ?? run
-    );
+  } finally {
+    clearTimeout(idleTimer);
+    control.signal.removeEventListener("abort", onJobAborted);
+    controller.abort("Agent run execution ended");
   }
+  // A run this attempt could not end stays in progress. The job fails with its one attempt
+  // used, and the run is ended as lost with the job.
+  if (!terminalWritten) {
+    throw stopCause === "lease_lost"
+      ? new JobLeaseLostError(lease.jobId)
+      : new AppError("INTERNAL", "Agent run did not reach a terminal state");
+  }
+}
 
-  private async reconstructInput(run: AgentRun): Promise<StartAgentRunInput> {
-    const messages = await this.options.conversationHistory.listMessages({
-      clientInstanceId: run.clientInstanceId,
-      conversationId: run.conversationId
-    });
-    const message = messages.find((candidate) => candidate.id === run.inputMessageId);
-    if (!message || message.role !== "user") {
-      throw new AppError("NOT_FOUND", "Agent run input message is not available");
+async function reconstructInput(
+  options: AgentRunJobsOptions,
+  run: AgentRun
+): Promise<StartAgentRunInput> {
+  const messages = await options.stores.conversations.listMessages({
+    clientInstanceId: run.clientInstanceId,
+    conversationId: run.conversationId
+  });
+  const message = messages.find((candidate) => candidate.id === run.inputMessageId);
+  if (!message || message.role !== "user") {
+    throw new AppError("NOT_FOUND", "Agent run input message is not available");
+  }
+  const attachmentManifest = readUserAttachmentManifest(message.metadata);
+  return {
+    agentName: run.agentName,
+    modelBindingId: run.modelBindingId,
+    reasoningEffort: run.reasoningEffort,
+    conversationId: run.conversationId,
+    idempotencyKey: run.idempotencyKey,
+    inputMessageId: run.inputMessageId,
+    preparedRun: { id: run.id, startedAt: run.startedAt },
+    message: {
+      text: message.text,
+      attachmentManifest: attachmentManifest?.attachments.length ? attachmentManifest : undefined
     }
-    return {
-      agentName: run.agentName,
-      modelBindingId: run.modelBindingId,
-      reasoningEffort: run.reasoningEffort,
-      conversationId: run.conversationId,
-      idempotencyKey: run.idempotencyKey,
-      inputMessageId: run.inputMessageId,
-      preparedRun: { id: run.id, startedAt: run.startedAt },
-      message: {
-        text: message.text,
-        attachmentManifest: readUserAttachmentManifest(message.metadata)
-      }
-    };
-  }
+  };
+}
 
-  private workerConversationHistory(run: AgentRun, leaseToken: string): ConversationHistoryStore {
-    return {
-      listMessages: (input) => this.options.conversationHistory.listMessages(input),
-      listRecentMessages: (input) => this.options.conversationHistory.listRecentMessages(input),
-      appendMessage: async (message) => {
-        if (message.role !== "tool") {
-          throw new AppError("VALIDATION_FAILED", "Worker runtime may only append tool messages");
-        }
-        return this.options.store.appendClaimedAgentRunMessage({
-          clientInstanceId: run.clientInstanceId,
-          runId: run.id,
-          leaseToken,
-          message: { ...message, role: "tool" }
-        });
-      },
-      appendAssistantMessage: (message) =>
-        this.options.store.appendClaimedAgentRunMessage({
-          clientInstanceId: run.clientInstanceId,
-          runId: run.id,
-          leaseToken,
+function fencedConversationHistory(
+  options: AgentRunJobsOptions,
+  run: AgentRun,
+  lease: AgentRunJobLease,
+  fenced: <Result>(write: () => Promise<Result>) => Promise<Result>
+): ConversationHistoryStore {
+  const { conversations, agentRuns } = options.stores;
+  const ofRun = { clientInstanceId: run.clientInstanceId, runId: run.id, lease };
+  return {
+    listMessages: (input) => conversations.listMessages(input),
+    listRecentMessages: (input) => conversations.listRecentMessages(input),
+    appendMessage: async (message) => {
+      if (message.role !== "tool") {
+        throw new AppError("VALIDATION_FAILED", "An agent run may only append tool messages");
+      }
+      return fenced(() =>
+        agentRuns.appendClaimedAgentRunMessage({ ...ofRun, message: { ...message, role: "tool" } })
+      );
+    },
+    appendAssistantMessage: (message) =>
+      fenced(() =>
+        agentRuns.appendClaimedAgentRunMessage({
+          ...ofRun,
           message: { ...message, role: "assistant" }
         })
-    };
-  }
-
-  private async finishAfterError(
-    run: AgentRun,
-    leaseToken: string,
-    cancellationRequested: boolean,
-    interrupted: boolean,
-    error: unknown
-  ): Promise<void> {
-    const latest = await this.options.store.getAgentRun({
-      clientInstanceId: run.clientInstanceId,
-      runId: run.id
-    });
-    if (!latest || latest.leaseToken !== leaseToken) return;
-    const event =
-      cancellationRequested || latest.status === "cancelling"
-        ? cancelledEvent(run, latest.lastSequence + 1, this.now(), latest.cancellationReason)
-        : interrupted
-          ? interruptedEvent(run, latest.lastSequence + 1, this.now())
-          : failedEvent(run, latest.lastSequence + 1, this.now(), workerFailure(error));
-    await this.appendObservationWithCancellationFallback(run, leaseToken, event);
-  }
-
-  private async appendObservationWithCancellationFallback(
-    run: AgentRun,
-    leaseToken: string,
-    event: AgentRuntimeEvent
-  ): Promise<AgentRuntimeEvent> {
-    try {
-      await this.options.store.appendClaimedRunObservation({
-        clientInstanceId: run.clientInstanceId,
-        runId: run.id,
-        leaseToken,
-        event
-      });
-      return event;
-    } catch (error) {
-      if (!(error instanceof AppError) || error.code !== "CONFLICT") throw error;
-      const latest = await this.options.store.getAgentRun({
-        clientInstanceId: run.clientInstanceId,
-        runId: run.id
-      });
-      if (
-        event.type === "run_cancelled" ||
-        latest?.leaseToken !== leaseToken ||
-        latest.status !== "cancelling"
-      ) {
-        throw error;
-      }
-      const cancellation = cancelledEvent(
-        run,
-        latest.lastSequence + 1,
-        this.now(),
-        latest.cancellationReason
-      );
-      await this.options.store.appendClaimedRunObservation({
-        clientInstanceId: run.clientInstanceId,
-        runId: run.id,
-        leaseToken,
-        event: cancellation
-      });
-      return cancellation;
-    }
-  }
+      )
+  };
 }
 
 export type WorkerLocalAgentRuntimeOptions = Omit<
   LocalAgentRuntimeOptions,
   "agentRunStore" | "runObservationStore" | "conversationHistory" | "beforeEffect"
-> & {
-  agentRunStore?: never;
-  runObservationStore?: never;
-  conversationHistory?: never;
-  beforeEffect?: never;
-};
+>;
 
-export function createWorkerLocalAgentRunExecutor(
+/**
+ * Executes each run in a runtime of its own that keeps no store: the job handler stores the
+ * events it yields, and its conversation writes carry the lease of the job.
+ */
+export function createLocalAgentRunExecutor(
   options: WorkerLocalAgentRuntimeOptions
 ): ExecuteAgentRun {
-  const unsafe = options as unknown as Partial<LocalAgentRuntimeOptions>;
-  if (
-    unsafe.agentRunStore ||
-    unsafe.runObservationStore ||
-    unsafe.conversationHistory ||
-    unsafe.beforeEffect
-  ) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "Worker LocalAgentRuntime persistence must be supplied by AgentRunWorker"
-    );
-  }
-  return async function* (input, context, control) {
+  return async (input, context, control) => {
     const runtime = new LocalAgentRuntime({
       ...options,
       conversationHistory: control.conversationHistory,
       beforeEffect: () => control.assertLease()
     });
     const handle = await runtime.start(input, context);
-    const iterator = runtime.observe(handle.runId, context)[Symbol.asyncIterator]();
-    let lastSequence = 0;
-    while (true) {
-      const next = await nextEventOrAbort(iterator, context.signal);
-      if (next === "aborted") {
-        yield {
-          type: "run_failed",
-          runId: requirePreparedRunId(input),
-          sequence: lastSequence + 1,
-          createdAt: new Date().toISOString(),
-          error: {
-            code: "AGENT_RUN_ABORTED",
-            message: "Agent run execution was interrupted",
-            category: "abort_error"
-          }
-        };
-        return;
-      }
-      if (next.done) return;
-      lastSequence = next.value.sequence;
-      yield next.value;
-    }
+    return {
+      events: runtime.observe(handle.runId, context),
+      cancel: (reason) => runtime.cancel(handle.runId, reason, context)
+    };
   };
+}
+
+async function* eventsUntilAborted(
+  source: AsyncIterable<AgentRuntimeEvent>,
+  runId: AgentRunId,
+  signal: AbortSignal
+): AsyncIterable<AgentRuntimeEvent> {
+  const iterator = source[Symbol.asyncIterator]();
+  let lastSequence = 0;
+  while (true) {
+    const next = await nextEventOrAbort(iterator, signal);
+    if (next === "aborted") {
+      yield {
+        type: "run_failed",
+        runId,
+        sequence: lastSequence + 1,
+        createdAt: new Date().toISOString(),
+        error: {
+          code: "AGENT_RUN_ABORTED",
+          message: "Agent run execution was interrupted",
+          category: "abort_error"
+        }
+      };
+      return;
+    }
+    if (next.done) return;
+    lastSequence = next.value.sequence;
+    yield next.value;
+  }
 }
 
 async function nextEventOrAbort(
   iterator: AsyncIterator<AgentRuntimeEvent>,
-  signal: AbortSignal | undefined
+  signal: AbortSignal
 ): Promise<IteratorResult<AgentRuntimeEvent> | "aborted"> {
-  if (!signal) return iterator.next();
   if (signal.aborted) return "aborted";
   let onAbort!: () => void;
   const aborted = new Promise<"aborted">((resolve) => {
@@ -529,12 +503,25 @@ async function nextEventOrAbort(
   }
 }
 
-function requirePreparedRunId(input: StartAgentRunInput) {
-  if (!input.preparedRun) {
-    throw new AppError("INTERNAL", "Worker execution requires a prepared Agent Run");
-  }
-  return input.preparedRun.id;
-}
+const ENDED_STATUSES = new Set<AgentRun["status"]>(["completed", "cancelled", "failed"]);
+
+const AGENT_RUN_IDLE_ERROR: AgentRunError = {
+  code: "AGENT_RUN_RUNTIME_INTERRUPTED",
+  message: "Agent run stored no event within the idle limit",
+  category: "runtime_interrupted"
+};
+
+const PERMISSION_UNSUPPORTED_ERROR: AgentRunError = {
+  code: "AGENT_RUN_PERMISSION_UNSUPPORTED",
+  message: "Permission-required tools are not supported by the Agent Worker yet",
+  category: "internal_error"
+};
+
+const EXECUTOR_ENDED_ERROR: AgentRunError = {
+  code: "AGENT_RUN_EXECUTOR_ENDED",
+  message: "Agent run executor ended without a terminal event",
+  category: "internal_error"
+};
 
 function cancelledEvent(
   run: AgentRun,
@@ -551,23 +538,13 @@ function cancelledEvent(
   };
 }
 
-function interruptedEvent(run: AgentRun, sequence: number, createdAt: string): AgentRuntimeEvent {
-  return failedEvent(run, sequence, createdAt, {
-    ...AGENT_RUN_INTERRUPTED_ERROR,
-    message: "Agent run worker stopped before completion"
-  });
-}
-
-function permissionUnsupportedEvent(
+function failedEvent(
   run: AgentRun,
   sequence: number,
-  createdAt: string
+  createdAt: string,
+  error: AgentRunError
 ): AgentRuntimeEvent {
-  return failedEvent(run, sequence, createdAt, {
-    code: "AGENT_RUN_PERMISSION_UNSUPPORTED",
-    message: "Permission-required tools are not supported by the Agent Worker yet",
-    category: "internal_error"
-  });
+  return { type: "run_failed", runId: run.id, sequence, createdAt, error };
 }
 
 function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {
@@ -591,30 +568,19 @@ function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {
   };
 }
 
-function failedEvent(
-  run: AgentRun,
-  sequence: number,
-  createdAt: string,
-  error: Extract<AgentRuntimeEvent, { type: "run_failed" }>["error"]
-): AgentRuntimeEvent {
-  return { type: "run_failed", runId: run.id, sequence, createdAt, error };
-}
-
-function workerFailure(error: unknown) {
+function workerFailure(error: unknown): AgentRunError {
   if (error instanceof AppError) {
     return {
       code: error.code,
       message: error.code === "INTERNAL" ? "Agent run failed" : error.message,
-      category: error.code === "INTERNAL" ? ("internal_error" as const) : ("app_error" as const)
+      category: error.code === "INTERNAL" ? "internal_error" : "app_error"
     };
   }
   return {
     code: "INTERNAL",
     message: "Agent run failed",
     category:
-      error instanceof Error && error.name === "AbortError"
-        ? ("abort_error" as const)
-        : ("internal_error" as const)
+      error instanceof Error && error.name === "AbortError" ? "abort_error" : "internal_error"
   };
 }
 
@@ -622,12 +588,4 @@ function isTerminalEvent(event: AgentRuntimeEvent): boolean {
   return (
     event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed"
   );
-}
-
-function addMilliseconds(isoDate: string, milliseconds: number): string {
-  return new Date(new Date(isoDate).getTime() + milliseconds).toISOString();
-}
-
-function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

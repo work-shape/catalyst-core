@@ -13,16 +13,17 @@ import {
   type PrepareConversationRunStartInput,
   type PreparedConversationRunStart,
   type ReleaseRunStartCommandInput,
-  type RecoverStaleAgentRunInput,
-  type RecoverStaleAgentRunResult,
   type RunObservation,
+  agentRunJobOptions,
   asAgentRunId,
   asClientInstanceId,
+  executeAgentRunJob,
   asConversationId,
   asMessageId,
   type RunStartCommand,
   type UpdateAgentRunStatusInput
 } from "@vivd-catalyst/core";
+import { enqueueJob } from "./jobs/store";
 import { lockActiveConversation } from "./postgres-conversation-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
@@ -261,9 +262,16 @@ export async function prepareConversationRunStart(
         )
       );
 
+    // The run and its job are accepted together: no run waits without a job, and no job
+    // finds its run missing.
+    const run = mapAgentRun(runRow);
+    if (run.status === "queued") {
+      await enqueueJob(tx, executeAgentRunJob, { runId: run.id }, agentRunJobOptions(run));
+    }
+
     return {
       userMessage: mapMessage(messageRow),
-      run: mapAgentRun(runRow),
+      run,
       firstUserMessage: earlierUserMessage === undefined
     };
   });
@@ -404,117 +412,15 @@ export async function updateAgentRunStatus(
   return mapAgentRun(row);
 }
 
-export async function listStaleActiveAgentRuns(
-  db: PostgresConnection,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    staleUpdatedBefore: string;
-    limit: number;
-  }
-): Promise<AgentRun[]> {
-  const rows = await db
-    .select()
-    .from(agentRuns)
-    .where(
-      and(
-        eq(agentRuns.clientInstanceId, input.clientInstanceId),
-        drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`,
-        lt(agentRuns.updatedAt, new Date(input.staleUpdatedBefore))
-      )
-    )
-    .orderBy(asc(agentRuns.updatedAt), asc(agentRuns.id))
-    .limit(input.limit);
-  return rows.map(mapAgentRun);
-}
-
-export async function recoverStaleAgentRun(
-  db: PostgresConnection,
-  input: RecoverStaleAgentRunInput
-): Promise<RecoverStaleAgentRunResult> {
-  return db.transaction(async (tx) => {
-    const [terminalObservation] = await tx
-      .select()
-      .from(agentRunObservations)
-      .where(
-        and(
-          eq(agentRunObservations.clientInstanceId, input.clientInstanceId),
-          eq(agentRunObservations.runId, input.runId),
-          drizzleSql`${agentRunObservations.type} in ('run_completed', 'run_cancelled', 'run_failed')`
-        )
-      )
-      .orderBy(desc(agentRunObservations.sequence))
-      .limit(1);
-
-    if (terminalObservation) {
-      const patch = terminalRunPatchFromObservation(mapRunObservation(terminalObservation));
-      const [row] = await tx
-        .update(agentRuns)
-        .set(patch)
-        .where(staleActiveRunWhere(input))
-        .returning();
-      return row
-        ? {
-            status: "recovered",
-            run: mapAgentRun(row)
-          }
-        : {
-            status: "not_recovered"
-          };
-    }
-
-    const [row] = await tx
-      .update(agentRuns)
-      .set({
-        status: "failed",
-        updatedAt: new Date(input.recoveredAt),
-        failedAt: new Date(input.recoveredAt),
-        lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`,
-        error: input.error
-      })
-      .where(staleActiveRunWhere(input))
-      .returning();
-    if (!row) {
-      return { status: "not_recovered" };
-    }
-
-    const sequence = row.lastSequence;
-    const event = {
-      type: "run_failed" as const,
-      runId: input.runId,
-      sequence,
-      createdAt: input.recoveredAt,
-      error: input.error
-    };
-    const [observationRow] = await tx
-      .insert(agentRunObservations)
-      .values({
-        clientInstanceId: row.clientInstanceId,
-        runId: row.id,
-        conversationId: row.conversationId,
-        ownerUserId: row.ownerUserId,
-        sequence,
-        type: "run_failed",
-        payload: event,
-        createdAt: new Date(input.recoveredAt)
-      })
-      .returning();
-
-    return {
-      status: "recovered",
-      run: mapAgentRun(row),
-      observation: mapRunObservation(observationRow)
-    };
-  });
-}
-
 export {
   appendClaimedAgentRunMessage,
   appendClaimedRunObservation,
   assertClaimedAgentRun,
-  claimNextAgentRun,
-  heartbeatAgentRun,
-  recoverExpiredAgentRuns,
+  claimAgentRunForJob,
+  failLostAgentRun,
   listAgentRunsInProgress,
+  listAgentRunsWithoutJob,
+  renewAgentRunJobLease,
   requestAgentRunCancellation
 } from "./postgres-agent-run-worker-operations";
 
@@ -628,47 +534,6 @@ function runStartCommandPendingClaimWhere(input: {
     eq(runStartCommands.status, "pending"),
     ...(input.claimedAt ? [eq(runStartCommands.updatedAt, new Date(input.claimedAt))] : [])
   );
-}
-
-function staleActiveRunWhere(input: RecoverStaleAgentRunInput) {
-  return and(
-    eq(agentRuns.clientInstanceId, input.clientInstanceId),
-    eq(agentRuns.id, input.runId),
-    drizzleSql`${agentRuns.status} in ('queued', 'running', 'waiting_for_permission', 'cancelling')`,
-    lt(agentRuns.updatedAt, new Date(input.staleUpdatedBefore))
-  );
-}
-
-function terminalRunPatchFromObservation(
-  observation: RunObservation
-): Partial<typeof agentRuns.$inferInsert> {
-  const event = observation.payload;
-  if (event.type === "run_completed") {
-    return {
-      status: "completed",
-      updatedAt: new Date(event.createdAt),
-      completedAt: new Date(event.createdAt),
-      lastSequence: event.sequence
-    };
-  }
-  if (event.type === "run_cancelled") {
-    return {
-      status: "cancelled",
-      updatedAt: new Date(event.createdAt),
-      cancelledAt: new Date(event.createdAt),
-      lastSequence: event.sequence
-    };
-  }
-  if (event.type !== "run_failed") {
-    throw new AppError("INTERNAL", "Expected terminal run observation");
-  }
-  return {
-    status: "failed",
-    updatedAt: new Date(event.createdAt),
-    failedAt: new Date(event.createdAt),
-    lastSequence: event.sequence,
-    error: event.error
-  };
 }
 
 function mapRunStartCommand(row: typeof runStartCommands.$inferSelect): RunStartCommand {

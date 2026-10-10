@@ -57,7 +57,6 @@ import {
   isTemporaryConversationTitle,
   normalizeGeneratedConversationTitle
 } from "./conversation-title";
-import { isActiveRun, isMissingLocalRuntimeState, recoverInterruptedRun } from "./run-recovery";
 import { generateConversationTitleJob } from "./job-kinds";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "./system-model-call";
 import type { ChatServerOptions } from "./types";
@@ -202,7 +201,7 @@ export class ConversationWorkflow {
         const runForList = activeRun;
         return {
           ...conversation,
-          ...(runForList && isActiveRun(runForList)
+          ...(runForList && isActiveAgentRunStatus(runForList.status)
             ? { activeRun: toActiveRunSummary(runForList) }
             : {})
         };
@@ -420,7 +419,7 @@ export class ConversationWorkflow {
         conversationId,
         runId
       });
-      if (!run || isActiveRun(run)) {
+      if (!run || isActiveAgentRunStatus(run.status)) {
         continue;
       }
       const observations = await this.options.stores.agentRuns.listRunObservations({
@@ -709,18 +708,9 @@ export class ConversationWorkflow {
       return;
     }
 
-    try {
-      yield* this.options.agentRuntime.observe(runId, context, {
-        afterSequence: lastSequence
-      });
-    } catch (error) {
-      if (isMissingLocalRuntimeState(error)) {
-        if (observations.length > 0) {
-          return;
-        }
-      }
-      throw error;
-    }
+    yield* this.options.agentRuntime.observe(runId, context, {
+      afterSequence: lastSequence
+    });
   }
 
   async getRunStatus(runId: AgentRunId, context: RuntimeCallContext): Promise<AgentRunStatus> {
@@ -786,17 +776,7 @@ export class ConversationWorkflow {
       return run;
     }
 
-    try {
-      await this.options.agentRuntime.cancel(runId, reason, context);
-    } catch (error) {
-      if (isMissingLocalRuntimeState(error)) {
-        const recovered = await recoverInterruptedRun(this.options, run);
-        if (recovered) {
-          return recovered.run;
-        }
-      }
-      throw error;
-    }
+    await this.options.agentRuntime.cancel(runId, reason, context);
     return (
       (await this.options.stores.agentRuns.getConversationAgentRun({
         clientInstanceId: this.options.clientInstanceId,

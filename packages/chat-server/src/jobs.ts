@@ -28,13 +28,11 @@ import {
   reconcileUsageSchedule,
   recoverAbandonedModelCallsJob,
   recoverAbandonedModelCallsSchedule,
-  recoverAgentRunsJob,
-  recoverAgentRunsSchedule
+  retiredRecoverAgentRunsJob
 } from "./job-kinds";
 import { ConversationRetentionWorkflow } from "./retention";
-import { RunRecoveryWatchdog } from "./run-recovery";
 import { deletionActor } from "./subject-deletion";
-import type { ChatServerOptions, ConversationRetentionOptions, RunRecoveryOptions } from "./types";
+import type { ChatServerOptions, ConversationRetentionOptions } from "./types";
 import { createUsageAttributionBackfill, createUsageReconciliation } from "./usage-backfill";
 import { ExecutionWorkspaceCleanupWorkflow } from "./workspace-cleanup";
 import { completeWorkspaceDeletion, recordWorkspaceDeletionStalled } from "./workspace-deletion";
@@ -48,7 +46,6 @@ export interface ChatServerJobs {
 /** What a test sets to drive a handler with its own clock and limits. */
 export interface ChatServerJobOptions {
   retention?: ConversationRetentionOptions;
-  runRecovery?: RunRecoveryOptions;
   now?: () => Date;
 }
 
@@ -62,12 +59,8 @@ export function createChatServerJobs(
     now,
     ...jobOptions.retention
   });
-  const runRecovery = new RunRecoveryWatchdog(options, options.logger, jobOptions.runRecovery);
   const usageAttributionBackfill = createUsageAttributionBackfill(options, now);
   const usageReconciliation = createUsageReconciliation(options, now);
-  // The runs a process-bound runtime lost are the ones from before this process started.
-  const processStartedAt = now();
-  let recoveredRunsLostWithProcess = false;
 
   const handlers: RegisteredJobHandler[] = [
     defineJobHandler({
@@ -136,15 +129,10 @@ export function createChatServerJobs(
       run: (_job, control) => retention.run(control.logger)
     }),
     defineJobHandler({
-      kind: recoverAgentRunsJob,
+      kind: retiredRecoverAgentRunsJob,
       slots: 1,
-      async run() {
-        if (!recoveredRunsLostWithProcess) {
-          await runRecovery.recoverRunsLostWithProcess(processStartedAt);
-          recoveredRunsLostWithProcess = true;
-        }
-        await runRecovery.sweep(now());
-      }
+      // No schedule names the kind, so no next tick follows the one this ends.
+      run: () => Promise.resolve()
     }),
     defineJobHandler({
       kind: pruneAuditEventsJob,
@@ -225,7 +213,6 @@ export function createChatServerJobs(
   ];
   const schedules: JobSchedule[] = [
     expireConversationsSchedule,
-    recoverAgentRunsSchedule,
     pruneAuditEventsSchedule,
     pruneJobsSchedule,
     adoptLegacyJobsSchedule,

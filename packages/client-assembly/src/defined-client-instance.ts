@@ -33,7 +33,8 @@ export interface DefineClientInstanceInput {
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   allowedOrigins?: string | string[];
   loadEnv?: boolean;
-  agentRuntimeMode?: CreateClientInstanceAppInput["agentRuntimeMode"];
+  /** Where the Agent Runs execute. `separate` when the deployment runs `runAgentRunWorker`. */
+  agentRunWorker?: CreateClientInstanceAppInput["agentRunWorker"];
 }
 
 export interface DefinedClientInstance {
@@ -134,7 +135,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         appInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer,
       allowedOrigins:
         appInput.allowedOrigins === undefined ? input.allowedOrigins : appInput.allowedOrigins,
-      agentRuntimeMode: appInput.agentRuntimeMode ?? input.agentRuntimeMode
+      agentRunWorker: appInput.agentRunWorker ?? input.agentRunWorker
     });
   }
 

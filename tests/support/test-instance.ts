@@ -318,6 +318,9 @@ async function createConfiguredInstance(
   });
   try {
     if (input.seedAssets !== false) await seedTestAssets(app);
+    // Runs execute as jobs of this worker, as they do behind `listen`. The API's other jobs
+    // stay with `getTestJobs`, so a test still decides when those run.
+    app.agentRunJobs?.start();
     return bindInstance(app.store, {
       server: testFramework(app).app,
       runtime: app,

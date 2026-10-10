@@ -57,7 +57,7 @@ function bindStores(
 ): PlatformStores {
   return {
     conversations: createPostgresConversationsStore(db),
-    agentRuns: createPostgresAgentRunsStore(db),
+    agentRuns: createPostgresAgentRunsStore(db, enqueued),
     files: createPostgresFilesStore(db, enqueued),
     audit: createPostgresAuditStore(db),
     usage: createPostgresUsageStore(db),

@@ -92,7 +92,12 @@ export const deleteWorkspaceJob = defineJobKind({
 
 export const expireConversationsJob = defineScheduledKind("conversation.expire");
 export const cleanUpExecutionWorkspacesJob = defineScheduledKind("execution_workspace.cleanup");
-export const recoverAgentRunsJob = defineScheduledKind("agent_run.recover", 2 * MINUTE_MS);
+/**
+ * Transition release only: the tick of the run recovery that the previous release scheduled.
+ * Runs are ended with their job now, so the kind has no schedule and its handler does nothing:
+ * it ends the tick that is still queued at the upgrade. It goes in the contract step.
+ */
+export const retiredRecoverAgentRunsJob = defineScheduledKind("agent_run.recover", 2 * MINUTE_MS);
 export const pruneAuditEventsJob = defineScheduledKind("audit.prune");
 export const pruneJobsJob = defineScheduledKind("platform_jobs.prune");
 /**
@@ -117,12 +122,6 @@ export const reconcileUsageJob = defineScheduledKind("usage.reconcile");
 export const expireConversationsSchedule = defineSchedule({
   kind: expireConversationsJob,
   every: HOUR_MS
-});
-export const recoverAgentRunsSchedule = defineSchedule({
-  kind: recoverAgentRunsJob,
-  every: MINUTE_MS,
-  // A conversation whose run the last process lost refuses messages until this ran.
-  dueAtStart: true
 });
 export const pruneAuditEventsSchedule = defineSchedule({
   kind: pruneAuditEventsJob,

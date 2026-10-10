@@ -9,13 +9,10 @@ import {
   type AppendClaimedAgentRunMessageInput,
   type AppendClaimedRunObservationInput,
   type AppendRunObservationInput,
-  type ClaimAgentRunInput,
   type ClaimRunStartCommandInput,
   type ClaimRunStartCommandResult,
   type CompleteRunStartCommandInput,
-  type HeartbeatAgentRunInput,
   type ReleaseRunStartCommandInput,
-  type RecoverExpiredAgentRunsInput,
   type RequestAgentRunCancellationInput,
   type RunObservation,
   type RunObservationStore,
@@ -26,7 +23,10 @@ import {
   appendClaimedRunObservation as appendPostgresClaimedRunObservation,
   appendRunObservation as appendPostgresRunObservation,
   assertClaimedAgentRun as assertPostgresClaimedAgentRun,
-  claimNextAgentRun as claimNextPostgresAgentRun,
+  claimAgentRunForJob as claimPostgresAgentRunForJob,
+  failLostAgentRun as failLostPostgresAgentRun,
+  listAgentRunsWithoutJob as listPostgresAgentRunsWithoutJob,
+  renewAgentRunJobLease as renewPostgresAgentRunJobLease,
   claimRunStartCommand as claimPostgresRunStartCommand,
   completeRunStartCommand as completePostgresRunStartCommand,
   createAgentRun as createPostgresAgentRun,
@@ -34,20 +34,20 @@ import {
   getActiveConversationAgentRun as getPostgresActiveConversationAgentRun,
   getConversationAgentRun as getPostgresConversationAgentRun,
   getLatestConversationAgentRun as getPostgresLatestConversationAgentRun,
-  heartbeatAgentRun as heartbeatPostgresAgentRun,
   listRunObservations as listPostgresRunObservations,
   prepareConversationRunStart as preparePostgresConversationRunStart,
-  listStaleActiveAgentRuns as listPostgresStaleActiveAgentRuns,
   releaseRunStartCommand as releasePostgresRunStartCommand,
-  recoverStaleAgentRun as recoverPostgresStaleAgentRun,
-  recoverExpiredAgentRuns as recoverPostgresExpiredAgentRuns,
   listAgentRunsInProgress as listPostgresAgentRunsInProgress,
   requestAgentRunCancellation as requestPostgresAgentRunCancellation,
   updateAgentRunStatus as updatePostgresAgentRunStatus
 } from "../postgres-agent-run-operations";
 import type { AgentRunsStore } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
-export function createPostgresAgentRunsStore(db: PostgresConnection): AgentRunsStore {
+/** `enqueued` is called for every job this store inserts, before its transaction commits. */
+export function createPostgresAgentRunsStore(
+  db: PostgresConnection,
+  enqueued: () => void
+): AgentRunsStore {
   return {
     async claimRunStartCommand(
       input: ClaimRunStartCommandInput
@@ -63,7 +63,9 @@ export function createPostgresAgentRunsStore(db: PostgresConnection): AgentRunsS
     async prepareConversationRunStart(
       input: Parameters<AgentRunStore["prepareConversationRunStart"]>[0]
     ) {
-      return preparePostgresConversationRunStart(db, input);
+      const prepared = await preparePostgresConversationRunStart(db, input);
+      if (prepared.run.status === "queued") enqueued();
+      return prepared;
     },
     async createAgentRun(input: Parameters<AgentRunStore["createAgentRun"]>[0]): Promise<AgentRun> {
       return createPostgresAgentRun(db, input);
@@ -96,19 +98,17 @@ export function createPostgresAgentRunsStore(db: PostgresConnection): AgentRunsS
     async updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun> {
       return updatePostgresAgentRunStatus(db, input);
     },
-    async listStaleActiveAgentRuns(
-      input: Parameters<AgentRunStore["listStaleActiveAgentRuns"]>[0]
-    ) {
-      return listPostgresStaleActiveAgentRuns(db, input);
+    async claimAgentRunForJob(input: Parameters<AgentRunStore["claimAgentRunForJob"]>[0]) {
+      return claimPostgresAgentRunForJob(db, input);
     },
-    async recoverStaleAgentRun(input: Parameters<AgentRunStore["recoverStaleAgentRun"]>[0]) {
-      return recoverPostgresStaleAgentRun(db, input);
+    async renewAgentRunJobLease(input: Parameters<AgentRunStore["renewAgentRunJobLease"]>[0]) {
+      return renewPostgresAgentRunJobLease(db, input);
     },
-    async claimNextAgentRun(input: ClaimAgentRunInput): Promise<AgentRun | undefined> {
-      return claimNextPostgresAgentRun(db, input);
+    async failLostAgentRun(input: Parameters<AgentRunStore["failLostAgentRun"]>[0]) {
+      return failLostPostgresAgentRun(db, input);
     },
-    async heartbeatAgentRun(input: HeartbeatAgentRunInput): Promise<AgentRun> {
-      return heartbeatPostgresAgentRun(db, input);
+    async listAgentRunsWithoutJob(input: Parameters<AgentRunStore["listAgentRunsWithoutJob"]>[0]) {
+      return listPostgresAgentRunsWithoutJob(db, input);
     },
     async requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun> {
       return requestPostgresAgentRunCancellation(db, input);
@@ -130,9 +130,6 @@ export function createPostgresAgentRunsStore(db: PostgresConnection): AgentRunsS
       input: AppendClaimedAgentRunMessageInput
     ): Promise<ChatMessage> {
       return appendPostgresClaimedAgentRunMessage(db, input);
-    },
-    async recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]> {
-      return recoverPostgresExpiredAgentRuns(db, input);
     },
     async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {
       return appendPostgresRunObservation(db, input);

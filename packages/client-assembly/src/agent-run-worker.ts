@@ -1,14 +1,7 @@
 import { createLogger } from "./logger";
 import {
-  AgentRunWorker,
-  createWorkerLocalAgentRunExecutor,
-  type AgentRunWorkerStopInput
-} from "@vivd-catalyst/agent-runtime";
-import {
   AppError,
-  type AgentRun,
-  type AuthenticatedUser,
-  type PlatformStores,
+  type JobWorker,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
@@ -16,6 +9,12 @@ import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { createClientInstanceExecutionAssembly } from "./app";
 import type { ClientInstanceCapability } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
+import { createClientInstanceAgentRunJobs } from "./agent-run-jobs";
+import { createJobWorker } from "./job-worker";
+
+// How long a worker that was told to stop lets its runs end on their own. A run that is not
+// done by then ends as interrupted and the person sends the message again.
+export const DEFAULT_AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS = 15 * 60 * 1000;
 
 export interface CreateClientInstanceAgentRunWorkerInput {
   config?: ClientInstanceConfig;
@@ -28,9 +27,15 @@ export interface CreateClientInstanceAgentRunWorkerInput {
 
 export interface ClientInstanceAgentRunWorker {
   readonly config: ClientInstanceConfig;
-  readonly worker: AgentRunWorker;
+  /** The job worker that serves `agent_run.execute`. */
+  readonly worker: JobWorker;
+  /** Starts the worker and resolves once `stop` has ended its runs. */
   runUntilStopped(): Promise<void>;
-  stop(input?: AgentRunWorkerStopInput): Promise<void>;
+  /**
+   * Stops claiming. With `drainMs` the running runs get that long to end; the ones left are
+   * ended as interrupted. A second call ends the drain at once.
+   */
+  stop(input?: { drainMs?: number }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -38,22 +43,33 @@ export async function createClientInstanceAgentRunWorker(
   input: CreateClientInstanceAgentRunWorkerInput
 ): Promise<ClientInstanceAgentRunWorker> {
   const execution = await createClientInstanceExecutionAssembly(input);
-
-  const worker = new AgentRunWorker({
+  const workerId = execution.env.AGENT_RUN_WORKER_ID;
+  const worker = createJobWorker({
+    stores: execution.store,
     clientInstanceId: execution.clientInstanceId,
-    store: execution.store.agentRuns,
-    conversationHistory: execution.store.conversations,
-    workerId: execution.env.AGENT_RUN_WORKER_ID,
-    concurrency: readAgentRunWorkerConcurrency(execution.env),
-    loadCurrentUser: (run) => loadCurrentUser(execution.store, run),
-    execute: createWorkerLocalAgentRunExecutor(execution.localAgentRuntimeOptions)
+    // The worker id names this process in the log lines of its jobs.
+    logger: workerId ? execution.logger.child({ workerId }) : execution.logger,
+    ...createClientInstanceAgentRunJobs(execution)
+  });
+  let stopped: (() => void) | undefined;
+  const untilStopped = new Promise<void>((resolve) => {
+    stopped = resolve;
   });
 
   return {
     config: execution.config,
     worker,
-    runUntilStopped: () => worker.runUntilStopped(),
-    stop: (stopInput) => worker.stop(stopInput),
+    runUntilStopped() {
+      worker.start();
+      return untilStopped;
+    },
+    async stop(stopInput = {}) {
+      try {
+        await worker.stop(stopInput);
+      } finally {
+        stopped?.();
+      }
+    },
     close: () => execution.close()
   };
 }
@@ -62,22 +78,17 @@ export async function runClientInstanceAgentRunWorker(
   input: CreateClientInstanceAgentRunWorkerInput
 ): Promise<void> {
   const service = await createClientInstanceAgentRunWorker(input);
-  const drainTimeoutMs = readAgentRunWorkerDrainTimeoutMs(readClientInstanceEnv(input.env));
+  const drainMs = readAgentRunWorkerDrainTimeoutMs(readClientInstanceEnv(input.env));
   let signals = 0;
-  // First signal drains active runs up to the timeout; a second one interrupts them now.
+  // The first signal drains the running runs up to the timeout; a second one ends them now.
   const stop = (signal: NodeJS.Signals) => {
     signals += 1;
     if (signals > 2) return;
-    service
-      .stop(
-        signals === 1
-          ? { drainTimeoutMs, reason: `Received ${signal}; drain timeout elapsed` }
-          : { interruptActive: true, reason: `Received ${signal} again` }
-      )
-      .catch((error: unknown) => {
-        createLogger().error({ error }, "Worker shutdown failed");
-        process.exitCode = 1;
-      });
+    createLogger().info({ signal, draining: signals === 1 }, "Agent run worker is stopping");
+    service.stop(signals === 1 ? { drainMs } : {}).catch((error: unknown) => {
+      createLogger().error({ error }, "Worker shutdown failed");
+      process.exitCode = 1;
+    });
   };
   process.on("SIGTERM", stop);
   process.on("SIGINT", stop);
@@ -89,8 +100,6 @@ export async function runClientInstanceAgentRunWorker(
     await service.close();
   }
 }
-
-export const DEFAULT_AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS = 15 * 60 * 1000;
 
 export function readAgentRunWorkerDrainTimeoutMs(env: ClientInstanceEnv): number {
   const raw = env.AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS;
@@ -105,45 +114,4 @@ export function readAgentRunWorkerDrainTimeoutMs(env: ClientInstanceEnv): number
   return value;
 }
 
-export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | undefined {
-  const raw = env.AGENT_RUN_WORKER_CONCURRENCY;
-  if (!raw) return undefined;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "AGENT_RUN_WORKER_CONCURRENCY must be a positive integer"
-    );
-  }
-  return value;
-}
-
-async function loadCurrentUser(store: PlatformStores, run: AgentRun): Promise<AuthenticatedUser> {
-  const user = (await store.users.listUsers({ clientInstanceId: run.clientInstanceId })).find(
-    (candidate) => candidate.id === run.ownerUserId
-  );
-  if (!user || user.status !== "active") {
-    throw new AppError("FORBIDDEN", "Agent run owner is unavailable or disabled");
-  }
-  const principal = run.authorization?.principal;
-  const identity =
-    principal?.kind === "user"
-      ? user.identities.find(
-          (candidate) =>
-            candidate.authSource === principal.authSource &&
-            candidate.externalUserId === principal.externalUserId
-        )
-      : user.identities[0];
-  return {
-    id: user.id,
-    externalUserId: identity?.externalUserId ?? user.id,
-    displayLabel: user.displayLabel,
-    email: user.email,
-    roles: user.roles,
-    permissionRefs: user.permissionRefs,
-    permissions: user.permissions,
-    clientInstanceId: user.clientInstanceId,
-    authSource: identity?.authSource ?? "agent-worker",
-    subjectUserId: user.id
-  };
-}
+export { readAgentRunWorkerConcurrency } from "./agent-run-jobs";

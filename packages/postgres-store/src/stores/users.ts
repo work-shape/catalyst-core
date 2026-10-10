@@ -19,6 +19,7 @@ import {
   deleteUserIdentity as deletePostgresUserIdentity,
   getUserModelPreference as getPostgresUserModelPreference,
   setUserModelPreference as setPostgresUserModelPreference,
+  getUserRecord as getPostgresUserRecord,
   listUsers as listPostgresUsers,
   markUserDeletionRequested as markPostgresUserDeletionRequested,
   resolveUserIdentity as resolvePostgresUserIdentity,
@@ -30,6 +31,9 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
   return {
     async resolveUserIdentity(input: ResolveUserIdentityInput) {
       return resolvePostgresUserIdentity(db, input, (event) => appendPostgresAuditEvent(db, event));
+    },
+    async getUser(input: Parameters<UserStore["getUser"]>[0]): Promise<UserRecord | undefined> {
+      return getPostgresUserRecord(db, input.clientInstanceId, input.userId);
     },
     async listUsers(input: {
       clientInstanceId: ClientInstanceId;

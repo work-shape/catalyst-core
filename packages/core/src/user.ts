@@ -118,6 +118,11 @@ export interface UserModelPreferenceInput {
 
 export interface UserStore {
   resolveUserIdentity(input: ResolveUserIdentityInput): Promise<AuthenticatedUser>;
+  /** One user by id, whatever their status. */
+  getUser(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserId;
+  }): Promise<UserRecord | undefined>;
   listUsers(input: {
     clientInstanceId: ClientInstanceId;
     page?: StorePage;

@@ -1,9 +1,13 @@
 import { IdentityResolvingAuthAdapter, type AuthAdapter } from "@vivd-catalyst/auth";
 import {
+  agentRunJobOptions,
   createPlatformId,
+  executeAgentRunJob,
   type AgentRun,
+  type AgentRunJobLease,
   type AuthenticatedUser,
   type Conversation,
+  type JobId,
   type UserRole
 } from "@vivd-catalyst/core";
 import { createConversationCleanupFixture } from "./conversation-cleanup-fixture";
@@ -46,6 +50,7 @@ export async function arrangeDeletion(
       authAdapter: new IdentityResolvingAuthAdapter(headerAdapter, db.store.users)
     }
   });
+  const leases = new Map<string, AgentRunJobLease>();
   const jobs = () =>
     db.sql<Array<{ kind: string; status: string; attempts: number }>>`
       select kind, status, attempts from platform_jobs
@@ -108,31 +113,59 @@ export async function arrangeDeletion(
         correlationId: "corr_deletion_run"
       });
     },
-    /** Claims the queued run as a worker does. The token is the worker's hold on it. */
+    /**
+     * Claims the queued run as its job does. The job is put into the state a worker's claim
+     * leaves it in, without a worker: the token is that attempt's hold on the run.
+     */
     async claimRun(leaseToken: string) {
-      const claimed = await db.store.agentRuns.claimNextAgentRun({
+      const [queued] = await db.sql<Array<{ id: AgentRun["id"]; correlation_id: string }>>`
+        select id, correlation_id from agent_runs
+        where client_instance_id = ${fixture.scope.clientInstanceId} and status = 'queued'
+        order by started_at, id limit 1`;
+      if (!queued) throw new Error("No queued run to claim");
+      await db.store.jobs.enqueue(
+        executeAgentRunJob,
+        { runId: queued.id },
+        agentRunJobOptions({
+          ...fixture.scope,
+          id: queued.id,
+          correlationId: queued.correlation_id
+        })
+      );
+      const [job] = await db.sql<Array<{ id: JobId }>>`
+        update platform_jobs
+        set status = 'running', attempts = 1, started_at = now(), lease_owner = 'deletion-test',
+          lease_token = ${leaseToken}, lease_expires_at = now() + interval '10 minutes'
+        where client_instance_id = ${fixture.scope.clientInstanceId} and subject = ${queued.id}
+        returning id`;
+      if (!job) throw new Error("The run has no job to claim");
+      const lease = { jobId: job.id, leaseToken };
+      const claimed = await db.store.agentRuns.claimAgentRunForJob({
         ...fixture.scope,
-        workerId: "deletion-test-worker",
-        leaseToken,
-        now: new Date().toISOString(),
-        leaseExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString()
+        runId: queued.id,
+        lease,
+        leaseMs: executeAgentRunJob.leaseMs
       });
-      if (!claimed) throw new Error("No queued run to claim");
-      return claimed;
+      if (claimed.status !== "claimed") throw new Error("The queued run was not claimed");
+      leases.set(leaseToken, lease);
+      return claimed.row;
     },
     /** The message a worker stores for its run. */
-    workerMessage: (run: AgentRun, leaseToken: string) =>
-      db.store.agentRuns.appendClaimedAgentRunMessage({
+    workerMessage(run: AgentRun, leaseToken: string) {
+      const lease = leases.get(leaseToken);
+      if (!lease) throw new Error("No run was claimed under this token");
+      return db.store.agentRuns.appendClaimedAgentRunMessage({
         ...fixture.scope,
         runId: run.id,
-        leaseToken,
+        lease,
         message: {
           ...fixture.scope,
           role: "assistant",
           conversationId: run.conversationId,
           text: "written back"
         }
-      }),
+      });
+    },
     async runStatus(run: AgentRun) {
       const [row] = await db.sql<Array<{ status: string }>>`
         select status from agent_runs where id = ${run.id}`;

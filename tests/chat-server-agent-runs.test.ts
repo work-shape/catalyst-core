@@ -15,6 +15,7 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asCollaborationWorkspaceId,
+  executeAgentRunJob,
   type AgentAvailability
 } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
@@ -32,14 +33,15 @@ import {
 } from "./support/chat-server-attachment-harness";
 
 describe("client instance app vertical slice", () => {
-  it("queues prepared runs when the API uses the worker runtime", async () => {
+  it("leaves an accepted run queued with its job when workers of their own execute runs", async () => {
     const app = await createTestInstance({
       config: createTestConfig(),
       env: {},
-      agentRuntimeMode: "worker",
+      agentRunWorker: "separate",
       tools: []
     });
     try {
+      const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
       const created = await app.call("conversations.create", {
         payload: { title: "Worker dispatch" }
       });
@@ -57,12 +59,24 @@ describe("client instance app vertical slice", () => {
       expect(result.run.status).toBe("queued");
       expect(
         await app.stores.agentRuns.listRunObservations({
-          clientInstanceId: asClientInstanceId(getTestConfig(app).clientInstance.id),
+          clientInstanceId,
           runId: asAgentRunId(result.run.id),
           afterSequence: 0,
           limit: 10
         })
       ).toEqual([]);
+      // The job was accepted with the run: no run in progress is without one.
+      expect(
+        await app.stores.agentRuns.listAgentRunsWithoutJob({
+          clientInstanceId,
+          jobKind: executeAgentRunJob.kind,
+          limit: 10
+        })
+      ).toEqual([]);
+      const summary = await app.stores.jobs.summarizeByKind({ clientInstanceId });
+      expect(summary.find((kind) => kind.kind === executeAgentRunJob.kind)).toMatchObject({
+        queued: 1
+      });
     } finally {
       await app.close();
     }
@@ -677,9 +691,10 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(cancelled.status).toBe(200);
+    // The request is recorded on the run; its worker ends it within the next second.
     expect((await cancelled.json()) as { run: { status: string } }).toMatchObject({
       run: {
-        status: "cancelled"
+        status: "cancelling"
       }
     });
     while (true) {
@@ -877,10 +892,11 @@ describe("client instance app vertical slice", () => {
         }
       });
       expect(cancelled.status).toBe(200);
+      // A run its worker has not claimed yet is cancelled at once; a claimed one is asked to stop.
       expect(await cancelled.json()).toMatchObject({
         run: {
           id: runId,
-          status: "cancelled"
+          status: expect.stringMatching(/^cancell(?:ed|ing)$/)
         }
       });
 
@@ -1195,7 +1211,7 @@ async function createAvailabilityFixture() {
       }
     }),
     env: {},
-    agentRuntimeMode: "worker",
+    agentRunWorker: "separate",
     tools: []
   });
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);

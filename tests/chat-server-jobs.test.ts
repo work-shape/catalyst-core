@@ -75,31 +75,29 @@ describe("the jobs of the API process", () => {
     ]);
   });
 
-  it("runs the run recovery at the first pass after every start", async () => {
+  it("ends the run recovery tick the previous release left behind and schedules no next one", async () => {
     const recoveries = () =>
       withSql(async (sql) => {
-        const rows = await sql<{ status: string; due: boolean }[]>`
-          select status, run_after <= now() as due from platform_jobs
-          where kind = 'agent_run.recover' order by created_at, id`;
+        const rows = await sql<{ status: string }[]>`
+          select status from platform_jobs where kind = 'agent_run.recover' order by created_at, id`;
         return rows.map((row) => ({ ...row }));
       });
-    const first = await createApp();
-    await getTestJobs(first).runDue();
-    // The next tick is a minute away.
-    await expect(recoveries()).resolves.toEqual([
-      { status: "succeeded", due: true },
-      { status: "queued", due: false }
-    ]);
-    await first.close();
+    const app = await createApp();
+    // The tick as the previous release's schedule enqueued it.
+    await withSql(async (sql) => {
+      await sql`
+        insert into platform_jobs
+          (id, client_instance_id, kind, payload, status, run_after, max_attempts, dedupe_key,
+           correlation_id, created_at)
+        values
+          ('job_leftover_recovery', ${clientInstanceId}, 'agent_run.recover', '{}', 'queued',
+           now(), 1, 'schedule:agent_run.recover', 'corr_leftover_recovery', now())`;
+    });
 
-    const second = await createApp();
-    await getTestJobs(second).runDue();
+    await getTestJobs(app).runDue();
+    await getTestJobs(app).runDue();
 
-    await expect(recoveries()).resolves.toEqual([
-      { status: "succeeded", due: true },
-      { status: "succeeded", due: true },
-      { status: "queued", due: false }
-    ]);
+    await expect(recoveries()).resolves.toEqual([{ status: "succeeded" }]);
   });
 
   it("gives a preview row without a job its job at the first pass, and no second one", async () => {

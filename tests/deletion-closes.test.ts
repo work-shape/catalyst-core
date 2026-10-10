@@ -163,7 +163,7 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
     await expect(t.runStatus(run)).resolves.toBeUndefined();
     await expect(t.workerMessage(run, "lease-owner")).rejects.toMatchObject({
       code: "CONFLICT",
-      message: "Agent run lease is no longer active"
+      message: "Agent run has ended"
     });
   });
 
