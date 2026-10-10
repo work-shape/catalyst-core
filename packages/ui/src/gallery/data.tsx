@@ -297,7 +297,15 @@ export const dataGallery: GalleryGroup = {
   entries: [
     {
       name: "Table",
-      components: ["Table", "TableHeader", "TableBody", "TableRow", "TableHead", "TableCell"],
+      components: [
+        "Table",
+        "TableHeader",
+        "TableBody",
+        "TableRow",
+        "TableHead",
+        "TableCell",
+        "TableCellDetail"
+      ],
       render: (text) => (
         <Table>
           <TableHeader>
