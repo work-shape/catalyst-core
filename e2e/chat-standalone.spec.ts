@@ -1,7 +1,8 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { randomUUID } from "node:crypto";
 import { requestWithOrigin } from "./request-with-origin";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { expect, test } from "./test";
 import { z } from "zod";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -171,6 +172,113 @@ test("composer grows for multiline input", async ({ page }) => {
     .toBeGreaterThan(initialHeight);
 });
 
+test("the composer grows to six lines without a resize observer loop", async ({ page }) => {
+  // The browser reports the loop as an error event on the window, without an exception.
+  await page.addInitScript(() => {
+    window.addEventListener("error", (event) => {
+      if (event.message.includes("ResizeObserver")) {
+        document.documentElement.dataset.resizeObserverLoops = String(
+          Number(document.documentElement.dataset.resizeObserverLoops ?? 0) + 1
+        );
+      }
+    });
+  });
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const input = page.getByPlaceholder("Message");
+  const lineHeight = async () =>
+    input.evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight));
+  const height = async () => input.evaluate((element) => element.getBoundingClientRect().height);
+  const oneLine = await height();
+
+  // Typed as a user types it: a long line that wraps, then line by line.
+  await input.pressSequentially("A first line that is long enough to wrap in a compact composer ");
+  for (let line = 2; line <= COMPOSER_GROWTH_LINES; line += 1) {
+    await input.press("Shift+Enter");
+    await input.pressSequentially(`line ${line}`);
+  }
+  await expect
+    .poll(height)
+    .toBeGreaterThanOrEqual(oneLine + (COMPOSER_GROWTH_LINES - 1) * (await lineHeight()) - 1);
+  // And back to one line, which moves the controls beside the input again.
+  await input.fill("");
+  await expect.poll(height).toBe(oneLine);
+  // Two frames, so an observer that fired on the last change has reported.
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  );
+
+  expect(
+    await page.evaluate(() => document.documentElement.dataset.resizeObserverLoops ?? "0")
+  ).toBe("0");
+});
+
+test("the work history of a run that just ended folds itself and opens on the first click", async ({
+  page
+}) => {
+  await signInViaUi(page, superadminUser);
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `/tool demo.weather_forecast {"location":"Bergen ${Date.now()}","days":3,"unit":"celsius","startDate":"2026-06-13"}`
+    );
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  const chatRegion = page.getByRole("region", { name: "Chat" });
+  await expect(page.getByText("Tool work completed").last()).toBeVisible();
+  // The page runs in React's StrictMode here, which runs every effect twice: the group still
+  // folds itself after its delay.
+  const workHistory = chatRegion.getByRole("button", { name: /^Work history/u });
+  await expect(workHistory).toHaveAttribute("aria-expanded", "false");
+  await expect(chatRegion.getByRole("button", { name: "1 tool call", exact: true })).toBeHidden();
+
+  // One click opens it.
+  await workHistory.click();
+  await expect(workHistory).toHaveAttribute("aria-expanded", "true");
+  await expect(chatRegion.getByRole("button", { name: "1 tool call", exact: true })).toBeVisible();
+});
+
+test("a message sent directly after switching lands in the conversation switched to", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+  const stamp = Date.now();
+  const left = await createListedConversation(page, `Switch from ${stamp}`);
+  const entered = await createListedConversation(page, `Switch to ${stamp}`);
+  const messagesOf = async (conversationId: string) => {
+    const thread = await page.request.get(
+      `${apiBaseUrl}/api/v1/conversations/${encodeURIComponent(conversationId)}/thread`
+    );
+    expect(thread.ok()).toBe(true);
+    return z
+      .object({ messages: z.array(z.object({ role: z.string(), text: z.string() })) })
+      .parse(await thread.json())
+      .messages.filter((message) => message.role === "user")
+      .map((message) => message.text);
+  };
+
+  await page.goto("/");
+  const rowOf = (title: string) =>
+    page.getByTestId("conversation-row").filter({ hasText: title }).getByRole("button").first();
+  await rowOf(`Switch from ${stamp}`).click();
+  await expect(page).toHaveURL(conversationUrlPattern(left.id));
+  const chat = page.getByRole("region", { name: "Chat" });
+  await expect(chat.getByText(`Opening message for Switch from ${stamp}`).first()).toBeVisible();
+
+  // The click, the text and Enter follow each other without waiting for the page in between.
+  const text = `Sent right after the switch ${stamp}`;
+  const input = page.getByPlaceholder("Message");
+  await rowOf(`Switch to ${stamp}`).click();
+  await input.fill(text);
+  await input.press("Enter");
+
+  await expect(page).toHaveURL(conversationUrlPattern(entered.id));
+  await expect(chat.locator('[data-role="user"]').getByText(text, { exact: true })).toBeVisible();
+  await expect.poll(() => messagesOf(entered.id)).toContain(text);
+  expect(await messagesOf(left.id)).toEqual([`Opening message for Switch from ${stamp}`]);
+});
+
 test("start page centres the composer and settles it at the bottom after the first message", async ({
   page
 }) => {
@@ -211,7 +319,8 @@ test("start page centres the composer and settles it at the bottom after the fir
   // The chip above the welcome message names the agent and is the picker; it lists one option
   // per agent. The header shows no agent while the start page does.
   const agentPicker = chat.getByRole("button", { name: "Select agent" });
-  const agentListbox = chat.getByRole("listbox");
+  // The list opens in the overlay layer, outside the chat region.
+  const agentListbox = page.getByRole("listbox");
   const agentOptions = agentListbox.getByRole("option");
   const headerAgent = page.locator("header").getByRole("button", { name: "Select agent" });
   await input.fill("Draft that survives choosing an agent");
@@ -242,13 +351,20 @@ test("start page centres the composer and settles it at the bottom after the fir
     "aria-selected",
     "true"
   );
-  await agentOptions.filter({ hasText: "Application Assistant" }).focus();
+  // The list has the keyboard and opens on the chosen agent. Escape leaves the choice alone.
+  await expect(agentListbox).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(agentOptions.filter({ hasText: "Application Assistant" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
   await page.keyboard.press("Escape");
   await expect(agentListbox).toHaveCount(0);
   await expect(agentPicker).toBeFocused();
+  await expect(agentPicker).toContainText("Research Assistant");
   await page.keyboard.press("Enter");
   await expect(agentListbox).toHaveAccessibleName("Select agent");
-  await agentOptions.filter({ hasText: "Application Assistant" }).focus();
+  await page.keyboard.press("ArrowUp");
   await page.keyboard.press("Enter");
   await expect(agentListbox).toHaveCount(0);
   await expect(agentPicker).toBeFocused();
@@ -544,7 +660,71 @@ test("without its name the agent chip is an icon that opens the agent list under
   await checkChip(headerChip);
 });
 
-test("the agent icon's list is chosen from with Tab and Enter and stays while the keyboard is in it", async ({
+test("an agent is chosen with the keyboard alone: arrows, a typed name, Enter and Escape", async ({
+  page
+}) => {
+  await signInViaUi(page, normalUser);
+  await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
+
+  const chat = page.getByRole("region", { name: "Chat" });
+  const chip = chat.getByRole("button", { name: "Select agent" });
+  const listbox = page.getByRole("listbox", { name: "Select agent" });
+  const application = listbox.getByRole("option", { name: "Application Assistant" });
+  const research = listbox.getByRole("option", { name: "Research Assistant" });
+  /** The option the list names as active to assistive technology. */
+  const activeOptionId = () => listbox.getAttribute("aria-activedescendant");
+
+  // Tab reaches the chip: it is the stop before the message field.
+  await page.getByPlaceholder("Message").focus();
+  for (let stops = 0; stops < AGENT_CHIP_TAB_STOPS_MOST; stops += 1) {
+    await page.keyboard.press("Shift+Tab");
+    if (await chip.evaluate((element) => element === document.activeElement)) break;
+  }
+  await expect(chip).toBeFocused();
+  await expect(chip).toContainText("Application Assistant");
+
+  // Arrow down opens the list on the chosen agent and gives the list the keyboard.
+  await page.keyboard.press("ArrowDown");
+  await expect(listbox).toBeFocused();
+  await expect(application).toHaveAttribute("aria-selected", "true");
+  expect(await activeOptionId()).toBe(await application.getAttribute("id"));
+
+  // Arrow down moves on, Enter chooses, and the chip has the keyboard again.
+  await page.keyboard.press("ArrowDown");
+  await expect(research).toHaveAttribute("aria-selected", "true");
+  expect(await activeOptionId()).toBe(await research.getAttribute("id"));
+  await page.keyboard.press("Enter");
+  await expect(listbox).toHaveCount(0);
+  await expect(chip).toContainText("Research Assistant");
+  await expect(chip).toBeFocused();
+  await expect(chat.getByRole("button", { name: "Summarize policy" })).toBeVisible();
+
+  // Enter opens it too. A typed name moves to its agent; the arrows wrap around the list.
+  await page.keyboard.press("Enter");
+  await expect(research).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.type("app");
+  await expect(application).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect(research).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(application).toHaveAttribute("aria-selected", "true");
+
+  // Escape closes without choosing and returns the keyboard to the chip.
+  await page.keyboard.press("Escape");
+  await expect(listbox).toHaveCount(0);
+  await expect(chip).toBeFocused();
+  await expect(chip).toContainText("Research Assistant");
+
+  // Tab leaves the list by closing it, also without choosing.
+  await page.keyboard.press("Enter");
+  await expect(listbox).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(listbox).toHaveCount(0);
+  await expect(chip).toBeFocused();
+  await expect(chip).toContainText("Research Assistant");
+});
+
+test("the agent icon's list takes the keyboard on an arrow key and stays while the keyboard is in it", async ({
   page
 }) => {
   await serveAgentSettings(page, { showAgentName: false });
@@ -553,8 +733,10 @@ test("the agent icon's list is chosen from with Tab and Enter and stays while th
 
   const chat = page.getByRole("region", { name: "Chat" });
   const chip = chat.getByRole("button", { name: "Select agent" });
-  const listbox = chat.getByRole("listbox", { name: "Select agent" });
+  const listbox = page.getByRole("listbox", { name: "Select agent" });
+  const application = listbox.getByRole("option", { name: "Application Assistant" });
   const research = listbox.getByRole("option", { name: "Research Assistant" });
+  const input = page.getByPlaceholder("Message");
   const leaveChip = async () => {
     const chatBox = await chat.boundingBox();
     if (!chatBox) throw new Error("chat area is not laid out");
@@ -563,44 +745,59 @@ test("the agent icon's list is chosen from with Tab and Enter and stays while th
     });
   };
 
-  // Keyboard alone: Enter opens, Tab walks the agents, Enter chooses.
+  // Keyboard alone: Enter opens with the keyboard in the list, an arrow moves, Enter chooses.
   await chip.focus();
   await page.keyboard.press("Enter");
-  await expect(listbox).toBeVisible();
-  await page.keyboard.press("Tab");
-  await expect(listbox.getByRole("option", { name: "Application Assistant" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(research).toBeFocused();
+  await expect(listbox).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(research).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Enter");
   await expect(listbox).toHaveCount(0);
   await expect(chip).toHaveAccessibleName("Select agent: Research Assistant");
   await expect(chip).toBeFocused();
 
-  // Opened under the pointer, the list stays when the pointer leaves while the keyboard is on
-  // an agent, so Enter still chooses it.
+  // Opened under the pointer, the list leaves the keyboard where it is: a draft goes on.
+  await input.focus();
   await chip.hover();
   await expect(listbox).toBeVisible();
-  await page.keyboard.press("Tab");
-  const application = listbox.getByRole("option", { name: "Application Assistant" });
-  await expect(application).toBeFocused();
+  await expect(input).toBeFocused();
+  await page.keyboard.type("still typing");
+  await expect(input).toHaveValue("still typing");
   await leaveChip();
-  await expect(application).toBeFocused();
+  await expect(listbox).toHaveCount(0);
+  await expect(input).toBeFocused();
+
+  // With the keyboard on the icon, an arrow key moves it into the list under the pointer. The
+  // list then stays when the pointer leaves, so Enter still chooses.
+  await chip.focus();
+  await chip.hover();
+  await expect(listbox).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await expect(listbox).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(application).toHaveAttribute("aria-selected", "true");
+  await leaveChip();
+  await expect(listbox).toBeFocused();
   await expect(listbox).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(listbox).toHaveCount(0);
   await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
+  await expect(chip).toBeFocused();
 
   // With the pointer away, the list closes once the keyboard leaves it too.
   await page.keyboard.press("Enter");
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await expect(research).toBeFocused();
+  await expect(listbox).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(listbox).toHaveCount(0);
 });
 
-test("a tap opens the agent icon's list and chooses from it", async ({ browser, baseURL }) => {
+test("a tap opens the agent icon's list and chooses from it", async ({
+  browser,
+  baseURL,
+  pageErrors
+}) => {
   const context = await browser.newContext({ baseURL, hasTouch: true });
+  await pageErrors.watch(context);
   const page = await context.newPage();
   await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
@@ -608,7 +805,7 @@ test("a tap opens the agent icon's list and chooses from it", async ({ browser, 
 
   const chat = page.getByRole("region", { name: "Chat" });
   const chip = chat.getByRole("button", { name: "Select agent" });
-  const listbox = chat.getByRole("listbox", { name: "Select agent" });
+  const listbox = page.getByRole("listbox", { name: "Select agent" });
   await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(listbox).toHaveCount(0);
 
@@ -645,16 +842,19 @@ for (const showAgentName of [false, true]) {
       .click();
     await page.setViewportSize({ width: 320, height: 640 });
 
-    // The header's list hangs from the chip's left edge and ends inside the window.
+    // The header's list hangs under the chip and keeps inside the window on both sides.
     const headerChip = page.locator("header").getByRole("button", { name: "Select agent" });
-    const list = page.getByRole("listbox", { name: "Select agent" }).locator("..");
+    const list = page.getByRole("dialog").filter({
+      has: page.getByRole("listbox", { name: "Select agent" })
+    });
     await headerChip.click();
     await expect(page.getByRole("option")).toHaveCount(2);
     const chipBox = await headerChip.boundingBox();
     const listBox = await list.boundingBox();
     if (!chipBox || !listBox) throw new Error("agent list is not laid out");
-    expect(listBox.x).toBeCloseTo(chipBox.x, 0);
-    expect(listBox.x + listBox.width).toBeLessThanOrEqual(320 - 16);
+    expect(listBox.y).toBeGreaterThan(chipBox.y + chipBox.height);
+    expect(listBox.x).toBeGreaterThanOrEqual(AGENT_LIST_WINDOW_MARGIN);
+    expect(listBox.x + listBox.width).toBeLessThanOrEqual(320 - AGENT_LIST_WINDOW_MARGIN);
     expect(listBox.width).toBeGreaterThan(200);
     // Nothing in it is cut off either.
     for (const option of await page.getByRole("option").all()) {
@@ -714,7 +914,7 @@ test("a single agent's icon names it in the list it opens under the pointer", as
 
   const chat = page.getByRole("region", { name: "Chat" });
   const chip = chat.getByRole("button", { name: "Select agent" });
-  const listbox = chat.getByRole("listbox", { name: "Select agent" });
+  const listbox = page.getByRole("listbox", { name: "Select agent" });
   await expect(chip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(chip).toHaveText("");
   await expect(listbox).toHaveCount(0);
@@ -1446,10 +1646,12 @@ test("the user list shows an account that is being deleted", async ({ page }) =>
 
 test("a superadmin manages a shared workspace without being a member", async ({
   page,
-  browser
+  browser,
+  pageErrors
 }) => {
   const workspaceName = `E2E Team ${Date.now()}`;
   const memberContext = await browser.newContext();
+  await pageErrors.watch(memberContext);
   const memberPage = await memberContext.newPage();
   await signInViaApi(memberPage, normalUser);
   const createdCollaborationWorkspace = await requestWithOrigin(
@@ -1487,7 +1689,8 @@ test("a superadmin manages a shared workspace without being a member", async ({
 
 test("a stranger to a workspace and a non-author of a private conversation find nothing", async ({
   page,
-  browser
+  browser,
+  pageErrors
 }) => {
   const stamp = Date.now();
   const closedWorkspaceName = `E2E Closed ${stamp}`;
@@ -1496,6 +1699,7 @@ test("a stranger to a workspace and a non-author of a private conversation find 
 
   // The superadmin owns a private workspace the normal user is no member of.
   const superadminContext = await browser.newContext();
+  await pageErrors.watch(superadminContext);
   const superadminPage = await superadminContext.newPage();
   await signInViaApi(superadminPage, superadminUser);
   const closedWorkspace = await createWorkspace(superadminPage, {
@@ -3751,6 +3955,13 @@ const collaborationWorkspaceConversationUrlPattern = /\/w\/[^/]+\/c\/[^/]+$/u;
 function conversationUrlPattern(conversationId: string): RegExp {
   return new RegExp(`/w/[^/]+/c/${escapeRegExp(encodeURIComponent(conversationId))}$`, "u");
 }
+
+/** The distance the library keeps between an anchored panel and the window's edge. */
+const AGENT_LIST_WINDOW_MARGIN = 8;
+/** More Shift+Tab presses than lie between the message field and the agent chip above it. */
+const AGENT_CHIP_TAB_STOPS_MOST = 12;
+/** The lines the composer grows to in the test that watches its resize observers. */
+const COMPOSER_GROWTH_LINES = 6;
 
 /**
  * Words in a message whose run must still be going on the server while the test acts on the

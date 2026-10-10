@@ -1,16 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type BrowserContext,
-  type Page,
-  type Request
-} from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page, Request } from "@playwright/test";
 import postgres from "postgres";
 import { z } from "zod";
+import { expect, test } from "./test";
 
 // A generated view loads its runtime, Tailwind and Lucide, from the instance and nothing from
 // anywhere else. Every test here refuses each request to a host other than the instance and

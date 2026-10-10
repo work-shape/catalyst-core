@@ -1,5 +1,6 @@
 import { requestWithOrigin } from "./request-with-origin";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };

@@ -1,5 +1,6 @@
 import { requestWithOrigin } from "./request-with-origin";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
@@ -10,7 +11,8 @@ const darkPopover = "color-mix(in srgb, #efebe4 6%, #1c1a17)";
 
 test("the UI library gallery opens for an administrator and for nobody else", async ({
   page,
-  browser
+  browser,
+  pageErrors
 }) => {
   await signInViaApi(page, adminUser);
   await page.goto("/ui-library");
@@ -27,6 +29,7 @@ test("the UI library gallery opens for an administrator and for nobody else", as
   await expect(page.locator("[data-gallery-entry]")).not.toHaveCount(0);
 
   const memberContext = await browser.newContext();
+  await pageErrors.watch(memberContext);
   const memberPage = await memberContext.newPage();
   await signInViaApi(memberPage, normalUser);
   await memberPage.goto("/ui-library");
@@ -208,7 +211,7 @@ test("anchored overlays sit on the raised surface and answer the keyboard", asyn
 
   // Picker: groups, search in the caller's order, a disabled option, the create row last.
   const pickerEntry = root.locator('[data-gallery-entry="Picker"]');
-  const pickerTrigger = pickerEntry.getByRole("button", { name: "Support assistant" });
+  const pickerTrigger = pickerEntry.getByRole("button", { name: "Support assistant", exact: true });
   await pickerTrigger.click();
   const picker = overlays.getByRole("dialog");
   await expectRaised(picker);
