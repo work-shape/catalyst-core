@@ -7,6 +7,15 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Modules:** a module that is off is off everywhere. Each of its operations answers
+  `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, before
+  the caller is authenticated. Its agent tools are not offered to the model and cannot be called,
+  and saving or pushing an agent that names one is refused with a message that names the module;
+  an agent stored earlier keeps its entry and runs without the tool. Its job kinds are not claimed
+  and their queued jobs stay queued. The operations of `assetManagement` answered `403 FORBIDDEN`
+  while the module was off and answer this `404` now. The page **Instance > Modules** in the
+  settings and `GET /api/v1/instance/modules` list every module with its state, what it adds and
+  its config key; both need `audit.view` and change nothing, because the switch is release config.
 - **Access:** an instance administrator can give one user read, write or delete on agents or
   skills inside a Namespace or on one asset, and can deny it. A Namespace is a registered name
   prefix such as `kai-`; it can carry a list of allowed tools and a list of allowed model

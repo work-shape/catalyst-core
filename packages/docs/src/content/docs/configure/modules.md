@@ -30,6 +30,21 @@ The document processing capability is part of the paid capabilities and not in t
 
 A module that a later release adds is off until its entry says otherwise.
 
+## What Off Means
+
+A module that is off is off for every caller and on every surface:
+
+- Each of its operations answers `404 NOT_FOUND` with `details.reason: "module_off"` and the module's name in `details.module`. The answer comes before the caller is authenticated, as for an address the instance does not serve.
+- Its agent tools are not offered to the model and cannot be called, also for an agent that still lists one. Saving or pushing an agent that names such a tool is refused with a message that names the module. An agent stored before the module was turned off keeps its entry and runs without the tool.
+- Its job kinds are not claimed. Jobs of such a kind that are already queued stay queued and show as queued under **Settings > Instance > Jobs**. They run when the module is on again.
+- Its screens, panels and buttons are absent from the interface.
+
+Turning a module off deletes nothing. Its stored data is there when the module is turned on again.
+
+## Reading The Modules Of An Instance
+
+**Settings > Instance > Modules** lists every module the product knows with its state, what it adds and its config key. The page is shown to holders of `audit.view` and changes nothing: the switch is release config. `GET /api/v1/instance/modules` returns the same list. A module whose code is not part of the build is listed as off with `shipped: false`.
+
 ## What Is Checked At Startup
 
 The API and every worker resolve the same switches before they open the database or start a service. Startup stops with a message that names the module when:
