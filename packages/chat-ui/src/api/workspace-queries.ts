@@ -435,18 +435,23 @@ export function useAdministeredCollaborationWorkspacesQuery(
   });
 }
 
-export function useConfigAssetsExportQuery(
+/** How long the platform context is taken as read: it changes with a grant or a release. */
+const PLATFORM_CONTEXT_STALE_MS = 5 * 60_000;
+
+/**
+ * Where the caller is and what it may do there: the instance, its release, the asset kinds
+ * and the caller's Namespaces. One read serves the rail, the account menu and Build.
+ */
+export function usePlatformContextQuery(
   input: WorkspaceQueryInput & {
     enabled: boolean;
   }
 ) {
   return useQuery({
-    queryKey: [
-      ...workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope),
-      "export"
-    ] as const,
-    queryFn: () => input.client.config_assets.export(),
-    enabled: input.enabled
+    queryKey: workspaceQueryKeys.platformContext(input.apiBaseUrl, input.authScope),
+    queryFn: () => input.client.platform.context.get(),
+    enabled: input.enabled,
+    staleTime: PLATFORM_CONTEXT_STALE_MS
   });
 }
 

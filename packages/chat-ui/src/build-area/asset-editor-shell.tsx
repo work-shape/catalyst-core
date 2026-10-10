@@ -1,0 +1,278 @@
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  Banner,
+  FormNotice,
+  Page,
+  PageHeader,
+  SaveBar,
+  Section,
+  SegmentedControl,
+  SegmentedControlItem,
+  SubRail
+} from "@vivd-catalyst/ui";
+import { useTranslation } from "../i18n";
+import { AssetLanguageProvider } from "./asset-form-fields";
+import { ASSET_LANGUAGES, type LocalizedPair } from "./asset-form-model";
+import type { BuildAssetEditorProps, BuildPageSlot } from "./build-asset-kind";
+import { refusalsOf, type BuildRefusalField, type BuildWriteOutcome } from "./build-refusals";
+
+type AssetLanguage = keyof LocalizedPair;
+
+/** One section of an asset page: an entry of the index and the fields under its heading. */
+export interface AssetSection {
+  /** The anchor the index scrolls to. */
+  id: string;
+  label: string;
+  description?: string;
+  /** How many things the section holds, in the index and after the heading. */
+  count?: number;
+  /** The field a refusal names that belongs here: a refused save scrolls to this section. */
+  refusalField?: BuildRefusalField;
+  body: ReactNode;
+}
+
+/**
+ * The form a kind's page holds, as the shell needs it: the shell counts the changes, saves,
+ * discards and tells the frame about unsaved changes, whatever the form is made of.
+ */
+export interface AssetFormControl {
+  /** How many fields differ from what was loaded or last saved. */
+  changes: number;
+  /** The definition to save, made from the form. */
+  submit(): Promise<BuildWriteOutcome>;
+  discard(): void;
+}
+
+/** The form state every kind's page keeps the same way: the form, what it started as, and the last answer. */
+export function useAssetForm<Form>(initial: Form): {
+  form: Form;
+  setForm(next: Form | ((form: Form) => Form)): void;
+  /** What the form is compared with: as loaded, or as last saved. */
+  baseline: Form;
+  markSaved(): void;
+  discard(): void;
+  outcome: BuildWriteOutcome | undefined;
+  setOutcome(outcome: BuildWriteOutcome | undefined): void;
+} {
+  const [form, setForm] = useState(initial);
+  const [baseline, setBaseline] = useState(initial);
+  const [outcome, setOutcome] = useState<BuildWriteOutcome>();
+  return {
+    form,
+    setForm,
+    baseline,
+    markSaved: () => setBaseline(form),
+    discard: () => {
+      setForm(baseline);
+      setOutcome(undefined);
+    },
+    outcome,
+    setOutcome
+  };
+}
+
+/**
+ * Tells the frame that the page shows something new, so the focus can move to its heading.
+ * `what` names what shows: the frame hears of every change of it.
+ */
+export function usePageShown(page: BuildPageSlot, what: string): void {
+  const { shown } = page;
+  useEffect(() => {
+    shown();
+  }, [shown, what]);
+}
+
+/**
+ * The page of one asset, the same for every kind: the head with the way back, the name and
+ * the id, the index of the sections, the one language switch, what a refused save says, and
+ * the save bar that shows with the first change. A kind hands it its sections.
+ */
+export function AssetEditorShell({
+  frame,
+  kindLabel,
+  title,
+  badges,
+  headActions,
+  sections,
+  missingTranslations,
+  control,
+  outcome,
+  saving,
+  saveLabel
+}: {
+  /** What the frame handed the kind's page. */
+  frame: BuildAssetEditorProps;
+  /** The kind in the singular, before the id. */
+  kindLabel: string;
+  title: string;
+  badges?: ReactNode;
+  /** Actions of the kind before the frame's own, such as making an agent the default. */
+  headActions?: ReactNode;
+  sections: readonly AssetSection[];
+  /** With it the page has texts per language: how many are still empty in each one. */
+  missingTranslations?: LocalizedPair<number>;
+  control: AssetFormControl;
+  /** The answer to the last save. Its refusals show at their fields and above the save bar. */
+  outcome: BuildWriteOutcome | undefined;
+  saving: boolean;
+  saveLabel: string;
+}) {
+  const { locale, t } = useTranslation();
+  const { page, back, actions, notice, canWrite, asset, start, onUnsavedChange } = frame;
+  const [language, setLanguage] = useState<AssetLanguage>(locale === "de" ? "de" : "en");
+  const isNew = asset === undefined;
+  usePageShown(page, "asset");
+  const dirty = isNew || control.changes > 0;
+  const unsaved = canWrite && dirty;
+
+  useEffect(() => {
+    onUnsavedChange(unsaved);
+    return () => onUnsavedChange(false);
+  }, [unsaved, onUnsavedChange]);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    control.submit().then(
+      (answer) => {
+        // A refusal that names a field is read where the field is.
+        const named = sections.find(
+          (section) => section.refusalField && refusalsOf(answer, section.refusalField).length > 0
+        );
+        if (named) {
+          document.getElementById(named.id)?.scrollIntoView({ block: "start" });
+        }
+      },
+      () => undefined
+    );
+  };
+  const identifier = asset?.name ?? start?.name ?? "";
+  const general = refusalsOf(outcome, undefined);
+
+  return (
+    <Page
+      ref={page.ref}
+      subRail={
+        sections.length > 1 ? (
+          <SubRail
+            mode="anchors"
+            belowHeader
+            label={t("build.sections")}
+            groups={[
+              {
+                id: "sections",
+                items: sections.map((section) => ({
+                  id: section.id,
+                  label: section.label,
+                  count: section.count
+                }))
+              }
+            ]}
+          />
+        ) : undefined
+      }
+    >
+      {page.above}
+      <form className="grid min-w-0 content-start" noValidate={!canWrite} onSubmit={submit}>
+        <PageHeader
+          variant="detail"
+          back={back}
+          title={title}
+          state={badges}
+          description={
+            <span className="flex min-w-0 items-center gap-2">
+              <span>{kindLabel}</span>
+              <code className="min-w-0 truncate text-code" title={identifier}>
+                {identifier}
+              </code>
+            </span>
+          }
+          secondaryActions={
+            <>
+              {headActions}
+              {actions}
+            </>
+          }
+        />
+        {canWrite ? null : <Banner tone="info">{t("build.readOnly")}</Banner>}
+        {missingTranslations ? (
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-4">
+            <span className="text-label text-muted-foreground">{t("build.textsIn")}</span>
+            <SegmentedControl
+              size="sm"
+              label={t("build.textsIn")}
+              value={language}
+              onValueChange={(next) =>
+                setLanguage(ASSET_LANGUAGES.find((candidate) => candidate === next) ?? language)
+              }
+            >
+              {ASSET_LANGUAGES.map((candidate) => (
+                <SegmentedControlItem
+                  key={candidate}
+                  value={candidate}
+                  count={
+                    candidate !== language && missingTranslations[candidate] > 0
+                      ? missingTranslations[candidate]
+                      : undefined
+                  }
+                  title={
+                    missingTranslations[candidate] > 0
+                      ? t(
+                          missingTranslations[candidate] === 1
+                            ? "build.textMissing"
+                            : "build.textsMissing",
+                          { count: missingTranslations[candidate] }
+                        )
+                      : undefined
+                  }
+                >
+                  {t(candidate === "en" ? "configEnglishLanguage" : "configGermanLanguage")}
+                </SegmentedControlItem>
+              ))}
+            </SegmentedControl>
+          </div>
+        ) : null}
+        <AssetLanguageProvider value={language}>
+          {sections.map((section) => (
+            <Section
+              key={section.id}
+              id={section.id}
+              title={section.label}
+              description={section.description}
+              count={section.count}
+            >
+              {section.body}
+            </Section>
+          ))}
+        </AssetLanguageProvider>
+        {notice || general.length > 0 || (canWrite && (dirty || saving)) ? (
+          <div className="sticky bottom-0 z-(--layer-sticky-header) grid gap-2 bg-background py-3">
+            {notice}
+            {general.map((message) => (
+              <FormNotice key={message} tone="error">
+                {message}
+              </FormNotice>
+            ))}
+            {canWrite ? (
+              <SaveBar
+                label={saveLabel}
+                saving={saving}
+                dirty={dirty}
+                whenClean="hidden"
+                changes={
+                  isNew
+                    ? undefined
+                    : t(control.changes === 1 ? "build.changeCount" : "build.changesCount", {
+                        count: control.changes
+                      })
+                }
+                discardLabel={isNew ? undefined : t("build.discard")}
+                onDiscard={isNew ? undefined : control.discard}
+                hint={t("configAppliesImmediately")}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </form>
+    </Page>
+  );
+}

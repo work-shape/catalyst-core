@@ -119,6 +119,14 @@ export const workspaceQueryKeys = {
     ["service-principals", apiBaseUrl, authScope] as const,
   configAssetsOverview: (apiBaseUrl: string, authScope: string) =>
     ["config-assets-overview", apiBaseUrl, authScope] as const,
+  /** Where the caller is and what it may do there. */
+  platformContext: (apiBaseUrl: string, authScope: string) =>
+    ["platform-context", apiBaseUrl, authScope] as const,
+  /** What a definition may refer to on this instance. */
+  platformReferences: (apiBaseUrl: string, authScope: string) =>
+    ["platform-references", apiBaseUrl, authScope] as const,
+  /** Every read of the asset operations: the lists and the single assets. */
+  assets: (apiBaseUrl: string, authScope: string) => ["assets", apiBaseUrl, authScope] as const,
   administeredCollaborationWorkspaces: (apiBaseUrl: string, authScope: string) =>
     ["administered-collaboration-workspaces", apiBaseUrl, authScope] as const
 };

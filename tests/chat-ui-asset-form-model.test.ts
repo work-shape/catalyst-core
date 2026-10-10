@@ -5,19 +5,25 @@ import {
   agentAvailabilityToForm,
   agentConfigToForm,
   agentFormToConfig,
+  agentMissingTranslations,
   agentModelRows,
-  configAssetMutationErrorMessage,
+  ASSET_LANGUAGES,
+  countChangedFields,
   editedAgentConfig,
+  emptyAgentForm,
+  emptySkillForm,
   localizedToPair,
   pairToLocalized,
   selectAgentModelBinding,
   setAgentModelReasoningEffort,
   setAgentModelUserSelectable,
   skillConfigToForm,
-  skillFormToConfig
-} from "../packages/chat-ui/src/control-plane/config-assets-model";
+  skillFormToConfig,
+  startedAgentForm,
+  startedSkillForm
+} from "@vivd-catalyst/chat-ui/build-area";
 
-describe("config assets form model", () => {
+describe("asset form model", () => {
   it("round-trips a full agent config through the form state", () => {
     const config = {
       name: "workflow_assistant",
@@ -334,42 +340,6 @@ describe("config assets form model", () => {
     };
     expect(skillFormToConfig(skillConfigToForm(config))).toEqual(config);
   });
-
-  it("surfaces config validation issues instead of the generic API message", () => {
-    const error = Object.assign(new Error("Config asset bundle is invalid"), {
-      payload: {
-        error: {
-          details: {
-            issues: [
-              {
-                message:
-                  "Agent 'research_assistant' references skills but does not allow 'read_skill'"
-              }
-            ]
-          }
-        }
-      }
-    });
-
-    expect(configAssetMutationErrorMessage(error, "Not saved")).toBe(
-      "Agent 'research_assistant' references skills but does not allow 'read_skill'"
-    );
-  });
-
-  it("surfaces the server's refusal to hide the default agent", () => {
-    expect(
-      configAssetMutationErrorMessage(
-        new Error("Default agent 'assistant' must be available in all workspaces"),
-        "Not saved"
-      )
-    ).toBe("Default agent 'assistant' must be available in all workspaces");
-  });
-
-  it("falls back to the caller's translated message when the server sent none", () => {
-    expect(configAssetMutationErrorMessage(undefined, "Nicht gespeichert")).toBe(
-      "Nicht gespeichert"
-    );
-  });
 });
 
 describe("agent availability model", () => {
@@ -418,5 +388,142 @@ describe("agent availability model", () => {
         { mode: "all", personalWorkspaces: true, collaborationWorkspaceIds: ["a"] }
       )
     ).toBe(true);
+  });
+});
+
+describe("texts per language", () => {
+  it("writes a localized text in English and German, in that order", () => {
+    expect(ASSET_LANGUAGES).toEqual(["en", "de"]);
+  });
+
+  it("counts per language the texts that are written in the other one only", () => {
+    const form = agentConfigToForm({
+      name: "assistant",
+      displayName: { de: "Assistent" },
+      description: { en: "Help with the workflow.", de: "Hilfe beim Workflow." },
+      welcomeMessage: { en: "How can I help?" },
+      instructions: "Help the user.",
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: [
+        { title: { en: "Weather" }, prompt: { en: "Check the weather.", de: "Prüfe das Wetter." } }
+      ]
+    });
+
+    // English lacks the name; German lacks the welcome message and the prompt's title.
+    expect(agentMissingTranslations(form)).toEqual({ en: 1, de: 2 });
+  });
+
+  it("does not count a text that is empty in both languages, or only blank in one", () => {
+    const form = emptyAgentForm();
+
+    expect(agentMissingTranslations(form)).toEqual({ en: 0, de: 0 });
+    expect(
+      agentMissingTranslations({
+        ...form,
+        displayName: { en: "Assistant", de: "   " },
+        welcomeSubtitle: { en: " ", de: "" },
+        initialPrompts: [{ title: { en: "", de: "" }, prompt: { en: "", de: "Frage" } }]
+      })
+    ).toEqual({ en: 1, de: 1 });
+  });
+
+  it("counts nothing for a text that reads the same in both languages", () => {
+    const form = agentConfigToForm({ name: "assistant", displayName: "Assistant" });
+
+    expect(agentMissingTranslations(form)).toEqual({ en: 0, de: 0 });
+  });
+});
+
+describe("changed fields", () => {
+  const loaded = agentConfigToForm({
+    name: "assistant",
+    displayName: { en: "Assistant", de: "Assistent" },
+    instructions: "Help the user.",
+    toolNames: ["read_skill"],
+    skillNames: [],
+    initialPrompts: [{ title: "Weather", prompt: "Check the weather." }]
+  });
+
+  it("counts no change on a form as loaded, also on a copy of it", () => {
+    expect(countChangedFields(loaded, loaded)).toBe(0);
+    expect(countChangedFields(agentConfigToForm(agentFormToConfig(loaded)), loaded)).toBe(0);
+  });
+
+  it("counts each field that differs once, however much of it changed", () => {
+    expect(
+      countChangedFields(
+        { ...loaded, displayName: { en: "Helper", de: "Helfer" }, instructions: "Be brief." },
+        loaded
+      )
+    ).toBe(2);
+    expect(
+      countChangedFields(
+        {
+          ...loaded,
+          toolNames: ["read_skill", "show_view"],
+          initialPrompts: [...loaded.initialPrompts, ...loaded.initialPrompts]
+        },
+        loaded
+      )
+    ).toBe(2);
+    expect(countChangedFields({ ...loaded, fastMode: true }, loaded)).toBe(1);
+  });
+
+  it("counts a field that was changed back as unchanged", () => {
+    const edited = { ...loaded, toolNames: [...loaded.toolNames, "show_view"] };
+    const back = { ...edited, toolNames: edited.toolNames.filter((name) => name !== "show_view") };
+
+    expect(countChangedFields(edited, loaded)).toBe(1);
+    expect(countChangedFields(back, loaded)).toBe(0);
+  });
+
+  it("counts the fields of a skill the same way", () => {
+    const skill = skillConfigToForm({ name: "review", title: "Review", content: "# Steps" });
+
+    expect(countChangedFields(skill, skill)).toBe(0);
+    expect(
+      countChangedFields(
+        {
+          ...skill,
+          content: "# Steps\n1. Read.",
+          resources: [{ path: "references/a.md", mediaType: "text/markdown", content: "" }]
+        },
+        skill
+      )
+    ).toBe(2);
+  });
+});
+
+describe("a started asset", () => {
+  const start = { name: "tax-assistant", title: "Steuer-Assistent" };
+
+  it("starts an agent with its id and its name in the reader's language only", () => {
+    expect(startedAgentForm(start, "de")).toEqual({
+      ...emptyAgentForm(),
+      name: "tax-assistant",
+      displayName: { en: "", de: "Steuer-Assistent" }
+    });
+    expect(startedAgentForm(start, "en").displayName).toEqual({ en: "Steuer-Assistent", de: "" });
+    // The other language is one text short until somebody writes it.
+    expect(agentMissingTranslations(startedAgentForm(start, "de"))).toEqual({ en: 1, de: 0 });
+  });
+
+  it("saves a started agent under its id with the one name it has", () => {
+    expect(agentFormToConfig(startedAgentForm(start, "de"))).toMatchObject({
+      name: "tax-assistant",
+      displayName: { de: "Steuer-Assistent" }
+    });
+  });
+
+  it("starts a skill with its id and its title", () => {
+    expect(startedSkillForm({ name: "tax-review", title: "Tax review" })).toEqual({
+      ...emptySkillForm(),
+      name: "tax-review",
+      title: "Tax review"
+    });
+    expect(
+      skillFormToConfig(startedSkillForm({ name: "tax-review", title: "Tax review" }))
+    ).toEqual({ name: "tax-review", title: "Tax review", description: "", content: "" });
   });
 });

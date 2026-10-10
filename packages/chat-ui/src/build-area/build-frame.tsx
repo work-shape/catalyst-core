@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNo
 import {
   Avatar,
   Button,
-  Card,
+  Chip,
   ConfirmDialog,
   Dialog,
   DropdownMenu,
@@ -19,22 +19,21 @@ import {
   ListRow,
   Page,
   PageHeader,
-  Pagination,
+  Picker,
+  PickerButton,
   SkeletonList,
   SkeletonPage,
   SubRail
 } from "@vivd-catalyst/ui";
-import { configAssetMutationErrorMessage } from "../control-plane/config-assets-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { holdLeaveGuard } from "../leave-guard";
-import { apiErrorStatus } from "../workspace-utils";
-import type { BuildAsset, BuildAssetKind, BuildMutationOutcome } from "./build-asset-kind";
+import type { BuildAssetKind, BuildAssetRow, BuildAssetStart } from "./build-asset-kind";
 import { useBuildAssetKinds } from "./build-asset-kinds";
-import type { BuildData } from "./build-data";
+import { ExistingAssetPage, NewAssetPage } from "./build-asset-page";
+import { BuildCreateDialog } from "./build-create-dialog";
+import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
 import {
-  BUILD_LIST_PAGE_SIZE,
-  buildListPage,
   formatUpdated,
   readLastBuildKindPath,
   resolveBuildPlace,
@@ -47,39 +46,41 @@ import { useBuildNavigation } from "./build-route";
 /** The commands the CLI entry names, in the order a person runs them. */
 const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst config push"];
 
-/** What the reader typed and which page they were on, per kind, so the way back keeps both. */
-interface ListView {
-  query: string;
-  page: number;
-}
+/** What the reader typed and chose, per kind, so the way back keeps both. */
+type ListView = BuildListFilter;
 
-const firstListView: ListView = { query: "", page: 1 };
+const firstListView: ListView = { text: "", namespace: undefined };
+
+/** The value of the Namespace filter that narrows nothing. */
+const ALL_NAMESPACES = "";
 
 /**
  * The Build area: one list per kind and one page per asset, each with an address. The frame
- * owns the kind rail, the list with search and pages, the way back, the answer to a conflict
- * and every state; what a kind is comes from its registry entry.
+ * owns the kind rail, the list with search and pages, the dialog that starts an asset, the way
+ * back, History, the delete, the answer to a conflict and every state; what a kind is comes
+ * from its registry entry, and what the instance holds from `source`.
  */
-export function BuildFrame({ data }: { data: BuildData }) {
+export function BuildFrame({ source }: { source: BuildSource }) {
   const { t } = useTranslation();
   const { location, open, href } = useBuildNavigation();
-  const kinds = visibleBuildKinds(useBuildAssetKinds(), data.kinds);
+  const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
   const [lastKindPath] = useState(readLastBuildKindPath);
   const place = resolveBuildPlace(kinds, location, lastKindPath);
   const placePath = place?.kind.entry.path;
   const corrected = place?.corrected ?? false;
 
   const [listViews, setListViews] = useState<Record<string, ListView>>({});
-  const [conflictOpen, setConflictOpen] = useState(false);
-  const [editorVersion, setEditorVersion] = useState(0);
   // A new asset has no address yet: it is written on the list's address and ends with it.
   const locationKey = `${location.kindPath ?? ""}/${location.name ?? ""}`;
-  const [creating, setCreating] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [start, setStart] = useState<BuildAssetStart>();
   const [seenLocationKey, setSeenLocationKey] = useState(locationKey);
   if (seenLocationKey !== locationKey) {
     setSeenLocationKey(locationKey);
-    setCreating(false);
+    setAsking(false);
+    setStart(undefined);
   }
+  const creating = start !== undefined;
 
   // The shell hands a new `open` with every render; the address is corrected once per place.
   const openRef = useRef(open);
@@ -151,6 +152,9 @@ export function BuildFrame({ data }: { data: BuildData }) {
   // Between a list and an asset the page changes under the reader: the focus goes to its
   // heading. The area focuses the first heading itself, and the rail keeps the focus on a kind.
   const pageRef = useRef<HTMLDivElement>(null);
+  // An asset page tells when its heading stands: it is read after the frame rendered.
+  const [shownCount, setShownCount] = useState(0);
+  const pageShown = useCallback(() => setShownCount((count) => count + 1), []);
   const focusKey = creating ? "new" : (place?.name ?? "");
   const focusedKey = useRef(focusKey);
   useEffect(() => {
@@ -160,23 +164,39 @@ export function BuildFrame({ data }: { data: BuildData }) {
     const heading = pageRef.current?.querySelector("h1");
     if (heading) {
       focusedKey.current = focusKey;
+      // Another page starts at its top, wherever the last one was scrolled to.
+      pageRef.current?.scrollIntoView({ block: "start" });
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
     }
-  }, [focusKey, data.loading]);
+  }, [focusKey, source.loading, shownCount]);
+
+  const loadError = source.error ? (
+    <LoadError
+      message={source.error}
+      onRetry={() => {
+        source.reload().catch(() => undefined);
+      }}
+    />
+  ) : null;
 
   if (!place) {
     return (
-      <Page>
-        <EmptyState>{t("build.noKinds")}</EmptyState>
+      <Page ref={pageRef}>
+        {loadError}
+        {source.loading ? (
+          <SkeletonPage />
+        ) : loadError ? null : (
+          <EmptyState>{t("build.noKinds")}</EmptyState>
+        )}
       </Page>
     );
   }
 
-  const { entry, state } = place.kind;
+  const { entry } = place.kind;
   const openList = () => {
     const leave = () => {
-      setCreating(false);
+      setStart(undefined);
       open({ kindPath: entry.path });
     };
     if (!unsaved) {
@@ -192,50 +212,9 @@ export function BuildFrame({ data }: { data: BuildData }) {
       () => undefined
     );
   };
-  const run = async (action: () => Promise<unknown>): Promise<BuildMutationOutcome> => {
-    try {
-      await action();
-      return { ok: true };
-    } catch (error) {
-      if (apiErrorStatus(error) === 409) {
-        setConflictOpen(true);
-        return { ok: false };
-      }
-      return {
-        ok: false,
-        error: configAssetMutationErrorMessage(error, t("configChangeSaveFailed"))
-      };
-    }
-  };
-  const reloadAfterConflict = () => {
-    data.reload().then(
-      () => {
-        setConflictOpen(false);
-        setEditorVersion((version) => version + 1);
-      },
-      // A read that fails shows above the page; the question stays open.
-      () => undefined
-    );
-  };
-  const loadError = data.error ? (
-    <InlineError className="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <span>{data.error}</span>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          data.reload().catch(() => undefined);
-        }}
-      >
-        {t("tryAgain")}
-      </Button>
-    </InlineError>
-  ) : null;
 
   const assetName = creating ? undefined : place.name;
-  if (creating || assetName !== undefined) {
-    const asset = state.assets.find((candidate) => candidate.name === assetName);
-    const Editor = entry.Editor;
+  if (start !== undefined || assetName !== undefined) {
     const back = (
       <Button
         variant="ghost"
@@ -247,53 +226,35 @@ export function BuildFrame({ data }: { data: BuildData }) {
         {t(entry.label)}
       </Button>
     );
+    const leaveTo = (name: string | undefined) => {
+      leaveAllowed.current = true;
+      open({ kindPath: entry.path, name }, name === undefined ? { replace: true } : undefined);
+    };
+    const page = { ref: pageRef, above: loadError, shown: pageShown };
     return (
-      <Page ref={pageRef}>
-        {loadError}
-        {creating || asset ? (
-          <Card className="min-w-0 overflow-hidden">
-            <Editor
-              key={`${editorVersion}:${entry.kind}:${asset?.name ?? ""}`}
-              asset={asset}
-              back={back}
-              onUnsavedChange={setUnsaved}
-              run={run}
-              onCreated={(name) => {
-                leaveAllowed.current = true;
-                open({ kindPath: entry.path, name });
-              }}
-              onDeleted={() => {
-                leaveAllowed.current = true;
-                open({ kindPath: entry.path }, { replace: true });
-              }}
-              onReloaded={() => setEditorVersion((version) => version + 1)}
-            />
-          </Card>
-        ) : data.loading ? (
-          <SkeletonPage />
-        ) : (
-          <>
-            <PageHeader back={back} title={assetName} />
-            <EmptyState icon={<SearchX aria-hidden="true" />}>
-              {t(entry.missingText, { name: assetName ?? "" })}
-            </EmptyState>
-          </>
-        )}
-        <Dialog
-          open={conflictOpen}
-          title={t("configChangedTitle")}
-          onClose={() => setConflictOpen(false)}
-          footer={
-            <>
-              <Button variant="outline" onClick={() => setConflictOpen(false)}>
-                {t("configKeepEditing")}
-              </Button>
-              <Button onClick={reloadAfterConflict}>{t("configReloadLatest")}</Button>
-            </>
-          }
-        >
-          <p className="text-body text-muted-foreground">{t("configChangedDescription")}</p>
-        </Dialog>
+      <>
+        {start !== undefined ? (
+          <NewAssetPage
+            source={source}
+            entry={entry}
+            start={start}
+            page={page}
+            back={back}
+            onUnsavedChange={setUnsaved}
+            onCreated={leaveTo}
+          />
+        ) : assetName !== undefined ? (
+          <ExistingAssetPage
+            key={assetName}
+            source={source}
+            kind={place.kind}
+            name={assetName}
+            page={page}
+            back={back}
+            onUnsavedChange={setUnsaved}
+            onDeleted={() => leaveTo(undefined)}
+          />
+        ) : null}
         <ConfirmDialog
           open={leaveAsked && unsaved}
           title={t("build.leaveTitle")}
@@ -303,7 +264,7 @@ export function BuildFrame({ data }: { data: BuildData }) {
         >
           {t("build.leaveDescription")}
         </ConfirmDialog>
-      </Page>
+      </>
     );
   }
 
@@ -324,8 +285,7 @@ export function BuildFrame({ data }: { data: BuildData }) {
                   return {
                     id: kind.entry.path,
                     label: t(kind.entry.label),
-                    icon: <Icon aria-hidden="true" />,
-                    count: data.loading ? undefined : kind.state.assets.length
+                    icon: <Icon aria-hidden="true" />
                   };
                 })
               }
@@ -337,22 +297,60 @@ export function BuildFrame({ data }: { data: BuildData }) {
       }
     >
       <BuildList
+        key={entry.path}
+        source={source}
         kind={place.kind}
-        loading={data.loading}
         loadError={loadError}
         view={view}
         onViewChange={(next) => setListViews((views) => ({ ...views, [entry.path]: next }))}
         hrefOf={(asset) => href({ kindPath: entry.path, name: asset.name })}
         onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
-        onNew={() => setCreating(true)}
+        onNew={() => setAsking(true)}
       />
+      {asking ? (
+        <BuildCreateDialog
+          entry={entry}
+          namespaces={source.rights.creatableNamespaces(entry.kind)}
+          mayNameFreely={source.rights.instanceWrite}
+          onClose={() => setAsking(false)}
+          onStart={(chosen) => {
+            setAsking(false);
+            setStart(chosen);
+          }}
+        />
+      ) : null}
     </Page>
   );
 }
 
+function LoadError({ message, onRetry }: { message: string; onRetry(): void }) {
+  const { t } = useTranslation();
+  return (
+    <InlineError className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <span>{message}</span>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        {t("tryAgain")}
+      </Button>
+    </InlineError>
+  );
+}
+
+/** What the reader typed, once they paused: the text the instance is asked with. */
+function useSettledText(text: string): string {
+  const [settled, setSettled] = useState(text);
+  useEffect(() => {
+    if (text === settled) {
+      return;
+    }
+    const timer = window.setTimeout(() => setSettled(text), BUILD_SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [settled, text]);
+  return settled;
+}
+
 function BuildList({
+  source,
   kind,
-  loading,
   loadError,
   view,
   onViewChange,
@@ -360,34 +358,33 @@ function BuildList({
   onOpen,
   onNew
 }: {
+  source: BuildSource;
   kind: VisibleBuildKind;
-  loading: boolean;
   loadError: ReactNode;
   view: ListView;
   onViewChange(view: ListView): void;
   /** The address of an asset: a row is a link to it. */
-  hrefOf(asset: BuildAsset): string;
-  onOpen(asset: BuildAsset): void;
+  hrefOf(asset: BuildAssetRow): string;
+  onOpen(asset: BuildAssetRow): void;
   onNew(): void;
 }) {
   const { locale, t } = useTranslation();
   const { entry, state } = kind;
   const [cliOpen, setCliOpen] = useState(false);
   const [now] = useState(() => new Date());
-  const texts = { t, locale };
-  const list = buildListPage({
-    entry,
-    assets: state.assets,
-    locale,
-    query: view.query,
-    page: view.page
-  });
+  const settledText = useSettledText(view.text);
+  const list = source.useList(entry.kind, { text: settledText, namespace: view.namespace });
+  const { namespaces } = source.rights;
+  const namespaceName = (prefix: string | undefined) =>
+    namespaces.find((namespace) => namespace.prefix === prefix)?.displayName;
+  const filtered = settledText.trim() !== "" || view.namespace !== undefined;
   const newButton = state.canCreate ? (
     <Button onClick={onNew}>
       <Plus aria-hidden="true" />
       {t(entry.newLabel)}
     </Button>
   ) : undefined;
+  const listError = list.error ? <LoadError message={list.error} onRetry={list.retry} /> : null;
 
   return (
     <>
@@ -413,14 +410,15 @@ function BuildList({
         }
       />
       {loadError}
-      {loading ? (
-        <SkeletonList rows={6} />
-      ) : state.assets.length === 0 ? (
-        loadError ? null : (
-          <EmptyState icon={<entry.icon aria-hidden="true" />} action={newButton}>
-            {t(state.canCreate ? entry.emptyText : entry.emptyReadOnlyText)}
-          </EmptyState>
+      {listError}
+      {list.rows === undefined ? (
+        listError ? null : (
+          <SkeletonList rows={6} />
         )
+      ) : list.rows.length === 0 && !filtered ? (
+        <EmptyState icon={<entry.icon aria-hidden="true" />} action={newButton}>
+          {t(state.canCreate ? entry.emptyText : entry.emptyReadOnlyText)}
+        </EmptyState>
       ) : (
         <div className="grid min-w-0 gap-3">
           <FilterBar
@@ -430,50 +428,71 @@ function BuildList({
                 leadingIcon={<Search />}
                 aria-label={t(entry.searchLabel)}
                 placeholder={t(entry.searchLabel)}
-                value={view.query}
-                onChange={(event) => onViewChange({ query: event.currentTarget.value, page: 1 })}
+                value={view.text}
+                onChange={(event) => onViewChange({ ...view, text: event.currentTarget.value })}
               />
             }
-            count={
-              view.query.trim() === ""
-                ? undefined
-                : t("build.matchCount", {
-                    count: list.total.toLocaleString(locale),
-                    total: state.assets.length.toLocaleString(locale)
-                  })
+            filters={
+              namespaces.length > 1 ? (
+                <Picker
+                  search
+                  label={t("build.namespaceFilter")}
+                  options={[
+                    { value: ALL_NAMESPACES, label: t("build.namespaceAll") },
+                    ...namespaces.map((namespace) => ({
+                      value: namespace.prefix,
+                      label: namespace.displayName,
+                      description: namespace.prefix
+                    }))
+                  ]}
+                  value={view.namespace ?? ALL_NAMESPACES}
+                  onValueChange={(prefix) =>
+                    onViewChange({
+                      ...view,
+                      namespace: prefix === ALL_NAMESPACES ? undefined : prefix
+                    })
+                  }
+                >
+                  <PickerButton
+                    label={t("build.namespaceFilter")}
+                    value={namespaceName(view.namespace) ?? t("build.namespaceAll")}
+                    placeholder={t("build.namespaceAll")}
+                  />
+                </Picker>
+              ) : undefined
             }
           />
-          {list.total === 0 ? (
-            <EmptyState layout="inline">
-              {t("build.noMatch", { query: view.query.trim() })}
+          {list.rows.length === 0 ? (
+            <EmptyState layout="inline" icon={<SearchX aria-hidden="true" />}>
+              {settledText.trim() === ""
+                ? t("build.noMatchInNamespace")
+                : t("build.noMatch", { query: settledText.trim() })}
             </EmptyState>
           ) : (
             <List aria-label={t(entry.label)}>
-              {list.rows.map(({ asset, title }) => {
-                const status = entry.status?.(asset, texts);
-                const updatedAt = asset.summary?.updatedAt;
+              {list.rows.map((asset) => {
+                const title = asset.title.trim() || asset.name;
+                const namespace = namespaceName(asset.namespace) ?? asset.namespace;
                 return (
                   <ListRow
                     key={asset.name}
                     leading={<RowMark entry={entry} title={title} />}
                     title={title}
-                    description={
+                    description={<code className="font-mono">{asset.name}</code>}
+                    chips={
                       <>
-                        <code className="font-mono">{asset.name}</code>
-                        {status ? ` · ${status}` : null}
+                        {namespace ? <Chip size="sm">{namespace}</Chip> : null}
+                        {entry.badges?.(asset, t)}
                       </>
                     }
-                    chips={entry.badges?.(asset, texts)}
                     time={
-                      updatedAt ? (
-                        <time
-                          className="hidden sm:inline"
-                          dateTime={updatedAt}
-                          title={formatDateTime(updatedAt, locale)}
-                        >
-                          {formatUpdated(updatedAt, now, locale)}
-                        </time>
-                      ) : undefined
+                      <time
+                        className="hidden sm:inline"
+                        dateTime={asset.updatedAt}
+                        title={formatDateTime(asset.updatedAt, locale)}
+                      >
+                        {formatUpdated(asset.updatedAt, now, locale)}
+                      </time>
                     }
                     link={
                       <a
@@ -491,23 +510,15 @@ function BuildList({
               })}
             </List>
           )}
-          {list.pageCount > 1 ? (
-            <Pagination
-              page={list.page}
-              pageCount={list.pageCount}
-              onPageChange={(page) => onViewChange({ query: view.query, page })}
-              range={t("settings.paginationRange", {
-                from: list.from,
-                to: Math.min(list.from + BUILD_LIST_PAGE_SIZE - 1, list.total),
-                total: list.total.toLocaleString(locale)
-              })}
-              labels={{
-                rows: t("settings.paginationRows"),
-                rowsPerPage: t("settings.paginationRowsPerPage"),
-                previous: t("settings.paginationPrevious"),
-                next: t("settings.paginationNext")
-              }}
-            />
+          {list.hasMore ? (
+            <Button
+              variant="outline"
+              className="justify-self-start"
+              loading={list.loadingMore}
+              onClick={list.loadMore}
+            >
+              {t("build.showMore")}
+            </Button>
           ) : null}
         </div>
       )}

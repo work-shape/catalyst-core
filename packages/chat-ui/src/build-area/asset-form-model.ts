@@ -1,9 +1,9 @@
-export interface LocalizedPair {
-  en: string;
-  de: string;
+export interface LocalizedPair<Value = string> {
+  en: Value;
+  de: Value;
 }
 
-export interface AgentInitialPromptForm {
+interface AgentInitialPromptForm {
   title: LocalizedPair;
   prompt: LocalizedPair;
 }
@@ -40,7 +40,7 @@ export interface SkillFormState {
   resources: SkillResourceFormState[];
 }
 
-export interface SkillResourceFormState {
+interface SkillResourceFormState {
   path: string;
   mediaType: string;
   content: string;
@@ -102,7 +102,7 @@ export function agentAvailabilityFormsEqual(
   );
 }
 
-export const EMPTY_LOCALIZED_PAIR: LocalizedPair = { en: "", de: "" };
+const EMPTY_LOCALIZED_PAIR: LocalizedPair = { en: "", de: "" };
 
 export function localizedToPair(value: unknown): LocalizedPair {
   if (typeof value === "string") {
@@ -397,31 +397,12 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
 }
 
 /** Example names shown in the empty name fields. Names are identifiers and are not translated. */
-export const EXAMPLE_AGENT_NAME = "workflow_assistant";
-export const EXAMPLE_SKILL_NAME = "generic_workflow_review";
 
 /** The file that holds a skill's instructions. */
 export const SKILL_ROOT_FILE_NAME = "SKILL.md";
 
-/** The language codes that head the two fields of a localized text. */
-export const LANGUAGE_CODE_LABELS = { en: "EN", de: "DE" } satisfies Record<
-  keyof LocalizedPair,
-  string
->;
-
 export function emptySkillForm(): SkillFormState {
   return { name: "", title: "", description: "", content: "", resources: [] };
-}
-
-export function configAssetMutationErrorMessage(error: unknown, fallback: string): string {
-  const issueMessages = readValidationIssueMessages(error);
-  if (issueMessages.length > 0) {
-    return issueMessages.join(" ");
-  }
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return fallback;
 }
 
 function hasLocalizedContent(pair: LocalizedPair): boolean {
@@ -444,23 +425,53 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-function readValidationIssueMessages(error: unknown): string[] {
-  const payload = readObjectProperty(error, "payload");
-  const responseError = readObjectProperty(payload, "error");
-  const details = readObjectProperty(responseError, "details");
-  const issues = readObjectProperty(details, "issues");
-  if (!Array.isArray(issues)) {
-    return [];
-  }
-  return issues.flatMap((issue) => {
-    const message = readObjectProperty(issue, "message");
-    return typeof message === "string" && message ? [message] : [];
-  });
+/** The two languages a localized text is written in. */
+export const ASSET_LANGUAGES = ["en", "de"] as const satisfies readonly (keyof LocalizedPair)[];
+
+/** The localized texts of an agent that people read in chat, starter prompts included. */
+function agentLocalizedTexts(form: AgentFormState): LocalizedPair[] {
+  return [
+    form.displayName,
+    form.description,
+    form.welcomeMessage,
+    form.welcomeSubtitle,
+    ...form.initialPrompts.flatMap((prompt) => [prompt.title, prompt.prompt])
+  ];
 }
 
-function readObjectProperty(value: unknown, property: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[property];
+/**
+ * How many of an agent's texts are written in some language and still empty in each one. A
+ * text that is empty everywhere is not missing anywhere.
+ */
+export function agentMissingTranslations(form: AgentFormState): LocalizedPair<number> {
+  const texts = agentLocalizedTexts(form).filter(hasLocalizedContent);
+  return {
+    en: texts.filter((text) => !text.en.trim()).length,
+    de: texts.filter((text) => !text.de.trim()).length
+  };
+}
+
+/** How many fields of a form differ from the form it is compared with. */
+export function countChangedFields<Form extends object>(form: Form, baseline: Form): number {
+  const before = new Map(Object.entries(baseline));
+  return Object.entries(form).filter(
+    ([field, value]) => JSON.stringify(value) !== JSON.stringify(before.get(field))
+  ).length;
+}
+
+/** An agent as the dialog that starts one leaves it: its id, and its name in the reader's language. */
+export function startedAgentForm(
+  start: { name: string; title: string },
+  language: keyof LocalizedPair
+): AgentFormState {
+  const form = emptyAgentForm();
+  return {
+    ...form,
+    name: start.name,
+    displayName: { ...form.displayName, [language]: start.title }
+  };
+}
+
+export function startedSkillForm(start: { name: string; title: string }): SkillFormState {
+  return { ...emptySkillForm(), name: start.name, title: start.title };
 }

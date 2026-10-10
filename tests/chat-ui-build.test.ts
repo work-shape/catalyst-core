@@ -2,21 +2,31 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
 import {
-  BUILD_LIST_PAGE_SIZE,
   buildAssetKinds,
   BuildAssetKindsProvider,
   BuildFrame,
-  buildListPage,
   buildLocationOfRoute,
   BuildNavigationProvider,
   buildRouteOfLocation,
   resolveBuildPlace,
+  resolveBuildRights,
+  SkillEditor,
+  skillConfigToForm,
   visibleBuildKinds,
   type BuildAsset,
   type BuildAssetKind,
-  type BuildData,
-  type BuildLocation
+  type BuildAssetRead,
+  type BuildAssetRow,
+  type BuildList,
+  type BuildLocation,
+  type BuildSource
 } from "@vivd-catalyst/chat-ui/build-area";
+import {
+  legalNamespace,
+  platformContext,
+  taxNamespace,
+  type Namespaces
+} from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 const [agentKind, skillKind] = buildAssetKinds;
@@ -24,44 +34,102 @@ if (!agentKind || !skillKind) {
   throw new Error("The platform registry has no agent and skill entry.");
 }
 
-function asset(kind: string, name: string, config: Record<string, unknown> = {}): BuildAsset {
-  return { kind, name, config: { name, ...config }, isDefault: false, summary: undefined };
-}
-
-const agents: BuildAsset[] = [
-  {
-    ...asset("agent", "workflow_assistant", {
-      displayName: { en: "Workflow Assistant", de: "Workflow-Assistent" }
-    }),
-    isDefault: true,
-    summary: {
-      kind: "agent",
-      name: "workflow_assistant",
-      revision: 3,
-      updatedAt: "2026-10-08T10:00:00.000Z",
-      availability: { mode: "all", personalWorkspaces: true, collaborationWorkspaceIds: [] }
-    }
-  },
-  asset("agent", "tax-steuer_agent", { displayName: "Steuer-Agent" })
-];
-const skills: BuildAsset[] = [asset("skill", "tax-review", { title: "Tax review" })];
-
-function data(overrides: Partial<BuildData> = {}): BuildData {
+function row(kind: string, name: string, overrides: Partial<BuildAssetRow> = {}): BuildAssetRow {
   return {
-    kinds: [
-      { kind: "agent", assets: agents, canCreate: true },
-      { kind: "skill", assets: skills, canCreate: true }
-    ],
-    loading: false,
-    error: undefined,
-    reload: async () => undefined,
+    id: `asset_${name}`,
+    kind,
+    name,
+    title: name,
+    scope: { kind: "instance" },
+    revision: 1,
+    updatedAt: "2026-10-08T10:00:00.000Z",
     ...overrides
   };
 }
 
+function asset(kind: string, name: string, overrides: Partial<BuildAsset> = {}): BuildAsset {
+  return {
+    id: `asset_${name}`,
+    kind,
+    name,
+    scope: { kind: "instance" },
+    revision: 3,
+    config: { name },
+    updatedAt: "2026-10-08T10:00:00.000Z",
+    ...overrides
+  };
+}
+
+// In the order the instance answers them: by name.
+const agents: BuildAssetRow[] = [
+  row("agent", "tax-steuer_agent", { title: "Steuer-Agent", namespace: "tax-" }),
+  row("agent", "workflow_assistant", { title: "Workflow Assistant", isDefault: true, revision: 3 })
+];
+const skills: BuildAssetRow[] = [row("skill", "tax-review", { title: "Tax review" })];
+
+const noop = () => undefined;
+
+interface SourceInput {
+  /** The rights the session names on the whole instance. */
+  permissions?: string[];
+  namespaces?: Namespaces;
+  /** What a kind's list answers, where it differs from the fixed rows. */
+  lists?: Record<string, Partial<BuildList>>;
+  /** What the read of one asset answers, by `kind/name`. Any other asset is missing. */
+  assets?: Record<string, BuildAssetRead>;
+  overrides?: Partial<BuildSource>;
+}
+
+/**
+ * A source with fixed answers. The rights are resolved as the product resolves them, so a
+ * test names who reads and the frame decides what that reader is offered.
+ */
+function source(input: SourceInput = {}): BuildSource {
+  const context = platformContext(input.namespaces);
+  const rights = resolveBuildRights(
+    { permissions: input.permissions ?? ["config_assets.read", "config_assets.write"] },
+    context
+  );
+  const rows: Record<string, BuildAssetRow[]> = { agent: agents, skill: skills };
+  return {
+    kinds: context.kinds
+      .filter((kind) => rights.reads(kind.kind))
+      .map((kind) => ({
+        kind: kind.kind,
+        canCreate: rights.mayCreate(kind.kind),
+        canDelete: true
+      })),
+    rights,
+    loading: false,
+    error: undefined,
+    reload: async () => undefined,
+    useList: (kind) => ({
+      rows: rows[kind] ?? [],
+      error: undefined,
+      hasMore: false,
+      loadingMore: false,
+      loadMore: noop,
+      retry: noop,
+      ...input.lists?.[kind]
+    }),
+    useAsset: (kind, name) => input.assets?.[`${kind}/${name}`] ?? { status: "missing" },
+    writes: {
+      put: async () => ({ revision: 1 }),
+      delete: async () => undefined,
+      revert: async () => ({ revision: 1 }),
+      revisions: async () => []
+    },
+    ...input.overrides
+  };
+}
+
+function ready(loaded: BuildAsset): BuildAssetRead {
+  return { status: "ready", asset: loaded, loadedAt: 1, reload: async () => undefined };
+}
+
 function render(
   location: BuildLocation,
-  input: { data?: BuildData; kinds?: readonly BuildAssetKind[]; locale?: LocaleCode } = {}
+  input: { source?: BuildSource; kinds?: readonly BuildAssetKind[]; locale?: LocaleCode } = {}
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -79,7 +147,7 @@ function render(
               href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
             }
           },
-          createElement(BuildFrame, { data: input.data ?? data() })
+          createElement(BuildFrame, { source: input.source ?? source() })
         )
       )
     )
@@ -93,26 +161,42 @@ const connectionKind: BuildAssetKind = {
   label: "settings.apiAccess",
   searchLabel: "build.agentsSearch",
   newLabel: "configNewAgent",
+  titleLabel: "configTitle",
+  deleteTitle: "configDeleteSkillTitle",
+  deleteDescription: "configDeleteSkillDescription",
   emptyText: "build.agentsEmpty",
   emptyReadOnlyText: "build.agentsEmptyReadOnly",
   missingText: "build.agentMissing",
   icon: skillKind.icon,
-  title: (item) => (typeof item.config.label === "string" ? item.config.label : undefined),
-  status: () => "needs reconnect",
   Editor: ({ asset: open }) => createElement("p", null, `connection body of ${open?.name}`)
 };
 
+/**
+ * The skill kind with the skill form and without the instance's configuration, which the
+ * platform's own entry reads from the Settings context.
+ */
+const skillPages: BuildAssetKind = {
+  ...skillKind,
+  Editor: (frame) =>
+    createElement(SkillEditor, {
+      frame,
+      initialForm: skillConfigToForm(frame.asset?.config ?? {}),
+      editable: true
+    })
+};
+const pageKinds = [agentKind, skillPages];
+
 describe("Build frame", () => {
-  it("lands on the Agents list, titled by display name with the id beneath", () => {
+  it("lands on the Agents list, titled by the name with the id beneath", () => {
     const markup = render({});
 
     expect(markup).toContain('<h1 class="min-w-0 break-words outline-none text-title-lg">Agents');
     expect(markup).toContain(">Workflow Assistant<");
-    expect(markup).toContain('<code class="font-mono">workflow_assistant</code> · All workspaces');
+    expect(markup).toContain('<code class="font-mono">workflow_assistant</code>');
     expect(markup).toContain(">Default agent<");
     expect(markup).toContain(">New agent<");
     expect(markup).not.toContain("New skill");
-    // Sorted by the name the reader sees: Steuer-Agent stands before Workflow Assistant.
+    // The instance orders the rows, and the frame shows them as they came.
     expect(markup.indexOf("Steuer-Agent")).toBeLessThan(markup.indexOf("Workflow Assistant"));
     expect(markup).not.toMatch(/Version \d/u);
     expect(markup).not.toContain("catalyst CLI");
@@ -125,46 +209,63 @@ describe("Build frame", () => {
     expect(markup).not.toMatch(/<li[^>]*>\s*<div[^>]*>\s*<button/u);
   });
 
-  it("titles a row in the reader's language", () => {
+  it("falls back to the id where the instance sent no title", () => {
+    const markup = render(
+      { kindPath: "skills" },
+      { source: source({ lists: { skill: { rows: [row("skill", "untitled", { title: " " })] } } }) }
+    );
+
+    expect(markup).toContain(">untitled</");
+    expect(markup).toContain('<code class="font-mono">untitled</code>');
+  });
+
+  it("names the kinds in the reader's language", () => {
     const markup = render({ kindPath: "agents" }, { locale: "de" });
 
-    expect(markup).toContain(">Workflow-Assistent<");
     expect(markup).toContain(">Agenten<");
     expect(markup).toContain("Skills");
     expect(markup).not.toContain("Fähigkeiten");
   });
 
-  it("shows the kinds as a rail with counts, and none while a single kind is visible", () => {
+  it("shows the kinds as a rail without counts, and none while a single kind is visible", () => {
     const both = render({ kindPath: "skills" });
     const one = render(
       { kindPath: "agents" },
-      { data: data({ kinds: [{ kind: "agent", assets: agents, canCreate: true }] }) }
+      {
+        source: source({
+          permissions: [],
+          namespaces: [{ ...taxNamespace, actions: ["agent.read"] }]
+        })
+      }
     );
 
     expect(both).toContain('aria-label="Kinds in Build"');
-    expect(both).toContain('<option value="agents">Agents (2)</option>');
-    expect(both).toContain('<option value="skills" selected="">Skills (1)</option>');
+    expect(both).toContain('<option value="agents">Agents</option>');
+    expect(both).toContain('<option value="skills" selected="">Skills</option>');
     expect(one).not.toContain('aria-label="Kinds in Build"');
   });
 
   it("shows a planted kind as a third rail item, with its list and its asset page", () => {
     const kinds = [...buildAssetKinds, connectionKind];
-    const withConnections = data({
-      kinds: [
-        ...data().kinds,
-        {
-          kind: "connection",
-          assets: [asset("connection", "crm", { label: "CRM" })],
-          canCreate: false
-        }
-      ]
+    const base = source();
+    const withConnections = source({
+      lists: {
+        connection: { rows: [row("connection", "crm", { title: "CRM" })] }
+      },
+      assets: { "connection/crm": ready(asset("connection", "crm")) },
+      overrides: {
+        kinds: [...base.kinds, { kind: "connection", canCreate: false, canDelete: false }]
+      }
     });
-    const list = render({ kindPath: "connections" }, { kinds, data: withConnections });
-    const page = render({ kindPath: "connections", name: "crm" }, { kinds, data: withConnections });
+    const list = render({ kindPath: "connections" }, { kinds, source: withConnections });
+    const page = render(
+      { kindPath: "connections", name: "crm" },
+      { kinds, source: withConnections }
+    );
 
-    expect(list).toContain('<option value="connections" selected="">API access (1)</option>');
+    expect(list).toContain('<option value="connections" selected="">API access</option>');
     expect(list).toContain(">CRM<");
-    expect(list).toContain('<code class="font-mono">crm</code> · needs reconnect');
+    expect(list).toContain('<code class="font-mono">crm</code>');
     // Without the right to create, the list has no New button.
     expect(list).not.toContain("New agent");
     expect(page).toContain("connection body of crm");
@@ -173,54 +274,236 @@ describe("Build frame", () => {
   });
 
   it("says in a sentence what an empty list is for, with the one button, or without the right", () => {
-    const empty = (canCreate: boolean) =>
+    const empty = (permissions: string[]) =>
       render(
         { kindPath: "skills" },
-        {
-          data: data({
-            kinds: [
-              { kind: "agent", assets: agents, canCreate: true },
-              { kind: "skill", assets: [], canCreate }
-            ]
-          })
-        }
+        { source: source({ permissions, lists: { skill: { rows: [] } } }) }
       );
+    const writer = empty(["config_assets.write"]);
+    const reader = empty(["config_assets.read"]);
 
-    expect(empty(true)).toContain("A skill holds instructions");
-    expect(empty(true).match(/New skill/gu)).toHaveLength(2);
-    expect(empty(false)).toContain("No skills yet.");
-    expect(empty(false)).not.toContain("New skill");
+    expect(writer).toContain("A skill holds instructions");
+    expect(writer.match(/New skill/gu)).toHaveLength(2);
+    expect(reader).toContain("No skills yet.");
+    expect(reader).not.toContain("New skill");
   });
 
-  it("names an address that has no asset, and shows the skeleton while the area loads", () => {
+  it("names an address that has no asset", () => {
     const missing = render({ kindPath: "agents", name: "gone" });
-    const loading = render({ kindPath: "agents" }, { data: data({ loading: true }) });
 
     expect(missing).toContain("There is no agent with the id gone.");
     expect(missing).toContain('aria-label="Back to Agents"');
-    expect(loading).toContain('aria-busy="true"');
-    expect(loading).toContain('<option value="agents" selected="">Agents</option>');
+  });
+
+  it("shows a skeleton until the instance said what the reader may do, and until a list arrived", () => {
+    const unknown = render({}, { source: source({ overrides: { kinds: [], loading: true } }) });
+    const list = render(
+      { kindPath: "agents" },
+      { source: source({ lists: { agent: { rows: undefined } } }) }
+    );
+    const page = render(
+      { kindPath: "agents", name: "workflow_assistant" },
+      { source: source({ assets: { "agent/workflow_assistant": { status: "loading" } } }) }
+    );
+
+    expect(unknown).toContain('aria-busy="true"');
+    expect(unknown).not.toContain("There is nothing to build on this instance yet.");
+    expect(list).toContain('aria-busy="true"');
+    expect(list).toContain('<option value="agents" selected="">Agents</option>');
+    expect(list).not.toContain("No agents yet");
+    expect(page).toContain('aria-busy="true"');
+    expect(page).not.toContain("There is no agent");
   });
 
   it("says that Build could not be loaded and offers to try again", () => {
-    const markup = render(
+    const area = render(
+      {},
+      { source: source({ overrides: { kinds: [], error: "Build could not be loaded." } }) }
+    );
+    const list = render(
       { kindPath: "agents" },
       {
-        data: data({
-          kinds: [{ kind: "agent", assets: [], canCreate: true }],
-          error: "Build could not be loaded."
+        source: source({
+          lists: { agent: { rows: undefined, error: "The list could not be read." } }
         })
       }
     );
 
+    expect(area).toContain('role="alert"');
+    expect(area).toContain("Build could not be loaded.");
+    expect(area).toContain("Try again");
+    expect(area).not.toContain("There is nothing to build on this instance yet.");
+    expect(list).toContain('role="alert"');
+    expect(list).toContain("The list could not be read.");
+    expect(list).toContain("Try again");
+    expect(list).not.toContain('aria-busy="true"');
+    expect(list).not.toContain("No agents yet");
+  });
+
+  it("says that there is nothing to build where the instance names no kind", () => {
+    expect(render({}, { source: source({ overrides: { kinds: [] } }) })).toContain(
+      "There is nothing to build on this instance yet."
+    );
+  });
+
+  it("offers a list's next page only while the instance holds more rows", () => {
+    const more = render(
+      { kindPath: "agents" },
+      { source: source({ lists: { agent: { hasMore: true } } }) }
+    );
+
+    expect(more).toContain(">Show more<");
+    expect(more).toContain(">Workflow Assistant<");
+    expect(render({ kindPath: "agents" })).not.toContain("Show more");
+  });
+});
+
+describe("Build for a Namespace holder", () => {
+  const holder = (namespaces: Namespaces, input: SourceInput = {}) =>
+    source({ permissions: [], namespaces, ...input });
+
+  it("offers a new asset only for a kind the holder may write somewhere", () => {
+    const from = holder([taxNamespace]);
+    const agentList = render({ kindPath: "agents" }, { source: from });
+    const skillList = render({ kindPath: "skills" }, { source: from });
+
+    expect(agentList).toContain(">New agent<");
+    expect(skillList).toContain(">Tax review<");
+    expect(skillList).not.toContain("New skill");
+    // Empty, the list of a kind the holder only reads has the sentence without the button.
+    expect(
+      render(
+        { kindPath: "skills" },
+        { source: holder([taxNamespace], { lists: { skill: { rows: [] } } }) }
+      )
+    ).toContain("No skills yet.");
+  });
+
+  it("names the Namespace of a row, and none on a row that belongs to none", () => {
+    const markup = render({ kindPath: "agents" }, { source: holder([taxNamespace]) });
+    const rowOf = (name: string) =>
+      markup.split("<li").find((item) => item.includes(`${name}</code>`)) ?? "";
+
+    expect(rowOf("tax-steuer_agent")).toContain(">Tax<");
+    expect(rowOf("workflow_assistant")).toContain(">Workflow Assistant<");
+    expect(rowOf("workflow_assistant")).not.toContain(">Tax<");
+  });
+
+  it("shows the prefix on a row whose Namespace the reader does not hold", () => {
+    const markup = render({ kindPath: "agents" });
+
+    expect(markup).toContain(">tax-<");
+  });
+
+  it("offers the Namespace filter only to a reader of more than one Namespace", () => {
+    const one = render({ kindPath: "agents" }, { source: holder([taxNamespace]) });
+    const two = render({ kindPath: "agents" }, { source: holder([taxNamespace, legalNamespace]) });
+
+    expect(two).toContain("All Namespaces");
+    expect(one).not.toContain("All Namespaces");
+    expect(render({ kindPath: "agents" })).not.toContain("All Namespaces");
+  });
+
+  it("has no rail item for a kind the holder has no right on", () => {
+    const agentsOnly = render(
+      { kindPath: "skills" },
+      { source: holder([{ ...taxNamespace, actions: ["agent.read"] }]) }
+    );
+
+    // The address of the kind without an item lands on the first kind with one.
+    expect(agentsOnly).toContain(">Steuer-Agent<");
+    expect(agentsOnly).not.toContain("Tax review");
+  });
+});
+
+describe("Build asset page", () => {
+  const taxSkill = asset("skill", "tax-review", {
+    namespace: "tax-",
+    config: {
+      name: "tax-review",
+      title: "Tax review",
+      description: "Review a tax file.",
+      content: "# Review"
+    }
+  });
+  const page = (from: BuildSource) =>
+    render({ kindPath: "skills", name: "tax-review" }, { kinds: pageKinds, source: from });
+  const read = { "skill/tax-review": ready(taxSkill) };
+  const skillWriter: Namespaces[number] = {
+    ...taxNamespace,
+    actions: ["skill.read", "skill.write", "skill.delete"]
+  };
+
+  it("opens an asset the reader may not write read-only, with no way to save or delete", () => {
+    const markup = page(source({ permissions: [], namespaces: [taxNamespace], assets: read }));
+
+    expect(markup).toContain("You can read this but not change it.");
+    expect(markup).toContain('value="Tax review"');
+    expect(markup).toMatch(/<input[^>]*disabled=""[^>]*value="Tax review"/u);
+    expect(markup).not.toContain("Add reference");
+    expect(markup).not.toContain("Save changes");
+    expect(markup).not.toContain('type="submit"');
+    expect(markup).not.toContain('aria-label="More actions"');
+    // History is read by everybody who reads the asset.
+    expect(markup).toContain("History");
+  });
+
+  it("opens an asset of a Namespace the reader writes for editing", () => {
+    const markup = page(source({ permissions: [], namespaces: [skillWriter], assets: read }));
+
+    expect(markup).not.toContain("You can read this but not change it.");
+    expect(markup).not.toMatch(/<input[^>]*disabled=""[^>]*value="Tax review"/u);
+    expect(markup).toContain("Add reference");
+    expect(markup).toContain('aria-label="More actions"');
+    // Nothing is changed yet, so there is nothing to save.
+    expect(markup).not.toContain("Save changes");
+  });
+
+  it("reads only an asset outside the Namespaces the reader writes", () => {
+    const elsewhere = asset("skill", "tax-review", {
+      namespace: "legal-",
+      config: taxSkill.config
+    });
+    const markup = page(
+      source({
+        permissions: [],
+        namespaces: [skillWriter, legalNamespace],
+        assets: { "skill/tax-review": ready(elsewhere) }
+      })
+    );
+
+    expect(markup).toContain("You can read this but not change it.");
+  });
+
+  it("leaves the delete out where the instance does not let people delete the kind", () => {
+    const base = source({ assets: read });
+    const markup = page({
+      ...base,
+      kinds: base.kinds.map((kind) => ({ ...kind, canDelete: false }))
+    });
+
+    expect(markup).not.toContain("You can read this but not change it.");
+    expect(markup).not.toContain('aria-label="More actions"');
+  });
+
+  it("shows the sentence of a failed read as the instance said it", () => {
+    const sentence = "Namespace tax- is closed for maintenance until 14:00";
+    const markup = page(
+      source({
+        assets: { "skill/tax-review": { status: "failed", message: sentence, retry: noop } }
+      })
+    );
+
     expect(markup).toContain('role="alert"');
+    expect(markup).toContain(sentence);
     expect(markup).toContain("Try again");
-    expect(markup).not.toContain("No agents yet");
+    expect(markup).toContain('aria-label="Back to Skills"');
+    expect(markup).not.toContain("There is no skill");
   });
 });
 
 describe("Build addresses", () => {
-  const kinds = visibleBuildKinds(buildAssetKinds, data().kinds);
+  const kinds = visibleBuildKinds(buildAssetKinds, source().kinds);
 
   it("opens the kind last visited at /build, else the first one, and marks the address for correction", () => {
     expect(resolveBuildPlace(kinds, {}, undefined)).toMatchObject({
@@ -247,50 +530,5 @@ describe("Build addresses", () => {
       expect(buildLocationOfRoute(buildRouteOfLocation(location))).toEqual(location);
     }
     expect(buildLocationOfRoute({ kind: "administration" })).toBeUndefined();
-  });
-});
-
-describe("Build list", () => {
-  const many = Array.from({ length: 1234 }, (_, index) =>
-    asset("skill", `ns-skill_${index}`, { title: `Skill ${index}` })
-  );
-  const page = (query: string, at = 1) =>
-    buildListPage({ entry: skillKind, assets: many, locale: "en", query, page: at });
-
-  it("cuts a long list into pages of fifty, in the order of the names", () => {
-    const first = page("");
-
-    expect(first.rows).toHaveLength(BUILD_LIST_PAGE_SIZE);
-    expect(first.rows.slice(0, 3).map((row) => row.title)).toEqual([
-      "Skill 0",
-      "Skill 1",
-      "Skill 2"
-    ]);
-    expect(first).toMatchObject({ total: 1234, page: 1, pageCount: 25, from: 1 });
-    expect(page("", 25)).toMatchObject({ page: 25, from: 1201 });
-    expect(page("", 25).rows).toHaveLength(34);
-    // A page past the end, as after a search that left fewer rows, is the last page.
-    expect(page("", 99).page).toBe(25);
-  });
-
-  it("searches the name and the id, whatever the case, and falls back to the id as title", () => {
-    expect(page("skill 123").rows.map((row) => row.asset.name)).toEqual([
-      "ns-skill_123",
-      "ns-skill_1230",
-      "ns-skill_1231",
-      "ns-skill_1232",
-      "ns-skill_1233"
-    ]);
-    expect(page("NS-SKILL_77").total).toBe(11);
-    expect(page("nothing here")).toMatchObject({ total: 0, from: 0, pageCount: 1 });
-    expect(
-      buildListPage({
-        entry: skillKind,
-        assets: [asset("skill", "untitled")],
-        locale: "en",
-        query: "",
-        page: 1
-      }).rows[0]?.title
-    ).toBe("untitled");
   });
 });

@@ -1,13 +1,7 @@
 import type { LocaleCode } from "@vivd-catalyst/api-client";
-import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
+import type { BuildAssetKind } from "./build-asset-kind";
 import type { BuildKindState } from "./build-data";
 import type { BuildLocation } from "./build-route";
-
-/**
- * How many assets one page of a list shows. The list is searched, sorted and cut in the
- * browser from the one read of the area, so this number bounds what is drawn, not what is read.
- */
-export const BUILD_LIST_PAGE_SIZE = 50;
 
 const LAST_KIND_STORAGE_KEY = "vivd-catalyst:build-kind";
 
@@ -54,63 +48,6 @@ export function resolveBuildPlace(
   return fallback ? { kind: fallback, name: undefined, corrected: true } : undefined;
 }
 
-/** One row of a list: the asset with the name the reader sees. */
-interface BuildListRow {
-  asset: BuildAsset;
-  title: string;
-}
-
-/** One page of a kind's list after the search. */
-export interface BuildListPage {
-  rows: BuildListRow[];
-  /** How many assets the search leaves. */
-  total: number;
-  /** The page shown, from 1. A page past the end is the last one. */
-  page: number;
-  pageCount: number;
-  /** The position of the first row in the searched list, from 1. */
-  from: number;
-}
-
-/**
- * The rows of one page: the assets whose name or id contains the search text, sorted by name
- * in the reader's language. It reads every asset of the kind once per call.
- */
-export function buildListPage(input: {
-  entry: BuildAssetKind;
-  assets: readonly BuildAsset[];
-  locale: LocaleCode;
-  query: string;
-  page: number;
-}): BuildListPage {
-  const { entry, assets, locale, query, page } = input;
-  const needle = query.trim().toLocaleLowerCase(locale);
-  const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
-  const matching = assets
-    .map((asset) => ({ asset, title: entry.title(asset, locale)?.trim() || asset.name }))
-    .filter(
-      (row) =>
-        needle === "" ||
-        row.title.toLocaleLowerCase(locale).includes(needle) ||
-        row.asset.name.toLocaleLowerCase(locale).includes(needle)
-    )
-    .sort(
-      (left, right) =>
-        collator.compare(left.title, right.title) ||
-        collator.compare(left.asset.name, right.asset.name)
-    );
-  const pageCount = Math.max(1, Math.ceil(matching.length / BUILD_LIST_PAGE_SIZE));
-  const shownPage = Math.min(Math.max(1, page), pageCount);
-  const start = (shownPage - 1) * BUILD_LIST_PAGE_SIZE;
-  return {
-    rows: matching.slice(start, start + BUILD_LIST_PAGE_SIZE),
-    total: matching.length,
-    page: shownPage,
-    pageCount,
-    from: matching.length === 0 ? 0 : start + 1
-  };
-}
-
 /** The kind the reader opened last in this browser. */
 export function readLastBuildKindPath(): string | undefined {
   try {
@@ -151,4 +88,17 @@ export function formatUpdated(updatedAt: string, now: Date, locale: LocaleCode):
     -Math.floor(elapsedMs / size),
     unit
   );
+}
+
+/**
+ * An id made from the name people read: lowercase words joined by underscores, as far as the
+ * name gives any. The reader can change it before the asset is created.
+ */
+export function assetIdFromTitle(title: string): string {
+  return title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "_")
+    .replace(/^_+|_+$/gu, "");
 }

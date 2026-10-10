@@ -21,7 +21,6 @@ import type {
 } from "@vivd-catalyst/api-client";
 import { signOut } from "@vivd-catalyst/api-client";
 import { apiErrorMessage } from "../workspace-utils";
-import { createAssetWrites } from "./asset-writes";
 import { updateRailConversations } from "./rail-conversations";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 import {
@@ -562,11 +561,19 @@ export function useDeleteCurrentUserMutation(
   });
 }
 
-export function useConfigAssetMutations(input: WorkspaceMutationInput) {
+/**
+ * The two changes of an agent that belong to the instance and are not part of its definition:
+ * which agent is the default, and where an agent can be chosen. The definition itself is
+ * written by the asset operations (`createAssetWrites`).
+ */
+export function useAgentPlacementMutations(input: WorkspaceMutationInput) {
   const queryClient = useQueryClient();
 
-  const invalidateConfigAssets = async () => {
-    await Promise.all([
+  const invalidateAssets = () =>
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.assets(input.apiBaseUrl, input.authScope)
+      }),
       queryClient.invalidateQueries({
         queryKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope)
       }),
@@ -574,22 +581,11 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
         queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
       })
     ]);
-  };
 
-  const assetWrites = createAssetWrites({
-    client: input.client,
-    queryClient,
-    overviewKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope)
-  });
-  const putAsset = useMutation({ mutationFn: assetWrites.put, onSuccess: invalidateConfigAssets });
-  const deleteAsset = useMutation({
-    mutationFn: assetWrites.delete,
-    onSuccess: invalidateConfigAssets
-  });
   const setDefaultAgent = useMutation({
-    mutationFn: (mutationInput: { agentName?: string; baseVersion?: number }) =>
+    mutationFn: (mutationInput: { agentName: string }) =>
       input.client.config_agents.set_default({ body: mutationInput }),
-    onSuccess: () => invalidateConfigAssets()
+    onSuccess: invalidateAssets
   });
   const setAgentAvailability = useMutation({
     mutationFn: (mutationInput: {
@@ -604,7 +600,7 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
     // The admin's own picker reads the same lists, so it follows the change at once.
     onSuccess: () =>
       Promise.all([
-        invalidateConfigAssets(),
+        invalidateAssets(),
         queryClient.invalidateQueries({
           queryKey: workspaceQueryKeys.collaborationWorkspaceAgentsScope(
             input.apiBaseUrl,
@@ -614,23 +610,11 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
         queryClient.invalidateQueries({ queryKey: ["config", input.apiBaseUrl, input.authScope] })
       ])
   });
-  const revertAsset = useMutation({
-    mutationFn: assetWrites.revert,
-    onSuccess: invalidateConfigAssets
-  });
 
   return {
-    putAsset,
-    deleteAsset,
     setDefaultAgent,
     setAgentAvailability,
-    revertAsset,
-    isPending:
-      putAsset.isPending ||
-      deleteAsset.isPending ||
-      setDefaultAgent.isPending ||
-      setAgentAvailability.isPending ||
-      revertAsset.isPending
+    isPending: setDefaultAgent.isPending || setAgentAvailability.isPending
   };
 }
 
