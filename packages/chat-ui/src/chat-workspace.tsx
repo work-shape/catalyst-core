@@ -8,6 +8,7 @@ import type { ChatShellProps } from "./chat-shell";
 import { CollaborationWorkspacePanel } from "./collaboration-workspace/collaboration-workspace-panel";
 import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
+import { ConversationListArea } from "./conversation/conversation-list-area";
 import { TranslationProvider, useTranslation } from "./i18n";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
@@ -322,6 +323,10 @@ function ChatWorkspaceContent({
               rail.selectWorkspaceView(view);
             }}
             onCreateConversation={startNewChat}
+            onShowAllConversations={() => {
+              closeDrawer();
+              rail.showAllConversations();
+            }}
             onSelectConversation={openConversation}
             onReloadConversations={rail.reloadConversations}
             onRenameConversation={rail.renameConversation}
@@ -337,7 +342,9 @@ function ChatWorkspaceContent({
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
               // The Inbox is not a conversation: there is no agent to choose.
-              showAgentSelector={!onStartPage && !inboxRoute}
+              showAgentSelector={
+                !onStartPage && !inboxRoute && model.route.view !== "conversations"
+              }
               onSelectAgent={model.config.selectAgentName}
               onOpenSidebar={model.chrome.openSidebarDrawer}
             />
@@ -372,6 +379,31 @@ function ChatWorkspaceContent({
                       onCloseItem={() => model.route.showRoute({ kind: "inbox" })}
                       onBesideWidthChange={setSurfaceBesideWidth}
                       onCoveringChange={setSurfaceCovering}
+                    />
+                  ) : undefined
+                }
+                conversationListArea={
+                  model.route.view === "conversations" ? (
+                    <ConversationListArea
+                      apiBaseUrl={model.auth.apiBaseUrl}
+                      authScope={WORKSPACE_AUTH_SCOPE}
+                      client={chat.client}
+                      collaborationWorkspaceId={
+                        collaborationWorkspace.activeCollaborationWorkspaceId
+                      }
+                      collaborationWorkspacesAvailable={collaborationWorkspacesAvailable}
+                      searchedWorkspace={collaborationWorkspace.activeCollaborationWorkspace}
+                      notice={chat.notice}
+                      deleting={rail.deletingConversation}
+                      onOpen={openConversation}
+                      onNewChat={startNewChat}
+                      onRename={rail.renameConversation}
+                      onMove={
+                        rail.canMoveConversation
+                          ? collaborationWorkspace.openMoveConversationDialog
+                          : undefined
+                      }
+                      onDelete={rail.deleteConversation}
                     />
                   ) : undefined
                 }

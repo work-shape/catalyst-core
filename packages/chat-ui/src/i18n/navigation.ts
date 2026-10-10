@@ -3,8 +3,8 @@ import { defineTranslations } from "./translation-area";
 /** The rail, the command palette and the frame of a surface. */
 export const navigation = defineTranslations({
   en: {
-    "nav.chat": "Chat",
     "nav.collapse": "Collapse sidebar",
+    "nav.conversations": "Conversations",
     "nav.expand": "Expand sidebar",
     "nav.inbox": "Inbox",
     "nav.label": "Main navigation",
@@ -17,13 +17,14 @@ export const navigation = defineTranslations({
     "nav.recentLoadFailed": "Conversations could not be loaded.",
     "nav.search": "Search",
     "nav.settings": "Settings",
+    "nav.showAll": "Show all",
     "nav.showChat": "Show chat",
     "nav.skipToContent": "Skip to content",
     "nav.surfaceNoRenderer": "This content cannot be shown yet."
   },
   de: {
-    "nav.chat": "Chat",
     "nav.collapse": "Seitenleiste einklappen",
+    "nav.conversations": "Unterhaltungen",
     "nav.expand": "Seitenleiste ausklappen",
     "nav.inbox": "Eingang",
     "nav.label": "Hauptnavigation",
@@ -36,6 +37,7 @@ export const navigation = defineTranslations({
     "nav.recentLoadFailed": "Unterhaltungen konnten nicht geladen werden.",
     "nav.search": "Suchen",
     "nav.settings": "Einstellungen",
+    "nav.showAll": "Alle anzeigen",
     "nav.showChat": "Chat anzeigen",
     "nav.skipToContent": "Zum Inhalt springen",
     "nav.surfaceNoRenderer": "Dieser Inhalt kann noch nicht angezeigt werden."

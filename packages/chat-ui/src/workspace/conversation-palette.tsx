@@ -12,11 +12,11 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
 /**
- * How long the palette waits after a key before it asks the server, in milliseconds, so a
+ * How long a search field waits after a key before it asks the server, in milliseconds, so a
  * typed word is one search and not one per letter. The reader sees the previous results until
  * then.
  */
-const SEARCH_DELAY_MS = 150;
+export const SEARCH_DELAY_MS = 150;
 
 /**
  * How many of the rail's conversations the palette lists before anything is typed, so the
@@ -165,7 +165,7 @@ export function ConversationPalette({
 }
 
 /** `value`, once it has stood unchanged for `delayMs`. An empty value arrives at once. */
-function useDelayed(value: string, delayMs: number): string {
+export function useDelayed(value: string, delayMs: number): string {
   const [delayed, setDelayed] = useState(value);
   useEffect(() => {
     if (value === "") {

@@ -1,4 +1,4 @@
-import { Inbox, MessageSquare, type LucideIcon } from "lucide-react";
+import { Inbox, type LucideIcon } from "lucide-react";
 import type { TranslationKey } from "../i18n";
 import type { WorkspaceRouteView } from "./workspace-route";
 
@@ -28,10 +28,10 @@ export interface RailSection {
 
 /**
  * The section rows in their order. A slice that adds a section adds its row here; whether a
- * module's row shows is decided by the module snapshot, not by this list.
+ * module's row shows is decided by the module snapshot, not by this list. Chat has no row: New
+ * chat starts a conversation and the list under "Recent" holds the ones there are.
  */
 export const railSections: readonly RailSection[] = [
-  { id: "chat", label: "nav.chat", icon: MessageSquare, view: "chat" },
   {
     id: "inbox",
     label: "nav.inbox",
@@ -43,14 +43,10 @@ export const railSections: readonly RailSection[] = [
   }
 ];
 
-/**
- * The rows the rail shows to this person: none while one section is left, because a list of
- * one is noise.
- */
+/** The rows the rail shows to this person. */
 export function shownRailSections(
   sections: readonly RailSection[],
   given: RailSectionsGiven = {}
 ): readonly RailSection[] {
-  const shown = sections.filter((section) => section.shown?.(given) ?? true);
-  return shown.length > 1 ? shown : [];
+  return sections.filter((section) => section.shown?.(given) ?? true);
 }

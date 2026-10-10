@@ -2,6 +2,7 @@ import { ApiError, type Conversation } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { workspaceRouteFromPath, workspaceRouteNavigation } from "../packages/chat-ui/src/routes";
 import {
+  conversationListRoute,
   routeCollaborationWorkspaceId,
   workspaceRouteView
 } from "../packages/chat-ui/src/workspace/workspace-route";
@@ -88,6 +89,29 @@ describe("collaboration workspace routes", () => {
     expect(
       routeCollaborationWorkspaceId({ kind: "new-conversation", collaborationWorkspaceId: "cw_1" })
     ).toBe("cw_1");
+  });
+});
+
+// Both fail without the list of every conversation: it had no route and no pages to key.
+describe("conversation list address", () => {
+  it("belongs to its workspace, and waits for one while none is known", () => {
+    const route = conversationListRoute("cw_1");
+
+    expect(route).toEqual({ kind: "conversation-list", collaborationWorkspaceId: "cw_1" });
+    expect(routeCollaborationWorkspaceId(route)).toBe("cw_1");
+    expect(workspaceRouteView(route)).toBe("conversations");
+    expect(conversationListRoute(undefined)).toEqual({ kind: "conversation-list-root" });
+    expect(workspaceRouteView({ kind: "conversation-list-root" })).toBe("conversations");
+  });
+
+  it("keys its pages under the workspace's list, so a change to the list reaches them", () => {
+    const list = workspaceQueryKeys.conversations("http://api", "scope", "cw_1");
+    const pages = workspaceQueryKeys.conversationPages("http://api", "scope", "cw_1", "steuer");
+
+    expect(pages.slice(0, list.length)).toEqual([...list]);
+    expect(pages).not.toEqual(
+      workspaceQueryKeys.conversationPages("http://api", "scope", "cw_1", "")
+    );
   });
 });
 

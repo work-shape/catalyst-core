@@ -23,6 +23,13 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
     "chat"
   ],
   ["/c/conv_2", { kind: "legacy-conversation", conversationId: "conv_2" }, "chat"],
+  // These two fail without the list of every conversation: the paths opened the application root.
+  [
+    "/w/cw_1/conversations",
+    { kind: "conversation-list", collaborationWorkspaceId: "cw_1" },
+    "conversations"
+  ],
+  ["/conversations", { kind: "conversation-list-root" }, "conversations"],
   ["/settings/you/profile", { kind: "settings", group: "you", page: "profile" }, "settings"],
   [
     "/settings/workspace/members",
@@ -47,7 +54,7 @@ describe("area route table", () => {
   it("has one row per area", () => {
     const areas = areaRoutes.map((row) => row.area);
 
-    expect(areas).toEqual(["chat", "settings", "inbox", "build", "ui-library"]);
+    expect(areas).toEqual(["chat", "conversations", "settings", "inbox", "build", "ui-library"]);
   });
 
   it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {

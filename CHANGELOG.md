@@ -269,6 +269,19 @@ id from config_assets where status = 'deleted')`.
   `ToolModelUsageReport` are removed, and `InProcessToolExecution` no longer takes
   `usageRecorder`. A tool that calls a model does so through the model gateway, which records
   the usage.
+- **Navigation:** the sidebar has one entry for a chat. The row "Chat" is gone; "New chat" starts
+  a conversation, and inside a conversation its row under "Recent" is the current item. A section
+  that stands alone, such as the Inbox, now shows its row. "Recent" lists the 30 latest
+  conversations of the workspace and ends with "Show all" once there are more. "Show all" opens
+  the new page `/w/<workspace>/conversations` with every conversation of the workspace by last
+  activity, a search by title that the server answers, and the row menu of the sidebar (rename,
+  move, delete). The page reads 50 conversations at a time and the older ones on request;
+  `/conversations` leads to the list of the active workspace. The collapsed sidebar has an icon
+  "Conversations" that opens the same page.
+- **Branding:** the platform's default favicon is the Catalyst mark, an orange field with a small
+  dark square at the bottom right that follows the colour scheme by itself. It replaces the
+  shield in `packages/chat-ui/assets/favicon.svg`, the standalone app, the demo client and the
+  docs site. A client that ships its own `favicon.svg` keeps it.
 - **Views:** a view can no longer move its own frame to another host. Every view is framed in
   a shell document the instance serves at `/app-runtime/view-shell/1/shell.html`, with the
   header `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'self'

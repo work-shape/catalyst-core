@@ -1,4 +1,4 @@
-import { Blocks, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
+import { Blocks, MessagesSquare, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import {
@@ -25,13 +25,19 @@ import type { WorkspaceRouteView } from "./workspace-route";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
 export type WorkspaceView = WorkspaceRouteView;
+
+/**
+ * How many conversations the rail lists under "Recent". The rest are one row away, on the list
+ * of every conversation, so the rail stays a short list and not a second place to scroll.
+ */
+export const RAIL_RECENT_LIMIT = 30;
 export { railSections, shownRailSections, type RailSection };
 
 interface WorkspaceRailProps {
   config: SafeConfig;
   /** Absent for embedded token sessions, which show the client's branding in its place. */
   collaborationWorkspaceSelector?: ReactNode;
-  /** The section rows. One section alone shows no row. */
+  /** The section rows. */
   sections?: readonly RailSection[];
   conversations: ConversationListItem[];
   conversationsStatus: "loading" | "failed" | "ready";
@@ -53,6 +59,8 @@ interface WorkspaceRailProps {
   onOpenSearch: () => void;
   onViewChange: (view: WorkspaceView) => void;
   onCreateConversation: () => void;
+  /** Opens the list of every conversation of the workspace. */
+  onShowAllConversations: () => void;
   onSelectConversation: (conversationId: string) => void;
   onReloadConversations: () => void;
   onRenameConversation: (conversationId: string, title: string) => Promise<void>;
@@ -62,8 +70,9 @@ interface WorkspaceRailProps {
 
 /**
  * The frame's navigation: the workspace selector with search and collapse, New chat, the
- * section rows, the conversations under "Recent", and a footer with the account menu and the
- * settings. Collapsed it is a strip of icons; under 768 px it is a drawer.
+ * section rows, the latest conversations under "Recent" with the way to all of them, and a
+ * footer with the account menu and the settings. Collapsed it is a strip of icons; under
+ * 768 px it is a drawer.
  */
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
@@ -93,7 +102,8 @@ function RailHeader({
   onToggleCollapsed,
   onOpenSearch,
   onViewChange,
-  onCreateConversation
+  onCreateConversation,
+  onShowAllConversations
 }: WorkspaceRailProps & { sections: readonly RailSection[] }) {
   const { t } = useTranslation();
   // A drawer is never collapsed, so the sidebar says what it shows.
@@ -127,6 +137,16 @@ function RailHeader({
       {t("nav.newChat")}
     </NavItem>
   );
+  // The strip hides the list under "Recent", so it carries the way to the conversations itself.
+  const allConversations = (
+    <NavItem
+      icon={<MessagesSquare aria-hidden="true" />}
+      selected={view === "conversations"}
+      onClick={onShowAllConversations}
+    >
+      {t("nav.conversations")}
+    </NavItem>
+  );
   const sectionRows =
     sections.length === 0 ? null : (
       <NavGroup className={iconsOnly ? undefined : "mt-4"}>
@@ -156,6 +176,7 @@ function RailHeader({
         <div className="grid h-(--layout-header) place-items-center">{collapse}</div>
         {search}
         {newChat}
+        {allConversations}
         {sectionRows}
       </div>
     );
@@ -200,8 +221,10 @@ function RecentConversations({
   conversations,
   conversationsStatus,
   selectedConversationId,
+  view,
   deletingConversation,
   canMoveConversation,
+  onShowAllConversations,
   onSelectConversation,
   onReloadConversations,
   onRenameConversation,
@@ -214,10 +237,12 @@ function RecentConversations({
     return null;
   }
 
+  const recent = recentConversations(conversations, selectedConversationId);
+
   return (
     <NavGroup label={t("nav.recent")}>
-      {conversations.length > 0 ? (
-        conversations.map((conversation) => (
+      {recent.length > 0 ? (
+        recent.map((conversation) => (
           <ConversationButton
             key={conversation.id}
             conversation={conversation}
@@ -254,8 +279,32 @@ function RecentConversations({
           {t("noConversations")}
         </EmptyState>
       )}
+      {conversations.length > RAIL_RECENT_LIMIT ? (
+        <NavItem
+          className={view === "conversations" ? undefined : "text-muted-foreground"}
+          selected={view === "conversations"}
+          onClick={onShowAllConversations}
+        >
+          {t("nav.showAll")}
+        </NavItem>
+      ) : null}
     </NavGroup>
   );
+}
+
+/**
+ * The conversations the rail lists: the latest ones, and after them the open conversation when
+ * it is an older one, so the row a person is in is always there to be the current one.
+ */
+export function recentConversations(
+  conversations: readonly ConversationListItem[],
+  selectedConversationId: string | undefined
+): readonly ConversationListItem[] {
+  const latest = conversations.slice(0, RAIL_RECENT_LIMIT);
+  const open = conversations
+    .slice(RAIL_RECENT_LIMIT)
+    .find((conversation) => conversation.id === selectedConversationId);
+  return open ? [...latest, open] : latest;
 }
 
 const SKELETON_ROW_WIDTHS = ["w-3/4", "w-1/2", "w-2/3"];

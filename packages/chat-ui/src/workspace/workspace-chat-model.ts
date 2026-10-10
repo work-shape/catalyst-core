@@ -60,7 +60,7 @@ import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
 import { inboxRailEntry } from "../inbox/inbox-model";
-import type { WorkspaceRoute } from "./workspace-route";
+import { conversationListRoute, type WorkspaceRoute } from "./workspace-route";
 import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
 import {
   agentModelSelection,
@@ -254,6 +254,8 @@ export interface ConversationRailModel {
   deletingConversation: boolean;
   canMoveConversation: boolean;
   startNewConversation(): void;
+  /** Opens the list of every conversation of the active workspace. */
+  showAllConversations(): void;
   selectConversation(conversationId: string): void;
   renameConversation(conversationId: string, title: string): Promise<void>;
   moveConversation(conversationId: string, title: string): void;
@@ -388,6 +390,12 @@ export function useWorkspaceChatModel({
     threadQuery.data?.conversation.id === selectedConversationId && !threadQuery.isFetching
       ? threadQuery.data?.conversation
       : undefined;
+  const { showRoute } = routeState;
+  const showConversationList = useCallback(
+    (collaborationWorkspaceId: string | undefined, options?: { replace?: true }) =>
+      showRoute(conversationListRoute(collaborationWorkspaceId), options),
+    [showRoute]
+  );
   const collaborationWorkspace = useCollaborationWorkspaceModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -401,7 +409,8 @@ export function useWorkspaceChatModel({
       route.kind === "legacy-conversation" && Boolean(threadQuery.error),
     goToCollaborationWorkspace: routeState.goToDefaultChat,
     showConversation: routeState.showConversation,
-    showSettings: routeState.showSettings
+    showSettings: routeState.showSettings,
+    showConversationList
   });
   const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
   const conversationsQuery = useWorkspaceConversationsQuery({
@@ -927,6 +936,11 @@ export function useWorkspaceChatModel({
       deletingConversation: deleteConversationMutation.isPending,
       canMoveConversation: collaborationWorkspace.canMoveConversation,
       startNewConversation,
+      showAllConversations: () => {
+        // The list reports what goes wrong on it, not what went wrong in the conversation left.
+        setNotice(undefined);
+        showConversationList(activeCollaborationWorkspaceId);
+      },
       selectConversation,
       renameConversation: async (conversationId, title) => {
         await renameConversationMutation.mutateAsync({ conversationId, title });

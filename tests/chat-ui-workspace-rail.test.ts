@@ -3,12 +3,7 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 import type { ConversationListItem, LocaleCode, SafeConfig } from "@vivd-catalyst/api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CollaborationWorkspaceSelector } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
-import {
-  railSections,
-  shownRailSections,
-  WorkspaceRail,
-  type RailSection
-} from "../packages/chat-ui/src/workspace/workspace-rail";
+import { WorkspaceRail } from "../packages/chat-ui/src/workspace/workspace-rail";
 import {
   retentionHintAfter,
   retentionHintClosed,
@@ -207,6 +202,7 @@ function renderRail(
         onOpenSearch: noop,
         onViewChange: noop,
         onCreateConversation: noop,
+        onShowAllConversations: noop,
         onSelectConversation: noop,
         onReloadConversations: noop,
         onRenameConversation: async () => undefined,
@@ -286,33 +282,6 @@ describe("workspace rail frame", () => {
     expect(markup).not.toContain('aria-label="Switch workspace"');
     expect(markup).not.toContain("Recent");
     expect(markup).not.toContain("Angebot Q3");
-  });
-});
-
-describe("workspace rail section rows", () => {
-  const [chat] = railSections;
-  if (!chat) {
-    throw new Error("The rail has no Chat section.");
-  }
-  const second: RailSection = { ...chat, id: "second", label: "nav.settings", view: "inbox" };
-
-  it("shows no Chat row while Chat is the only section a person has", () => {
-    expect(railSections.map((section) => section.id)).toEqual(["chat", "inbox"]);
-    expect(shownRailSections(railSections)).toEqual([]);
-
-    const markup = renderRail();
-    expect(markup).not.toContain(">Chat<");
-    expect(markup).not.toContain("lucide-message-square");
-  });
-
-  it("shows the Chat row once a second section is registered", () => {
-    const markup = renderRail(undefined, undefined, [], { sections: [...railSections, second] });
-
-    expect(markup.match(/lucide-message-square/gu)).toHaveLength(2);
-    // The row of the open view is the current one; the other is not.
-    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Chat/u);
-    expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
-    expect(markup).toContain("Settings");
   });
 });
 
@@ -485,12 +454,12 @@ describe("workspace rail Inbox row", () => {
     expect(markup).not.toContain("lucide-inbox");
   });
 
-  it("shows under Chat with what waits to be decided, in both languages", () => {
+  it("shows under New chat with what waits to be decided, in both languages", () => {
     const markup = renderRail(undefined, { toDecide: 3 });
 
     expect(markup).toContain('aria-label="Inbox, 3 to decide"');
     expect(markup).toContain(">3</span>");
-    expect(markup.indexOf("lucide-message-square")).toBeLessThan(markup.indexOf("lucide-inbox"));
+    expect(markup.indexOf("lucide-square-pen")).toBeLessThan(markup.indexOf("lucide-inbox"));
     expect(renderRail(undefined, { toDecide: 3 }, [], {}, "de")).toContain(
       'aria-label="Eingang, 3 zu entscheiden"'
     );
@@ -616,6 +585,7 @@ describe("workspace rail conversation rows", () => {
           onOpenSearch: noop,
           onViewChange: noop,
           onCreateConversation: noop,
+          onShowAllConversations: noop,
           onSelectConversation: noop,
           onReloadConversations: noop,
           onRenameConversation: async () => undefined,

@@ -13,7 +13,7 @@ import {
   createCompletedAssistantWorkIndices,
   createVisibleFinalAssistantPartIndices
 } from "../packages/chat-ui/src/assistant/assistant-work-grouping";
-import { TranslationProvider, createTranslationContext } from "../packages/chat-ui/src/i18n";
+import { TranslationProvider, createTranslationContext } from "@vivd-catalyst/chat-ui";
 import { InboxItemView, type InboxItemActions } from "../packages/chat-ui/src/inbox";
 
 const skillChangePreview = {

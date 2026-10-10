@@ -14,8 +14,19 @@ export function collaborationWorkspaceHomeRoute(collaborationWorkspaceId: string
   return { kind: "new-conversation", collaborationWorkspaceId };
 }
 
+/** The list of every conversation of a workspace, or the unresolved list while none is known. */
+export function conversationListRoute(
+  collaborationWorkspaceId: string | undefined
+): WorkspaceRoute {
+  return collaborationWorkspaceId
+    ? { kind: "conversation-list", collaborationWorkspaceId }
+    : { kind: "conversation-list-root" };
+}
+
 export function routeCollaborationWorkspaceId(route: WorkspaceRoute): string | undefined {
-  return route.kind === "new-conversation" || route.kind === "conversation"
+  return route.kind === "new-conversation" ||
+    route.kind === "conversation" ||
+    route.kind === "conversation-list"
     ? route.collaborationWorkspaceId
     : undefined;
 }
