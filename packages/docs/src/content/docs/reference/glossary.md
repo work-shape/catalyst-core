@@ -49,7 +49,7 @@ A tool implemented with customer-specific code that runs inside the client insta
 
 ## OpenAPI API Tool
 
-A tool configured from a selected OpenAPI operation whose backing API runs outside the product.
+A tool configured from a selected OpenAPI operation whose backing API runs outside the product. Planned; not in the current release.
 
 ## Embed Surface
 

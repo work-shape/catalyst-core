@@ -51,7 +51,7 @@ Some systems remain outside Workshape Catalyst even when the instance is operate
 
 Examples:
 
-- a customer API called by an OpenAPI API tool
+- a customer API called by a custom code tool
 - an internal document system called by a custom code tool
 - a customer endpoint that exchanges an existing app session for a short-lived chat session token
 

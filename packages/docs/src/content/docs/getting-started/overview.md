@@ -22,7 +22,6 @@ The customer-specific layer provides the narrow pieces:
 - agent instructions
 - enabled tools
 - custom code tools
-- OpenAPI tool selections
 - branding and chat copy
 - retention and usage policy
 - auth integration settings

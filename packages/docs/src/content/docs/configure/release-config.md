@@ -22,7 +22,6 @@ Release config should cover:
 - retention and deletion policy
 - audit retention
 - usage budgets and safeguards
-- OpenAPI operation selections
 - built-in tool enablement
 
 ## Example

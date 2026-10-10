@@ -3,6 +3,10 @@ title: OpenAPI API Tools
 description: Expose selected external API operations as agent tools.
 ---
 
+:::caution[Not in the current release]
+OpenAPI API tools are planned. The current release has no OpenAPI tool adapter and its release config does not accept the `tools.openapi` section shown below. This page describes the intended shape. Until then, call an HTTP API from a [custom code tool](/extend/custom-tools/).
+:::
+
 OpenAPI API tools let an instance expose selected operations from an existing customer or third-party API.
 
 The backing API runs outside Workshape Catalyst. Workshape Catalyst validates and calls selected operations through a tool adapter.
