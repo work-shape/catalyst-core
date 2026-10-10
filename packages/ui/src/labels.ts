@@ -21,6 +21,8 @@ export interface UiLabels {
   optional: string;
   /** Under a chart that drew only the first rows or series of its data. */
   chartTruncated: string;
+  /** In the box of a chart whose engine could not be loaded. */
+  chartLoadFailed: string;
 }
 
 export const uiLabelsEn: UiLabels = {
@@ -40,7 +42,8 @@ export const uiLabelsEn: UiLabels = {
   collapse: "Collapse",
   required: "Required",
   optional: "Optional",
-  chartTruncated: "Only part of the data is shown."
+  chartTruncated: "Only part of the data is shown.",
+  chartLoadFailed: "The chart could not be loaded."
 };
 
 export const uiLabelsDe: UiLabels = {
@@ -60,5 +63,6 @@ export const uiLabelsDe: UiLabels = {
   collapse: "Zuklappen",
   required: "Pflichtfeld",
   optional: "Optional",
-  chartTruncated: "Nur ein Teil der Daten wird angezeigt."
+  chartTruncated: "Nur ein Teil der Daten wird angezeigt.",
+  chartLoadFailed: "Das Diagramm konnte nicht geladen werden."
 };

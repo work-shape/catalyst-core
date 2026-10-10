@@ -21,7 +21,7 @@ let chartEngine: Promise<ChartEngine | undefined> | undefined;
 
 /**
  * The engine is one chunk, requested when the first chart mounts. A failed request resolves to
- * `undefined` and is forgotten, so the chart that asked shows its empty box and the next chart
+ * `undefined` and is forgotten, so the chart that asked says so in its box and the next chart
  * to mount asks again.
  */
 function loadChartEngine(): Promise<ChartEngine | undefined> {
@@ -150,6 +150,15 @@ function ChartCanvas({ spec, loading, fallback }: ChartCanvasProps) {
   return engine ? <div ref={containerRef} className="size-full" /> : fallback;
 }
 
+/** What the chart's box shows in place of a drawing: one sentence. */
+function ChartNotice({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex size-full items-center justify-center rounded-md border border-dashed px-4 text-center text-body text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
 /** The chart's data for a reader who does not see the drawing. */
 const ChartTable = memo(function ChartTable({ spec }: { spec: ChartSpec }) {
   return (
@@ -210,12 +219,6 @@ export function Chart({
   );
   // One request per mounted chart: a chart whose request failed does not ask again by itself.
   const [loading] = useState(loadChartEngine);
-  const emptyBox = (
-    <div className="flex size-full items-center justify-center rounded-md border border-dashed px-4 text-center text-body text-muted-foreground">
-      {emptyLabel}
-    </div>
-  );
-
   return (
     <figure
       aria-label={ariaLabel}
@@ -227,13 +230,19 @@ export function Chart({
         <>
           <div aria-hidden="true" className="w-full text-caption" style={{ height }}>
             <Suspense fallback={<Skeleton shape="block" className="h-full" />}>
-              <ChartCanvas spec={spec} loading={loading} fallback={emptyBox} />
+              <ChartCanvas
+                spec={spec}
+                loading={loading}
+                fallback={<ChartNotice>{labels.chartLoadFailed}</ChartNotice>}
+              />
             </Suspense>
           </div>
           <ChartTable spec={spec} />
         </>
       ) : (
-        <div style={{ height }}>{emptyBox}</div>
+        <div style={{ height }}>
+          <ChartNotice>{emptyLabel}</ChartNotice>
+        </div>
       )}
       {truncated === undefined ? null : (
         <figcaption className="text-caption text-muted-foreground">
