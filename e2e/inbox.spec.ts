@@ -310,11 +310,15 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   await approverPage.getByTestId("operation-call-full-input-open").click();
   const fullInput = approverPage.getByRole("dialog", { name: "Full input" });
   await expect(fullInput.getByTestId("operation-call-full-input")).toContainText(NOTE);
-  await shoot(approverPage, "inbox-operation-call-full-input", async () => {
-    await expect(fullInput).toBeVisible();
-  });
   await approverPage.keyboard.press("Escape");
   await expect(fullInput).toHaveCount(0);
+  // A reload closes the dialog, so each shot opens it again.
+  await shoot(approverPage, "inbox-operation-call-full-input", async () => {
+    await approverPage.getByTestId("operation-call-full-input-open").click();
+    await expect(approverPage.getByTestId("operation-call-full-input")).toBeVisible();
+  });
+  await approverPage.keyboard.press("Escape");
+  await expect(approverPage.getByTestId("operation-call-full-input")).toBeHidden();
 
   // In German the same item.
   await approverPage.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));

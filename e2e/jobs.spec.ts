@@ -114,7 +114,7 @@ test("a superadmin sees a dead job with its error class and retries it", async (
   await expect(page.getByText("Kind: conversation.generate_title")).toBeVisible();
   await expect(tick).toHaveCount(0);
   await expect(row).toBeVisible();
-  await page.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(tick).toBeVisible();
 
   await row.getByRole("button", { name: `Actions for job ${job.id}` }).click();
