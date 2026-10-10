@@ -16,6 +16,14 @@ with `CREATEDB` and permission to terminate its own connections. Missing/unreach
 fails tests. Use `beforeAllWithPostgres` for database suite setup: it reports setup failures on
 each test, because Vitest otherwise counts tests behind a failed `beforeAll` as skipped.
 
+Connections are counted, not hoped for. `scripts/test-postgres-capacity.mjs` holds the budget of
+one test file (40 connections, the highest measured is 32) and the arithmetic:
+`workers * (budget + 1) + 3 <= max_connections`. `pnpm check:local` starts its server with
+`max_connections` for every worker of the machine (618 on 16 cores). On any other server
+`vitest.config.ts` reads `max_connections` and runs only as many files side by side as fit, and
+says so in one line: a server left at the default of 100 runs two. A file that needs more than
+the budget raises the constant; the server and the worker count follow.
+
 The template is migrated by `migrateDatabase`, the entry an operator's migration step runs. It
 reads migrations from `CATALYST_TEST_MIGRATIONS_DIRECTORY`, defaulting to
 `platform/packages/postgres-store/migrations` independently of the working directory.

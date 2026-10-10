@@ -4,12 +4,17 @@
 // ends, fails or is interrupted.
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { connectionsForWorkers, defaultTestWorkers } from "./test-postgres-capacity.mjs";
 
 const image = "postgres:17.6";
 const user = "catalyst";
 const password = "local-check";
 const database = "catalyst_test";
 const name = `catalyst-check-${process.pid}-${randomBytes(4).toString("hex")}`;
+// Room for every test file the suite runs side by side on this machine. Postgres's default of
+// 100 is less than that on more than three cores, and the suite then failed at random with
+// "too many clients already".
+const maxConnections = connectionsForWorkers(defaultTestWorkers());
 
 function docker(...args) {
   return spawnSync("docker", args, { encoding: "utf8" });
@@ -46,7 +51,9 @@ const started = docker(
   // An empty host port lets Docker choose a free one.
   "--publish",
   "127.0.0.1::5432",
-  image
+  image,
+  "-c",
+  `max_connections=${maxConnections}`
 );
 if (started.status !== 0) {
   remove();
@@ -101,7 +108,9 @@ while (!isReady()) {
   await new Promise((resolve) => setTimeout(resolve, 500));
 }
 
-process.stdout.write(`check:local: Postgres 17 in ${name} on 127.0.0.1:${port}\n`);
+process.stdout.write(
+  `check:local: Postgres 17 in ${name} on 127.0.0.1:${port}, max_connections ${maxConnections}\n`
+);
 check = spawn("pnpm", ["check"], {
   stdio: "inherit",
   env: {
