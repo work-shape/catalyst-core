@@ -101,7 +101,7 @@ With `extendOnActivity: true`, every message a user sends moves the deletion dat
 
 Changing `conversationDays` or `extendOnActivity` does not rewrite the dates of existing Conversations. A Conversation takes the new period with its next message, when `extendOnActivity` is on.
 
-In its last seven days a Conversation carries a clock in the list, and the open Conversation shows one line above the message field with the deletion date. With `extendOnActivity: true` the line adds that a new message keeps the Conversation.
+In its last seven days, or the last half of a period shorter than fourteen days, a Conversation carries a clock in the list, and the open Conversation shows one line above the message field with the deletion date. With `extendOnActivity: true` the line adds that a new message keeps the Conversation.
 
 The conversation Resources panel is enabled by default and appears only after a user enters a persisted Conversation. Set `ui.resources.enabled: false` only when a deployment must opt out of that surface.
 

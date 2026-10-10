@@ -239,7 +239,7 @@ export function WorkspaceRail({
               key={conversation.id}
               conversation={conversation}
               selected={conversation.id === selectedConversationId}
-              expires={config.retention?.expireConversations === true}
+              retention={config.retention}
               onSelect={() => onSelectConversation(conversation.id)}
               onRename={(title) => onRenameConversation(conversation.id, title)}
               onMove={

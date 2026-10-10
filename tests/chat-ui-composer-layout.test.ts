@@ -1,7 +1,11 @@
-import { createElement } from "react";
+import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { SafeConfig } from "@vivd-catalyst/api-client";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { safeConfigSchema } from "@vivd-catalyst/api-contract";
+import { createSafeConfigView } from "@vivd-catalyst/config-schema";
 import {
   shouldExpandComposer,
   shouldQueueSend
@@ -13,8 +17,15 @@ import {
   type QueuedSendState,
   type SendBlock
 } from "../packages/chat-ui/src/assistant/send-block";
-import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
-import { TranslationProvider } from "./chat-ui-render-harness";
+import {
+  AssistantThread,
+  ThreadWelcomeHeading
+} from "../packages/chat-ui/src/assistant/assistant-thread";
+import {
+  renderToStaticMarkup as renderInUiRoot,
+  TranslationProvider
+} from "./chat-ui-render-harness";
+import { createTestConfig } from "./support/fixtures";
 
 const agents = [
   {
@@ -297,5 +308,116 @@ describe("composer send during a block", () => {
         })
       )
     ).toBe("send");
+  });
+});
+
+describe("the retention line above the composer", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const noop = () => undefined;
+  type Retention = SafeConfig["retention"];
+  const safeConfig: SafeConfig = safeConfigSchema.parse(
+    createSafeConfigView(createTestConfig(), { version: 0, agents: [], skills: [] })
+  );
+  const retention: Retention = {
+    ...safeConfig.retention,
+    conversationDays: 30,
+    expireConversations: true,
+    extendOnActivity: true
+  };
+  // What an API from before the setting answers.
+  const { extendOnActivity: _since, ...olderApiRetention } = retention;
+
+  /** A thread with one message, as an open conversation has. */
+  function OpenConversation({ children }: { children: ReactNode }) {
+    const runtime = useLocalRuntime(
+      {
+        async run() {
+          return { content: [] };
+        }
+      },
+      { initialMessages: [{ role: "user", content: [{ type: "text", text: "First message" }] }] }
+    );
+    return createElement(AssistantRuntimeProvider, { runtime }, children);
+  }
+
+  /** The text of the line, or nothing when the thread shows none. */
+  function lineOf(input: { retention: Retention; daysLeft: number }): string | undefined {
+    const markup = renderInUiRoot(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "en" as const },
+        createElement(
+          OpenConversation,
+          null,
+          createElement(AssistantThread, {
+            config: { ...safeConfig, retention: input.retention },
+            agents: [],
+            selectedAgentName: undefined,
+            selectableModels: [],
+            selectedModelBindingId: undefined,
+            selectedReasoningEffort: undefined,
+            showContextIndicator: false,
+            contextSnapshot: undefined,
+            notice: undefined,
+            retainedUntil: new Date(Date.now() + input.daysLeft * day).toISOString(),
+            draftAttachments: [],
+            localUploadingAttachments: [],
+            sendQueued: false,
+            attachmentsEnabled: false,
+            attachmentAccept: "",
+            messagesEnabled: true,
+            messagesLoaded: true,
+            composerFocusRequestId: 0,
+            onCancelRun: noop,
+            onSelectAgent: noop,
+            onSelectModelBinding: noop,
+            onSelectReasoningEffort: noop,
+            onFilesSelected: noop,
+            onRemoveDraftAttachment: noop,
+            onRetryDraftAttachment: noop,
+            onQueueSend: noop
+          })
+        )
+      )
+    );
+    const line = markup.split('data-testid="conversation-retention-notice"')[1];
+    return line?.match(/<div>([^<]*)<\/div>/u)?.[1];
+  }
+
+  const deletion = "Will be deleted automatically on [A-Z][a-z]+day, [A-Z][a-z]+ \\d+\\.";
+  const promise = " A new message keeps this conversation\\.";
+
+  it("says when, and that a message keeps the conversation, where a message moves the date", () => {
+    expect(lineOf({ retention, daysLeft: 3 })).toMatch(new RegExp(`^${deletion}${promise}$`, "u"));
+  });
+
+  it("makes no promise where the date stands, or where an older API does not say", () => {
+    const dateOnly = new RegExp(`^${deletion}$`, "u");
+    expect(lineOf({ retention: { ...retention, extendOnActivity: false }, daysLeft: 3 })).toMatch(
+      dateOnly
+    );
+    expect(lineOf({ retention: olderApiRetention, daysLeft: 3 })).toMatch(dateOnly);
+  });
+
+  it("shows nothing on an instance that deletes nothing for age", () => {
+    expect(
+      lineOf({ retention: { ...retention, expireConversations: false }, daysLeft: 3 })
+    ).toBeUndefined();
+  });
+
+  it("shows nothing while the date is outside the warning window", () => {
+    expect(lineOf({ retention, daysLeft: 7.5 })).toBeUndefined();
+    expect(lineOf({ retention, daysLeft: 6.5 })).toBeDefined();
+  });
+
+  it("is gone after a message on an instance with a short period", () => {
+    for (const conversationDays of [1, 3, 7, 14, 90]) {
+      const short = { ...retention, conversationDays };
+      // A message has just moved the date a whole period ahead.
+      expect(lineOf({ retention: short, daysLeft: conversationDays })).toBeUndefined();
+      expect(
+        lineOf({ retention: short, daysLeft: Math.min(7, conversationDays / 2) - 0.01 })
+      ).toBeDefined();
+    }
   });
 });

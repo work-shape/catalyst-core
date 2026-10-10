@@ -141,7 +141,8 @@ contain breaking changes; a patch version does not.
   generated title and background jobs do not move it. `retention.extendOnActivity: false`
   keeps the date set at creation as a fixed maximum age. Check what an instance promised its
   users before upgrading: the default is `true`. A conversation within seven days of its date
-  shows one line above the composer with the deletion date; where a message moves the date,
+  shows one line above the composer with the deletion date. The line and the clock in the list
+  cover at most half the retention period, so a new message always clears them; where a message moves the date,
   the line says that a new message keeps the conversation. The safe config answer carries
   `retention.extendOnActivity`, optional for clients of an older API.
 - **UI library:** `Banner` has the layout `line`, one quiet sentence without a box whose icon

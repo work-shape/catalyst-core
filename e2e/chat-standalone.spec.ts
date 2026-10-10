@@ -1996,19 +1996,12 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   await signInViaApi(page, normalUser);
   const title = `Retention hint ${Date.now()}`;
   const { id } = await createListedConversation(page, title);
-  const thread = await page.request.get(
-    `${apiBaseUrl}/api/v1/conversations/${encodeURIComponent(id)}/thread`
-  );
-  expect(thread.ok()).toBe(true);
-  const { conversation } = z
-    .object({ conversation: z.object({ retainedUntil: z.string() }) })
-    .parse(await thread.json());
-  // The fixture keeps conversations for one day, so every row is about to be deleted.
+  const retainedUntil = await showRetentionDates(page, id, { extendOnActivity: true });
   const sentence = `Will be deleted automatically on ${new Intl.DateTimeFormat("en", {
     weekday: "long",
     month: "long",
     day: "numeric"
-  }).format(new Date(conversation.retainedUntil))}`;
+  }).format(new Date(retainedUntil))}`;
   await page.goto("/");
 
   const row = page.getByTestId("conversation-row").filter({ hasText: title });
@@ -2163,16 +2156,16 @@ test("the line makes no promise where a message does not move the date", async (
 });
 
 /**
- * The fixture keeps conversations for one day, so every date is near and stays near after a
- * message. This shows one conversation as an instance with a long period would: three days from
- * its date until the server moves the date, and far from it afterwards. With `extendOnActivity`
- * off it shows an instance that keeps the date set at creation.
+ * The fixture keeps conversations for one day. This shows one conversation as an instance with a
+ * period of thirty days would: three days from its date until the server moves the date, and
+ * far from it afterwards. With `extendOnActivity` off it shows an instance that keeps the date
+ * set at creation. Returns the date shown while it is near.
  */
 async function showRetentionDates(
   page: Page,
   conversationId: string,
   retention: { extendOnActivity: boolean }
-): Promise<void> {
+): Promise<string> {
   const day = 24 * 60 * 60 * 1000;
   const near = new Date(Date.now() + 3 * day).toISOString();
   let stamped: string | undefined;
@@ -2186,7 +2179,7 @@ async function showRetentionDates(
     const entries = Object.entries(value).map(([key, entry]) => [key, shown(entry)] as const);
     const record = Object.fromEntries(entries);
     if (typeof record.conversationDays === "number") {
-      return { ...record, extendOnActivity: retention.extendOnActivity };
+      return { ...record, conversationDays: 30, extendOnActivity: retention.extendOnActivity };
     }
     if (record.id !== conversationId || typeof record.retainedUntil !== "string") {
       return record;
@@ -2201,9 +2194,13 @@ async function showRetentionDates(
     };
   };
   await page.route(
-    ({ pathname }) => /\/api\/v1\/.*(?:\/config|\/conversations|\/thread|\/runs)$/u.test(pathname),
+    ({ pathname }) => /\/api\/v1\/(?:.*\/)?(?:config|conversations|thread|runs)$/u.test(pathname),
     async (route) => {
-      const response = await route.fetch();
+      // A request still in flight when the test ends has no answer to rewrite.
+      const response = await route.fetch().catch(() => undefined);
+      if (!response) {
+        return;
+      }
       if (!response.headers()["content-type"]?.includes("application/json")) {
         await route.fulfill({ response });
         return;
@@ -2211,6 +2208,7 @@ async function showRetentionDates(
       await route.fulfill({ response, json: shown(await response.json()) });
     }
   );
+  return near;
 }
 
 test("conversation rail deletes a conversation", async ({ page }) => {

@@ -17,10 +17,7 @@ export function RetentionNotice({
   retainedUntil: string | undefined;
 }) {
   const { locale, t } = useTranslation();
-  if (!retention?.expireConversations || !retainedUntil) {
-    return null;
-  }
-  const expiresAt = retentionWarningDate(retainedUntil);
+  const expiresAt = retainedUntil ? retentionWarningDate(retainedUntil, retention) : undefined;
   if (!expiresAt) {
     return null;
   }
@@ -34,7 +31,7 @@ export function RetentionNotice({
       data-testid="conversation-retention-notice"
     >
       {/* An API from before the setting does not say; the promise is made only when it does. */}
-      {retention.extendOnActivity === true
+      {retention?.extendOnActivity === true
         ? t("conversationRetentionNoticeKeptByMessage", { hint })
         : t("conversationRetentionNotice", { hint })}
     </Banner>

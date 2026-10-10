@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
 import { Clock, FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import type { ConversationListItem } from "@vivd-catalyst/api-client";
+import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import {
   Button,
   cn,
@@ -17,7 +17,7 @@ import { retentionWarningDate, retentionWarningText } from "./retention-warning"
 export function ConversationButton({
   conversation,
   selected,
-  expires,
+  retention,
   onSelect,
   onRename,
   onMove,
@@ -26,8 +26,8 @@ export function ConversationButton({
 }: {
   conversation: ConversationListItem;
   selected: boolean;
-  /** Whether the client instance deletes conversations at their retention date. */
-  expires: boolean;
+  /** The instance's retention settings, which decide whether and when a deletion is near. */
+  retention: SafeConfig["retention"] | undefined;
   onSelect: () => void;
   onRename: (title: string) => Promise<void>;
   /** Absent while the user belongs to a single Collaboration Workspace. */
@@ -46,7 +46,7 @@ export function ConversationButton({
   const wasSelectedRef = useRef(selected);
   const running = Boolean(conversation.activeRun);
   const unread = Boolean(conversation.unread && !selected);
-  const expiresAt = expires ? retentionWarningDate(conversation.retainedUntil) : undefined;
+  const expiresAt = retentionWarningDate(conversation.retainedUntil, retention);
   const expiryLabel = expiresAt ? retentionWarningText(expiresAt, { locale, t }) : undefined;
   const expiryHintId = useId();
   // The clock opens its hint under the pointer; the row's button opens it for the keyboard.

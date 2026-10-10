@@ -548,14 +548,18 @@ describe("workspace rail conversation rows", () => {
   function renderRows(
     expireConversations: boolean,
     locale: LocaleCode = "en",
-    conversations: ConversationListItem[] = [conversation, later]
+    conversations: ConversationListItem[] = [conversation, later],
+    conversationDays = 30
   ): string {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
         { children: null, locale },
         createElement(WorkspaceRail, {
-          config: { ...railConfig, retention: { expireConversations } } as SafeConfig,
+          config: {
+            ...railConfig,
+            retention: { expireConversations, conversationDays }
+          } as SafeConfig,
           conversations,
           selectedConversationId: undefined,
           canViewAdministration: false,
@@ -609,6 +613,29 @@ describe("workspace rail conversation rows", () => {
     expect(atBoundary?.description).toBe("Will be deleted automatically on Thursday, October 15");
     expect(justOutside?.clockName).toBeUndefined();
     expect(justOutside?.description).toBeUndefined();
+  });
+
+  it("warns for at most half of a short retention period", () => {
+    // A message moves the date a whole period ahead: it must leave the warning behind.
+    const marked = (conversationDays: number, daysLeft: number) =>
+      retentionMarksOf(
+        renderRows(
+          true,
+          "en",
+          [{ ...conversation, retainedUntil: retainedIn(daysLeft * day) }],
+          conversationDays
+        )
+      )[0]?.clockName !== undefined;
+
+    expect(marked(7, 7)).toBe(false);
+    expect(marked(7, 3.5)).toBe(true);
+    expect(marked(7, 3.5 + 1 / 24)).toBe(false);
+    expect(marked(1, 1)).toBe(false);
+    expect(marked(1, 0.5)).toBe(true);
+    // From fourteen days on the window is the full seven days.
+    expect(marked(14, 7)).toBe(true);
+    expect(marked(90, 7)).toBe(true);
+    expect(marked(90, 7.1)).toBe(false);
   });
 
   it.each<{ locale: LocaleCode; clockName: string; description: string }>([
