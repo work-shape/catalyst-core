@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { getHeapStatistics } from "node:v8";
 import { ESLint } from "eslint";
 import { getFileInfo } from "prettier";
 import ts from "typescript";
@@ -14,6 +15,25 @@ const root = process.cwd();
 const target = process.argv[2] ?? "";
 const here = dirname(fileURLToPath(import.meta.url));
 const formatted = "js,jsx,mjs,cjs,ts,tsx,mts,cts,json,css,scss,html,yml,yaml".split(",");
+
+// The typed lint keeps one TypeScript program for the whole repository in memory: about
+// 2.5 GB once every file is checked. Node sizes its heap by the machine, 2 GB on a runner
+// with 8 GB of memory, where the lint ran out of memory. On a smaller heap than this the
+// lint starts itself again with this one, so no caller has to set it.
+const lintHeapMegabytes = 4096;
+if (
+  target === "lint" &&
+  getHeapStatistics().heap_size_limit < lintHeapMegabytes * 1024 * 1024 &&
+  !process.execArgv.some((argument) => argument.startsWith("--max-old-space-size"))
+) {
+  const again = spawnSync(
+    process.execPath,
+    [`--max-old-space-size=${lintHeapMegabytes}`, ...process.execArgv, ...process.argv.slice(1)],
+    { stdio: "inherit" }
+  );
+  if (again.error) throw again.error;
+  process.exit(again.status ?? 1);
+}
 
 /**
  * Runs a tool and returns its output. A status outside `accepted` is a tool failure,

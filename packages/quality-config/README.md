@@ -52,6 +52,7 @@ Every message counts, whatever its severity, so a rule set to `warn` still fails
 ### Why these parts are our own
 
 - The console, environment and fetch rules could be written with ESLint's `no-restricted-globals` and `no-restricted-properties`, but then they share one rule name. The baseline counts by rule, and console, environment and fetch have different owners.
+- The typed lint holds one TypeScript program for the whole repository, about 2.5 GB once every file is checked. `catalyst-quality lint` therefore starts itself again with a 4 GB heap when Node's default for the machine is smaller, which it is on a runner with 8 GB of memory. Callers set nothing.
 - Module cycles use TypeScript's own resolver with the lint project's options, and a short graph search. `import-x/no-cycle` was tried and dropped: on platform ESLint needed 7.5 GB and 38 seconds with it, against 3 GB and 14 seconds without, and ran out of memory at Node's default limit. dependency-cruiser was not tried: it would add a third resolver beside TypeScript's and import-x's, and it reports each edge of a cycle rather than each cycle.
 - ESLint's bulk suppressions have no owners and no package scopes, and cover ESLint only. The baseline covers all four tools in one format.
 
