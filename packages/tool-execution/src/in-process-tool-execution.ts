@@ -8,7 +8,6 @@ import {
   type ApprovedToolExecutionRequest,
   type JsonObject,
   type Logger,
-  type ModelUsageRecorder,
   type ToolAuthorizationDecision,
   type ToolExecution,
   type ToolExecutionContext,
@@ -16,11 +15,7 @@ import {
   type ToolExecutionResult,
   type ToolHandlerFailureResult
 } from "@vivd-catalyst/core";
-import {
-  auditActorFromUser,
-  getRuntimeSubjectUserId,
-  type AuditRecorder
-} from "@vivd-catalyst/core";
+import { auditActorFromUser, type AuditRecorder } from "@vivd-catalyst/core";
 import type { ToolRegistry } from "./tool-registry";
 import { toolFailureLogRecord } from "./tool-failure-log";
 import { failed, toPreview } from "./tool-results";
@@ -29,7 +24,6 @@ export interface InProcessToolExecutionOptions {
   registry: ToolRegistry;
   getAgentToolNames(agentName: string): readonly string[] | Promise<readonly string[]>;
   auditRecorder?: AuditRecorder;
-  usageRecorder?: ModelUsageRecorder;
   /** Receives the full error of a handler whose failure the model only sees as a reference. */
   logger?: Logger;
   /**
@@ -45,7 +39,6 @@ export class InProcessToolExecution implements ToolExecution {
     agentName: string
   ) => readonly string[] | Promise<readonly string[]>;
   private readonly auditRecorder?: AuditRecorder;
-  private readonly usageRecorder?: ModelUsageRecorder;
   private readonly logger?: Logger;
   private readonly authorizer: Authorizer;
 
@@ -53,7 +46,6 @@ export class InProcessToolExecution implements ToolExecution {
     this.registry = options.registry;
     this.getAgentToolNames = options.getAgentToolNames;
     this.auditRecorder = options.auditRecorder;
-    this.usageRecorder = options.usageRecorder;
     this.logger = options.logger;
     this.authorizer = options.authorizer ?? createAuthorizer();
   }
@@ -154,19 +146,17 @@ export class InProcessToolExecution implements ToolExecution {
             }
           : result;
 
-      const publicResult = await this.recordAndRemoveModelUsage(validated, request, context);
-
       await this.audit(
         "tool.completed",
-        publicResult.status === "success" ? "success" : "failed",
+        validated.status === "success" ? "success" : "failed",
         request,
         context,
         {
-          resultStatus: publicResult.status,
-          ...toolAuditSummaryMetadata(publicResult.auditSummary)
+          resultStatus: validated.status,
+          ...toolAuditSummaryMetadata(validated.auditSummary)
         }
       );
-      return publicResult;
+      return validated;
     } catch (error) {
       const result =
         error instanceof ZodError
@@ -206,49 +196,6 @@ export class InProcessToolExecution implements ToolExecution {
       `The tool failed with an internal error. Reference: ${context.correlationId}`,
       { correlationId: context.correlationId }
     );
-  }
-
-  private async recordAndRemoveModelUsage(
-    result: ToolExecutionResult,
-    request: ToolExecutionRequest,
-    context: ToolExecutionContext
-  ): Promise<ToolExecutionResult> {
-    if (result.status !== "success" || !result.modelUsage) {
-      return result;
-    }
-    const usageRecorder = this.usageRecorder;
-    if (!usageRecorder) {
-      throw new Error("Tool-reported model usage requires a configured usage recorder");
-    }
-    const { modelUsage, ...publicResult } = result;
-    await Promise.all(
-      modelUsage.map((usage) =>
-        usageRecorder.recordModelUsage({
-          clientInstanceId: context.clientInstanceId,
-          attribution: {
-            kind: "agent_run",
-            conversationId: request.conversationId,
-            runId: request.agentRunId,
-            agentName: request.agentName,
-            userId: getRuntimeSubjectUserId(context)
-          },
-          providerId: usage.providerId,
-          model: usage.model,
-          inputTokens: usage.inputTokens,
-          ...(usage.cachedInputTokens !== undefined
-            ? { cachedInputTokens: usage.cachedInputTokens }
-            : {}),
-          outputTokens: usage.outputTokens,
-          totalTokens: usage.totalTokens,
-          source: usage.source,
-          ...(usage.webSearchCallCount !== undefined
-            ? { webSearchCallCount: usage.webSearchCallCount }
-            : {}),
-          correlationId: context.correlationId
-        })
-      )
-    );
-    return publicResult;
   }
 
   private async audit(

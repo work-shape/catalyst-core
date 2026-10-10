@@ -28,10 +28,7 @@ const modelProvider = "packages/model-provider";
  * it. `count` is how many the file holds; one more is a finding. The list only shrinks.
  * @type {Exemption[]}
  */
-const usageWriteExemptions = [
-  // The usage a tool reports in its result, until extraction is a gateway call.
-  { file: "packages/tool-execution/src/in-process-tool-execution.ts", count: 1, removedBy: "CB-6b" }
-];
+const usageWriteExemptions = [];
 
 /**
  * Comparisons against a provider type outside model-provider that predate the rule. Both
