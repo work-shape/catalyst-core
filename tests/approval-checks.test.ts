@@ -279,22 +279,27 @@ describe("approval check runner", () => {
   });
 
   it("runs checks concurrently, retains configured order and isolates a failed check", async () => {
-    const f = await fixture([rule, { ...rule, id: "second", onFail: "block" }]);
+    const second: ApprovalCheckConfig = {
+      ...rule,
+      id: "second",
+      onFail: "block",
+      instruction: "Second instruction."
+    };
+    const f = await fixture([rule, second]);
     let releaseFirst: ((value: ModelCompletion) => void) | undefined;
     let releaseSecond: ((value: ModelCompletion) => void) | undefined;
-    f.complete
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            releaseFirst = resolve;
-          })
-      )
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
+    // Which check reaches the model first is not fixed: each is admitted in the database
+    // before it is sent. The request says which one it is.
+    f.complete.mockImplementation(
+      (request) =>
+        new Promise((resolve) => {
+          if (JSON.stringify(request.messages).includes(second.instruction)) {
             releaseSecond = resolve;
-          })
-      );
+          } else {
+            releaseFirst = resolve;
+          }
+        })
+    );
     const pending = f.runner.run(handler, command, context);
     await vi.waitFor(() => expect(f.complete).toHaveBeenCalledTimes(2));
     releaseSecond?.(completion("invalid"));
