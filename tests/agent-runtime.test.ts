@@ -807,6 +807,108 @@ describe("local agent runtime", () => {
     });
   });
 
+  it("announces the end of a run only after the run is recorded as ended", async () => {
+    const clientInstanceId = asClientInstanceId("terminal-order-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-terminal-order",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = (await createTestInstance()).stores;
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const inputMessage = await store.conversations.appendMessage({
+      clientInstanceId,
+      conversationId,
+      role: "user",
+      text: "hello"
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "terminal_order_agent",
+              displayName: "Terminal Order Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        // A store that takes its time, as a loaded database does.
+        agentRunStore: {
+          ...store.agentRuns,
+          async updateAgentRunStatus(input) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            return store.agentRuns.updateAgentRunStatus(input);
+          }
+        },
+        runObservationStore: store.agentRuns,
+        modelProvider: {
+          id: "test-provider",
+          async complete() {
+            return {
+              text: "Done.",
+              toolCalls: [],
+              usage: noReportedUsage()
+            };
+          }
+        },
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        toolExecution: createUnusedToolExecution(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
+      })
+    );
+
+    const run = await runtime.start(
+      {
+        agentName: "terminal_order_agent",
+        conversationId,
+        inputMessageId: inputMessage.id,
+        message: {
+          text: "hello"
+        }
+      },
+      context
+    );
+
+    // What an observer reads back at the moment it hears the run has ended.
+    const recordedWhenAnnounced: Array<string | undefined> = [];
+    for await (const event of runtime.observe(run.runId, context)) {
+      if (event.type === "run_completed") {
+        const recorded = await store.agentRuns.getAgentRun({ clientInstanceId, runId: run.runId });
+        recordedWhenAnnounced.push(recorded?.status);
+      }
+    }
+
+    expect(recordedWhenAnnounced).toEqual(["completed"]);
+  });
+
   it("runs a user-selected model binding with the effort configured for that model", async () => {
     const clientInstanceId = asClientInstanceId("binding-client");
     const context: RuntimeCallContext = {

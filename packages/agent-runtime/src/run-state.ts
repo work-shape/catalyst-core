@@ -40,6 +40,12 @@ export function toRunFailureError(error: unknown): RunFailureError {
   };
 }
 
+function isTerminalRunEvent(event: AgentRuntimeEvent): boolean {
+  return (
+    event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed"
+  );
+}
+
 function categorizeRunFailure(error: unknown): AgentRunFailureCategory {
   if (error instanceof AppError) {
     return error.code === "INTERNAL" ? "internal_error" : "app_error";
@@ -95,6 +101,11 @@ export class RunState {
           break;
         }
         index += 1;
+        if (isTerminalRunEvent(event)) {
+          // The stores are written behind the live events. An observer that hears a run has
+          // ended reads the run back, so it hears it once the stores say so too.
+          await this.eventWriteQueue;
+        }
         yield event;
       }
       if (this.closed) {
