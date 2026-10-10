@@ -95,7 +95,7 @@ describe("agent run jobs beside an API and a worker of the previous release", ()
     expect(fixture.executor.calls).toHaveLength(0);
   });
 
-  it("adopts and fails a held run once the previous release's worker is gone", async () => {
+  it("fails a held run once the previous release's worker is gone, without a job", async () => {
     const fixture = await createFixture("old_worker_gone_later");
     const run = await fixture.accept();
     await legacyClaim(fixture, "legacy-lease");
@@ -108,14 +108,53 @@ describe("agent run jobs beside an API and a worker of the previous release", ()
 
     await fixture.makeAdoptionDue();
     await worker.runDue();
-    await worker.runDue();
 
     expect(fixture.executor.calls).toHaveLength(0);
     expect(await fixture.run(run)).toMatchObject({
       status: "failed",
       error: { code: "AGENT_RUN_WORKER_LOST" }
     });
-    expect(await fixture.jobs()).toMatchObject([{ status: "succeeded" }, { status: "succeeded" }]);
+    expect(await fixture.jobs()).toMatchObject([{ status: "succeeded" }]);
+  });
+
+  it("fails a started run whose worker is gone while only the API is up, and the conversation takes the next message", async () => {
+    const fixture = await createFixture("old_worker_gone_api_only");
+    const run = await fixture.accept();
+    // A worker of the previous release executes the run. No worker of this release is up,
+    // so the job of the run waits, and only the job worker of the API serves the upkeep.
+    await legacyClaim(fixture, "legacy-lease");
+    const api = fixture.upkeepWorker();
+    await api.runDue();
+    // Slow or busy, that worker is alive while its lease lasts.
+    expect(await fixture.run(run)).toMatchObject({ status: "running" });
+
+    await db.sql`
+      update agent_runs set lease_expires_at = now() - interval '1 second' where id = ${run.id}`;
+    await fixture.makeAdoptionDue();
+    await api.runDue();
+
+    expect(await fixture.run(run)).toMatchObject({
+      status: "failed",
+      error: { code: "AGENT_RUN_WORKER_LOST", category: "runtime_interrupted" }
+    });
+    expect(await fixture.eventTypes(run)).toEqual(["run_failed"]);
+    // What that worker still writes is refused: the lease is off the row.
+    await expect(legacyAppend(fixture, run, "legacy-lease", 1, "message_delta")).resolves.toBe(
+      false
+    );
+    const audited = await db.sql<{ count: number }[]>`
+      select count(*)::int as count from audit_events
+      where client_instance_id = ${fixture.clientInstanceId}
+        and type = 'agent_run.recovered' and subject = ${run.id}`;
+    expect(audited).toEqual([{ count: 1 }]);
+    // The same tick again fails nothing twice.
+    await fixture.makeAdoptionDue();
+    await api.runDue();
+    expect(await fixture.eventTypes(run)).toEqual(["run_failed"]);
+
+    const next = await fixture.accept("And now?");
+    expect(await fixture.run(next)).toMatchObject({ status: "queued" });
+    expect(fixture.executor.calls).toHaveLength(0);
   });
 
   it("fails a run whose previous-release worker was killed, without executing it again", async () => {

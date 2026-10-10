@@ -468,7 +468,7 @@ export interface FailLostAgentRunInput {
   error: AgentRunError;
 }
 
-/** A run in progress without a job, as the adoption enqueues it. */
+/** A queued run without a job, as the adoption enqueues it. */
 export interface AgentRunWithoutJob {
   id: AgentRunId;
   correlationId: string;
@@ -589,8 +589,19 @@ export interface AgentRunStore {
     limit: number;
   }): Promise<AgentRun[]>;
   /**
-   * The runs in progress that have no queued or running job of `jobKind` and that nobody
-   * holds under a live lease, oldest first. The upkeep enqueues a job for each.
+   * Fails the runs that were started and that no worker holds any more, oldest first, each
+   * with `error` and a `run_failed` event: the lease on the row ran out or was never set, and
+   * no job of `jobKind` is running for the run. Resolves with the runs it failed.
+   */
+  failAgentRunsWithoutWorker(input: {
+    clientInstanceId: ClientInstanceId;
+    jobKind: string;
+    error: AgentRunError;
+    limit: number;
+  }): Promise<AgentRun[]>;
+  /**
+   * The queued runs that have no queued or running job of `jobKind`, oldest first. The
+   * upkeep enqueues a job for each.
    */
   listAgentRunsWithoutJob(input: {
     clientInstanceId: ClientInstanceId;

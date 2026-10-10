@@ -26,6 +26,7 @@ import {
   assertClaimedAgentRun as assertPostgresClaimedAgentRun,
   claimAgentRunForJob as claimPostgresAgentRunForJob,
   failAgentRunsQueuedTooLong as failPostgresAgentRunsQueuedTooLong,
+  failAgentRunsWithoutWorker as failPostgresAgentRunsWithoutWorker,
   failLostAgentRun as failLostPostgresAgentRun,
   listAgentRunsWithoutJob as listPostgresAgentRunsWithoutJob,
   renewAgentRunJobLease as renewPostgresAgentRunJobLease,
@@ -113,6 +114,11 @@ export function createPostgresAgentRunsStore(
       input: Parameters<AgentRunStore["failAgentRunsQueuedTooLong"]>[0]
     ) {
       return failPostgresAgentRunsQueuedTooLong(db, input);
+    },
+    async failAgentRunsWithoutWorker(
+      input: Parameters<AgentRunStore["failAgentRunsWithoutWorker"]>[0]
+    ) {
+      return failPostgresAgentRunsWithoutWorker(db, input);
     },
     async listAgentRunsWithoutJob(input: Parameters<AgentRunStore["listAgentRunsWithoutJob"]>[0]) {
       return listPostgresAgentRunsWithoutJob(db, input);

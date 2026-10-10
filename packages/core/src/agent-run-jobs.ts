@@ -23,8 +23,9 @@ export const AGENT_RUN_HEARTBEAT_MS = 15 * 1000;
 // How often a running run looks for a cancellation request on its row. A click on Stop reaches
 // the worker within this time plus one database read.
 export const AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS = 1000;
-// How often runs in progress without a job are given one. A run that an API of the previous
-// release accepted waits at most this long when no worker of that release is left to take it.
+// How often the upkeep of the runs looks. A queued run without a job, which an API of the
+// previous release accepted, waits at most this long for its job; a started run whose worker
+// is gone without a job to bury is failed at most this long after its lease ran out.
 export const AGENT_RUN_ADOPTION_INTERVAL_MS = 15 * 1000;
 // Runs one tick of the adoption gives a job. The next tick takes the rest.
 export const AGENT_RUN_ADOPTION_BATCH_SIZE = 500;
@@ -35,8 +36,8 @@ const AGENT_RUN_ADOPTION_LEASE_MS = 2 * 60 * 1000;
 // the slots of all worker processes, times the length of a run. Raise it together with the
 // backlog an instance is meant to carry, or add slots.
 export const AGENT_RUN_MAX_QUEUED_MS = 10 * 60 * 1000;
-// Queued runs one tick fails as waited too long. The next tick takes the rest.
-const AGENT_RUN_QUEUED_TOO_LONG_BATCH_SIZE = 500;
+// Runs one tick fails for each reason. The next tick takes the rest.
+const AGENT_RUN_UPKEEP_FAIL_BATCH_SIZE = 500;
 
 /**
  * Executes one row of `agent_runs`. The row stays the record the interface reads; the job is
@@ -78,12 +79,16 @@ export function agentRunJobOptions(run: {
  * The upkeep of the runs, served by every process that runs a job worker, the API included,
  * so that it goes on while no Agent Run worker is up.
  *
- * It gives a job to every run in progress that has none and that nobody holds. In the
- * transition release such a run was accepted by an API of the previous release, or a worker
- * of that release held it and is gone. After the transition the only such run is one whose
- * job was buried without its `onExhausted`; the job it gets here finds the run started and
- * fails it. A run that a worker of the previous release holds under a live lease gets no job:
- * that worker ends it, or its lease runs out and the run is adopted then.
+ * It gives a job to every queued run that has none: an API of the previous release accepted
+ * it.
+ *
+ * It fails every started run that no worker holds: the lease on its row ran out and no job
+ * of it is running. A worker of the previous release held it and is gone, or its job was
+ * buried without its `onExhausted`. The run is failed here and not by a job, so that it ends
+ * while no worker is up to take one. A slow worker that is still alive loses nothing it had:
+ * a lease that ran out is no claim, the write that fails the run takes the lease from the
+ * row, and every later write of that worker is refused for it. A run under a live lease, and
+ * a run whose job is running, is left to its worker or to the burial of that job.
  *
  * It also fails every run that is still queued after `AGENT_RUN_MAX_QUEUED_MS`.
  */
@@ -226,22 +231,36 @@ export function agentRunUpkeepHandler(options: AgentRunUpkeepOptions): Registere
       }
       if (runs.length > 0) control.logger.info({ runs: runs.length }, "Adopted agent runs");
 
-      // Each run changes only while it is still queued, so a tick that was taken over fails
-      // nothing twice. The job of a run failed here finds it ended and does nothing.
-      const waitedTooLong = await stores.transaction(async (txStores) => {
-        const failed = await txStores.agentRuns.failAgentRunsQueuedTooLong({
+      // Each run is failed by one statement that reads its state again under the row lock,
+      // so a tick that was taken over fails nothing twice. A job of a run failed here finds
+      // it ended and does nothing.
+      const failed = await stores.transaction(async (txStores) => {
+        const lost = await txStores.agentRuns.failAgentRunsWithoutWorker({
+          clientInstanceId,
+          jobKind: executeAgentRunJob.kind,
+          error: AGENT_RUN_WORKER_LOST_ERROR,
+          limit: AGENT_RUN_UPKEEP_FAIL_BATCH_SIZE
+        });
+        for (const run of lost) await recordRecovery(txStores, run, AGENT_RUN_WORKER_LOST_ERROR);
+        const notStarted = await txStores.agentRuns.failAgentRunsQueuedTooLong({
           clientInstanceId,
           queuedMs: AGENT_RUN_MAX_QUEUED_MS,
           error: AGENT_RUN_NOT_STARTED_ERROR,
-          limit: AGENT_RUN_QUEUED_TOO_LONG_BATCH_SIZE
+          limit: AGENT_RUN_UPKEEP_FAIL_BATCH_SIZE
         });
-        for (const run of failed) await recordRecovery(txStores, run, AGENT_RUN_NOT_STARTED_ERROR);
-        return failed;
+        for (const run of notStarted)
+          await recordRecovery(txStores, run, AGENT_RUN_NOT_STARTED_ERROR);
+        return { lost, notStarted };
       });
-      for (const run of waitedTooLong) options.onObservation?.(run.id);
-      if (waitedTooLong.length > 0)
+      for (const run of [...failed.lost, ...failed.notStarted]) options.onObservation?.(run.id);
+      if (failed.lost.length > 0)
         control.logger.warn(
-          { runs: waitedTooLong.length },
+          { runs: failed.lost.length },
+          "Failed agent runs that lost their worker"
+        );
+      if (failed.notStarted.length > 0)
+        control.logger.warn(
+          { runs: failed.notStarted.length },
           "Failed agent runs that no worker took in time"
         );
     }

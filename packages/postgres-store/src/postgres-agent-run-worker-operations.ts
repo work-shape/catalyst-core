@@ -1,8 +1,9 @@
-import { and, asc, eq, gt, inArray, lt, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   AppError,
   JobLeaseLostError,
   type AgentRun,
+  type AgentRunError,
   type AgentRunJobClaim,
   type AgentRunJobLease,
   type AgentRunStore,
@@ -458,22 +459,51 @@ export async function failAgentRunsQueuedTooLong(
   db: PostgresConnection,
   input: Parameters<AgentRunStore["failAgentRunsQueuedTooLong"]>[0]
 ): Promise<AgentRun[]> {
+  return failAgentRunsWhere(db, input, () =>
+    and(
+      eq(agentRuns.status, "queued"),
+      // `started_at` is when the run was accepted; a queued run has not been claimed.
+      lt(
+        agentRuns.startedAt,
+        drizzleSql`now() - make_interval(secs => ${input.queuedMs}::double precision / 1000)`
+      )
+    )
+  );
+}
+
+export async function failAgentRunsWithoutWorker(
+  db: PostgresConnection,
+  input: Parameters<AgentRunStore["failAgentRunsWithoutWorker"]>[0]
+): Promise<AgentRun[]> {
+  return failAgentRunsWhere(db, input, () =>
+    and(
+      inArray(agentRuns.status, STARTED_STATUSES),
+      drizzleSql`(${agentRuns.leaseExpiresAt} is null or ${agentRuns.leaseExpiresAt} <= now())`,
+      // A running job is its worker's while its lease lasts, and the burial of the job ends
+      // the run after that.
+      drizzleSql`not exists (
+        select 1 from platform_jobs job
+        where job.client_instance_id = ${agentRuns.clientInstanceId}
+          and job.kind = ${input.jobKind}
+          and job.dedupe_key = ${input.jobKind} || ':' || ${agentRuns.id}
+          and job.status = 'running'
+      )`
+    )
+  );
+}
+
+/** Fails up to `limit` runs that meet `condition`, oldest first, each with a `run_failed` event. */
+async function failAgentRunsWhere(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; error: AgentRunError; limit: number },
+  condition: () => SQL | undefined
+): Promise<AgentRun[]> {
   return db.transaction(async (tx) => {
     const ofInstance = eq(agentRuns.clientInstanceId, input.clientInstanceId);
-    const waiting = tx
+    const chosen = tx
       .select({ id: agentRuns.id })
       .from(agentRuns)
-      .where(
-        and(
-          ofInstance,
-          eq(agentRuns.status, "queued"),
-          // `started_at` is when the run was accepted; a queued run has not been claimed.
-          lt(
-            agentRuns.startedAt,
-            drizzleSql`now() - make_interval(secs => ${input.queuedMs}::double precision / 1000)`
-          )
-        )
-      )
+      .where(and(ofInstance, condition()))
       .orderBy(asc(agentRuns.startedAt), asc(agentRuns.id))
       .limit(input.limit);
     const rows = await tx
@@ -483,10 +513,15 @@ export async function failAgentRunsQueuedTooLong(
         failedAt: drizzleSql`now()`,
         updatedAt: drizzleSql`now()`,
         lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`,
-        error: input.error
+        error: input.error,
+        leaseOwner: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        heartbeatAt: null
       })
-      // The status is read again under the row lock: a run a worker claimed meanwhile stays.
-      .where(and(ofInstance, eq(agentRuns.status, "queued"), inArray(agentRuns.id, waiting)))
+      // The condition is read again under the row lock: a run that a worker claimed, renewed
+      // or ended meanwhile stays as it is.
+      .where(and(ofInstance, condition(), inArray(agentRuns.id, chosen)))
       .returning();
     const failed = rows.flatMap((row) => (row.failedAt ? [{ row, failedAt: row.failedAt }] : []));
     if (failed.length === 0) return [];
@@ -522,9 +557,9 @@ export async function listAgentRunsWithoutJob(
     .where(
       and(
         eq(agentRuns.clientInstanceId, input.clientInstanceId),
-        inArray(agentRuns.status, RUN_IN_PROGRESS_STATUSES),
-        // A run under a live lease is someone's: a job of it would only find it held.
-        drizzleSql`(${agentRuns.leaseExpiresAt} is null or ${agentRuns.leaseExpiresAt} <= now())`,
+        // Only a run that was never started is executed. A started run that lost its worker
+        // is failed by `failAgentRunsWithoutWorker`.
+        eq(agentRuns.status, "queued"),
         drizzleSql`not exists (
           select 1 from platform_jobs job
           where job.client_instance_id = ${agentRuns.clientInstanceId}

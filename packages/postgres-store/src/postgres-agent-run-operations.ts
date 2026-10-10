@@ -419,6 +419,7 @@ export {
   assertClaimedAgentRun,
   claimAgentRunForJob,
   failAgentRunsQueuedTooLong,
+  failAgentRunsWithoutWorker,
   failLostAgentRun,
   listAgentRunsInProgress,
   listAgentRunsWithoutJob,
