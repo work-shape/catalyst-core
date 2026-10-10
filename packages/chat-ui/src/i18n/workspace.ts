@@ -9,6 +9,9 @@ export const workspace = defineTranslations({
     noConversations: "No conversations yet.",
     openSidebar: "Open sidebar",
     runInterrupted: "The reply was interrupted. Please send your message again.",
+    runNotStarted:
+      "The reply could not be started because the service is busy or unavailable. Please send your message again.",
+    runStopped: "The reply was stopped.",
     returnToChat: "Return to chat",
     selectAgent: "Select agent",
     sessionCheckingDescription: "Your account is being checked before the chat loads.",
@@ -31,6 +34,9 @@ export const workspace = defineTranslations({
     noConversations: "Noch keine Unterhaltungen.",
     openSidebar: "Seitenleiste öffnen",
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
+    runNotStarted:
+      "Die Antwort konnte nicht gestartet werden, weil der Dienst ausgelastet oder nicht erreichbar ist. Bitte sende deine Nachricht erneut.",
+    runStopped: "Die Antwort wurde gestoppt.",
     returnToChat: "Zurück zum Chat",
     selectAgent: "Agent auswählen",
     sessionCheckingDescription: "Dein Konto wird geprüft, bevor der Chat geladen wird.",

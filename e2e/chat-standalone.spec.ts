@@ -1990,6 +1990,9 @@ test("stop generating cancels the active stream instead of only hiding the butto
       return thread.activeRun?.run.id === run.id ? thread.activeRun.run.status : undefined;
     })
     .toBe("cancelled");
+  // The person reads a sentence, never the reason code the request carried.
+  await expect(page.getByText("The reply was stopped.")).toBeVisible();
+  await expect(page.getByText("user_requested")).toHaveCount(0);
 
   await expect(page.locator('[data-role="assistant"]').filter({ hasText: lateToken })).toHaveCount(
     0

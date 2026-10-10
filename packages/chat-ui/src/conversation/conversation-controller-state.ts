@@ -38,6 +38,8 @@ export interface ConversationControllerState {
     class: ConversationControllerErrorClass;
     message: string;
     category?: string;
+    /** The error code of a failed run. */
+    code?: string;
   };
 }
 
@@ -395,7 +397,8 @@ function terminalErrorFromSnapshot(
     return {
       class: "run_failed",
       message: activeRun.projection.error?.message ?? "Run failed",
-      category: activeRun.projection.error?.category
+      category: activeRun.projection.error?.category,
+      code: activeRun.projection.error?.code
     };
   }
   if (activeRun.run.status === "cancelled") {
@@ -414,7 +417,8 @@ function terminalError(
     return {
       class: "run_failed",
       message: observation.payload.error.message,
-      category: observation.payload.error.category
+      category: observation.payload.error.category,
+      code: observation.payload.error.code
     };
   }
   if (observation.payload.type === "run_cancelled") {

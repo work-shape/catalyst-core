@@ -35,6 +35,7 @@ export const administration = defineTranslations({
       "The jobs could not be refreshed. This is the last state that was loaded.",
     "jobs.errorClass": "Last error",
     "jobs.subject": "Subject",
+    "jobs.notTaken": "No worker takes these",
     "jobs.waitingFor": "Oldest waiting",
     "jobs.statusQueued": "Queued",
     "jobs.waitingForModule":
@@ -160,6 +161,7 @@ export const administration = defineTranslations({
       "Die Jobs konnten nicht aktualisiert werden. Zu sehen ist der zuletzt geladene Stand.",
     "jobs.errorClass": "Letzter Fehler",
     "jobs.subject": "Gegenstand",
+    "jobs.notTaken": "Kein Worker übernimmt diese",
     "jobs.waitingFor": "Wartet am längsten",
     "jobs.statusQueued": "Wartend",
     "jobs.waitingForModule":

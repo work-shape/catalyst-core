@@ -35,6 +35,20 @@ import { useTranslation, type TranslationKey } from "../../i18n";
 import { useModuleName } from "../../module-texts";
 import { useSettingsPage } from "../settings-page-context";
 
+// A worker polls once a second, so a due job is taken within seconds while a process that
+// serves its kind is up and has a free slot. After this long with none of the kind running,
+// the page says that nothing takes the kind.
+const NOT_TAKEN_AFTER_MS = 60 * 1000;
+
+/**
+ * True when jobs of the kind have been due for a while and none is running: no process that
+ * executes the kind is up. For `agent_run.execute` that is the missing Agent Run worker.
+ */
+function isNotBeingTaken(row: JobKindSummary, now: Date): boolean {
+  if (row.running > 0 || !row.waitingSince) return false;
+  return now.getTime() - new Date(row.waitingSince).getTime() >= NOT_TAKEN_AFTER_MS;
+}
+
 /** How often the page asks again while its browser tab is visible. */
 const JOBS_REFRESH_MS = 10_000;
 
@@ -234,6 +248,11 @@ function JobSummaryTable({
               </TableCell>
               <TableCell className="text-right tabular-nums">{count(row.dead, "danger")}</TableCell>
               <TableCell className="text-right text-muted-foreground tabular-nums">
+                {isNotBeingTaken(row, now) ? (
+                  <Badge tone="warning" className="mr-2" data-job-not-taken>
+                    {t("jobs.notTaken")}
+                  </Badge>
+                ) : null}
                 {row.waitingSince ? formatElapsed(row.waitingSince, now, locale) : "—"}
               </TableCell>
             </TableRow>

@@ -141,3 +141,29 @@ test("a superadmin sees a dead job with its error class and retries it", async (
     expect(text).not.toContain(MESSAGE_MARKER);
   }
 });
+
+test("the summary marks a kind whose due jobs no worker takes", async ({ page }) => {
+  // A kind that no process of the instance serves, as `agent_run.execute` is while no Agent
+  // Run worker is up.
+  const id = `job_e2e_untaken_${randomUUID()}`;
+  await withSql(
+    (sql) => sql`
+      insert into platform_jobs (
+        id, client_instance_id, kind, payload, status, run_after, attempts, max_attempts,
+        correlation_id, created_at
+      )
+      select
+        ${id}, client_instance_id, 'e2e.not_served', '{}', 'queued',
+        now() - interval '5 minutes', 0, 1, ${`corr_${id}`}, now() - interval '5 minutes'
+      from platform_jobs limit 1`
+  );
+  try {
+    await signIn(page);
+    await page.goto("/settings/instance/jobs");
+
+    const kind = page.locator('[data-job-kind="e2e.not_served"]');
+    await expect(kind.locator("[data-job-not-taken]")).toHaveText("No worker takes these");
+  } finally {
+    await withSql((sql) => sql`delete from platform_jobs where id = ${id}`);
+  }
+});

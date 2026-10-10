@@ -80,7 +80,7 @@ import {
   useWorkspaceRouteState,
   useWorkspaceTheme
 } from "./workspace-ui-state";
-import { createTranslationContext } from "../i18n";
+import { createTranslationContext, type TranslationContextValue } from "../i18n";
 import { workspaceSendBlock } from "./workspace-send-block";
 
 export const WORKSPACE_AUTH_SCOPE = "standalone";
@@ -516,11 +516,10 @@ export function useWorkspaceChatModel({
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
   const activeLocale = useWorkspaceLocale(config?.localization.locale);
-  const controllerTerminalNotice = isVisibleTerminalControllerError(controller.error?.class)
-    ? controller.error?.category === "runtime_interrupted"
-      ? createTranslationContext(activeLocale).t("runInterrupted")
-      : controller.error?.message
-    : undefined;
+  const controllerTerminalNotice = terminalRunNotice(
+    controller.error,
+    createTranslationContext(activeLocale).t
+  );
   const visibleNotice = notice ?? controllerTerminalNotice;
 
   function showConversationInActiveCollaborationWorkspace(
@@ -1039,6 +1038,20 @@ export function useWorkspaceChatModel({
   };
 }
 
-function isVisibleTerminalControllerError(errorClass: string | undefined): boolean {
-  return errorClass === "run_failed" || errorClass === "run_cancelled";
+// The code a run is failed with when no worker took it within its queue limit.
+const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";
+
+/**
+ * What the person reads above the composer when a run ended as failed or cancelled. The
+ * reason of a cancellation and the message of an interruption are written for operators, so
+ * the person reads a sentence in their language instead.
+ */
+export function terminalRunNotice(
+  error: ConversationControllerState["error"],
+  t: TranslationContextValue["t"]
+): string | undefined {
+  if (error?.class === "run_cancelled") return t("runStopped");
+  if (error?.class !== "run_failed") return undefined;
+  if (error.category !== "runtime_interrupted") return error.message;
+  return error.code === RUN_NOT_STARTED_CODE ? t("runNotStarted") : t("runInterrupted");
 }

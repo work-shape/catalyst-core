@@ -5,7 +5,10 @@ import {
   uploadFileWithRetry,
   withoutDraftAttachment
 } from "../packages/chat-ui/src/conversation/draft-attachment-controller";
-import { isAbandonedDraftConversation } from "../packages/chat-ui/src/workspace/workspace-chat-model";
+import {
+  isAbandonedDraftConversation,
+  terminalRunNotice
+} from "../packages/chat-ui/src/workspace/workspace-chat-model";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 
 const file = () => new File(["content"], "Perso.pdf", { type: "application/pdf" });
@@ -135,5 +138,44 @@ describe("abandoned draft conversation", () => {
     const drafts = [{ id: "att_1" }, { id: "att_2" }];
     expect(withoutDraftAttachment(drafts, "att_1").map(({ id }) => id)).toEqual(["att_2"]);
     expect(withoutDraftAttachment(withoutDraftAttachment(drafts, "att_1"), "att_2")).toEqual([]);
+  });
+});
+
+describe("the notice of a run that ended as failed or cancelled", () => {
+  const en = createTranslationContext("en").t;
+  const de = createTranslationContext("de").t;
+  const interrupted = {
+    class: "run_failed" as const,
+    message: "Written for operators",
+    category: "runtime_interrupted"
+  };
+
+  it("names a stopped reply in the person's language, never by the reason code", () => {
+    const cancelled = { class: "run_cancelled" as const, message: "user_requested" };
+
+    expect(terminalRunNotice(cancelled, en)).toBe("The reply was stopped.");
+    expect(terminalRunNotice(cancelled, de)).toBe("Die Antwort wurde gestoppt.");
+  });
+
+  it("tells a run that no worker took apart from an interrupted reply", () => {
+    const notStarted = { ...interrupted, code: "AGENT_RUN_NOT_STARTED" };
+    const lost = { ...interrupted, code: "AGENT_RUN_WORKER_LOST" };
+
+    expect(terminalRunNotice(notStarted, en)).toContain("could not be started");
+    expect(terminalRunNotice(notStarted, de)).toContain("konnte nicht gestartet werden");
+    expect(terminalRunNotice(lost, en)).toBe(
+      "The reply was interrupted. Please send your message again."
+    );
+    expect(terminalRunNotice(lost, de)).toBe(
+      "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut."
+    );
+  });
+
+  it("shows the message of any other failure, and nothing for an error that ended no run", () => {
+    const failed = { ...interrupted, message: "Budget is used up", category: "app_error" };
+
+    expect(terminalRunNotice(failed, en)).toBe("Budget is used up");
+    expect(terminalRunNotice({ class: "send_failed", message: "Offline" }, en)).toBeUndefined();
+    expect(terminalRunNotice(undefined, en)).toBeUndefined();
   });
 });
