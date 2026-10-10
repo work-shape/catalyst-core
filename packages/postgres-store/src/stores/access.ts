@@ -4,6 +4,7 @@ import {
   asClientInstanceId,
   asUserId,
   createPlatformId,
+  userInDeletionError,
   type AccessAdministrationStore,
   type ClientInstanceId,
   type Namespace,
@@ -29,7 +30,11 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
       const [holder, grantRows] = await Promise.all([
         input.holder.kind === "user"
           ? db
-              .select({ status: productUsers.status })
+              .select({
+                // A user whose deletion was requested holds nothing any more.
+                status: sql<string>`case when ${productUsers.deletionRequestedAt} is null
+                  then ${productUsers.status} else 'deleting' end`
+              })
               .from(productUsers)
               .where(
                 and(
@@ -70,6 +75,21 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
     async createGrant(input) {
       return db.transaction(async (tx) => {
         await lockAccess(tx, input.clientInstanceId);
+        if (input.holderKind === "user") {
+          // Held until the row is written: the deletion of the user removes the rows the
+          // user holds, so none may appear once it was requested.
+          const [holder] = await tx
+            .select({ deletionRequestedAt: productUsers.deletionRequestedAt })
+            .from(productUsers)
+            .where(
+              and(
+                eq(productUsers.clientInstanceId, input.clientInstanceId),
+                eq(productUsers.id, input.holderId)
+              )
+            )
+            .for("share");
+          if (holder && holder.deletionRequestedAt !== null) throw userInDeletionError();
+        }
         if (input.scopeKind === "namespace") {
           const [registered] = await tx
             .select({ prefix: namespaces.prefix })

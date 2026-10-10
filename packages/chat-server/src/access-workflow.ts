@@ -1,5 +1,6 @@
 import {
   AppError,
+  userInDeletionError,
   asUserId,
   auditActorFromUser,
   isGrantableAction,
@@ -69,6 +70,8 @@ export class AccessWorkflow {
       throw new AppError("NOT_FOUND", "User not found", { reason: "unknown_holder" });
     }
     requireManageableHolder(actor, holder);
+    // The store refuses the same for a deletion requested after this read.
+    if (holder.status === "deleting") throw userInDeletionError();
     const grant = await this.options.stores.access.createGrant({
       clientInstanceId: this.options.clientInstanceId,
       holderKind: "user",

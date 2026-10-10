@@ -419,7 +419,10 @@ export interface NamespaceUsage extends Namespace {
 
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
 export interface AccessAdministrationStore extends AccessStore {
-  /** Throws CONFLICT `duplicate_grant`, and VALIDATION_FAILED `unknown_namespace` for an unregistered prefix. */
+  /**
+   * Throws CONFLICT `duplicate_grant`, VALIDATION_FAILED `unknown_namespace` for an
+   * unregistered prefix, and `userInDeletionError` for a user whose deletion was requested.
+   */
   createGrant(input: Omit<PermissionGrant, "id" | "createdAt">): Promise<PermissionGrant>;
   getGrant(input: {
     clientInstanceId: ClientInstanceId;

@@ -283,4 +283,77 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
       )
     ).toHaveLength(1);
   });
+  // The rows a deleted user held went with the user before this change, by the access store.
+  // Fails without the change: a grant was written for a user being deleted, and such a user
+  // was still read as an active holder.
+  it("removes the grant and deny rows a user holds and keeps the user's id as attribution", async () => {
+    const t = await arrangeDeletion(db, "access_rows");
+    const superadmin = await t.createUser("superadmin", ["user", "admin", "superadmin"]);
+    const leaving = await t.createUser("leaving", ["user", "admin"]);
+    const member = await t.createUser("member");
+    const grant = (actor: { id: string }, holderId: string, action: string, effect = "allow") =>
+      t.api.call(
+        "permissions.grant",
+        {
+          payload: {
+            holderKind: "user",
+            holderId,
+            action,
+            effect,
+            scopeKind: "namespace",
+            namespace: "lea-"
+          }
+        },
+        actor.id
+      );
+    const registered = await t.api.call(
+      "namespaces.create",
+      { payload: { prefix: "lea-", displayName: "Lea" } },
+      leaving.id
+    );
+    expect(registered.statusCode).toBe(200);
+    expect((await grant(leaving, member.id, "agent.write")).statusCode).toBe(200);
+    expect((await grant(superadmin, leaving.id, "agent.read")).statusCode).toBe(200);
+    expect((await grant(superadmin, leaving.id, "agent.delete", "deny")).statusCode).toBe(200);
+    const rows = () => db.sql<Array<{ holder: string; effect: string; grantedBy: string }>>`
+      select holder_id as holder, effect, granted_by as "grantedBy" from permission_grants
+      where client_instance_id = ${t.scope.clientInstanceId} order by holder_id, effect`;
+    await expect(rows()).resolves.toHaveLength(3);
+
+    // Once the deletion is requested the user holds nothing and gets nothing.
+    const closed = await t.createUser("closed");
+    await db.store.users.markUserDeletionRequested({ ...t.scope, userId: asUserId(closed.id) });
+    const refused = await grant(superadmin, closed.id, "agent.read");
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ error: { message: "User account is being deleted" } });
+    await expect(
+      db.store.access.createGrant({
+        ...t.scope,
+        holderKind: "user",
+        holderId: closed.id,
+        action: "agent.read",
+        effect: "allow",
+        scopeKind: "namespace",
+        namespace: "lea-",
+        grantedBy: asUserId(superadmin.id)
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "User account is being deleted" });
+    await expect(
+      db.store.access.loadPersistedAccess({
+        ...t.scope,
+        holder: { kind: "user", id: closed.id }
+      })
+    ).resolves.toMatchObject({ holderActive: false });
+
+    expect((await t.api.call("me.delete", {}, leaving.id)).statusCode).toBe(200);
+    await expect(t.userRow(leaving)).resolves.toEqual([]);
+    // What the user gave stays, and names the user by the bare id: no row points at the user.
+    await expect(rows()).resolves.toEqual([
+      { holder: member.id, effect: "allow", grantedBy: leaving.id }
+    ]);
+    const namespaces = await db.sql<Array<{ createdBy: string }>>`
+      select created_by as "createdBy" from namespaces
+      where client_instance_id = ${t.scope.clientInstanceId}`;
+    expect(namespaces).toEqual([{ createdBy: leaving.id }]);
+  });
 });

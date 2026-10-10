@@ -153,11 +153,13 @@ id from config_assets where status = 'deleted')`.
   without stored objects are cleared, and stored objects that cannot be removed fail the
   attempt. An attempt that removes nothing fails, so a deletion that cannot go on ends as a
   dead job with its `deletion_stalled` event. An administrator who changes a user being
-  deleted gets `409 CONFLICT`. The audit log records
+  deleted, or writes a grant for one, gets `409 CONFLICT`, and such a user holds no rights.
+  The grant and deny rows a user holds go with the user; rows the user wrote for others and
+  Namespaces the user registered stay and keep the user's id. The audit log records
   `user.deletion_requested` and `collaboration_workspace.deletion_requested` when a deletion
   is accepted; `user.delete_failed` and `collaboration_workspace.delete_failed` are no longer
   written. A client that calls one of the three delete operations must accept `202`. Upgrade:
-  migration `0034_deletion_requested` adds a nullable column to two tables. Rollback: the
+  migration `0035_deletion_requested` adds a nullable column to two tables. Rollback: the
   previous release does not know the mark, so a closed account could sign in again and a
   closed workspace would be listed again. Let the deletion jobs finish before rolling back.
   These two queries list what is still closed, and both must return nothing:
