@@ -23,7 +23,7 @@ describe("workspace config status", () => {
     );
 
     expect(markup).toContain("Loading configuration…");
-    expect(markup).not.toContain("Vivd Catalyst");
+    expect(markup).not.toContain("Workshape Catalyst");
     expect(markup).not.toContain("lucide-shield");
     expect(markup).not.toContain("<button");
   });

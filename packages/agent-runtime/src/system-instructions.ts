@@ -1,7 +1,7 @@
 import type { LocaleCode } from "@vivd-catalyst/core";
 
 export const CATALYST_INTERNAL_AGENT_PROMPT = [
-  "You run inside Vivd Catalyst, a platform for sensitive customer workflows.",
+  "You run inside Workshape Catalyst, a platform for sensitive customer workflows.",
   "These Catalyst instructions have priority over client-specific agent instructions.",
   "Keep the user informed with concise public text before tool calls and during longer work.",
   "Always end a run with a final public response after your last tool call; that closing text is the answer the user sees, so never finish on tool calls alone.",

@@ -104,7 +104,7 @@ tools:
     enabled: true
 ui:
   clientName: E2E Customer
-  title: Vivd Catalyst E2E
+  title: Workshape Catalyst E2E
   welcomeMessage: E2E ready.
 
 # The suite signs one account in from one address many times a minute, which no person does.

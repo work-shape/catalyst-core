@@ -1,9 +1,9 @@
 ---
-title: Run Vivd Catalyst
+title: Run Workshape Catalyst
 description: Configure, extend, and operate a dedicated AI agent chat instance.
 ---
 
-Vivd Catalyst is a reusable AI agent chat platform for sensitive workflows.
+Workshape Catalyst is a reusable AI agent chat platform for sensitive workflows.
 
 The platform is not a shared marketplace and not a forkable one-off app. Each organization runs through a dedicated client instance assembled from reusable platform packages, release config, and a thin layer of customer-specific code.
 

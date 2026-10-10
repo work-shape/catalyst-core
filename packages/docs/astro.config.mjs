@@ -4,9 +4,9 @@ import starlight from "@astrojs/starlight";
 export default defineConfig({
   integrations: [
     starlight({
-      title: "Vivd Catalyst Operator Docs",
+      title: "Workshape Catalyst Operator Docs",
       description:
-        "Documentation for configuring, extending, and running dedicated Vivd Catalyst client instances.",
+        "Documentation for configuring, extending, and running dedicated Workshape Catalyst client instances.",
       sidebar: [
         {
           label: "Start Here",

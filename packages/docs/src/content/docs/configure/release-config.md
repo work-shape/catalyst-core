@@ -302,7 +302,7 @@ Clients own their favicon and should serve it from `public/`, reference it from 
 
 ## Model Provider Configuration
 
-OpenAI-compatible providers keep API-specific request shapes behind the model-provider boundary. Agents and tools still see Vivd Catalyst's provider-neutral messages, tools, tool calls, tool results, and usage.
+OpenAI-compatible providers keep API-specific request shapes behind the model-provider boundary. Agents and tools still see Workshape Catalyst's provider-neutral messages, tools, tool calls, tool results, and usage.
 
 Use `api: responses` for OpenAI reasoning models that combine reasoning, tool calling, or multi-turn workflows. Leave the field unset, or set `api: chat_completions`, for legacy OpenAI-compatible endpoints that still expect `/chat/completions`.
 

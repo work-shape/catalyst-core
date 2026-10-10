@@ -712,7 +712,7 @@ export const uiConfigSchema = z
     logoUrlDark: z.string().url().or(z.string().startsWith("/")).optional(),
     logoInvertOnDark: z.boolean().default(false),
     faviconUrl: z.string().url().or(z.string().startsWith("/")).optional(),
-    title: localizedStringSchema.default("Vivd Catalyst"),
+    title: localizedStringSchema.default("Workshape Catalyst"),
     welcomeMessage: localizedStringSchema.default("How can I help?"),
     // The start page names the agent beside its icon; when false it shows the
     // icon alone, as a conversation always does.
@@ -727,7 +727,7 @@ export const uiConfigSchema = z
     defaultThemeMode: z.enum(["light", "dark", "system"]).default("system")
   })
   .default({
-    title: "Vivd Catalyst",
+    title: "Workshape Catalyst",
     welcomeMessage: "How can I help?",
     showAgentName: true,
     showAgentDescriptions: false,

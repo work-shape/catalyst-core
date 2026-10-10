@@ -1,4 +1,4 @@
-# Vivd Catalyst
+# Workshape Catalyst
 
 This repository is a greenfield foundation for reusable, code-deployed AI agent chat client instances.
 

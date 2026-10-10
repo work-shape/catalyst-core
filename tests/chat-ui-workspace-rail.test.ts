@@ -248,7 +248,7 @@ describe("workspace rail branding", () => {
 
     expect(markup).toContain(">FI</span>");
     expect(markup).toContain(">Musterfinanz</span>");
-    expect(markup).not.toContain("Vivd Catalyst");
+    expect(markup).not.toContain("Workshape Catalyst");
   });
 });
 

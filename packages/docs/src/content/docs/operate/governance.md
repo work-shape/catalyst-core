@@ -112,4 +112,4 @@ Deletion should cover:
 - related document outputs and file references
 - minimal retained audit records where legally or contractually required
 
-The customer or legal owner decides the lawful basis and exact retention durations. Vivd Catalyst provides the mechanisms and evidence path.
+The customer or legal owner decides the lawful basis and exact retention durations. Workshape Catalyst provides the mechanisms and evidence path.
