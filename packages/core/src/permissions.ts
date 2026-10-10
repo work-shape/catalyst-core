@@ -32,6 +32,7 @@ export const ACTIONS = [
   "skill.write",
   "skill.delete",
   "skill.approve",
+  "operations.approve",
   "users.manage",
   "usage.view",
   "audit.view",
@@ -43,7 +44,8 @@ export const ACTIONS = [
 export type PlatformAction = (typeof ACTIONS)[number];
 
 export const LEGACY_PERMISSION_ACTIONS = {
-  "agent_skills.approve": ["skill.approve"],
+  // Who approves a skill change approves an operation call that waits for an approval.
+  "agent_skills.approve": ["skill.approve", "operations.approve"],
   "config_assets.read": ["agent.read", "skill.read"],
   "config_assets.write": ["agent.write", "agent.delete", "skill.write", "skill.delete"],
   "config_assets.release": ["assets.release"],

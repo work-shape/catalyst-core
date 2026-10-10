@@ -1,6 +1,6 @@
 import type { OperationDenial } from "./operation-denial";
 import type { ManagedArtifactRef, ToolDisplayOutput } from "./files";
-import type { AuthenticatedIdentity } from "./identity";
+import type { AuthenticatedIdentity, RuntimeCallContext } from "./identity";
 import type {
   AgentRunId,
   CollaborationWorkspaceId,
@@ -10,7 +10,7 @@ import type {
 } from "./ids";
 import type { StructuredResultPublication } from "./structured-result";
 import type { ISODateString } from "./time";
-import type { ToolExecutionRequest } from "./tool-execution";
+import type { ToolExecutionRequest, ToolExecutionResult } from "./tool-execution";
 
 export type OperationEffect = "reading" | "changing";
 
@@ -57,6 +57,32 @@ export interface OperationCall<TInput = unknown> {
   idempotencyKey?: string;
   correlationId: string;
 }
+
+/**
+ * What only the live call has and no frozen call keeps: how long it may take, who may stop
+ * it, the language of its caller and, for a call an Agent Run makes, the hold of that run. A
+ * call that is executed later, after an approval, runs without it.
+ */
+export type OperationCallRuntime = Pick<
+  RuntimeCallContext,
+  "locale" | "deadline" | "signal" | "runFence"
+> & {
+  /**
+   * Set where the surface could not read the caller's input at all. The call then ends as an
+   * invalid input with this text, after the surface's own check and before anything runs.
+   */
+  unreadableInput?: { code: string; message: string };
+};
+
+/**
+ * Runs the call of an agent tool as an operation and answers as the agent reads it. The agent
+ * runtime knows its tools through this alone.
+ */
+export type ToolOperationRunner = (
+  request: ToolExecutionRequest,
+  context: RuntimeCallContext,
+  options?: Pick<OperationCallRuntime, "unreadableInput">
+) => Promise<ToolExecutionResult>;
 
 export type OperationResult<TOutput = unknown> =
   | {

@@ -15717,6 +15717,9 @@
               "by": {
                 "type": "string"
               },
+              "byLabel": {
+                "type": "string"
+              },
               "at": {
                 "$ref": "#/components/schemas/Timestamp"
               },
@@ -15743,6 +15746,37 @@
             "required": [
               "code",
               "message"
+            ]
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "modelCalls": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "inputTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "totalTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "modelCalls",
+              "inputTokens",
+              "outputTokens",
+              "totalTokens"
             ]
           },
           "correlationId": {

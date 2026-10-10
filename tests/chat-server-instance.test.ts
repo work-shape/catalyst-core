@@ -253,6 +253,7 @@ describe("client instance app vertical slice", () => {
     });
     const tool = defineTool({
       name: "demo.echo",
+      effect: "reading",
       description: "Echo text for tests.",
       inputSchema: z.object({ text: z.string() }),
       outputSchema: z.object({ echoed: z.string() }),
@@ -297,7 +298,7 @@ describe("client instance app vertical slice", () => {
     expect(
       audit
         .json<{ items: Array<{ type: string }> }>()
-        .items.some((event) => event.type === "tool.completed")
+        .items.some((event) => event.type === "operation.completed")
     ).toBe(true);
 
     const usage = await app.call("usage.get_summary", {});
@@ -689,32 +690,48 @@ describe("client instance app vertical slice", () => {
     });
   });
 
-  it("rejects startup when an enabled tool requires approval before resume support exists", async () => {
-    const approvalTool = defineTool({
-      name: "demo.approval",
-      description: "Approval-only test tool.",
-      inputSchema: z.object({}),
-      permission: {
-        mode: "approval_required",
-        reason: "Needs approval"
-      },
-      async execute() {
-        return toolSuccess({});
-      }
-    });
-
-    await expect(
+  // Fails without the change: the gate read the tool's mode, not the policy of its operation,
+  // and said nothing of when held agent calls arrive.
+  it("rejects startup when an enabled changing tool declares an approval, naming OP-3", async () => {
+    const start = (effect: "reading" | "changing") =>
       createTestInstance({
         config: createTestConfig({
           tools: [{ name: "demo.approval", enabled: true }],
           toolNames: ["demo.approval"]
         }),
         env: {},
-        tools: [approvalTool]
-      })
-    ).rejects.toMatchObject({
+        tools: [
+          defineTool({
+            name: "demo.approval",
+            effect,
+            description: "Approval-only test tool.",
+            inputSchema: z.object({}),
+            permission: { mode: "approval_required", reason: "Needs approval" },
+            async execute() {
+              return toolSuccess({});
+            }
+          })
+        ]
+      });
+
+    await expect(start("changing")).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
-      message: "Client instance assembly is invalid"
+      message: "Client instance assembly is invalid",
+      details: {
+        issues: [
+          {
+            message:
+              "Tool 'demo.approval' requires approval, but v1 client assembly does not support approval-required tool policies yet. They arrive with the pause of a run (OP-3)."
+          }
+        ]
+      }
+    });
+    // An approval cannot hold a read, so the mode would silently not apply.
+    await expect(start("reading")).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: {
+        issues: [{ message: expect.stringContaining("declares that it only reads") }]
+      }
     });
   });
 

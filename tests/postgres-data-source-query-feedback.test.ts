@@ -9,7 +9,8 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { createDataSourceRegistry, createDataSourceTools } from "@vivd-catalyst/data-source";
-import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { createTestToolRunner } from "./support/tool-runner";
 import { usePostgresSuite } from "./support/postgres-suite";
 
 describe("data source query feedback on Postgres", () => {
@@ -100,7 +101,7 @@ async function runQuery(databaseUrl: string, query: string, statementTimeoutMs =
       return logger;
     }
   };
-  const execution = new InProcessToolExecution({
+  const runTool = createTestToolRunner({
     registry: new ToolRegistry({ tools }),
     getAgentToolNames: () => tools.map((tool) => tool.name),
     logger
@@ -119,15 +120,14 @@ async function runQuery(databaseUrl: string, query: string, statementTimeoutMs =
       authSource: "test"
     }
   };
-  const result = await execution.execute(
+  const result = await runTool(
     {
       toolName: "data.reporting.query",
       toolCallId: asToolCallId("toolcall_query_feedback"),
       agentRunId: asAgentRunId("run_query_feedback"),
       conversationId: asConversationId("conv_query_feedback"),
       agentName: "reporting_agent",
-      input: { query },
-      authorization: { status: "allowed" }
+      input: { query }
     },
     context
   );

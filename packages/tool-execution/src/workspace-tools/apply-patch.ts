@@ -32,6 +32,7 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceApplyPatchTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.apply_patch",
+    effect: "changing",
     description:
       "Apply a unified diff patch to text files in /workspace. Supports create, update, and delete for workspace paths; rejects path traversal, renames, and binary files. Use workspace.exec for normal shell work and scripts.",
     inputSchema: workspaceApplyPatchInputSchema,

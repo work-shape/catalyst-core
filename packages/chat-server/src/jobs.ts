@@ -3,6 +3,7 @@ import {
   asConversationId,
   asUserId,
   createAgentRunUpkeepJobs,
+  createAuthorizer,
   defineJobHandler,
   defineSchedule,
   type JobSchedule,
@@ -33,6 +34,8 @@ import {
   recoverAbandonedModelCallsSchedule,
   retiredRecoverAgentRunsJob
 } from "./job-kinds";
+import { createOperationCalls } from "./operations/operation-calls";
+import { createOperationRunJobs } from "./operation-run-jobs";
 import { ConversationRetentionWorkflow } from "./retention";
 import { deletionActor } from "./subject-deletion";
 import type { ChatServerOptions, ConversationRetentionOptions } from "./types";
@@ -141,6 +144,18 @@ export function createChatServerJobs(
       kind: pruneAuditEventsJob,
       slots: 1,
       async run(job, control) {
+        // The runs no conversation caused are kept as long as the audit events of their calls.
+        // A run a conversation caused goes with that conversation.
+        let operationRunsDeletedCount = 0;
+        for (let batch = 0; batch < OPERATION_RUN_PRUNE_BATCHES_PER_TICK; batch++) {
+          const deleted = await options.stores.operationRuns.deleteWithoutConversationOlderThan({
+            clientInstanceId: options.clientInstanceId,
+            days: options.config.retention.auditDays,
+            limit: OPERATION_RUN_PRUNE_BATCH_SIZE
+          });
+          operationRunsDeletedCount += deleted;
+          if (deleted < OPERATION_RUN_PRUNE_BATCH_SIZE || control.signal.aborted) break;
+        }
         // The deletion and its record commit together, or neither does.
         await control.transaction(async (stores) => {
           const { deletedCount, createdBefore } = await stores.audit.deleteAuditEventsOlderThan({
@@ -155,7 +170,8 @@ export function createChatServerJobs(
             metadata: {
               deletedCount,
               createdBefore,
-              auditDays: options.config.retention.auditDays
+              auditDays: options.config.retention.auditDays,
+              operationRunsDeletedCount
             }
           });
         });
@@ -234,6 +250,24 @@ export function createChatServerJobs(
   handlers.push(...agentRunUpkeep.handlers);
   schedules.push(...agentRunUpkeep.schedules);
 
+  // The jobs read the registry the API's routes registered their operations in. A caller
+  // that built no call path of its own has no operation with a time of its own to read.
+  const operationCalls =
+    options.operationCalls ??
+    createOperationCalls({
+      ...options,
+      authorizer: options.authorizer ?? createAuthorizer(options.stores.access)
+    });
+  const operationRuns = createOperationRunJobs({
+    clientInstanceId: options.clientInstanceId,
+    runs: options.stores.operationRuns,
+    registry: operationCalls.registry,
+    approvals: options.approvalRequests?.store,
+    now
+  });
+  handlers.push(...operationRuns.handlers);
+  schedules.push(...operationRuns.schedules);
+
   const cleanup = options.executionWorkspaceCleanup;
   if (cleanup) {
     const workspaceCleanup = new ExecutionWorkspaceCleanupWorkflow(options, {
@@ -274,6 +308,10 @@ export function createChatServerJobs(
 }
 
 const DEFAULT_WORKSPACE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+// Operation Runs one statement of the daily prune deletes, and statements per tick: at most
+// 100,000 a day inside the lease of the tick. A backlog beyond that goes the next day.
+const OPERATION_RUN_PRUNE_BATCH_SIZE = 5000;
+const OPERATION_RUN_PRUNE_BATCHES_PER_TICK = 20;
 // Deletions of accounts or of workspaces this process runs at once, per kind.
 const DELETION_SLOTS = 2;
 // Rows one tick of the adopt schedule gives a job, per kind. It keeps a tick inside its lease

@@ -211,6 +211,7 @@ export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToo
     return [
       defineTool<QueryToolInput, QueryToolOutput>({
         name: toolName,
+        effect: "reading",
         description: [
           `Run a read-only query against ${config.description}.`,
           `Use ${describeToolName} first when the schema is unfamiliar.`,
@@ -244,6 +245,7 @@ export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToo
       }),
       defineTool<DescribeToolInput, DescribeToolOutput>({
         name: describeToolName,
+        effect: "reading",
         description: `Discover the readable schema of ${config.description}. Omit relation to list tables and views, or provide one relation to inspect its columns, primary key, and foreign keys.`,
         inputSchema: describeToolInputSchema,
         outputSchema: describeToolOutputSchema,

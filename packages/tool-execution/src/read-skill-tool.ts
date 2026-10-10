@@ -64,6 +64,7 @@ export interface ReadSkillToolOptions {
 export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefinition {
   return defineTool({
     name: "read_skill",
+    effect: "reading",
     description:
       "Read the root instructions or one listed text resource for an available client skill. Read the root first, then load only relevant resources from its manifest.",
     inputSchema: readSkillInputSchema,

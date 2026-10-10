@@ -22,6 +22,7 @@ export const workflowSummaryToolFactory = defineConfiguredTool({
     const inputSchema = createInputSchema(config.defaultCurrency);
     return defineTool({
       name: "demo.workflow_summary",
+      effect: "reading",
       description:
         "Summarize structured workflow information and return governance-safe review flags.",
       inputSchema,

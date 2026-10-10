@@ -21,6 +21,7 @@ import { findWorkspaceFile } from "./workspace";
 export function workspaceReadFileTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.read_file",
+    effect: "reading",
     description:
       "Read a bounded UTF-8 preview of a text file from the conversation execution workspace.",
     inputSchema: workspaceReadFileInputSchema,

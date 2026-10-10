@@ -356,14 +356,6 @@ export const EVENTS = {
     name: "storage.orphaned_files_deleted",
     subject: "storage"
   },
-  "tool.authorization_checked": {
-    ...LEGACY_AUDIT,
-    name: "tool.authorization_checked",
-    subject: "tool"
-  },
-  "tool.completed": { ...LEGACY_AUDIT, name: "tool.completed", subject: "tool" },
-  "tool.failed": { ...LEGACY_AUDIT, name: "tool.failed", subject: "tool" },
-  "tool.started": { ...LEGACY_AUDIT, name: "tool.started", subject: "tool" },
   "user.created": { ...LEGACY_AUDIT, name: "user.created", subject: "user" },
   "user.deleted": { ...LEGACY_AUDIT, name: "user.deleted", subject: "user" },
   "user.deletion_requested": {

@@ -503,6 +503,7 @@ describe("client instance app vertical slice", () => {
     });
     const tool = defineTool({
       name: "demo.echo",
+      effect: "reading",
       description: "Echo text for tests.",
       inputSchema: z.object({ text: z.string() }),
       outputSchema: z.object({ echoed: z.string() }),

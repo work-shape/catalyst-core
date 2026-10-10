@@ -5,7 +5,7 @@ import type {
   ConversationId,
   OperationRunId
 } from "./ids";
-import type { JsonObject, JsonValue } from "./json";
+import type { JsonValue } from "./json";
 import type { OperationDenial } from "./operation-denial";
 import type { OperationEffect, OperationOrigin } from "./operations";
 import type { StorePage } from "./paging";
@@ -35,10 +35,20 @@ export interface OperationRunDecision {
   /** `direct`: the caller's own call was the confirmation. */
   mode: "direct" | "confirmed" | "approved" | "declined";
   by: string;
+  /** The name of who decided, kept where the decision was another person's. */
+  byLabel?: string;
   at: ISODateString;
   comment?: string;
   edited?: boolean;
   inputHashes?: string[];
+}
+
+/** What the model calls made inside a run used, summed over the calls. */
+export interface OperationRunUsage {
+  modelCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
 }
 
 /** Why a run failed or was refused: a code and a message that is safe to show. */
@@ -83,7 +93,7 @@ export interface OperationRun {
   error?: OperationRunError;
   /** Why a `denied` run was refused. */
   denial?: OperationDenial;
-  usage?: JsonObject;
+  usage?: OperationRunUsage;
   correlationId: string;
   createdAt: ISODateString;
   startedAt?: ISODateString;
@@ -115,6 +125,7 @@ export type OperationRunEnd = { finishedAt: ISODateString } & (
       output?: { value: JsonValue };
       resultRef?: string;
       decision?: OperationRunDecision;
+      usage?: OperationRunUsage;
     }
   | { status: "failed"; error: OperationRunError }
   | { status: "denied"; error: OperationRunError; denial: OperationDenial }
@@ -164,8 +175,52 @@ export interface OperationRunStore {
     filters?: OperationRunFilters;
     page?: StorePage;
   }): Promise<OperationRun[]>;
-  /** Marks the waiting runs whose time ran out by the database's clock and returns them. */
-  markExpired(input: { clientInstanceId: ClientInstanceId }): Promise<OperationRun[]>;
+  /**
+   * Takes a run that waits for an approval, to execute its call: the one transition by which an
+   * approved call starts. `undefined` when the run does not wait any more, so of two takers
+   * one executes.
+   */
+  resume(input: {
+    clientInstanceId: ClientInstanceId;
+    id: OperationRunId;
+    decision: OperationRunDecision;
+    startedAt: ISODateString;
+  }): Promise<OperationRun | undefined>;
+  /** Ends a run that waits for an approval without executing it. `undefined` when it does not wait. */
+  endWaiting(input: {
+    clientInstanceId: ClientInstanceId;
+    id: OperationRunId;
+    end: Extract<OperationRunEnd, { status: "denied" | "failed" }>;
+    decision?: OperationRunDecision;
+  }): Promise<OperationRun | undefined>;
+  /**
+   * Marks waiting runs whose time ran out by the database's clock and returns them, oldest
+   * first and at most `limit` of them.
+   */
+  markExpired(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<OperationRun[]>;
+  /** The runs that have been `running` since before the moment, oldest first. */
+  listRunningSince(input: {
+    clientInstanceId: ClientInstanceId;
+    startedBefore: ISODateString;
+    limit: number;
+  }): Promise<OperationRun[]>;
+  /** Deletes the runs that conversations caused, with those conversations. */
+  deleteOfConversations(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationIds: readonly ConversationId[];
+  }): Promise<number>;
+  /**
+   * Deletes ended runs no conversation caused that are older than the days, by the database's
+   * clock, at most `limit` of them in one call.
+   */
+  deleteWithoutConversationOlderThan(input: {
+    clientInstanceId: ClientInstanceId;
+    days: number;
+    limit: number;
+  }): Promise<number>;
   /** Fails a run that is still `running` with the code `interrupted`. */
   markInterrupted(input: {
     clientInstanceId: ClientInstanceId;

@@ -2,8 +2,10 @@ import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime
 import {
   type ApprovalRequestHandlerRegistry,
   AppError,
+  resolvePolicy,
   type ModuleSnapshot
 } from "@vivd-catalyst/core";
+import { toolOperationPolicy } from "@vivd-catalyst/tool-execution";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelBindingRef,
@@ -201,12 +203,45 @@ function findToolReferenceIssues(
         `Enabled tool '${tool.name}' has no implementation registered by the client assembly app`
       );
     }
-    if (tool.enabled && providedTools.get(tool.name)?.permission?.mode === "approval_required") {
+    const provided = providedTools.get(tool.name);
+    if (
+      tool.enabled &&
+      provided?.effect === "reading" &&
+      provided.permission?.mode === "approval_required"
+    ) {
+      // An approval is a value of changing operations. Left to the policy, the mode would
+      // not apply and the tool would run unasked, which its definition says it must not.
       issues.push(
-        `Tool '${tool.name}' requires approval, but v1 client assembly does not support approval-required tool policies yet`
+        `Tool '${tool.name}' requires approval and declares that it only reads. An approval holds a changing call: declare the effect 'changing' or another mode.`
+      );
+    } else if (tool.enabled && provided && waitsForAPerson(config, provided)) {
+      issues.push(
+        `Tool '${tool.name}' requires approval, but v1 client assembly does not support approval-required tool policies yet. They arrive with the pause of a run (OP-3).`
       );
     }
   }
 
   return issues;
+}
+
+/**
+ * Whether every call an agent makes of the tool would wait for a person by what the release
+ * declares: the tool's own mode, or the instance default of its effect. An agent's run cannot
+ * be held for that yet, so such a tool would never run.
+ */
+function waitsForAPerson(config: ClientInstanceConfig, tool: AnyToolDefinition): boolean {
+  const resolution = resolvePolicy({
+    definition: toolOperationPolicy(tool),
+    // An agent's call: nobody is there to confirm it and its run cannot be held.
+    origin: { kind: "schedule", scheduleId: "startup" },
+    instanceDefaults: config.policy.defaults,
+    centralSettings: [],
+    callerCanConfirm: false,
+    canPause: false
+  });
+  return (
+    resolution.next === "await_approval" ||
+    resolution.next === "await_confirmation" ||
+    resolution.source === "surface_cannot_pause"
+  );
 }

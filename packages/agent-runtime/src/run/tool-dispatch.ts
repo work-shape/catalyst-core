@@ -44,7 +44,7 @@ export class ToolDispatch {
         context,
         state,
         toolCall,
-        toolExecution: this.options.toolExecution,
+        runTool: this.options.runTool,
         modelContext: this.modelInput.modelContextOptions(context),
         repeatedToolCall: this.registerToolCall(
           repeatedToolCalls,

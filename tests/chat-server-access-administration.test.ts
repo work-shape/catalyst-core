@@ -9,7 +9,7 @@ import {
   type AuthenticatedUser,
   type UserRole
 } from "@vivd-catalyst/core";
-import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import {
   SERVICE_HEADER,
@@ -22,6 +22,7 @@ import {
   skill
 } from "./support/access-instance";
 import type { TestCallInput, TestOperationName } from "./support/operations";
+import { createTestToolRunner } from "./support/tool-runner";
 
 // Administration of grants and Namespaces at the HTTP boundary: who may write what, the tenant
 // and holder boundaries of the store, audit, and the reference check of a tool call. The
@@ -739,6 +740,7 @@ describe("tool calls and permission references", () => {
   const tool = defineTool({
     name: "demo.echo",
     description: "Echo text for tests.",
+    effect: "reading",
     inputSchema: z.object({ text: z.string().min(1) }),
     outputSchema: z.object({ echoed: z.string() }),
     permission: { mode: "allow", requiredPermissionRefs: ["demo-tools"] },
@@ -755,7 +757,7 @@ describe("tool calls and permission references", () => {
 
   it("allows a holder of the reference and refuses everyone else, a superadmin included", async () => {
     const t = await setup();
-    const execution = new InProcessToolExecution({
+    const runTool = createTestToolRunner({
       registry: new ToolRegistry({ tools: [tool] }),
       getAgentToolNames: () => ["demo.echo"],
       authorizer: createAuthorizer(t.stores.access)
@@ -770,30 +772,28 @@ describe("tool calls and permission references", () => {
       authSource: "test"
     });
     const authorize = (actor: AuthenticatedUser) =>
-      execution.authorize(request, {
-        clientInstanceId,
-        correlationId: "corr_access_tool",
-        user: actor
-      });
+      runTool(request, { clientInstanceId, correlationId: "corr_access_tool", user: actor });
 
     expect(await authorize(user(t.kai.id, ["user"], ["demo-tools"]))).toMatchObject({
-      status: "allowed"
+      status: "success",
+      output: { echoed: "hello" }
     });
     for (const actor of [
       user(t.lena.id, ["user"], []),
       user(t.lena.id, ["user"], ["other-tools"]),
       user(t.root.id, ["user", "admin", "superadmin"], [])
     ]) {
-      expect(await authorize(actor)).toEqual({
-        status: "denied",
-        reason: "User is missing permission 'demo-tools'"
+      expect(await authorize(actor)).toMatchObject({
+        status: "failed",
+        error: { code: "not_allowed", message: "User is missing permission 'demo-tools'" }
       });
     }
 
     // A deactivated holder of the reference is refused too.
     await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
     expect(await authorize(user(t.kai.id, ["user"], ["demo-tools"]))).toMatchObject({
-      status: "denied"
+      status: "failed",
+      error: { code: "not_allowed" }
     });
   });
 });

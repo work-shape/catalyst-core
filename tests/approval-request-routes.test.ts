@@ -379,15 +379,18 @@ describe("approval routes and generated instance client", () => {
     }
   });
 
-  it("assembles and registers the routes with no handlers", async () => {
+  // An instance always has the kind a held operation call is decided on, so a person with
+  // `operations.approve` has a queue to read where the assembly brings no kind of its own.
+  it("assembles and registers the routes with no handlers of the assembly", async () => {
     const f = await fixture(true);
     try {
       await expect(f.reviewer.approval_requests.count_pending()).resolves.toEqual({
         count: 0,
-        canReview: false,
+        canReview: true,
         mine: { pending: 0, total: 0 }
       });
-      await expect(f.reviewer.approval_requests.list()).rejects.toMatchObject({ status: 403 });
+      await expect(f.reviewer.approval_requests.list()).resolves.toEqual({ items: [] });
+      await expect(f.stranger.approval_requests.list()).rejects.toMatchObject({ status: 403 });
       await expect(f.reviewer.approval_requests.list_mine()).resolves.toEqual({ items: [] });
       await expect(
         f.reviewer.approval_requests.get({ params: { requestId: "missing" } })

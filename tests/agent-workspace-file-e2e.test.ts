@@ -1,5 +1,6 @@
 import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
 import { createTestInstance } from "./support/test-instance";
+import { createTestToolRunner } from "./support/tool-runner";
 import { inlineCommandResults } from "./support/workspace-command-jobs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,7 +12,6 @@ import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { modelContentText } from "@vivd-catalyst/model-provider";
 import {
   createWorkspaceToolDefinitions,
-  InProcessToolExecution,
   LocalWorkspaceCommandRunner,
   ToolRegistry,
   WorkspaceCommandService
@@ -84,7 +84,7 @@ describe("agent workspace file e2e", () => {
         execResultPollIntervalMs: 10
       });
       const tools = createWorkspaceToolDefinitions({ service });
-      const toolExecution = new InProcessToolExecution({
+      const runTool = createTestToolRunner({
         registry: new ToolRegistry({ tools }),
         getAgentToolNames: () => tools.map((tool) => tool.name)
       });
@@ -190,7 +190,7 @@ describe("agent workspace file e2e", () => {
           runObservationStore: store.agentRuns,
           modelProvider,
           toolRegistry: new ToolRegistry({ tools }),
-          toolExecution,
+          runTool,
           usageGovernance: new ModelUsageGovernance({
             store: store.usage,
             budget: {},

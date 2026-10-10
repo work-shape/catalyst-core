@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { AppError, asWorkspaceCommandId, type Logger } from "@vivd-catalyst/core";
-import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
+import { createTestToolRunner } from "./support/tool-runner";
 
 const marker = "PRIVATE_PARAMETER_VALUE";
 
@@ -20,6 +21,7 @@ describe("tool handler error boundary on Postgres", () => {
       defineTool({
         name: "test.write",
         description: "Writes a row that breaks a foreign key.",
+        effect: "changing",
         inputSchema: z.object({}),
         async execute() {
           await harness.store.executionWorkspaces.upsertWorkspaceFile({
@@ -38,10 +40,7 @@ describe("tool handler error boundary on Postgres", () => {
     );
 
     const request = harness.createRequest("test.write", {});
-    const result = await execution.execute(
-      { ...request, authorization: { status: "allowed" } },
-      harness.context
-    );
+    const result = await execution(request, harness.context);
 
     expect(result).toEqual({
       status: "failed",
@@ -88,6 +87,7 @@ describe("tool handler error boundary on Postgres", () => {
       defineTool({
         name: "test.write",
         description: "Refuses with a message for the model.",
+        effect: "changing",
         inputSchema: z.object({}),
         async execute() {
           throw new AppError("NOT_FOUND", "Sheet 'Summary' does not exist");
@@ -96,10 +96,7 @@ describe("tool handler error boundary on Postgres", () => {
       recordingLogger(logged)
     );
 
-    const result = await execution.execute(
-      { ...harness.createRequest("test.write", {}), authorization: { status: "allowed" } },
-      harness.context
-    );
+    const result = await execution(harness.createRequest("test.write", {}), harness.context);
 
     expect(result).toMatchObject({
       status: "failed",
@@ -110,7 +107,7 @@ describe("tool handler error boundary on Postgres", () => {
 });
 
 function executionFor(tool: AnyToolDefinition, logger: Logger) {
-  return new InProcessToolExecution({
+  return createTestToolRunner({
     registry: new ToolRegistry({ tools: [tool] }),
     getAgentToolNames: () => [tool.name],
     logger

@@ -10,15 +10,13 @@ import {
   asToolCallId,
   type SkillConfig,
   type ToolExecutionContext,
-  type ToolExecutionRequest
+  type ToolExecutionRequest,
+  type ToolOperationRunner
 } from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
+import { createTestToolRunner } from "./support/tool-runner";
 import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
-import {
-  createReadSkillTool,
-  InProcessToolExecution,
-  ToolRegistry
-} from "@vivd-catalyst/tool-execution";
+import { createReadSkillTool, ToolRegistry } from "@vivd-catalyst/tool-execution";
 
 const supportSkill = {
   name: "support_review",
@@ -219,7 +217,7 @@ function createExecution(input: { agents: ReturnType<typeof agent>[]; skills: Sk
   const tool = createReadSkillTool({
     assetSource: createStaticConfigAssetSource(input)
   });
-  return new InProcessToolExecution({
+  return createTestToolRunner({
     registry: new ToolRegistry({ tools: [tool] }),
     getAgentToolNames() {
       return ["read_skill"];
@@ -242,10 +240,7 @@ function request(
   };
 }
 
-async function executeReadSkill(
-  execution: InProcessToolExecution,
-  toolRequest: ToolExecutionRequest
-) {
+async function executeReadSkill(execution: ToolOperationRunner, toolRequest: ToolExecutionRequest) {
   const context: ToolExecutionContext = {
     clientInstanceId: asClientInstanceId("test-client"),
     correlationId: "corr_test",
@@ -259,12 +254,7 @@ async function executeReadSkill(
       authSource: "test"
     }
   };
-  const decision = await execution.authorize(toolRequest, context);
-  expect(decision.status).toBe("allowed");
-  if (decision.status !== "allowed") {
-    throw new Error("Expected read_skill tool authorization");
-  }
-  const result = await execution.execute({ ...toolRequest, authorization: decision }, context);
+  const result = await execution(toolRequest, context);
   if (result.status !== "success") return result;
   if (!isRecord(result.output)) {
     throw new Error("Expected read_skill to return an object");

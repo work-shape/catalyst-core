@@ -38,6 +38,11 @@ export class ToolRegistry {
     return this.toolsByName.get(toolName);
   }
 
+  /** The tools this instance has: enabled, and of no module that is off. */
+  list(): AnyToolDefinition[] {
+    return [...this.toolsByName.keys()].flatMap((toolName) => this.get(toolName) ?? []);
+  }
+
   listDescriptorsForAgent(toolNames: readonly string[]): ToolDescriptor[] {
     return toolNames
       .map((toolName) => this.get(toolName))

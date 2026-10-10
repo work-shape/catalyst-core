@@ -9,7 +9,13 @@ export function createPostgresOperationRunsStore(db: PostgresConnection): Operat
     findByIdempotencyKey: (input) => operations.findOperationRunByIdempotencyKey(db, input),
     get: (input) => operations.getOperationRun(db, input),
     list: (input) => operations.listOperationRuns(db, input),
+    resume: (input) => operations.resumeOperationRun(db, input),
+    endWaiting: (input) => operations.endWaitingOperationRun(db, input),
     markExpired: (input) => operations.markOperationRunsExpired(db, input),
+    listRunningSince: (input) => operations.listOperationRunsRunningSince(db, input),
+    deleteOfConversations: (input) => operations.deleteOperationRunsOfConversations(db, input),
+    deleteWithoutConversationOlderThan: (input) =>
+      operations.deleteOperationRunsWithoutConversationOlderThan(db, input),
     markInterrupted: (input) => operations.markOperationRunInterrupted(db, input)
   };
 }

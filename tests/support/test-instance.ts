@@ -472,6 +472,19 @@ export function getTestJobs(instance: TestInstance, jobOptions?: ChatServerJobOp
   return state.jobs;
 }
 
+/**
+ * Registers fixture operations on an assembled instance through the product's route helper,
+ * beside the product's own. Only before the instance answered its first request.
+ */
+export function registerTestOperations(
+  instance: TestInstance,
+  register: (route: TestRoute) => void
+): void {
+  const runtime = metadata.get(instance)?.runtime;
+  if (!runtime) throw new Error("No test HTTP transport");
+  register(testFramework(runtime).route);
+}
+
 export function getTestConfig(instance: TestInstance): ClientInstanceConfig {
   const config = metadata.get(instance)?.config;
   if (!config) throw new Error("No instance configuration");

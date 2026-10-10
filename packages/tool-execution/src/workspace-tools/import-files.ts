@@ -29,6 +29,7 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceImportFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.import_files",
+    effect: "changing",
     description:
       "Copy uploaded managed conversation files into the execution workspace by fileId. The result returns a shell-safe workspace path in importedFiles[].path; use that exact path in workspace.exec and do not invent shortened filenames. This uses managed file access and never exposes object-storage credentials.",
     inputSchema: workspaceImportFilesInputSchema,

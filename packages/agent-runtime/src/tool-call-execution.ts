@@ -1,12 +1,9 @@
 import {
-  AppError,
   type AgentRunId,
-  type ApprovedToolExecutionRequest,
   type RuntimeCallContext,
   type StartAgentRunInput,
-  type ToolAuthorizationDecision,
-  type ToolExecution,
   type ToolExecutionResult,
+  type ToolOperationRunner,
   asToolCallId
 } from "@vivd-catalyst/core";
 import type { ModelToolCall } from "@vivd-catalyst/model-provider";
@@ -23,7 +20,8 @@ export async function executeToolCall(input: {
   context: RuntimeCallContext;
   state: RunState;
   toolCall: ModelToolCall;
-  toolExecution: ToolExecution;
+  /** Runs the call as the operation the tool is. Every check of the call is on that path. */
+  runTool: ToolOperationRunner;
   modelContext: ModelContextProjectionOptions;
   repeatedToolCall: {
     repeated: boolean;
@@ -78,78 +76,15 @@ export async function executeToolCall(input: {
     return { result, modelOutput };
   }
 
-  const decision = await input.toolExecution.authorize(request, input.context);
-  if (decision.status === "denied") {
-    const result = {
-      status: "failed" as const,
-      error: {
-        code: "not_allowed" as const,
-        message: decision.reason
-      }
-    };
-    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
-    input.state.emit({
-      type: "tool_call_failed",
-      runId: input.runId,
-      toolCallId,
-      toolName: input.toolCall.toolName,
-      result,
-      modelOutput: modelOutput.text,
-      projectionNotice: modelOutput.notice
-    });
-    return { result, modelOutput };
-  }
-
-  if (input.toolCall.inputParseError) {
-    const result = {
-      status: "failed" as const,
-      error: {
-        code: "validation_failed" as const,
-        message: input.toolCall.inputParseError.message,
-        details: {
-          issues: [
-            {
-              code: input.toolCall.inputParseError.code,
-              path: "",
-              message: input.toolCall.inputParseError.message
-            }
-          ]
-        }
-      }
-    };
-    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
-    input.state.emit({
-      type: "tool_call_failed",
-      runId: input.runId,
-      toolCallId,
-      toolName: input.toolCall.toolName,
-      result,
-      modelOutput: modelOutput.text,
-      projectionNotice: modelOutput.notice
-    });
-    return { result, modelOutput };
-  }
-
-  if (decision.status === "requires_approval") {
-    input.state.emit({
-      type: "tool_permission_requested",
-      runId: input.runId,
-      toolCallId,
-      toolName: input.toolCall.toolName,
-      reason: decision.reason,
-      preview: decision.preview
-    });
-    throw new AppError(
-      "CONFLICT",
-      "Tool approval is required, but this v1 request path does not resume paused runs"
-    );
-  }
-
   await input.beforeDispatch?.();
-  const result = await input.toolExecution.execute(
-    createApprovedToolRequest(request, decision),
-    input.context
-  );
+  // The surface is asked before the input is read, so a call the agent may not make is
+  // refused as that and not for its input.
+  const result = await input.runTool(request, input.context, {
+    unreadableInput: input.toolCall.inputParseError && {
+      code: input.toolCall.inputParseError.code,
+      message: input.toolCall.inputParseError.message
+    }
+  });
   const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
   logProjectionNotice(input, modelOutput);
   input.state.emit({
@@ -188,14 +123,4 @@ function logProjectionNotice(
     },
     "Model context tool output bounded"
   );
-}
-
-function createApprovedToolRequest(
-  request: Omit<ApprovedToolExecutionRequest, "authorization">,
-  authorization: Extract<ToolAuthorizationDecision, { status: "allowed" }>
-): ApprovedToolExecutionRequest {
-  return {
-    ...request,
-    authorization
-  };
 }

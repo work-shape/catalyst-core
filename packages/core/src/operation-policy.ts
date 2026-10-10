@@ -50,7 +50,7 @@ export interface PolicyInput {
   guardrailOutcome?: PlatformEventOutcome;
   /** Whether the call is its caller's own confirmation: `callerCanConfirm(origin)`. */
   callerCanConfirm: boolean;
-  /** Whether the surface can hold the call until somebody else decided. */
+  /** Whether the surface can hold the call until the person it acts for confirmed it. */
   canPause: boolean;
 }
 
@@ -77,7 +77,9 @@ export type PolicyResolution = { source: PolicySource } & (
  * replaces the base, and of several that match the strictest wins. A call with several targets
  * takes the strictest of what each target resolves to. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
  * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
- * `deny`. A surface that can neither confirm nor pause is refused what would have to wait.
+ * `deny`. A surface that can neither confirm nor pause is refused a call that would have to
+ * wait for its own caller's confirmation. A call that needs another person's approval waits
+ * from every surface.
  */
 export function resolvePolicy(input: PolicyInput): PolicyResolution {
   const { definition } = input;
@@ -134,9 +136,9 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
         ? { value, next: "await_confirmation", source }
         : { value: "deny", next: "refuse", source: "surface_cannot_pause" };
     case "approval":
-      return input.callerCanConfirm || input.canPause
-        ? { value, next: "await_approval", source }
-        : { value: "deny", next: "refuse", source: "surface_cannot_pause" };
+      // No surface has to hold a call for an approval: the run waits, and the decision of the
+      // approver executes it. So an agent's call waits for one too.
+      return { value, next: "await_approval", source };
   }
 }
 

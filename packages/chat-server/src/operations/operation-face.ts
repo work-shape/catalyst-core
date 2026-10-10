@@ -5,7 +5,6 @@ import {
 } from "@vivd-catalyst/api-contract";
 import {
   AppError,
-  createOperationRegistry,
   isAppError,
   isAppErrorCode,
   operationDenialError,
@@ -22,13 +21,12 @@ import {
   type PolicyValue,
   type StorePage
 } from "@vivd-catalyst/core";
-import { runOperation, type RunOperationDeps } from "@vivd-catalyst/tool-execution";
+import { runOperation } from "@vivd-catalyst/tool-execution";
 import type { FastifyReply } from "fastify";
 import { z } from "zod";
 import { checkResponse } from "../http/check-response";
 import { paginate, pageScope, storePage } from "../http/paging";
 import type { ResolvedChatServerOptions } from "../types";
-import { createAuditingEventEmitter } from "./event-emitter";
 import { operationRunHref, toOperationRunResource } from "./operation-run-resource";
 
 /**
@@ -37,16 +35,7 @@ import { operationRunHref, toOperationRunResource } from "./operation-run-resour
  */
 const DEFAULT_OPERATION_TIMEOUT_MS = 5 * 60 * 1000;
 
-type OperationFaceOptions = Pick<
-  ResolvedChatServerOptions,
-  | "clientInstanceId"
-  | "stores"
-  | "auditRecorder"
-  | "authorizer"
-  | "config"
-  | "logger"
-  | "operations"
->;
+type OperationFaceOptions = Pick<ResolvedChatServerOptions, "operationCalls" | "config" | "logger">;
 
 /** What an implementation knows about the call, with the page of a list operation. */
 export type OperationBindingContext = OperationExecutionContext & {
@@ -104,22 +93,7 @@ const runReferenceSchema = z.object({ operationRunId: z.string() });
  * `403` for a refusal, the operation's own error for a failure.
  */
 export function createOperationFace(options: OperationFaceOptions): OperationFace {
-  const registry = createOperationRegistry();
-  const deps: RunOperationDeps = {
-    clientInstanceId: options.clientInstanceId,
-    registry,
-    runs: options.stores.operationRuns,
-    authorizer: options.authorizer,
-    events: options.operations?.events ?? createAuditingEventEmitter(options.auditRecorder),
-    audit: options.auditRecorder,
-    policy: {
-      instanceDefaults: options.config.policy.defaults,
-      centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
-    },
-    approvals: options.operations?.approvals,
-    logger: options.logger,
-    now: options.operations?.now
-  };
+  const { registry, deps } = options.operationCalls;
 
   return {
     registry,

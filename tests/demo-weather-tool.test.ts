@@ -9,8 +9,9 @@ import {
   type ToolExecutionContext,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
-import { InProcessToolExecution, ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { weatherForecastTool } from "../clients/demo/tools/weather-forecast";
+import { createTestToolRunner } from "./support/tool-runner";
 
 describe("demo weather forecast tool", () => {
   it("derives the configured model-facing input schema from the Zod schema", () => {
@@ -88,7 +89,7 @@ describe("demo weather forecast tool", () => {
 
 async function runWeatherTool(locale?: LocaleCode): Promise<ToolExecutionResult> {
   const context = createToolContext(locale);
-  const execution = new InProcessToolExecution({
+  const runTool = createTestToolRunner({
     registry: new ToolRegistry({ tools: [weatherForecastTool] }),
     getAgentToolNames: () => ["demo.weather_forecast"]
   });
@@ -105,13 +106,7 @@ async function runWeatherTool(locale?: LocaleCode): Promise<ToolExecutionResult>
     }
   };
 
-  const decision = await execution.authorize(request, context);
-  expect(decision.status).toBe("allowed");
-  if (decision.status !== "allowed") {
-    throw new Error("Expected weather tool to be allowed");
-  }
-
-  return execution.execute({ ...request, authorization: decision }, context);
+  return runTool(request, context);
 }
 
 function createToolContext(locale?: LocaleCode): ToolExecutionContext {

@@ -15,7 +15,7 @@ import {
 } from "@vivd-catalyst/core";
 
 describe("permissions", () => {
-  it("maps each of the thirteen actions to exactly one of the nine legacy keys", () => {
+  it("maps each of the fourteen actions to exactly one of the nine legacy keys", () => {
     expect(ACTIONS).toEqual([
       "agent.read",
       "agent.write",
@@ -24,6 +24,7 @@ describe("permissions", () => {
       "skill.write",
       "skill.delete",
       "skill.approve",
+      "operations.approve",
       "users.manage",
       "usage.view",
       "audit.view",
@@ -40,7 +41,7 @@ describe("permissions", () => {
       expect(keys, action).toEqual([legacyPermissionFor(action)]);
     }
     expect(LEGACY_PERMISSION_ACTIONS).toEqual({
-      "agent_skills.approve": ["skill.approve"],
+      "agent_skills.approve": ["skill.approve", "operations.approve"],
       "config_assets.read": ["agent.read", "skill.read"],
       "config_assets.write": ["agent.write", "agent.delete", "skill.write", "skill.delete"],
       "config_assets.release": ["assets.release"],
@@ -83,6 +84,7 @@ describe("permissions", () => {
       "skill.write",
       "skill.delete",
       "skill.approve",
+      "operations.approve",
       "users.manage",
       "usage.view",
       "audit.view"

@@ -24,11 +24,12 @@ import {
   readToolResultMetadata,
   type RunObservationStore,
   type RuntimeCallContext,
-  type ToolExecution,
+  type ToolOperationRunner,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
+import { createTestToolRunner } from "./support/tool-runner";
 import { LocalAgentRuntime, type LocalAgentRunFailureReport } from "@vivd-catalyst/agent-runtime";
 import {
   OPENAI_RESPONSES_STRING_MAX_CHARS,
@@ -39,7 +40,7 @@ import {
   type ModelCompletionStreamEvent,
   type ModelMessage
 } from "@vivd-catalyst/model-provider";
-import { defineTool } from "@vivd-catalyst/tool-sdk";
+import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { ToolRegistry } from "@vivd-catalyst/tool-execution";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
@@ -165,7 +166,7 @@ describe("local agent runtime", () => {
           }
         },
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -258,7 +259,7 @@ describe("local agent runtime", () => {
           }
         },
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -378,7 +379,7 @@ describe("local agent runtime", () => {
           }
         },
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -534,6 +535,7 @@ describe("local agent runtime", () => {
           tools: [
             defineTool({
               name: "test.wait",
+              effect: "reading",
               description: "Wait until cancelled.",
               inputSchema: z.object({}),
               async execute() {
@@ -542,29 +544,24 @@ describe("local agent runtime", () => {
             })
           ]
         }),
-        toolExecution: {
-          async authorize() {
-            return { status: "allowed" };
-          },
-          async execute(_request, toolContext) {
-            markToolStarted();
-            await new Promise<void>((resolve) => {
-              if (toolContext.signal?.aborted) {
-                resolve();
-                return;
-              }
-              toolContext.signal?.addEventListener("abort", () => resolve(), { once: true });
-            });
-            observedAbortReason = toolContext.signal?.reason;
-            markToolAborted();
-            return {
-              status: "cancelled",
-              error: {
-                code: "cancelled",
-                message: "Tool was cancelled"
-              }
-            };
-          }
+        async runTool(_request, toolContext) {
+          markToolStarted();
+          await new Promise<void>((resolve) => {
+            if (toolContext.signal?.aborted) {
+              resolve();
+              return;
+            }
+            toolContext.signal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+          observedAbortReason = toolContext.signal?.reason;
+          markToolAborted();
+          return {
+            status: "cancelled",
+            error: {
+              code: "cancelled",
+              message: "Tool was cancelled"
+            }
+          };
         },
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
@@ -665,7 +662,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -771,7 +768,7 @@ describe("local agent runtime", () => {
           }
         },
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -880,7 +877,7 @@ describe("local agent runtime", () => {
           }
         },
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -1000,7 +997,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -1163,7 +1160,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -1294,7 +1291,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -1396,7 +1393,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -1533,6 +1530,7 @@ describe("local agent runtime", () => {
           tools: [
             defineTool({
               name: "test.inspect",
+              effect: "reading",
               description: "Inspect a page.",
               inputSchema: z.object({ page: z.number() }),
               async execute() {
@@ -1541,18 +1539,13 @@ describe("local agent runtime", () => {
             })
           ]
         }),
-        toolExecution: {
-          async authorize() {
-            return { status: "allowed" };
-          },
-          async execute(request) {
-            return {
-              status: "success",
-              output: {
-                inspectedPage: (request.input as { page?: number }).page
-              }
-            };
-          }
+        async runTool(request) {
+          return {
+            status: "success",
+            output: {
+              inspectedPage: (request.input as { page?: number }).page
+            }
+          };
         },
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
@@ -1700,7 +1693,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -1839,7 +1832,7 @@ describe("local agent runtime", () => {
             conversationHistory: store.conversations,
             modelProvider: withoutStreaming(provider),
             toolRegistry: new ToolRegistry({ tools: [] }),
-            toolExecution: createUnusedToolExecution(),
+            runTool: createUnusedToolRunner(),
             usageGovernance: new ModelUsageGovernance({
               store: store.usage,
               budget: {},
@@ -1942,7 +1935,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -2216,7 +2209,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance
       })
     );
@@ -2331,6 +2324,7 @@ describe("local agent runtime", () => {
           tools: [
             defineTool({
               name: "test.promote_artifact",
+              effect: "reading",
               description: "Promote an artifact.",
               inputSchema: z.object({ path: z.string() }),
               async execute() {
@@ -2339,20 +2333,15 @@ describe("local agent runtime", () => {
             })
           ]
         }),
-        toolExecution: {
-          async authorize() {
-            return { status: "allowed" };
-          },
-          async execute() {
-            return {
-              status: "success",
-              output: {
-                artifactId: artifact.artifactId,
-                path: "result.pdf"
-              },
-              artifacts: [artifact]
-            };
-          }
+        async runTool() {
+          return {
+            status: "success",
+            output: {
+              artifactId: artifact.artifactId,
+              path: "result.pdf"
+            },
+            artifacts: [artifact]
+          };
         },
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
@@ -2433,6 +2422,20 @@ describe("local agent runtime", () => {
     let modelStep = 0;
     let invalidToolResult = "";
     let validToolExecutions = 0;
+    const inspectTools = new ToolRegistry({
+      tools: [
+        defineTool({
+          name: "test.inspect",
+          description: "Inspect a page.",
+          effect: "reading",
+          inputSchema: z.object({ page: z.number() }),
+          execute() {
+            validToolExecutions += 1;
+            return toolSuccess({ inspected: true });
+          }
+        })
+      ]
+    });
     const providerContinuation = {
       providerId: "test-provider",
       state: { encrypted: "opaque-provider-state" }
@@ -2521,32 +2524,13 @@ describe("local agent runtime", () => {
         defaultModelProvider: providerConfig,
         conversationHistory: store.conversations,
         modelProvider,
-        toolRegistry: new ToolRegistry({
-          tools: [
-            defineTool({
-              name: "test.inspect",
-              description: "Inspect a page.",
-              inputSchema: z.object({ page: z.number() }),
-              async execute() {
-                throw new Error("Tool registry execution should not be used by this test");
-              }
-            })
-          ]
+        toolRegistry: inspectTools,
+        // The call takes the path every tool call takes, so the input that could not be read
+        // is answered by that path and not by this test.
+        runTool: createTestToolRunner({
+          registry: inspectTools,
+          getAgentToolNames: () => ["test.inspect"]
         }),
-        toolExecution: {
-          async authorize() {
-            return { status: "allowed" };
-          },
-          async execute() {
-            validToolExecutions += 1;
-            return {
-              status: "success",
-              output: {
-                inspected: true
-              }
-            };
-          }
-        },
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -2695,7 +2679,7 @@ describe("local agent runtime", () => {
         runObservationStore: store.agentRuns,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -2988,7 +2972,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -3074,7 +3058,7 @@ describe("local agent runtime", () => {
         conversationHistory: store.conversations,
         modelProvider,
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: createUnusedToolExecution(),
+        runTool: createUnusedToolRunner(),
         usageGovernance: new ModelUsageGovernance({
           store: store.usage,
           budget: {},
@@ -3240,15 +3224,8 @@ async function createConversationWithMessages(
   return conversation.id;
 }
 
-function createUnusedToolExecution(): ToolExecution {
-  return {
-    async authorize() {
-      throw new Error("Tool execution should not be used");
-    },
-    async execute() {
-      throw new Error("Tool execution should not be used");
-    }
-  };
+function createUnusedToolRunner(): ToolOperationRunner {
+  return () => Promise.reject(new Error("Tool execution should not be used"));
 }
 
 function noReportedUsage() {
@@ -3411,7 +3388,7 @@ async function storedContinuationFixture(name: string, encryptedContent: string)
       modelProviderContinuationStore: store.conversations,
       modelProvider: withoutStreaming(provider),
       toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
+      runTool: createUnusedToolRunner(),
       usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
     })
   );
@@ -3552,7 +3529,7 @@ async function rateLimitFixture(name: string) {
       conversationHistory: store.conversations,
       modelProvider,
       toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: createUnusedToolExecution(),
+      runTool: createUnusedToolRunner(),
       usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
     })
   );
@@ -3647,6 +3624,7 @@ async function pageImageFixture(
         tools: [
           defineTool({
             name: "view_document_page",
+            effect: "reading",
             description: "View a document page.",
             inputSchema: z.object({ fileId: z.string(), pageNumber: z.number() }),
             async execute() {
@@ -3655,26 +3633,21 @@ async function pageImageFixture(
           })
         ]
       }),
-      toolExecution: {
-        async authorize() {
-          return { status: "allowed" };
-        },
-        async execute(request) {
-          const pageNumber = z.object({ pageNumber: z.number() }).parse(request.input).pageNumber;
-          return {
-            status: "success",
-            output: { fileId: "file_contract", pageNumber },
-            artifacts: [
-              {
-                artifactId: asManagedArtifactId(`art_page_${pageNumber}`),
-                kind: "document.page_image",
-                mimeType: "image/png",
-                modelVisibility: { type: "image", mimeType: "image/png" },
-                metadata: { fileId: "file_contract", pageNumber }
-              }
-            ]
-          };
-        }
+      async runTool(request) {
+        const pageNumber = z.object({ pageNumber: z.number() }).parse(request.input).pageNumber;
+        return {
+          status: "success",
+          output: { fileId: "file_contract", pageNumber },
+          artifacts: [
+            {
+              artifactId: asManagedArtifactId(`art_page_${pageNumber}`),
+              kind: "document.page_image",
+              mimeType: "image/png",
+              modelVisibility: { type: "image", mimeType: "image/png" },
+              metadata: { fileId: "file_contract", pageNumber }
+            }
+          ]
+        };
       },
       artifactReader: {
         async readArtifact() {

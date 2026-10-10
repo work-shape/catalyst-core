@@ -367,19 +367,16 @@ describe("approval decision history", () => {
           runObservationStore: f.store.agentRuns,
           modelProvider,
           toolRegistry: new ToolRegistry({ tools: [] }),
-          toolExecution: {
-            authorize: async () => ({ status: "allowed" }),
-            execute: async () => {
-              expect((await f.messages()).at(-1)?.metadata?.agentRuntime).toMatchObject({
-                kind: "assistant_tool_calls"
-              });
-              await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
-                requestId: request.id,
-                decision: "request_changes",
-                comment: "Include the appendix"
-              });
-              return { status: "success", output: { checked: true } };
-            }
+          runTool: async () => {
+            expect((await f.messages()).at(-1)?.metadata?.agentRuntime).toMatchObject({
+              kind: "assistant_tool_calls"
+            });
+            await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+              requestId: request.id,
+              decision: "request_changes",
+              comment: "Include the appendix"
+            });
+            return { status: "success", output: { checked: true } };
           },
           usageGovernance: new ModelUsageGovernance({
             store: f.store.usage,

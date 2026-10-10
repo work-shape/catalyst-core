@@ -134,6 +134,22 @@ export const checkSandboxJob = defineScheduledKind("infrastructure.check_sandbox
  */
 export const INFRASTRUCTURE_CHECK_INTERVAL_MS = 5 * MINUTE_MS;
 
+/** Ends the Operation Runs that waited for an approval longer than they may. */
+export const expireOperationRunsJob = defineScheduledKind("operation_runs.expire");
+/** Fails the Operation Runs whose process ended before their call did. */
+export const recoverOperationRunsJob = defineScheduledKind("operation_runs.recover");
+
+export const expireOperationRunsSchedule = defineSchedule({
+  kind: expireOperationRunsJob,
+  every: 5 * MINUTE_MS
+});
+export const recoverOperationRunsSchedule = defineSchedule({
+  kind: recoverOperationRunsJob,
+  every: MINUTE_MS,
+  // A run that the process before this one left running is failed as soon as this one is up.
+  dueAtStart: true
+});
+
 export const expireConversationsSchedule = defineSchedule({
   kind: expireConversationsJob,
   every: HOUR_MS

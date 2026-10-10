@@ -14,6 +14,7 @@ import { findWorkspaceFile } from "./workspace";
 export function workspacePromoteArtifactTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.promote_artifact",
+    effect: "changing",
     description:
       "Promote a final workspace file to a managed artifact. Catalyst automatically displays promoted artifacts as clickable download cards below the assistant response.",
     inputSchema: workspacePromoteArtifactInputSchema,

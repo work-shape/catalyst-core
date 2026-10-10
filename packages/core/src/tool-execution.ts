@@ -1,6 +1,11 @@
-import type { AgentRunId, ConversationId, ToolCallId } from "./ids";
+import type {
+  AgentRunId,
+  CollaborationWorkspaceId,
+  ConversationId,
+  OperationRunId,
+  ToolCallId
+} from "./ids";
 import type { JsonObject, JsonValue } from "./json";
-import type { ISODateString } from "./time";
 import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { StructuredResultPublication } from "./structured-result";
 import type { RuntimeCallContext } from "./identity";
@@ -29,40 +34,18 @@ export interface ToolExecutionRequest {
   input: unknown;
 }
 
-export interface ToolPermissionDecision {
-  approved: boolean;
-  decidedBy: string;
-  decidedAt: ISODateString;
-  reason?: string;
-}
-
-export type ToolAuthorizationDecision =
-  | {
-      status: "allowed";
-      reason?: string;
-    }
-  | {
-      status: "denied";
-      reason: string;
-    }
-  | {
-      status: "requires_approval";
-      reason: string;
-      preview?: JsonObject;
-    };
-
-export interface ApprovedToolExecutionRequest extends ToolExecutionRequest {
-  authorization: Extract<ToolAuthorizationDecision, { status: "allowed" }>;
-}
-
 export interface ScopedSecretResolver {
   getSecret(name: string): Promise<string | undefined>;
 }
 
 export interface ToolExecutionContext extends RuntimeCallContext {
-  permissionDecision?: ToolPermissionDecision;
   secrets?: ScopedSecretResolver;
   toolRequest?: ToolExecutionRequest;
+  /**
+   * The Operation Run this call is, and the workspace it is in. A tool that calls a model
+   * passes both on, so the usage of that call is a row of the run and the workspace.
+   */
+  operationRun?: { id: OperationRunId; workspaceId?: CollaborationWorkspaceId };
 }
 
 export type ToolRuntimeContext = ToolExecutionContext;
@@ -103,14 +86,3 @@ export type ToolHandlerResult<TOutput = unknown> =
   ToolHandlerSuccessResult<TOutput> | ToolHandlerFailureResult;
 
 export type ToolExecutionResult = ToolHandlerResult<unknown>;
-
-export interface ToolExecution {
-  authorize(
-    request: ToolExecutionRequest,
-    context: ToolExecutionContext
-  ): Promise<ToolAuthorizationDecision>;
-  execute(
-    request: ApprovedToolExecutionRequest,
-    context: ToolExecutionContext
-  ): Promise<ToolExecutionResult>;
-}

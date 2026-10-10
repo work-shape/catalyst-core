@@ -64,6 +64,7 @@ export function createShowViewTool(
   const inputSchema = createShowViewInputSchema(scriptSourceHint);
   return defineTool({
     name: "show_view",
+    effect: "reading",
     description: [
       "Show model-authored HTML to the user as a visual view. Use this when a table, widget, chart, dashboard, or richer visual explanation would help.",
       "Tailwind CSS, Lucide icons, Chart.js-compatible inline scripts, and shadcn-style app theme classes are available in the rendered iframe.",

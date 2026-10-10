@@ -11,7 +11,7 @@ import {
   type ModelProviderContinuationStore,
   type ModelProviderConfig,
   type RunObservationStore,
-  type ToolExecution,
+  type ToolOperationRunner,
   type WebAccessConfig,
   type AgentRunId,
   type AgentRuntimeEvent,
@@ -41,7 +41,7 @@ export interface LocalAgentRuntimeOptions {
   /** The only way a run reaches a model. It admits, retries and records usage. */
   modelGateway: ModelGateway;
   toolRegistry: ModelToolRegistryView;
-  toolExecution: ToolExecution;
+  runTool: ToolOperationRunner;
   webAccess?: WebAccessConfig;
   agentSkillChangesEnabled?: boolean;
   historyMessageLimit?: number;

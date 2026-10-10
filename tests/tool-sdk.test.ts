@@ -7,6 +7,7 @@ describe("tool SDK", () => {
   it("derives provider-facing input JSON Schema from Zod input schemas", () => {
     const tool = defineTool({
       name: "test.representative",
+      effect: "reading",
       description: "Representative test tool.",
       inputSchema: z.object({
         title: z.string().min(2).max(40).describe("Short user-visible title."),
@@ -59,6 +60,7 @@ describe("tool SDK", () => {
   it("keeps record value schemas in additionalProperties instead of closing them", () => {
     const tool = defineTool({
       name: "test.record_input",
+      effect: "reading",
       description: "Tool with a record-typed input field.",
       inputSchema: z.object({
         labels: z.record(z.string(), z.string()).describe("Arbitrary string labels.")

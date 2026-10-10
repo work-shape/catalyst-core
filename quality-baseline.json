@@ -180,7 +180,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/tool-execution",
-      "count": 5,
+      "count": 4,
       "owner": "EW-1"
     },
     {
@@ -243,7 +243,7 @@
       "target": "lint",
       "rule": "catalyst/module-cycle",
       "scope": "packages/core",
-      "count": 6,
+      "count": 5,
       "owner": "CB-8b"
     },
     {

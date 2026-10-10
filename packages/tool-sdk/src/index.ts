@@ -2,6 +2,7 @@ import { z } from "zod";
 import type {
   JsonObject,
   JsonValue,
+  OperationEffect,
   ToolExecutionErrorCode,
   ToolHandlerResult,
   ToolPermissionPolicy,
@@ -11,6 +12,12 @@ import type {
 export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   name: string;
   description: string;
+  /**
+   * `changing` when the tool writes state that outlives the call and is visible outside the
+   * model's own message, `reading` otherwise. Every call of the tool is an Operation Run with
+   * this effect; a changing call is what a policy can hold for an approval.
+   */
+  effect: OperationEffect;
   inputSchema: z.ZodType<TInput>;
   outputSchema?: z.ZodType<TOutput>;
   inputJsonSchema?: JsonObject;

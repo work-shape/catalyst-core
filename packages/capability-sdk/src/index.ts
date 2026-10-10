@@ -124,6 +124,12 @@ export interface CapabilityModelCall {
   /** The user and the conversation the call is made for, for its usage record. */
   userId?: string;
   conversationId?: ConversationId;
+  /**
+   * The workspace and the Operation Run of the tool call that makes the call, as the tool's
+   * context names them (`context.operationRun`), for its usage record.
+   */
+  workspaceId?: string;
+  operationRunId?: string;
   /** Ties the usage record to the request that caused the call. */
   correlationId: string;
   signal?: AbortSignal;

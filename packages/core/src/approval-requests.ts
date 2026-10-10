@@ -2,8 +2,8 @@ import type { StorePage } from "./paging";
 import type { AgentRunId, ClientInstanceId, ConversationId, ToolCallId } from "./ids";
 import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";
 import type { JsonObject } from "./json";
-import type { Permission } from "./permissions";
-import type { ToolPermissionDecision } from "./tool-execution";
+import type { Permission, PlatformAction } from "./permissions";
+import type { ISODateString } from "./time";
 
 export type ApprovalRequestStatus =
   | "pending"
@@ -20,6 +20,16 @@ export interface ApprovalCheckResult {
   message: string;
 }
 
+/** What a person answered to a request, and when. */
+export interface ApprovalRequestDecision {
+  approved: boolean;
+  decidedBy: string;
+  decidedByLabel: string;
+  decidedAt: ISODateString;
+  reason?: string;
+  comment?: string;
+}
+
 export interface ApprovalRequest {
   id: string;
   clientInstanceId: ClientInstanceId;
@@ -34,7 +44,7 @@ export interface ApprovalRequest {
     agentName: string;
   };
   status: ApprovalRequestStatus;
-  decision?: ToolPermissionDecision & { decidedByLabel: string; comment?: string };
+  decision?: ApprovalRequestDecision;
   reversion?: { revertedBy: string; revertedByLabel: string; revertedAt: string };
   checks: ApprovalCheckResult[];
   applyResult?: JsonObject;
@@ -53,7 +63,8 @@ export interface ApprovalRequestContext {
 
 export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject> {
   kind: string;
-  requiredPermission: Permission;
+  /** The right of who decides a request of this kind and sees it among the requests to decide. */
+  requiredPermission: Permission | PlatformAction;
   validate(payload: JsonObject): TPayload;
   /** Proposed new content only; the workflow adds the request summary. */
   checkContent?(payload: TPayload): string;
@@ -74,6 +85,16 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
     approver: AuthenticatedUser,
     context: ApprovalRequestContext
   ): Promise<JsonObject>;
+  /**
+   * Called while a pending request is ended without an approval: rejected, sent back for
+   * changes or withdrawn. A kind whose request holds something open ends it here. A throw
+   * leaves the request pending. Takes the stored payload, so it must not require a valid one.
+   */
+  declined?(
+    payload: JsonObject,
+    decision: ApprovalRequestDecision,
+    context: ApprovalRequestContext
+  ): Promise<void>;
 }
 
 export type ApprovalRequestHandlerRegistry = ReadonlyMap<string, ApprovalRequestHandler>;
@@ -153,7 +174,8 @@ export interface ApprovalRequestStore {
 export interface ApprovalRequestCreator {
   createRequest(
     user: AuthenticatedUser,
-    context: { correlationId: string },
+    /** `runFence` where an Agent Run files the request: refused once the run lost its lease. */
+    context: { correlationId: string; runFence?: AgentRunWriteFence },
     command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin">
   ): Promise<ApprovalRequest>;
 }

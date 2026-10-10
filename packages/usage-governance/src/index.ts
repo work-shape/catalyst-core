@@ -543,7 +543,8 @@ function usageEventOrigin(
       ...who,
       conversationId: attribution.conversationId,
       agentRunId: attribution.runId,
-      agentName: attribution.agentName
+      agentName: attribution.agentName,
+      ...(attribution.operationRunId ? { operationRunId: attribution.operationRunId } : {})
     };
   }
   return {

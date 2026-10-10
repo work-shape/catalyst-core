@@ -58,12 +58,23 @@ export const operationRunSchema = z.object({
     .object({
       mode: z.enum(["direct", "confirmed", "approved", "declined"]),
       by: z.string(),
+      /** The name of who decided, where the decision was another person's. */
+      byLabel: z.string().optional(),
       at: timestampSchema,
       comment: z.string().optional()
     })
     .optional(),
   /** Why the run failed or was refused: a code and a message, never a provider's text. */
   error: z.object({ code: z.string(), message: z.string() }).optional(),
+  /** What the model calls made inside the run used, where it made any. */
+  usage: z
+    .object({
+      modelCalls: z.number().int().min(0),
+      inputTokens: z.number().int().min(0),
+      outputTokens: z.number().int().min(0),
+      totalTokens: z.number().int().min(0)
+    })
+    .optional(),
   correlationId: z.string(),
   createdAt: timestampSchema,
   startedAt: timestampSchema.optional(),

@@ -584,14 +584,7 @@ describe("agent runs as claimed jobs", () => {
           }
         },
         toolRegistry: new ToolRegistry({ tools: [] }),
-        toolExecution: {
-          async authorize() {
-            throw new Error("No tools expected");
-          },
-          async execute() {
-            throw new Error("No tools expected");
-          }
-        },
+        runTool: () => Promise.reject(new Error("No tools expected")),
         usageGovernance: new ModelUsageGovernance({
           store: db.store.usage,
           budget: {},

@@ -3582,7 +3582,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   for (let index = 0; index < rowCount; index += 1) {
     await activityRows.nth(index).click();
   }
-  await expect(page.getByText("tool.completed").first()).toBeVisible();
+  await expect(page.getByText("operation.completed").first()).toBeVisible();
   expect(consoleErrors).toEqual([]);
 });
 

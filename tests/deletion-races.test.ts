@@ -355,14 +355,7 @@ function localRuntime(store: Store, beforeAnswer: () => Promise<void>) {
         }
       },
       toolRegistry: new ToolRegistry({ tools: [] }),
-      toolExecution: {
-        async authorize() {
-          throw new Error("Tool execution should not be used");
-        },
-        async execute() {
-          throw new Error("Tool execution should not be used");
-        }
-      },
+      runTool: () => Promise.reject(new Error("Tool execution should not be used")),
       usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
     })
   );

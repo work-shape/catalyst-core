@@ -1,4 +1,17 @@
-import { and, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+  sql
+} from "drizzle-orm";
 import {
   INTERRUPTED_RUN_ERROR,
   type OperationRun,
@@ -6,6 +19,7 @@ import {
 } from "@vivd-catalyst/core";
 import { keysetFilter } from "./paging";
 import type { PostgresConnection } from "./postgres-database";
+import { conversations } from "./schema/conversations";
 import { operationRuns } from "./schema/operationRuns";
 
 type OperationRunRow = typeof operationRuns.$inferSelect;
@@ -27,7 +41,14 @@ export async function createOperationRun(
       actorId: run.actor.id,
       actor: run.actor,
       ownerUserId: run.ownerUserId,
-      collaborationWorkspaceId: run.workspaceId,
+      // A call a conversation caused happens in that conversation's workspace.
+      collaborationWorkspaceId:
+        run.workspaceId ??
+        (run.conversationId === undefined
+          ? undefined
+          : sql`(select ${conversations.collaborationWorkspaceId} from ${conversations}
+              where ${conversations.clientInstanceId} = ${run.clientInstanceId}
+                and ${conversations.id} = ${run.conversationId})`),
       originKind: run.origin.kind,
       origin: run.origin,
       conversationId: run.conversationId,
@@ -90,7 +111,13 @@ export async function finishOperationRun(
           }
         : { finishedAt }),
       ...(end.status === "done"
-        ? { output: end.output, resultRef: end.resultRef, decision: end.decision }
+        ? {
+            output: end.output,
+            resultRef: end.resultRef,
+            // A run that was approved keeps the decision it was taken with.
+            ...(end.decision ? { decision: end.decision } : {}),
+            usage: end.usage
+          }
         : {}),
       ...(end.status === "failed" ? { error: end.error } : {}),
       ...(end.status === "denied" ? { error: { ...end.error, denial: end.denial } } : {})
@@ -160,22 +187,129 @@ export async function listOperationRuns(
   return rows.map(mapOperationRun);
 }
 
+export async function resumeOperationRun(
+  db: PostgresConnection,
+  input: Input<"resume">
+): Promise<OperationRun | undefined> {
+  const startedAt = new Date(input.startedAt);
+  const [row] = await db
+    .update(operationRuns)
+    .set({ status: "running", decision: input.decision, startedAt, updatedAt: startedAt })
+    // Only a run that still waits and whose time has not run out is taken, so an approval and
+    // the expiry of the same run never both win.
+    .where(
+      and(
+        identity(input),
+        eq(operationRuns.status, "pending_approval"),
+        or(isNull(operationRuns.expiresAt), sql`${operationRuns.expiresAt} > now()`)
+      )
+    )
+    .returning();
+  return row ? mapOperationRun(row) : undefined;
+}
+
+export async function endWaitingOperationRun(
+  db: PostgresConnection,
+  input: Input<"endWaiting">
+): Promise<OperationRun | undefined> {
+  const { end } = input;
+  const finishedAt = new Date(end.finishedAt);
+  const [row] = await db
+    .update(operationRuns)
+    .set({
+      status: end.status,
+      finishedAt,
+      updatedAt: finishedAt,
+      error: end.status === "denied" ? { ...end.error, denial: end.denial } : end.error,
+      ...(input.decision ? { decision: input.decision } : {})
+    })
+    .where(and(identity(input), eq(operationRuns.status, "pending_approval")))
+    .returning();
+  return row ? mapOperationRun(row) : undefined;
+}
+
 export async function markOperationRunsExpired(
   db: PostgresConnection,
   input: Input<"markExpired">
 ): Promise<OperationRun[]> {
-  const rows = await db
-    .update(operationRuns)
-    .set({ status: "expired", finishedAt: sql`now()`, updatedAt: sql`now()` })
+  const waiting = ["pending_confirmation", "pending_approval"] as const;
+  const due = db
+    .select({ id: operationRuns.id })
+    .from(operationRuns)
     .where(
       and(
         eq(operationRuns.clientInstanceId, input.clientInstanceId),
-        inArray(operationRuns.status, ["pending_confirmation", "pending_approval"]),
+        inArray(operationRuns.status, waiting),
         lte(operationRuns.expiresAt, sql`now()`)
       )
     )
+    .orderBy(asc(operationRuns.expiresAt))
+    .limit(input.limit);
+  const rows = await db
+    .update(operationRuns)
+    .set({ status: "expired", finishedAt: sql`now()`, updatedAt: sql`now()` })
+    // The status is asked again: a run an approver took meanwhile is running, not expired.
+    .where(and(inArray(operationRuns.id, due), inArray(operationRuns.status, waiting)))
     .returning();
   return rows.map(mapOperationRun);
+}
+
+export async function listOperationRunsRunningSince(
+  db: PostgresConnection,
+  input: Input<"listRunningSince">
+): Promise<OperationRun[]> {
+  const rows = await db
+    .select()
+    .from(operationRuns)
+    .where(
+      and(
+        eq(operationRuns.clientInstanceId, input.clientInstanceId),
+        eq(operationRuns.status, "running"),
+        lt(operationRuns.startedAt, new Date(input.startedBefore))
+      )
+    )
+    .orderBy(asc(operationRuns.startedAt))
+    .limit(input.limit);
+  return rows.map(mapOperationRun);
+}
+
+export async function deleteOperationRunsOfConversations(
+  db: PostgresConnection,
+  input: Input<"deleteOfConversations">
+): Promise<number> {
+  if (input.conversationIds.length === 0) return 0;
+  const removed = await db
+    .delete(operationRuns)
+    .where(
+      and(
+        eq(operationRuns.clientInstanceId, input.clientInstanceId),
+        inArray(operationRuns.conversationId, [...input.conversationIds])
+      )
+    );
+  return removed.count;
+}
+
+export async function deleteOperationRunsWithoutConversationOlderThan(
+  db: PostgresConnection,
+  input: Input<"deleteWithoutConversationOlderThan">
+): Promise<number> {
+  const old = db
+    .select({ id: operationRuns.id })
+    .from(operationRuns)
+    .where(
+      and(
+        eq(operationRuns.clientInstanceId, input.clientInstanceId),
+        isNull(operationRuns.conversationId),
+        // A run that still runs or waits is not history yet, whatever its age.
+        notInArray(operationRuns.status, ["running", "pending_confirmation", "pending_approval"]),
+        // The cutoff is the database's: its clock stamped the rows.
+        lt(operationRuns.createdAt, sql`now() - make_interval(days => ${input.days})`)
+      )
+    )
+    .orderBy(asc(operationRuns.createdAt))
+    .limit(input.limit);
+  const removed = await db.delete(operationRuns).where(inArray(operationRuns.id, old));
+  return removed.count;
 }
 
 export async function markOperationRunInterrupted(

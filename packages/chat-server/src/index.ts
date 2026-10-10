@@ -39,6 +39,7 @@ import { registerSessionTokenRoutes } from "./routes/session-token-routes";
 import { registerServiceAccessTokenRoutes } from "./routes/service-access-token-routes";
 import { registerSuperadminRoutes } from "./routes/superadmin-routes";
 import { registerUserAccountRoutes } from "./routes/user-account-routes";
+import { createOperationCalls } from "./operations/operation-calls";
 import type { ChatServerOptions, ResolvedChatServerOptions } from "./types";
 
 export type {
@@ -50,6 +51,14 @@ export type { ConversationCleanupRetrySummary } from "./conversation-cleanup";
 export type { ConversationRetentionRunSummary, OrphanedFileCleanupSummary } from "./retention";
 export { ConversationRetentionWorkflow } from "./retention";
 export { createChatServerJobs } from "./jobs";
+export { createOperationCalls };
+export { createAuditingEventEmitter } from "./operations/event-emitter";
+export type { OperationCallsOptions } from "./operations/operation-calls";
+export {
+  HELD_OPERATION_CALLS_PER_ACTOR,
+  HELD_OPERATION_CALLS_PER_INSTANCE,
+  HELD_OPERATION_INPUT_MAX_BYTES
+} from "./operation-call-approval-handler";
 export type { ChatServerJobOptions, ChatServerJobs } from "./jobs";
 export {
   DELETION_MAX_ATTEMPTS,
@@ -78,6 +87,7 @@ export {
 export type { ExecutionWorkspaceCleanupRunSummary } from "./workspace-cleanup";
 export type {
   ChatServerOptions,
+  OperationCalls,
   ConversationRetentionOptions,
   ExecutionWorkspaceCleanupJobOptions
 } from "./types";
@@ -98,11 +108,19 @@ export type { InProcessHttpServer } from "./http/runtime";
 
 export async function createChatServer(input: ChatServerOptions): Promise<HttpRuntime> {
   const allowedOrigins = normalizeAllowedOrigins(input.allowedOrigins);
+  const authorizer = input.authorizer ?? createAuthorizer(input.stores.access);
+  const operationCalls = input.operationCalls ?? createOperationCalls({ ...input, authorizer });
   const options: ResolvedChatServerOptions = {
     ...input,
     allowedOrigins,
     rateLimiter: input.rateLimiter ?? createInProcessRateLimiter(),
-    authorizer: input.authorizer ?? createAuthorizer(input.stores.access)
+    authorizer,
+    operationCalls,
+    // The kind a waiting call is decided on is one of the instance's approval kinds.
+    approvalRequests: input.approvalRequests && {
+      ...input.approvalRequests,
+      handlers: operationCalls.approvalRequestHandlers
+    }
   };
   const app = Fastify({
     loggerInstance: adaptLogger(options.logger),

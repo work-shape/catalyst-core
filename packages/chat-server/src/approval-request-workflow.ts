@@ -7,6 +7,7 @@ import {
   type ApprovalRequest,
   type ApprovalRequestContext,
   type ApprovalRequestCreator,
+  type ApprovalRequestDecision,
   type ApprovalRequestHandler,
   type ApprovalRequestHandlerRegistry,
   type ApprovalRequestStatus,
@@ -190,6 +191,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         };
         if (command.decision !== "approve") {
           await this.assertNotApplied(pending, context);
+          await this.endWithoutApproval(pending, decision, context);
           return {
             status: command.decision === "reject" ? "rejected" : "changes_requested",
             decision
@@ -224,15 +226,14 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       requestId,
       resolve: async (pending) => {
         await this.assertNotApplied(pending, context);
-        return {
-          status: "withdrawn",
-          decision: {
-            approved: false,
-            decidedBy: user.id,
-            decidedByLabel: user.displayLabel,
-            decidedAt: new Date().toISOString()
-          }
+        const decision = {
+          approved: false,
+          decidedBy: user.id,
+          decidedByLabel: user.displayLabel,
+          decidedAt: new Date().toISOString()
         };
+        await this.endWithoutApproval(pending, decision, context);
+        return { status: "withdrawn", decision };
       }
     });
     await this.record(user, context, "approval_request.withdrawn", updated);
@@ -286,6 +287,17 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         "This request's change is already applied; approve it to record the outcome"
       );
     }
+  }
+
+  /** Tells the kind that its request ends without an approval, inside the transition. */
+  private async endWithoutApproval(
+    pending: ApprovalRequest,
+    decision: ApprovalRequestDecision,
+    context: CallContext
+  ): Promise<void> {
+    await this.options.handlers
+      .get(pending.kind)
+      ?.declined?.(pending.payload, decision, this.handlerContext(pending, context));
   }
 
   private async visibleRequest(

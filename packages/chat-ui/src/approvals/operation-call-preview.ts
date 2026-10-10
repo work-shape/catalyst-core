@@ -1,8 +1,8 @@
 const originKinds = ["agent", "user", "cli", "mcp", "app", "workflow", "schedule"] as const;
 
-export type OperationCallOriginKind = (typeof originKinds)[number];
+type OperationCallOriginKind = (typeof originKinds)[number];
 
-export interface OperationCallInput {
+interface OperationCallInput {
   key: string;
   /** The value as text. The server renders it; the client shows it as written. */
   value: string;

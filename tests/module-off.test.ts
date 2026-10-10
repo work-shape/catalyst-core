@@ -50,6 +50,7 @@ function fixture(bringsTool = true) {
         : [
             defineTool({
               name: TOOL,
+              effect: "reading",
               description: "Reads a document for tests.",
               inputSchema: z.object({}),
               async execute() {

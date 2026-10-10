@@ -258,10 +258,12 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     expect(resolve({ centralSettings, callerCanConfirm: false, canPause: true })).toMatchObject({
       next: "await_approval"
     });
+    // No surface has to hold the call: the run waits, so an agent's call waits too. Fails
+    // without the change, which refused it as a surface that cannot pause.
     expect(resolve({ centralSettings, callerCanConfirm: false, canPause: false })).toEqual({
-      value: "deny",
-      next: "refuse",
-      source: "surface_cannot_pause"
+      value: "approval",
+      next: "await_approval",
+      source: "central_setting"
     });
   });
 

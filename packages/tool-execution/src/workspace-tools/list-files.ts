@@ -12,6 +12,7 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceListFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.list_files",
+    effect: "reading",
     description: "List internal files currently tracked in the conversation execution workspace.",
     inputSchema: workspaceListFilesInputSchema,
     outputSchema: workspaceListFilesOutputSchema,

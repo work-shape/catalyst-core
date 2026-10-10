@@ -14,9 +14,9 @@ import {
 } from "@vivd-catalyst/core";
 
 import { MemoryObjectStorage } from "./memory-object-storage";
+import { createTestToolRunner } from "./tool-runner";
 import {
   createWorkspaceToolDefinitions,
-  InProcessToolExecution,
   ToolRegistry,
   WorkspaceCommandService,
   type WorkspaceCommandTelemetry
@@ -110,7 +110,7 @@ export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) 
   });
   const tools = createWorkspaceToolDefinitions({ service });
   const agentToolNames = input.agentToolNames ?? tools.map((tool) => tool.name);
-  const execution = new InProcessToolExecution({
+  const execution = createTestToolRunner({
     registry: new ToolRegistry({ tools }),
     getAgentToolNames: () => agentToolNames,
     ...(auditRecorder ? { auditRecorder } : {})
@@ -134,17 +134,7 @@ export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) 
       toolContext: ToolExecutionContext = context
     ) {
       const request = createToolRequest(conversation, agentRun.id, toolName, requestInput);
-      const decision = await execution.authorize(request, toolContext);
-      if (decision.status !== "allowed") {
-        return {
-          status: "failed" as const,
-          error: {
-            code: "not_allowed" as const,
-            message: decision.reason
-          }
-        };
-      }
-      return execution.execute({ ...request, authorization: decision }, toolContext);
+      return execution(request, toolContext);
     },
     async putWorkspaceFile(file: {
       path: string;

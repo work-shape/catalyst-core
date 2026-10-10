@@ -4,12 +4,6 @@ export {
   isOperationRunFilterEmpty,
   operationRunOriginFields,
   operationRunQuery,
-  operationRunWorkspaceLabel,
-  type OperationRunFilter
+  operationRunWorkspaceLabel
 } from "./operations-model";
-export {
-  OperationRunDetail,
-  OperationRunFilters,
-  OperationRunsTable,
-  type OperationRunWorkspace
-} from "./operations-view";
+export { OperationRunDetail, OperationRunFilters, OperationRunsTable } from "./operations-view";

@@ -293,17 +293,20 @@ describe("workspace tools", () => {
     expect(hereDoc.status).toBe("success");
   });
 
-  it("enforces agent allowlists through in-process tool execution", async () => {
+  // Fails without the tool path on `runOperation`: the allowlist is asked there, per call.
+  it("refuses a tool outside the agent's allowlist as a failed tool result", async () => {
     const harness = await createWorkspaceHarness({
       agentToolNames: ["workspace.list_files"]
     });
-    const request = harness.createRequest("workspace.exec", { command: "pwd" });
 
-    const decision = await harness.execution.authorize(request, harness.context);
+    const result = await harness.runTool("workspace.exec", { command: "pwd" });
 
-    expect(decision).toMatchObject({
-      status: "denied",
-      reason: "Agent 'workspace_agent' is not allowed to use 'workspace.exec'"
+    expect(result).toMatchObject({
+      status: "failed",
+      error: {
+        code: "not_allowed",
+        message: "Agent 'workspace_agent' is not allowed to use 'workspace.exec'"
+      }
     });
   });
 
@@ -340,7 +343,7 @@ describe("workspace tools", () => {
           })
         }),
         expect.objectContaining({
-          type: "tool.completed",
+          type: "operation.completed",
           metadata: expect.objectContaining({
             auditAction: "workspace.exec",
             resultStatus: "success"

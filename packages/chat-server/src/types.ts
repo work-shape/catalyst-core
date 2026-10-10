@@ -17,12 +17,14 @@ import type {
 } from "@vivd-catalyst/core";
 import type {
   AuditRecorder,
+  ApprovalRequestHandlerRegistry,
   Authorizer,
   CentralPolicySetting,
+  OperationRegistry,
   PlatformEventEmitter,
   RateLimiter
 } from "@vivd-catalyst/core";
-import type { OperationApprovalRequests } from "@vivd-catalyst/tool-execution";
+import type { OperationApprovalRequests, RunOperationDeps } from "@vivd-catalyst/tool-execution";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
@@ -45,9 +47,31 @@ export interface ExecutionWorkspaceCleanupJobOptions {
   now?: () => Date;
 }
 
+/**
+ * The one call path of an instance's process: the registry every surface reaches its
+ * operations through, what a call runs with, and the approval kinds with the one a waiting
+ * call is decided on. The API and an Agent Run worker of the same process share it, so a tool
+ * an agent calls and an operation a person calls are the same registered thing.
+ */
+export interface OperationCalls {
+  registry: OperationRegistry;
+  deps: RunOperationDeps;
+  /** The approval kinds the caller gave, with `operation_call` added. */
+  approvalRequestHandlers: ApprovalRequestHandlerRegistry;
+}
+
 export interface ChatServerOptions {
   logger: import("@vivd-catalyst/core").Logger;
+  /**
+   * The approval kinds of the instance. The server adds `operation_call`, the kind a call that
+   * waits for another person is decided on.
+   */
   approvalRequests?: Pick<ApprovalRequestWorkflowOptions, "store" | "handlers" | "onDecided">;
+  /**
+   * The call path the assembly built, where agents of this process call tools on it too.
+   * Without one the server builds its own from the options below.
+   */
+  operationCalls?: OperationCalls;
   config: ClientInstanceConfig;
   /** Which modules are on, resolved once by the assembly for the API and every worker. */
   modules: ModuleSnapshot;
@@ -154,4 +178,4 @@ export interface ChatServerOptions {
 
 /** The options as the server's own modules see them, with every default filled in. */
 export type ResolvedChatServerOptions = ChatServerOptions &
-  Required<Pick<ChatServerOptions, "rateLimiter" | "authorizer">>;
+  Required<Pick<ChatServerOptions, "rateLimiter" | "authorizer" | "operationCalls">>;

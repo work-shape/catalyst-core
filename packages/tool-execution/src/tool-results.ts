@@ -18,10 +18,3 @@ export function failed(
     }
   };
 }
-
-export function toPreview(input: unknown): JsonObject {
-  if (input && typeof input === "object" && !Array.isArray(input)) {
-    return input as JsonObject;
-  }
-  return { value: String(input) };
-}

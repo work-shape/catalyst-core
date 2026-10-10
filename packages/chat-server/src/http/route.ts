@@ -51,7 +51,7 @@ type RouteServerOptions = Pick<
   | "stores"
   | "auditRecorder"
   | "authorizer"
-  | "operations"
+  | "operationCalls"
 >;
 
 /** What a handler knows about a call whose caller is not a signed-in user. */

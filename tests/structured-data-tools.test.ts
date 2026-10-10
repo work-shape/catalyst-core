@@ -1,6 +1,7 @@
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { claimAttachmentsForStoredMessage } from "./support/test-store";
 import { type TestStore, createTestInstance } from "./support/test-instance";
+import { createTestToolRunner } from "./support/tool-runner";
 import { describe, expect, it } from "vitest";
 import {
   asAgentRunId,
@@ -12,11 +13,7 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 
-import {
-  createStructuredDataToolDefinitions,
-  InProcessToolExecution,
-  ToolRegistry
-} from "@vivd-catalyst/tool-execution";
+import { createStructuredDataToolDefinitions, ToolRegistry } from "@vivd-catalyst/tool-execution";
 
 describe("structured_data.publish", () => {
   it("reviews a fully materialized replacement and publishes with model-visible warnings", async () => {
@@ -585,7 +582,7 @@ async function createHarness(publicationReviewer?: StructuredDataPublicationRevi
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
   const tools = createStructuredDataToolDefinitions({ store, publicationReviewer });
-  const execution = new InProcessToolExecution({
+  const runTool = createTestToolRunner({
     registry: new ToolRegistry({ tools }),
     getAgentToolNames: () => tools.map((tool) => tool.name)
   });
@@ -620,11 +617,7 @@ async function createHarness(publicationReviewer?: StructuredDataPublicationRevi
         agentName: "structured_data_agent",
         input
       };
-      const authorization = await execution.authorize(request, context);
-      if (authorization.status !== "allowed") {
-        throw new Error(authorization.reason);
-      }
-      return execution.execute({ ...request, authorization }, context);
+      return runTool(request, context);
     }
   };
 }

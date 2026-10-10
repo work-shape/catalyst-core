@@ -1,5 +1,4 @@
 export * from "./tool-registry";
-export * from "./in-process-tool-execution";
 export * from "./built-in-tools";
 export * from "./read-skill-tool";
 export * from "./workspace-tools";
@@ -26,4 +25,11 @@ export * from "./structured-data-tool-schemas";
 export * from "./propose-skill-change-tool";
 export * from "./skill-source-version";
 export * from "./registration";
-export * from "./run-operation";
+export { runOperation } from "./run-operation";
+export type {
+  OperationApprovalRequests,
+  OperationOutcome,
+  RunOperationDeps
+} from "./operation-execution";
+export * from "./tool-operation";
+export * from "./waiting-operation";

@@ -13,8 +13,6 @@ import {
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import {
-  ApprovalCheckRunner,
-  ApprovalRequestWorkflow,
   createSkillChangeApprovalHandler,
   createAgentAssetKind,
   createChatServer,
@@ -29,7 +27,6 @@ import type {
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
-  createAuthorizer,
   type HttpRuntime,
   type JobWorker,
   type PlatformStores,
@@ -52,7 +49,6 @@ import {
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
-  InProcessToolExecution,
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
@@ -63,6 +59,7 @@ import {
 } from "./assembly-validation";
 import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
+import { createInstanceOperationCalls, createInstanceToolRunner } from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
 import { createClientInstanceMail } from "./mail";
 import type {
@@ -96,6 +93,8 @@ export interface CreateClientInstanceAppInput {
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
+  /** What the calls of operations run with beyond the instance's own defaults. For tests. */
+  operations?: ChatServerOptions["operations"];
   allowedOrigins?: string | string[];
   agentRunWorker?: AgentRunWorkerPlacement;
 }
@@ -158,6 +157,10 @@ export async function createClientInstanceApp(
     stores: store,
     usageGovernance,
     auditRecorder,
+    authorizer: execution.authorizer,
+    // The routes register their operations where the agents of this process have their tools.
+    operationCalls: execution.operationCalls,
+    operations: input.operations,
     approvalRequests: {
       store: store.approvals,
       handlers: execution.approvalRequestHandlers,
@@ -367,18 +370,19 @@ export async function createClientInstanceExecutionAssembly(
     const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
     approvalRequestHandlers.set(handler.kind, handler);
   }
-  const approvalRequestCreator = new ApprovalRequestWorkflow({
+  const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,
-    store: store.approvals,
-    handlers: approvalRequestHandlers,
-    checkRunner: new ApprovalCheckRunner({
-      clientInstanceId,
-      config,
-      modelGateway
-    }),
-    onDecided: (request) => store.approvals.appendApprovalDecision(request),
-    auditRecorder
+    config,
+    logger,
+    modules,
+    store,
+    auditRecorder,
+    modelGateway,
+    assetSource,
+    approvalRequestHandlers,
+    operations: input.operations
   });
+  const handlers = operationCalls.approvalRequestHandlers;
   const workspaceTools = config.executionWorkspaces.enabled
     ? createWorkspaceToolDefinitions({
         store,
@@ -426,22 +430,13 @@ export async function createClientInstanceExecutionAssembly(
       ...input.tools
     ]
   });
-  assertClientAssemblyValid({ config, tools, approvalRequestHandlers, modules });
+  assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
   const toolRegistry = new ToolRegistry({
     tools,
     enabledToolNames: getEnabledToolNames(config),
     modules
   });
-  const toolExecution = new InProcessToolExecution({
-    registry: toolRegistry,
-    async getAgentToolNames(agentName) {
-      const assets = await assetSource.getSnapshot();
-      return assets.agents.find((candidate) => candidate.name === agentName)?.toolNames ?? [];
-    },
-    auditRecorder,
-    logger,
-    authorizer: createAuthorizer(store.access)
-  });
+  const toolOptions = { clientInstanceId, logger };
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
@@ -458,7 +453,7 @@ export async function createClientInstanceExecutionAssembly(
     modelProviderContinuationStore: store.conversations,
     modelGateway,
     toolRegistry,
-    toolExecution,
+    runTool: createInstanceToolRunner(operationCalls, toolRegistry, toolOptions),
     webAccess: config.webAccess,
     agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,
@@ -516,7 +511,9 @@ export async function createClientInstanceExecutionAssembly(
     modelGateway,
     localAgentRuntimeOptions,
     configAssets,
-    approvalRequestHandlers,
+    authorizer,
+    operationCalls,
+    approvalRequestHandlers: handlers,
     async close() {
       await closeCapabilityContributions(capabilityContributions);
       await store.close?.();

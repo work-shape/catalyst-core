@@ -51,6 +51,7 @@ describe("web response bridge", () => {
   it("streams multiple chat text deltas for tool-capable agents", async () => {
     const tool = defineTool({
       name: "demo.echo",
+      effect: "reading",
       description: "Echo text for tests.",
       inputSchema: z.object({ text: z.string() }),
       async execute(input) {
@@ -118,6 +119,7 @@ describe("web response bridge", () => {
   it("streams model text and tool inputs for tool-call turns", async () => {
     const tool = defineTool({
       name: "demo.echo",
+      effect: "reading",
       description: "Echo text for tests.",
       inputSchema: z.object({ text: z.string() }),
       async execute(input) {

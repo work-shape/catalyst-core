@@ -461,7 +461,7 @@ describe("operation over HTTP: a call that waits for an approval", () => {
     const { server, executed } = await createServer({ ...approval, now: () => longAgo });
     const first = await server.call("testRunChange", change("held", "ok", "key-1"), person());
     expect(first.statusCode).toBe(202);
-    const expired = await server.stores.operationRuns.markExpired({ clientInstanceId });
+    const expired = await server.stores.operationRuns.markExpired({ clientInstanceId, limit: 100 });
     expect(expired.map((run) => run.status)).toEqual(["expired"]);
 
     const again = await server.call("testRunChange", change("held", "ok", "key-1"), person());

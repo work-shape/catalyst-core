@@ -118,6 +118,8 @@ export interface AgentRunModelAttribution {
   agentName: string;
   userId: string;
   workspaceId?: string;
+  /** The Operation Run of the tool call that made the model call, where a tool made it. */
+  operationRunId?: string;
 }
 
 /** A model call the product made for itself. */

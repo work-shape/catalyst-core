@@ -30,6 +30,7 @@ export function createStructuredDataToolDefinitions(input: {
   return [
     defineTool({
       name: "structured_data.publish",
+      effect: "changing",
       description:
         "Publish or update the conversation's current structured-data resource shown in the Resources panel. Use replace to supply the full structure and patch to edit named fields by stable section and field keys. Reuse the resource, section, and field keys you published earlier when updating.",
       inputSchema: structuredDataPublishInputSchema,
@@ -255,6 +256,7 @@ export function createStructuredDataToolDefinitions(input: {
     }),
     defineTool({
       name: "structured_data.read",
+      effect: "reading",
       description:
         "Read the current structured-data resource for this conversation when the existing facts are useful. Sources are returned as model-visible file ids, filenames, and pages.",
       inputSchema: structuredDataReadInputSchema,
@@ -321,6 +323,7 @@ export function createStructuredDataToolDefinitions(input: {
     }),
     defineTool({
       name: "structured_result.read",
+      effect: "reading",
       description:
         "Read the current revision of a keyed structured result for this conversation. Use it when continuing or revising an existing domain result.",
       inputSchema: structuredResultReadInputSchema,

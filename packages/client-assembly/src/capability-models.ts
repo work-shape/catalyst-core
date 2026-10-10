@@ -34,7 +34,9 @@ function createCapabilityModels(input: {
           kind: "system",
           purpose: call.purpose,
           ...(call.userId === undefined ? {} : { userId: call.userId }),
-          ...(call.conversationId === undefined ? {} : { conversationId: call.conversationId })
+          ...(call.conversationId === undefined ? {} : { conversationId: call.conversationId }),
+          ...(call.workspaceId === undefined ? {} : { workspaceId: call.workspaceId }),
+          ...(call.operationRunId === undefined ? {} : { operationRunId: call.operationRunId })
         },
         clientInstanceId,
         correlationId: call.correlationId,

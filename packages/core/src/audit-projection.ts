@@ -95,6 +95,12 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "message.completed": "Assistant responded",
   "message.failed": "Assistant response failed",
   "message.cancelled": "Cancelled a response",
+  "operation.authorization_checked": "Checked the right for a call",
+  "operation.started": "Started a call",
+  "operation.completed": "Ran a call",
+  "operation.failed": "Call failed",
+  "operation.denied": "Call refused",
+  // Written until a tool call became an Operation Run. Kept for the events that exist.
   "tool.authorization_checked": "Checked tool authorization",
   "tool.started": "Started a tool",
   "tool.completed": "Ran a tool",
@@ -193,7 +199,7 @@ function rankForType(type: string): number {
   }
   if (type === "message.created") return 75;
   if (type.startsWith("workspace.")) return 40;
-  if (type.startsWith("tool.")) return 38;
+  if (type.startsWith("tool.") || type.startsWith("operation.")) return 38;
   if (type.startsWith("workspace_command.")) return 35;
   return 10;
 }
@@ -204,7 +210,8 @@ function metadataString(event: AuditEvent, key: string): string | undefined {
 }
 
 function labelForEvent(event: AuditEvent): string {
-  if (event.type.startsWith("tool.")) {
+  if (event.type.startsWith("tool.") || event.type.startsWith("operation.")) {
+    // A tool says what it did in words of its own, whichever event carries them.
     const action = metadataString(event, "auditAction");
     const actionLabel = action ? TOOL_ACTION_LABELS[action] : undefined;
     if (actionLabel) {
@@ -264,7 +271,11 @@ function resolveTarget(event: AuditEvent): AuditActivityTarget | undefined {
   if (type.startsWith("user.") || type.startsWith("governance.user_")) {
     return subject ? { kind: "user", id: subject } : undefined;
   }
-  if (type.startsWith("tool.")) {
+  // The call of an agent's tool is an operation whose subject is the tool.
+  if (
+    type.startsWith("tool.") ||
+    (type.startsWith("operation.") && metadataString(event, "origin") === "agent")
+  ) {
     const auditSubject = metadataString(event, "auditSubject");
     const id = auditSubject ?? subject;
     return id ? { kind: "tool", id, label: subject } : undefined;

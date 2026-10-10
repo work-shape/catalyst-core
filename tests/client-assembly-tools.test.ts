@@ -82,6 +82,7 @@ const configuredToolFactory = defineConfiguredTool({
   create(config) {
     return defineTool({
       name: "demo.configured",
+      effect: "reading",
       description: `Configured demo tool ${config.descriptionSuffix}`,
       inputSchema: z.object({ text: z.string() }),
       permission: {

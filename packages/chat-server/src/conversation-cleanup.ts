@@ -6,6 +6,7 @@ import {
   type UserId
 } from "@vivd-catalyst/core";
 import { deleteConversationPages } from "./page-file-sets";
+import { OPERATION_CALL_APPROVAL_KIND } from "@vivd-catalyst/tool-execution";
 import type { ChatServerOptions } from "./types";
 import { cleanupExecutionWorkspaceForConversation } from "./workspace-cleanup";
 
@@ -41,6 +42,7 @@ async function cleanUpConversationData(
     deletedAt
   });
   await deleteConversationPages(options, conversationId);
+  await deleteOperationRunsOfConversation(options, conversationId);
   return {
     attachmentCount: objects?.attachmentCount ?? 0,
     fileCount: objects?.fileObjectKeys.length ?? 0,
@@ -50,6 +52,50 @@ async function cleanUpConversationData(
     workspaceCommandCount: workspace?.commandCount ?? 0,
     workspaceObjectCount: workspace?.fileObjectKeys.length ?? 0
   };
+}
+
+/**
+ * How many calls of one Conversation that still wait for an approval one cleanup ends. A
+ * person may hold `HELD_OPERATION_CALLS_PER_ACTOR` at once, so one read takes them all.
+ */
+const HELD_CALLS_PER_CONVERSATION_LIMIT = 100;
+
+/**
+ * Deletes the Operation Runs the agents of a Conversation caused. A call of theirs that still
+ * waits for an approval is ended first, so its request does not keep the input of a deleted
+ * Conversation open for a decision that could execute nothing.
+ */
+async function deleteOperationRunsOfConversation(
+  options: ChatServerOptions,
+  conversationId: ConversationId
+): Promise<void> {
+  const { clientInstanceId } = options;
+  const approvals = options.approvalRequests?.store;
+  const held = approvals
+    ? await approvals.listApprovalRequests({
+        clientInstanceId,
+        kinds: [OPERATION_CALL_APPROVAL_KIND],
+        status: "pending",
+        conversationId,
+        page: { limit: HELD_CALLS_PER_CONVERSATION_LIMIT }
+      })
+    : [];
+  for (const request of held) {
+    try {
+      await approvals?.transitionPendingApprovalRequest({
+        clientInstanceId,
+        requestId: request.id,
+        resolve: () => Promise.resolve({ status: "superseded" })
+      });
+    } catch (error) {
+      // Somebody decided it meanwhile.
+      if (!(isAppError(error) && error.code === "CONFLICT")) throw error;
+    }
+  }
+  await options.stores.operationRuns.deleteOfConversations({
+    clientInstanceId,
+    conversationIds: [conversationId]
+  });
 }
 
 /**

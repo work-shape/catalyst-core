@@ -6,8 +6,15 @@ import type { PlatformEventName } from "./events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
 import type { PolicyTarget } from "./operation-policy";
-import type { OperationEffect, OperationOrigin, PolicyValue } from "./operations";
+import type {
+  OperationCallRuntime,
+  OperationEffect,
+  OperationOrigin,
+  PolicyValue
+} from "./operations";
+import type { OperationRunUsage } from "./operation-runs";
 import type { AccessResource, ActorAccess } from "./permissions";
+import type { ToolHandlerResult } from "./tool-execution";
 
 /** How far a changing operation reaches. One that declares none counts as `irreversible`. */
 export type OperationChangeClass = "reversible" | "irreversible" | "outward";
@@ -29,6 +36,8 @@ export interface OperationExecutionContext {
   origin: OperationOrigin;
   workspaceId?: CollaborationWorkspaceId;
   correlationId: string;
+  /** What only the live call has. Empty for a call that is executed after an approval. */
+  runtime: OperationCallRuntime;
   /** The actor's rights, for an operation whose rule is more than one action. */
   access: ActorAccess;
   /** Writes audit rows that carry the run's id and correlation id. */
@@ -112,13 +121,54 @@ interface OperationDefinitionBase<Input, Output> {
   policyTargets?(input: Input): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
   /** The operation's own events, emitted beside the ones every call has. */
   events?: { before?: PlatformEventName; after?: PlatformEventName };
-  http: { method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; path: string };
+  /** Where the operation is reached over HTTP. An agent tool has no such face. */
+  http?: { method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; path: string };
   /** A run still `running` after this long counts as interrupted. */
   timeoutMs: number;
   /** The module the operation belongs to. MD-1 reads it; nothing does before. */
   module?: string;
-  execute(input: Input, context: OperationExecutionContext): Promise<Output>;
+  /**
+   * Whether a call that was frozen earlier can no longer apply, such as a write whose base
+   * revision is gone. Asked before a call that waited for an approval is executed. Without it
+   * the call is executed and fails or succeeds by its own rules.
+   */
+  isStale?(input: Input, context: OperationAuthorizeContext): Promise<boolean>;
+  execute(
+    input: Input,
+    context: OperationExecutionContext
+  ): Promise<Output | ToolOperationAnswer<Output>>;
 }
+
+const toolOperationAnswer: unique symbol = Symbol("toolOperationAnswer");
+
+/**
+ * What an operation that is an agent tool answers: the tool's whole result, with what the
+ * agent is shown beside the output and with a failure the tool reports itself. The call path
+ * records the run from it and hands it to the agent unchanged.
+ */
+export interface ToolOperationAnswer<Output = unknown> {
+  readonly [toolOperationAnswer]: true;
+  readonly result: ToolHandlerResult<Output>;
+  /** What the model calls the tool made used, summed. The run keeps it. */
+  readonly usage?: OperationRunUsage;
+}
+
+export function answerAsTool<Output>(
+  result: ToolHandlerResult<Output>,
+  usage?: OperationRunUsage
+): ToolOperationAnswer<Output> {
+  return { [toolOperationAnswer]: true, result, usage };
+}
+
+export function isToolOperationAnswer(answer: unknown): answer is ToolOperationAnswer {
+  return typeof answer === "object" && answer !== null && toolOperationAnswer in answer;
+}
+
+/**
+ * The action a refusal names when an agent calls a tool its definition does not list:
+ * `agent_tool:<tool name>`. No grant carries it; it exists so the refusal says what was asked.
+ */
+export const AGENT_TOOL_ACTION_PREFIX = "agent_tool:";
 
 /** Which operations a listing asks for. */
 export interface OperationListScope {

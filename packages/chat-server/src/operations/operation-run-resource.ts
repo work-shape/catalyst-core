@@ -25,10 +25,12 @@ export function toOperationRunResource(run: OperationRun): OperationRunResource 
     decision: run.decision && {
       mode: run.decision.mode,
       by: run.decision.by,
+      byLabel: run.decision.byLabel,
       at: run.decision.at,
       comment: run.decision.comment
     },
     error: run.error && { code: run.error.code, message: run.error.message },
+    usage: run.usage,
     correlationId: run.correlationId,
     createdAt: run.createdAt,
     startedAt: run.startedAt,
