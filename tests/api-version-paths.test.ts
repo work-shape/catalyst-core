@@ -29,12 +29,13 @@ const names = Object.keys(apiOperations).filter(
 // Read through the descriptor's own type: each catalog entry is narrower than a test needs.
 const descriptor = (name: ApiOperationName): Operation => apiOperations[name];
 const routeOf = (name: ApiOperationName) => `${descriptor(name).method} ${descriptor(name).path}`;
-// Outside the versioned API: the health and readiness probes, and the runtime files a
-// sandboxed view frame loads as script addresses.
+// Outside the versioned API: the health and readiness probes, the runtime files a sandboxed
+// view frame loads as script addresses, and the shell document that frames a view.
 const unversioned: readonly ApiOperationName[] = [
   "health.get",
   "ready.get",
-  "view_runtime.files.get"
+  "view_runtime.files.get",
+  "view_shell.files.get"
 ];
 const versioned = names.filter((name) => !unversioned.includes(name));
 
@@ -143,6 +144,7 @@ describe("the operation catalog", () => {
         "users.password.reset  POST /api/v1/instance/users/:userId/password",
         "users.update  PATCH /api/v1/instance/users/:userId",
         "view_runtime.files.get  GET /app-runtime/view/:version/:file",
+        "view_shell.files.get  GET /app-runtime/view-shell/:version/:file",
         "workspaces.access_requests.approve  POST /api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId/approve",
         "workspaces.access_requests.create  POST /api/v1/workspaces/:collaborationWorkspaceId/access-requests",
         "workspaces.access_requests.decline  DELETE /api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId",
@@ -173,7 +175,7 @@ describe("the operation catalog", () => {
     }
   });
 
-  it("puts every operation except the two probes and the view runtime files under the version prefix", () => {
+  it("puts every operation except the two probes and the files of a view's frame under the version prefix", () => {
     expect(API_VERSION_PREFIX.split("/")).toEqual(["", "api", "v1"]);
     for (const name of versioned) {
       expect(descriptor(name).path.startsWith(`${API_VERSION_PREFIX}/`), name).toBe(true);
@@ -184,6 +186,8 @@ describe("the operation catalog", () => {
     expect(descriptor("ready.get").auth).toBe("public");
     expect(routeOf("view_runtime.files.get")).toBe("GET /app-runtime/view/:version/:file");
     expect(descriptor("view_runtime.files.get").auth).toBe("public");
+    expect(routeOf("view_shell.files.get")).toBe("GET /app-runtime/view-shell/:version/:file");
+    expect(descriptor("view_shell.files.get").auth).toBe("public");
   });
 
   it("scopes paths by resource and never by a role name", () => {

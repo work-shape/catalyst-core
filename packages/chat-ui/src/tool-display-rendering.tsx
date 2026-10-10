@@ -9,14 +9,10 @@ import {
 } from "react";
 import { Banner, Spinner, useUiMode } from "@vivd-catalyst/ui";
 import { THEME_TOKEN_NAMES } from "@vivd-catalyst/ui/theme";
+import { VIEW_SHELL_MESSAGES } from "@vivd-catalyst/api-client";
 import { useTranslation } from "./i18n";
 import { renderStructuredDataResourceDisplay } from "./structured-data-resource-display";
-import {
-  composeViewDocument,
-  DISPLAY_BLOCKED_MESSAGE_TYPE,
-  DISPLAY_HEIGHT_MESSAGE_TYPE,
-  type ViewDisplayKind
-} from "./view-document";
+import { composeViewDocument, viewRunsScripts, type ViewDisplayKind } from "./view-document";
 import { useViewPolicy } from "./view-policy";
 
 const RUNTIME_THEME_STYLE_ID = "vivd-catalyst-runtime-theme";
@@ -100,8 +96,15 @@ export function renderBuiltInDisplay(display: {
 }
 
 /**
- * The one component every generated view passes through. It composes the frame document from
+ * The one component every generated view passes through. It composes the view document from
  * the stored HTML and the instance's policy of today, then adds the theme found on its host.
+ *
+ * The frame here is not the view. It holds the shell document the instance serves, and the
+ * shell holds the view: the shell's policy is what keeps a view from moving its own frame to
+ * another host. The shell says when it is ready, takes the document, and passes on the height
+ * and the refused scripts the view reports. The shell has no origin, so its messages carry the
+ * origin `null` and the document can be addressed to its window only, not to an origin. That
+ * window holds the shell for as long as it lives: only the shell could move it, and does not.
  */
 function RenderedHtmlDisplay({
   html: storedHtml,
@@ -115,7 +118,8 @@ function RenderedHtmlDisplay({
   title: string;
 }) {
   const { t } = useTranslation();
-  const { runtime, allowedScriptSrc } = useViewPolicy();
+  const { shellUrl, runtime, allowedScriptSrc } = useViewPolicy();
+  const runsScripts = viewRunsScripts(kind);
   const html = useMemo(
     () => composeViewDocument({ html: storedHtml, kind, runtime, allowedScriptSrc }),
     [storedHtml, kind, runtime, allowedScriptSrc]
@@ -124,7 +128,8 @@ function RenderedHtmlDisplay({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const htmlRef = useRef<string | undefined>(undefined);
   const frameSourceRef = useRef<string | undefined>(undefined);
-  const [frameDocument, setFrameDocument] = useState<{ key: number; srcDoc?: string }>({ key: 0 });
+  // Each view document gets a shell of its own: the key counts them, and zero is none yet.
+  const [shellKey, setShellKey] = useState(0);
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [scriptBlocked, setScriptBlocked] = useState(false);
@@ -150,10 +155,7 @@ function RenderedHtmlDisplay({
       setScriptBlocked(false);
     }
     setLoading(true);
-    setFrameDocument((currentDocument) => ({
-      key: currentDocument.key + 1,
-      srcDoc: nextSrcDoc
-    }));
+    setShellKey((key) => key + 1);
   }, [html]);
 
   // The frame carries the theme it finds on its host after each render. Reading the mode
@@ -163,30 +165,49 @@ function RenderedHtmlDisplay({
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (event.source !== iframeRef.current?.contentWindow || !isRecord(event.data)) {
+      const shell = iframeRef.current?.contentWindow;
+      if (!shell || event.source !== shell || event.origin !== "null" || !isRecord(event.data)) {
         return;
       }
-      if (event.data.type === DISPLAY_BLOCKED_MESSAGE_TYPE) {
-        setScriptBlocked(true);
-        return;
+      switch (event.data.type) {
+        case VIEW_SHELL_MESSAGES.ready:
+          if (frameSourceRef.current !== undefined) {
+            shell.postMessage(
+              {
+                type: VIEW_SHELL_MESSAGES.document,
+                document: frameSourceRef.current,
+                scripts: runsScripts,
+                title
+              },
+              "*"
+            );
+          }
+          return;
+        case VIEW_SHELL_MESSAGES.loaded:
+          setLoading(false);
+          return;
+        case VIEW_SHELL_MESSAGES.blocked:
+          setScriptBlocked(true);
+          return;
+        case VIEW_SHELL_MESSAGES.height:
+          if (
+            typeof event.data.height === "number" &&
+            Number.isFinite(event.data.height) &&
+            event.data.height > 0
+          ) {
+            setContentHeight(Math.ceil(event.data.height));
+          }
+          return;
+        default:
+          return;
       }
-      if (
-        event.data.type !== DISPLAY_HEIGHT_MESSAGE_TYPE ||
-        typeof event.data.height !== "number"
-      ) {
-        return;
-      }
-      if (!Number.isFinite(event.data.height) || event.data.height <= 0) {
-        return;
-      }
-      setContentHeight(Math.ceil(event.data.height));
     }
 
     window.addEventListener("message", onMessage);
     return () => {
       window.removeEventListener("message", onMessage);
     };
-  }, []);
+  }, [runsScripts, title]);
 
   return (
     <div ref={hostRef} className="relative bg-background">
@@ -203,17 +224,17 @@ function RenderedHtmlDisplay({
           </span>
         </div>
       ) : null}
-      {frameDocument.srcDoc ? (
+      {shellKey > 0 ? (
         <iframe
-          key={frameDocument.key}
+          key={shellKey}
           ref={iframeRef}
           title={title}
           scrolling="no"
           sandbox="allow-scripts"
-          srcDoc={frameDocument.srcDoc}
+          referrerPolicy="no-referrer"
+          src={shellUrl}
           className="w-full overflow-hidden border-0 bg-background"
           style={frameStyle}
-          onLoad={() => setLoading(false)}
         />
       ) : (
         <div className="w-full bg-background" style={frameStyle} aria-hidden="true" />

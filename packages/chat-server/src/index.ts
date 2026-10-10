@@ -20,6 +20,7 @@ import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerDevMailRoutes } from "./routes/dev-mail-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
 import { registerViewRuntimeRoutes } from "./routes/view-runtime-routes";
+import { registerViewShellRoutes } from "./routes/view-shell-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
 import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
@@ -116,6 +117,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerAgentRunRoutes(route, options, app.log);
   registerConfigRoutes(route, options);
   registerViewRuntimeRoutes(route);
+  registerViewShellRoutes(route, options);
   registerCollaborationWorkspaceRoutes(route, options);
   registerConfigAssetRoutes(route, options);
   registerApprovalRequestRoutes(route, options);

@@ -37,6 +37,29 @@ export const VIEW_RUNTIME = {
   lucideFile: "lucide.js"
 } as const;
 
+/**
+ * The document every generated view is framed in, and its script. The instance serves both, so
+ * the content policy that holds a view arrives as a response header and not from the page that
+ * shows the view. A change to either file, to the header or to the messages is a new `version`.
+ */
+export const VIEW_SHELL = {
+  version: "1",
+  documentFile: "shell.html",
+  scriptFile: "shell.js"
+} as const;
+
+/**
+ * What the interface, the shell and a view tell each other. The shell says it is ready, the
+ * interface hands it one view document, and the shell passes on what the view reports.
+ */
+export const VIEW_SHELL_MESSAGES = {
+  ready: "vivd-catalyst:view-shell-ready",
+  document: "vivd-catalyst:view-shell-document",
+  loaded: "vivd-catalyst:view-shell-loaded",
+  height: "vivd-catalyst:display-height",
+  blocked: "vivd-catalyst:display-blocked"
+} as const;
+
 export const capturedMailSchema = z.object({
   id: z.string(),
   to: z.object({

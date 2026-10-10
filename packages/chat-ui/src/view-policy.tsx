@@ -1,9 +1,13 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
-import { viewRuntimeAddress, type ViewRuntimeAddress } from "./view-document";
+import { viewRuntimeAddress, viewShellUrl, type ViewRuntimeAddress } from "./view-document";
 
-/** What a generated view may load: the instance's view runtime and the hosts its config names. */
+/**
+ * What a generated view may load, the instance's view runtime and the hosts its config names,
+ * and the shell document of the instance that every view is framed in.
+ */
 interface ViewPolicy {
+  shellUrl: string;
   runtime: ViewRuntimeAddress;
   allowedScriptSrc: readonly string[];
 }
@@ -24,6 +28,7 @@ export function ViewPolicyProvider({
   const sourcesKey = allowedScriptSrc.join(" ");
   const value = useMemo<ViewPolicy>(
     () => ({
+      shellUrl: viewShellUrl(apiBaseUrl, window.location.href),
       runtime: viewRuntimeAddress(apiBaseUrl, window.location.href),
       allowedScriptSrc: sourcesKey ? sourcesKey.split(" ") : []
     }),

@@ -92,20 +92,49 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "planted-view-exit",
+    reason:
+      "Chromium's own log line for a frame it did not let move to another address. These tests " +
+      "plant the move in a generated view and assert that nothing reached the other host.",
+    matches:
+      /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\. The request has been blocked\.\s*$/u,
+    tests: [
+      "a view cannot leave its frame through location.href",
+      "a view cannot leave its frame through location.assign",
+      "a view cannot leave its frame through location.replace",
+      "a view cannot leave its frame through a meta refresh a script adds",
+      "a view cannot leave its frame through a link a script clicks",
+      "a view cannot leave its frame through a meta refresh in its document",
+      "a view cannot leave its frame through a link the user clicks",
+      "a view cannot leave its frame through a download link the user clicks",
+      "a view with private rows cannot leave its frame through a link the user clicks",
+      "a view with private rows cannot leave its frame through a download link the user clicks",
+      "a view cannot move its frame to an address of the instance either"
+    ]
+  },
+  {
+    name: "planted-script-in-scriptless-view",
+    reason:
+      "Chromium's own log lines for a script and a refresh in a frame that runs no script. A " +
+      "view that holds private rows is such a frame. These tests plant both in one, or click " +
+      "in one, which the test runner does with a script of its own.",
+    matches:
+      /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$|^Refused to execute the redirect specified via '<meta http-equiv='refresh' content='\.\.\.'>'\. The document is sandboxed, and the 'allow-scripts' keyword is not set\.$/u,
+    tests: [
+      "and no script of another host that borrows the hash of an inline script (private_hydrated_view)",
+      "a view with private rows cannot leave its frame through a meta refresh in its document",
+      "a view with private rows cannot leave its frame through a link the user clicks",
+      "a view with private rows cannot leave its frame through a download link the user clicks",
+      "a view with private rows sends no WebRTC packet"
+    ]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +
       "for whoever operates the instance. The test serves such a configuration on purpose.",
     matches: /^The instance configuration does not fit this interface at: /u,
     tests: ["a configuration the interface cannot read shows an error that a retry recovers from"]
-  },
-  {
-    // C-153: navigate-to directive.
-    name: "view-policy-navigate-to",
-    reason:
-      "Known and filed, not fixed here: the policy of a generated view names the directive " +
-      "`navigate-to`, which Chromium does not know and reports for every view it shows.",
-    matches: /^Unrecognized Content-Security-Policy directive 'navigate-to'\.$/u
   },
   {
     // C-95: resize observer loop of the top-anchored thread.

@@ -1,24 +1,28 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { APIRequestContext, BrowserContext, Page, Request } from "@playwright/test";
-import postgres from "postgres";
+import type { BrowserContext, Page, Request } from "@playwright/test";
 import { z } from "zod";
 import { expect, test } from "./test";
+import {
+  apiOrigin,
+  rewriteStoredDisplay,
+  shellFiles,
+  showView,
+  signIn,
+  uiOrigin,
+  viewFrame,
+  viewTitle
+} from "./view-fixtures";
 
 // A generated view loads its runtime, Tailwind and Lucide, from the instance and nothing from
 // anywhere else. Every test here refuses each request to a host other than the instance and
 // then asks that none was attempted.
 
-const apiOrigin = new URL(process.env.E2E_API_URL ?? "http://127.0.0.1:4210").origin;
-const uiOrigin = new URL(process.env.E2E_UI_URL ?? "http://127.0.0.1:5273").origin;
-const databaseUrl = `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 const serverCredential = process.env.E2E_SERVER_CREDENTIAL ?? "e2e-server-to-server-credential";
-const user = { email: "e2e-user@example.test", password: "e2e-user-password" };
 
 const runtimeDirectory = `${apiOrigin}/app-runtime/view/1/`;
 const runtimeFiles = [`${runtimeDirectory}tailwind.js`, `${runtimeDirectory}lucide.js`];
-const viewTitle = "Quarterly revenue";
 const blockedNotice = "Part of this view could not load.";
 // What a reverse proxy in front of an instance sends to the API. Everything else is interface.
 const apiPathPattern = /^\/(?:api|auth|app-runtime)\/|^\/health$/u;
@@ -43,9 +47,9 @@ interface InstanceTraffic {
   requested: string[];
   /** Addresses outside the instance. Each was refused. */
   refused: string[];
-  /** What the frames of generated views asked for. */
+  /** What the frames of generated views asked for: the shell that frames a view, and the view. */
   requestedByViews: string[];
-  /** What the frames of generated views were answered. */
+  /** What those frames were answered. */
   loadedByViews: string[];
 }
 
@@ -117,66 +121,9 @@ function viewHtml(extra = ""): string {
   return `<section class="grid gap-4"><div class="rounded-lg border bg-card p-4 text-card-foreground"><h2 class="flex items-center gap-2 text-lg font-semibold"><i data-lucide="chart-column"></i>${viewTitle}</h2><p class="text-muted-foreground">Four quarters</p><canvas id="chart" width="320" height="120"></canvas></div></section><script>(function(){var canvas=document.getElementById("chart");var context=canvas.getContext("2d");var palette=window.vivdCatalystTheme.chartPalette();[40,80,60,100].forEach(function(value,index){context.fillStyle=palette[index];context.fillRect(20+index*70,120-value,50,value)});canvas.setAttribute("data-drawn",String(Boolean(window.tailwind)&&Boolean(window.lucide)))})();</script>${extra}`;
 }
 
-/** What the test model reads as a call of `show_view`. */
-function showViewMessage(html: string): string {
-  return `/tool show_view ${JSON.stringify({ html, mode: "inline", title: viewTitle })}`;
-}
-
-/** Runs `show_view` through the agent and returns the conversation that holds the view. */
-async function showView(
-  request: APIRequestContext,
-  headers: Record<string, string>,
-  html: string
-): Promise<{ id: string; title: string; collaborationWorkspaceId: string }> {
-  const title = `View ${randomUUID()}`;
-  const started = await request.post(`${apiOrigin}/api/v1/conversations/runs`, {
-    headers,
-    data: {
-      idempotencyKey: randomUUID(),
-      conversation: { title },
-      message: {
-        text: showViewMessage(html)
-      }
-    }
-  });
-  expect(started.ok()).toBe(true);
-  const { conversation } = z
-    .object({
-      conversation: z.object({ id: z.string(), collaborationWorkspaceId: z.string() })
-    })
-    .parse(await started.json());
-  await expect
-    .poll(async () => {
-      const thread = await request.get(
-        `${apiOrigin}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`,
-        { headers }
-      );
-      expect(thread.ok()).toBe(true);
-      const snapshot = z
-        .object({
-          activeRun: z.unknown().optional(),
-          messages: z.array(z.object({ role: z.string() }))
-        })
-        .parse(await thread.json());
-      return snapshot.activeRun === undefined && snapshot.messages.some((m) => m.role === "tool");
-    })
-    .toBe(true);
-  return { ...conversation, title };
-}
-
-async function signIn(page: Page, origin: string): Promise<Record<string, string>> {
-  const headers = { Origin: origin };
-  const response = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
-    headers,
-    data: { ...user, rememberMe: true }
-  });
-  expect(response.ok()).toBe(true);
-  return headers;
-}
-
 /** Styles from the compiler, the icon from Lucide, the chart from the view's own script. */
 async function expectViewRendered(page: Page): Promise<void> {
-  const view = page.frameLocator(`iframe[title="${viewTitle}"]`).first();
+  const view = viewFrame(page);
   const card = view.locator("section > div");
   const heading = view.getByRole("heading", { name: viewTitle });
 
@@ -200,42 +147,18 @@ async function expectViewRendered(page: Page): Promise<void> {
   await expect(page.getByText("Loading view…")).toHaveCount(0);
 }
 
-/**
- * Overwrites fields of the display a conversation's `show_view` call stored, the way an earlier
- * release or another tool would have written them. Returns the stored display versions.
- */
-async function rewriteStoredDisplay(
-  conversationId: string,
-  display: Parameters<ReturnType<typeof postgres>["json"]>[0]
-): Promise<(string | null)[]> {
-  const sql = postgres(databaseUrl, { max: 1 });
-  try {
-    const rewritten = await sql<{ version: string | null }[]>`
-      update messages
-      set metadata = jsonb_set(
-        metadata,
-        '{agentRuntime,result,display}',
-        (metadata #> '{agentRuntime,result,display}') || ${sql.json(display)}
-      )
-      where conversation_id = ${conversationId} and role = 'tool'
-      returning metadata #>> '{agentRuntime,result,display,version}' as version
-    `;
-    expect(rewritten).toHaveLength(1);
-    return rewritten.map((row) => row.version);
-  } finally {
-    await sql.end();
-  }
-}
-
 function distinct(addresses: string[]): string[] {
   return Array.from(new Set(addresses)).sort();
 }
 
-/** No request left for another host, and the view asked for its two runtime files alone. */
+/** What the frames of a view load when nothing is refused: the shell and the runtime. */
+const viewFrameFiles = [...shellFiles, ...runtimeFiles];
+
+/** No request left for another host, and the view's frames asked for their own files alone. */
 function expectInstanceOnly(traffic: InstanceTraffic): void {
   expect(traffic.refused).toEqual([]);
-  expect(distinct(traffic.requestedByViews)).toEqual(distinct(runtimeFiles));
-  expect(distinct(traffic.loadedByViews)).toEqual(distinct(runtimeFiles));
+  expect(distinct(traffic.requestedByViews)).toEqual(distinct(viewFrameFiles));
+  expect(distinct(traffic.loadedByViews)).toEqual(distinct(viewFrameFiles));
 }
 
 test.describe("a generated view loads its runtime from the instance alone", () => {
@@ -383,13 +306,11 @@ test.describe("a generated view loads its runtime from the instance alone", () =
     // The view keeps its styles, its icon and its chart, and the host says what happened.
     await expectViewRendered(page);
     await expect(page.getByText(blockedNotice).first()).toBeVisible();
-    await expect(
-      page.frameLocator(`iframe[title="${viewTitle}"]`).first().locator("body")
-    ).not.toContainText(/refused|blocked|error/iu);
+    await expect(viewFrame(page).locator("body")).not.toContainText(/refused|blocked|error/iu);
     // The view asked for them, the policy refused, and neither left the browser.
     expect(traffic.refused).toEqual([]);
-    expect(distinct(traffic.requestedByViews)).toEqual(distinct([...runtimeFiles, ...outside]));
-    expect(distinct(traffic.loadedByViews)).toEqual(distinct(runtimeFiles));
+    expect(distinct(traffic.requestedByViews)).toEqual(distinct([...viewFrameFiles, ...outside]));
+    expect(distinct(traffic.loadedByViews)).toEqual(distinct(viewFrameFiles));
     expect(consoleErrors).toEqual([]);
   });
 
@@ -417,7 +338,7 @@ test.describe("a generated view loads its runtime from the instance alone", () =
     expect(traffic.requested.filter((address) => address.startsWith(elsewhere))).toEqual(
       traffic.requestedByViews.filter((address) => address.startsWith(elsewhere))
     );
-    expect(distinct(traffic.loadedByViews)).toEqual(distinct(runtimeFiles));
+    expect(distinct(traffic.loadedByViews)).toEqual(distinct(viewFrameFiles));
   });
 
   for (const kind of ["html.rendered", "private_hydrated_view"] as const) {
@@ -442,11 +363,21 @@ test.describe("a generated view loads its runtime from the instance alone", () =
 
       await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
 
-      const view = page.frameLocator(`iframe[title="${viewTitle}"]`).first();
-      // The last inline script ran, so the script file before it was decided on.
-      await expect(view.locator("body")).toHaveAttribute("data-done", "true");
+      const view = viewFrame(page);
+      await expect(view.getByRole("heading", { name: viewTitle })).toBeVisible();
+      if (kind === "html.rendered") {
+        // The last inline script ran, so the script file before it was decided on.
+        await expect(view.locator("body")).toHaveAttribute("data-done", "true");
+        await expect(page.getByText(blockedNotice).first()).toBeVisible();
+      } else {
+        // A view that holds private rows runs no script, so it asks for no script file either.
+        await expect(page.getByText("Loading view…")).toHaveCount(0);
+        await expect(view.locator("body")).not.toHaveAttribute("data-done");
+        expect(traffic.requestedByViews.filter((address) => address.startsWith(elsewhere))).toEqual(
+          []
+        );
+      }
       expect(traffic.refused).toEqual([]);
-      await expect(page.getByText(blockedNotice).first()).toBeVisible();
     });
   }
 
@@ -478,7 +409,12 @@ test.describe("a generated view loads its runtime from the instance alone", () =
 
     await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
 
-    const frame = page.locator(`iframe[title="${viewTitle}"]`).first();
+    // The view is the one frame inside the shell, and the shell gave it the composed document.
+    const frame = page
+      .locator(`iframe[title="${viewTitle}"]`)
+      .first()
+      .contentFrame()
+      .locator("iframe");
     const body = frame.contentFrame().locator("body");
     await expect(body).toHaveAttribute("data-done", "true");
     await expect(body).toHaveAttribute("data-ran", "crlf,cr,spaced end tag");

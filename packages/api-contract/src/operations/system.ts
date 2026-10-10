@@ -43,6 +43,20 @@ export const systemOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
+  // Beside the view runtime and for the same reason outside `/api`: the address of a frame,
+  // called without credentials. It answers a frame only.
+  "view_shell.files.get": defineOperation({
+    id: "view_shell.files.get",
+    method: "GET",
+    path: "/app-runtime/view-shell/:version/:file",
+    summary: "Serve the document a generated view is framed in, or its script",
+    tag: "System",
+    auth: "public",
+    effect: "reading",
+    response: blob(),
+    errors: ["FORBIDDEN", "NOT_FOUND"],
+    rateClass: "read"
+  }),
   "captured_mail.list": defineOperation({
     id: "captured_mail.list",
     method: "GET",

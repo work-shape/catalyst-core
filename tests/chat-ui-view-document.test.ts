@@ -76,8 +76,23 @@ describe("composed view document", () => {
     expect(csp).toContain("connect-src 'none'");
     expect(csp).toContain("img-src data: blob:");
     expect(csp).toContain("form-action 'none'");
-    expect(csp).toContain("navigate-to 'none'");
     expect(csp).toContain("base-uri 'none'");
+  });
+
+  it("names no directive a browser does not know", () => {
+    // `navigate-to` was never enforced. What it was meant to do, the shell's policy does.
+    expect(compose("<section>View</section>")).not.toContain("navigate-to");
+  });
+
+  it("takes the WebRTC constructors away before any other script, as hardening only", () => {
+    const html = compose("<script>window.ready = true;</script>");
+    const firstScript = /<script>([\s\S]*?)<\/script>/u.exec(html)?.[1] ?? "";
+
+    expect(firstScript).toContain("delete window[name]");
+    for (const name of ["RTCPeerConnection", "webkitRTCPeerConnection", "mozRTCPeerConnection"]) {
+      expect(firstScript).toContain(`"${name}"`);
+    }
+    expect(html.indexOf(firstScript)).toBeLessThan(html.indexOf("window.ready = true;"));
   });
 
   it("puts a host named in views.allowedScriptSrc into the policies and nowhere else", () => {
@@ -107,18 +122,21 @@ describe("composed view document", () => {
     ]);
   });
 
-  it("gives a private-data view no library and no script host, whatever the setting says", () => {
-    const html = compose("<script>window.ready = true;</script>", {
+  it("gives a private-data view no library, no script host and no script at all, whatever the setting says", () => {
+    const stored = "<script>window.ready = true;</script>";
+    const html = compose(stored, {
       kind: "private_hydrated_view",
       allowedScriptSrc: ["https:", "https://cdn.jsdelivr.net"]
     });
-    const scriptSrc = readCspDirective(html, "script-src");
 
     expect(scriptAddresses(html)).toEqual([]);
     expect(hostsNamedIn(html)).toEqual([]);
-    expect(sourcesOf(scriptSrc)).toEqual([]);
-    expect(scriptSrc).toContain(scriptHashSource("window.ready = true;"));
+    // Its frame runs no script. The policy says so too, and the composer writes none.
+    expect(readCspDirective(html, "script-src")).toEqual(["'none'"]);
+    expect(html.match(policyPattern)).toHaveLength(1);
+    expect(countOccurrences(html, "<script")).toBe(countOccurrences(stored, "<script"));
     expect(readCsp(html)).toContain("connect-src 'none'");
+    expect(html.startsWith(composedOpening)).toBe(true);
   });
 
   it("replaces a content policy the stored HTML carries and hashes its inline scripts", () => {
@@ -136,28 +154,18 @@ describe("composed view document", () => {
 
   it("holds script files to the allowed hosts in a second policy that names no hash", () => {
     const named = "https://cdn.jsdelivr.net";
-    const cases = [
-      {
-        kind: "html.rendered",
-        expected: [runtimeDirectory, named, "'unsafe-inline'", "'unsafe-eval'"]
-      },
-      { kind: "private_hydrated_view", expected: ["'unsafe-inline'"] }
-    ] as const;
+    const expected = [runtimeDirectory, named, "'unsafe-inline'", "'unsafe-eval'"];
+    const html = compose("<section>View</section><script>window.ready = true;</script>", {
+      allowedScriptSrc: [named]
+    });
+    const policies = [...html.matchAll(policyPattern)].map((match) => match[1] ?? "");
 
-    for (const { kind, expected } of cases) {
-      const html = compose("<section>View</section><script>window.ready = true;</script>", {
-        kind,
-        allowedScriptSrc: [named]
-      });
-      const policies = [...html.matchAll(policyPattern)].map((match) => match[1] ?? "");
-
-      // A hash would let a script file of any host through by its integrity attribute.
-      expect(policies).toHaveLength(2);
-      expect(policies[0]).toContain("'sha256-");
-      expect(policies[1]).toBe(`script-src ${expected.join(" ")}`);
-      // Both stand before the first script of the document.
-      expect(html.indexOf(policies[1] ?? "")).toBeLessThan(html.indexOf("<script"));
-    }
+    // A hash would let a script file of any host through by its integrity attribute.
+    expect(policies).toHaveLength(2);
+    expect(policies[0]).toContain("'sha256-");
+    expect(policies[1]).toBe(`script-src ${expected.join(" ")}`);
+    // Both stand before the first script of the document.
+    expect(html.indexOf(policies[1] ?? "")).toBeLessThan(html.indexOf("<script"));
   });
 
   it("allows every inline script it writes itself by hash", () => {
@@ -213,7 +221,10 @@ describe("composed view document", () => {
       const html = compose(stored, { kind });
 
       expect(html.startsWith(composedOpening)).toBe(true);
-      expect(countOccurrences(html, "Content-Security-Policy")).toBe(2);
+      // A view that runs scripts has a second policy for script files; the other needs none.
+      expect(countOccurrences(html, "Content-Security-Policy")).toBe(
+        kind === "html.rendered" ? 2 : 1
+      );
       // The stored HTML follows the closed head, byte for byte.
       expect(html.slice(html.indexOf("</head>\n") + "</head>\n".length)).toBe(stored);
       expect(html.indexOf(composedOpening)).toBeLessThan(html.indexOf(stored));

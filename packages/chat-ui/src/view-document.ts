@@ -1,4 +1,9 @@
-import { apiOperations, VIEW_RUNTIME } from "@vivd-catalyst/api-client";
+import {
+  apiOperations,
+  VIEW_RUNTIME,
+  VIEW_SHELL,
+  VIEW_SHELL_MESSAGES
+} from "@vivd-catalyst/api-client";
 import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 import { sha256Base64 } from "./sha256";
 
@@ -7,11 +12,21 @@ import { sha256Base64 } from "./sha256";
 // scripts, is composed here each time the view is shown. A view saved under an earlier policy
 // is therefore shown under the instance's policy of today.
 
-export const DISPLAY_HEIGHT_MESSAGE_TYPE = "vivd-catalyst:display-height";
-export const DISPLAY_BLOCKED_MESSAGE_TYPE = "vivd-catalyst:display-blocked";
-
 /** A private-data view holds query results the model never saw and runs no library at all. */
 export type ViewDisplayKind = "html.rendered" | "private_hydrated_view";
+
+/**
+ * Whether a view that holds private rows runs scripts. It does not, because a script can send
+ * packets to any host over WebRTC and no browser lets a document forbid that. Without scripts
+ * such a view shows its HTML and CSS alone: a template that draws its rows with a script
+ * shows none of them, and the frame keeps a fixed height and scrolls, since nothing in it can
+ * report its height. Set to true, these views run their inline scripts again, as they did.
+ */
+const PRIVATE_ROW_VIEWS_RUN_SCRIPTS: boolean = false;
+
+export function viewRunsScripts(kind: ViewDisplayKind): boolean {
+  return kind === "html.rendered" || PRIVATE_ROW_VIEWS_RUN_SCRIPTS;
+}
 
 export interface ViewRuntimeAddress {
   /** The one directory a view may load scripts from on the instance. Ends with a slash. */
@@ -48,6 +63,19 @@ export function viewRuntimeAddress(apiBaseUrl: string, pageUrl: string): ViewRun
     tailwindUrl,
     lucideUrl: fileUrl(VIEW_RUNTIME.lucideFile)
   };
+}
+
+/**
+ * Where the instance serves the shell document every view is framed in. Absolute for the
+ * reason the runtime's addresses are, and on the API's origin like them.
+ */
+export function viewShellUrl(apiBaseUrl: string, pageUrl: string): string {
+  return new URL(
+    `${apiBaseUrl.replace(/\/$/u, "")}${apiOperations["view_shell.files.get"].buildPath({
+      params: { version: VIEW_SHELL.version, file: VIEW_SHELL.documentFile }
+    })}`,
+    pageUrl
+  ).href;
 }
 
 /**
@@ -112,10 +140,19 @@ const TAILWIND_THEME_SCRIPT = [
 ].join("");
 const LUCIDE_SCRIPT =
   'document.addEventListener("DOMContentLoaded",function(){if(window.lucide){window.lucide.createIcons();}});';
-const DISPLAY_HEIGHT_SCRIPT = `(()=>{const t="${DISPLAY_HEIGHT_MESSAGE_TYPE}";let e=0;function n(){const t=document.documentElement,n=document.body;return Math.ceil(Math.max(t?.scrollHeight??0,t?.offsetHeight??0,n?.scrollHeight??0,n?.offsetHeight??0))}function o(){const o=n();o>0&&Math.abs(o-e)>1&&(e=o,parent.postMessage({type:t,height:o},"*"))}document.addEventListener("DOMContentLoaded",()=>{o();if("ResizeObserver"in window&&document.body){window.__vivdCatalystResizeObserver=new ResizeObserver(o);window.__vivdCatalystResizeObserver.observe(document.body)}setTimeout(o,50);setTimeout(o,250);setTimeout(o,1000)});window.addEventListener("load",o)})();`;
+const DISPLAY_HEIGHT_SCRIPT = `(()=>{const t="${VIEW_SHELL_MESSAGES.height}";let e=0;function n(){const t=document.documentElement,n=document.body;return Math.ceil(Math.max(t?.scrollHeight??0,t?.offsetHeight??0,n?.scrollHeight??0,n?.offsetHeight??0))}function o(){const o=n();o>0&&Math.abs(o-e)>1&&(e=o,parent.postMessage({type:t,height:o},"*"))}document.addEventListener("DOMContentLoaded",()=>{o();if("ResizeObserver"in window&&document.body){window.__vivdCatalystResizeObserver=new ResizeObserver(o);window.__vivdCatalystResizeObserver.observe(document.body)}setTimeout(o,50);setTimeout(o,250);setTimeout(o,1000)});window.addEventListener("load",o)})();`;
+// Hardening, not a boundary. WebRTC sends packets to a host a script names, and no content
+// policy or sandbox flag of today's browsers forbids it. This takes the constructors away
+// before any script of the view runs, which stops a script that reaches for them by name. A
+// script that wants them gets them back from a new window: it writes a `srcdoc` frame of its
+// own that holds a copy of itself, which passes this policy by the same hash and runs where
+// nothing was removed (`e2e/view-exits.spec.ts` does exactly that). The boundary is that a
+// view holding private rows runs no script at all.
+const WEBRTC_REMOVAL_SCRIPT =
+  'for(const name of ["RTCPeerConnection","webkitRTCPeerConnection","mozRTCPeerConnection"]){try{delete window[name]}catch{}}';
 // Tells the host that the content policy refused a script file, so it can say so above the
 // frame. Inline handlers and data addresses are refused silently, as before.
-const BLOCKED_SCRIPT_REPORT_SCRIPT = `document.addEventListener("securitypolicyviolation",function(event){if(event.effectiveDirective==="script-src-elem"&&/^https?:/.test(event.blockedURI)){parent.postMessage({type:"${DISPLAY_BLOCKED_MESSAGE_TYPE}"},"*")}});`;
+const BLOCKED_SCRIPT_REPORT_SCRIPT = `document.addEventListener("securitypolicyviolation",function(event){if(event.effectiveDirective==="script-src-elem"&&/^https?:/.test(event.blockedURI)){parent.postMessage({type:"${VIEW_SHELL_MESSAGES.blocked}"},"*")}});`;
 const THEME_HELPER_SCRIPT = `(()=>{function color(name,fallback){const key=name.startsWith("--")?name:"--"+name;const value=getComputedStyle(document.documentElement).getPropertyValue(key).trim();return value||fallback||""}function chartColors(){return{background:color("background"),foreground:color("foreground"),card:color("card"),cardForeground:color("card-foreground"),mutedForeground:color("muted-foreground"),border:color("border"),primary:color("primary"),accent:color("accent"),destructive:color("destructive"),success:color("success"),warning:color("warning"),info:color("info")}}function chartPalette(){return[color("chart-1"),color("chart-2"),color("chart-3"),color("chart-4"),color("chart-5")]}window.vivdCatalystTheme={color,chartColors,chartPalette}})();`;
 // The light default theme for a view shown outside a themed chat: what the shared UI library
 // derives from the default inputs, so no colour is held here.
@@ -157,9 +194,34 @@ const LEGACY_RUNTIME_TAG_HASHES: ReadonlySet<string> = new Set([
   "N/SjJOqUVPEPeXWi7UdBrwQ2fk7f6PcZBCrHwD0ADhw="
 ]);
 
+// What a view may load besides scripts: nothing from any host. That a view cannot move its
+// own frame to another address is not said here, because no browser lets a document say it of
+// itself. The shell that frames the view says it, see `view-shell.ts` of the chat server.
+const CLOSED_DIRECTIVES = [
+  "style-src 'unsafe-inline'",
+  "img-src data: blob:",
+  "font-src data:",
+  "connect-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'"
+];
+
 function createHead(input: ViewDocumentInput, inlineScriptHashSources: string[]): string {
+  const opening = [
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    DEFAULT_THEME_STYLE
+  ];
+  if (!viewRunsScripts(input.kind)) {
+    // The frame of this view runs no script; the policy says so a second time.
+    const policy = ["default-src 'none'", "script-src 'none'", ...CLOSED_DIRECTIVES].join("; ");
+    return [`<meta http-equiv="Content-Security-Policy" content="${policy}">`, ...opening].join(
+      "\n"
+    );
+  }
   const runtime = input.kind === "html.rendered" ? input.runtime : undefined;
   const scripts = [
+    WEBRTC_REMOVAL_SCRIPT,
     BLOCKED_SCRIPT_REPORT_SCRIPT,
     ...(runtime ? [TAILWIND_THEME_SCRIPT, LUCIDE_SCRIPT] : []),
     THEME_HELPER_SCRIPT,
@@ -171,13 +233,7 @@ function createHead(input: ViewDocumentInput, inlineScriptHashSources: string[])
   const policy = [
     "default-src 'none'",
     `script-src ${Array.from(new Set([...scriptSources, ...scriptHashes])).join(" ")}`,
-    "style-src 'unsafe-inline'",
-    "img-src data: blob:",
-    "font-src data:",
-    "connect-src 'none'",
-    "navigate-to 'none'",
-    "base-uri 'none'",
-    "form-action 'none'"
+    ...CLOSED_DIRECTIVES
   ].join("; ");
   // A hash in a policy also admits a script file of any host whose integrity attribute
   // carries that hash. A script must pass every policy of its document, so a second one
@@ -190,9 +246,8 @@ function createHead(input: ViewDocumentInput, inlineScriptHashSources: string[])
     // The policies are the first elements of the document: nothing is parsed before they apply.
     `<meta http-equiv="Content-Security-Policy" content="${policy}">`,
     `<meta http-equiv="Content-Security-Policy" content="${scriptFilePolicy}">`,
-    '<meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    DEFAULT_THEME_STYLE,
+    ...opening,
+    `<script>${WEBRTC_REMOVAL_SCRIPT}</script>`,
     `<script>${BLOCKED_SCRIPT_REPORT_SCRIPT}</script>`,
     ...(runtime
       ? [
