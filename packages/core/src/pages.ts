@@ -22,6 +22,18 @@ export function createFileSetId(): FileSetId {
   return createPlatformId<"FileSetId">("fset");
 }
 
+/** One build of a Page: what a save asked for and how it ended. */
+export type PageBuildId = Brand<string, "PageBuildId">;
+
+export function createPageBuildId(): PageBuildId {
+  return createPlatformId<"PageBuildId">("pbuild");
+}
+
+/** Whether a string from outside, such as a job payload, has the form of a build id. */
+export function isPageBuildId(value: string): value is PageBuildId {
+  return /^pbuild_[0-9a-f-]{36}$/u.test(value);
+}
+
 const PAGE_ID = /^page_[0-9a-f-]{36}$/u;
 const FILE_SET_ID = /^fset_[0-9a-f-]{36}$/u;
 
@@ -122,6 +134,85 @@ export interface NewFileSet {
   createdAt: string;
 }
 
+/** One file of the folder a save snapshots: where its bytes are and what they hash to. */
+export interface PageBuildSourceFile {
+  /** Relative to the Page's folder. */
+  path: string;
+  /** The object of the `workspaces` store that holds the bytes as they were at the save. */
+  objectKey: string;
+  byteSize: number;
+  /** Lower-case hex SHA-256. The build refuses bytes that do not match. */
+  checksum: string;
+}
+
+/** What a save hands the build: the name of the Page and the snapshot of its folder. */
+export interface PageBuildRequest {
+  pageName: string;
+  /** The folder of the workspace the files were taken from, for messages. */
+  directory: string;
+  files: PageBuildSourceFile[];
+  requestedByUserId?: UserId;
+}
+
+/** One thing an author has to change before a Page builds. */
+export interface PageBuildIssue {
+  file: string;
+  /** Counts from 1. */
+  line?: number;
+  /** Counts from 1. */
+  column?: number;
+  message: string;
+  code?: string;
+  /** The tag name, for an issue about one element of an HTML file. */
+  element?: string;
+  /** The attribute name, for an issue about one attribute. */
+  attribute?: string;
+}
+
+/**
+ * How a build ended. `saved`: the file set is stored. `errors`: the author's files do not
+ * build, and nothing was stored. `failed`: the build itself gave no result, for example because
+ * it was stopped at its time limit, and nothing was stored.
+ */
+export type PageSaveOutcome =
+  | { status: "saved"; pageId: PageId; fileSetId: FileSetId; number: number }
+  | { status: "errors"; errors: PageBuildIssue[] }
+  | { status: "failed"; message: string };
+
+export interface PageBuild {
+  id: PageBuildId;
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  request: PageBuildRequest;
+  /** Missing while the build is queued or running. */
+  result?: PageSaveOutcome;
+  createdAt: string;
+  finishedAt?: string;
+}
+
+/**
+ * The one way a save has a Page built: it hands over the snapshot and waits for how the build
+ * ended. The tool that saves knows nothing of the queue and the process behind it.
+ */
+export interface PageBuildClient {
+  build(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    request: PageBuildRequest;
+    /** Aborting it ends the wait; the build is told to store nothing. */
+    signal?: AbortSignal;
+    /** Passing it ends the wait in the same way. */
+    deadline?: Date;
+  }): Promise<PageSaveOutcome>;
+}
+
+/**
+ * How long the row of a build is kept when the save that asked for it never read its result.
+ * A save removes its row when it has the result; a later save of the same conversation removes
+ * the rows that are older than this.
+ */
+export const PAGE_BUILD_KEEP_MS = 60 * 60 * 1000;
+
 /**
  * The rows of Pages and their file sets. A file set is written once: this store has no call
  * that changes or replaces one, and its id is new with every save, so no later save writes to
@@ -187,6 +278,36 @@ export interface PagesStore {
     clientInstanceId: ClientInstanceId;
     pageId: PageId;
   }): Promise<{ fileSetCount: number }>;
+  /**
+   * Records a build that a save asks for, and removes the builds of the conversation that are
+   * older than `PAGE_BUILD_KEEP_MS`. Inside `stores.transaction` it commits or rolls back with
+   * the job that runs the build.
+   */
+  createPageBuild(input: {
+    clientInstanceId: ClientInstanceId;
+    id: PageBuildId;
+    conversationId: ConversationId;
+    request: PageBuildRequest;
+    createdAt: string;
+  }): Promise<PageBuild>;
+  getPageBuild(input: {
+    clientInstanceId: ClientInstanceId;
+    buildId: PageBuildId;
+  }): Promise<PageBuild | undefined>;
+  /**
+   * Writes how a build ended. Answers false, and changes nothing, when the build has a result
+   * already or its row is gone.
+   */
+  finishPageBuild(input: {
+    clientInstanceId: ClientInstanceId;
+    buildId: PageBuildId;
+    result: PageSaveOutcome;
+    finishedAt: string;
+  }): Promise<boolean>;
+  deletePageBuild(input: {
+    clientInstanceId: ClientInstanceId;
+    buildId: PageBuildId;
+  }): Promise<void>;
 }
 
 /** Why a file set or a Page was refused, as `details.reason` of the error. */

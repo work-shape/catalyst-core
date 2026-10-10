@@ -1,4 +1,4 @@
-import { integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type {
   ClientInstanceId,
   ConversationId,
@@ -6,6 +6,9 @@ import type {
   FileSetId,
   FileSetOwner,
   JsonObject,
+  PageBuildId,
+  PageBuildRequest,
+  PageSaveOutcome,
   PageId,
   UserId
 } from "@vivd-catalyst/core";
@@ -64,4 +67,27 @@ export const fileSets = pgTable(
     // Also what every read by owner uses: an owner's id is unique in the instance.
     uniqueIndex("file_sets_owner_number_idx").on(table.ownerKind, table.ownerId, table.number)
   ]
+);
+
+/**
+ * One build a save asked for. The row is how the save and the job that builds find each other:
+ * the save writes the request, the job writes the result, the save reads it and removes the
+ * row. A row whose save never came back goes with a later save of its conversation or with the
+ * conversation.
+ */
+export const pageBuilds = pgTable(
+  "page_builds",
+  {
+    id: text("id").$type<PageBuildId>().primaryKey(),
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    conversationId: text("conversation_id")
+      .$type<ConversationId>()
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    request: jsonb("request").$type<PageBuildRequest>().notNull(),
+    result: jsonb("result").$type<PageSaveOutcome>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true })
+  },
+  (table) => [index("page_builds_conversation_idx").on(table.conversationId, table.createdAt)]
 );

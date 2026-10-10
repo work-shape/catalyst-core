@@ -137,10 +137,15 @@ describe("the file sets of a Page", () => {
     const { save, scope } = await arrange("no_update");
     // What the store offers. A call that changes a file set would have to be added here.
     expect(Object.keys(db.store.pages).sort()).toEqual([
+      // The build calls are about the row a save waits on, not about a file set.
+      "createPageBuild",
       "createPageFileSet",
       "deletePage",
+      "deletePageBuild",
       "ensurePage",
+      "finishPageBuild",
       "getPage",
+      "getPageBuild",
       "getPageFileSet",
       "getServedFileSet",
       "listConversationPageIds",

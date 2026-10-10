@@ -12,6 +12,10 @@ export function createPostgresPagesStore(db: PostgresConnection): PagesStore {
     getPageFileSet: (input) => operations.getPageFileSet(db, input),
     getServedFileSet: (input) => operations.getServedFileSet(db, input),
     listConversationPageIds: (input) => operations.listConversationPageIds(db, input),
-    deletePage: (input) => operations.deletePage(db, input)
+    deletePage: (input) => operations.deletePage(db, input),
+    createPageBuild: (input) => operations.createPageBuild(db, input),
+    getPageBuild: (input) => operations.getPageBuild(db, input),
+    finishPageBuild: (input) => operations.finishPageBuild(db, input),
+    deletePageBuild: (input) => operations.deletePageBuild(db, input)
   };
 }

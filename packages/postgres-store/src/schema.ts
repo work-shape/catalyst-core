@@ -40,7 +40,7 @@ import { platformJobs } from "./schema/jobs";
 import { operationRuns } from "./schema/operationRuns";
 import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
-import { pages, fileSets } from "./schema/pages";
+import { pages, fileSets, pageBuilds } from "./schema/pages";
 
 export const schema = {
   approvalRequests,
@@ -74,5 +74,6 @@ export const schema = {
   namespaces,
   infrastructureCheckState,
   pages,
-  fileSets
+  fileSets,
+  pageBuilds
 };

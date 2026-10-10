@@ -1,19 +1,21 @@
-import { and, asc, count, desc, eq, max, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, lt, max, sql } from "drizzle-orm";
 import {
   CONVERSATION_MAX_PAGES,
+  PAGE_BUILD_KEEP_MS,
   PAGE_MAX_FILE_SETS,
   createPageId,
   pageRefusal,
   type FileSet,
   type FileSetSummary,
   type Page,
+  type PageBuild,
   type PageId,
   type PagesStore,
   type ServedFileSet
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
-import { fileSets, pages } from "./schema/pages";
+import { fileSets, pageBuilds, pages } from "./schema/pages";
 
 // A file set is inserted and read, and deleted with its Page. Nothing here updates one.
 
@@ -268,6 +270,92 @@ export async function deletePage(
       .where(and(eq(pages.clientInstanceId, input.clientInstanceId), eq(pages.id, input.pageId)));
     return { fileSetCount: deleted.length };
   });
+}
+
+export async function createPageBuild(
+  db: PostgresConnection,
+  input: Input<"createPageBuild">
+): Promise<PageBuild> {
+  const createdAt = new Date(input.createdAt);
+  // What an earlier save of this conversation left behind and never read.
+  await db
+    .delete(pageBuilds)
+    .where(
+      and(
+        eq(pageBuilds.clientInstanceId, input.clientInstanceId),
+        eq(pageBuilds.conversationId, input.conversationId),
+        lt(pageBuilds.createdAt, new Date(createdAt.getTime() - PAGE_BUILD_KEEP_MS))
+      )
+    );
+  const [created] = await db
+    .insert(pageBuilds)
+    .values({
+      id: input.id,
+      clientInstanceId: input.clientInstanceId,
+      conversationId: input.conversationId,
+      request: input.request,
+      createdAt
+    })
+    .returning();
+  if (!created) {
+    throw new Error("The build of a Page was not recorded");
+  }
+  return mapPageBuild(created);
+}
+
+export async function getPageBuild(
+  db: PostgresConnection,
+  input: Input<"getPageBuild">
+): Promise<PageBuild | undefined> {
+  const [row] = await db
+    .select()
+    .from(pageBuilds)
+    .where(
+      and(eq(pageBuilds.clientInstanceId, input.clientInstanceId), eq(pageBuilds.id, input.buildId))
+    )
+    .limit(1);
+  return row ? mapPageBuild(row) : undefined;
+}
+
+export async function finishPageBuild(
+  db: PostgresConnection,
+  input: Input<"finishPageBuild">
+): Promise<boolean> {
+  const finished = await db
+    .update(pageBuilds)
+    .set({ result: input.result, finishedAt: new Date(input.finishedAt) })
+    .where(
+      and(
+        eq(pageBuilds.clientInstanceId, input.clientInstanceId),
+        eq(pageBuilds.id, input.buildId),
+        isNull(pageBuilds.result)
+      )
+    )
+    .returning({ id: pageBuilds.id });
+  return finished.length > 0;
+}
+
+export async function deletePageBuild(
+  db: PostgresConnection,
+  input: Input<"deletePageBuild">
+): Promise<void> {
+  await db
+    .delete(pageBuilds)
+    .where(
+      and(eq(pageBuilds.clientInstanceId, input.clientInstanceId), eq(pageBuilds.id, input.buildId))
+    );
+}
+
+function mapPageBuild(row: typeof pageBuilds.$inferSelect): PageBuild {
+  return {
+    id: row.id,
+    clientInstanceId: row.clientInstanceId,
+    conversationId: row.conversationId,
+    request: row.request,
+    ...(row.result ? { result: row.result } : {}),
+    createdAt: row.createdAt.toISOString(),
+    ...(row.finishedAt ? { finishedAt: row.finishedAt.toISOString() } : {})
+  };
 }
 
 function ownedByPage(pageId: PageId) {
