@@ -35,7 +35,7 @@ import {
   useCollaborationWorkspaceAgentsQuery,
   useWorkspaceCacheActions,
   useWorkspaceConfigQuery,
-  useWorkspaceConversationsQuery,
+  useRecentConversationsQuery,
   useWorkspaceMeQuery,
   useWorkspaceModelPreferenceQuery,
   useWorkspaceThreadQuery
@@ -241,7 +241,10 @@ export interface WorkspaceChromeModel {
 }
 
 export interface ConversationRailModel {
+  /** The latest conversations of the active workspace, and one more when it holds older ones. */
   conversations: ConversationListItem[];
+  /** The conversation on screen as a row, once its thread is there. */
+  openConversation: ConversationListItem | undefined;
   /** How the list stands: still on its first load, failed without a list to show, or there. */
   conversationsStatus: "loading" | "failed" | "ready";
   reloadConversations(): void;
@@ -413,7 +416,7 @@ export function useWorkspaceChatModel({
     showConversationList
   });
   const activeCollaborationWorkspaceId = collaborationWorkspace.activeCollaborationWorkspaceId;
-  const conversationsQuery = useWorkspaceConversationsQuery({
+  const conversationsQuery = useRecentConversationsQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
@@ -449,10 +452,14 @@ export function useWorkspaceChatModel({
     onTerminalObservation: workspaceCache.invalidateTerminalRunObservation
   });
   const serverConversations = conversationsQuery.data ?? [];
+  const selectedConversationRunning = Boolean(
+    controller.activeRun && isLiveRunStatus(controller.activeRun.run.status)
+  );
   const conversationListRefresh = useConversationListRefresh({
     enabled: isAuthenticated,
     conversations: serverConversations,
-    refresh: workspaceCache.invalidateConversations
+    streamedConversationId: selectedConversationRunning ? selectedConversationId : undefined,
+    refresh: workspaceCache.refreshRecentConversations
   });
 
   useEffect(() => {
@@ -485,9 +492,31 @@ export function useWorkspaceChatModel({
   }, [conversationActivity.locallyUnreadConversationIds, serverConversations]);
   const messages = selectedConversationId ? controller.messages : [];
   const messagesLoaded = !selectedConversationId || controller.snapshotStatus === "ready";
-  const selectedConversationRunning = Boolean(
-    controller.activeRun && isLiveRunStatus(controller.activeRun.run.status)
-  );
+  // The rail reads the latest conversations only. The open one may be older than those, and
+  // the thread on screen already holds what its row shows.
+  const openThread =
+    threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
+  const openConversation = useMemo((): ConversationListItem | undefined => {
+    if (
+      !openThread ||
+      (collaborationWorkspacesAvailable &&
+        openThread.conversation.collaborationWorkspaceId !== activeCollaborationWorkspaceId)
+    ) {
+      return undefined;
+    }
+    return {
+      ...openThread.conversation,
+      ...(selectedConversationRunning && controller.activeRun
+        ? { activeRun: controller.activeRun.run }
+        : {})
+    };
+  }, [
+    activeCollaborationWorkspaceId,
+    collaborationWorkspacesAvailable,
+    controller.activeRun,
+    openThread,
+    selectedConversationRunning
+  ]);
   const workspaceAgentsQuery = useCollaborationWorkspaceAgentsQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -917,6 +946,7 @@ export function useWorkspaceChatModel({
     collaborationWorkspace,
     conversationRail: {
       conversations,
+      openConversation,
       conversationsStatus:
         conversationsQuery.data !== undefined
           ? "ready"
@@ -946,7 +976,9 @@ export function useWorkspaceChatModel({
         await renameConversationMutation.mutateAsync({ conversationId, title });
       },
       moveConversation: (conversationId) => {
-        const conversation = conversations.find((candidate) => candidate.id === conversationId);
+        const conversation = [...conversations, openConversation].find(
+          (candidate) => candidate?.id === conversationId
+        );
         if (conversation) {
           collaborationWorkspace.openMoveConversationDialog(conversation);
         }

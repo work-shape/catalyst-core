@@ -12,6 +12,7 @@ import {
   Skeleton,
   useSidebarCollapsed
 } from "@vivd-catalyst/ui";
+import { RAIL_RECENT_LIMIT } from "../api/workspace-queries";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -26,12 +27,7 @@ import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
 export type WorkspaceView = WorkspaceRouteView;
 
-/**
- * How many conversations the rail lists under "Recent". The rest are one row away, on the list
- * of every conversation, so the rail stays a short list and not a second place to scroll.
- */
-export const RAIL_RECENT_LIMIT = 30;
-export { railSections, shownRailSections, type RailSection };
+export { RAIL_RECENT_LIMIT, railSections, shownRailSections, type RailSection };
 
 interface WorkspaceRailProps {
   config: SafeConfig;
@@ -39,7 +35,13 @@ interface WorkspaceRailProps {
   collaborationWorkspaceSelector?: ReactNode;
   /** The section rows. */
   sections?: readonly RailSection[];
+  /**
+   * The latest conversations of the workspace, and at most one more than the rail lists: the
+   * one more says that the workspace holds older ones.
+   */
   conversations: ConversationListItem[];
+  /** The conversation on screen, which may be older than the latest ones. */
+  openConversation?: ConversationListItem;
   conversationsStatus: "loading" | "failed" | "ready";
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
@@ -219,6 +221,7 @@ function RailBranding({ config }: { config: SafeConfig }) {
 function RecentConversations({
   config,
   conversations,
+  openConversation,
   conversationsStatus,
   selectedConversationId,
   view,
@@ -237,7 +240,7 @@ function RecentConversations({
     return null;
   }
 
-  const recent = recentConversations(conversations, selectedConversationId);
+  const recent = recentConversations(conversations, openConversation);
 
   return (
     <NavGroup label={t("nav.recent")}>
@@ -298,13 +301,12 @@ function RecentConversations({
  */
 export function recentConversations(
   conversations: readonly ConversationListItem[],
-  selectedConversationId: string | undefined
+  openConversation: ConversationListItem | undefined
 ): readonly ConversationListItem[] {
   const latest = conversations.slice(0, RAIL_RECENT_LIMIT);
-  const open = conversations
-    .slice(RAIL_RECENT_LIMIT)
-    .find((conversation) => conversation.id === selectedConversationId);
-  return open ? [...latest, open] : latest;
+  return openConversation && !latest.some(({ id }) => id === openConversation.id)
+    ? [...latest, openConversation]
+    : latest;
 }
 
 const SKELETON_ROW_WIDTHS = ["w-3/4", "w-1/2", "w-2/3"];

@@ -301,6 +301,7 @@ function ChatWorkspaceContent({
             config={model.config.config}
             collaborationWorkspaceSelector={collaborationWorkspaceSelector}
             conversations={rail.conversations}
+            openConversation={rail.openConversation}
             conversationsStatus={rail.conversationsStatus}
             selectedConversationId={rail.selectedConversationId}
             canViewAdministration={rail.canViewAdministration}

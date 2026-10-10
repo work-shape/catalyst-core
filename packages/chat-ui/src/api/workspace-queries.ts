@@ -116,38 +116,48 @@ export function useWorkspaceConfigQuery(input: Parameters<typeof workspaceConfig
   return useQuery(workspaceConfigQueryOptions(input));
 }
 
-export function workspaceConversationsQueryOptions(
+/** How many conversations the rail lists under "Recent". The rest are on the full list. */
+export const RAIL_RECENT_LIMIT = 30;
+
+/**
+ * The rail's conversations: the latest ones of a workspace and one more, whose presence says
+ * that there are older ones. One request for one page, whatever the number of conversations.
+ */
+export function recentConversationsQueryOptions(
   input: WorkspaceQueryInput & {
     collaborationWorkspaceId: string | undefined;
     collaborationWorkspacesAvailable: boolean;
     enabled: boolean;
   }
 ) {
-  const collaborationWorkspaceId = input.collaborationWorkspaceId;
-  const cacheWorkspaceId = input.collaborationWorkspacesAvailable
+  const { collaborationWorkspaceId, collaborationWorkspacesAvailable } = input;
+  const workspace = collaborationWorkspacesAvailable ? { collaborationWorkspaceId } : {};
+  const cacheWorkspaceId = collaborationWorkspacesAvailable
     ? collaborationWorkspaceId
     : PERSONAL_DEFAULT_CONVERSATION_LIST;
   return {
     queryKey: workspaceQueryKeys.conversations(input.apiBaseUrl, input.authScope, cacheWorkspaceId),
-    queryFn: () =>
-      listAll((paging) =>
-        input.client.conversations.list({
-          query: {
-            ...(input.collaborationWorkspacesAvailable ? { collaborationWorkspaceId } : {}),
-            ...paging
-          }
-        })
-      ),
+    queryFn: async () => {
+      const query = { ...workspace, limit: RAIL_RECENT_LIMIT + 1 };
+      return (await input.client.conversations.list({ query })).items;
+    },
     enabled:
-      input.enabled &&
-      (!input.collaborationWorkspacesAvailable || Boolean(collaborationWorkspaceId))
+      input.enabled && (!collaborationWorkspacesAvailable || Boolean(collaborationWorkspaceId))
   };
 }
 
-export function useWorkspaceConversationsQuery(
-  input: Parameters<typeof workspaceConversationsQueryOptions>[0]
+export function useRecentConversationsQuery(
+  input: Parameters<typeof recentConversationsQueryOptions>[0]
 ) {
-  return useQuery(workspaceConversationsQueryOptions(input));
+  return useQuery(recentConversationsQueryOptions(input));
+}
+
+/**
+ * Reads the rail's conversations again and nothing else: the pages of the full list, whose keys
+ * continue this one, stay. A read still on its way is kept, so nothing is asked twice at once.
+ */
+export function refreshRecentConversations(queryClient: QueryClient, key: QueryKey): Promise<void> {
+  return queryClient.refetchQueries({ queryKey: key, exact: true }, { cancelRefetch: false });
 }
 
 export function useCollaborationWorkspacesQuery(
@@ -485,11 +495,6 @@ export function useConfigAssetsExportQuery(
   });
 }
 
-/**
- * Conversation-list writes follow the conversation's own workspace, never the
- * routed one: a stale `/w/:other/c/:id` link must not splice the conversation
- * into a list it does not belong to.
- */
 /** The cache of everything the interface has read from the instance. */
 export function createWorkspaceQueryClient(): QueryClient {
   return new QueryClient();
@@ -531,6 +536,11 @@ export function cacheStartedRunThread<Thread>(
   queryClient.setQueryData(threadKey, thread);
 }
 
+/**
+ * Conversation-list writes follow the conversation's own workspace, never the
+ * routed one: a stale `/w/:other/c/:id` link must not splice the conversation
+ * into a list it does not belong to.
+ */
 export function conversationListCacheKey(
   apiBaseUrl: string,
   authScope: string,
@@ -550,6 +560,8 @@ export interface WorkspaceCacheActions {
   refreshThreadSnapshot(conversationId: string): Promise<ConversationThreadSnapshot>;
   invalidateCurrentUser(): void;
   invalidateConversations(): void;
+  /** Reads the rail's one page again and leaves the pages of the full list alone. */
+  refreshRecentConversations(): void;
   removeThreadSnapshot(conversationId: string): void;
   invalidateConversationStarted(conversationId: string): void;
   invalidateConversationResources(conversationId: string): void;
@@ -585,6 +597,13 @@ export function useWorkspaceCacheActions(
     void queryClient.invalidateQueries({
       queryKey: workspaceQueryKeys.conversations(apiBaseUrl, authScope, conversationListWorkspaceId)
     });
+  }, [apiBaseUrl, authScope, conversationListWorkspaceId, queryClient]);
+
+  const refreshRecent = useCallback(() => {
+    refreshRecentConversations(
+      queryClient,
+      workspaceQueryKeys.conversations(apiBaseUrl, authScope, conversationListWorkspaceId)
+    ).catch(() => undefined);
   }, [apiBaseUrl, authScope, conversationListWorkspaceId, queryClient]);
 
   const removeThreadSnapshot = useCallback(
@@ -749,6 +768,7 @@ export function useWorkspaceCacheActions(
       refreshThreadSnapshot,
       invalidateCurrentUser,
       invalidateConversations,
+      refreshRecentConversations: refreshRecent,
       removeThreadSnapshot,
       invalidateConversationStarted,
       invalidateConversationResources,
@@ -764,6 +784,7 @@ export function useWorkspaceCacheActions(
       invalidateConversationResources,
       invalidateConversations,
       invalidateCurrentUser,
+      refreshRecent,
       removeThreadSnapshot,
       invalidateStreamError,
       invalidateTerminalRunObservation,

@@ -1,4 +1,10 @@
-import { ApiError, type Conversation } from "@vivd-catalyst/api-client";
+import { ApiError, createApiClient, type Conversation } from "@vivd-catalyst/api-client";
+import { apiOperations } from "@vivd-catalyst/api-contract";
+import {
+  asClientInstanceId,
+  asCollaborationWorkspaceId,
+  asConversationId
+} from "@vivd-catalyst/core";
 import { describe, expect, it } from "vitest";
 import { workspaceRouteFromPath, workspaceRouteNavigation } from "../packages/chat-ui/src/routes";
 import {
@@ -13,12 +19,15 @@ import {
   PERSONAL_DEFAULT_CONVERSATION_LIST,
   conversationListCacheKey,
   listCollaborationWorkspacesWithPersonal,
-  workspaceConversationsQueryOptions,
+  RAIL_RECENT_LIMIT,
+  recentConversationsQueryOptions,
+  refreshRecentConversations,
   cacheStartedRunThread,
   createWorkspaceQueryClient,
   readThreadAgain
 } from "../packages/chat-ui/src/api/workspace-queries";
 import { workspaceQueryKeys } from "../packages/chat-ui/src/api/workspace-query-keys";
+import { createTestFetch, createTestInstance } from "./support/test-instance";
 
 describe("collaboration workspace routes", () => {
   it("reads the workspace home and its conversations from the path", () => {
@@ -225,7 +234,7 @@ describe("conversation list cache targeting", () => {
 
   it("enables the embedded Personal Workspace list and targets its stable cache key", async () => {
     const listArguments: Array<string | undefined> = [];
-    const options = workspaceConversationsQueryOptions({
+    const options = recentConversationsQueryOptions({
       apiBaseUrl,
       authScope,
       client: {
@@ -251,6 +260,117 @@ describe("conversation list cache targeting", () => {
       conversationListCacheKey(apiBaseUrl, authScope, conversation("cw_personal"), false)
     ).toEqual(options.queryKey);
   });
+});
+
+// Fails without the change: the rail read every page of the list, which is 5 requests at 1,000
+// conversations and 50 at 10,000, and what refreshed it during a run read them all again
+// together with every loaded page of the full list.
+describe("the rail's conversations in a workspace of 1,000", () => {
+  const apiBaseUrl = "https://catalyst.test";
+  const authScope = "standalone";
+  const seeded = 1_000;
+
+  it("costs one list request on load and one per refresh during a run", async () => {
+    const instance = await createTestInstance();
+    const created = await instance.call("conversations.create", {
+      payload: { title: "Conversation 0" }
+    });
+    expect(created.statusCode).toBe(200);
+    const first = created.json<Conversation>();
+    const clientInstanceId = asClientInstanceId(first.clientInstanceId);
+    const collaborationWorkspaceId = asCollaborationWorkspaceId(first.collaborationWorkspaceId);
+    const { conversations } = instance.stores;
+    // A conversation is listed once it holds a message.
+    const seedMessage = (conversationId: string) =>
+      conversations.appendMessage({
+        clientInstanceId,
+        conversationId: asConversationId(conversationId),
+        role: "user",
+        text: "First message"
+      });
+    const seedOne = async (index: number) => {
+      const conversation = await conversations.createConversation({
+        clientInstanceId,
+        collaborationWorkspaceId,
+        createdByUserId: first.createdByUserId,
+        createdByExternalUserId: first.createdByExternalUserId,
+        visibility: "workspace",
+        title: `Conversation ${index}`,
+        retainedUntil: first.retainedUntil
+      });
+      await seedMessage(conversation.id);
+    };
+    const atOnce = 20;
+    await seedMessage(first.id);
+    for (let done = 1; done < seeded; done += atOnce) {
+      await Promise.all(
+        Array.from({ length: Math.min(atOnce, seeded - done) }, (_, index) => seedOne(done + index))
+      );
+    }
+
+    const testFetch = createTestFetch(instance);
+    const listRequests: URLSearchParams[] = [];
+    const client = createApiClient({
+      baseUrl: apiBaseUrl,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        if (
+          request.method === apiOperations["conversations.list"].method &&
+          url.pathname === apiOperations["conversations.list"].path
+        ) {
+          listRequests.push(url.searchParams);
+        }
+        return testFetch(request);
+      }
+    });
+    const queryClient = createWorkspaceQueryClient();
+    const rail = recentConversationsQueryOptions({
+      apiBaseUrl,
+      authScope,
+      client,
+      collaborationWorkspaceId,
+      collaborationWorkspacesAvailable: true,
+      enabled: true
+    });
+    // The full list page with pages loaded, under the key that continues the rail's.
+    let fullListReads = 0;
+    await queryClient.fetchQuery({
+      queryKey: workspaceQueryKeys.conversationPages(
+        apiBaseUrl,
+        authScope,
+        collaborationWorkspaceId,
+        ""
+      ),
+      queryFn: async () => {
+        fullListReads += 1;
+        return [];
+      }
+    });
+
+    // Load: one request for the rows the rail shows and the one that says there are more.
+    const loaded = await queryClient.fetchQuery(rail);
+    expect(listRequests).toHaveLength(1);
+    expect(listRequests[0]?.get("limit")).toBe(String(RAIL_RECENT_LIMIT + 1));
+    expect(listRequests[0]?.get("cursor")).toBeNull();
+    expect(loaded).toHaveLength(RAIL_RECENT_LIMIT + 1);
+
+    // During a run: each refresh is one request again, and the full list's pages stay.
+    const refreshes = 3;
+    for (let refresh = 0; refresh < refreshes; refresh += 1) {
+      await refreshRecentConversations(queryClient, rail.queryKey);
+    }
+    expect(listRequests).toHaveLength(1 + refreshes);
+    expect(fullListReads).toBe(1);
+    expect(queryClient.getQueryData(rail.queryKey)).toHaveLength(RAIL_RECENT_LIMIT + 1);
+
+    // Two refreshes at once wait for one answer instead of asking twice.
+    await Promise.all([
+      refreshRecentConversations(queryClient, rail.queryKey),
+      refreshRecentConversations(queryClient, rail.queryKey)
+    ]);
+    expect(listRequests).toHaveLength(2 + refreshes);
+  }, 120_000);
 });
 
 describe("personal workspace on the workspace list", () => {

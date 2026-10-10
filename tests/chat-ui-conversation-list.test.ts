@@ -311,13 +311,29 @@ describe("workspace rail Show all", () => {
     expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
   });
 
+  // Fails without the change: the rail looked for the open conversation in a list of every
+  // conversation, which it no longer loads, and took an id instead of the conversation.
   it("keeps the open conversation in the rail when it is an older one", () => {
-    const conversations = many(RAIL_RECENT_LIMIT + 5);
-    const older = `conv_${RAIL_RECENT_LIMIT + 3}`;
+    // What the rail is given: the latest conversations and one more.
+    const conversations = many(RAIL_RECENT_LIMIT + 1);
+    const older = conversation("conv_old", "Mietvertrag Altbau", "2026-07-01T10:00:00.000Z");
 
-    expect(recentConversations(conversations, "conv_2")).toHaveLength(RAIL_RECENT_LIMIT);
+    expect(recentConversations(conversations, conversations[2])).toHaveLength(RAIL_RECENT_LIMIT);
+    expect(recentConversations(conversations, undefined)).toHaveLength(RAIL_RECENT_LIMIT);
     const shown = recentConversations(conversations, older);
     expect(shown).toHaveLength(RAIL_RECENT_LIMIT + 1);
-    expect(shown.at(-1)?.id).toBe(older);
+    expect(shown.at(-1)?.id).toBe(older.id);
+
+    const markup = renderRail(conversations, {
+      openConversation: older,
+      selectedConversationId: older.id
+    });
+    expect(markup).toMatch(currentRow("Mietvertrag Altbau"));
+    expect(markup.match(/aria-current="true"/gu)).toHaveLength(1);
+    // The open conversation stands after the latest ones and before the way to all of them.
+    expect(markup.indexOf("Mietvertrag Altbau")).toBeGreaterThan(
+      markup.indexOf(`Titel ${RAIL_RECENT_LIMIT - 1}.`)
+    );
+    expect(markup.indexOf("Mietvertrag Altbau")).toBeLessThan(markup.lastIndexOf("Show all"));
   });
 });
