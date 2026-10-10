@@ -72,7 +72,13 @@ function render(
         { value: input.kinds ?? buildAssetKinds },
         createElement(
           BuildNavigationProvider,
-          { value: { location, open: () => undefined } },
+          {
+            value: {
+              location,
+              open: () => undefined,
+              href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+            }
+          },
           createElement(BuildFrame, { data: input.data ?? data() })
         )
       )
@@ -110,6 +116,13 @@ describe("Build frame", () => {
     expect(markup.indexOf("Steuer-Agent")).toBeLessThan(markup.indexOf("Workflow Assistant"));
     expect(markup).not.toMatch(/Version \d/u);
     expect(markup).not.toContain("catalyst CLI");
+  });
+
+  it("makes each row a link to the asset's address", () => {
+    const markup = render({ kindPath: "agents" });
+
+    expect(markup).toMatch(/<a [^>]*href="\/build\/agents\/workflow_assistant"/u);
+    expect(markup).not.toMatch(/<li[^>]*>\s*<div[^>]*>\s*<button/u);
   });
 
   it("titles a row in the reader's language", () => {

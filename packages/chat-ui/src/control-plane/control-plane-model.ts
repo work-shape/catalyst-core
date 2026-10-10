@@ -27,6 +27,7 @@ import type {
   SettingsPageDefinition,
   SettingsViewer
 } from "../settings/page-definition";
+import { workspaceRoutePath } from "../routes";
 import type { SettingsPageContextValue } from "../settings/settings-page-context";
 import type { ThemeModePreference } from "../theme";
 import type {
@@ -197,7 +198,8 @@ export function useControlPlaneModel({
       inBuild
         ? {
             location: { kindPath: buildKindPath, name: buildAssetName },
-            open: (location, options) => showRoute(buildRouteOfLocation(location), options)
+            open: (location, options) => showRoute(buildRouteOfLocation(location), options),
+            href: (location) => workspaceRoutePath(buildRouteOfLocation(location))
           }
         : undefined,
     [buildAssetName, buildKindPath, inBuild, showRoute]

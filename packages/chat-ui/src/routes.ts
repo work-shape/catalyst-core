@@ -138,6 +138,15 @@ export function workspaceRouteNavigation(route: WorkspaceRoute): {
   return Object.keys(params).length > 0 ? { to, params } : { to };
 }
 
+/** The path of a route, as a link's `href` takes it: the row's pattern with the route's fields. */
+export function workspaceRoutePath(route: WorkspaceRoute): string {
+  const { to, params = {} } = workspaceRouteNavigation(route);
+  return to
+    .split("/")
+    .map((part) => (part.startsWith("$") ? encodeURIComponent(params[part.slice(1)] ?? "") : part))
+    .join("/");
+}
+
 function routeOf(
   kind: WorkspaceRoute["kind"],
   params: Record<string, string>

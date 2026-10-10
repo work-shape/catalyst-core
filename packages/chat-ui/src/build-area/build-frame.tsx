@@ -1,5 +1,5 @@
 import { ArrowLeft, MoreHorizontal, Plus, Search, SearchX, Terminal } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
   Button,
@@ -60,7 +60,7 @@ const firstListView: ListView = { query: "", page: 1 };
  */
 export function BuildFrame({ data }: { data: BuildData }) {
   const { t } = useTranslation();
-  const { location, open } = useBuildNavigation();
+  const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), data.kinds);
   const [lastKindPath] = useState(readLastBuildKindPath);
   const place = resolveBuildPlace(kinds, location, lastKindPath);
@@ -94,6 +94,23 @@ export function BuildFrame({ data }: { data: BuildData }) {
       storeLastBuildKindPath(placePath);
     }
   }, [corrected, placePath]);
+
+  // Between a list and an asset the page changes under the reader: the focus goes to its
+  // heading. The area focuses the first heading itself, and the rail keeps the focus on a kind.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const focusKey = creating ? "new" : (place?.name ?? "");
+  const focusedKey = useRef(focusKey);
+  useEffect(() => {
+    if (focusedKey.current === focusKey) {
+      return;
+    }
+    const heading = pageRef.current?.querySelector("h1");
+    if (heading) {
+      focusedKey.current = focusKey;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }, [focusKey, data.loading]);
 
   if (!place) {
     return (
@@ -164,7 +181,7 @@ export function BuildFrame({ data }: { data: BuildData }) {
       </Button>
     );
     return (
-      <Page>
+      <Page ref={pageRef}>
         {loadError}
         {creating || asset ? (
           <Card className="min-w-0 overflow-hidden">
@@ -210,6 +227,7 @@ export function BuildFrame({ data }: { data: BuildData }) {
   const view = listViews[entry.path] ?? firstListView;
   return (
     <Page
+      ref={pageRef}
       subRail={
         kinds.length > 1 ? (
           <SubRail
@@ -241,6 +259,7 @@ export function BuildFrame({ data }: { data: BuildData }) {
         loadError={loadError}
         view={view}
         onViewChange={(next) => setListViews((views) => ({ ...views, [entry.path]: next }))}
+        hrefOf={(asset) => href({ kindPath: entry.path, name: asset.name })}
         onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
         onNew={() => setCreating(true)}
       />
@@ -254,6 +273,7 @@ function BuildList({
   loadError,
   view,
   onViewChange,
+  hrefOf,
   onOpen,
   onNew
 }: {
@@ -262,6 +282,8 @@ function BuildList({
   loadError: ReactNode;
   view: ListView;
   onViewChange(view: ListView): void;
+  /** The address of an asset: a row is a link to it. */
+  hrefOf(asset: BuildAsset): string;
   onOpen(asset: BuildAsset): void;
   onNew(): void;
 }) {
@@ -370,7 +392,17 @@ function BuildList({
                         </time>
                       ) : undefined
                     }
-                    onClick={() => onOpen(asset)}
+                    link={
+                      <a
+                        href={hrefOf(asset)}
+                        onClick={(event) => {
+                          if (opensHere(event)) {
+                            event.preventDefault();
+                            onOpen(asset);
+                          }
+                        }}
+                      />
+                    }
                   />
                 );
               })}
@@ -413,6 +445,11 @@ function BuildList({
       ) : null}
     </>
   );
+}
+
+/** A plain click opens the page here. With a modifier or another button the browser decides. */
+function opensHere(event: MouseEvent): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 }
 
 /** What stands before a row's name: the asset's own avatar, or the mark of its kind. */

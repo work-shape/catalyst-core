@@ -2849,9 +2849,9 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
   const agents = page.getByRole("list", { name: "Agents" });
-  const research = agents.getByRole("button", { name: /Research Assistant/u });
+  const research = agents.getByRole("link", { name: /Research Assistant/u });
   await expect(research).toContainText("research_assistant");
-  await expect(agents.getByRole("button", { name: /Application Assistant/u })).toBeVisible();
+  await expect(agents.getByRole("link", { name: /Application Assistant/u })).toBeVisible();
   await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
   await expect(page.getByText("Also editable with the catalyst CLI.")).toHaveCount(0);
 
@@ -2868,10 +2868,10 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await search.fill("no such agent");
   await expect(page.getByText("Nothing matches “no such agent”.", { exact: true })).toBeVisible();
   await search.fill("application_ass");
-  await expect(agents.getByRole("button")).toHaveCount(1);
-  await expect(agents.getByRole("button", { name: /Application Assistant/u })).toBeVisible();
+  await expect(agents.getByRole("link")).toHaveCount(1);
+  await expect(agents.getByRole("link", { name: /Application Assistant/u })).toBeVisible();
   await search.fill("RESEARCH");
-  await expect(agents.getByRole("button")).toHaveCount(1);
+  await expect(agents.getByRole("link")).toHaveCount(1);
   await expect(page.getByText(/^1 of \d+$/u)).toBeVisible();
 
   // A click opens the agent on its own address; back returns to the list as it was left.
@@ -2882,7 +2882,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await page.goBack();
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(search).toHaveValue("RESEARCH");
-  await expect(agents.getByRole("button")).toHaveCount(1);
+  await expect(agents.getByRole("link")).toHaveCount(1);
 
   // The address alone opens an agent, and a reload stays on it.
   await page.goto("/build/agents/application_assistant");
@@ -2896,7 +2896,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   ).toBeVisible();
   await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
-  await expect(agents.getByRole("button", { name: /Research Assistant/u })).toBeVisible();
+  await expect(agents.getByRole("link", { name: /Research Assistant/u })).toBeVisible();
 
   // The kind rail switches the list; New starts a skill from there.
   await page
@@ -2926,6 +2926,31 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(page).toHaveURL(/\/build\/agents$/u);
 });
 
+test("a Build row is a link, and the heading takes the focus", async ({ page, context }) => {
+  await signInViaApi(page, superadminUser);
+  await page.goto("/build/agents");
+  const agents = page.getByRole("list", { name: "Agents" });
+  const research = agents.getByRole("link", { name: /Research Assistant/u });
+
+  // A row carries its address; with a modifier the browser opens it elsewhere and this page stays.
+  await expect(research).toHaveAttribute("href", "/build/agents/research_assistant");
+  const opened = context.waitForEvent("page");
+  await research.click({ modifiers: ["ControlOrMeta"] });
+  const tab = await opened;
+  await expect(tab).toHaveURL(/\/build\/agents\/research_assistant$/u);
+  await tab.close();
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
+
+  // The keyboard opens a row, and the focus goes to the heading of the page it lands on.
+  await research.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
+  await expect(page.getByRole("heading", { name: "Research Assistant", level: 1 })).toBeFocused();
+  await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeFocused();
+});
+
 test("superadmin config follows the German locale", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("vivd-catalyst:locale", "de");
@@ -2947,7 +2972,7 @@ test("superadmin config follows the German locale", async ({ page }) => {
 
   await page
     .getByRole("list", { name: "Agenten" })
-    .getByRole("button", { name: /research_assistant · Alle Arbeitsbereiche/u })
+    .getByRole("link", { name: /research_assistant · Alle Arbeitsbereiche/u })
     .click();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
 
@@ -3015,7 +3040,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Agents");
     await page
       .getByRole("list", { name: "Agents" })
-      .getByRole("button", { name: /research_assistant · All workspaces/u })
+      .getByRole("link", { name: /research_assistant · All workspaces/u })
       .click();
     await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
     await expect(form()).toBeVisible();
@@ -3024,7 +3049,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Skills");
     await page
       .getByRole("list", { name: "Skills" })
-      .getByRole("button", { name: /config_e2e_skill/u })
+      .getByRole("link", { name: /config_e2e_skill/u })
       .click();
     await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
     await expect(form()).toBeVisible();

@@ -7,7 +7,8 @@ import {
   areaRoutePaths,
   areaRoutes,
   workspaceRouteFromPath,
-  workspaceRouteNavigation
+  workspaceRouteNavigation,
+  workspaceRoutePath
 } from "../packages/chat-ui/src/routes";
 
 type Area = (typeof areaRoutes)[number]["area"];
@@ -115,6 +116,18 @@ describe("area route table", () => {
       assetKind: "agents",
       name: "tax-steuer_agent.v2"
     });
+  });
+
+  it("writes a route as a path a link can carry, and reads the same route from it", () => {
+    for (const name of ["tax-steuer_agent.v2", "a/b", "50% off", "Übersicht", "new"]) {
+      const route: WorkspaceRoute = { kind: "build-asset", assetKind: "agents", name };
+      expect(workspaceRouteFromPath(workspaceRoutePath(route))).toEqual(route);
+    }
+    expect(workspaceRoutePath({ kind: "build-asset", assetKind: "agents", name: "a/b" })).toBe(
+      "/build/agents/a%2Fb"
+    );
+    expect(workspaceRoutePath({ kind: "build-kind", assetKind: "skills" })).toBe("/build/skills");
+    expect(workspaceRoutePath({ kind: "build" })).toBe("/build");
   });
 
   it("opens the application root for an address no row resolves", () => {

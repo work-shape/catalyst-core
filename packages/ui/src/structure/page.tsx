@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../cn";
 
 /** The widest the content column grows: 44rem for a form, 64rem for a list, or all the room. */
@@ -10,7 +10,7 @@ const contentWidths: Record<PageWidth, string> = {
   wide: "max-w-none"
 };
 
-export interface PageProps extends HTMLAttributes<HTMLDivElement> {
+export interface PageProps extends ComponentProps<"div"> {
   width?: PageWidth;
   /**
    * A `SubRail` in its own column beside the content while the content keeps 40rem. With less

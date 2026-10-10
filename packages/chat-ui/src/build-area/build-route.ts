@@ -38,6 +38,8 @@ export interface BuildNavigation {
   location: BuildLocation;
   /** Opens a place. `replace` corrects the address without a step in the history. */
   open(location: BuildLocation, options?: { replace?: boolean }): void;
+  /** The address of a place, for a link to it. */
+  href(location: BuildLocation): string;
 }
 
 const BuildNavigationContext = createContext<BuildNavigation | undefined>(undefined);
