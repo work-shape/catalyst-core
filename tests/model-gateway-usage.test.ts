@@ -11,6 +11,7 @@ import {
 import {
   ModelProviderError,
   createModelGateway,
+  estimateInterruptedCallUsage,
   isModelProviderContinuationRejected,
   type ModelAdapter,
   type ModelAdapterRequest,
@@ -238,6 +239,99 @@ describe("model gateway usage recording", () => {
     });
   });
 
+  // Fails without the change: nothing was estimated, and a search the provider had started
+  // was not counted.
+  it("estimates a cut-off stream from every attempt that began to answer, and counts a started search", async () => {
+    let attempts = 0;
+    const f = await fixture(
+      async () => completion(120),
+      {},
+      {
+        costs: {},
+        async *stream() {
+          attempts += 1;
+          // The first attempt only announces a tool call, so the call is sent again.
+          yield { type: "tool_call_preparing", toolCallId: `call_${attempts}`, toolName: "lookup" };
+          if (attempts === 1) {
+            throw new ModelProviderError({
+              kind: "network",
+              message: "Model provider connection failed"
+            });
+          }
+          yield {
+            type: "provider_tool_started",
+            toolCallId: "search_1",
+            toolName: "web_search",
+            input: { query: "q" }
+          };
+          throw new ModelProviderError({
+            kind: "invalid_request",
+            status: 400,
+            message: "Model provider stream failed"
+          });
+        }
+      }
+    );
+    useFakeClockBesidePostgres();
+
+    const error: unknown = await advanceFakeClockUntilSettled(
+      (async () => {
+        for await (const _event of f.gateway.stream(call())) {
+          // Read to the end.
+        }
+      })(),
+      RETRY_CLOCK_STEP_MS
+    ).catch((thrown: unknown) => thrown);
+    vi.useRealTimers();
+
+    expect(error).toMatchObject({ kind: "invalid_request" });
+    expect(attempts).toBe(2);
+    // "hello" twice is ten characters. "lookup" twice, "web_search" and `{"query":"q"}` are 35.
+    const estimate = estimateInterruptedCallUsage({
+      inputCharacters: 10,
+      outputCharacters: 35,
+      webSearchCallCount: 1
+    });
+    expect(estimate).toEqual({
+      inputTokens: 4,
+      cachedInputTokens: 0,
+      outputTokens: 12,
+      totalTokens: 16,
+      source: "estimated",
+      webSearchCallCount: 1
+    });
+    expect(await f.events()).toEqual([expect.objectContaining({ status: "settled", ...estimate })]);
+  });
+
+  // A call that gave nothing used nothing anyone can name: it stays at nothing.
+  it("estimates nothing for a stream that fails before anything arrived", async () => {
+    const f = await fixture(
+      async () => completion(120),
+      {},
+      {
+        costs: {},
+        async *stream() {
+          yield { type: "text_delta", delta: "" };
+          throw new ModelProviderError({
+            kind: "invalid_request",
+            status: 400,
+            message: "Model provider stream failed"
+          });
+        }
+      }
+    );
+
+    await expect(
+      (async () => {
+        for await (const _event of f.gateway.stream(call())) {
+          // Read to the end.
+        }
+      })()
+    ).rejects.toMatchObject({ kind: "invalid_request" });
+
+    expect(await f.events()).toEqual([uncompletedEvent()]);
+  });
+
   it("leaves no event for a call admission refuses", async () => {
     const f = await fixture(async () => completion(120), { modelCallsPerDay: 1 });
 
@@ -287,7 +381,8 @@ async function fixture(
       }),
       logger: silentTestLogger
     }),
-    events: (): Promise<ModelUsageEvent[]> => store.usage.listModelUsageEvents({ clientInstanceId }),
+    events: (): Promise<ModelUsageEvent[]> =>
+      store.usage.listModelUsageEvents({ clientInstanceId }),
     summary: () =>
       new ModelUsageGovernance({
         store: store.usage,

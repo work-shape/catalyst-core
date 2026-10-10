@@ -13,7 +13,6 @@ import {
   ModelProviderError,
   createInstanceModelGateway,
   createModelGateway,
-  estimateInterruptedCallUsage,
   isModelProviderContinuationRejected,
   modelProviderDefinitions,
   type ModelAdapter,
@@ -313,96 +312,6 @@ describe("model gateway", () => {
     expect(attempts).toBe(1);
     expect(seen).toEqual([{ type: "text_delta", delta: "Visible" }]);
     expect(f.governance.recorded).toHaveLength(1);
-  });
-
-  // Fails without the change: nothing was estimated, and a search the provider had started
-  // was not counted.
-  it("estimates a cut-off stream from every attempt that began to answer, and counts a started search", async () => {
-    vi.useFakeTimers();
-    let attempts = 0;
-    const f = fixture({
-      async *stream() {
-        attempts += 1;
-        // The first attempt only announces a tool call, so the call is sent again.
-        yield { type: "tool_call_preparing", toolCallId: `call_${attempts}`, toolName: "lookup" };
-        if (attempts === 1) {
-          throw new ModelProviderError({
-            kind: "network",
-            message: "Model provider connection failed"
-          });
-        }
-        yield {
-          type: "provider_tool_started",
-          toolCallId: "search_1",
-          toolName: "web_search",
-          input: { query: "q" }
-        };
-        yield { type: "text_delta", delta: "" };
-        throw new ModelProviderError({
-          kind: "invalid_request",
-          status: 400,
-          message: "Model provider stream failed"
-        });
-      }
-    });
-
-    const failed = expect(drain(f.gateway.stream(call()))).rejects.toMatchObject({
-      kind: "invalid_request"
-    });
-    await vi.advanceTimersByTimeAsync(2_000);
-    await failed;
-
-    expect(attempts).toBe(2);
-    // "hello" twice is ten characters. "lookup" twice, "web_search" and `{"query":"q"}` are 35.
-    expect(
-      estimateInterruptedCallUsage({
-        inputCharacters: 10,
-        outputCharacters: 35,
-        webSearchCallCount: 1
-      })
-    ).toEqual({
-      inputTokens: 4,
-      cachedInputTokens: 0,
-      outputTokens: 12,
-      totalTokens: 16,
-      source: "estimated",
-      webSearchCallCount: 1
-    });
-    expect(f.governance.recorded).toEqual([
-      expect.objectContaining({
-        source: "estimated",
-        inputTokens: 4,
-        outputTokens: 12,
-        totalTokens: 16,
-        webSearchCallCount: 1
-      })
-    ]);
-  });
-
-  // A call that gave nothing used nothing anyone can name: it stays at nothing.
-  it("estimates nothing for a stream that fails before anything arrived", async () => {
-    const f = fixture({
-      // eslint-disable-next-line require-yield
-      async *stream() {
-        throw new ModelProviderError({
-          kind: "invalid_request",
-          status: 400,
-          message: "Model provider stream failed"
-        });
-      }
-    });
-
-    await expect(
-      (async () => {
-        for await (const _event of f.gateway.stream(call())) {
-          // Read to the end.
-        }
-      })()
-    ).rejects.toMatchObject({ kind: "invalid_request" });
-
-    expect(f.governance.recorded).toEqual([
-      expect.objectContaining({ source: "estimated", totalTokens: 0 })
-    ]);
   });
 
   it("throws the abort of a stopped call and records it once", async () => {

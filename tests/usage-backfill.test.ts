@@ -366,8 +366,8 @@ describe("the usage attribution backfill", () => {
     );
     const aDayLater = new Date(start.getTime() + DAY_MS + 1);
     const running = runBackfill(clientInstanceId, () => aDayLater, quiet);
-    const waiting = async () =>
-      await db.sql<Array<{ pid: number }>>`
+    const waiting = () =>
+      db.sql<Array<{ pid: number }>>`
         select pid from pg_stat_activity
         where application_name = ${db.first} and wait_event_type = 'Lock'`;
     await waitUntil(async () => {
