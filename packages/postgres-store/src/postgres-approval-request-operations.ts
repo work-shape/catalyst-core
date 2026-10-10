@@ -6,6 +6,7 @@ import {
   type ApprovalRequest,
   type ApprovalRequestStore
 } from "@vivd-catalyst/core";
+import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { mapApprovalRequest } from "./rows";
 import { approvalRequests } from "./schema";
@@ -15,20 +16,28 @@ export async function createApprovalRequest(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
-  const now = new Date();
-  const [row] = await db
-    .insert(approvalRequests)
-    .values({
-      ...input,
-      id: createPlatformId("apr"),
-      status: "pending",
-      checks: input.checks ?? [],
-      createdAt: now,
-      updatedAt: now
-    })
-    .returning();
-  if (!row) throw new AppError("INTERNAL", "Failed to create approval request");
-  return mapApprovalRequest(row);
+  const { runFence, ...request } = input;
+  const insert = async (tx: PostgresConnection) => {
+    const now = new Date();
+    const [row] = await tx
+      .insert(approvalRequests)
+      .values({
+        ...request,
+        id: createPlatformId("apr"),
+        status: "pending",
+        checks: request.checks ?? [],
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+    if (!row) throw new AppError("INTERNAL", "Failed to create approval request");
+    return mapApprovalRequest(row);
+  };
+  if (!runFence) return insert(db);
+  return db.transaction(async (tx) => {
+    await requireClaimedAgentRun(tx, request.clientInstanceId, runFence);
+    return insert(tx);
+  });
 }
 
 export async function getApprovalRequest(

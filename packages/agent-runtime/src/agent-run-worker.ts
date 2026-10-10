@@ -337,7 +337,10 @@ async function executeClaimedRun(
         correlationId: run.correlationId,
         locale: run.locale,
         ...authorization,
-        signal: controller.signal
+        signal: controller.signal,
+        // What a tool or the runtime writes for the run beside its events and messages
+        // carries the lease too: an approval request, a dropped provider continuation.
+        runFence: { runId: run.id, lease }
       };
       const execution = await options.execute(input, context, {
         assertLease: async () => {

@@ -476,6 +476,9 @@ export async function createClientInstanceExecutionAssembly(
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
   }
+  // A run's events, messages, approval requests and dropped continuations carry the lease of
+  // its job (`runFence`). Usage settlement and audit do not, on purpose: a call that was made
+  // has cost money and a tool that ran has acted, so both are recorded whoever holds the run.
   const localAgentRuntimeOptions = {
     logger,
     assetSource,

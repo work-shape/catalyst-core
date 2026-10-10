@@ -1,6 +1,6 @@
 import type { StorePage } from "./paging";
 import type { AgentRunId, ClientInstanceId, ConversationId, ToolCallId } from "./ids";
-import type { AuthenticatedUser } from "./identity";
+import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";
 import type { JsonObject } from "./json";
 import type { Permission } from "./permissions";
 import type { ToolPermissionDecision } from "./tool-execution";
@@ -97,7 +97,11 @@ export interface ApprovalRequestStore {
     input: Pick<
       ApprovalRequest,
       "clientInstanceId" | "kind" | "summary" | "payload" | "requestedBy" | "origin"
-    > & { checks?: ApprovalCheckResult[] }
+    > & {
+      checks?: ApprovalCheckResult[];
+      /** Given when an Agent Run creates the request: refused once the run lost its lease. */
+      runFence?: AgentRunWriteFence;
+    }
   ): Promise<ApprovalRequest>;
   getApprovalRequest(input: {
     clientInstanceId: ClientInstanceId;

@@ -7,6 +7,7 @@ import {
   type AgentRunJobLease,
   type AgentRunStore,
   type AgentRunWithoutJob,
+  type AgentRunWriteFence,
   type AgentRuntimeEvent,
   type AppendClaimedAgentRunEndInput,
   type AppendClaimedAgentRunMessageInput,
@@ -566,6 +567,25 @@ function heldByAnother(leaseOwnerId: string) {
     and ${agentRuns.leaseExpiresAt} > now()
     and ${agentRuns.leaseOwner} is distinct from ${leaseOwnerId}
   )`;
+}
+
+/**
+ * The fence of a write that a run makes outside its events and messages: the job still runs
+ * under the lease and the run has not ended. Both hold until `tx` ends.
+ */
+export async function requireClaimedAgentRun(
+  tx: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  fence: AgentRunWriteFence
+): Promise<void> {
+  await requireJobLease(tx, fence.lease);
+  const [row] = await tx
+    .select({ id: agentRuns.id })
+    .from(agentRuns)
+    .where(claimedRunWhere({ clientInstanceId, ...fence }))
+    .limit(1)
+    .for("share");
+  if (!row) throw new AppError("CONFLICT", "Agent run has ended");
 }
 
 /** One run as the attempt of a job holds it. */

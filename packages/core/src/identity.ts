@@ -1,5 +1,6 @@
 import { AppError } from "./errors";
-import type { ApiCredentialId, ClientInstanceId, ServicePrincipalId } from "./ids";
+import type { AgentRunId, ApiCredentialId, ClientInstanceId, ServicePrincipalId } from "./ids";
+import type { JobId } from "./jobs";
 import type { LocaleCode } from "./localization";
 
 export type UserRole = "user" | "admin" | "superadmin" | string;
@@ -101,6 +102,17 @@ export function isAuthenticatedServicePrincipal(
   return "kind" in identity && identity.kind === "service";
 }
 
+/**
+ * The hold of one attempt of an `agent_run.execute` job on its run, as a store write names
+ * it. A write that carries it is stored only while the job is still running under the token
+ * and the run has not ended, in the transaction of the write. Otherwise it throws
+ * `JobLeaseLostError` or `CONFLICT` and stores nothing.
+ */
+export interface AgentRunWriteFence {
+  runId: AgentRunId;
+  lease: { jobId: JobId; leaseToken: string };
+}
+
 export interface RuntimeCallContext {
   user: AuthenticatedUser;
   clientInstanceId: ClientInstanceId;
@@ -112,6 +124,11 @@ export interface RuntimeCallContext {
   scopes?: AuthScope[];
   deadline?: Date;
   signal?: AbortSignal;
+  /**
+   * Present while a claimed Agent Run job makes the call. A tool hands it to the store writes
+   * it makes for the run, so a run that lost its lease leaves no such write behind.
+   */
+  runFence?: AgentRunWriteFence;
 }
 
 export function createUserPrincipal(user: AuthenticatedUser): AuthPrincipal {

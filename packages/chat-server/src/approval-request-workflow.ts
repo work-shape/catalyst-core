@@ -82,7 +82,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       payload,
       checks,
       clientInstanceId: this.options.clientInstanceId,
-      requestedBy: { id: user.id, displayLabel: user.displayLabel }
+      requestedBy: { id: user.id, displayLabel: user.displayLabel },
+      // A request that an Agent Run proposes is created only while the run holds its lease.
+      runFence: context.runFence
     });
     await this.record(user, context, "approval_request.created", request);
     return request;

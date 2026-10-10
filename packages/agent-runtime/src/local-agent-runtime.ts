@@ -431,7 +431,8 @@ export class LocalAgentRuntime implements AgentRuntime {
         await this.options.modelProviderContinuationStore?.deleteModelProviderContinuation({
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
-          providerId: modelSelection.provider.id
+          providerId: modelSelection.provider.id,
+          runFence: context.runFence
         });
         this.options.logger?.warn(
           {

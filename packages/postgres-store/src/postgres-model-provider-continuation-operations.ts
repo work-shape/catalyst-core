@@ -5,6 +5,7 @@ import {
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore
 } from "@vivd-catalyst/core";
+import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { modelProviderContinuations } from "./schema";
 
@@ -30,15 +31,25 @@ export async function deleteModelProviderContinuation(
   db: PostgresConnection,
   input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
 ): Promise<void> {
-  await db
-    .delete(modelProviderContinuations)
-    .where(
-      and(
-        eq(modelProviderContinuations.clientInstanceId, input.clientInstanceId),
-        eq(modelProviderContinuations.conversationId, input.conversationId),
-        eq(modelProviderContinuations.providerId, input.providerId)
-      )
-    );
+  const remove = (tx: PostgresConnection) =>
+    tx
+      .delete(modelProviderContinuations)
+      .where(
+        and(
+          eq(modelProviderContinuations.clientInstanceId, input.clientInstanceId),
+          eq(modelProviderContinuations.conversationId, input.conversationId),
+          eq(modelProviderContinuations.providerId, input.providerId)
+        )
+      );
+  const { runFence } = input;
+  if (!runFence) {
+    await remove(db);
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await requireClaimedAgentRun(tx, input.clientInstanceId, runFence);
+    await remove(tx);
+  });
 }
 
 function mapModelProviderContinuation(

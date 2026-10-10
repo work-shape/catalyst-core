@@ -7,6 +7,7 @@ import type {
   ConversationId,
   MessageId
 } from "./ids";
+import type { AgentRunWriteFence } from "./identity";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
 
@@ -239,5 +240,7 @@ export interface ModelProviderContinuationStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     providerId: string;
+    /** Given when an Agent Run drops it: refused once the run lost its lease. */
+    runFence?: AgentRunWriteFence;
   }): Promise<void>;
 }
