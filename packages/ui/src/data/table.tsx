@@ -63,3 +63,20 @@ export const TableCell = forwardRef<HTMLTableCellElement, TdHTMLAttributes<HTMLT
     return <td ref={ref} className={cn("px-3 py-2.5 align-middle", className)} {...props} />;
   }
 );
+
+/**
+ * A second line in a cell, under its value: what belongs to the value and matters less, such as
+ * the time under a date or a share under a total. A table with many facts per row stays as wide
+ * as its box this way, with fewer columns instead of a row that runs out of sight.
+ */
+export const TableCellDetail = forwardRef<HTMLSpanElement, HTMLAttributes<HTMLSpanElement>>(
+  function TableCellDetail({ className, ...props }, ref) {
+    return (
+      <span
+        ref={ref}
+        className={cn("block text-caption text-muted-foreground", className)}
+        {...props}
+      />
+    );
+  }
+);

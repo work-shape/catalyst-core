@@ -167,6 +167,7 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   tableName: string;
   tableState: string;
   tableUpdated: string;
+  tableUpdatedTime: string;
   rowAgent: string;
   rowWorkflow: string;
   rowKnowledge: string;
@@ -374,6 +375,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     tableName: "Name",
     tableState: "State",
     tableUpdated: "Updated",
+    tableUpdatedTime: "9:41 AM",
     rowAgent: "Support assistant",
     rowWorkflow: "Invoice check",
     rowKnowledge: "Product handbook",
@@ -582,6 +584,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     tableName: "Name",
     tableState: "Status",
     tableUpdated: "Geändert",
+    tableUpdatedTime: "09:41",
     rowAgent: "Support-Assistent",
     rowWorkflow: "Rechnungsprüfung",
     rowKnowledge: "Produkthandbuch",

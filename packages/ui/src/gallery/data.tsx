@@ -6,7 +6,15 @@ import { FilterBar } from "../data/filter-bar";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
 import { List, ListRow, type ListRowSize } from "../data/list-row";
 import { Pagination } from "../data/pagination";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../data/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableCellDetail,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "../data/table";
 import { Input } from "../forms/input";
 import { Select } from "../forms/select";
 import { Badge } from "../status/badge";
@@ -157,7 +165,10 @@ function AssetTable({ text }: { text: GalleryText }) {
           <TableCell>
             <Badge tone="success">{text.statePublished}</Badge>
           </TableCell>
-          <TableCell className="text-muted-foreground">{text.today}</TableCell>
+          <TableCell>
+            {text.today}
+            <TableCellDetail>{text.tableUpdatedTime}</TableCellDetail>
+          </TableCell>
         </TableRow>
         <TableRow>
           <TableCell>
@@ -175,7 +186,10 @@ function AssetTable({ text }: { text: GalleryText }) {
           <TableCell>
             <Badge tone="info">{text.stateRunning}</Badge>
           </TableCell>
-          <TableCell className="text-muted-foreground">{text.today}</TableCell>
+          <TableCell>
+            {text.today}
+            <TableCellDetail>{text.tableUpdatedTime}</TableCellDetail>
+          </TableCell>
         </TableRow>
         <TableRow>
           <TableCell>
@@ -193,7 +207,10 @@ function AssetTable({ text }: { text: GalleryText }) {
           <TableCell>
             <Badge>{text.stateDraft}</Badge>
           </TableCell>
-          <TableCell className="text-muted-foreground">{text.yesterday}</TableCell>
+          <TableCell>
+            {text.yesterday}
+            <TableCellDetail>{text.tableUpdatedTime}</TableCellDetail>
+          </TableCell>
         </TableRow>
       </TableBody>
     </Table>
