@@ -337,6 +337,31 @@ function AgentPicker({ text }: { text: GalleryText }) {
   );
 }
 
+/** An icon that opens its list under the pointer, with descriptions in full and no search. */
+function PointedAgentPicker({ text }: { text: GalleryText }) {
+  const options: PickerOption[] = [
+    { value: "support", label: text.rowAgent, description: text.agentSupportLongHint },
+    { value: "research", label: text.agentResearch, description: text.agentResearchHint },
+    { value: "contracts", label: text.agentContracts, description: text.agentContractsHint }
+  ];
+  const [agent, setAgent] = useState("support");
+  const chosen = options.find((option) => option.value === agent);
+  return (
+    <Picker
+      openOnHover
+      wrapDescriptions
+      label={text.pickAgent}
+      options={options}
+      value={agent}
+      onValueChange={setAgent}
+    >
+      <Button variant="outline" size="icon" aria-label={`${text.pickAgent}: ${chosen?.label}`}>
+        <Bot aria-hidden="true" />
+      </Button>
+    </Picker>
+  );
+}
+
 function PickerSamples({ text }: { text: GalleryText }) {
   const [workspaces, setWorkspaces] = useState<readonly string[]>([text.workspaceMarketing]);
   const [role, setRole] = useState<string | undefined>(undefined);
@@ -344,6 +369,7 @@ function PickerSamples({ text }: { text: GalleryText }) {
   return (
     <Samples>
       <AgentPicker text={text} />
+      <PointedAgentPicker text={text} />
       <Picker
         multiple
         options={workspaceOptions(text)}

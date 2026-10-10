@@ -108,6 +108,7 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   pickerGroupWorkspace: string;
   pickerGroupInstance: string;
   agentSupportHint: string;
+  agentSupportLongHint: string;
   agentResearch: string;
   agentResearchHint: string;
   agentContracts: string;
@@ -282,6 +283,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     pickerGroupWorkspace: "This workspace",
     pickerGroupInstance: "Instance",
     agentSupportHint: "Answers questions from the handbook",
+    agentSupportLongHint:
+      "Answers questions from the handbook, names the page it found the answer on and says so when the handbook has none",
     agentResearch: "Research assistant",
     agentResearchHint: "Searches the web and cites its sources",
     agentContracts: "Contract check",
@@ -458,6 +461,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     pickerGroupWorkspace: "Dieser Workspace",
     pickerGroupInstance: "Instanz",
     agentSupportHint: "Beantwortet Fragen aus dem Handbuch",
+    agentSupportLongHint:
+      "Beantwortet Fragen aus dem Handbuch, nennt die Seite mit der Antwort und sagt es, wenn das Handbuch keine hat",
     agentResearch: "Recherche-Assistent",
     agentResearchHint: "Durchsucht das Web und nennt Quellen",
     agentContracts: "Vertragsprüfung",
