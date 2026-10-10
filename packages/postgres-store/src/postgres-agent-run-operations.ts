@@ -413,6 +413,7 @@ export async function updateAgentRunStatus(
 }
 
 export {
+  appendClaimedAgentRunEnd,
   appendClaimedAgentRunMessage,
   appendClaimedRunObservation,
   assertClaimedAgentRun,

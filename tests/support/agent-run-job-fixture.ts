@@ -9,6 +9,7 @@ import {
   asAgentRunId,
   asMessageId,
   createAgentRunUpkeepJobs,
+  createAssistantFinalMetadata,
   executeAgentRunJob,
   type AgentRun,
   type AgentRunAuthorization,
@@ -266,6 +267,30 @@ class ControlledExecution {
       conversationId: this.input.conversationId,
       text
     });
+  }
+
+  /**
+   * The answer that ends the run, as the runtime writes it: the message, then the event that
+   * names it. The worker holds both back until the event that ends the run.
+   */
+  async finalMessage(text: string): Promise<ChatMessage> {
+    const message = await this.control.conversationHistory.appendAssistantMessage({
+      clientInstanceId: this.context.clientInstanceId,
+      conversationId: this.input.conversationId,
+      text,
+      metadata: createAssistantFinalMetadata({
+        runId: this.runId,
+        reasoning: [],
+        sources: [],
+        citations: []
+      })
+    });
+    this.push({
+      type: "message_completed",
+      ...this.next(),
+      message: { id: message.id, role: "assistant", text, metadata: message.metadata }
+    });
+    return message;
   }
 
   complete(): void {

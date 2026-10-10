@@ -9,13 +9,18 @@ import {
   defineJobHandler,
   executeAgentRunJob,
   failAgentRunOfLostJob,
+  createPlatformId,
   getSubjectUserId,
+  readAssistantFinalMetadata,
   type AgentRun,
   type AgentRunError,
   type AgentRunId,
   type AgentRunJobLease,
   type AgentRuntimeEvent,
+  type AppendAssistantMessageInput,
+  type AppendClaimedAgentRunEndInput,
   type AuthenticatedUser,
+  type ChatMessage,
   type ClientInstanceId,
   type ConversationHistoryStore,
   type JobControl,
@@ -190,6 +195,8 @@ async function executeClaimedRun(
   };
   restartIdleTimer();
 
+  // Read through a function: the cause is set from callbacks, which the compiler does not follow.
+  const hasLostLease = () => stopCause === "lease_lost";
   /** Every write of the run goes through here: the first refusal stops the run. */
   const fenced = async <Result>(write: () => Promise<Result>): Promise<Result> => {
     try {
@@ -199,25 +206,70 @@ async function executeClaimedRun(
       throw error;
     }
   };
-  const storeEvent = (event: AgentRuntimeEvent) =>
-    fenced(() => store.appendClaimedRunObservation({ ...ofRun, lease, event }));
-  const append = async (event: AgentRuntimeEvent): Promise<void> => {
+  /**
+   * The last assistant message of the run, held back with the events that follow it until
+   * the event that ends the run: all of them are stored in one transaction. A worker that is
+   * killed at the end of a run leaves either the whole answer with a run that ended, or a
+   * failed run without the answer, never an answer beside a failed run.
+   */
+  let heldEnd: RunWrite | undefined;
+  const storeWrite = (batch: RunWrite) =>
+    fenced(() => store.appendClaimedAgentRunEnd({ ...ofRun, lease, ...batch }));
+  const write = async (batch: RunWrite): Promise<void> => {
+    const last = batch.events.at(-1);
     try {
-      await storeEvent(event);
+      await storeWrite(batch);
     } catch (error) {
       // The store refuses to end a run as completed or failed once it was asked to cancel.
       // The request came between the last look at the row and this event: the run ends as
-      // cancelled, with what it stored so far.
-      if (event.type !== "run_completed" && event.type !== "run_failed") throw error;
+      // cancelled, with what it stored so far and what this write carries.
+      if (last?.type !== "run_completed" && last?.type !== "run_failed") throw error;
       if (error instanceof JobLeaseLostError) throw error;
       const latest = await store.getAgentRun(ofRun);
       if (latest?.status !== "cancelling") throw error;
       cancellation ??= { reason: latest.cancellationReason };
-      await storeEvent(cancelledEvent(run, latest.lastSequence + 1, now(), cancellation.reason));
+      await storeWrite({
+        ...batch,
+        events: [
+          ...batch.events.slice(0, -1),
+          cancelledEvent(run, last.sequence, now(), cancellation.reason)
+        ]
+      });
     }
-    if (isTerminalEvent(event)) terminalWritten = true;
+    if (last && isTerminalEvent(last)) terminalWritten = true;
     restartIdleTimer();
     options.onObservation?.(run.id);
+  };
+  /** Stores what is held when the run goes on or ends without the event that ends it. */
+  const flushHeldEnd = async (): Promise<void> => {
+    const held = heldEnd;
+    heldEnd = undefined;
+    if (held) await write(held);
+  };
+  const append = async (event: AgentRuntimeEvent): Promise<void> => {
+    if (!heldEnd) return write({ events: [event] });
+    if (event.type === "message_delta" || event.type === "message_completed") {
+      heldEnd.events.push(event);
+      return;
+    }
+    const held = heldEnd;
+    heldEnd = undefined;
+    if (isTerminalEvent(event)) return write({ ...held, events: [...held.events, event] });
+    await write(held);
+    await write({ events: [event] });
+  };
+  const holdFinalMessage = (message: AppendAssistantMessageInput): ChatMessage => {
+    const id = message.id ?? createPlatformId<"MessageId">("msg");
+    heldEnd = { message: { ...message, id, role: "assistant" }, events: [] };
+    return {
+      id,
+      clientInstanceId: message.clientInstanceId,
+      conversationId: message.conversationId,
+      role: "assistant",
+      text: message.text,
+      createdAt: now(),
+      ...(message.metadata ? { metadata: message.metadata } : {})
+    };
   };
 
   const sendCancel = () => {
@@ -291,7 +343,11 @@ async function executeClaimedRun(
         assertLease: async () => {
           await fenced(() => store.assertClaimedAgentRun({ ...ofRun, lease }));
         },
-        conversationHistory: fencedConversationHistory(options, run, lease, fenced)
+        conversationHistory: fencedConversationHistory(options, run, lease, {
+          fenced,
+          holdFinalMessage,
+          flushHeldEnd
+        })
       });
       cancelExecution = (reason) => execution.cancel(reason);
       sendCancel();
@@ -312,10 +368,14 @@ async function executeClaimedRun(
         if (terminalWritten) break;
       }
       if (!terminalWritten && stopCause !== "lease_lost") {
+        await flushHeldEnd();
         await closeRun(EXECUTOR_ENDED_ERROR);
       }
     } catch (error) {
       if (terminalWritten || stopCause === "lease_lost") throw error;
+      // An answer that is still held is stored when it can be, and the run ends as failed.
+      await flushHeldEnd().catch(() => undefined);
+      if (hasLostLease()) throw error;
       await closeRun(workerFailure(error));
     }
   } finally {
@@ -364,7 +424,11 @@ function fencedConversationHistory(
   options: AgentRunJobsOptions,
   run: AgentRun,
   lease: AgentRunJobLease,
-  fenced: <Result>(write: () => Promise<Result>) => Promise<Result>
+  writes: {
+    fenced<Result>(write: () => Promise<Result>): Promise<Result>;
+    holdFinalMessage(message: AppendAssistantMessageInput): ChatMessage;
+    flushHeldEnd(): Promise<void>;
+  }
 ): ConversationHistoryStore {
   const { conversations, agentRuns } = options.stores;
   const ofRun = { clientInstanceId: run.clientInstanceId, runId: run.id, lease };
@@ -375,19 +439,27 @@ function fencedConversationHistory(
       if (message.role !== "tool") {
         throw new AppError("VALIDATION_FAILED", "An agent run may only append tool messages");
       }
-      return fenced(() =>
+      await writes.flushHeldEnd();
+      return writes.fenced(() =>
         agentRuns.appendClaimedAgentRunMessage({ ...ofRun, message: { ...message, role: "tool" } })
       );
     },
-    appendAssistantMessage: (message) =>
-      fenced(() =>
+    appendAssistantMessage: async (message) => {
+      await writes.flushHeldEnd();
+      // The answer that ends the run is stored with the event that ends it.
+      if (readAssistantFinalMetadata(message.metadata)) return writes.holdFinalMessage(message);
+      return writes.fenced(() =>
         agentRuns.appendClaimedAgentRunMessage({
           ...ofRun,
           message: { ...message, role: "assistant" }
         })
-      )
+      );
+    }
   };
 }
+
+/** What one transaction stores of a run: a last assistant message, and events in order. */
+type RunWrite = Pick<AppendClaimedAgentRunEndInput, "message" | "events">;
 
 export type WorkerLocalAgentRuntimeOptions = Omit<
   LocalAgentRuntimeOptions,

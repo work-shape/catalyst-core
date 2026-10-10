@@ -270,6 +270,100 @@ describe("agent runs as claimed jobs", () => {
     expect(await fixture.eventTypes(run)).toEqual(["run_cancelled"]);
   });
 
+  it("stores the answer of a run and the end of the run together", async () => {
+    const fixture = await createFixture("end_together");
+    const run = await fixture.accept();
+    const pass = fixture.worker().runDue();
+    const execution = await fixture.executor.next();
+    execution.delta("Done.");
+    await waitUntil(async () => (await fixture.events(run)).length === 1, "the piece is stored");
+    const message = await execution.finalMessage("Done.");
+
+    // The answer is written and the run has not ended: nothing of the answer is stored yet.
+    expect(await assistantTexts(fixture)).toEqual([]);
+    expect(await fixture.run(run)).toMatchObject({ status: "running", lastSequence: 1 });
+
+    execution.complete();
+    await pass;
+
+    expect(await fixture.run(run)).toMatchObject({ status: "completed", lastSequence: 3 });
+    expect(await fixture.eventTypes(run)).toEqual([
+      "message_delta",
+      "message_completed",
+      "run_completed"
+    ]);
+    const stored = (await fixture.messages()).filter((entry) => entry.role === "assistant");
+    expect(stored).toMatchObject([{ id: message.id, text: "Done." }]);
+  });
+
+  it("leaves no answer beside a failed run when the worker is lost at the end of the run", async () => {
+    const fixture = await createFixture("end_lost");
+    harness.heartbeatsByHand();
+    const run = await fixture.accept();
+    const worker = fixture.worker();
+    const pass = worker.runDue();
+    const execution = await fixture.executor.next();
+    await execution.finalMessage("Done.");
+    // The worker is gone for the lease time between its answer and the end of its run.
+    await fixture.expireJobLeases();
+    await fixture.worker({ stores: db.secondStore }).runDue();
+
+    execution.complete();
+    await pass;
+
+    expect(await fixture.run(run)).toMatchObject({
+      status: "failed",
+      error: { code: "AGENT_RUN_WORKER_LOST" }
+    });
+    expect(await fixture.eventTypes(run)).toEqual(["run_failed"]);
+    expect(await assistantTexts(fixture)).toEqual([]);
+  });
+
+  it("stores the answer with a run that ends as cancelled at its completion", async () => {
+    const fixture = await createFixture("end_cancelled");
+    const run = await fixture.accept();
+    const pass = fixture.worker().runDue();
+    const execution = await fixture.executor.next();
+    await execution.finalMessage("Done.");
+    await db.store.agentRuns.requestAgentRunCancellation({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: run.id,
+      requestedAt: new Date().toISOString(),
+      reason: "Stop at the end"
+    });
+    execution.complete();
+    await pass;
+
+    expect(await fixture.run(run)).toMatchObject({ status: "cancelled", lastSequence: 2 });
+    expect(await fixture.eventTypes(run)).toEqual(["message_completed", "run_cancelled"]);
+    expect(await assistantTexts(fixture)).toEqual(["Done."]);
+  });
+
+  it("stores a held answer when the run goes on or ends without its last event", async () => {
+    const fixture = await createFixture("end_flushed");
+    const run = await fixture.accept();
+    const pass = fixture.worker().runDue();
+    const execution = await fixture.executor.next();
+    await execution.finalMessage("First.");
+    // The run goes on after what looked like its answer.
+    await execution.assistantMessage("Second.");
+    expect(await assistantTexts(fixture)).toEqual(["First.", "Second."]);
+    await execution.finalMessage("Third.");
+    execution.end();
+    await pass;
+
+    expect(await assistantTexts(fixture)).toEqual(["First.", "Second.", "Third."]);
+    expect(await fixture.eventTypes(run)).toEqual([
+      "message_completed",
+      "message_completed",
+      "run_failed"
+    ]);
+    expect(await fixture.run(run)).toMatchObject({
+      status: "failed",
+      error: { code: "AGENT_RUN_EXECUTOR_ENDED" }
+    });
+  });
+
   it("ends a run as interrupted when its worker stops, and no worker executes it again", async () => {
     const fixture = await createFixture("stop");
     const run = await fixture.accept();

@@ -8,6 +8,7 @@ import {
   type AgentRunStore,
   type AgentRunWithoutJob,
   type AgentRuntimeEvent,
+  type AppendClaimedAgentRunEndInput,
   type AppendClaimedAgentRunMessageInput,
   type AppendClaimedRunObservationInput,
   type AssertClaimedAgentRunInput,
@@ -24,7 +25,7 @@ import {
   subjectRowLeaseOwnerId
 } from "@vivd-catalyst/core";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
-import type { PostgresConnection } from "./postgres-database";
+import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
@@ -188,56 +189,80 @@ export async function appendClaimedRunObservation(
   db: PostgresConnection,
   input: AppendClaimedRunObservationInput
 ): Promise<RunObservation> {
-  if (input.event.runId !== input.runId) {
-    throw new AppError("VALIDATION_FAILED", "Run observation belongs to another agent run");
-  }
   return db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
-    const terminal = terminalStatusPatch(input.event);
-    const [run] = await tx
-      .update(agentRuns)
-      .set({
-        lastSequence: input.event.sequence,
-        updatedAt: new Date(input.event.createdAt),
-        ...(input.event.type === "tool_permission_requested"
-          ? { status: "waiting_for_permission" as const }
-          : {}),
-        ...terminal
-      })
-      .where(
-        and(
-          claimedRunWhere(input),
-          eq(agentRuns.lastSequence, input.event.sequence - 1),
-          // A run that was asked to cancel ends as cancelled and as nothing else. What it
-          // still writes on its way there is stored.
-          endsOrSuspendsRun(input.event)
-            ? inArray(agentRuns.status, ["running", "waiting_for_permission"])
-            : undefined
-        )
-      )
-      .returning();
-    if (!run) {
-      throw new AppError(
-        "CONFLICT",
-        "Agent run has ended, was asked to cancel, or its sequence is stale"
-      );
-    }
-
-    const [row] = await tx
-      .insert(agentRunObservations)
-      .values({
-        clientInstanceId: run.clientInstanceId,
-        runId: run.id,
-        conversationId: run.conversationId,
-        ownerUserId: run.ownerUserId,
-        sequence: input.event.sequence,
-        type: input.event.type,
-        payload: input.event,
-        createdAt: new Date(input.event.createdAt)
-      })
-      .returning();
-    return mapRunObservation(row);
+    return insertClaimedRunObservation(tx, input, input.event);
   });
+}
+
+/**
+ * The end of a run in one transaction: its last assistant message, when one is given, and
+ * its events through the one that ends it. All of it is stored or none of it, so a run never
+ * shows a stored answer beside a run that did not end.
+ */
+export async function appendClaimedAgentRunEnd(
+  db: PostgresConnection,
+  input: AppendClaimedAgentRunEndInput
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await requireJobLease(tx, input.lease);
+    if (input.message) await insertClaimedAgentRunMessage(tx, input, input.message);
+    for (const event of input.events) await insertClaimedRunObservation(tx, input, event);
+  });
+}
+
+async function insertClaimedRunObservation(
+  tx: PostgresConnection,
+  claim: ClaimedRun,
+  event: AgentRuntimeEvent
+): Promise<RunObservation> {
+  if (event.runId !== claim.runId) {
+    throw new AppError("VALIDATION_FAILED", "Run observation belongs to another agent run");
+  }
+  const terminal = terminalStatusPatch(event);
+  const [run] = await tx
+    .update(agentRuns)
+    .set({
+      lastSequence: event.sequence,
+      updatedAt: new Date(event.createdAt),
+      ...(event.type === "tool_permission_requested"
+        ? { status: "waiting_for_permission" as const }
+        : {}),
+      ...terminal
+    })
+    .where(
+      and(
+        claimedRunWhere(claim),
+        eq(agentRuns.lastSequence, event.sequence - 1),
+        // A run that was asked to cancel ends as cancelled and as nothing else. What it
+        // still writes on its way there is stored.
+        endsOrSuspendsRun(event)
+          ? inArray(agentRuns.status, ["running", "waiting_for_permission"])
+          : undefined
+      )
+    )
+    .returning();
+  if (!run) {
+    throw new AppError(
+      "CONFLICT",
+      "Agent run has ended, was asked to cancel, or its sequence is stale"
+    );
+  }
+
+  const [row] = await tx
+    .insert(agentRunObservations)
+    .values({
+      clientInstanceId: run.clientInstanceId,
+      runId: run.id,
+      conversationId: run.conversationId,
+      ownerUserId: run.ownerUserId,
+      sequence: event.sequence,
+      type: event.type,
+      payload: event,
+      createdAt: new Date(event.createdAt)
+    })
+    .returning();
+  return mapRunObservation(row);
 }
 
 export async function assertClaimedAgentRun(
@@ -297,76 +322,84 @@ export async function appendClaimedAgentRunMessage(
 ) {
   return db.transaction(async (tx) => {
     await requireJobLease(tx, input.lease);
-    const [run] = await tx
-      .select()
-      .from(agentRuns)
-      .where(claimedRunWhere(input))
-      .limit(1)
-      .for("update");
-    if (!run) throw new AppError("CONFLICT", "Agent run has ended");
-    if (input.message.conversationId !== run.conversationId) {
-      throw new AppError("CONFLICT", "Agent run message belongs to another conversation");
-    }
-    await requireActiveConversationLock(
-      tx,
-      input.clientInstanceId,
-      asConversationId(run.conversationId),
-      asUserId(run.ownerUserId)
+    return insertClaimedAgentRunMessage(tx, input, input.message);
+  });
+}
+
+async function insertClaimedAgentRunMessage(
+  tx: PostgresTransaction,
+  claim: ClaimedRun,
+  message: AppendClaimedAgentRunMessageInput["message"]
+) {
+  const [run] = await tx
+    .select()
+    .from(agentRuns)
+    .where(claimedRunWhere(claim))
+    .limit(1)
+    .for("update");
+  if (!run) throw new AppError("CONFLICT", "Agent run has ended");
+  if (message.conversationId !== run.conversationId) {
+    throw new AppError("CONFLICT", "Agent run message belongs to another conversation");
+  }
+  await requireActiveConversationLock(
+    tx,
+    claim.clientInstanceId,
+    asConversationId(run.conversationId),
+    asUserId(run.ownerUserId)
+  );
+  const createdAt = new Date();
+  const [row] = await tx
+    .insert(messages)
+    .values({
+      id: message.id ?? createPlatformId<"MessageId">("msg"),
+      clientInstanceId: claim.clientInstanceId,
+      conversationId: run.conversationId,
+      role: message.role,
+      text: message.text,
+      metadata: message.metadata ?? {},
+      createdAt
+    })
+    .returning();
+  if (!row) throw new AppError("INTERNAL", "Agent run message was not persisted");
+  await tx
+    .update(conversations)
+    .set({ updatedAt: createdAt })
+    .where(
+      and(
+        eq(conversations.clientInstanceId, claim.clientInstanceId),
+        eq(conversations.id, run.conversationId),
+        eq(conversations.status, "active")
+      )
     );
-    const createdAt = new Date();
-    const [row] = await tx
-      .insert(messages)
-      .values({
-        id: input.message.id ?? createPlatformId<"MessageId">("msg"),
-        clientInstanceId: input.clientInstanceId,
-        conversationId: run.conversationId,
-        role: input.message.role,
-        text: input.message.text,
-        metadata: input.message.metadata ?? {},
-        createdAt
-      })
-      .returning();
-    if (!row) throw new AppError("INTERNAL", "Agent run message was not persisted");
+  if (message.role === "assistant" && message.providerContinuation) {
+    const continuation = message.providerContinuation;
     await tx
-      .update(conversations)
-      .set({ updatedAt: createdAt })
-      .where(
-        and(
-          eq(conversations.clientInstanceId, input.clientInstanceId),
-          eq(conversations.id, run.conversationId),
-          eq(conversations.status, "active")
-        )
-      );
-    if (input.message.role === "assistant" && input.message.providerContinuation) {
-      const continuation = input.message.providerContinuation;
-      await tx
-        .insert(modelProviderContinuations)
-        .values({
-          clientInstanceId: input.clientInstanceId,
-          conversationId: run.conversationId,
-          providerId: continuation.providerId,
+      .insert(modelProviderContinuations)
+      .values({
+        clientInstanceId: claim.clientInstanceId,
+        conversationId: run.conversationId,
+        providerId: continuation.providerId,
+        state: continuation.state,
+        sourceMessageId: row.id,
+        sourceStorageOrdinal: row.storageOrdinal,
+        updatedAt: createdAt
+      })
+      .onConflictDoUpdate({
+        target: [
+          modelProviderContinuations.clientInstanceId,
+          modelProviderContinuations.conversationId,
+          modelProviderContinuations.providerId
+        ],
+        set: {
           state: continuation.state,
           sourceMessageId: row.id,
           sourceStorageOrdinal: row.storageOrdinal,
           updatedAt: createdAt
-        })
-        .onConflictDoUpdate({
-          target: [
-            modelProviderContinuations.clientInstanceId,
-            modelProviderContinuations.conversationId,
-            modelProviderContinuations.providerId
-          ],
-          set: {
-            state: continuation.state,
-            sourceMessageId: row.id,
-            sourceStorageOrdinal: row.storageOrdinal,
-            updatedAt: createdAt
-          },
-          setWhere: lt(modelProviderContinuations.sourceStorageOrdinal, row.storageOrdinal)
-        });
-    }
-    return mapMessage(row);
-  });
+        },
+        setWhere: lt(modelProviderContinuations.sourceStorageOrdinal, row.storageOrdinal)
+      });
+  }
+  return mapMessage(row);
 }
 
 export async function failLostAgentRun(
@@ -535,12 +568,15 @@ function heldByAnother(leaseOwnerId: string) {
   )`;
 }
 
-/** The run is this attempt's and has not ended. A cancelling run still takes its last writes. */
-function claimedRunWhere(input: {
+/** One run as the attempt of a job holds it. */
+interface ClaimedRun {
   clientInstanceId: ClientInstanceId;
   runId: AgentRun["id"];
   lease: AgentRunJobLease;
-}) {
+}
+
+/** The run is this attempt's and has not ended. A cancelling run still takes its last writes. */
+function claimedRunWhere(input: ClaimedRun) {
   return and(
     eq(agentRuns.clientInstanceId, input.clientInstanceId),
     eq(agentRuns.id, input.runId),

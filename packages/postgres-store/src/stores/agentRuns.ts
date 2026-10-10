@@ -19,6 +19,7 @@ import {
   type UpdateAgentRunStatusInput
 } from "@vivd-catalyst/core";
 import {
+  appendClaimedAgentRunEnd as appendPostgresClaimedAgentRunEnd,
   appendClaimedAgentRunMessage as appendPostgresClaimedAgentRunMessage,
   appendClaimedRunObservation as appendPostgresClaimedRunObservation,
   appendRunObservation as appendPostgresRunObservation,
@@ -131,6 +132,11 @@ export function createPostgresAgentRunsStore(
     },
     async assertClaimedAgentRun(input: AssertClaimedAgentRunInput): Promise<AgentRun> {
       return assertPostgresClaimedAgentRun(db, input);
+    },
+    async appendClaimedAgentRunEnd(
+      input: Parameters<AgentRunStore["appendClaimedAgentRunEnd"]>[0]
+    ) {
+      return appendPostgresClaimedAgentRunEnd(db, input);
     },
     async appendClaimedAgentRunMessage(
       input: AppendClaimedAgentRunMessageInput

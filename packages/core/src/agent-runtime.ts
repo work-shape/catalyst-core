@@ -450,6 +450,16 @@ export interface AppendClaimedAgentRunMessageInput {
     ({ role: "assistant" } & AppendAssistantMessageInput) | ({ role: "tool" } & CreateMessageInput);
 }
 
+export interface AppendClaimedAgentRunEndInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  lease: AgentRunJobLease;
+  /** The last assistant message of the run, when it wrote one. */
+  message?: { role: "assistant" } & AppendAssistantMessageInput;
+  /** The events that follow, in order. The last one ends the run. */
+  events: AgentRuntimeEvent[];
+}
+
 export interface FailLostAgentRunInput {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
@@ -554,6 +564,12 @@ export interface AgentRunStore {
    * nothing is written back after an erasure began.
    */
   appendClaimedAgentRunMessage(input: AppendClaimedAgentRunMessageInput): Promise<ChatMessage>;
+  /**
+   * Stores the end of a run in one transaction: its last assistant message, when one is
+   * given, and its events in order. Refused as `appendClaimedAgentRunMessage` and
+   * `appendClaimedRunObservation` refuse, and then nothing of it is stored.
+   */
+  appendClaimedAgentRunEnd(input: AppendClaimedAgentRunEndInput): Promise<void>;
   /**
    * Ends a run that was started and whose worker is gone: failed with `error` and a
    * `run_failed` event. A queued run was never started and is left for a new job; an ended
