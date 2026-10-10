@@ -345,7 +345,9 @@ id from config_assets where status = 'deleted')`.
   whether the provider reported it, reported none, or it is estimated. `failed`: it failed,
   was stopped or timed out before any answer arrived; it counts as one call, uses nothing
   and shows "Failed". A stream that is stopped or breaks off after its answer began is
-  settled with an estimate of three characters a token and marked `estimated`.
+  settled with the usage its provider had reported by then, and otherwise with an estimate
+  of three characters a token, one token for a character outside the Latin alphabet, and
+  marked `estimated`.
   `abandoned`: its process went away; it shows "Abandoned". A job
   (`usage.recover_abandoned_calls`, every 10 minutes) takes a call that is still `pending`
   six hours after its admission as abandoned and releases what it reserved.

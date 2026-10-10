@@ -194,10 +194,22 @@ export interface ModelAdapterRequest {
  * One provider entry, ready to be called. It owns its wire format and throws
  * `ModelProviderError`; it neither retries nor records usage, the gateway does both.
  */
+/**
+ * What the stream of an adapter gives: the events of the answer, and two that are for the
+ * gateway alone and that it hands to no caller. `usage_reported` is the usage the provider
+ * reported while the stream ran, so a stream that is cut off after it settles with it.
+ * `tool_call_input_delta` is a piece of the input of a function call as it arrives, which no
+ * event of the answer carries before the completion: the provider bills it as output.
+ */
+export type ModelAdapterStreamEvent =
+  | ModelCompletionStreamEvent
+  | { type: "usage_reported"; usage: ModelCompletion["usage"] }
+  | { type: "tool_call_input_delta"; delta: string };
+
 export interface ModelAdapter {
   capabilities(model: string): ModelCapabilities;
   complete(request: ModelAdapterRequest): Promise<ModelCompletion>;
-  stream(request: ModelAdapterRequest): AsyncIterable<ModelCompletionStreamEvent>;
+  stream(request: ModelAdapterRequest): AsyncIterable<ModelAdapterStreamEvent>;
 }
 
 export function modelContentText(content: ModelContent): string {

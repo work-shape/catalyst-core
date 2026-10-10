@@ -20,6 +20,7 @@ import {
   type ModelAdapterRequest,
   type ModelCapabilities,
   type ModelCompletion,
+  type ModelAdapterStreamEvent,
   type ModelCompletionStreamEvent,
   type ModelMessage,
   type ModelOutputFormat,
@@ -204,14 +205,19 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           return;
         }
         for await (const event of target.adapter.stream(request)) {
+          if (event.type === "usage_reported") {
+            seen.reportedUsage = event.usage;
+            continue;
+          }
           const received = receivedWith(event);
           if (received) {
             // The provider read the request of this attempt once more to answer it.
-            if (!answering) seen.received.inputCharacters += seen.requestCharacters;
+            if (!answering) seen.received.inputCharacters += seen.requestCharacters();
             answering = true;
             seen.received.outputCharacters += received.characters;
             seen.received.webSearchCallCount += received.webSearchCalls;
           }
+          if (event.type === "tool_call_input_delta") continue;
           if (event.type === "tool_call_preparing") {
             preparingToolCallIds.push(event.toolCallId);
           } else if (event.type === "completed") {
@@ -257,8 +263,9 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
    * refused before or at admission records nothing. Admission writes the usage event of the
    * call, so every admitted call has exactly one, whether it completed, failed, was stopped or
    * was left unread by its caller. A call that did not complete and gave nothing is settled as
-   * failed with nothing used. A stream that was cut off after its answer began is settled with
-   * `estimateInterruptedCallUsage`: its provider counted what it sent, and reported nothing.
+   * failed with nothing used. A stream that was cut off is settled with the usage its provider
+   * had reported by then, and without one, where its answer had begun, with
+   * `estimateInterruptedCallUsage`: its provider counted what it sent.
    * Only a process that goes away leaves an event that is not settled.
    */
   async function* run(
@@ -269,7 +276,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     assertWithinCapabilities(call, target, streaming);
     const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
     policy.assertAttemptMayStart();
-    const inputCharacters = requestCharacters(call);
+    const inputCharacters = requestCharacters(call, (text) => text.length);
     const admitted = await governance.admitModelCall({
       clientInstanceId: call.clientInstanceId,
       attribution: call.attribution,
@@ -281,17 +288,20 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       correlationId: call.correlationId,
       request: { inputCharacters }
     });
+    let estimatedRequest: number | undefined;
     const seen: SeenOfCall = {
-      requestCharacters: inputCharacters,
+      // Read only where an estimate is made: it goes through every text of the request.
+      requestCharacters: () => (estimatedRequest ??= requestCharacters(call, estimatedCharacters)),
       received: { inputCharacters: 0, outputCharacters: 0, webSearchCallCount: 0 }
     };
     const settle = async (answerHandedOn: boolean): Promise<void> => {
       try {
-        // What the provider reported. Without it: an estimate where an answer began, and
-        // nothing where none did.
+        // What the provider reported, with the completion or before the stream was cut.
+        // Without it: an estimate where an answer began, and nothing where none did.
         await governance.settleModelCall(
           admitted,
           seen.completion?.usage ??
+            seen.reportedUsage ??
             (seen.received.outputCharacters > 0
               ? estimateInterruptedCallUsage(seen.received)
               : undefined)
@@ -352,61 +362,100 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
 /** What the gateway saw of a call: its completion, or what arrived of an answer without one. */
 interface SeenOfCall {
   completion?: ModelCompletion;
-  /** The characters of the request, as admission sized it. */
-  requestCharacters: number;
+  /** The usage the provider reported in a stream that gave no completion. */
+  reportedUsage?: ModelCompletion["usage"];
+  /** The characters of the request, as `estimatedCharacters` counts them. */
+  requestCharacters(): number;
   received: InterruptedCallSize;
 }
 
-/** What arrived of a streamed call that reported no usage, over all its attempts. */
+/**
+ * What arrived of a streamed call that reported no usage, over all its attempts. Characters are
+ * counted with `estimatedCharacters`.
+ */
 export interface InterruptedCallSize {
   /** The characters of the request, once for each attempt that began to answer. */
   inputCharacters: number;
-  /** The characters of the text, the reasoning and the tool events that arrived. */
+  /** The characters of the text, the reasoning, the tool events and the tool inputs. */
   outputCharacters: number;
   webSearchCallCount: number;
 }
 
 /**
- * Characters taken as one token when a call that was cut off is estimated. Text runs at about
- * four characters a token; three keeps the estimate above what the provider counts.
+ * Characters of the Latin alphabet, digits and punctuation taken as one token when a call that
+ * was cut off is estimated. Such text runs at about four characters a token; three keeps the
+ * estimate above what the provider counts.
  */
 const ESTIMATED_CHARACTERS_PER_TOKEN = 3;
+
+/**
+ * The most tokens an estimate gives for the input of a call, and for its output. No model
+ * takes or gives that much in one call, so the bound cuts nothing real. It is there for a
+ * stream that is malformed or runs without end: its estimate stays far inside what the usage
+ * event and the counters store as a 32-bit integer, also as the sum of both, so settling it
+ * cannot fail on its size and leave the call to be recovered with nothing used.
+ */
+export const MAX_ESTIMATED_TOKENS_PER_CALL = 10_000_000;
+
+/** The most web searches an estimate counts for one call, for the same reason. */
+export const MAX_ESTIMATED_WEB_SEARCHES_PER_CALL = 1_000;
+
+/**
+ * The size of a text for the estimate. A character of the Latin alphabet, a digit or a
+ * punctuation mark counts as one. Every other character counts as
+ * `ESTIMATED_CHARACTERS_PER_TOKEN`, which is one token for each: Chinese, Japanese and Korean
+ * text runs at about one token a character, and Cyrillic, Greek, Arabic and accented letters
+ * at less, so three characters a token would count such text at a third of what it costs.
+ */
+export function estimatedCharacters(text: string): number {
+  let others = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) > 0x7f) others += 1;
+  }
+  return text.length + others * (ESTIMATED_CHARACTERS_PER_TOKEN - 1);
+}
 
 /**
  * What a streamed call is settled with when it was stopped or broke off after its answer began
  * and its provider had reported no usage. The rule: every `ESTIMATED_CHARACTERS_PER_TOKEN`
  * characters that were sent or that arrived count as one token, rounded up, and at least one
- * output token; the input counts as not cached, which is the dearer rate; a web search counts
- * from its start. The usage is marked `estimated`. It is never nothing: a provider bills what
- * it sent, whether or not the caller read to the end.
+ * output token, with the characters counted by `estimatedCharacters`; the input counts as not
+ * cached, which is the dearer rate; a web search counts from its start. Neither the input nor
+ * the output is more than `MAX_ESTIMATED_TOKENS_PER_CALL`. The usage is marked `estimated`. It
+ * is never nothing: a provider bills what it sent, whether or not the caller read to the end.
  */
 export function estimateInterruptedCallUsage(received: InterruptedCallSize): ModelCallUsage {
-  const inputTokens = Math.ceil(received.inputCharacters / ESTIMATED_CHARACTERS_PER_TOKEN);
-  const outputTokens = Math.max(
-    1,
-    Math.ceil(received.outputCharacters / ESTIMATED_CHARACTERS_PER_TOKEN)
-  );
+  const tokens = (characters: number): number =>
+    bounded(Math.ceil(characters / ESTIMATED_CHARACTERS_PER_TOKEN), MAX_ESTIMATED_TOKENS_PER_CALL);
+  const inputTokens = tokens(received.inputCharacters);
+  const outputTokens = Math.max(1, tokens(received.outputCharacters));
   return {
     inputTokens,
     cachedInputTokens: 0,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
     source: "estimated",
-    webSearchCallCount: received.webSearchCallCount
+    webSearchCallCount: bounded(received.webSearchCallCount, MAX_ESTIMATED_WEB_SEARCHES_PER_CALL)
   };
+}
+
+/** A whole count from nothing to `maximum`. What is not a number counts as the maximum. */
+function bounded(count: number, maximum: number): number {
+  return Number.isNaN(count) ? maximum : Math.min(maximum, Math.max(0, Math.trunc(count)));
 }
 
 /** What one stream event shows the provider to have produced. Nothing for an empty delta. */
 function receivedWith(
-  event: ModelCompletionStreamEvent
+  event: Exclude<ModelAdapterStreamEvent, { type: "usage_reported" }>
 ): { characters: number; webSearchCalls: number } | undefined {
   const sizeOf = (value: unknown): number =>
-    value === undefined ? 0 : JSON.stringify(value).length;
+    value === undefined ? 0 : estimatedCharacters(JSON.stringify(value));
   switch (event.type) {
     case "text_delta":
     case "reasoning_delta":
+    case "tool_call_input_delta":
       return event.delta.length > 0
-        ? { characters: event.delta.length, webSearchCalls: 0 }
+        ? { characters: estimatedCharacters(event.delta), webSearchCalls: 0 }
         : undefined;
     case "tool_call_preparing":
       return { characters: event.toolName.length, webSearchCalls: 0 };
@@ -423,32 +472,33 @@ function receivedWith(
 }
 
 /**
- * The characters of what a call sends: its texts, the inputs of its tool calls and its tool
- * definitions. An image counts as nothing here; its tokens do not follow from its bytes.
+ * The size of what a call sends, as `sizeOf` counts a text: its texts, the inputs of its tool
+ * calls and its tool definitions. An image counts as nothing here; its tokens do not follow
+ * from its bytes.
  */
-function requestCharacters(call: ModelCall): number {
+function requestCharacters(call: ModelCall, sizeOf: (text: string) => number): number {
   let characters = 0;
   for (const message of call.messages) {
     if (typeof message.content === "string") {
-      characters += message.content.length;
+      characters += sizeOf(message.content);
     } else {
       for (const part of message.content) {
-        if (part.type === "text") characters += part.text.length;
+        if (part.type === "text") characters += sizeOf(part.text);
       }
     }
     if (message.role === "assistant") {
       for (const toolCall of message.toolCalls ?? []) {
-        characters += toolCall.toolName.length + JSON.stringify(toolCall.input ?? null).length;
+        characters += sizeOf(toolCall.toolName) + sizeOf(JSON.stringify(toolCall.input ?? null));
       }
     }
   }
   for (const tool of call.tools) {
-    characters += tool.name.length;
+    characters += sizeOf(tool.name);
     if (isModelFunctionTool(tool)) {
-      characters += tool.description.length + JSON.stringify(tool.inputJsonSchema ?? {}).length;
+      characters += sizeOf(tool.description) + sizeOf(JSON.stringify(tool.inputJsonSchema ?? {}));
     }
   }
-  if (call.output) characters += JSON.stringify(call.output.jsonSchema).length;
+  if (call.output) characters += sizeOf(JSON.stringify(call.output.jsonSchema));
   return characters;
 }
 

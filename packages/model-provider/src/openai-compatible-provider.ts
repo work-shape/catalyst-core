@@ -13,6 +13,7 @@ import {
   type ModelCapabilities,
   type ModelCompletion,
   type ModelCompletionRequest,
+  type ModelAdapterStreamEvent,
   type ModelCompletionStreamEvent,
   type ModelTransportContext
 } from "./types";
@@ -113,7 +114,7 @@ export class OpenAiCompatibleChatProvider {
   async *stream(
     request: ModelCompletionRequest,
     context: TransportCallContext
-  ): AsyncIterable<ModelCompletionStreamEvent> {
+  ): AsyncIterable<ModelAdapterStreamEvent> {
     if (this.options.api === "responses") {
       yield* this.streamResponses(request, context);
       return;
@@ -161,7 +162,7 @@ export class OpenAiCompatibleChatProvider {
   private async *streamChatCompletions(
     request: ModelCompletionRequest,
     context: TransportCallContext
-  ): AsyncIterable<ModelCompletionStreamEvent> {
+  ): AsyncIterable<ModelAdapterStreamEvent> {
     const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
       request.tools
     );

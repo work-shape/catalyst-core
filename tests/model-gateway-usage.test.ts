@@ -12,12 +12,15 @@ import {
   ModelProviderError,
   createModelGateway,
   estimateInterruptedCallUsage,
+  estimatedCharacters,
+  MAX_ESTIMATED_TOKENS_PER_CALL,
+  MAX_ESTIMATED_WEB_SEARCHES_PER_CALL,
   isModelProviderContinuationRejected,
   type ModelAdapter,
   type ModelAdapterRequest,
   type ModelCall,
   type ModelCompletion,
-  type ModelCompletionStreamEvent
+  type ModelAdapterStreamEvent
 } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
@@ -303,6 +306,136 @@ describe("model gateway usage recording", () => {
     expect(await f.events()).toEqual([expect.objectContaining({ status: "settled", ...estimate })]);
   });
 
+  // Fails without the change: the usage a provider reported before the connection broke was
+  // dropped, and the call was settled with an estimate in its place.
+  it("settles a cut-off stream with the usage its provider had reported, not with an estimate", async () => {
+    const forwarded: string[] = [];
+    const f = await fixture(
+      async () => completion(120),
+      {},
+      {
+        costs: {},
+        async *stream() {
+          yield { type: "text_delta", delta: "An answer of some length" };
+          yield { type: "usage_reported", usage: completion(77).usage };
+          throw new AppError("TIMEOUT", "Model provider stream ended before the completion marker");
+        }
+      }
+    );
+
+    await expect(
+      (async () => {
+        for await (const event of f.gateway.stream(call())) forwarded.push(event.type);
+      })()
+    ).rejects.toBeDefined();
+
+    expect(forwarded).toEqual(["text_delta"]);
+    expect(await f.events()).toEqual([
+      expect.objectContaining({
+        status: "settled",
+        source: "provider_reported",
+        inputTokens: 57,
+        outputTokens: 20,
+        totalTokens: 77
+      })
+    ]);
+  });
+
+  // Fails without the change: the input of a function call was not counted, text outside the
+  // Latin alphabet counted at a third of a token a character, and nothing bounded the result.
+  it("counts the input of a tool call and non-Latin text in full, and hands neither count on", async () => {
+    const forwarded: string[] = [];
+    const f = await fixture(
+      async () => completion(120),
+      {},
+      {
+        costs: {},
+        async *stream() {
+          yield { type: "tool_call_preparing", toolCallId: "call_1", toolName: "lookup" };
+          // Twelve characters: four tokens.
+          yield { type: "tool_call_input_delta", delta: '{"query":"q"' };
+          // Five characters outside the Latin alphabet: five tokens.
+          yield { type: "text_delta", delta: "こんにちは" };
+          throw new ModelProviderError({
+            kind: "invalid_request",
+            status: 400,
+            message: "Model provider stream failed"
+          });
+        }
+      }
+    );
+
+    await expect(
+      (async () => {
+        for await (const event of f.gateway.stream(
+          call({ messages: [{ role: "user", content: "你好" }] })
+        )) {
+          forwarded.push(event.type);
+        }
+      })()
+    ).rejects.toMatchObject({ kind: "invalid_request" });
+
+    expect(forwarded).toEqual(["tool_call_preparing", "text_delta"]);
+    expect(estimatedCharacters("abc")).toBe(3);
+    expect(estimatedCharacters("こんにちは")).toBe(15);
+    // "lookup" is two tokens, the input four and the text five. The request is two characters
+    // outside the Latin alphabet: two tokens.
+    expect(await f.events()).toEqual([
+      expect.objectContaining({
+        status: "settled",
+        source: "estimated",
+        inputTokens: 2,
+        outputTokens: 11,
+        totalTokens: 13
+      })
+    ]);
+  });
+
+  // Fails without the change: the estimate grew with the stream without end, past what the
+  // usage event stores, so settling it failed and recovery left the call with nothing used.
+  it.each([
+    { size: "huge", characters: Number.MAX_SAFE_INTEGER },
+    { size: "endless", characters: Number.POSITIVE_INFINITY },
+    { size: "no number", characters: Number.NaN }
+  ])("bounds the estimate of a stream of $size size", async ({ characters }) => {
+    const estimate = estimateInterruptedCallUsage({
+      inputCharacters: characters,
+      outputCharacters: characters,
+      webSearchCallCount: characters
+    });
+
+    expect(estimate).toEqual({
+      inputTokens: MAX_ESTIMATED_TOKENS_PER_CALL,
+      cachedInputTokens: 0,
+      outputTokens: MAX_ESTIMATED_TOKENS_PER_CALL,
+      totalTokens: 2 * MAX_ESTIMATED_TOKENS_PER_CALL,
+      source: "estimated",
+      webSearchCallCount: MAX_ESTIMATED_WEB_SEARCHES_PER_CALL
+    });
+    expect(estimate.totalTokens).toBeLessThan(2 ** 31);
+
+    // The largest estimate settles: the usage event and the counters take it.
+    const f = await fixture(async () => completion(120));
+    const governance = f.governance;
+    const admitted = await governance.admitModelCall({
+      clientInstanceId,
+      attribution: call().attribution,
+      providerId: "main",
+      model: "entry-model",
+      fastMode: false,
+      correlationId: "corr-gateway-usage",
+      request: { inputCharacters: 5 }
+    });
+    await governance.settleModelCall(admitted, estimate);
+    expect(await f.events()).toEqual([
+      expect.objectContaining({
+        status: "settled",
+        source: "estimated",
+        totalTokens: 2 * MAX_ESTIMATED_TOKENS_PER_CALL
+      })
+    ]);
+  });
+
   // A call that gave nothing used nothing anyone can name: it stays at nothing.
   it("estimates nothing for a stream that fails before anything arrived", async () => {
     const f = await fixture(
@@ -347,7 +480,7 @@ async function fixture(
   complete: (request: ModelAdapterRequest) => Promise<ModelCompletion>,
   safeguards: { modelCallsPerDay?: number } = {},
   streamed?: {
-    stream: (request: ModelAdapterRequest) => AsyncIterable<ModelCompletionStreamEvent>;
+    stream: (request: ModelAdapterRequest) => AsyncIterable<ModelAdapterStreamEvent>;
     costs: UsageCostConfig;
   }
 ) {
@@ -367,8 +500,15 @@ async function fixture(
       return streamed.stream(request);
     }
   };
+  const governance = new ModelUsageGovernance({
+    store: store.usage,
+    budget: {},
+    safeguards,
+    ...(streamed ? { costs: streamed.costs } : {})
+  });
   return {
     requests,
+    governance,
     gateway: createModelGateway({
       providers: [provider],
       bindings: [],

@@ -1,5 +1,9 @@
 import { AppError } from "@vivd-catalyst/core";
-import type { ModelCompletionStreamEvent, ModelProviderContinuation } from "./types";
+import type {
+  ModelAdapterStreamEvent,
+  ModelCompletionStreamEvent,
+  ModelProviderContinuation
+} from "./types";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "./types";
 import {
   noReportedUsage,
@@ -90,7 +94,7 @@ interface OpenAiResponsesStreamEvent {
 export async function* streamOpenAiCompatibleCompletion(
   body: ReadableStream<Uint8Array>,
   toolNameMap: Map<string, string>
-): AsyncIterable<ModelCompletionStreamEvent> {
+): AsyncIterable<ModelAdapterStreamEvent> {
   let text = "";
   let usage = noReportedUsage();
   let serviceTier: { providerServiceTier?: string } = {};
@@ -108,6 +112,10 @@ export async function* streamOpenAiCompatibleCompletion(
       usage = toModelUsage(payload.usage);
     }
     serviceTier = { ...serviceTier, ...readProviderServiceTier(payload) };
+    if (payload.usage) {
+      // Handed on at once: a connection that breaks before the completion marker keeps it.
+      yield { type: "usage_reported", usage: { ...usage, ...serviceTier } };
+    }
 
     for (const choice of payload.choices ?? []) {
       const delta = choice.delta;
@@ -140,6 +148,9 @@ export async function* streamOpenAiCompatibleCompletion(
             toolCallId: updated.id,
             toolName: mappedToolName
           };
+        }
+        if (toolCall.function?.arguments) {
+          yield { type: "tool_call_input_delta", delta: toolCall.function.arguments };
         }
       }
     }

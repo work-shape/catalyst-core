@@ -4,7 +4,7 @@ import {
   DeterministicModelProvider,
   OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
-  type ModelCompletionStreamEvent
+  type ModelAdapterStreamEvent
 } from "@vivd-catalyst/model-provider";
 import { ServerSentEventDataLineParser } from "../packages/model-provider/src/openai-compatible-stream";
 
@@ -376,7 +376,7 @@ describe("OpenAI-compatible model provider", () => {
       baseUrl: "https://example.test/v1",
       apiKey: "test"
     });
-    const events: ModelCompletionStreamEvent[] = [];
+    const events: ModelAdapterStreamEvent[] = [];
     for await (const event of provider.stream(
       {
         providerId: "openai",
@@ -1192,7 +1192,7 @@ describe("OpenAI-compatible model provider", () => {
       apiKey: "test"
     });
 
-    const events: ModelCompletionStreamEvent[] = [];
+    const events: ModelAdapterStreamEvent[] = [];
     for await (const event of provider.stream?.(
       {
         providerId: "openai",
@@ -1355,7 +1355,7 @@ describe("OpenAI-compatible model provider", () => {
       }
     });
 
-    const events: ModelCompletionStreamEvent[] = [];
+    const events: ModelAdapterStreamEvent[] = [];
     for await (const event of provider.stream?.(
       {
         providerId: "openai",
@@ -1463,7 +1463,7 @@ describe("OpenAI-compatible model provider", () => {
       baseUrl: "https://example.test/openai/v1",
       apiKey: "test"
     });
-    const events: ModelCompletionStreamEvent[] = [];
+    const events: ModelAdapterStreamEvent[] = [];
     for await (const event of provider.stream?.(
       {
         providerId: "azure-eu",
@@ -1514,6 +1514,10 @@ describe("OpenAI-compatible model provider", () => {
                   }
                 }
               ]
+            },
+            {
+              choices: [],
+              usage: { prompt_tokens: 40, completion_tokens: 6, total_tokens: 46 }
             }
           ],
           false
@@ -1541,6 +1545,17 @@ describe("OpenAI-compatible model provider", () => {
 
     await expect(stream.next()).resolves.toMatchObject({
       value: { type: "tool_call_preparing", toolCallId: "call_truncated" }
+    });
+    // Fails without the change: the input of the call and the usage the provider had reported
+    // stayed inside the adapter, and were gone when the stream broke off.
+    await expect(stream.next()).resolves.toMatchObject({
+      value: { type: "tool_call_input_delta", delta: "{" }
+    });
+    await expect(stream.next()).resolves.toMatchObject({
+      value: {
+        type: "usage_reported",
+        usage: { inputTokens: 40, outputTokens: 6, totalTokens: 46, source: "provider_reported" }
+      }
     });
     await expect(stream.next()).rejects.toMatchObject({
       code: "TIMEOUT",
@@ -1791,7 +1806,7 @@ describe("OpenAI-compatible model provider", () => {
     const clientInstanceId = asClientInstanceId("client-test");
     const registry = new DeterministicModelProvider("local");
 
-    const events: ModelCompletionStreamEvent[] = [];
+    const events: ModelAdapterStreamEvent[] = [];
     for await (const event of registry.stream(
       {
         providerId: "local",

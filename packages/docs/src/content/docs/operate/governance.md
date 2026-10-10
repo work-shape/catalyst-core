@@ -75,7 +75,7 @@ A record has a status:
 - `failed`: the call failed, was stopped or timed out before any of its answer arrived. It counts as one call toward the daily call limit and uses no tokens. The Usage page shows it as "Failed".
 - `abandoned`: the process that made the call went away before the call ended. The job `usage.recover_abandoned_calls` runs every 10 minutes and takes a call that is still `pending` six hours after its admission as abandoned. The Usage page shows it as "Abandoned".
 
-A streamed call that is stopped or breaks off after its answer began has cost something, and its provider reports no usage for it. Such a call is settled with an estimate: every three characters that were sent and every three that arrived count as one token, the input counts as not cached, and a web search that had started counts as one search. Its record is marked `estimated`.
+A streamed call that is stopped or breaks off after its answer began has cost something, and its provider reports no usage for it. Where the provider had reported the usage before the stream broke off, the call is settled with it. Otherwise it is settled with an estimate: every three characters that were sent and every three that arrived count as one token, a character outside the Latin alphabet counts as a token of its own, the input of a tool call counts as output, the input counts as not cached, and a web search that had started counts as one search. An estimate is at most 10,000,000 tokens of input and as many of output. Its record is marked `estimated`.
 
 ### How a call is admitted
 

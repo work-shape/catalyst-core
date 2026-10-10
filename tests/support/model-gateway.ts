@@ -17,7 +17,7 @@ import {
   type ModelCapabilities,
   type ModelCompletion,
   type ModelCompletionRequest,
-  type ModelCompletionStreamEvent,
+  type ModelAdapterStreamEvent,
   type ModelGateway,
   type ModelTransportContext
 } from "@vivd-catalyst/model-provider";
@@ -34,7 +34,7 @@ export interface FakeModelProvider {
   stream?(
     request: ModelCompletionRequest,
     context: ModelTransportContext
-  ): AsyncIterable<ModelCompletionStreamEvent>;
+  ): AsyncIterable<ModelAdapterStreamEvent>;
 }
 
 /** A provider that answers with whole completions only, so the runtime does not stream it. */

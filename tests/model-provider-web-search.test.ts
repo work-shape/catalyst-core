@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { asClientInstanceId, type RuntimeCallContext } from "@vivd-catalyst/core";
 import {
   OpenAiCompatibleChatProvider,
-  type ModelCompletionStreamEvent
+  type ModelAdapterStreamEvent
 } from "@vivd-catalyst/model-provider";
 
 const OPENAI_WEB_SEARCH_TOOL = {
@@ -266,7 +266,7 @@ describe("OpenAI provider-native web search", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = createResponsesProvider();
-    const events: ModelCompletionStreamEvent[] = [];
+    const events: ModelAdapterStreamEvent[] = [];
     for await (const event of provider.stream?.(
       {
         providerId: "openai",
