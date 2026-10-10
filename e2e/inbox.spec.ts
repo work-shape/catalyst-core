@@ -34,7 +34,7 @@ test("a person who decides nothing and has asked for nothing has no Inbox row, a
   await signIn(page, member);
   const rail = page.getByRole("navigation", { name: "Main navigation" });
 
-  // One section is no list: the rail shows neither Chat nor Inbox.
+  // The rail shows no Inbox to a person it holds nothing for, and never a Chat row.
   await expect(rail.getByRole("button", { name: /^Inbox/u })).toHaveCount(0);
   await expect(rail.getByRole("button", { name: "Chat", exact: true })).toHaveCount(0);
 
