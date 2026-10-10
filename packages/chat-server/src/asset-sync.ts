@@ -2,9 +2,12 @@ import {
   AppError,
   INSTANCE_ASSET_SCOPE,
   auditActorFromIdentity,
+  findNamespaceOfAssetName,
   isAppError,
+  type ActorAccess,
   type ConfigAssetMutation,
-  type ConfigAssetRecord
+  type ConfigAssetRecord,
+  type PolicyTarget
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
@@ -90,45 +93,15 @@ export async function syncAssets(
   input: AssetSyncInput
 ) {
   const kinds = options.configAssets.kinds;
-  const planned = planItems(options, input);
+  // The registry asked the same before the policy. It is asked again on the rows as they are
+  // now: a call that waited for an approval runs later than it was authorized.
+  const planned = await authorizeItems(options, call.access, input);
   const ready = () => planned.filter(isReady);
   const stopIfRefused = (issues?: AssetSetIssue[]) => {
     if (planned.some((entry) => entry.refusal) || issues?.length) {
       throw refusedBatch(planned, issues);
     }
   };
-
-  // Rights first, on every item, so a caller without them learns nothing else of the batch.
-  for (const entry of ready()) {
-    const row = await options.configAssets.store.getConfigAsset({
-      clientInstanceId: options.clientInstanceId,
-      kind: entry.kind.kind,
-      name: entry.name
-    });
-    const own = row?.scope.kind === "instance" ? row : undefined;
-    const resource = accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, own?.id);
-    const { actions } = entry.kind;
-    const right =
-      entry.item.type === "delete"
-        ? deleteDecision(call.access, { kind: entry.kind, resource })
-        : decide(call.access, actions.write, resource);
-    if (!right.allowed) {
-      entry.refusal = {
-        code: "FORBIDDEN",
-        message: `Missing the right '${right.action}'`,
-        action: right.action
-      };
-    } else if (row && !own) {
-      // A Namespace is a prefix among the instance's own assets.
-      entry.refusal = {
-        code: "VALIDATION_FAILED",
-        message: `Config ${entry.kind.kind} '${entry.name}' belongs to another scope`
-      };
-    } else if (own) {
-      entry.asset = own;
-    }
-  }
-  stopIfRefused();
 
   const namespaces = await options.stores.access.listNamespaceRecords({
     clientInstanceId: options.clientInstanceId
@@ -137,7 +110,6 @@ export async function syncAssets(
     throw new AppError("VALIDATION_FAILED", `Namespace '${input.namespace}' is not registered`);
   }
   await authorizeInteractiveWrite(options, call.actor, call, call.audit);
-
   for (const entry of ready()) {
     const current = entry.asset?.status === "active" ? entry.asset.revision : null;
     if (entry.item.type === "delete") {
@@ -298,6 +270,89 @@ export async function syncAssets(
     });
   }
   return { version: result.version, items, warnings: [] };
+}
+
+/**
+ * What each item is by its own input, and the caller's right on every item that names an
+ * asset: the write or the delete right at the asset's scope. Throws the refusal of the batch
+ * where an item is refused by either, so a caller without the rights learns nothing else.
+ */
+async function authorizeItems(
+  options: ChatServerOptions,
+  access: ActorAccess,
+  input: AssetSyncInput
+): Promise<PlannedItem[]> {
+  const planned = planItems(options, input);
+  for (const entry of planned.filter(isReady)) {
+    const row = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: entry.kind.kind,
+      name: entry.name
+    });
+    const own = row?.scope.kind === "instance" ? row : undefined;
+    const resource = accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, own?.id);
+    const { actions } = entry.kind;
+    const right =
+      entry.item.type === "delete"
+        ? deleteDecision(access, { kind: entry.kind, resource })
+        : decide(access, actions.write, resource);
+    if (!right.allowed) {
+      entry.refusal = {
+        code: "FORBIDDEN",
+        message: `Missing the right '${right.action}'`,
+        action: right.action
+      };
+    } else if (row && !own) {
+      // A Namespace is a prefix among the instance's own assets.
+      entry.refusal = {
+        code: "VALIDATION_FAILED",
+        message: `Config ${entry.kind.kind} '${entry.name}' belongs to another scope`
+      };
+    } else if (own) {
+      entry.asset = own;
+    }
+  }
+  if (planned.some((entry) => entry.refusal)) {
+    throw refusedBatch(planned);
+  }
+  return planned;
+}
+
+/**
+ * The check the registry asks before the policy and the guardrails: every item is authorized,
+ * so a batch its caller may not make never reaches either. The refusal is the batch's own
+ * error, which names each item by its index.
+ */
+export async function authorizeAssetSync(
+  options: ChatServerOptions,
+  access: ActorAccess,
+  input: AssetSyncInput
+): Promise<void> {
+  await authorizeItems(options, access, input);
+}
+
+/**
+ * What the policy is asked about: each kind the batch names with the Namespace of the names it
+ * carries, so a setting narrowed to a kind or to a Namespace applies to the batch.
+ */
+export async function assetSyncPolicyTargets(
+  options: ChatServerOptions,
+  input: AssetSyncInput
+): Promise<PolicyTarget[]> {
+  const namespaces = await options.stores.access.listNamespaceRecords({
+    clientInstanceId: options.clientInstanceId
+  });
+  const targets = new Map<string, PolicyTarget>();
+  for (const item of input.items) {
+    const name = item.type === "put" ? readDefinitionName(item.config) : item.name;
+    const namespace =
+      name === undefined ? undefined : findNamespaceOfAssetName(namespaces, name)?.prefix;
+    targets.set(JSON.stringify([item.kind, namespace]), {
+      assetKind: item.kind,
+      ...(namespace === undefined ? {} : { namespace })
+    });
+  }
+  return [...targets.values()];
 }
 
 function isReady(entry: PlannedItem): entry is ReadyItem {

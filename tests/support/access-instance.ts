@@ -12,7 +12,12 @@ import {
 } from "@vivd-catalyst/core";
 import { atCurrentRevision } from "./asset-revisions";
 import type { TestCallInput, TestOperationName } from "./operations";
-import { createTestInstanceWith, type TestInstance, type TestStore } from "./test-instance";
+import {
+  createTestInstanceWith,
+  type TestInstance,
+  type TestServerOptions,
+  type TestStore
+} from "./test-instance";
 
 // The instance behind the grant and Namespace tests: four stored users, interactive agent
 // editing switched on, two tools and two model bindings.
@@ -178,9 +183,13 @@ export interface AccessInstance {
   assetId(kind: "agent" | "skill", name: string): Promise<string>;
 }
 
-export async function setupAccessInstance(): Promise<AccessInstance> {
+/** `operations` sets what the operation layer asks beside the rights: policy and events. */
+export async function setupAccessInstance(
+  operations?: TestServerOptions["operations"]
+): Promise<AccessInstance> {
   const instance = await createTestInstanceWith((stores) => ({
     config,
+    ...(operations ? { operations } : {}),
     authAdapter: recordAuthAdapter(stores),
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
     configAssets: {

@@ -15,6 +15,7 @@ import {
   type JsonObject,
   type Namespace,
   type OperationAuthorization,
+  type PolicyTarget,
   type StorePage
 } from "@vivd-catalyst/core";
 import { z } from "zod";
@@ -37,7 +38,12 @@ import {
   errorIssues,
   type AssetCall
 } from "./asset-access";
-import { syncAssets, type AssetSyncInput } from "./asset-sync";
+import {
+  assetSyncPolicyTargets,
+  authorizeAssetSync,
+  syncAssets,
+  type AssetSyncInput
+} from "./asset-sync";
 import {
   assertChangedAgentsAllowed,
   assetKey,
@@ -125,6 +131,45 @@ export class AssetWorkflow {
     input: { kind: string; config: unknown; workspaceId?: string }
   ): Promise<OperationAuthorization> {
     return this.authorizeRead(access, { ...input, name: readDefinitionName(input.config) ?? "" });
+  }
+
+  /**
+   * Every item of a batch, as its own write or delete. A batch with an item its caller may
+   * not make throws its refusal here, which names each item, and so never reaches the policy.
+   */
+  async authorizeSync(access: ActorAccess, input: AssetSyncInput): Promise<OperationAuthorization> {
+    await authorizeAssetSync(this.options, access, input);
+    return { allowed: true };
+  }
+
+  /**
+   * What the policy is asked about for a call on one asset: its kind, its owner, and the
+   * Namespace its name belongs to.
+   */
+  async policyTargets(address: {
+    kind: string;
+    name?: string;
+    workspaceId?: string;
+  }): Promise<PolicyTarget[]> {
+    const namespace =
+      address.name === undefined
+        ? undefined
+        : findNamespaceOfAssetName(
+            await this.namespaces(scopeOf(address.workspaceId)),
+            address.name
+          );
+    return [
+      {
+        assetKind: address.kind,
+        ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId }),
+        ...(namespace ? { namespace: namespace.prefix } : {})
+      }
+    ];
+  }
+
+  /** What the policy is asked about for a batch: every kind and Namespace its items name. */
+  syncPolicyTargets(input: AssetSyncInput): Promise<PolicyTarget[]> {
+    return assetSyncPolicyTargets(this.options, input);
   }
 
   /**

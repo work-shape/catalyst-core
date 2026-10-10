@@ -12,6 +12,7 @@ const ASSET_WRITE_MODULE = "assetManagement";
  * One asset of any registered kind. Each call is an Operation Run. The right is the kind's
  * own and is decided on the asset the call names, so every operation brings its check: the
  * registry asks it before the policy, and the workflow asks it again on the asset it loaded.
+ * The policy is asked about the kind, the owner and the Namespace of every asset a call names.
  */
 export function registerAssetRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AssetWorkflow(options);
@@ -23,8 +24,9 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.sync"], {
-    // The batch decides the right per item, each as its own write or delete.
-    authorize: () => ({ allowed: true }),
+    // The right is decided per item, each as its own write or delete, before the policy.
+    authorize: (input, { access }) => workflow.authorizeSync(access, input),
+    policyTargets: (input) => workflow.syncPolicyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => workflow.sync(context, input)
@@ -33,18 +35,22 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   route.operation(apiOperations["assets.validate"], {
     authorize: (input, { access }) => workflow.authorizeValidate(access, input),
     resource: (input) => assetResource({ ...input, name: readDefinitionName(input.config) }),
+    policyTargets: (input) =>
+      workflow.policyTargets({ ...input, name: readDefinitionName(input.config) }),
     execute: (input, context) => workflow.validate(context, input)
   });
 
   route.operation(apiOperations["assets.get"], {
     authorize: (input, { access }) => workflow.authorizeRead(access, input),
     resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
     execute: (input, context) => workflow.get(context, input)
   });
 
   route.operation(apiOperations["assets.put"], {
     authorize: (input, { access }) => workflow.authorizeWrite(access, input),
     resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => workflow.put(context, input)
@@ -53,6 +59,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   route.operation(apiOperations["assets.delete"], {
     authorize: (input, { access }) => workflow.authorizeDelete(access, input),
     resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => workflow.delete(context, input)
@@ -61,12 +68,14 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   route.operation(apiOperations["assets.revisions.list"], {
     authorize: (input, { access }) => workflow.authorizeRead(access, input),
     resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
     execute: (input, context) => workflow.listRevisions(context, input, context.paging)
   });
 
   route.operation(apiOperations["assets.revert"], {
     authorize: (input, { access }) => workflow.authorizeWrite(access, input),
     resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => workflow.revert(context, input)

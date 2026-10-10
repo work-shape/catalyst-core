@@ -12,7 +12,7 @@ export type PolicyDefaults = Record<OperationEffect, PolicyValue>;
 /**
  * An admin's value for one operation or for every operation under a name prefix
  * (`connections.*`). It may be narrowed to a workspace, an asset kind and a Namespace, and then
- * applies only to a call whose target carries the same.
+ * applies only to a call one of whose targets carries the same.
  */
 export interface CentralPolicySetting {
   operation: string;
@@ -22,7 +22,10 @@ export interface CentralPolicySetting {
   namespace?: string;
 }
 
-/** What a call touches, as far as a central setting can be narrowed to it. */
+/**
+ * One thing a call touches, as far as a central setting can be narrowed to it. A call on one
+ * asset has one target and a batch has one for each asset it names.
+ */
 export interface PolicyTarget {
   workspaceId?: string;
   assetKind?: string;
@@ -37,7 +40,8 @@ export interface PolicyInput {
   origin: OperationOrigin;
   instanceDefaults: PolicyDefaults;
   centralSettings: readonly CentralPolicySetting[];
-  target?: PolicyTarget;
+  /** Every target of the call. A setting applies when it matches one of them. */
+  targets?: readonly PolicyTarget[];
   personSetting?: PersonPolicySetting;
   /** What the guardrails of the before-event answered, once they ran. */
   guardrailOutcome?: PlatformEventOutcome;
@@ -88,8 +92,10 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
     value = definition.defaultPolicy;
     source = "declared_default";
   }
+  // A call that names no target still has one, which carries nothing a setting is narrowed to.
+  const targets = input.targets?.length ? input.targets : [{}];
   const central = input.centralSettings
-    .filter((setting) => matches(setting, definition.name, input.target ?? {}))
+    .filter((setting) => targets.some((target) => matches(setting, definition.name, target)))
     .map((setting) => setting.value)
     .filter(applies);
   if (central.length > 0) {

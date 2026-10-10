@@ -383,7 +383,9 @@ async function executeRun(
       origin: call.origin,
       instanceDefaults: deps.policy.instanceDefaults,
       centralSettings: await deps.policy.centralSettings(),
-      target: { workspaceId: call.workspaceId, assetKind: resource?.kind },
+      targets: definition.policyTargets
+        ? await definition.policyTargets(call.input)
+        : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
       callerCanConfirm: callerCanConfirm(call.origin),
       // No surface can hold a call for its actor's confirmation before OP-3.
       canPause: false

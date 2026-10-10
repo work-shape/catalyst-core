@@ -5,6 +5,7 @@ import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
+import type { PolicyTarget } from "./operation-policy";
 import type { OperationEffect, OperationOrigin, PolicyValue } from "./operations";
 import type { AccessResource, ActorAccess } from "./permissions";
 
@@ -103,6 +104,12 @@ interface OperationDefinitionBase<Input, Output> {
   inputSchema: z.ZodType<Input>;
   outputSchema: z.ZodType;
   resource(input: Input): OperationResource | undefined;
+  /**
+   * What the policy is asked about, where the resource does not say it all: the Namespace of
+   * an asset, or every asset of a batch. It is asked after the caller's right. Without it the
+   * policy is asked about the resource.
+   */
+  policyTargets?(input: Input): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
   /** The operation's own events, emitted beside the ones every call has. */
   events?: { before?: PlatformEventName; after?: PlatformEventName };
   http: { method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; path: string };

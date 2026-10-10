@@ -7,6 +7,7 @@ import {
   skill,
   type AccessInstance
 } from "./access-instance";
+import type { TestServerOptions } from "./test-instance";
 
 // What the tests of the asset operations share: the instance with one Namespace holder, and
 // the shape of a page of the list.
@@ -41,8 +42,10 @@ export interface NamespaceHolderInstance extends AccessInstance {
 }
 
 /** Kai holds every right on agents and the write right on skills in `kai-`; Lena holds nothing. */
-export async function setupNamespaceHolder(): Promise<NamespaceHolderInstance> {
-  const t = await setupAccessInstance();
+export async function setupNamespaceHolder(
+  operations?: TestServerOptions["operations"]
+): Promise<NamespaceHolderInstance> {
+  const t = await setupAccessInstance(operations);
   await t.createNamespace("kai-");
   await t.createNamespace("lena-");
   for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read", "skill.write"]) {

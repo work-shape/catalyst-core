@@ -84,22 +84,47 @@ describe("resolvePolicy: where the value comes from", () => {
       { operation: "items.create", value: "deny", workspaceId: "cws_1", assetKind: "skill" }
     ] as const;
     expect(
-      resolve({ centralSettings, target: { workspaceId: "cws_1", assetKind: "skill" } })
+      resolve({ centralSettings, targets: [{ workspaceId: "cws_1", assetKind: "skill" }] })
     ).toMatchObject({ value: "deny" });
-    for (const target of [
+    for (const targets of [
       undefined,
-      { workspaceId: "cws_2", assetKind: "skill" },
-      { workspaceId: "cws_1", assetKind: "agent" },
-      { workspaceId: "cws_1" }
+      [],
+      [{ workspaceId: "cws_2", assetKind: "skill" }],
+      [{ workspaceId: "cws_1", assetKind: "agent" }],
+      [{ workspaceId: "cws_1" }],
+      // No one target carries both: the setting is narrowed to one asset, not to a batch.
+      [
+        { workspaceId: "cws_1", assetKind: "agent" },
+        { workspaceId: "cws_2", assetKind: "skill" }
+      ]
     ]) {
-      expect(resolve({ centralSettings, target })).toMatchObject({ source: "instance_default" });
+      expect(resolve({ centralSettings, targets })).toMatchObject({ source: "instance_default" });
     }
     expect(
       resolve({
         centralSettings: [{ operation: "items.create", value: "deny", namespace: "sales" }],
-        target: { namespace: "support" }
+        targets: [{ namespace: "support" }]
       })
     ).toMatchObject({ source: "instance_default" });
+  });
+
+  it("applies a narrowed central setting to a batch when one of its targets carries the same", () => {
+    const targets = [
+      { assetKind: "agent", namespace: "sales" },
+      { assetKind: "skill", namespace: "sales" }
+    ];
+    const narrowed = (setting: { assetKind?: string; namespace?: string }) =>
+      resolve({
+        centralSettings: [{ operation: "items.create", value: "deny", ...setting }],
+        targets
+      });
+    expect(narrowed({ assetKind: "skill" })).toMatchObject({ value: "deny" });
+    expect(narrowed({ namespace: "sales" })).toMatchObject({ value: "deny" });
+    expect(narrowed({ assetKind: "widget" })).toMatchObject({ source: "instance_default" });
+    // A setting that is not narrowed applies to a call that names no target at all.
+    expect(
+      resolve({ centralSettings: [{ operation: "items.create", value: "deny" }], targets: [] })
+    ).toMatchObject({ value: "deny" });
   });
 });
 

@@ -24,6 +24,7 @@ import {
   type OperationAuthorizeContext,
   type OperationOrigin,
   type OperationResource,
+  type PolicyTarget,
   type StorePage,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
@@ -153,10 +154,13 @@ type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknow
 /** What a registration adds to the descriptor: what the call touches and what it does. */
 type OperationBinding<Op extends Operation> = Omit<
   AssembledOperationBinding,
-  "resource" | "execute" | "authorize"
+  "resource" | "policyTargets" | "execute" | "authorize"
 > &
   RightsCheck<Op> & {
     resource?(input: OperationInput<Op>): OperationResource | undefined;
+    policyTargets?(
+      input: OperationInput<Op>
+    ): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
     execute(
       input: OperationInput<Op>,
       context: OperationBindingContext
