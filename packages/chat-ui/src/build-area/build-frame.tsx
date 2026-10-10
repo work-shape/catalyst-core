@@ -42,6 +42,7 @@ import {
   type VisibleBuildKind
 } from "./build-model";
 import { useBuildNavigation } from "./build-route";
+import { scrollPageToTop } from "./build-scroll";
 
 /** The commands the CLI entry names, in the order a person runs them. */
 const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst config push"];
@@ -164,8 +165,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
     const heading = pageRef.current?.querySelector("h1");
     if (heading) {
       focusedKey.current = focusKey;
-      // Another page starts at its top, wherever the last one was scrolled to.
-      pageRef.current?.scrollIntoView({ block: "start" });
+      scrollPageToTop(pageRef.current);
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Banner,
   FormNotice,
@@ -15,6 +15,7 @@ import { AssetLanguageProvider } from "./asset-form-fields";
 import { ASSET_LANGUAGES, type LocalizedPair } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildPageSlot } from "./build-asset-kind";
 import { refusalsOf, type BuildRefusalField, type BuildWriteOutcome } from "./build-refusals";
+import { scrollToSection } from "./build-scroll";
 
 type AssetLanguage = keyof LocalizedPair;
 
@@ -130,6 +131,7 @@ export function AssetEditorShell({
     return () => onUnsavedChange(false);
   }, [unsaved, onUnsavedChange]);
 
+  const formRef = useRef<HTMLFormElement>(null);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     control.submit().then(
@@ -139,7 +141,7 @@ export function AssetEditorShell({
           (section) => section.refusalField && refusalsOf(answer, section.refusalField).length > 0
         );
         if (named) {
-          document.getElementById(named.id)?.scrollIntoView({ block: "start" });
+          scrollToSection(formRef.current, named.id);
         }
       },
       () => undefined
@@ -172,7 +174,12 @@ export function AssetEditorShell({
       }
     >
       {page.above}
-      <form className="grid min-w-0 content-start" noValidate={!canWrite} onSubmit={submit}>
+      <form
+        ref={formRef}
+        className="grid min-w-0 content-start"
+        noValidate={!canWrite}
+        onSubmit={submit}
+      >
         <PageHeader
           variant="detail"
           back={back}
@@ -193,7 +200,11 @@ export function AssetEditorShell({
             </>
           }
         />
-        {canWrite ? null : <Banner tone="info">{t("build.readOnly")}</Banner>}
+        {canWrite ? null : (
+          <Banner tone="info" className="mt-4">
+            {t("build.readOnly")}
+          </Banner>
+        )}
         {missingTranslations ? (
           <div className="flex flex-wrap items-center justify-end gap-2 pt-4">
             <span className="text-label text-muted-foreground">{t("build.textsIn")}</span>

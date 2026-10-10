@@ -1,6 +1,7 @@
 import { History, MoreHorizontal, SearchX, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
+  Banner,
   Button,
   ConfirmDialog,
   DropdownMenu,
@@ -240,12 +241,17 @@ function LoadedAssetPage({
         }
         notice={
           conflict ? (
-            <FormNotice tone="error" className="flex-wrap items-center" data-build-conflict="">
-              <span>{t("build.conflict")}</span>
-              <Button variant="outline" size="sm" onClick={loadNewer}>
-                {t("build.loadNewer")}
-              </Button>
-            </FormNotice>
+            <Banner
+              tone="danger"
+              data-build-conflict=""
+              action={
+                <Button variant="outline" size="sm" onClick={loadNewer}>
+                  {t("build.loadNewer")}
+                </Button>
+              }
+            >
+              {t("build.conflict")}
+            </Banner>
           ) : failure ? (
             <FormNotice tone="error">{failure}</FormNotice>
           ) : null
