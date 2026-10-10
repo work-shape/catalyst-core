@@ -73,7 +73,7 @@ describe("start page agent picker with the agent's name", () => {
 
     expect(markup.match(/<button/gu)).toHaveLength(1);
     expect(markup).toContain('aria-label="Select agent: Research Assistant"');
-    expect(markup).toContain('aria-haspopup="listbox"');
+    expect(markup).toContain('aria-haspopup="dialog"');
     expect(markup).toContain(">Research Assistant<");
     expect(markup).not.toContain("Application Assistant");
     expect(markup.indexOf("Research Assistant")).toBeLessThan(markup.indexOf("How can I help?"));

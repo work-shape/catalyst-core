@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import { describe, expect, it } from "vitest";
 import { ThreadWelcomeHeading } from "../packages/chat-ui/src/assistant/assistant-thread";
 import { TranslationProvider } from "./chat-ui-render-harness";
-import { agentChipDisplayFor, AgentList } from "../packages/chat-ui/src/workspace/agent-selector";
+import {
+  agentChipDisplayFor,
+  agentPickerOptions
+} from "../packages/chat-ui/src/workspace/agent-selector";
 import { WorkspaceChrome } from "../packages/chat-ui/src/workspace/workspace-chrome";
 
 const noop = () => undefined;
@@ -85,9 +88,11 @@ function labelContent(markup: string): string {
   return content;
 }
 
-/** The chip as the button that opens the agent list. */
+/** The chip as the button that opens the agent list, without the id of the list it opens. */
 function chipButton(markup: string): string | undefined {
-  return /<button[^>]*aria-haspopup[^>]*>.*?<\/button>/u.exec(markup)?.[0];
+  return /<button[^>]*aria-haspopup[^>]*>.*?<\/button>/u
+    .exec(markup)?.[0]
+    .replace(/ aria-controls="[^"]*"/u, "");
 }
 
 describe("agent chip in the header", () => {
@@ -104,7 +109,7 @@ describe("agent chip in the header", () => {
 
         expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
         expect(markup).toContain('title="Catalyst Assistant"');
-        expect(markup).toContain('aria-haspopup="listbox"');
+        expect(markup).toContain('aria-haspopup="dialog"');
         expect(markup).toContain("<svg");
         expect(markup).not.toContain(">Catalyst Assistant<");
         expect(markup).not.toContain("Research Assistant");
@@ -154,7 +159,7 @@ describe("named agent chip on the start page", () => {
     const markup = renderStartPage(severalAgents);
 
     expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
-    expect(markup).toContain('aria-haspopup="listbox"');
+    expect(markup).toContain('aria-haspopup="dialog"');
     expect(markup).toContain(">Catalyst Assistant<");
     expect(markup).not.toContain("Research Assistant");
   });
@@ -193,7 +198,7 @@ describe("agent chip on the start page without the name", () => {
 
       expect(markup).toContain('aria-label="Select agent: Catalyst Assistant"');
       expect(markup).toContain('title="Catalyst Assistant"');
-      expect(markup).toContain('aria-haspopup="listbox"');
+      expect(markup).toContain('aria-haspopup="dialog"');
       expect(markup).toContain("<svg");
       expect(markup).not.toContain(">Catalyst Assistant<");
     }
@@ -210,40 +215,28 @@ describe("agent chip on the start page without the name", () => {
 });
 
 describe("agent list", () => {
-  function renderList(showAgentDescriptions: boolean | undefined) {
-    const selectedAgent = severalAgents[0];
-    if (!selectedAgent) {
-      throw new Error("Expected an agent fixture");
-    }
-    return renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "en" as const },
-        createElement(AgentList, {
-          agents: severalAgents,
-          selectedAgent,
-          showDescriptions: display({ showAgentDescriptions }).showDescriptions,
-          onSelectAgent: noop
-        })
-      )
-    );
+  function options(showAgentDescriptions: boolean | undefined) {
+    return agentPickerOptions(severalAgents, display({ showAgentDescriptions }).showDescriptions);
   }
 
   it("names the agents without their descriptions unless the instance shows them", () => {
-    for (const markup of [renderList(undefined), renderList(false)]) {
-      expect(markup).toContain(">Catalyst Assistant<");
-      expect(markup).toContain(">Research Assistant<");
-      expect(markup).not.toContain("Answers questions about Catalyst.");
+    for (const listed of [options(undefined), options(false)]) {
+      expect(listed).toEqual([
+        { value: "catalyst_assistant", label: "Catalyst Assistant" },
+        { value: "research_assistant", label: "Research Assistant" }
+      ]);
     }
   });
 
   it("puts each description under its agent's name when the instance shows them", () => {
-    const markup = renderList(true);
-
-    expect(markup).toContain(
-      '>Catalyst Assistant</span><span class="text-xs text-muted-foreground [overflow-wrap:anywhere]">Answers questions about Catalyst.<'
-    );
-    expect(markup).toMatch(/>Research Assistant<\/span><\/span><\/button>/u);
+    expect(options(true)).toEqual([
+      {
+        value: "catalyst_assistant",
+        label: "Catalyst Assistant",
+        description: "Answers questions about Catalyst."
+      },
+      { value: "research_assistant", label: "Research Assistant" }
+    ]);
   });
 });
 
