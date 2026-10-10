@@ -86,44 +86,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
   ).toBeVisible();
   await namespaceDialog.getByRole("button", { name: "Cancel" }).click();
 
-  // Grant E2E User writing agents in kai-.
-  await tab(page, "Grants").click();
-  await expect(page.getByText("No grant yet.")).toBeVisible();
-  await page.getByRole("button", { name: "Grant", exact: true }).click();
-  const grantDialog = page.getByRole("dialog", { name: "Grant" });
-  await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
-  await grantDialog.getByLabel("Write").check();
-  await pick(page, grantDialog.getByRole("button", { name: /^Namespace: / }), /kai-/u);
-  await grantDialog.getByRole("button", { name: "Grant", exact: true }).click();
-  await expect(grantDialog).toBeHidden();
-  const grantRows = page.getByTestId("grant-row");
-  await expect(grantRows).toHaveCount(1);
-  await expect(grantRows.first()).toContainText("E2E User");
-  await expect(grantRows.first()).toContainText("Write agents");
-  await expect(grantRows.first()).toContainText("Namespace kai-");
-  await expect(grantRows.first()).toContainText("E2E Admin");
-
-  // The row allows kai-helper and nothing allows other-helper.
-  await check(page, "kai-helper");
-  await expect(checkRow(page, "write")).toContainText("Allowed");
-  await expect(checkRow(page, "write")).toContainText("Grant in Namespace kai-");
-  await expect(checkRow(page, "read")).toContainText("Refused");
-  await check(page, "other-helper");
-  await expect(checkRow(page, "write")).toContainText("Refused");
-  await expect(checkRow(page, "write")).toContainText("No grant");
-
-  // The Namespace cannot be deleted while a grant names it, and its row says why.
-  await tab(page, "Namespaces").click();
-  await namespaceRow.getByRole("button", { name: "Actions for kai-" }).click();
-  const deleteItem = page.getByRole("menuitem", { name: /Delete/u });
-  await expect(deleteItem).toBeDisabled();
-  await deleteItem.hover();
-  await expect(
-    page.getByText("1 grant names this Namespace. Revoke it first.").first()
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
-
-  // A deny on the one agent wins over the grant in its Namespace.
+  // An agent in the Namespace, for the lists and the deny further down.
   const created = await requestWithOrigin(page, "put", assetPath, {
     data: {
       config: {
@@ -136,31 +99,126 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     }
   });
   expect(created.ok()).toBe(true);
+  const grantDialog = page.getByRole("dialog", { name: "New grant" });
+  const grantRows = page.getByTestId("grant-row");
+  const namespaceGrants = grantRows.filter({ hasText: "Namespace kai-" });
   try {
     await page.reload();
+
+    // Grant E2E User reading and writing agents in kai-: one row, two actions.
     await tab(page, "Grants").click();
-    await page.getByRole("button", { name: "Grant", exact: true }).click();
+    await expect(page.getByText("No grant yet.")).toBeVisible();
+    await page.getByRole("button", { name: "New grant" }).click();
+    await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    await grantDialog.getByLabel("Read").check();
+    await grantDialog.getByLabel("Write").check();
+    await pick(page, grantDialog.getByRole("button", { name: /^Namespace: / }), /kai-/u);
+    await grantDialog.getByRole("button", { name: "Create grant" }).click();
+    await expect(grantDialog).toBeHidden();
+    await expect(grantRows).toHaveCount(1);
+    await expect(grantRows.first()).toContainText("E2E User");
+    await expect(grantRows.first()).toContainText("Read agents");
+    await expect(grantRows.first()).toContainText("Write agents");
+    await expect(grantRows.first()).toContainText("Namespace kai-");
+    await expect(grantRows.first()).toContainText("E2E Admin");
+
+    // The same form with one more action adds the missing row and says what it left alone.
+    await page.getByRole("button", { name: "New grant" }).click();
+    await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    for (const verb of ["Read", "Write", "Delete"]) {
+      await grantDialog.getByLabel(verb).check();
+    }
+    await pick(page, grantDialog.getByRole("button", { name: /^Namespace: / }), /kai-/u);
+    await grantDialog.getByRole("button", { name: "Create grant" }).click();
+    await expect(grantDialog).toBeHidden();
+    await expect(page.getByText("1 added. 2 already there and left as they are.")).toBeVisible();
+    await expect(grantRows).toHaveCount(1);
+    await expect(grantRows.first().locator('[data-effect="allow"]')).toHaveCount(3);
+
+    // The rows allow kai-helper and nothing allows other-helper. The result says that it
+    // answers for the right alone, and that a read through a grant opens no overview.
+    await check(page, "kai-helper");
+    await expect(checkRow(page, "write")).toContainText("Allowed");
+    await expect(checkRow(page, "write")).toContainText("Grant in Namespace kai-");
+    await expect(page.getByTestId("check-right-only")).toContainText("This is the right alone.");
+    await expect(page.getByText("Read is allowed through a grant")).toBeVisible();
+    await expect(page.getByTestId("check-namespace-limits")).toHaveCount(0);
+    await check(page, "other-helper");
+    await expect(checkRow(page, "write")).toContainText("Refused");
+    await expect(checkRow(page, "write")).toContainText("No grant");
+    await expect(page.getByTestId("check-right-only")).toHaveCount(0);
+    // A name no agent can have gets no result.
+    await check(page, "kai helper");
+    await expect(page.getByText("An agent name is one word without spaces.")).toBeVisible();
+    await expect(page.getByTestId("check-row")).toHaveCount(0);
+
+    // The Namespace cannot be deleted while grants name it. The item says why without a
+    // pointer: the reason is a line of the item.
+    await tab(page, "Namespaces").click();
+    await namespaceRow.getByRole("button", { name: "Actions for kai-" }).click();
+    const deleteItem = page.getByRole("menuitem", { name: "Delete" });
+    await expect(deleteItem).toBeDisabled();
+    await expect(deleteItem).toContainText("3 grants name this Namespace. Revoke them first.");
+
+    // An empty tool list over an agent that exists is saved only after a confirmation that
+    // names the Namespace and the agent count.
+    await page.getByRole("menuitem", { name: "Edit" }).click();
+    const editDialog = page.getByRole("dialog", { name: "Edit Namespace kai-" });
+    await editDialog.getByRole("switch", { name: "Limit tools" }).click();
+    await expect(editDialog.getByText("1 agent already has this prefix.")).toBeVisible();
+    await editDialog.getByRole("button", { name: "Save", exact: true }).click();
+    const lockConfirm = page.getByRole("dialog", { name: "Save kai- with an empty list?" });
+    await expect(lockConfirm).toContainText("1 agent already has this prefix.");
+    await expect(lockConfirm).toContainText("an instance administrator and the release sync");
+    await lockConfirm.getByRole("button", { name: "Save anyway" }).click();
+    await expect(editDialog).toBeHidden();
+    await expect(namespaceRow).toContainText("None allowed");
+
+    // The Check tab names that limit under a write it calls allowed.
+    await check(page, "kai-helper");
+    await expect(checkRow(page, "write")).toContainText("Allowed");
+    await expect(page.getByTestId("check-namespace-limits")).toContainText(
+      "This name lies in Namespace kai-"
+    );
+    await expect(page.getByTestId("check-namespace-limits")).toContainText("Tools: none allowed.");
+
+    // A deny on the one agent wins over the grant in its Namespace.
+    await tab(page, "Grants").click();
+    await page.getByRole("button", { name: "New grant" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
     await grantDialog.getByLabel("Write").check();
     await grantDialog.getByRole("radio", { name: /On one asset/u }).check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("radio", { name: /^Deny/u }).check();
-    await expect(grantDialog.getByText("It is not a wall")).toBeVisible();
-    await grantDialog.getByRole("button", { name: "Grant", exact: true }).click();
+    await expect(grantDialog.getByText("Wins over grants and roles on this asset")).toBeVisible();
+    await grantDialog.getByRole("button", { name: "Create grant" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
+    await expect(grantRows.locator('[data-effect="deny"]')).toHaveText("Denied: Write agents");
 
     await check(page, "kai-helper");
     await expect(checkRow(page, "write")).toContainText("Refused");
     await expect(checkRow(page, "write")).toContainText("Deny on this asset");
     await expect(page.getByText("does not take away instance-wide rights")).toBeVisible();
 
-    // At 390 wide the page keeps inside the window.
+    // At 390 wide the page keeps inside the window, on the result and on the grant list,
+    // and nothing in the list scrolls sideways: a row stacks and keeps its menu in reach.
     await page.getByRole("button", { name: "Close sidebar" }).click();
     await page.setViewportSize(NARROW);
     await checkRow(page, "write").scrollIntoViewIfNeeded();
     await expect(checkRow(page, "write")).toBeInViewport();
     await expectNoSidewaysScroll(page);
+    await tab(page, "Grants").click();
+    await expect(grantRows).toHaveCount(2);
+    await expectNoSidewaysScroll(page);
+    for (const row of await grantRows.all()) {
+      expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true
+      );
+      await expect(row.getByRole("button", { name: /^Actions for the grant of/u })).toBeInViewport({
+        ratio: 1
+      });
+    }
     await page.setViewportSize(WIDE);
     await page.getByRole("button", { name: "Open sidebar" }).click();
   } finally {
@@ -168,19 +226,30 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     expect(deleted.ok()).toBe(true);
   }
 
-  // The deny outlives its asset: the list says so and still revokes it.
+  // The deny outlives its asset: the list says so in text and still removes it.
   await page.reload();
   await tab(page, "Grants").click();
   const orphanedDeny = grantRows.filter({ hasText: "Asset no longer exists" });
   await expect(orphanedDeny).toContainText("kai-helper");
-  for (const row of [orphanedDeny, grantRows.filter({ hasText: "Namespace kai-" })]) {
-    await row.getByRole("button", { name: /^Actions for the grant of/u }).click();
-    await page.getByRole("menuitem", { name: "Revoke" }).click();
-    await page
-      .getByRole("dialog", { name: "Revoke this grant?" })
-      .getByRole("button", { name: "Revoke" })
-      .click();
-    await expect(row).toHaveCount(0);
+  await expect(orphanedDeny).toContainText("This deny stays until you remove it.");
+  await orphanedDeny.getByRole("button", { name: /^Actions for the grant of/u }).click();
+  await page.getByRole("menuitem", { name: "Remove deny: Write agents" }).click();
+  await page
+    .getByRole("dialog", { name: "Remove this deny?" })
+    .getByRole("button", { name: "Remove deny" })
+    .click();
+  await expect(orphanedDeny).toHaveCount(0);
+  for (const action of ["Read agents", "Write agents", "Delete agents"]) {
+    // The menu of the last round has left the page before the row's menu is opened again: a
+    // click that lands while it is still leaving only finishes its closing.
+    await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
+    await namespaceGrants.getByRole("button", { name: /^Actions for the grant of/u }).click();
+    await page.getByRole("menuitem", { name: `Revoke: ${action}` }).click();
+    const revokeDialog = page.getByRole("dialog", { name: "Revoke this grant?" });
+    await revokeDialog.getByRole("button", { name: "Revoke" }).click();
+    // The dialog is gone, not only faded: it hands the focus back when it leaves.
+    await expect(revokeDialog).toHaveCount(0);
+    await expect(namespaceGrants.getByText(action, { exact: true })).toHaveCount(0);
   }
   await expect(page.getByText("No grant yet.")).toBeVisible();
 

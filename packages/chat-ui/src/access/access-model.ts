@@ -99,15 +99,40 @@ export function namespaceRequest(form: NamespaceForm): CreateNamespaceRequest {
 }
 
 /**
- * The lists that are switched on and empty while agents already live under the prefix. Saving
- * such a list refuses every later save of those agents by somebody who writes through a grant,
- * the release sync included.
+ * How many assets a Namespace's lists would bind: the agents under the prefix when the page
+ * could read them, else the agents and skills the Namespace's own row counts, else unknown.
+ */
+export type BoundAssets =
+  { unit: "agents"; count: number } | { unit: "assets"; count: number } | { unit: "unknown" };
+
+export function boundAssets(
+  prefix: string,
+  assets: readonly ConfigAssetSummary[] | undefined,
+  namespace: NamespaceWithUsage | undefined
+): BoundAssets {
+  if (assets !== undefined) {
+    return {
+      unit: "agents",
+      count:
+        prefix === ""
+          ? 0
+          : assets.filter((asset) => asset.kind === "agent" && asset.name.startsWith(prefix)).length
+    };
+  }
+  return namespace ? { unit: "assets", count: namespace.assetCount } : { unit: "unknown" };
+}
+
+/**
+ * The lists that are switched on and empty while assets may already live under the prefix.
+ * The server holds every save of an agent there against the lists, whoever saves: an empty
+ * tool list refuses every agent that names a tool, an empty model list every agent that names
+ * a model binding, and an agent without a binding needs the right to manage models.
  */
 export function namespaceLockedLists(
   form: NamespaceForm,
-  agentCount: number
+  bound: BoundAssets
 ): ("tools" | "models")[] {
-  if (agentCount === 0) {
+  if (bound.unit !== "unknown" && bound.count === 0) {
     return [];
   }
   return [
@@ -116,14 +141,24 @@ export function namespaceLockedLists(
   ];
 }
 
-/** The active agents whose names start with the prefix. */
-export function agentsUnderPrefix(
-  assets: readonly ConfigAssetSummary[],
-  prefix: string
-): ConfigAssetSummary[] {
-  return prefix === ""
-    ? []
-    : assets.filter((asset) => asset.kind === "agent" && asset.name.startsWith(prefix));
+/** The Namespace a name lies in: Namespaces never overlap, so there is at most one. */
+export function namespaceOfName(
+  name: string,
+  namespaces: readonly NamespaceWithUsage[]
+): NamespaceWithUsage | undefined {
+  return namespaces.find((namespace) => name.startsWith(namespace.prefix));
+}
+
+/**
+ * The shape the server asks of a skill's name (`skillNameSchema` of the config schema, which
+ * does not load in a browser). An agent's name only has to be one word.
+ */
+const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
+const AGENT_NAME_PATTERN = /^\S+$/u;
+
+/** Whether the server could hold an asset of this name: a check gives no verdict otherwise. */
+export function assetNameValid(kind: AccessAssetKind, name: string): boolean {
+  return (kind === "skill" ? SKILL_NAME_PATTERN : AGENT_NAME_PATTERN).test(name);
 }
 
 /** What the grant dialog holds while it is edited. */
@@ -182,6 +217,62 @@ export class GrantWriteError extends Error {
     super("A grant row could not be written", { cause });
     this.name = "GrantWriteError";
   }
+}
+
+/** What a grant of several actions came to: rows that existed already are left as they are. */
+export interface GrantWriteResult {
+  added: number;
+  existing: number;
+}
+
+/** The rows one person holds on one place, in the order the actions are listed. */
+export interface GrantGroup {
+  key: string;
+  holderId: string;
+  /** The first row: it carries the scope every row of the group has. */
+  scope: PermissionGrantRow;
+  grants: PermissionGrantRow[];
+}
+
+/** One group per holder and place, the holders in the order of their names. */
+export function groupGrants(
+  grants: readonly PermissionGrantRow[],
+  holderName: (holderId: string) => string
+): GrantGroup[] {
+  const groups = new Map<string, GrantGroup>();
+  for (const grant of grants) {
+    const key = [
+      grant.holderKind,
+      grant.holderId,
+      grant.scopeKind,
+      grant.namespace ?? grant.scopeId ?? ""
+    ].join(":");
+    const group = groups.get(key);
+    if (group) {
+      group.grants.push(grant);
+    } else {
+      groups.set(key, { key, holderId: grant.holderId, scope: grant, grants: [grant] });
+    }
+  }
+  const place = ({ scope }: GrantGroup) =>
+    `${scope.scopeKind} ${scope.namespace ?? scope.scopeAsset?.name ?? scope.scopeId ?? ""}`;
+  const position = (grant: PermissionGrantRow) => {
+    const parts = splitGrantableAction(grant.action);
+    return parts
+      ? ACCESS_ASSET_KINDS.indexOf(parts.kind) * ACCESS_VERBS.length +
+          ACCESS_VERBS.indexOf(parts.verb)
+      : ACCESS_ASSET_KINDS.length * ACCESS_VERBS.length;
+  };
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      grants: [...group.grants].sort((left, right) => position(left) - position(right))
+    }))
+    .sort(
+      (left, right) =>
+        holderName(left.holderId).localeCompare(holderName(right.holderId)) ||
+        place(left).localeCompare(place(right))
+    );
 }
 
 /** The users a grant can be written for: nobody whose account is being deleted. */
@@ -253,6 +344,16 @@ export function accessWriteFailure(error: unknown): AccessWriteFailure {
     return "userBeingDeleted";
   }
   return error.code === "NOT_FOUND" ? "notFound" : "other";
+}
+
+/** Why a list the page needs is not there: the caller lacks the right, or the load failed. */
+export type LoadFailure = "forbidden" | "failed";
+
+export function loadFailure(error: unknown): LoadFailure | undefined {
+  if (error === null || error === undefined) {
+    return undefined;
+  }
+  return error instanceof ApiError && error.status === 403 ? "forbidden" : "failed";
 }
 
 /** The registered prefix a refused prefix overlaps, as the server names it. */
@@ -348,4 +449,48 @@ export function checkAsset(
         }
       : action;
   });
+}
+
+/** What the Check tab has to go on, and what keeps it from giving a result. */
+export interface CheckInputs {
+  holderId: string | undefined;
+  kind: AccessAssetKind;
+  name: string;
+  effectiveLoaded: boolean;
+  effectiveFailure: "hidden" | "failed" | undefined;
+  grantsLoaded: boolean;
+  grantsFailed: boolean;
+  assetsLoaded: boolean;
+  assetsFailure: LoadFailure | undefined;
+}
+
+export type CheckState =
+  | "incomplete"
+  | "holderHidden"
+  | "effectiveFailed"
+  | "grantsFailed"
+  | "assetsForbidden"
+  | "assetsFailed"
+  | "loading"
+  | "ready";
+
+/**
+ * Whether the Check tab may give a result. It needs a person, a name an asset can have, the
+ * person's rights, the grant rows and the assets: a result without the rows or the assets
+ * would miss a deny on one asset and call the action allowed.
+ */
+export function checkState(inputs: CheckInputs): CheckState {
+  if (inputs.holderId === undefined || !assetNameValid(inputs.kind, inputs.name)) {
+    return "incomplete";
+  }
+  if (inputs.effectiveFailure !== undefined) {
+    return inputs.effectiveFailure === "hidden" ? "holderHidden" : "effectiveFailed";
+  }
+  if (inputs.grantsFailed) {
+    return "grantsFailed";
+  }
+  if (inputs.assetsFailure !== undefined) {
+    return inputs.assetsFailure === "forbidden" ? "assetsForbidden" : "assetsFailed";
+  }
+  return inputs.effectiveLoaded && inputs.grantsLoaded && inputs.assetsLoaded ? "ready" : "loading";
 }

@@ -37,12 +37,14 @@ import {
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   accessWriteFailure,
-  agentsUnderPrefix,
+  boundAssets,
   namespaceFormFrom,
   namespaceLockedLists,
   namespacePrefixProblem,
   namespaceRequest,
   overlappedPrefix,
+  type BoundAssets,
+  type LoadFailure,
   type NamespaceForm,
   type NamespacePrefixProblem
 } from "./access-model";
@@ -64,7 +66,8 @@ export interface NamespacesTabProps {
   onRetry(): void;
   /** Absent while the tools, models and assets load, and when they could not be loaded. */
   references: NamespaceReferences | undefined;
-  referencesFailed: boolean;
+  /** `forbidden` when the caller may not read the agents and skills of the instance. */
+  referencesFailure: LoadFailure | undefined;
   /** Each write rejects with the server's refusal, which the tab turns into its sentence. */
   onCreate(request: CreateNamespaceRequest): Promise<unknown>;
   onUpdate(prefix: string, request: UpdateNamespaceRequest): Promise<unknown>;
@@ -79,7 +82,7 @@ export function NamespacesTab({
   loadFailed,
   onRetry,
   references,
-  referencesFailed,
+  referencesFailure,
   onCreate,
   onUpdate,
   onDelete
@@ -98,6 +101,7 @@ export function NamespacesTab({
 
   return (
     <div className="grid gap-4">
+      <p className="text-body text-muted-foreground">{t("access.namespacesIntro")}</p>
       {deleteFailed ? (
         <Banner tone="danger" onDismiss={() => setDeleteFailed(false)}>
           {t("access.namespaceDeleteFailed")}
@@ -169,6 +173,7 @@ export function NamespacesTab({
                         <DropdownMenuItem
                           tone="danger"
                           icon={<Trash2 aria-hidden="true" />}
+                          reasonPlacement="line"
                           disabledReason={
                             namespace.grantCount === 0
                               ? undefined
@@ -199,7 +204,7 @@ export function NamespacesTab({
           namespace={dialog.kind === "edit" ? dialog.namespace : undefined}
           registeredPrefixes={(namespaces ?? []).map((namespace) => namespace.prefix)}
           references={references}
-          referencesFailed={referencesFailed}
+          referencesFailure={referencesFailure}
           onSave={(form) =>
             dialog.kind === "edit"
               ? onUpdate(dialog.namespace.prefix, updateRequest(form))
@@ -256,7 +261,7 @@ function NamespaceDialog({
   namespace,
   registeredPrefixes,
   references,
-  referencesFailed,
+  referencesFailure,
   onSave,
   onClose
 }: {
@@ -264,7 +269,7 @@ function NamespaceDialog({
   namespace: NamespaceWithUsage | undefined;
   registeredPrefixes: readonly string[];
   references: NamespaceReferences | undefined;
-  referencesFailed: boolean;
+  referencesFailure: LoadFailure | undefined;
   onSave(form: NamespaceForm): Promise<unknown>;
   onClose(): void;
 }) {
@@ -292,16 +297,15 @@ function NamespaceDialog({
   // A prefix is judged from its first character on; an empty field waits for the submit.
   const showPrefixProblem = prefixProblem !== undefined && (form.prefix !== "" || submitted);
   const displayNameMissing = form.displayName.trim() === "";
-  const agentCount = agentsUnderPrefix(references?.assets ?? [], form.prefix).length;
-  const lockedLists = prefixProblem ? [] : namespaceLockedLists(form, agentCount);
+  // Without the list of agents the Namespace's own count stands in: the warning must not
+  // depend on a right the administrator may lack.
+  const bound = boundAssets(form.prefix, references?.assets, namespace);
+  const lockedLists = prefixProblem ? [] : namespaceLockedLists(form, bound);
+  const lockSentences = lockedLists.length === 0 ? [] : lockText(lockedLists, bound, t);
+  const [confirming, setConfirming] = useState(false);
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    setSubmitted(true);
-    setFailure(undefined);
-    if (prefixProblem || displayNameMissing) {
-      return;
-    }
+  const save = () => {
+    setConfirming(false);
     setSaving(true);
     onSave(form)
       .then(onClose)
@@ -318,6 +322,21 @@ function NamespaceDialog({
         );
       })
       .finally(() => setSaving(false));
+  };
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setSubmitted(true);
+    setFailure(undefined);
+    if (prefixProblem || displayNameMissing) {
+      return;
+    }
+    // An empty list over existing agents is saved only after it was confirmed.
+    if (lockedLists.length > 0) {
+      setConfirming(true);
+      return;
+    }
+    save();
   };
 
   return (
@@ -376,8 +395,14 @@ function NamespaceDialog({
             onChange={(event) => change({ displayName: event.currentTarget.value })}
           />
         </Field>
-        {referencesFailed ? (
-          <Banner tone="danger">{t("access.referencesLoadFailed")}</Banner>
+        {referencesFailure ? (
+          <Banner tone="danger">
+            {t(
+              referencesFailure === "forbidden"
+                ? "access.referencesForbidden"
+                : "access.referencesLoadFailed"
+            )}
+          </Banner>
         ) : null}
         <LimitedList
           label={t("access.limitTools")}
@@ -408,25 +433,55 @@ function NamespaceDialog({
           onLimitedChange={(limitModels) => change({ limitModels })}
           onChosenChange={(modelBindingIds) => change({ modelBindingIds })}
         />
-        {lockedLists.length > 0 ? (
+        {lockSentences.length > 0 ? (
           <Banner tone="warning" title={t("access.namespaceLockTitle")}>
             <div className="grid gap-1">
-              {lockedLists.map((list) => (
-                <p key={list}>{t(lockWarningKey(list, agentCount), { count: agentCount })}</p>
+              {lockSentences.map((sentence) => (
+                <p key={sentence}>{sentence}</p>
               ))}
             </div>
           </Banner>
         ) : null}
       </form>
+      {confirming ? (
+        <ConfirmDialog
+          open
+          title={t("access.namespaceLockConfirmTitle", { prefix: form.prefix })}
+          confirmLabel={t("access.namespaceLockConfirm")}
+          onConfirm={save}
+          onClose={() => setConfirming(false)}
+        >
+          <div className="grid gap-2">
+            {lockSentences.map((sentence) => (
+              <p key={sentence}>{sentence}</p>
+            ))}
+          </div>
+        </ConfirmDialog>
+      ) : null}
     </Dialog>
   );
 }
 
-function lockWarningKey(list: "tools" | "models", agentCount: number): TranslationKey {
-  if (list === "tools") {
-    return agentCount === 1 ? "access.namespaceLockToolsOne" : "access.namespaceLockToolsOther";
-  }
-  return agentCount === 1 ? "access.namespaceLockModelsOne" : "access.namespaceLockModelsOther";
+/** Who an empty list binds and what it stops, one sentence each. */
+function lockText(
+  lists: readonly ("tools" | "models")[],
+  bound: BoundAssets,
+  t: ReturnType<typeof useTranslation>["t"]
+): string[] {
+  const who =
+    bound.unit === "unknown"
+      ? t("access.lockUnknown")
+      : bound.unit === "agents"
+        ? t(bound.count === 1 ? "access.lockAgentsOne" : "access.lockAgentsOther", {
+            count: bound.count
+          })
+        : t(bound.count === 1 ? "access.lockAssetsOne" : "access.lockAssetsOther", {
+            count: bound.count
+          });
+  return [
+    who,
+    ...lists.map((list) => t(list === "tools" ? "access.lockTools" : "access.lockModels"))
+  ];
 }
 
 function prefixProblemText(

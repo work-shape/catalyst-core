@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ApiError } from "@vivd-catalyst/api-client";
+import { loadFailure } from "../../access/access-model";
 import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from "@vivd-catalyst/ui";
 import { CheckTab, GrantsTab, NamespacesTab } from "../../access";
 import {
@@ -30,6 +31,7 @@ export function AccessPage() {
   const effectiveQuery = useEffectivePermissionsQuery({ ...api, holderId: checkedHolderId });
   const mutations = useAccessMutations(api);
   const overview = overviewQuery.data;
+  const overviewFailure = loadFailure(overviewQuery.error);
   const retry = (query: { refetch(): Promise<unknown> }) => () => {
     query.refetch().catch(() => undefined);
   };
@@ -59,7 +61,7 @@ export function AccessPage() {
                 assets: overview.assets
               }
             }
-            referencesFailed={Boolean(overviewQuery.error)}
+            referencesFailure={overviewFailure}
             onCreate={(request) => mutations.createNamespace.mutateAsync(request)}
             onUpdate={(prefix, body) => mutations.updateNamespace.mutateAsync({ prefix, body })}
             onDelete={(prefix) => mutations.deleteNamespace.mutateAsync(prefix)}
@@ -74,7 +76,7 @@ export function AccessPage() {
             usersFailed={Boolean(usersQuery.error)}
             namespaces={namespacesQuery.data}
             assets={overview?.assets}
-            assetsFailed={Boolean(overviewQuery.error)}
+            assetsFailure={overviewFailure}
             onGrant={(requests) => mutations.grant.mutateAsync(requests)}
             onRevoke={(grantId) => mutations.revoke.mutateAsync(grantId)}
           />
@@ -84,6 +86,10 @@ export function AccessPage() {
             users={usersQuery.data}
             usersFailed={Boolean(usersQuery.error)}
             assets={overview?.assets}
+            assetsFailure={overviewFailure}
+            onRetryAssets={retry(overviewQuery)}
+            namespaces={namespacesQuery.data}
+            modelBindings={overview?.references.modelBindings}
             holderId={checkedHolderId}
             onHolderChange={setCheckedHolderId}
             effective={effectiveQuery.data}
@@ -95,9 +101,11 @@ export function AccessPage() {
                   : "failed"
             }
             onRetry={retry(effectiveQuery)}
-            holderGrants={(grantsQuery.data ?? []).filter(
+            holderGrants={grantsQuery.data?.filter(
               (grant) => grant.holderKind === "user" && grant.holderId === checkedHolderId
             )}
+            grantsFailed={Boolean(grantsQuery.error)}
+            onRetryGrants={retry(grantsQuery)}
           />
         </TabsContent>
       </Tabs>

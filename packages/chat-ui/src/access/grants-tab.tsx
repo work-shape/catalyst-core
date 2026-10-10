@@ -1,4 +1,4 @@
-import { Ellipsis, Undo2 } from "lucide-react";
+import { Ban, Check, Ellipsis, Undo2 } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 import type {
   AdministeredUser,
@@ -23,16 +23,14 @@ import {
   Field,
   FormNotice,
   IconButton,
+  List,
   Picker,
   PickerButton,
   RadioGroup,
   SkeletonList,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
 } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
@@ -43,15 +41,27 @@ import {
   grantRequests,
   grantableUsers,
   GrantWriteError,
+  groupGrants,
   splitGrantableAction,
   type AccessAssetKind,
   type AccessVerb,
   type AccessWriteFailure,
-  type GrantForm
+  type GrantForm,
+  type GrantGroup,
+  type GrantWriteResult,
+  type LoadFailure
 } from "./access-model";
 
 /** From this many entries on, a picker of the grant dialog shows its search field. */
 const PICKER_SEARCH_FROM_COUNT = 8;
+
+/**
+ * The columns of the grant list once the list itself is wide enough for them. Narrower, a row
+ * stacks: the person with the row's menu, then the place, then the actions and who granted
+ * them. The list's own width decides, not the window's, because the settings rail and the
+ * sidebar take their share of a window.
+ */
+const GRANT_COLUMNS = "@xl:grid-cols-[minmax(0,4fr)_minmax(0,4fr)_minmax(0,6fr)_1.75rem]";
 
 type Translate = TranslationContextValue["t"];
 
@@ -77,49 +87,32 @@ function actionLabel(action: string, t: Translate): string {
   });
 }
 
-/** "Agent kai-helper" for an asset of a kind this page knows. */
-function assetLabel(asset: { kind: string; name: string }, t: Translate): string {
+/** What one row says, with its effect in words: "Denied: Write agents". */
+function grantLabel(grant: PermissionGrantRow, t: Translate): string {
+  const action = actionLabel(grant.action, t);
+  return grant.effect === "deny" ? t("access.deniedAction", { action }) : action;
+}
+
+/**
+ * Where a row applies, in one line. The server leaves an asset's name out for a reader who
+ * may not read agents and skills; the row then names the asset by its id.
+ */
+function scopeLabel(grant: PermissionGrantRow, t: Translate): string {
+  if (grant.scopeKind === "namespace" && grant.namespace !== undefined) {
+    return t("access.scopeNamespace", { prefix: grant.namespace });
+  }
+  if (grant.scopeKind !== "asset") {
+    return grant.scopeKind;
+  }
+  const asset = grant.scopeAsset;
+  if (asset?.name === undefined) {
+    return t("access.scopeAssetById", { id: grant.scopeId ?? "" });
+  }
   return asset.kind === "agent"
     ? t("access.scopeAgent", { name: asset.name })
     : asset.kind === "skill"
       ? t("access.scopeSkill", { name: asset.name })
       : asset.name;
-}
-
-/** Where a row applies, in one line. */
-function scopeLabel(grant: PermissionGrantRow, t: Translate): string {
-  if (grant.scopeKind === "namespace" && grant.namespace !== undefined) {
-    return t("access.scopeNamespace", { prefix: grant.namespace });
-  }
-  if (grant.scopeKind === "asset") {
-    return grant.scopeAsset ? assetLabel(grant.scopeAsset, t) : t("access.scopeAssetUnknown");
-  }
-  return grant.scopeKind;
-}
-
-/**
- * The rows of one person together, and under a person the rows of one place together, in the
- * order the actions are listed everywhere else.
- */
-function inListOrder(
-  grants: readonly PermissionGrantRow[],
-  holderName: (grant: PermissionGrantRow) => string
-): PermissionGrantRow[] {
-  const place = (grant: PermissionGrantRow) =>
-    `${grant.scopeKind} ${grant.namespace ?? grant.scopeAsset?.name ?? grant.scopeId ?? ""}`;
-  const kind = (grant: PermissionGrantRow) =>
-    splitGrantableAction(grant.action)?.kind ?? grant.action;
-  const actionIndex = (grant: PermissionGrantRow) => {
-    const parts = splitGrantableAction(grant.action);
-    return parts ? ACCESS_VERBS.indexOf(parts.verb) : ACCESS_VERBS.length;
-  };
-  return [...grants].sort(
-    (left, right) =>
-      holderName(left).localeCompare(holderName(right)) ||
-      place(left).localeCompare(place(right)) ||
-      kind(left).localeCompare(kind(right)) ||
-      actionIndex(left) - actionIndex(right)
-  );
 }
 
 export interface GrantsTabProps {
@@ -133,13 +126,17 @@ export interface GrantsTabProps {
   namespaces: readonly NamespaceWithUsage[] | undefined;
   /** The active agents and skills. Absent while they load and when they could not be loaded. */
   assets: readonly ConfigAssetSummary[] | undefined;
-  assetsFailed: boolean;
-  /** Rejects with a `GrantWriteError` that names the refused row and how many were written. */
-  onGrant(requests: readonly CreatePermissionGrantRequest[]): Promise<unknown>;
+  /** `forbidden` when the caller may not read the agents and skills of the instance. */
+  assetsFailure: LoadFailure | undefined;
+  /**
+   * Writes the rows that do not exist yet and says how many it added. Rejects with a
+   * `GrantWriteError` that names the refused row and how many were written before it.
+   */
+  onGrant(requests: readonly CreatePermissionGrantRequest[]): Promise<GrantWriteResult>;
   onRevoke(grantId: string): Promise<unknown>;
 }
 
-/** The grant rows of the instance, the dialog that writes rows and the revoke of one row. */
+/** The grants of the instance, one row per person and place, and the dialog that writes them. */
 export function GrantsTab({
   grants,
   loadFailed,
@@ -148,19 +145,20 @@ export function GrantsTab({
   usersFailed,
   namespaces,
   assets,
-  assetsFailed,
+  assetsFailure,
   onGrant,
   onRevoke
 }: GrantsTabProps) {
   const { t, locale } = useTranslation();
   const [granting, setGranting] = useState(false);
+  const [written, setWritten] = useState<GrantWriteResult | undefined>();
   const [pendingRevoke, setPendingRevoke] = useState<PermissionGrantRow | undefined>();
   const [revoking, setRevoking] = useState(false);
   const [revokeFailed, setRevokeFailed] = useState(false);
-  const userName = (userId: string | undefined) =>
+  const findUser = (userId: string | undefined) =>
     userId === undefined ? undefined : users?.find((user) => user.id === userId);
-  const holderName = (grant: PermissionGrantRow) =>
-    userName(grant.holderId)?.displayLabel ?? t("access.unknownUser");
+  const holderName = (holderId: string) =>
+    findUser(holderId)?.displayLabel ?? t("access.unknownUser");
 
   const newGrant = (
     <Button size="sm" onClick={() => setGranting(true)}>
@@ -173,6 +171,15 @@ export function GrantsTab({
       {revokeFailed ? (
         <Banner tone="danger" onDismiss={() => setRevokeFailed(false)}>
           {t("access.revokeFailed")}
+        </Banner>
+      ) : null}
+      {/* Rows that existed already were left alone: the person is told what was added. */}
+      {written !== undefined && written.existing > 0 ? (
+        <Banner onDismiss={() => setWritten(undefined)}>
+          {t(written.added === 0 ? "access.grantNothingAdded" : "access.grantPartlyAdded", {
+            added: written.added,
+            existing: written.existing
+          })}
         </Banner>
       ) : null}
       {loadFailed ? (
@@ -193,85 +200,29 @@ export function GrantsTab({
       ) : (
         <>
           <div className="flex justify-end">{newGrant}</div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("access.grantHolder")}</TableHead>
-                <TableHead>{t("access.grantAction")}</TableHead>
-                <TableHead>{t("access.grantScope")}</TableHead>
-                <TableHead>{t("access.grantEffect")}</TableHead>
-                <TableHead>{t("access.grantedBy")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("access.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {inListOrder(grants, holderName).map((grant) => {
-                const holder = userName(grant.holderId);
-                const grantedBy = userName(grant.grantedBy);
-                const assetGone = grant.scopeAsset?.active === false;
-                return (
-                  <TableRow key={grant.id} data-testid="grant-row">
-                    <TableCell>
-                      <div className="grid">
-                        <span>{holder?.displayLabel ?? t("access.unknownUser")}</span>
-                        {holder?.email ? (
-                          <span className="text-caption break-all text-muted-foreground">
-                            {holder.email}
-                          </span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>{actionLabel(grant.action, t)}</TableCell>
-                    <TableCell>
-                      <div className="grid justify-items-start gap-1">
-                        <span>{scopeLabel(grant, t)}</span>
-                        {assetGone ? (
-                          <Badge tone="warning" size="sm" title={t("access.scopeAssetGoneHint")}>
-                            {t("access.scopeAssetGone")}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge tone={grant.effect === "deny" ? "danger" : "success"}>
-                        {t(grant.effect === "deny" ? "access.effectDeny" : "access.effectAllow")}
-                      </Badge>
-                    </TableCell>
-                    {/* The server leaves out a writer the reader is not shown: that is no error. */}
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      <div className="grid">
-                        <span>{grantedBy?.displayLabel ?? t("access.notAvailable")}</span>
-                        <span className="text-caption">{formatDate(grant.createdAt, locale)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-0 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <IconButton
-                            size="sm"
-                            label={t("access.grantMenu", { name: holderName(grant) })}
-                          >
-                            <Ellipsis aria-hidden="true" />
-                          </IconButton>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            tone="danger"
-                            icon={<Undo2 aria-hidden="true" />}
-                            onSelect={() => setPendingRevoke(grant)}
-                          >
-                            {t("access.revoke")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div className="@container">
+            <div
+              aria-hidden="true"
+              className={`hidden gap-x-4 border-b px-3 pb-2 text-caption font-medium text-muted-foreground @xl:grid ${GRANT_COLUMNS}`}
+            >
+              <span>{t("access.grantHolder")}</span>
+              <span>{t("access.grantScope")}</span>
+              <span>{t("access.grantActions")}</span>
+            </div>
+            <List className="gap-0">
+              {groupGrants(grants, holderName).map((group) => (
+                <GrantGroupRow
+                  key={group.key}
+                  group={group}
+                  holder={findUser(group.holderId)}
+                  holderName={holderName(group.holderId)}
+                  grantedBy={grantedByText(group, findUser, t)}
+                  grantedAt={formatDate(latest(group), locale)}
+                  onRevoke={setPendingRevoke}
+                />
+              ))}
+            </List>
+          </div>
         </>
       )}
       {granting ? (
@@ -280,16 +231,23 @@ export function GrantsTab({
           usersFailed={usersFailed}
           namespaces={namespaces}
           assets={assets}
-          assetsFailed={assetsFailed}
-          onGrant={onGrant}
+          assetsFailure={assetsFailure}
+          onGrant={(requests) =>
+            onGrant(requests).then((result) => {
+              setWritten(result);
+              return result;
+            })
+          }
           onClose={() => setGranting(false)}
         />
       ) : null}
       {pendingRevoke ? (
         <ConfirmDialog
           open
-          title={t("access.revokeTitle")}
-          confirmLabel={t("access.revoke")}
+          title={t(
+            pendingRevoke.effect === "deny" ? "access.revokeDenyTitle" : "access.revokeTitle"
+          )}
+          confirmLabel={t(pendingRevoke.effect === "deny" ? "access.revokeDeny" : "access.revoke")}
           loading={revoking}
           onConfirm={() => {
             setRevoking(true);
@@ -308,7 +266,7 @@ export function GrantsTab({
               ? "access.revokeDenyDescription"
               : "access.revokeAllowDescription",
             {
-              name: holderName(pendingRevoke),
+              name: holderName(pendingRevoke.holderId),
               action: actionLabel(pendingRevoke.action, t),
               scope: scopeLabel(pendingRevoke, t)
             }
@@ -316,6 +274,133 @@ export function GrantsTab({
         </ConfirmDialog>
       ) : null}
     </div>
+  );
+}
+
+/** The newest row of a group: when the person last got something there. */
+function latest(group: GrantGroup): string {
+  return group.grants.reduce(
+    (newest, grant) => (grant.createdAt > newest ? grant.createdAt : newest),
+    group.scope.createdAt
+  );
+}
+
+/**
+ * Who wrote the rows of a group. The server leaves out a writer the reader is not shown: that
+ * is no error, and the cell says so in words instead of staying empty.
+ */
+function grantedByText(
+  group: GrantGroup,
+  findUser: (userId: string | undefined) => AdministeredUser | undefined,
+  t: Translate
+): string {
+  const names = group.grants.map(
+    (grant) => findUser(grant.grantedBy)?.displayLabel ?? t("access.notAvailable")
+  );
+  return [...new Set(names)].join(", ");
+}
+
+/** One person's rows on one place: the actions as chips, each revoked from the row's menu. */
+function GrantGroupRow({
+  group,
+  holder,
+  holderName,
+  grantedBy,
+  grantedAt,
+  onRevoke
+}: {
+  group: GrantGroup;
+  holder: AdministeredUser | undefined;
+  holderName: string;
+  grantedBy: string;
+  grantedAt: string;
+  onRevoke(grant: PermissionGrantRow): void;
+}) {
+  const { t } = useTranslation();
+  const assetGone = group.scope.scopeAsset?.active === false;
+  return (
+    <li
+      data-testid="grant-row"
+      className={`grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 border-b px-3 py-3 last:border-0 ${GRANT_COLUMNS}`}
+    >
+      <div className="grid min-w-0">
+        <span className="truncate">{holderName}</span>
+        {holder?.email ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* A long address is cut; the whole of it shows on hover and on focus. */}
+              <span
+                tabIndex={0}
+                className="truncate rounded-sm text-caption text-muted-foreground focus-visible:focus-ring"
+              >
+                {holder.email}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{holder.email}</TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
+      <div className="@xl:order-last">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <IconButton size="sm" label={t("access.grantMenu", { name: holderName })}>
+              <Ellipsis aria-hidden="true" />
+            </IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {group.grants.map((grant) => (
+              <DropdownMenuItem
+                key={grant.id}
+                tone="danger"
+                icon={<Undo2 aria-hidden="true" />}
+                onSelect={() => onRevoke(grant)}
+              >
+                {t(grant.effect === "deny" ? "access.revokeDenyItem" : "access.revokeAllowItem", {
+                  action: actionLabel(grant.action, t)
+                })}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="col-span-2 grid min-w-0 justify-items-start gap-1 @xl:col-span-1">
+        <span className="max-w-full break-words">{scopeLabel(group.scope, t)}</span>
+        {assetGone ? (
+          <>
+            <Badge tone="warning" size="sm">
+              {t("access.scopeAssetGone")}
+            </Badge>
+            <span className="text-caption text-muted-foreground">
+              {t("access.scopeAssetGoneHint")}
+            </span>
+          </>
+        ) : null}
+      </div>
+      <div className="col-span-2 grid min-w-0 gap-1.5 @xl:col-span-1">
+        <ul className="flex min-w-0 flex-wrap gap-1.5">
+          {group.grants.map((grant) => (
+            <li key={grant.id} className="max-w-full">
+              {/* A deny differs by its icon, its outline and its word, not by colour alone. */}
+              <Badge
+                data-effect={grant.effect}
+                tone={grant.effect === "deny" ? "danger" : "success"}
+                appearance={grant.effect === "deny" ? "outline" : "soft"}
+              >
+                {grant.effect === "deny" ? (
+                  <Ban aria-hidden="true" />
+                ) : (
+                  <Check aria-hidden="true" />
+                )}
+                {grantLabel(grant, t)}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+        <span className="text-caption text-muted-foreground">
+          {t("access.grantedByLine", { name: grantedBy, date: grantedAt })}
+        </span>
+      </div>
+    </li>
   );
 }
 
@@ -337,10 +422,7 @@ const failureKeys: Partial<Record<AccessWriteFailure, TranslationKey>> = {
 function grantFailureText(error: unknown, t: Translate): string {
   const cause = error instanceof GrantWriteError ? error.cause : error;
   const failure = accessWriteFailure(cause);
-  const sentence =
-    failure === "duplicateGrant" && error instanceof GrantWriteError
-      ? t("access.grantDuplicate", { action: actionLabel(error.request.action, t) })
-      : t(failureKeys[failure] ?? "access.grantFailed");
+  const sentence = t(failureKeys[failure] ?? "access.grantFailed");
   return error instanceof GrantWriteError && error.written > 0
     ? `${sentence} ${t("access.grantPartlyWritten", { written: error.written, total: error.total })}`
     : sentence;
@@ -351,12 +433,12 @@ function GrantDialog({
   usersFailed,
   namespaces,
   assets,
-  assetsFailed,
+  assetsFailure,
   onGrant,
   onClose
 }: Pick<
   GrantsTabProps,
-  "users" | "usersFailed" | "namespaces" | "assets" | "assetsFailed" | "onGrant"
+  "users" | "usersFailed" | "namespaces" | "assets" | "assetsFailure" | "onGrant"
 > & { onClose(): void }) {
   const { t } = useTranslation();
   const formId = useId();
@@ -507,7 +589,15 @@ function GrantDialog({
           <Field
             label={t("access.grantAsset")}
             required
-            error={assetsFailed ? t("access.referencesLoadFailed") : undefined}
+            error={
+              assetsFailure === undefined
+                ? undefined
+                : t(
+                    assetsFailure === "forbidden"
+                      ? "access.referencesForbidden"
+                      : "access.referencesLoadFailed"
+                  )
+            }
           >
             <Picker
               search={kindAssets.length >= PICKER_SEARCH_FROM_COUNT}

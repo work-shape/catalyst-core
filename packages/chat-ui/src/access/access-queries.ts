@@ -7,7 +7,7 @@ import {
   type UpdateNamespaceRequest
 } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
-import { GrantWriteError } from "./access-model";
+import { accessWriteFailure, GrantWriteError, type GrantWriteResult } from "./access-model";
 
 interface AccessApiInput {
   apiBaseUrl: string;
@@ -80,18 +80,29 @@ export function useAccessMutations(input: AccessApiInput) {
     mutationFn: (prefix: string) => input.client.namespaces.delete({ params: { prefix } }),
     onSettled: refresh
   });
-  /** One row per request, in order. It stops at the first refusal and says how far it came. */
+  /**
+   * One row per request, in order. A row that exists already is left as it is, so sending a
+   * form again after it stopped half way adds what is missing. It stops at any other refusal
+   * and says how far it came.
+   */
   const grant = useMutation({
-    mutationFn: async (requests: readonly CreatePermissionGrantRequest[]) => {
-      let written = 0;
+    mutationFn: async (
+      requests: readonly CreatePermissionGrantRequest[]
+    ): Promise<GrantWriteResult> => {
+      let added = 0;
+      let existing = 0;
       for (const request of requests) {
         try {
           await input.client.permissions.grant({ body: request });
+          added += 1;
         } catch (error) {
-          throw new GrantWriteError(request, written, requests.length, error);
+          if (accessWriteFailure(error) !== "duplicateGrant") {
+            throw new GrantWriteError(request, added, requests.length, error);
+          }
+          existing += 1;
         }
-        written += 1;
       }
+      return { added, existing };
     },
     onSettled: refresh
   });

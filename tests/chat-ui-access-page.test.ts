@@ -9,11 +9,14 @@ import {
 } from "@vivd-catalyst/api-client";
 import {
   accessWriteFailure,
+  boundAssets,
   checkAsset,
   checkedAssetId,
+  checkState,
   CheckTab,
   grantRequests,
   GrantsTab,
+  groupGrants,
   namespaceLockedLists,
   namespacePrefixProblem,
   namespaceRequest,
@@ -24,6 +27,7 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 
 const AT = "2026-10-01T10:00:00Z";
 const never = async () => undefined;
+const nothingAdded = async () => ({ added: 0, existing: 0 });
 const nothing = () => undefined;
 
 function render(node: ReturnType<typeof createElement>, locale: "en" | "de" = "en"): string {
@@ -89,7 +93,7 @@ function namespacesTab(props: Partial<ComponentProps<typeof NamespacesTab>>) {
     loadFailed: false,
     onRetry: nothing,
     references: undefined,
-    referencesFailed: false,
+    referencesFailure: undefined,
     onCreate: never,
     onUpdate: never,
     onDelete: never,
@@ -106,8 +110,8 @@ function grantsTab(props: Partial<ComponentProps<typeof GrantsTab>>) {
     usersFailed: false,
     namespaces: [kai],
     assets: [],
-    assetsFailed: false,
-    onGrant: never,
+    assetsFailure: undefined,
+    onGrant: nothingAdded,
     onRevoke: never,
     ...props
   });
@@ -118,12 +122,18 @@ function checkTab(props: Partial<ComponentProps<typeof CheckTab>>) {
     users: [user("user-1", "Kai Example")],
     usersFailed: false,
     assets: [],
+    assetsFailure: undefined,
+    onRetryAssets: nothing,
+    namespaces: [kai],
+    modelBindings: [],
     holderId: undefined,
     onHolderChange: nothing,
     effective: undefined,
     effectiveFailure: undefined,
     onRetry: nothing,
     holderGrants: [],
+    grantsFailed: false,
+    onRetryGrants: nothing,
     ...props
   });
 }
@@ -153,6 +163,15 @@ describe("Namespaces tab", () => {
     expect(markup).toContain("No limit");
     expect(markup).toContain("None allowed");
   });
+
+  it("says what a Namespace is above the list, not only when the list is empty", () => {
+    expect(render(namespacesTab({ namespaces: [kai] }))).toContain(
+      "A Namespace is a name prefix such as kai-."
+    );
+    expect(render(namespacesTab({ namespaces: [kai] }), "de")).toContain(
+      "Ein Namespace ist ein Namenspräfix wie kai-."
+    );
+  });
 });
 
 describe("Grants tab", () => {
@@ -174,6 +193,44 @@ describe("Grants tab", () => {
     expect(markup).toContain("Asset no longer exists");
   });
 
+  it("shows the orphan hint as text a touch screen shows, not as a title", () => {
+    const markup = render(grantsTab({ grants: [orphanedDeny] }));
+    expect(markup).toContain("This deny stays until you remove it.");
+    expect(markup).not.toContain("title=");
+  });
+
+  it("shows one row per person and place, with the actions as chips", () => {
+    const second = { ...namespaceGrant, id: "grant-3", action: "agent.read" };
+    const markup = render(grantsTab({ grants: [namespaceGrant, second, orphanedDeny] }));
+    expect(markup.split('data-testid="grant-row"')).toHaveLength(3);
+    // The verbs come in the page's order, whatever order the rows were written in.
+    expect(markup.indexOf("Read agents")).toBeLessThan(markup.indexOf("Write agents"));
+    // A deny says so in words and carries its own mark; colour is not the only difference.
+    expect(markup).toContain("Denied: Read agents");
+    expect(markup).toContain('data-effect="deny"');
+    expect(markup).toContain('data-effect="allow"');
+  });
+
+  it("groups by person and place and by nothing else", () => {
+    const other = { ...namespaceGrant, id: "grant-4", holderId: "user-2" };
+    const groups = groupGrants([namespaceGrant, orphanedDeny, other], (id) => id);
+    expect(groups.map((group) => [group.holderId, group.grants.map((grant) => grant.id)])).toEqual([
+      ["user-1", ["grant-2"]],
+      ["user-1", ["grant-1"]],
+      ["user-2", ["grant-4"]]
+    ]);
+  });
+
+  it("names an asset by its id when the server leaves the name out", () => {
+    const unnamed: PermissionGrantRow = {
+      ...orphanedDeny,
+      scopeAsset: { kind: "agent", active: true }
+    };
+    const markup = render(grantsTab({ grants: [unnamed] }));
+    expect(markup).toContain("Asset asset-gone");
+    expect(markup).not.toContain("Asset no longer exists");
+  });
+
   it("shows a row whose granter is hidden without an empty cell or an error", () => {
     const markup = render(grantsTab({ grants: [orphanedDeny] }));
     expect(markup).toContain("Not available");
@@ -192,6 +249,43 @@ describe("Check tab", () => {
     expect(render(checkTab({ users: undefined, usersFailed: true }))).toContain(
       "The users could not be loaded."
     );
+  });
+});
+
+describe("when a check gives a result", () => {
+  const ready = {
+    holderId: "user-1",
+    kind: "agent",
+    name: "kai-helper",
+    effectiveLoaded: true,
+    effectiveFailure: undefined,
+    grantsLoaded: true,
+    grantsFailed: false,
+    assetsLoaded: true,
+    assetsFailure: undefined
+  } as const;
+
+  it("gives one when the person's rights, the grants and the assets are there", () => {
+    expect(checkState(ready)).toBe("ready");
+  });
+
+  it("gives none while the grants or the assets load, and says which part failed", () => {
+    expect(checkState({ ...ready, grantsLoaded: false })).toBe("loading");
+    expect(checkState({ ...ready, assetsLoaded: false })).toBe("loading");
+    expect(checkState({ ...ready, grantsFailed: true })).toBe("grantsFailed");
+    expect(checkState({ ...ready, assetsLoaded: false, assetsFailure: "failed" })).toBe(
+      "assetsFailed"
+    );
+    expect(checkState({ ...ready, assetsLoaded: false, assetsFailure: "forbidden" })).toBe(
+      "assetsForbidden"
+    );
+  });
+
+  it("gives none for a name no asset can have", () => {
+    expect(checkState({ ...ready, name: "kai helper" })).toBe("incomplete");
+    expect(checkState({ ...ready, kind: "skill", name: "9lives" })).toBe("incomplete");
+    expect(checkState({ ...ready, kind: "skill", name: "kai-notes" })).toBe("ready");
+    expect(checkState({ ...ready, holderId: undefined })).toBe("incomplete");
   });
 });
 
@@ -307,8 +401,32 @@ describe("what the dialogs send", () => {
       allowedToolNames: null,
       allowedModelBindingIds: []
     });
-    expect(namespaceLockedLists(form, 0)).toEqual([]);
-    expect(namespaceLockedLists(form, 2)).toEqual(["models"]);
+    expect(namespaceLockedLists(form, { unit: "agents", count: 0 })).toEqual([]);
+    expect(namespaceLockedLists(form, { unit: "agents", count: 2 })).toEqual(["models"]);
+  });
+
+  it("warns from the Namespace's own count when the agents could not be read", () => {
+    const form = {
+      prefix: "kai-",
+      displayName: "Kai",
+      limitTools: true,
+      toolNames: [],
+      limitModels: false,
+      modelBindingIds: []
+    };
+    // Read: the agents under the prefix are counted, skills are not.
+    expect(boundAssets("kai-", [agent("a", "kai-helper"), agent("b", "other")], kai)).toEqual({
+      unit: "agents",
+      count: 1
+    });
+    // Not read (loading, failed, or no right to read): the row's count of assets stands in.
+    const fallback = boundAssets("kai-", undefined, kai);
+    expect(fallback).toEqual({ unit: "assets", count: 1 });
+    expect(namespaceLockedLists(form, fallback)).toEqual(["tools"]);
+    // A new prefix has no row to count from, so the page cannot rule agents out.
+    expect(namespaceLockedLists(form, boundAssets("kai-", undefined, undefined))).toEqual([
+      "tools"
+    ]);
   });
 
   it("writes one row per chosen action", () => {

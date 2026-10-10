@@ -12,8 +12,7 @@ export const access = defineTranslations({
     "access.actions": "Actions",
 
     "access.namespacesLoadFailed": "The Namespaces could not be loaded.",
-    "access.namespacesEmpty":
-      "No Namespace yet. A Namespace is a name prefix such as kai- that a person gets rights in.",
+    "access.namespacesEmpty": "No Namespace yet.",
     "access.newNamespace": "New Namespace",
     "access.editNamespace": "Edit",
     "access.deleteNamespace": "Delete",
@@ -55,22 +54,14 @@ export const access = defineTranslations({
     "access.chooseModels": "Choose models",
     "access.chosenCount": "{count} of {total} chosen",
     "access.toolsEmptyHint":
-      "No tool is chosen. An agent in this Namespace cannot be saved with any tool.",
+      "No tool is chosen. Nobody can create or change an agent that names a tool in this Namespace, an instance administrator and the release sync included.",
     "access.modelsEmptyHint":
-      "No model is chosen. Nobody without the right to manage models can create or save an agent in this Namespace.",
+      "No model is chosen. Nobody can create or change an agent that names a model in this Namespace. An agent without a model can be saved only by a person with the right to manage models.",
     "access.modelsListedHint":
-      "A person with write rights here may pick one of these models without the right to manage models.",
+      "Every agent created or changed in this Namespace names one of these models, whoever saves it. A person with write rights here may pick one of them without the right to manage models. Only a person with that right may save an agent without a model.",
     "access.referencesLoadFailed":
       "The tools, models and assets of the instance could not be loaded.",
-    "access.namespaceLockTitle": "This locks out everyone who writes through a grant",
-    "access.namespaceLockToolsOne":
-      "{count} agent already has this prefix. With an empty tool list it can no longer be saved with a tool by anyone who writes through a grant, the release sync included.",
-    "access.namespaceLockToolsOther":
-      "{count} agents already have this prefix. With an empty tool list they can no longer be saved with a tool by anyone who writes through a grant, the release sync included.",
-    "access.namespaceLockModelsOne":
-      "{count} agent already has this prefix. With an empty model list it can no longer be saved by anyone who writes through a grant, the release sync included.",
-    "access.namespaceLockModelsOther":
-      "{count} agents already have this prefix. With an empty model list they can no longer be saved by anyone who writes through a grant, the release sync included.",
+    "access.namespaceLockTitle": "An empty list binds everyone who saves an agent here",
     "access.namespaceSaveFailed": "The Namespace could not be saved.",
     "access.namespaceListEntryGone":
       "A chosen tool or model no longer exists on this instance. Open the list and choose again.",
@@ -80,12 +71,12 @@ export const access = defineTranslations({
     "access.grantsLoadFailed": "The grants could not be loaded.",
     "access.grantsEmpty":
       "No grant yet. A grant allows or denies one person an action in a Namespace or on one asset.",
-    "access.newGrant": "Grant",
+    "access.newGrant": "New grant",
     "access.grantHolder": "Person",
     "access.grantAction": "Action",
     "access.grantScope": "Scope",
     "access.grantEffect": "Effect",
-    "access.grantedBy": "Granted by",
+    "access.grantedByLine": "Granted by {name}, {date}",
     "access.effectAllow": "Allow",
     "access.effectDeny": "Deny",
     "access.scopeNamespace": "Namespace {prefix}",
@@ -93,8 +84,7 @@ export const access = defineTranslations({
     "access.scopeSkill": "Skill {name}",
     "access.scopeAssetGone": "Asset no longer exists",
     "access.scopeAssetGoneHint":
-      "This deny stays until you revoke it. It applies again when an asset with this name is created.",
-    "access.scopeAssetUnknown": "One asset",
+      "This deny stays until you remove it. It applies again when an asset with this name is created.",
     "access.unknownUser": "Unknown user",
     "access.actionRead": "Read",
     "access.actionWrite": "Write",
@@ -110,9 +100,9 @@ export const access = defineTranslations({
     "access.revokeDenyDescription":
       "{name} is no longer denied this: {action}, {scope}. Other grants and the person's role then decide.",
     "access.revokeFailed": "The grant could not be revoked.",
-    "access.grantDialogTitle": "Grant",
+    "access.grantDialogTitle": "New grant",
     "access.grantDialogDescription":
-      "One row is written for each action you tick. Instance-wide rights are set on the Users page.",
+      "One row is written for each action you tick. Rows the person already has are left as they are. Instance-wide rights are set on the Users page.",
     "access.choosePerson": "Choose a person",
     "access.usersLoadFailed": "The users could not be loaded.",
     "access.grantKind": "Kind",
@@ -130,11 +120,10 @@ export const access = defineTranslations({
     "access.noNamespaces": "Register a Namespace first.",
     "access.effectAllowDescription": "The person may do the ticked actions there.",
     "access.effectDenyDescription":
-      "Wins over every grant and role for the ticked actions there. It is not a wall: a person with instance-wide rights can still export a denied agent or set it as the default. Whoever is denied reading or writing an asset cannot delete it. A deny on one asset stays when the asset is deleted, until you revoke it.",
-    "access.submitGrant": "Grant",
+      "Wins over grants and roles on this asset; holders of instance rights can still export it or set it as default. The documentation page Rights and Namespaces has the rest.",
+    "access.submitGrant": "Create grant",
     "access.grantIncomplete": "Choose a person, at least one action and where it applies.",
     "access.grantFailed": "The grant could not be written.",
-    "access.grantDuplicate": "The person already has this row: {action}.",
     "access.grantUserBeingDeleted": "User account is being deleted",
     "access.grantUnknownHolder": "This user no longer exists.",
     "access.grantUnknownNamespace": "This Namespace is no longer registered.",
@@ -153,7 +142,7 @@ export const access = defineTranslations({
     "access.checkLoadFailed": "The rights of this person could not be loaded.",
     "access.checkHolderHidden": "This user was not found.",
     "access.checkHolderInactive":
-      "This account is not active. It holds nothing until it is active again, whatever its grants say.",
+      "This account is not active. While it is not active it has no rights, whatever its grants say.",
     "access.checkResult": "Rights of {name} on {asset}",
     "access.checkDecision": "Decision",
     "access.checkDecidedBy": "Decided by",
@@ -175,13 +164,59 @@ export const access = defineTranslations({
     "access.decidedByDenyThrough":
       "{deny} ({action}). Whoever is denied reading or writing an asset cannot delete it.",
     "access.decidedByNothing": "No role, right or grant covers this.",
-    "access.checkInstanceRightsNote":
+
+    "access.namespacesIntro":
+      "A Namespace is a name prefix such as kai-. Agents and skills whose names start with it belong to it, and a person can get rights inside it.",
+    "access.referencesForbidden":
+      "Your account lacks the right config_assets.read, so the tools, models and assets of the instance are not shown here.",
+    "access.lockUnknown":
+      "The agents with this prefix could not be counted. If there are any, this applies to them.",
+    "access.lockAgentsOne": "{count} agent already has this prefix.",
+    "access.lockAgentsOther": "{count} agents already have this prefix.",
+    "access.lockAssetsOne": "{count} agent or skill already has this prefix.",
+    "access.lockAssetsOther": "{count} agents and skills already have this prefix.",
+    "access.lockTools":
+      "Empty tool list: nobody can create or change an agent that names a tool here any more, an instance administrator and the release sync included.",
+    "access.lockModels":
+      "Empty model list: nobody can create or change an agent that names a model here any more. Only a person with the instance right to manage models can still save an agent here, and only without a model.",
+    "access.namespaceLockConfirmTitle": "Save {prefix} with an empty list?",
+    "access.namespaceLockConfirm": "Save anyway",
+    "access.deniedAction": "Denied: {action}",
+    "access.scopeAssetById": "Asset {id}",
+    "access.revokeAllowItem": "Revoke: {action}",
+    "access.revokeDenyItem": "Remove deny: {action}",
+    "access.revokeDenyTitle": "Remove this deny?",
+    "access.revokeDeny": "Remove deny",
+    "access.grantNothingAdded": "Nothing was added. The person already has every row you chose.",
+    "access.grantPartlyAdded": "{added} added. {existing} already there and left as they are.",
+    "access.checkNameInvalidAgent": "An agent name is one word without spaces.",
+    "access.checkNameInvalidSkill":
+      "A skill name starts with a letter and uses only letters, digits, dots, hyphens and underscores.",
+    "access.checkGrantsFailed":
+      "The grants could not be loaded, so denies on single assets cannot be taken into account. No result is shown.",
+    "access.checkAssetsFailed":
+      "The agents and skills could not be loaded, so rows on single assets cannot be matched to this name. No result is shown.",
+    "access.checkAssetsForbidden":
+      "Your account lacks the right config_assets.read, so rows on single assets cannot be matched to this name. No result is shown.",
+    "access.checkRightOnlyAgent":
+      "This is the right alone. A save can still be refused: by a tool or model list of the Namespace, for a changed model setting without the right to manage models, when the first or last agent changes the default agent, or when agent configuration in the interface is switched off.",
+    "access.checkRightOnlySkill":
+      "This is the right alone. A save is still refused when agent configuration in the interface is switched off.",
+    "access.checkNamespace": "This name lies in Namespace {prefix}, whose lists bind every writer.",
+    "access.checkToolsNone": "Tools: none allowed.",
+    "access.checkToolsListed": "Tools: only {list}.",
+    "access.checkModelsNone":
+      "Models: none allowed. Only a person with the right to manage models can save the agent, and only without a model.",
+    "access.checkModelsListed": "Models: the agent names one of {list}.",
+    "access.checkReadThroughGrant":
+      "Read is allowed through a grant: the person can open this asset. The overview of all agents and skills and the export need the instance-wide right to read.",
+    "access.checkDenyNote":
       "A deny on an asset does not take away instance-wide rights: with them a person can still export the asset or set an agent as the default."
   },
   de: {
     "access.description":
       "Gib einer Person Rechte an Agenten und Fähigkeiten in einem Namespace oder an einem einzelnen Asset und prüfe, was eine Person darf.",
-    "access.tabs": "Bereiche von Zugriff",
+    "access.tabs": "Abschnitte der Zugriffsseite",
     "access.tabNamespaces": "Namespaces",
     "access.tabGrants": "Rechte",
     "access.tabCheck": "Prüfen",
@@ -189,8 +224,7 @@ export const access = defineTranslations({
     "access.actions": "Aktionen",
 
     "access.namespacesLoadFailed": "Die Namespaces konnten nicht geladen werden.",
-    "access.namespacesEmpty":
-      "Noch kein Namespace. Ein Namespace ist ein Namenspräfix wie kai-, in dem eine Person Rechte bekommt.",
+    "access.namespacesEmpty": "Noch kein Namespace.",
     "access.newNamespace": "Neuer Namespace",
     "access.editNamespace": "Bearbeiten",
     "access.deleteNamespace": "Löschen",
@@ -200,7 +234,7 @@ export const access = defineTranslations({
     "access.namespaceGrants": "Rechte",
     "access.namespaceTools": "Werkzeuge",
     "access.namespaceModels": "Modelle",
-    "access.namespaceNoLimit": "Keine Grenze",
+    "access.namespaceNoLimit": "Unbegrenzt",
     "access.namespaceListed": "{count} gelistet",
     "access.namespaceNoneAllowed": "Keines erlaubt",
     "access.namespaceMenu": "Aktionen für {prefix}",
@@ -228,27 +262,19 @@ export const access = defineTranslations({
       "Aus: Agenten in diesem Namespace dürfen jedes Werkzeug der Instanz verwenden.",
     "access.limitModels": "Modelle begrenzen",
     "access.limitModelsHint":
-      "Aus: Nur eine Person mit dem Recht, Modelle zu verwalten, kann hier das Modell eines Agenten festlegen.",
+      "Aus: Das Modell eines Agenten kann hier nur festlegen, wer das Recht hat, Modelle zu verwalten.",
     "access.chooseTools": "Werkzeuge wählen",
     "access.chooseModels": "Modelle wählen",
     "access.chosenCount": "{count} von {total} gewählt",
     "access.toolsEmptyHint":
-      "Kein Werkzeug gewählt. Ein Agent in diesem Namespace kann mit keinem Werkzeug gespeichert werden.",
+      "Kein Werkzeug gewählt. Niemand kann in diesem Namespace einen Agenten anlegen oder ändern, der ein Werkzeug nennt, auch ein Instanzadministrator und der Release-Abgleich nicht.",
     "access.modelsEmptyHint":
-      "Kein Modell gewählt. Niemand ohne das Recht, Modelle zu verwalten, kann in diesem Namespace einen Agenten anlegen oder speichern.",
+      "Kein Modell gewählt. Niemand kann in diesem Namespace einen Agenten anlegen oder ändern, der ein Modell nennt. Einen Agenten ohne Modell kann nur speichern, wer das Recht hat, Modelle zu verwalten.",
     "access.modelsListedHint":
-      "Eine Person mit Schreibrecht hier darf eines dieser Modelle wählen, ohne das Recht, Modelle zu verwalten.",
+      "Jeder Agent, der in diesem Namespace angelegt oder geändert wird, nennt eines dieser Modelle, egal wer speichert. Eine Person mit Schreibrecht hier darf eines davon wählen, ohne das Recht, Modelle zu verwalten. Einen Agenten ohne Modell darf nur speichern, wer dieses Recht hat.",
     "access.referencesLoadFailed":
       "Die Werkzeuge, Modelle und Assets der Instanz konnten nicht geladen werden.",
-    "access.namespaceLockTitle": "Das sperrt alle aus, die über ein vergebenes Recht schreiben",
-    "access.namespaceLockToolsOne":
-      "{count} Agent hat dieses Präfix bereits. Mit einer leeren Werkzeugliste kann ihn niemand mehr mit einem Werkzeug speichern, der über ein vergebenes Recht schreibt, auch der Release-Abgleich nicht.",
-    "access.namespaceLockToolsOther":
-      "{count} Agenten haben dieses Präfix bereits. Mit einer leeren Werkzeugliste kann sie niemand mehr mit einem Werkzeug speichern, der über ein vergebenes Recht schreibt, auch der Release-Abgleich nicht.",
-    "access.namespaceLockModelsOne":
-      "{count} Agent hat dieses Präfix bereits. Mit einer leeren Modellliste kann ihn niemand mehr speichern, der über ein vergebenes Recht schreibt, auch der Release-Abgleich nicht.",
-    "access.namespaceLockModelsOther":
-      "{count} Agenten haben dieses Präfix bereits. Mit einer leeren Modellliste kann sie niemand mehr speichern, der über ein vergebenes Recht schreibt, auch der Release-Abgleich nicht.",
+    "access.namespaceLockTitle": "Eine leere Liste gilt für alle, die hier einen Agenten speichern",
     "access.namespaceSaveFailed": "Der Namespace konnte nicht gespeichert werden.",
     "access.namespaceListEntryGone":
       "Ein gewähltes Werkzeug oder Modell gibt es auf dieser Instanz nicht mehr. Öffne die Liste und wähle neu.",
@@ -258,12 +284,12 @@ export const access = defineTranslations({
     "access.grantsLoadFailed": "Die Rechte konnten nicht geladen werden.",
     "access.grantsEmpty":
       "Noch kein Recht vergeben. Ein Recht erlaubt oder verweigert einer Person eine Aktion in einem Namespace oder an einem Asset.",
-    "access.newGrant": "Recht vergeben",
+    "access.newGrant": "Neues Recht",
     "access.grantHolder": "Person",
     "access.grantAction": "Aktion",
     "access.grantScope": "Geltungsbereich",
     "access.grantEffect": "Wirkung",
-    "access.grantedBy": "Vergeben von",
+    "access.grantedByLine": "Vergeben von {name}, {date}",
     "access.effectAllow": "Erlauben",
     "access.effectDeny": "Verweigern",
     "access.scopeNamespace": "Namespace {prefix}",
@@ -271,8 +297,7 @@ export const access = defineTranslations({
     "access.scopeSkill": "Fähigkeit {name}",
     "access.scopeAssetGone": "Asset existiert nicht mehr",
     "access.scopeAssetGoneHint":
-      "Diese Verweigerung bleibt, bis du sie entziehst. Sie gilt wieder, sobald ein Asset mit diesem Namen angelegt wird.",
-    "access.scopeAssetUnknown": "Ein Asset",
+      "Diese Verweigerung bleibt, bis du sie aufhebst. Sie gilt wieder, sobald ein Asset mit diesem Namen angelegt wird.",
     "access.unknownUser": "Unbekannter Benutzer",
     "access.actionRead": "Lesen",
     "access.actionWrite": "Schreiben",
@@ -286,11 +311,11 @@ export const access = defineTranslations({
     "access.revokeTitle": "Dieses Recht entziehen?",
     "access.revokeAllowDescription": "{name} verliert dieses Recht sofort: {action}, {scope}.",
     "access.revokeDenyDescription":
-      "{name} wird dies nicht mehr verweigert: {action}, {scope}. Danach entscheiden andere Rechte und die Rolle der Person.",
+      "{name} wird das nicht mehr verweigert: {action}, {scope}. Danach entscheiden die anderen Rechte und die Rolle der Person.",
     "access.revokeFailed": "Das Recht konnte nicht entzogen werden.",
-    "access.grantDialogTitle": "Recht vergeben",
+    "access.grantDialogTitle": "Neues Recht",
     "access.grantDialogDescription":
-      "Für jede angehakte Aktion wird eine Zeile geschrieben. Instanzweite Rechte setzt du auf der Seite Benutzer.",
+      "Für jede angehakte Aktion wird eine Zeile geschrieben. Zeilen, die die Person schon hat, bleiben unverändert. Instanzweite Rechte setzt du auf der Seite Benutzer.",
     "access.choosePerson": "Person wählen",
     "access.usersLoadFailed": "Die Benutzer konnten nicht geladen werden.",
     "access.grantKind": "Art",
@@ -308,11 +333,10 @@ export const access = defineTranslations({
     "access.noNamespaces": "Registriere zuerst einen Namespace.",
     "access.effectAllowDescription": "Die Person darf die angehakten Aktionen dort ausführen.",
     "access.effectDenyDescription":
-      "Geht dort für die angehakten Aktionen jedem Recht und jeder Rolle vor. Es ist keine Mauer: Eine Person mit instanzweiten Rechten kann einen verweigerten Agenten weiterhin exportieren oder als Standard festlegen. Wem das Lesen oder Schreiben eines Assets verweigert ist, der kann es nicht löschen. Eine Verweigerung an einem Asset bleibt, wenn das Asset gelöscht wird, bis du sie entziehst.",
-    "access.submitGrant": "Vergeben",
+      "Geht Rechten und Rollen an diesem Asset vor; wer instanzweite Rechte hat, kann es weiterhin exportieren oder als Standard festlegen. Alles Weitere steht in der Dokumentation auf der Seite Rights and Namespaces.",
+    "access.submitGrant": "Recht anlegen",
     "access.grantIncomplete": "Wähle eine Person, mindestens eine Aktion und wo sie gilt.",
     "access.grantFailed": "Das Recht konnte nicht geschrieben werden.",
-    "access.grantDuplicate": "Die Person hat diese Zeile bereits: {action}.",
     "access.grantUserBeingDeleted": "Das Benutzerkonto wird gerade gelöscht",
     "access.grantUnknownHolder": "Diesen Benutzer gibt es nicht mehr.",
     "access.grantUnknownNamespace": "Dieser Namespace ist nicht mehr registriert.",
@@ -331,7 +355,7 @@ export const access = defineTranslations({
     "access.checkLoadFailed": "Die Rechte dieser Person konnten nicht geladen werden.",
     "access.checkHolderHidden": "Dieser Benutzer wurde nicht gefunden.",
     "access.checkHolderInactive":
-      "Dieses Konto ist nicht aktiv. Es hält nichts, bis es wieder aktiv ist, egal was seine Rechte sagen.",
+      "Dieses Konto ist nicht aktiv. Solange es nicht aktiv ist, hat es keine Rechte, unabhängig davon, was ihm vergeben wurde.",
     "access.checkResult": "Rechte von {name} an {asset}",
     "access.checkDecision": "Entscheidung",
     "access.checkDecidedBy": "Entschieden durch",
@@ -354,7 +378,56 @@ export const access = defineTranslations({
       "{deny} ({action}). Wem das Lesen oder Schreiben eines Assets verweigert ist, der kann es nicht löschen.",
     "access.decidedByNothing":
       "Keine Rolle, kein einzelnes Recht und kein vergebenes Recht deckt das ab.",
-    "access.checkInstanceRightsNote":
+
+    "access.namespacesIntro":
+      "Ein Namespace ist ein Namenspräfix wie kai-. Agenten und Fähigkeiten, deren Name damit beginnt, gehören dazu, und eine Person kann darin Rechte bekommen.",
+    "access.referencesForbidden":
+      "Deinem Konto fehlt das Recht config_assets.read. Deshalb werden die Werkzeuge, Modelle und Assets der Instanz hier nicht angezeigt.",
+    "access.lockUnknown":
+      "Die Agenten mit diesem Präfix konnten nicht gezählt werden. Falls es welche gibt, gilt das für sie.",
+    "access.lockAgentsOne": "{count} Agent hat dieses Präfix bereits.",
+    "access.lockAgentsOther": "{count} Agenten haben dieses Präfix bereits.",
+    "access.lockAssetsOne": "{count} Agent oder Fähigkeit hat dieses Präfix bereits.",
+    "access.lockAssetsOther": "{count} Agenten und Fähigkeiten haben dieses Präfix bereits.",
+    "access.lockTools":
+      "Leere Werkzeugliste: Niemand kann hier mehr einen Agenten anlegen oder ändern, der ein Werkzeug nennt, auch ein Instanzadministrator und der Release-Abgleich nicht.",
+    "access.lockModels":
+      "Leere Modellliste: Niemand kann hier mehr einen Agenten anlegen oder ändern, der ein Modell nennt. Einen Agenten kann hier nur noch speichern, wer das instanzweite Recht hat, Modelle zu verwalten, und nur ohne Modell.",
+    "access.namespaceLockConfirmTitle": "{prefix} mit leerer Liste speichern?",
+    "access.namespaceLockConfirm": "Trotzdem speichern",
+    "access.deniedAction": "Verweigert: {action}",
+    "access.scopeAssetById": "Asset {id}",
+    "access.revokeAllowItem": "Entziehen: {action}",
+    "access.revokeDenyItem": "Verweigerung aufheben: {action}",
+    "access.revokeDenyTitle": "Diese Verweigerung aufheben?",
+    "access.revokeDeny": "Verweigerung aufheben",
+    "access.grantNothingAdded":
+      "Es wurde nichts hinzugefügt. Die Person hat alle gewählten Zeilen bereits.",
+    "access.grantPartlyAdded":
+      "{added} hinzugefügt. {existing} gab es schon, sie bleiben unverändert.",
+    "access.checkNameInvalidAgent": "Ein Agentenname ist ein Wort ohne Leerzeichen.",
+    "access.checkNameInvalidSkill":
+      "Der Name einer Fähigkeit beginnt mit einem Buchstaben und besteht nur aus Buchstaben, Ziffern, Punkten, Bindestrichen und Unterstrichen.",
+    "access.checkGrantsFailed":
+      "Die Rechte konnten nicht geladen werden. Verweigerungen an einzelnen Assets lassen sich deshalb nicht berücksichtigen. Es wird kein Ergebnis angezeigt.",
+    "access.checkAssetsFailed":
+      "Die Agenten und Fähigkeiten konnten nicht geladen werden. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
+    "access.checkAssetsForbidden":
+      "Deinem Konto fehlt das Recht config_assets.read. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
+    "access.checkRightOnlyAgent":
+      "Das ist nur das Recht. Ein Speichern kann trotzdem abgelehnt werden: durch eine Werkzeug- oder Modellliste des Namespace, bei einer geänderten Modelleinstellung ohne das Recht, Modelle zu verwalten, wenn der erste oder letzte Agent den Standardagenten ändert, oder wenn die Agentenkonfiguration in der Oberfläche abgeschaltet ist.",
+    "access.checkRightOnlySkill":
+      "Das ist nur das Recht. Ein Speichern wird trotzdem abgelehnt, wenn die Agentenkonfiguration in der Oberfläche abgeschaltet ist.",
+    "access.checkNamespace":
+      "Dieser Name liegt im Namespace {prefix}. Dessen Listen gelten für alle, die schreiben.",
+    "access.checkToolsNone": "Werkzeuge: keines erlaubt.",
+    "access.checkToolsListed": "Werkzeuge: nur {list}.",
+    "access.checkModelsNone":
+      "Modelle: keines erlaubt. Den Agenten kann nur speichern, wer das Recht hat, Modelle zu verwalten, und nur ohne Modell.",
+    "access.checkModelsListed": "Modelle: Der Agent nennt eines von {list}.",
+    "access.checkReadThroughGrant":
+      "Lesen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Fähigkeiten und der Export brauchen das instanzweite Leserecht.",
+    "access.checkDenyNote":
       "Eine Verweigerung an einem Asset nimmt keine instanzweiten Rechte: Damit kann eine Person das Asset weiterhin exportieren oder einen Agenten als Standard festlegen."
   }
 });
