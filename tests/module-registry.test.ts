@@ -241,7 +241,9 @@ function featuresBeforeModules(config: ClientInstanceConfig): Record<string, boo
       Reflect.get(documents, "enabled") === true,
     resources: config.ui.resources.enabled ?? true,
     assetManagement: config.administration.agentConfiguration.enabled ?? false,
-    userInvitations: isPasswordMailEnabled(config)
+    userInvitations: isPasswordMailEnabled(config),
+    // Never had a switch before the section: on only where the config says so.
+    apps: config.modules.apps?.enabled ?? false
   };
 }
 
@@ -309,7 +311,8 @@ describe("the snapshot in a running instance", () => {
       documents: { enabled: false },
       resources: { enabled: true },
       assetManagement: { enabled: true },
-      userInvitations: { enabled: true }
+      userInvitations: { enabled: true },
+      apps: { enabled: false }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -354,7 +357,8 @@ describe("the snapshot in a running instance", () => {
         documents: { enabled: false },
         resources: { enabled: false },
         assetManagement: { enabled: false },
-        userInvitations: { enabled: false }
+        userInvitations: { enabled: false },
+        apps: { enabled: false }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {

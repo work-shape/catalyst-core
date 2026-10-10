@@ -9,6 +9,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
 import { asClientInstanceId } from "@vivd-catalyst/core";
+import { authMountRoutes } from "./support/operations";
 import { removedAssetPaths, retiredApiPaths } from "./support/retired-api-paths";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import {
@@ -30,12 +31,14 @@ const names = Object.keys(apiOperations).filter(
 const descriptor = (name: ApiOperationName): Operation => apiOperations[name];
 const routeOf = (name: ApiOperationName) => `${descriptor(name).method} ${descriptor(name).path}`;
 // Outside the versioned API: the health and readiness probes, the runtime files a sandboxed
-// view frame loads as script addresses, and the shell document that frames a view.
+// view frame loads as script addresses, the shell document that frames a view, and the files
+// of a Page, which its frame loads by relative addresses.
 const unversioned: readonly ApiOperationName[] = [
   "health.get",
   "ready.get",
   "view_runtime.files.get",
-  "view_shell.files.get"
+  "view_shell.files.get",
+  "app_content.files.get"
 ];
 const versioned = names.filter((name) => !unversioned.includes(name));
 
@@ -57,6 +60,7 @@ describe("the operation catalog", () => {
         "access_tokens.exchange  POST /api/v1/auth/access-token",
         "api_credentials.create  POST /api/v1/instance/service-principals/:servicePrincipalId/credentials",
         "api_credentials.revoke  POST /api/v1/instance/api-credentials/:credentialId/revoke",
+        "app_content.files.get  GET /app-content/*",
         "approval_requests.count_pending  GET /api/v1/approval-requests/pending-count",
         "approval_requests.decide  POST /api/v1/approval-requests/:requestId/decide",
         "approval_requests.get  GET /api/v1/approval-requests/:requestId",
@@ -130,6 +134,10 @@ describe("the operation catalog", () => {
         "openapi.get  GET /api/v1/openapi.json",
         "operations.get_run  GET /api/v1/operations/runs/:runId",
         "operations.list_runs  GET /api/v1/operations/runs",
+        "pages.files.get  GET /api/v1/conversations/:conversationId/pages/:pageId/file-sets/:fileSetId/source-file",
+        "pages.get  GET /api/v1/conversations/:conversationId/pages/:pageId",
+        "pages.list  GET /api/v1/conversations/:conversationId/pages",
+        "pages.preview  POST /api/v1/conversations/:conversationId/pages/:pageId/preview",
         "password_reset.request  POST /api/v1/password-reset",
         "password_setup.complete  POST /api/v1/password-setup",
         "permissions.effective  GET /api/v1/instance/access/effective",
@@ -196,6 +204,10 @@ describe("the operation catalog", () => {
     expect(descriptor("view_runtime.files.get").auth).toBe("public");
     expect(routeOf("view_shell.files.get")).toBe("GET /app-runtime/view-shell/:version/:file");
     expect(descriptor("view_shell.files.get").auth).toBe("public");
+    // Public because its frame has no origin and so no session to send: the token in the
+    // address is the authorization.
+    expect(routeOf("app_content.files.get")).toBe("GET /app-content/*");
+    expect(descriptor("app_content.files.get").auth).toBe("public");
   });
 
   it("scopes paths by resource and never by a role name", () => {
@@ -265,6 +277,7 @@ describe("the released document", () => {
     expect(paths).not.toContain(descriptor("captured_mail.list").path);
     expect(paths).not.toContain(descriptor("health.get").path);
     expect(paths.some((path) => path.startsWith("/app-runtime"))).toBe(false);
+    expect(paths.some((path) => path.startsWith("/app-content"))).toBe(false);
     expect(names.filter((name) => descriptor(name).devOnly === true)).toEqual([
       "captured_mail.list"
     ]);
@@ -343,7 +356,7 @@ describe("a running instance", () => {
     // and Namespaces came after it, then the background jobs, then a person's own Approval
     // Requests, then the list of modules, then the infrastructure and its check. The five
     // asset addresses moved once more, to `/api/v1/assets`, and the list, the check and the
-    // sync of assets came with them.
+    // sync of assets came with them. Then the Pages of a conversation.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -367,7 +380,11 @@ describe("a running instance", () => {
       "instance.infrastructure.check",
       "assets.list",
       "assets.validate",
-      "assets.sync"
+      "assets.sync",
+      "pages.list",
+      "pages.get",
+      "pages.files.get",
+      "pages.preview"
     ];
     expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });
@@ -410,7 +427,7 @@ describe("the sign-in library's mount", () => {
       ({ method, path }) => `${method} ${path}`
     );
     const catalog = names.filter((name) => descriptor(name).devOnly !== true).map(routeOf);
-    expect(registered.sort()).toEqual([...catalog, "OPTIONS *"].sort());
+    expect(registered.sort()).toEqual([...catalog, "OPTIONS *", ...authMountRoutes].sort());
   });
 
   it("does not answer for the API-key exchange, which moved under the version prefix", async () => {

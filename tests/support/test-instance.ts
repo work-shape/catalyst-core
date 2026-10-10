@@ -503,7 +503,7 @@ export async function listenTestInstance(instance: TestInstance): Promise<string
 
 /**
  * Every route the instance's HTTP server has registered, read from the framework's own
- * listing. A wildcard mount is listed by its method alone, with the path "*".
+ * listing. A wildcard is listed as "*" at the end of the path it stands below.
  */
 export async function listTestRoutes(
   instance: TestInstance
@@ -513,17 +513,20 @@ export async function listTestRoutes(
   const server = getTestServer(instance);
   const prefixes: string[] = [];
   const routes: { method: string; path: string }[] = [];
-  for (const line of server.printRoutes({ commonPrefix: false }).split("\n")) {
-    const match = /^((?:[│ ] {3})*)[├└]── (\S+)(?: \(([A-Z, ]+)\))?$/u.exec(line);
+  // The listing by common prefixes: the flat one leaves out a wildcard below a path.
+  for (const line of server.printRoutes().split("\n")) {
+    const match = /^((?:[│ ] {3})*)[├└]── (\(empty root node\)|\S+)(?: \(([A-Z, ]+)\))?$/u.exec(
+      line
+    );
     if (!match) {
       if (line.trim().length > 0) throw new Error(`Unreadable route listing line: ${line}`);
       continue;
     }
     const depth = (match[1] ?? "").length / 4;
-    const segment = match[2] ?? "";
+    const segment = match[2] === "(empty root node)" ? "" : (match[2] ?? "");
     prefixes.length = depth;
     prefixes.push(segment);
-    const path = segment === "*" ? "*" : prefixes.join("");
+    const path = prefixes.join("");
     for (const method of (match[3] ?? "").split(", ").filter(Boolean)) {
       // The framework answers HEAD for every GET route on its own.
       if (method !== "HEAD") routes.push({ method, path });

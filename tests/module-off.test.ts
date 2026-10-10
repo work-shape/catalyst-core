@@ -436,7 +436,8 @@ describe("a module that is off", () => {
       ["documents", true, "modules.documents.enabled"],
       ["resources", false, "modules.resources.enabled"],
       ["assetManagement", false, "modules.assetManagement.enabled"],
-      ["userInvitations", false, "modules.userInvitations.enabled"]
+      ["userInvitations", false, "modules.userInvitations.enabled"],
+      ["apps", false, "modules.apps.enabled"]
     ]);
     expect(items[0]).toMatchObject({
       shipped: true,

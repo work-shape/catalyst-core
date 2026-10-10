@@ -71,10 +71,18 @@ administration:
     agentSkillChanges:
       enabled: true
       allowSkillCreation: true
+# Pages are on: the specs about what a Page cannot reach need the route that serves one.
+modules:
+  apps:
+    enabled: true
 infrastructure:
   models:
     local:
       provider: deterministic
+  objectStorage:
+    files:
+      provider: filesystem
+      root: .tmp/e2e/files
 modelBindings:
   - id: primary
     providerId: local

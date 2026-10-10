@@ -20,6 +20,9 @@ const fixtureOperation = (method: "GET" | "POST", path: string) => ({
   buildPath: (input?: BuildApiPathOptions) => buildApiPath(path, input)
 });
 
+/** The sign-in library's mount as the server's route listing shows it. */
+export const authMountRoutes = ["GET /api/auth/*", "POST /api/auth/*"] as const;
+
 /** A path under the sign-in library's mount that the library does not serve. */
 export const inventedAuthPath = (name: string | number): string => `/api/auth/invented-${name}`;
 
