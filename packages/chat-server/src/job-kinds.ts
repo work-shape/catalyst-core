@@ -11,7 +11,10 @@ const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-/** A scheduled kind: one tick at a time across the instance, one attempt, ten minutes of lease. */
+/**
+ * A scheduled kind: one tick at a time across the instance, one attempt, ten minutes of lease.
+ * A failed tick is not retried by hand: the next tick already waits under its key.
+ */
 function defineScheduledKind(kind: string, leaseMs = 10 * MINUTE_MS): JobKind<ScheduledJobPayload> {
   return defineJobKind({
     kind,
@@ -19,7 +22,8 @@ function defineScheduledKind(kind: string, leaseMs = 10 * MINUTE_MS): JobKind<Sc
     maxAttempts: 1,
     backoff: { baseMs: 0, maxMs: 0 },
     leaseMs,
-    concurrency: { global: 1 }
+    concurrency: { global: 1 },
+    manualRetry: false
   });
 }
 

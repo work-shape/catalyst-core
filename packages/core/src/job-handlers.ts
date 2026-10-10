@@ -1,4 +1,5 @@
 import { AppError } from "./errors";
+import type { ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 import type { Job, JobKind } from "./jobs";
 import type { Logger } from "./logger";
@@ -167,4 +168,28 @@ function waitOrAbort(milliseconds: number, signal: AbortSignal): Promise<void> {
     }, milliseconds);
     signal.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+/** The job a person retries, as the code that puts its subject back sees it. */
+export interface RetriedJob {
+  readonly clientInstanceId: ClientInstanceId;
+  readonly kind: string;
+  /** The id of the record the job works on. */
+  readonly subject?: string;
+}
+
+/**
+ * What the API needs to retry an ended job of a kind by hand. A kind without one is not
+ * retried: the API cannot know what its job left behind.
+ */
+export interface JobRetry {
+  readonly kind: JobKind;
+  /**
+   * Puts the subject record back into the state the job works from, in the transaction that
+   * queues the job again. A job that gave up has usually marked its subject as failed, and a
+   * job that finds its subject finished does nothing. Answers false when the record cannot be
+   * worked on again; the retry is then refused and nothing changes. Missing when the job
+   * reads everything it needs anew.
+   */
+  restoreSubject?(job: RetriedJob, stores: PlatformStores): Promise<boolean>;
 }

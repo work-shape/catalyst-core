@@ -1,7 +1,12 @@
 import type { ArtifactPreviewJobRecord, JobId, JobWorker, Logger } from "@vivd-catalyst/core";
 import { createPostgresJobWorker, type PostgresStores } from "@vivd-catalyst/postgres-store";
 import { withTestSql as withSql } from "./support/test-sql";
-import { createTestInstance } from "./support/test-instance";
+import {
+  createTestInstance,
+  createTestInstanceWith,
+  type TestStore
+} from "./support/test-instance";
+import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -28,6 +33,7 @@ import {
   type Conversation,
   type ManagedArtifactRecord,
   type ManagedFileRecord,
+  StoreBackedAuditRecorder,
   asClientInstanceId
 } from "@vivd-catalyst/core";
 
@@ -1120,6 +1126,68 @@ describe("the preview job beside a worker of the previous release", () => {
       })
     ).resolves.toMatchObject({ status: "failed", errorCode: "stale_lease" });
   });
+
+  it("renders the preview after an operator retried the dead job", async () => {
+    const server = await createTestInstanceWith((stores) => ({
+      authAdapter: createCallerAuthAdapter(),
+      auditRecorder: new StoreBackedAuditRecorder({
+        clientInstanceId: asClientInstanceId("demo-local"),
+        store: stores.audit
+      })
+    }));
+    const fixture = await createWorkerFixture({ server });
+    const renderer = new FakeRenderer({ result: onePage });
+    const worker = createWorker(fixture, renderer);
+    // A worker that claimed the last attempt and died: the job is dead, the row failed.
+    await withSql(async (sql) => {
+      const [job] = await sql<{ id: string }[]>`
+        update platform_jobs
+        set status = 'running', attempts = max_attempts, lease_token = 'crashed',
+            lease_expires_at = now() - interval '1 second'
+        where client_instance_id = ${fixture.clientInstanceId}
+        returning id
+      `;
+      await sql`
+        update artifact_preview_jobs
+        set status = 'processing', attempts = 2, lease_owner_id = ${`job:${job?.id}`},
+            lease_token = 'crashed', lease_expires_at = now() - interval '1 second'
+        where id = ${fixture.previewJobId}
+      `;
+    });
+    await worker.jobs.runDue();
+    const [dead] = await platformJobs(fixture);
+    expect(dead).toMatchObject({ status: "dead" });
+    expect(await readPreviewJob(fixture)).toMatchObject({ status: "failed" });
+    expect(renderer.inputs).toHaveLength(0);
+
+    const retried = await server.call(
+      "instance.jobs.retry",
+      { params: { jobId: dead?.id ?? "" } },
+      asCaller({ id: "usr_root", roles: ["superadmin"] })
+    );
+
+    // The job and its row wait for work again, together.
+    expect(retried.statusCode).toBe(200);
+    expect(retried.json()).toMatchObject({ status: "queued", attempts: 0 });
+    expect(await readPreviewJob(fixture)).toMatchObject({
+      status: "pending",
+      attempts: 0,
+      errorCode: undefined,
+      leaseToken: undefined
+    });
+
+    await worker.jobs.runDue();
+
+    expect(renderer.inputs).toHaveLength(1);
+    expect(await platformJobs(fixture)).toMatchObject([{ status: "succeeded", attempts: 1 }]);
+    expect(await readPreviewJob(fixture)).toMatchObject({ status: "completed" });
+    await expect(
+      fixture.store.files.getArtifactPreviewManifest({
+        clientInstanceId: fixture.clientInstanceId,
+        sourceArtifactId: fixture.source.id
+      })
+    ).resolves.toMatchObject({ status: "ready", pageCount: 1 });
+  });
 });
 
 /**
@@ -1282,10 +1350,14 @@ async function createWorkerFixture(
     byteSize?: number;
     sourceBytes?: Uint8Array;
     settingsHash?: string;
+    /** The instance whose API a test calls. Without one the fixture has an id of its own. */
+    server?: { stores: TestStore };
   } = {}
 ): Promise<WorkerFixture> {
-  const clientInstanceId = asClientInstanceId(`preview_worker_${globalThis.crypto.randomUUID()}`);
-  const store = (await createTestInstance()).stores;
+  const clientInstanceId = asClientInstanceId(
+    input.server ? "demo-local" : `preview_worker_${globalThis.crypto.randomUUID()}`
+  );
+  const store = (input.server ?? (await createTestInstance())).stores;
   const objectStore = new MemoryObjectStorage();
   const conversation = await store.createConversationForTesting({
     clientInstanceId,

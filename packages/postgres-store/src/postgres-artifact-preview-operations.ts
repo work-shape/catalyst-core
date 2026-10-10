@@ -215,6 +215,40 @@ export async function claimArtifactPreviewJob(
     : { status: "finished" };
 }
 
+/**
+ * A failed preview row waits for work again, as a row that was asked for anew does. True when
+ * the row waits for work after the call.
+ */
+export async function restoreFailedArtifactPreviewJob(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; jobId: string }
+): Promise<boolean> {
+  const ofRow = and(
+    eq(artifactPreviewJobs.clientInstanceId, input.clientInstanceId),
+    eq(artifactPreviewJobs.id, input.jobId)
+  );
+  await db
+    .update(artifactPreviewJobs)
+    .set({
+      status: "pending",
+      attempts: 0,
+      nextAttemptAt: drizzleSql`now()`,
+      leaseOwnerId: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      errorCode: null,
+      errorMessage: null,
+      updatedAt: drizzleSql`now()`
+    })
+    .where(and(ofRow, eq(artifactPreviewJobs.status, "failed")));
+  const [current] = await db
+    .select({ status: artifactPreviewJobs.status })
+    .from(artifactPreviewJobs)
+    .where(ofRow)
+    .limit(1);
+  return current !== undefined && !isTerminalArtifactPreviewJob(current.status);
+}
+
 export async function renewClaimedArtifactPreviewJobLease(
   db: PostgresConnection,
   input: RenewClaimedArtifactPreviewJobLeaseInput

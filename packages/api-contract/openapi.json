@@ -12710,6 +12710,9 @@
           },
           "finishedAt": {
             "$ref": "#/components/schemas/Timestamp"
+          },
+          "retryable": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -12718,7 +12721,8 @@
           "status",
           "attempts",
           "maxAttempts",
-          "createdAt"
+          "createdAt",
+          "retryable"
         ]
       },
       "JobKindSummary": {

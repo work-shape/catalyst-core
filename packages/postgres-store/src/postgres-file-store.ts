@@ -70,6 +70,7 @@ import {
   getArtifactPreviewManifest as getPostgresArtifactPreviewManifest,
   markClaimedArtifactPreviewJobUnsupported as markClaimedPostgresArtifactPreviewJobUnsupported,
   listArtifactPreviewJobIdsWithoutJob,
+  restoreFailedArtifactPreviewJob,
   renewClaimedArtifactPreviewJobLease as renewClaimedPostgresArtifactPreviewJobLease,
   writeArtifactPreviewManifest as writePostgresArtifactPreviewManifest
 } from "./postgres-artifact-preview-operations";
@@ -411,6 +412,13 @@ class PostgresPlatformFileStore implements PlatformFileStore {
         dedupeKey: artifactPreviewJobDedupeKey(previewJobId)
       }
     );
+  }
+
+  restoreFailedArtifactPreviewJob(input: {
+    clientInstanceId: ClientInstanceId;
+    jobId: string;
+  }): Promise<boolean> {
+    return restoreFailedArtifactPreviewJob(this.db, input);
   }
 
   async adoptArtifactPreviewJobs(input: {

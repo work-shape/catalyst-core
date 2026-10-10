@@ -108,6 +108,7 @@ export async function createClientInstanceApp(
     store,
     attachments,
     managedObjects,
+    jobRetries,
     workspaceFileByteStore,
     auditRecorder,
     usageGovernance,
@@ -149,6 +150,7 @@ export async function createClientInstanceApp(
     agentRuntime,
     attachments,
     managedObjects,
+    jobRetries,
     executionWorkspaceCleanup: workspaceFileByteStore?.deleteObject
       ? {
           store: store.executionWorkspaces,
@@ -286,6 +288,9 @@ export async function createClientInstanceExecutionAssembly(
     ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
   ]);
+  const jobRetries = capabilityContributions.flatMap(
+    (contribution) => contribution.jobRetries ?? []
+  );
   const assetSource = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
     store: store.configAssets,
@@ -469,6 +474,7 @@ export async function createClientInstanceExecutionAssembly(
     store,
     attachments,
     managedObjects,
+    jobRetries,
     workspaceFileByteStore,
     auditRecorder,
     assetSource,

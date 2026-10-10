@@ -589,6 +589,15 @@ export interface ArtifactPreviewStore {
     input: MarkClaimedArtifactPreviewJobUnsupportedInput
   ): Promise<ArtifactPreviewJobRecord>;
   /**
+   * For the retry of the job that drives a preview row: a failed row waits for work again,
+   * with its attempts and its error cleared. True when the row waits for work after the call,
+   * false when it is finished in another way or gone.
+   */
+  restoreFailedArtifactPreviewJob(input: {
+    clientInstanceId: ClientInstanceId;
+    jobId: string;
+  }): Promise<boolean>;
+  /**
    * Transition release only: enqueues a job for every preview row that is not finished and has
    * no queued or running job, up to `limit`. Returns how many it enqueued.
    */

@@ -24,6 +24,7 @@ import {
   type PlatformFileStore,
   type RegisteredJobHandler,
   type RegisteredProviderDefinition,
+  type RetriedJob,
   type SecretResolver
 } from "@vivd-catalyst/core";
 import type {
@@ -55,7 +56,7 @@ export { defineTool, defineConfiguredTool, toolFailed, toolSuccess };
 // A capability declares its job kinds with `defineJobKind`, enqueues through `jobs` on its
 // context and serves them from its own worker process with `defineJobHandler`.
 export { defineJobHandler, defineJobKind };
-export type { Job, JobControl, JobHandler, JobKind, RegisteredJobHandler };
+export type { Job, JobControl, JobHandler, JobKind, RegisteredJobHandler, RetriedJob };
 export type {
   AnyConfiguredToolDefinition,
   AnyToolDefinition,
@@ -122,10 +123,25 @@ export type ClientInstanceCapabilityFiles = Pick<
   | "markConversationManagedObjectsDeleted"
 >;
 
+/**
+ * How an ended job of a kind the capability declares is retried by hand. The API retries no
+ * job of a kind it was not given one for.
+ */
+export interface ClientInstanceJobRetry {
+  kind: JobKind;
+  /**
+   * Puts the subject record back into the state the job works from, in the transaction that
+   * queues the job again. Answers false when the record cannot be worked on again. Missing
+   * when the job reads everything it needs anew.
+   */
+  restoreSubject?(job: RetriedJob, stores: ClientInstanceCapabilityStores): Promise<boolean>;
+}
+
 export interface ClientInstanceCapabilityContribution {
   tools?: AnyToolDefinition[];
   attachments?: ClientInstanceAttachmentHandler[];
   managedObjects?: ClientInstanceManagedObjectReaderContribution[];
+  jobRetries?: ClientInstanceJobRetry[];
   close?: () => Promise<void>;
 }
 

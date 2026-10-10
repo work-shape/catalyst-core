@@ -39,7 +39,12 @@ export const jobSchema = z.object({
   errorCode: z.string().optional(),
   createdAt: timestampSchema,
   startedAt: timestampSchema.optional(),
-  finishedAt: timestampSchema.optional()
+  finishedAt: timestampSchema.optional(),
+  /**
+   * Whether `instance.jobs.retry` takes the job: it ended as failed or dead and its kind is
+   * one that is retried by hand. A schedule tick is not; the next tick is its retry.
+   */
+  retryable: z.boolean()
 });
 
 /** What one job kind has waiting, running and ended in an error. */

@@ -119,6 +119,31 @@ order by kinds.kind`);
 // otherwise a job created in the same millisecond as the last one shown would be skipped.
 const createdAtMillisecond = sql`date_trunc('milliseconds', ${platformJobs.createdAt})`;
 
+/**
+ * True for every row of the instance. It names the kinds, read by stepping through
+ * `platform_jobs_claim_idx`, so that a list by status alone reads that index by kind and
+ * status and not the whole table: the index starts with the kind.
+ */
+function kindIsOneOfInstance(clientInstanceId: ClientInstanceId) {
+  const ofInstance = sql`client_instance_id = ${clientInstanceId}`;
+  return sql`${platformJobs.kind} = any(array(
+with recursive k as (
+  (select kind from platform_jobs where ${ofInstance} order by kind limit 1)
+  union all
+  select (
+    select n.kind from platform_jobs n where n.${ofInstance} and n.kind > k.kind
+    order by n.kind limit 1
+  )
+  from k where k.kind is not null
+)
+select kind from k where kind is not null))`;
+}
+
+/**
+ * Newest first. A list by status, with or without a kind, reads `platform_jobs_claim_idx`
+ * and sorts what it found, so its work grows with the jobs in those statuses. A list without
+ * a status reads every job of the instance or of the kind.
+ */
 export async function listJobOverview(
   db: PostgresConnection,
   input: Input<"listOverview">
@@ -130,7 +155,9 @@ export async function listJobOverview(
     .where(
       and(
         eq(platformJobs.clientInstanceId, input.clientInstanceId),
-        filters.kind === undefined ? undefined : eq(platformJobs.kind, filters.kind),
+        filters.kind === undefined
+          ? filters.statuses && kindIsOneOfInstance(input.clientInstanceId)
+          : eq(platformJobs.kind, filters.kind),
         filters.statuses === undefined
           ? undefined
           : inArray(platformJobs.status, [...filters.statuses]),
@@ -145,8 +172,7 @@ export async function listJobOverview(
 /**
  * Queues an ended job again in one statement. A job whose dedupe key another queued or running
  * job of the kind holds is left alone: the newer job already does its work, and the index
- * that allows one live job per key is what refuses the second. Call it outside a transaction,
- * because a refused statement ends the transaction it ran in.
+ * that allows one live job per key is what refuses the second.
  */
 export async function retryJob(
   db: PostgresConnection,
@@ -158,17 +184,21 @@ export async function retryJob(
     eq(platformJobs.id, sql`${input.id}`)
   );
   try {
-    const [row] = await db
-      .update(platformJobs)
-      .set({
-        status: "queued",
-        attempts: 0,
-        runAfter: sql`now()`,
-        startedAt: null,
-        finishedAt: null
-      })
-      .where(and(ofInstance, inArray(platformJobs.status, [...RETRYABLE_STATUSES])))
-      .returning(overviewColumns);
+    // Inside a caller's transaction this is a savepoint, so a refused statement leaves the
+    // transaction usable.
+    const [row] = await db.transaction((inner) =>
+      inner
+        .update(platformJobs)
+        .set({
+          status: "queued",
+          attempts: 0,
+          runAfter: sql`now()`,
+          startedAt: null,
+          finishedAt: null
+        })
+        .where(and(ofInstance, inArray(platformJobs.status, [...RETRYABLE_STATUSES])))
+        .returning(overviewColumns)
+    );
     if (row) return { outcome: "requeued", job: mapOverview(row) };
   } catch (error) {
     if (isUniqueViolation(error)) return { outcome: "superseded" };

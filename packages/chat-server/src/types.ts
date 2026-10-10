@@ -1,4 +1,4 @@
-import type { PlatformStores } from "@vivd-catalyst/core";
+import type { JobRetry, PlatformStores } from "@vivd-catalyst/core";
 import type {
   ApiKeyAccessTokenExchange,
   HmacSessionTokenIssuer,
@@ -70,6 +70,11 @@ export interface ChatServerOptions {
   };
   agentRuntime: AgentRuntime;
   attachments?: ChatAttachmentService;
+  /**
+   * How ended jobs of kinds that capabilities declare are retried by hand. The server brings
+   * those of its own kinds.
+   */
+  jobRetries?: JobRetry[];
   managedObjects?: {
     readArtifact(input: {
       clientInstanceId: ClientInstanceId;

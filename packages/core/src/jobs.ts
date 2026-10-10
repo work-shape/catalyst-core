@@ -35,6 +35,11 @@ export interface JobKind<Payload extends JsonObject = JsonObject> {
   readonly leaseMs: number;
   /** Limits on running jobs across the instance. A missing limit is no limit. */
   readonly concurrency: { readonly global?: number; readonly perKey?: number };
+  /**
+   * `false` when a person cannot retry an ended job of the kind, because running it again
+   * would not redo its work. A schedule tick is such a job: the next tick is its retry.
+   */
+  readonly manualRetry?: false;
 }
 
 export function defineJobKind<Payload extends JsonObject>(
@@ -227,7 +232,8 @@ export interface JobsStore {
   }): Promise<JobOverview[]>;
   /**
    * Queues a `failed` or `dead` job again, due at once, with its attempts reset. The last
-   * error class stays on the row until the next attempt ends.
+   * error class stays on the row until the next attempt ends. Inside `stores.transaction` it
+   * commits or rolls back with what the caller puts back on the subject record.
    */
   retry(input: { clientInstanceId: ClientInstanceId; id: string }): Promise<RetryJobResult>;
 }
