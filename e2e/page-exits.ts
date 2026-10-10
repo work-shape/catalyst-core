@@ -16,6 +16,10 @@ export interface PageExit {
   refusal?: RegExp;
   /** What the Page's script wrote on its body about how the try ended. */
   shows?: { attribute: string; value: string };
+  /** More files of the Page's file set, given the origin of the other host. */
+  files?(there: string): Record<string, string>;
+  /** What a person does in the Page for the try to happen. */
+  act?: { how: "hover" | "click"; target: string };
 }
 
 const directive = (name: string) =>
@@ -30,7 +34,20 @@ const NO_POPUPS =
 const NO_ANCESTOR_NAVIGATION =
   /^Unsafe attempt to initiate navigation for frame with (?:URL|origin) '[^']*' from frame with URL 'about:srcdoc'\. The frame attempting navigation /u;
 
+const INLINE_SCRIPT =
+  /^Executing inline script violates the following Content Security Policy directive 'script-src 'self'(?: 'sha256-[A-Za-z0-9+/=]+')?'\./u;
+/** An image the policy lets a Page show: it is held in its own address. */
+const PIXEL = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+const INLINE_RULES =
+  /^Applying inline speculation rules violates the following Content Security Policy directive 'script-src 'self' 'sha256-[A-Za-z0-9+/=]+''\./u;
+
 const text = (value: string) => JSON.stringify(value);
+/** A script that starts a worker from an address and writes on the body how that ended. */
+const worker = (address: string) =>
+  `const mark = (value) => document.body.setAttribute("data-worker", value); try { const worker = new Worker(${address}); worker.onmessage = () => mark("answered"); worker.onerror = () => mark("failed"); } catch (error) { mark("threw " + error.name); }`;
+const workerSource = (there: string) =>
+  text(`postMessage("started"); fetch(${text(hit(there, "worker"))}).catch(() => undefined);`);
 const hit = (there: string, how: string) => `${there}/hit?${how}=1&rows=secret`;
 /** A script that adds a `link` element of one relation. */
 const hint = (rel: string) => (there: string) =>
@@ -125,6 +142,20 @@ export const pageNavigationExits: readonly PageExit[] = [
     html: (there) =>
       `<form id="form" action="${there}/hit" method="post" target="_blank"><input name="rows" value="secret"></form>`,
     script: () => `document.getElementById("form").submit();`,
+    refusal: NO_FORMS
+  },
+  {
+    name: "a button with a form address of its own",
+    html: (there) =>
+      `<form><input name="rows" value="secret"><button id="send" formmethod="get" formaction="${there}/hit">Send</button></form>`,
+    act: { how: "click", target: "#send" },
+    refusal: NO_FORMS
+  },
+  {
+    name: "an image button with a form address of its own",
+    html: (there) =>
+      `<form><input name="rows" value="secret"><input id="send" type="image" alt="Send" width="80" height="30" src="${PIXEL}" formaction="${there}/hit"></form>`,
+    act: { how: "click", target: "#send" },
     refusal: NO_FORMS
   }
 ];
@@ -229,8 +260,7 @@ export const pageLoadExits: readonly PageExit[] = [
   {
     name: "an inline script",
     html: () => `<script>document.body.setAttribute("data-inline", "ran")</script>`,
-    refusal:
-      /^Executing inline script violates the following Content Security Policy directive 'script-src 'self''\./u
+    refusal: INLINE_SCRIPT
   },
   {
     name: "a worker of another host",
@@ -242,6 +272,98 @@ export const pageLoadExits: readonly PageExit[] = [
       `try { const worker = new Worker("./assets/worker.js"); worker.onmessage = () => document.body.setAttribute("data-worker", "answered"); worker.onerror = () => document.body.setAttribute("data-worker", "failed"); } catch (error) { document.body.setAttribute("data-worker", "threw " + error.name); }`,
     // A frame without an origin has no file of its own origin to start a worker from.
     shows: { attribute: "data-worker", value: "threw SecurityError" }
+  },
+  {
+    name: "an image set in its style",
+    html: (there) =>
+      `<style>#page-title { background-image: image-set(url("${hit(there, "imageset")}") 1x); }</style>`,
+    refusal: directive("img-src 'self' data:")
+  },
+  {
+    name: "a cursor in its style",
+    html: (there) => `<style>#page-title { cursor: url("${hit(there, "cursor")}"), auto; }</style>`,
+    act: { how: "hover", target: "#page-title" },
+    refusal: directive("img-src 'self' data:")
+  },
+  {
+    name: "an import in its stylesheet file",
+    files: (there) => ({
+      "assets/style.css": `@import url("${hit(there, "fileimport")}");\n#page-title { color: rgb(1, 2, 3); }`
+    }),
+    refusal: directive("style-src 'self' 'unsafe-inline'")
+  },
+  {
+    name: "a font in its stylesheet file",
+    files: (there) => ({
+      "assets/style.css": `@font-face { font-family: planted; src: url("${hit(there, "filefont")}"); }\n#page-title { font-family: planted; }`
+    }),
+    refusal: directive("default-src 'none'")
+  },
+  {
+    name: "an image in the style attribute of an embedded SVG",
+    html: (there) =>
+      `<svg width="20" height="20" style="background: url('${hit(there, "svgstyle")}')"></svg>`,
+    refusal: directive("img-src 'self' data:")
+  },
+  {
+    name: "an import in the style of an embedded SVG",
+    html: (there) =>
+      `<svg width="20" height="20"><style>@import url("${hit(there, "svgimport")}");</style></svg>`,
+    refusal: directive("style-src 'self' 'unsafe-inline'")
+  },
+  {
+    name: "the poster of a video",
+    html: (there) => `<video poster="${hit(there, "poster")}"></video>`,
+    refusal: directive("img-src 'self' data:")
+  },
+  {
+    name: "the track of a video",
+    html: (there) =>
+      `<video controls><track default kind="subtitles" srclang="en" src="${hit(there, "track")}"></video>`,
+    refusal: directive("default-src 'none'")
+  },
+  {
+    name: "a ping of a link a script clicks outside its document",
+    script: (there) =>
+      `const link = document.createElement("a"); link.href = "#here"; link.ping = ${text(hit(there, "ping"))}; link.click();`,
+    refusal: directive("connect-src 'none'")
+  },
+  {
+    name: "speculation rules in its markup",
+    html: (there) =>
+      `<script type="speculationrules">{"prefetch":[{"urls":["${hit(there, "prefetch")}"]}],"prerender":[{"urls":["${hit(there, "prerender")}"]}]}</script>`,
+    refusal: INLINE_RULES
+  },
+  {
+    name: "speculation rules a script adds",
+    script: (there) =>
+      `const rules = document.createElement("script"); rules.type = "speculationrules"; rules.textContent = JSON.stringify({ prefetch: [{ urls: [${text(hit(there, "prefetch"))}] }], prerender: [{ urls: [${text(hit(there, "prerender"))}] }] }); document.head.appendChild(rules);`,
+    refusal: INLINE_RULES
+  },
+  {
+    name: "an import map that names another host",
+    html: (there) =>
+      `<script type="importmap">{"imports":{"rows":"${hit(there, "importmap")}"}}</script>`,
+    script: () =>
+      `import("rows").then(() => document.body.setAttribute("data-import", "loaded"), (error) => document.body.setAttribute("data-import", error.name));`,
+    refusal: INLINE_SCRIPT,
+    shows: { attribute: "data-import", value: "TypeError" }
+  },
+  {
+    name: "a worker from a blob",
+    script: (there) =>
+      worker(
+        `URL.createObjectURL(new Blob([${workerSource(there)}], { type: "text/javascript" }))`
+      ),
+    refusal: directive("worker-src 'none'"),
+    shows: { attribute: "data-worker", value: "failed" }
+  },
+  {
+    name: "a worker from a data address",
+    script: (there) =>
+      worker(`"data:text/javascript," + encodeURIComponent(${workerSource(there)})`),
+    refusal: directive("worker-src 'none'"),
+    shows: { attribute: "data-worker", value: "failed" }
   },
   {
     name: "a base address",
@@ -291,7 +413,10 @@ export interface PageLink {
   script?(address: string): string;
   /** What the test clicks: the link itself, or the element that hides it. */
   target: string;
-  /** The link is in a tree the test cannot read, so its address is not asserted. */
+  /**
+   * The test does not read the address off its target: the link is in a tree it cannot read,
+   * or the target is not a link the guard knows.
+   */
   hidden?: boolean;
   /** A way around the guard. It is clicked in the two ways that open a tab, not in every way. */
   bypass?: boolean;
@@ -324,6 +449,24 @@ export const pageLinks: readonly PageLink[] = [
     html: (address) =>
       `<svg width="240" height="40"><a id="go" href="${address}" xlink:href="${address}"><rect width="240" height="40" fill="silver"/><text y="24">Open</text></a></svg>`,
     target: "#go"
+  },
+  {
+    name: "an area of an image map",
+    html: (address) =>
+      `<img id="map-image" alt="Open" usemap="#map" width="240" height="40" src="${PIXEL}"><map name="map"><area id="go" shape="rect" coords="0,0,240,40" alt="Open" ping="${address}" href="${address}"></map>`,
+    script: () =>
+      `const area = document.getElementById("go"); document.body.setAttribute("data-area", [area.hasAttribute("href"), area.hasAttribute("ping")].join(","));`,
+    target: "#map-image",
+    hidden: true,
+    shows: { attribute: "data-area", value: "false,false" }
+  },
+  {
+    // No link to this browser, so the guard leaves the attribute. The click is what counts.
+    name: "an address on a MathML element",
+    html: (address) =>
+      `<math id="go" display="block" href="${address}"><mtext href="${address}">Open</mtext></math>`,
+    target: "#go",
+    hidden: true
   },
   {
     // An attribute with a namespace, which a filter of attribute names would not see.
@@ -403,5 +546,10 @@ export const pageTestTitles = {
   otherSite: "another site cannot hold a Page in a frame",
   noFrames: "a Page holds no frame of its own, in its markup or written by its script",
   webRtc: "a Page sends no WebRTC packet the way a view can",
-  noOrigin: "a Page reads no cookie, no storage and no session of the instance"
+  noOrigin: "a Page reads no cookie, no storage and no session of the instance",
+  failClosed: "a Page whose guard the browser does not run is not shown",
+  noGuardRequest: "an HTML file in a folder of a Page is guarded without a request of its own",
+  frameRead: "a Page reads nothing off a frame it adds, in the task that added it",
+  nameAndHistory: "a Page changes neither the name nor the history of the page that holds it",
+  forgedMessage: "a message a Page forges changes nothing in the interface"
 } as const;

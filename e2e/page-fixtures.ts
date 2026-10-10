@@ -114,22 +114,49 @@ export async function storePage(
  * frame has no sandbox attribute and no policy of its own: whatever holds the Page in is what
  * the instance answers with. Returns the frame of the Page itself, inside the shell.
  */
-export async function openPage(page: Page, input: PageFiles): Promise<FrameLocator> {
+export async function openPage(
+  page: Page,
+  input: PageFiles,
+  /** The HTML file the frame asks for. Without it, the entry file of the file set. */
+  path = ""
+): Promise<FrameLocator> {
   const headers = await signIn(page, uiOrigin);
   const stored = await storePage(page, headers, input);
   await page.goto(`${uiOrigin}/`);
+  return framePage(page, `${stored.url}${path}`);
+}
+
+/** Shows the address of a Page in a frame over the page the tab is on. */
+export async function framePage(page: Page, address: string): Promise<FrameLocator> {
   await page.evaluate(
-    ({ address, title }) => {
+    ({ address: source, title }) => {
       const frame = document.createElement("iframe");
       frame.title = title;
-      frame.src = address;
+      frame.src = source;
       frame.style.cssText =
         "position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:white";
       document.body.appendChild(frame);
     },
-    { address: stored.url, title: pageFrameTitle }
+    { address, title: pageFrameTitle }
   );
   return pageFrame(page);
+}
+
+/** What a click opened: a tab, a window or a download. */
+export function watchOpened(page: Page): string[] {
+  const opened: string[] = [];
+  page.context().on("page", (popup) => opened.push(popup.url()));
+  page.on("download", (download) => opened.push(download.url()));
+  return opened;
+}
+
+/**
+ * The tab still shows the interface. The interface moves between its own addresses while it
+ * loads, so the origin is what is compared: another host and the instance's API are both
+ * another origin.
+ */
+export function expectOnInterface(page: Page): void {
+  expect(new URL(page.url()).origin).toBe(uiOrigin);
 }
 
 /**

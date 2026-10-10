@@ -19,7 +19,14 @@ import {
   tabOpeningClicks,
   type PageExit
 } from "./page-exits";
-import { expectPageRan, openPage, storePage } from "./page-fixtures";
+import {
+  expectOnInterface,
+  expectPageRan,
+  openPage,
+  storePage,
+  watchOpened
+} from "./page-fixtures";
+import { pageHeldTests } from "./page-held";
 import { expect } from "./test";
 import {
   apiOrigin,
@@ -478,23 +485,6 @@ exitTest.describe("WebRTC from a view", () => {
 // the header of that answer is the policy of both. The Page runs scripts, so every way out is
 // tried here by a script or by a person, with the same other host counting what arrives.
 
-/** What a click opened: a tab, a window or a download. */
-function watchOpened(page: Page): string[] {
-  const opened: string[] = [];
-  page.context().on("page", (popup) => opened.push(popup.url()));
-  page.on("download", (download) => opened.push(download.url()));
-  return opened;
-}
-
-/**
- * The tab still shows the interface. The interface moves between its own addresses while it
- * loads, so the origin is what is compared: another host and the instance's API are both
- * another origin.
- */
-function expectOnInterface(page: Page): void {
-  expect(new URL(page.url()).origin).toBe(uiOrigin);
-}
-
 async function expectPageExitRefused(
   page: Page,
   exit: PageExit,
@@ -505,9 +495,14 @@ async function expectPageExitRefused(
   const view = await openPage(page, {
     html: exit.html?.(otherHost.origin),
     script: exit.script?.(otherHost.origin),
-    files: { "assets/worker.js": 'postMessage("started");' }
+    files: { "assets/worker.js": 'postMessage("started");', ...exit.files?.(otherHost.origin) }
   });
 
+  if (exit.act) {
+    // What a person does in the Page. The Page is there to be acted on once its script ran.
+    await expectPageRan(page);
+    await view.locator(exit.act.target)[exit.act.how]();
+  }
   if (exit.refusal) {
     await expectRefused(page, otherHost, refusals, exit.refusal);
   } else {
@@ -711,6 +706,12 @@ exitTest.describe("a Page is held where the interface put it", () => {
     await expect(view.locator("body")).not.toHaveAttribute("data-offered");
     expect(otherHost.packets).toBe(0);
   });
+
+  for (const held of pageHeldTests) {
+    exitTest(held.title, async ({ page, otherHost, refusals }) => {
+      await held.run({ page, otherHost, refusals });
+    });
+  }
 
   exitTest(pageTestTitles.noOrigin, async ({ page, otherHost, refusals }) => {
     const session = `${apiOrigin}/api/v1/me`;
