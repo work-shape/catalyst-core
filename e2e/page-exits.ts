@@ -326,6 +326,15 @@ export const pageLinks: readonly PageLink[] = [
     target: "#go"
   },
   {
+    // An attribute with a namespace, which a filter of attribute names would not see.
+    name: "a link in an SVG that a script gives an address with a namespace",
+    html: () =>
+      `<svg width="240" height="40"><a id="go"><rect width="240" height="40" fill="silver"/><text y="24">Open</text></a></svg>`,
+    script: (address) =>
+      `const link = document.getElementById("go"); const give = () => { link.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", ${text(address)}); link.setAttributeNS("http://www.w3.org/1999/xlink", "href", ${text(address)}); }; give(); window.addEventListener("pointerdown", give, true);`,
+    target: "#go"
+  },
+  {
     name: "a link that gets its address back when the pointer goes down",
     bypass: true,
     html: () => `<a id="go" style="${linkStyle}">Open</a>`,
@@ -356,8 +365,8 @@ export const pageLinks: readonly PageLink[] = [
     script: (address) =>
       [
         `const keep = function () {};`,
-        `for (const [owner, names] of [[Element.prototype, ["removeAttribute", "removeAttributeNS", "remove", "hasAttribute", "querySelectorAll"]], [Event.prototype, ["preventDefault", "composedPath"]], [MutationObserver.prototype, ["observe", "disconnect"]], [EventTarget.prototype, ["addEventListener"]], [NodeList.prototype, ["item"]], [Reflect, ["apply"]], [Function.prototype, ["call", "apply"]]]) { for (const name of names) { try { owner[name] = keep; } catch (error) {} } }`,
-        `for (const [owner, name] of [[Node.prototype, "nodeType"], [Element.prototype, "localName"], [NodeList.prototype, "length"], [MutationRecord.prototype, "addedNodes"], [MutationRecord.prototype, "type"], [MouseEvent.prototype, "ctrlKey"], [MouseEvent.prototype, "metaKey"], [MouseEvent.prototype, "button"]]) { try { Object.defineProperty(owner, name, { get: () => undefined }); } catch (error) {} }`,
+        `for (const [owner, names] of [[Element.prototype, ["removeAttribute", "removeAttributeNS", "removeAttributeNode", "remove", "hasAttribute", "querySelectorAll"]], [NamedNodeMap.prototype, ["item"]], [Event.prototype, ["preventDefault", "composedPath"]], [MutationObserver.prototype, ["observe", "disconnect"]], [EventTarget.prototype, ["addEventListener"]], [NodeList.prototype, ["item"]], [Reflect, ["apply"]], [Function.prototype, ["call", "apply"]]]) { for (const name of names) { try { owner[name] = keep; } catch (error) {} } }`,
+        `for (const [owner, name] of [[Node.prototype, "nodeType"], [Element.prototype, "localName"], [Element.prototype, "attributes"], [Attr.prototype, "localName"], [NamedNodeMap.prototype, "length"], [NodeList.prototype, "length"], [MutationRecord.prototype, "addedNodes"], [MutationRecord.prototype, "type"], [MouseEvent.prototype, "ctrlKey"], [MouseEvent.prototype, "metaKey"], [MouseEvent.prototype, "button"]]) { try { Object.defineProperty(owner, name, { get: () => undefined }); } catch (error) {} }`,
         `const link = document.createElement("a"); link.id = "go"; link.style.cssText = ${text(linkStyle)}; link.textContent = "Open"; link.href = ${text(address)}; document.body.appendChild(link);`
       ].join("\n"),
     target: "#go"

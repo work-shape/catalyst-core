@@ -296,9 +296,11 @@ const PAGE_GUARD_SCRIPT = `(function () {
   var localName = getter(Element.prototype, "localName");
   var listLength = getter(NodeList.prototype, "length");
   var listItem = method(NodeList.prototype, "item");
-  var removeAttribute = method(Element.prototype, "removeAttribute");
-  var removeAttributeNS = method(Element.prototype, "removeAttributeNS");
-  var hasAttribute = method(Element.prototype, "hasAttribute");
+  var attributesOf = getter(Element.prototype, "attributes");
+  var attributeCount = getter(NamedNodeMap.prototype, "length");
+  var attributeAt = method(NamedNodeMap.prototype, "item");
+  var attributeName = getter(Attr.prototype, "localName");
+  var removeAttributeNode = method(Element.prototype, "removeAttributeNode");
   var removeElement = method(Element.prototype, "remove");
   var queryElement = method(Element.prototype, "querySelectorAll");
   var queryFragment = method(DocumentFragment.prototype, "querySelectorAll");
@@ -351,8 +353,11 @@ const PAGE_GUARD_SCRIPT = `(function () {
   refuse(ShadowRoot.prototype, "setHTMLUnsafe");
   refuse(ShadowRoot.prototype, "setHTML");
 
-  var XLINK = "http://www.w3.org/1999/xlink";
-  var addresses = ["href", "xlink:href", "ping"];
+  // By local name, so in every namespace: the address of a link in an SVG is one of XLink.
+  function isAddress(attribute) {
+    var name = attributeName(attribute);
+    return name === "href" || name === "xlink:href" || name === "ping";
+  }
   var FRAMES = "iframe,frame,frameset,object,embed,fencedframe,portal";
   function isElement(node) {
     return nodeType(node) === 1;
@@ -374,13 +379,22 @@ const PAGE_GUARD_SCRIPT = `(function () {
     );
   }
   function hasAddress(link) {
-    return hasAttribute(link, "href") || hasAttribute(link, "xlink:href") || hasAttribute(link, "ping");
+    var attributes = attributesOf(link);
+    for (var index = attributeCount(attributes) - 1; index >= 0; index -= 1) {
+      if (isAddress(attributeAt(attributes, index))) {
+        return true;
+      }
+    }
+    return false;
   }
   function strip(link) {
-    for (var index = 0; index < addresses.length; index += 1) {
-      removeAttribute(link, addresses[index]);
+    var attributes = attributesOf(link);
+    for (var index = attributeCount(attributes) - 1; index >= 0; index -= 1) {
+      var attribute = attributeAt(attributes, index);
+      if (isAddress(attribute)) {
+        removeAttributeNode(link, attribute);
+      }
     }
-    removeAttributeNS(link, XLINK, "href");
   }
   function each(list, act) {
     for (var index = 0, length = listLength(list); index < length; index += 1) {
@@ -417,7 +431,8 @@ const PAGE_GUARD_SCRIPT = `(function () {
       }
     }
   });
-  var watched = { subtree: true, childList: true, attributes: true, attributeFilter: ["href", "ping"] };
+  // No attribute filter: a filter leaves out every attribute that has a namespace.
+  var watched = { subtree: true, childList: true, attributes: true };
   function watch(root) {
     observe(observer, root, watched);
     sweep(root);
