@@ -1,5 +1,5 @@
 /** The areas of the interface: what a route shows. */
-export type WorkspaceRouteView = "chat" | "settings" | "approvals" | "build" | "ui-library";
+export type WorkspaceRouteView = "chat" | "settings" | "inbox" | "build" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -20,7 +20,10 @@ export type WorkspaceRoute =
   | { kind: "administration" }
   /** Config as a full page, until the Build area replaces it. */
   | { kind: "build" }
-  | { kind: "approvals" }
+  /** The Inbox with its lists. */
+  | { kind: "inbox" }
+  /** The Inbox with one item open beside the lists. */
+  | { kind: "inbox-item"; itemId: string }
   /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
   | { kind: "ui-library" };
 
@@ -66,7 +69,14 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/admin/api-access", redirectTo: "/settings/instance/api-access" }
     ]
   },
-  { area: "approvals", paths: [{ path: "/approvals", route: "approvals" }] },
+  {
+    area: "inbox",
+    paths: [
+      { path: "/inbox", route: "inbox" },
+      { path: "/inbox/$itemId", route: "inbox-item" },
+      { path: "/approvals", redirectTo: "/inbox" }
+    ]
+  },
   { area: "build", paths: [{ path: "/admin/config", route: "build" }] },
   { area: "ui-library", paths: [{ path: "/ui-library", route: "ui-library" }] }
 ];
@@ -120,14 +130,16 @@ function routeOf(
   kind: WorkspaceRoute["kind"],
   params: Record<string, string>
 ): WorkspaceRoute | undefined {
-  const { collaborationWorkspaceId, conversationId, group, page } = params;
+  const { collaborationWorkspaceId, conversationId, group, page, itemId } = params;
   switch (kind) {
     case "collaboration-workspace-root":
     case "administration":
     case "build":
-    case "approvals":
+    case "inbox":
     case "ui-library":
       return { kind };
+    case "inbox-item":
+      return itemId ? { kind, itemId } : undefined;
     case "settings":
       return group && page ? { kind, group, page } : undefined;
     case "new-conversation":

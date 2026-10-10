@@ -1,4 +1,4 @@
-export type SkillChangeType = "replace" | "add" | "new_resource";
+type SkillChangeType = "replace" | "add" | "new_resource";
 
 export interface SkillChangePreviewChange {
   type: SkillChangeType;

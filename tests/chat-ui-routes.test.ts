@@ -29,7 +29,8 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
     "settings"
   ],
   ["/settings/instance/users", { kind: "settings", group: "instance", page: "users" }, "settings"],
-  ["/approvals", { kind: "approvals" }, "approvals"],
+  ["/inbox", { kind: "inbox" }, "inbox"],
+  ["/inbox/apr_1", { kind: "inbox-item", itemId: "apr_1" }, "inbox"],
   ["/admin", { kind: "administration" }, "settings"],
   ["/admin/config", { kind: "build" }, "build"],
   ["/ui-library", { kind: "ui-library" }, "ui-library"]
@@ -39,7 +40,7 @@ describe("area route table", () => {
   it("has one row per area", () => {
     const areas = areaRoutes.map((row) => row.area);
 
-    expect(areas).toEqual(["chat", "settings", "approvals", "build", "ui-library"]);
+    expect(areas).toEqual(["chat", "settings", "inbox", "build", "ui-library"]);
   });
 
   it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {
@@ -75,6 +76,19 @@ describe("area route table", () => {
     );
     expect(workspaceRouteFromPath(path)).toEqual(route);
     expect(areaOfRoute(workspaceRouteFromPath(path))).toBe("settings");
+  });
+
+  // Fails without the Inbox routes: /approvals was a route of its own and /inbox resolved to the root.
+  it("leads the old review queue address to the Inbox and gives an item its own address", () => {
+    const row = areaRoutePaths().find((candidate) => candidate.path === "/approvals");
+
+    expect(row?.route).toBeUndefined();
+    expect(row?.redirectTo).toBe("/inbox");
+    expect(workspaceRouteFromPath("/approvals")).toEqual({ kind: "inbox" });
+    expect(workspaceRouteNavigation({ kind: "inbox-item", itemId: "apr_1" })).toEqual({
+      to: "/inbox/$itemId",
+      params: { itemId: "apr_1" }
+    });
   });
 
   it("keeps /admin and /admin/config as addresses the shell answers by the viewer's rights", () => {

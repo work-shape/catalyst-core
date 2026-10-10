@@ -133,6 +133,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "request-that-is-gone",
+    reason:
+      "Chromium's own log line: the test opens the address of an Inbox item that does not " +
+      "exist, the instance answers 404 and the page says so, which it asserts.",
+    matches: requestAnswered(404),
+    path: /^\/api\/v1\/approval-requests\/apr_not_a_request$/u,
+    tests: [
+      "a member's proposal waits in the reviewer's Inbox, is rejected there and comes back decided"
+    ]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +

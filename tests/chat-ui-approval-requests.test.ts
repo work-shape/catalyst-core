@@ -2,30 +2,19 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
-import {
-  ApprovalHistoryRow,
-  ApprovalRequestCardView,
-  ApprovalRequestDetailsView,
-  type ApprovalRequestCardActions,
-  type ApprovalRequestCardState
-} from "../packages/chat-ui/src/approvals/approval-request-card";
-import {
-  decidedApprovalRequests,
-  readApprovalRequestDisplay
-} from "../packages/chat-ui/src/approvals/approval-request-model";
+import { ApprovalRequestCardView } from "../packages/chat-ui/src/approvals/approval-request-card";
+import { readApprovalRequestDisplay } from "../packages/chat-ui/src/approvals/approval-request-model";
 import {
   buildApprovalRevisionMessage,
   changedLines
 } from "../packages/chat-ui/src/approvals/approval-revision-message";
-import { ApprovalRequestList } from "../packages/chat-ui/src/approvals/approvals-view";
 import { parseSkillChangePreview } from "../packages/chat-ui/src/approvals/skill-change-preview";
 import {
   createCompletedAssistantWorkIndices,
   createVisibleFinalAssistantPartIndices
 } from "../packages/chat-ui/src/assistant/assistant-work-grouping";
 import { TranslationProvider, createTranslationContext } from "../packages/chat-ui/src/i18n";
-import { workspaceRouteFromPath, workspaceRouteNavigation } from "../packages/chat-ui/src/routes";
-import { workspaceRouteView } from "../packages/chat-ui/src/workspace/workspace-route";
+import { InboxItemView, type InboxItemActions } from "../packages/chat-ui/src/inbox";
 
 const skillChangePreview = {
   skillName: "payroll",
@@ -68,172 +57,12 @@ function request(overrides: Partial<ApprovalRequestView> = {}): ApprovalRequestV
   } as ApprovalRequestView;
 }
 
-const idleActions: ApprovalRequestCardActions = {
+const idleActions: InboxItemActions = {
   pending: false,
-  onDecide: () => undefined,
-  onWithdraw: () => undefined,
-  onRevert: () => undefined
+  decide: () => undefined,
+  withdraw: () => undefined,
+  revert: () => undefined
 };
-
-function renderCard(
-  state: ApprovalRequestCardState,
-  actions: ApprovalRequestCardActions = idleActions,
-  locale: "de" | "en" = "de"
-): string {
-  return renderToStaticMarkup(
-    createElement(
-      TranslationProvider,
-      { children: null, locale },
-      createElement(ApprovalRequestCardView, { state, actions })
-    )
-  );
-}
-
-function renderReady(overrides: Partial<ApprovalRequestView> = {}, actions = idleActions): string {
-  return renderCard({ status: "ready", request: request(overrides) }, actions);
-}
-
-describe("approval request card", () => {
-  it("shows the proposed change read-only to a user who can neither decide nor withdraw", () => {
-    const markup = renderReady();
-
-    expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
-    expect(markup).toContain("Wartet auf Freigabe");
-    expect(markup).toContain("Angefragt von Anna Beispiel");
-    expect(markup).toContain("Fähigkeit: Gehaltsabrechnungen prüfen");
-    expect(markup).not.toContain("<button");
-  });
-
-  it("offers the three decisions to an approver", () => {
-    const markup = renderReady({ canDecide: true });
-
-    expect(markup).toContain(">Übernehmen</button>");
-    expect(markup).toContain(">Änderung anfragen</button>");
-    expect(markup).toContain(">Ablehnen</button>");
-    expect(markup).not.toContain(">Zurückziehen</button>");
-  });
-
-  it("lets the requester withdraw without offering a decision", () => {
-    const markup = renderReady({ canWithdraw: true });
-
-    expect(markup).toContain(">Zurückziehen</button>");
-    expect(markup).not.toContain(">Übernehmen</button>");
-  });
-
-  it("names the decider and the comment once the request is decided", () => {
-    const markup = renderReady({
-      status: "changes_requested",
-      decision: {
-        approved: false,
-        decidedBy: "user-felix",
-        decidedByLabel: "Felix Pahlke",
-        decidedAt: "2026-10-05T09:00:00Z",
-        comment: "Bitte ohne Kundennamen."
-      }
-    });
-
-    expect(markup).toContain("Änderung angefragt");
-    expect(markup).toContain("Entscheidung von Felix Pahlke");
-    expect(markup).toContain("Bitte ohne Kundennamen.");
-    expect(markup).not.toContain("<button");
-  });
-
-  it("offers rollback only when the view allows it and the client can do it", () => {
-    const approved = { status: "approved", canRevert: true } as Partial<ApprovalRequestView>;
-
-    expect(renderReady(approved)).toContain(">Rückgängig machen</button>");
-    expect(renderReady(approved, { ...idleActions, onRevert: undefined })).not.toContain(
-      "Rückgängig machen"
-    );
-    expect(renderReady({ status: "approved" })).not.toContain("Rückgängig machen");
-  });
-
-  it("gives a rolled back request its own badge and names who undid it", () => {
-    const markup = renderReady({
-      status: "reverted",
-      reversion: {
-        revertedBy: "user-felix",
-        revertedByLabel: "Felix Pahlke",
-        revertedAt: "2026-10-06T09:00:00Z"
-      }
-    } as Partial<ApprovalRequestView>);
-
-    expect(markup).toContain("Rückgängig gemacht</span>");
-    expect(markup).toContain("Rückgängig gemacht von Felix Pahlke");
-  });
-
-  it("shows warned and blocked checks and stays silent about passed ones", () => {
-    const markup = renderReady({
-      checks: [
-        { id: "format", status: "passed", message: "Format in Ordnung." },
-        { id: "no_customer_data", status: "warned", message: "Enthält möglicherweise einen Namen." }
-      ]
-    });
-
-    expect(markup).toContain("Enthält möglicherweise einen Namen.");
-    expect(markup).not.toContain("Format in Ordnung.");
-    expect(renderReady()).not.toContain("<ul");
-  });
-
-  it("words a check that could not be evaluated itself", () => {
-    const markup = renderReady({
-      checks: [
-        { id: "format", status: "passed", message: "" },
-        { id: "no_customer_data", status: "warned", message: "" }
-      ]
-    });
-
-    expect(markup).toContain("Die automatische Prüfung konnte nicht ausgeführt werden.");
-    expect(markup.match(/<li/gu)).toHaveLength(1);
-  });
-
-  it("names a superseded request like its status line in the thread", () => {
-    expect(renderReady({ status: "superseded" })).toContain("Nicht mehr anwendbar</span>");
-  });
-
-  it("falls back to the summary for an unknown kind or an unreadable preview", () => {
-    const unknownKind = renderReady({ kind: "future_kind" });
-    const brokenPreview = renderReady({ preview: { changes: "nope" } });
-
-    for (const markup of [unknownKind, brokenPreview]) {
-      expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
-      expect(markup).not.toContain("Bisher");
-    }
-  });
-
-  it("explains a rollback that newer changes made impossible", () => {
-    const markup = renderReady(
-      { status: "approved", canRevert: true } as Partial<ApprovalRequestView>,
-      {
-        ...idleActions,
-        failure: "revert_conflict"
-      }
-    );
-
-    expect(markup).toContain("weil es inzwischen neuere Änderungen gibt");
-  });
-
-  it("renders loading, not-found and error as states of their own", () => {
-    expect(renderCard({ status: "loading" })).toContain("Vorschlag wird geladen…");
-    expect(renderCard({ status: "not-found" })).toContain("du darfst ihn nicht sehen");
-
-    const failed = renderCard({ status: "error", onRetry: () => undefined });
-    expect(failed).toContain("Der Vorschlag konnte nicht geladen werden.");
-    expect(failed).toContain(">Erneut versuchen</button>");
-  });
-
-  it("renders matching English copy", () => {
-    const markup = renderCard(
-      { status: "ready", request: request({ canDecide: true }) },
-      idleActions,
-      "en"
-    );
-
-    expect(markup).toContain("Awaiting approval");
-    expect(markup).toContain(">Accept</button>");
-    expect(markup).toContain(">Request changes</button>");
-  });
-});
 
 describe("compact approval request card in the thread", () => {
   const decided = {
@@ -258,7 +87,6 @@ describe("compact approval request card in the thread", () => {
         createElement(ApprovalRequestCardView, {
           state: { status: "ready", request: request(overrides) },
           actions: idleActions,
-          variant: "compact",
           ...(options.details === false ? {} : { onShowDetails: () => undefined })
         })
       )
@@ -362,117 +190,47 @@ describe("compact approval request card in the thread", () => {
 });
 
 describe("withdraw next to the decisions", () => {
-  const both = { canDecide: true, canWithdraw: true };
-
-  function renderVariant(variant: "full" | "compact", overrides: Partial<ApprovalRequestView>) {
+  function renderWith(overrides: Partial<ApprovalRequestView>) {
     return renderToStaticMarkup(
       createElement(
         TranslationProvider,
         { children: null, locale: "de" },
         createElement(ApprovalRequestCardView, {
           state: { status: "ready", request: request(overrides) },
-          actions: idleActions,
-          variant
+          actions: idleActions
         })
       )
     );
   }
 
-  it("is not offered to a requester who may decide, on either card", () => {
-    for (const variant of ["full", "compact"] as const) {
-      const markup = renderVariant(variant, both);
-      expect(markup).toContain(">Ablehnen</button>");
-      expect(markup).not.toContain("Zurückziehen");
-      expect(markup.match(/<button/gu)).toHaveLength(3);
-    }
+  it("is not offered to a requester who may decide", () => {
+    const markup = renderWith({ canDecide: true, canWithdraw: true });
+    expect(markup).toContain(">Ablehnen</button>");
+    expect(markup).not.toContain("Zurückziehen");
+    expect(markup.match(/<button/gu)).toHaveLength(3);
   });
 
   it("stays the only action of a requester who cannot decide", () => {
-    for (const variant of ["full", "compact"] as const) {
-      const markup = renderVariant(variant, { canWithdraw: true });
-      expect(markup).toContain(">Zurückziehen</button>");
-      expect(markup.match(/<button/gu)).toHaveLength(1);
-    }
-  });
-});
-
-describe("approval request details panel", () => {
-  function renderDetails(
-    overrides: Partial<ApprovalRequestView> = {},
-    actions: ApprovalRequestCardActions = idleActions,
-    locale: "de" | "en" = "de"
-  ): string {
-    return renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale },
-        createElement(ApprovalRequestDetailsView, {
-          state: { status: "ready", request: request(overrides) },
-          actions
-        })
-      )
-    );
-  }
-
-  it("shows the whole proposal and offers an approver the card's decisions below it", () => {
-    const markup = renderDetails({ canDecide: true, canWithdraw: true });
-
-    expect(markup).toContain("Angefragt von Anna Beispiel");
-    expect(markup).toContain("Prüfe den Bruttolohn und die Steuerklasse.");
-    expect(markup).toContain('data-testid="approval-request-details-actions"');
-    expect(markup).toContain("sticky bottom-0");
-    expect(markup).toContain(">Übernehmen</button>");
-    expect(markup).toContain(">Änderung anfragen</button>");
-    expect(markup).toContain(">Ablehnen</button>");
-    expect(markup).not.toContain("Zurückziehen");
-    expect(markup.indexOf("Prüfe den Bruttolohn")).toBeLessThan(markup.indexOf("Übernehmen"));
-    expect(renderDetails({ canDecide: true }, idleActions, "en")).toContain(">Accept</button>");
-  });
-
-  it("offers a requester who cannot decide only withdraw", () => {
-    const markup = renderDetails({ canWithdraw: true });
-
+    const markup = renderWith({ canWithdraw: true });
     expect(markup).toContain(">Zurückziehen</button>");
     expect(markup.match(/<button/gu)).toHaveLength(1);
   });
 
-  it("has no action bar for a reader who can do nothing", () => {
-    expect(renderDetails()).not.toContain("approval-request-details-actions");
-  });
-
-  it("reflects a decided request: new status, decision and comment, rollback when allowed", () => {
-    const markup = renderDetails({
-      status: "changes_requested",
-      decision: {
-        approved: false,
-        decidedBy: "user-felix",
-        decidedByLabel: "Felix Pahlke",
-        decidedAt: "2026-10-05T09:00:00Z",
-        comment: "Bitte ohne Kundennamen."
-      }
-    });
-
-    expect(markup).toContain("Änderung angefragt");
-    expect(markup).toContain("Entscheidung von Felix Pahlke");
-    expect(markup).toContain("Bitte ohne Kundennamen.");
-    expect(markup).not.toContain("<button");
-    expect(
-      renderDetails({ status: "approved", canRevert: true } as Partial<ApprovalRequestView>)
-    ).toContain(">Rückgängig machen</button>");
-  });
-
-  it("renders loading and not-found as states of their own", () => {
-    const render = (state: ApprovalRequestCardState) =>
+  it("renders loading, not-found and error as states of their own", () => {
+    const render = (state: Parameters<typeof ApprovalRequestCardView>[0]["state"]) =>
       renderToStaticMarkup(
         createElement(
           TranslationProvider,
           { children: null, locale: "de" },
-          createElement(ApprovalRequestDetailsView, { state, actions: idleActions })
+          createElement(ApprovalRequestCardView, { state, actions: idleActions })
         )
       );
 
     expect(render({ status: "loading" })).toContain("Vorschlag wird geladen…");
     expect(render({ status: "not-found" })).toContain("du darfst ihn nicht sehen");
+    const failed = render({ status: "error", onRetry: () => undefined });
+    expect(failed).toContain("Der Vorschlag konnte nicht geladen werden.");
+    expect(failed).toContain(">Erneut versuchen</button>");
   });
 });
 
@@ -609,6 +367,19 @@ describe("changed lines of a proposal", () => {
 });
 
 describe("skill change body", () => {
+  function renderReady(overrides: Partial<ApprovalRequestView> = {}): string {
+    return renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "de" },
+        createElement(InboxItemView, {
+          state: { status: "ready", request: request(overrides) },
+          actions: idleActions
+        })
+      )
+    );
+  }
+
   it("describes changes in plain language instead of a diff", () => {
     const markup = renderReady();
 
@@ -704,111 +475,6 @@ describe("approval request model", () => {
     expect(
       readApprovalRequestDisplay({ kind: "html.rendered", data: { requestId: "apr_1" } })
     ).toBeUndefined();
-  });
-
-  it("lists decided requests for the history, most recently touched first", () => {
-    const history = decidedApprovalRequests([
-      request({ id: "pending" }),
-      request({ id: "older", status: "rejected", updatedAt: "2026-10-01T08:00:00Z" }),
-      request({ id: "newer", status: "approved", updatedAt: "2026-10-03T08:00:00Z" })
-    ]);
-
-    expect(history.map((entry) => entry.id)).toEqual(["newer", "older"]);
-  });
-});
-
-describe("history row of the review queue", () => {
-  const decided = request({
-    status: "approved",
-    canRevert: true,
-    decision: {
-      approved: true,
-      decidedBy: "user-felix",
-      decidedByLabel: "Felix Pahlke",
-      decidedAt: "2026-10-05T09:00:00Z",
-      comment: "Passt so."
-    }
-  } as Partial<ApprovalRequestView>);
-
-  function renderRow(defaultOpen = false, locale: "de" | "en" = "de"): string {
-    return renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale },
-        createElement(ApprovalHistoryRow, { request: decided, actions: idleActions, defaultOpen })
-      )
-    );
-  }
-
-  it("is collapsed by default: summary, status, one meta line and a disclosure", () => {
-    const markup = renderRow();
-
-    expect(markup).toContain('data-variant="history"');
-    expect(markup).toContain("line-clamp-2");
-    expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
-    expect(markup).toContain("Übernommen</span>");
-    expect(markup).toMatch(
-      /Angefragt von Anna Beispiel, [^<]+ · Fähigkeit: Gehaltsabrechnungen prüfen · Entscheidung von Felix Pahlke, /
-    );
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).not.toContain("Prüfe den Bruttolohn.");
-    expect(markup).not.toContain("Passt so.");
-    expect(markup).not.toContain("Rückgängig machen");
-  });
-
-  it("opens to the proposal, the comment and rollback without repeating the requester", () => {
-    const markup = renderRow(true);
-    const controls = /aria-controls="([^"]+)"/.exec(markup)?.[1];
-
-    expect(markup).toContain('aria-expanded="true"');
-    expect(controls).toBeTruthy();
-    expect(markup).toContain(`id="${controls}"`);
-    expect(markup).toContain("Prüfe den Bruttolohn und die Steuerklasse.");
-    expect(markup).toContain("Passt so.");
-    expect(markup).toContain(">Rückgängig machen</button>");
-    expect(markup.split("Angefragt von Anna Beispiel")).toHaveLength(2);
-  });
-
-  it("renders matching English copy", () => {
-    const markup = renderRow(false, "en");
-
-    expect(markup).toContain("Accepted</span>");
-    expect(markup).toContain("Requested by Anna Beispiel");
-    expect(markup).toContain("Decision by Felix Pahlke");
-  });
-});
-
-describe("approvals view", () => {
-  function renderList(input: { loading?: boolean; failed?: boolean; history?: boolean }): string {
-    return renderToStaticMarkup(
-      createElement(
-        TranslationProvider,
-        { children: null, locale: "de" },
-        createElement(ApprovalRequestList, {
-          requests: [],
-          loading: input.loading ?? false,
-          failed: input.failed ?? false,
-          emptyKey: input.history ? "approvalsEmptyHistory" : "approvalsEmptyPending",
-          onRetry: () => undefined
-        })
-      )
-    );
-  }
-
-  it("has an empty state for each tab", () => {
-    expect(renderList({})).toContain("Nichts wartet auf Freigabe.");
-    expect(renderList({ history: true })).toContain("Noch keine Entscheidungen.");
-  });
-
-  it("offers a way out when the list is loading or failed", () => {
-    expect(renderList({ loading: true })).toContain("Freigaben werden geladen…");
-    expect(renderList({ failed: true })).toContain(">Erneut versuchen</button>");
-  });
-
-  it("is reachable by its own route, outside the administration", () => {
-    expect(workspaceRouteFromPath("/approvals")).toEqual({ kind: "approvals" });
-    expect(workspaceRouteNavigation({ kind: "approvals" })).toEqual({ to: "/approvals" });
-    expect(workspaceRouteView({ kind: "approvals" })).toBe("approvals");
   });
 });
 

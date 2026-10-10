@@ -68,6 +68,9 @@ administration:
     allowAgentDeletion: true
     allowDefaultAgentChange: true
     allowSkillEditing: true
+    agentSkillChanges:
+      enabled: true
+      allowSkillCreation: true
 infrastructure:
   models:
     local:
@@ -95,6 +98,8 @@ usage:
           outputPricePerMillionTokens: 0
 tools:
   - name: read_skill
+    enabled: true
+  - name: propose_skill_change
     enabled: true
   - name: show_view
     enabled: true

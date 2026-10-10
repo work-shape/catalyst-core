@@ -18,7 +18,8 @@ interface SurfaceSources {
   app_view: unknown;
   app_edit: unknown;
   workflow_canvas: unknown;
-  inbox_item: unknown;
+  /** One item of the Inbox, by its id. The renderer reads the item's live state itself. */
+  inbox_item: { itemId: string };
 }
 
 export type SurfaceKind = keyof SurfaceSources;

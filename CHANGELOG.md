@@ -152,6 +152,14 @@ id from config_assets where status = 'deleted')`.
   hand, with an optional `restoreSubject` that runs in the retry's transaction. The API
   retries no job of a kind it was given no entry for. `ChatServerOptions.jobRetries` carries
   them to the server. `PlatformFileStore` gains `restoreFailedArtifactPreviewJob`.
+- **Inbox:** Approval Requests are found in the Inbox, a section of the sidebar below Chat at
+  `/inbox`, with one address per item (`/inbox/<id>`). A person who may decide gets the lists To
+  decide, My requests and Decided (the last 30 days); everyone else gets their own requests as
+  one list, with the state, who decided and the comment. The new operation
+  `approval_requests.list_mine` (`GET /api/v1/approval-requests/mine`, scope `conversation:read`)
+  returns the caller's own requests. `approval_requests.list` takes `scope=decided`, and
+  `approval_requests.count_pending` also answers `mine: { pending, total }`. A migration adds the
+  index `approval_requests_client_requester_idx` to `approval_requests` and changes no data.
 
 ### Changed
 
@@ -749,6 +757,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   as well.
 - **Chat:** the agent list shows each agent's description only with the new
   `ui.showAgentDescriptions: true`; by default it lists the names alone.
+- **Approvals:** the review queue behind the clipboard icon in the sidebar's footer is gone;
+  `/approvals` leads to `/inbox`. The card of a request in a conversation opens the same item
+  beside the chat. Rejecting from the item takes an optional comment. A collapsed sidebar shows
+  the number of an item's count on its icon.
 
 ### Fixed
 

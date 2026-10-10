@@ -179,7 +179,7 @@ type RailProps = Parameters<typeof WorkspaceRail>[0];
 
 function renderRail(
   collaborationWorkspaceSelector?: ReactNode,
-  approvals?: { pendingCount: number },
+  inbox?: { toDecide: number },
   conversations: ConversationListItem[] = [],
   overrides: Partial<RailProps> = {},
   locale: LocaleCode = "en"
@@ -195,7 +195,7 @@ function renderRail(
         conversationsStatus: "ready",
         selectedConversationId: undefined,
         canViewAdministration: false,
-        approvals,
+        inbox,
         view: "chat",
         deletingConversation: false,
         canMoveConversation: false,
@@ -294,10 +294,10 @@ describe("workspace rail section rows", () => {
   if (!chat) {
     throw new Error("The rail has no Chat section.");
   }
-  const second: RailSection = { ...chat, id: "second", label: "nav.settings", view: "approvals" };
+  const second: RailSection = { ...chat, id: "second", label: "nav.settings", view: "inbox" };
 
-  it("shows no Chat row while Chat is the only section", () => {
-    expect(railSections.map((section) => section.id)).toEqual(["chat"]);
+  it("shows no Chat row while Chat is the only section a person has", () => {
+    expect(railSections.map((section) => section.id)).toEqual(["chat", "inbox"]);
     expect(shownRailSections(railSections)).toEqual([]);
 
     const markup = renderRail();
@@ -476,24 +476,46 @@ describe("workspace-scoped agents", () => {
   });
 });
 
-describe("workspace rail approvals entry", () => {
-  it("stays hidden from users who may not review", () => {
-    expect(renderRail()).not.toContain("approvals");
+// Each of these fails without the Inbox row: the rail had a footer button for reviewers only.
+describe("workspace rail Inbox row", () => {
+  it("is absent for a person who decides nothing and has asked for nothing", () => {
+    const markup = renderRail();
+
+    expect(markup).not.toContain("Inbox");
+    expect(markup).not.toContain("lucide-inbox");
   });
 
-  it("is offered to reviewers without administration access, with the pending count", () => {
-    const markup = renderRail(undefined, { pendingCount: 3 });
+  it("shows under Chat with what waits to be decided, in both languages", () => {
+    const markup = renderRail(undefined, { toDecide: 3 });
 
-    expect(markup).toContain('aria-label="Open approvals, 3 waiting"');
+    expect(markup).toContain('aria-label="Inbox, 3 to decide"');
     expect(markup).toContain(">3</span>");
-    expect(markup).not.toContain("lucide-shield");
+    expect(markup.indexOf("lucide-message-square")).toBeLessThan(markup.indexOf("lucide-inbox"));
+    expect(renderRail(undefined, { toDecide: 3 }, [], {}, "de")).toContain(
+      'aria-label="Eingang, 3 zu entscheiden"'
+    );
   });
 
-  it("drops the badge when nothing is pending", () => {
-    const markup = renderRail(undefined, { pendingCount: 0 });
+  it("stays for a person with nothing to decide, without a count", () => {
+    const markup = renderRail(undefined, { toDecide: 0 });
 
-    expect(markup).toContain('aria-label="Open approvals"');
+    expect(markup).toContain("Inbox");
+    expect(markup).not.toContain("to decide");
     expect(markup).not.toContain("rounded-full bg-primary");
+    expect(renderRail(undefined, { toDecide: 0 }, [], {}, "de")).toContain("Eingang");
+  });
+
+  it("keeps the count on the icon while the rail is collapsed", () => {
+    const markup = renderRail(undefined, { toDecide: 12 }, [], { collapsed: true });
+
+    expect(markup).toContain('aria-label="Inbox, 12 to decide"');
+    expect(markup).toContain(">12</span>");
+  });
+
+  it("is the current row on the Inbox", () => {
+    const markup = renderRail(undefined, { toDecide: 1 }, [], { view: "inbox" });
+
+    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*aria-label="Inbox, 1 to decide"/u);
   });
 });
 

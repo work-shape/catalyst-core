@@ -209,8 +209,8 @@ export function WorkspaceUiStateProvider({
         onRouteChange({ kind: "build" });
         return;
       }
-      if (nextView === "approvals") {
-        onRouteChange({ kind: "approvals" });
+      if (nextView === "inbox") {
+        onRouteChange({ kind: "inbox" });
         return;
       }
       onRouteChange(lastChatRouteRef.current);

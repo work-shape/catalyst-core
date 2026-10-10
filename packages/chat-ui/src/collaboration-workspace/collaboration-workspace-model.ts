@@ -152,7 +152,7 @@ export function useCollaborationWorkspaceModel(
   )?.id;
   const fallbackCollaborationWorkspaceId =
     personalCollaborationWorkspaceId ?? collaborationWorkspaces[0]?.id;
-  // Settings, approvals and administration have no workspace in their URL. The
+  // Settings, the Inbox and administration have no workspace in their URL. The
   // rail still shows the workspace the user came from, so its conversations
   // stay in reach; the membership check keeps a stale stored id out.
   const routedCollaborationWorkspaceId = routeCollaborationWorkspaceId(route);
@@ -361,7 +361,8 @@ function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {
     route.kind === "settings" ||
     route.kind === "administration" ||
     route.kind === "build" ||
-    route.kind === "approvals" ||
+    route.kind === "inbox" ||
+    route.kind === "inbox-item" ||
     route.kind === "ui-library"
   );
 }

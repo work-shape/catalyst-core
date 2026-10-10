@@ -59,6 +59,7 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
+import { inboxRailEntry } from "../inbox/inbox-model";
 import type { WorkspaceRoute } from "./workspace-route";
 import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
 import {
@@ -246,8 +247,8 @@ export interface ConversationRailModel {
   reloadConversations(): void;
   selectedConversationId: string | undefined;
   canViewAdministration: boolean;
-  /** Present only for users who may review Approval Requests. */
-  approvals: { pendingCount: number } | undefined;
+  /** Present for a person who may decide requests or has made one: the Inbox row shows. */
+  inbox: { toDecide: number } | undefined;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -653,24 +654,7 @@ export function useWorkspaceChatModel({
     client,
     enabled: isAuthenticated
   });
-  const approvals = approvalPendingCountQuery.data?.canReview
-    ? { pendingCount: approvalPendingCountQuery.data.count }
-    : undefined;
-  const approvalReviewUnavailable =
-    approvalPendingCountQuery.isError || approvalPendingCountQuery.data?.canReview === false;
-
-  // Mirrors the administration route guard: a deep link to the review queue
-  // falls back to chat once it is known that this user may not review.
-  useEffect(() => {
-    if (isAuthenticated && route.kind === "approvals" && approvalReviewUnavailable) {
-      goToActiveCollaborationWorkspaceChat({ replace: true });
-    }
-  }, [
-    approvalReviewUnavailable,
-    goToActiveCollaborationWorkspaceChat,
-    isAuthenticated,
-    route.kind
-  ]);
+  const inbox = inboxRailEntry(approvalPendingCountQuery.data);
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
@@ -938,7 +922,7 @@ export function useWorkspaceChatModel({
       },
       selectedConversationId,
       canViewAdministration,
-      approvals,
+      inbox,
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
@@ -1045,7 +1029,12 @@ export function useWorkspaceChatModel({
           isConversationGone: (error) => apiErrorStatus(error) === 404,
           leaveInComposer: (conversationId, text) =>
             leaveRevisionInComposer(conversationId, text, input.failureNotice)
-        })
+        }),
+      agentDisplayName: (agentName) =>
+        configQuery.data?.agents.find((agent) => agent.name === agentName)?.displayName,
+      // The address without a workspace resolves to the conversation's own.
+      openConversation: (conversationId) =>
+        routeState.showRoute({ kind: "legacy-conversation", conversationId })
     }
   };
 }

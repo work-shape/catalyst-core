@@ -15,7 +15,7 @@ const rendered: Record<Surface["kind"], boolean> = {
   app_view: false,
   app_edit: false,
   workflow_canvas: false,
-  inbox_item: false
+  inbox_item: true
 };
 
 function renderFrame(surface: Surface, mode: FrameProps["mode"] = "beside"): string {
@@ -47,7 +47,6 @@ function bareSurface(kind: string): Surface | undefined {
     case "app_view":
     case "app_edit":
     case "workflow_canvas":
-    case "inbox_item":
       return { kind, ...base };
     default:
       return undefined;
@@ -55,13 +54,13 @@ function bareSurface(kind: string): Surface | undefined {
 }
 
 describe("surface slot frame", () => {
-  it("declares seven kinds and renders the first two", () => {
+  it("declares seven kinds and renders three of them", () => {
     expect(Object.keys(rendered)).toHaveLength(7);
     expect(
       Object.entries(rendered)
         .filter(([, hasRenderer]) => hasRenderer)
         .map(([kind]) => kind)
-    ).toEqual(["tool_display", "file_preview"]);
+    ).toEqual(["tool_display", "file_preview", "inbox_item"]);
   });
 
   it("renders a tool display and a file preview with their own actions", () => {
@@ -77,7 +76,7 @@ describe("surface slot frame", () => {
     }
   });
 
-  it.each(["page", "app_view", "app_edit", "workflow_canvas", "inbox_item"])(
+  it.each(["page", "app_view", "app_edit", "workflow_canvas"])(
     "shows the frame with a sentence for %s, which has no renderer",
     (kind) => {
       const surface = bareSurface(kind);
@@ -114,6 +113,25 @@ describe("surface slot frame", () => {
     expect(markup).toContain("Show chat");
     expect(markup).not.toContain("fullscreen");
     expect(markup).not.toContain("Close display panel");
+  });
+
+  // Fails without `under`: the frame knew the chat as the only thing a surface covers.
+  it("names what an area's surface covers when that is not the chat", () => {
+    const markup = renderToStaticMarkup(
+      createElement(SurfaceSlotFrame, {
+        surface: toolDisplay,
+        mode: "covering",
+        under: { label: "Show list", icon: createElement("i", { "data-under-icon": "" }) },
+        onClose() {},
+        onShowChat() {},
+        onToggleFullscreen() {}
+      })
+    );
+
+    expect(markup).toContain("Show list");
+    expect(markup).toContain("data-under-icon");
+    expect(markup).not.toContain("Show chat");
+    expect(markup).not.toContain("lucide-message-square");
   });
 
   it("puts the header slots in one order", () => {

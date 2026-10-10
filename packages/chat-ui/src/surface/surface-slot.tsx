@@ -6,7 +6,8 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type PointerEvent
+  type PointerEvent,
+  type ReactNode
 } from "react";
 import { Maximize2, MessageSquare, Minimize2, X } from "lucide-react";
 import { Button, cn, EmptyState, IconButton, SurfaceFrame } from "@vivd-catalyst/ui";
@@ -34,6 +35,25 @@ const SPLIT_KEY_STEP = 16;
  */
 export type SurfaceSlotMode = "beside" | "covering" | "fullscreen";
 
+/** Where an area's slot takes its surface from when the area holds it itself, as a route does. */
+export interface SurfaceSlotSource {
+  surface: Surface | undefined;
+  close(): void;
+}
+
+/** What lies under a surface that covers the main area: the button that brings it back. */
+export interface SurfaceSlotUnder {
+  label: string;
+  icon: ReactNode;
+}
+
+/** What the slot shows beside the main side while it holds no surface. */
+export interface SurfaceSlotIdle {
+  /** The kind whose width the empty slot takes, so opening a surface moves nothing. */
+  kind: SurfaceKind;
+  content: ReactNode;
+}
+
 /**
  * The one place a surface is shown. It sits beside the conversation while both sides keep their
  * minimum, and covers the main area below that. Its width is free, is kept per surface kind and
@@ -41,16 +61,25 @@ export type SurfaceSlotMode = "beside" | "covering" | "fullscreen";
  */
 export function SurfaceSlot({
   renderers = surfaceRenderers,
+  source,
+  under,
+  idle,
   onBesideWidthChange,
   onCoveringChange
 }: {
   renderers?: SurfaceRenderers;
-  /** Told how much of the main area the surface takes beside the conversation; 0 otherwise. */
+  /** The surface of an area that holds it itself. Without it the slot shows what a card opened. */
+  source?: SurfaceSlotSource;
+  /** What the surface covers. Without it that is the chat. */
+  under?: SurfaceSlotUnder;
+  /** Shown beside the main side while there is no surface. Without it the empty slot is gone. */
+  idle?: SurfaceSlotIdle;
+  /** Told how much of the main area the slot takes beside the conversation; 0 otherwise. */
   onBesideWidthChange?: (width: number) => void;
   /** Told whether the surface covers the main area, so what lies under it can go inert. */
   onCoveringChange?: (covering: boolean) => void;
 }) {
-  const { close, entry, open } = useToolDisplayPanel();
+  const panel = useToolDisplayPanel();
   const { t } = useTranslation();
   const slotRef = useRef<HTMLElement | null>(null);
   const [mainWidth, setMainWidth] = useState<number | undefined>();
@@ -59,8 +88,13 @@ export function SurfaceSlot({
   const [chosenWidths, setChosenWidths] = useState<Partial<Record<SurfaceKind, number>>>({});
   const [fullscreen, setFullscreen] = useState(false);
   const [resizing, setResizing] = useState(false);
-  const surface = entry && open ? entry : undefined;
-  const kind = surface?.kind;
+  const surface = source ? source.surface : panel.entry && panel.open ? panel.entry : undefined;
+  const placement = surfacePlacement(mainWidth, splitMin);
+  // An empty slot shows only where it would stand beside the main side.
+  const idleContent =
+    !surface && idle && mainWidth !== undefined && placement === "beside" ? idle : undefined;
+  const kind = surface?.kind ?? idleContent?.kind;
+  const shown = Boolean(surface) || idleContent !== undefined;
   const maximumWidth = maxSurfaceWidth(mainWidth, splitMin);
   const storedWidth = useMemo(
     () =>
@@ -76,18 +110,23 @@ export function SurfaceSlot({
     mainWidth,
     splitMin
   );
-  const placement = surfacePlacement(mainWidth, splitMin);
   const mode: SurfaceSlotMode =
     placement === "covering" ? "covering" : fullscreen ? "fullscreen" : "beside";
-  const besideWidth = surface && mode === "beside" ? width : 0;
+  const besideWidth = shown && mode === "beside" ? width : 0;
   // Fullscreen hides the conversation as much as a narrow main area does.
   const covering = Boolean(surface) && mode !== "beside";
 
   // The reader closes the surface on the surface, so the focus goes back to what opened it.
+  const closeSource = source?.close;
+  const closePanel = panel.close;
   const closeSurface = useCallback(() => {
     setFullscreen(false);
-    close({ restoreFocus: true });
-  }, [close]);
+    if (closeSource) {
+      closeSource();
+    } else {
+      closePanel({ restoreFocus: true });
+    }
+  }, [closePanel, closeSource]);
 
   const chooseWidth = useCallback(
     (nextWidth: number): number | undefined => {
@@ -235,9 +274,9 @@ export function SurfaceSlot({
   return (
     <aside
       ref={slotRef}
-      hidden={!surface}
+      hidden={!shown}
       aria-label={surface?.title}
-      data-surface-kind={kind}
+      data-surface-kind={surface?.kind}
       data-surface-mode={surface ? mode : undefined}
       className={cn(
         "bg-card",
@@ -247,7 +286,7 @@ export function SurfaceSlot({
       )}
       style={mode === "beside" ? { width: `${width}px` } : undefined}
     >
-      {surface && mode === "beside" && mainWidth !== undefined ? (
+      {shown && mode === "beside" && mainWidth !== undefined ? (
         // The hairline between the two sides is the handle: 12 px wide to the pointer. It takes
         // the ring colour only while it is dragged or holds the keyboard focus.
         <div
@@ -273,11 +312,14 @@ export function SurfaceSlot({
           surface={surface}
           renderers={renderers}
           mode={mode}
+          under={under}
           onClose={closeSurface}
           onShowChat={mode === "fullscreen" ? () => setFullscreen(false) : closeSurface}
           onToggleFullscreen={() => setFullscreen((current) => !current)}
         />
-      ) : null}
+      ) : (
+        idleContent?.content
+      )}
     </aside>
   );
 }
@@ -285,12 +327,14 @@ export function SurfaceSlot({
 /**
  * The frame of the surface in the slot. Beside the conversation it offers fullscreen and close.
  * In fullscreen "Show chat" joins them. Covering the main area it offers "Show chat" alone,
- * because all three would do the same thing there.
+ * because all three would do the same thing there. An area that is not the chat names what its
+ * surface covers through `under`.
  */
 export function SurfaceSlotFrame({
   surface,
   renderers = surfaceRenderers,
   mode,
+  under,
   onClose,
   onShowChat,
   onToggleFullscreen
@@ -298,6 +342,7 @@ export function SurfaceSlotFrame({
   surface: Surface;
   renderers?: SurfaceRenderers;
   mode: SurfaceSlotMode;
+  under?: SurfaceSlotUnder;
   onClose: () => void;
   onShowChat: () => void;
   onToggleFullscreen: () => void;
@@ -311,8 +356,8 @@ export function SurfaceSlotFrame({
       leading={
         mode === "beside" ? undefined : (
           <Button variant="ghost" size="sm" onClick={onShowChat}>
-            <MessageSquare aria-hidden="true" />
-            {t("nav.showChat")}
+            {under?.icon ?? <MessageSquare aria-hidden="true" />}
+            {under?.label ?? t("nav.showChat")}
           </Button>
         )
       }

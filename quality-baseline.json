@@ -19,7 +19,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-floating-promises",
       "scope": "packages/chat-ui",
-      "count": 63,
+      "count": 62,
       "owner": "G-5c"
     },
     {
@@ -96,7 +96,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unnecessary-type-assertion",
       "scope": "tests",
-      "count": 106,
+      "count": 102,
       "owner": "CB-2"
     },
     {
@@ -424,13 +424,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/chat-ui/src/approvals/approval-request-card.tsx",
-      "count": 1,
-      "owner": "EW-1"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "packages/chat-ui/src/assistant/assistant-message.tsx",
       "count": 1,
       "owner": "G-5c"
@@ -551,13 +544,6 @@
       "target": "lint",
       "rule": "max-lines",
       "scope": "tests/chat-server-users.test.ts",
-      "count": 1,
-      "owner": "CB-2"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
-      "scope": "tests/chat-ui-approval-requests.test.ts",
       "count": 1,
       "owner": "CB-2"
     },

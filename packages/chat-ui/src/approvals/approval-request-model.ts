@@ -59,13 +59,6 @@ export function visibleApprovalChecks(
   return checks.filter((check) => check.status !== "passed");
 }
 
-/** History is everything that is no longer waiting, most recently touched first. */
-export function decidedApprovalRequests(requests: ApprovalRequestView[]): ApprovalRequestView[] {
-  return requests
-    .filter((request) => request.status !== "pending")
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-}
-
 /**
  * Withdrawing is the requester's way out while they wait for someone else. A
  * requester who may decide rejects instead: next to "reject" a second button
@@ -76,29 +69,6 @@ export function offersApprovalWithdraw(
   request: Pick<ApprovalRequestView, "canDecide" | "canWithdraw">
 ): boolean {
   return request.canWithdraw && !request.canDecide;
-}
-
-/**
- * `canRevert` lands on the view together with the rollback endpoint. Until the
- * contract carries it, the field is simply absent and rollback stays hidden.
- */
-export function canRevertApprovalRequest(request: object): boolean {
-  return "canRevert" in request && request.canRevert === true;
-}
-
-export interface ApprovalReversion {
-  revertedByLabel: string;
-  revertedAt: string;
-}
-
-/** Who rolled an accepted change back; read like `canRevert`, for the same reason. */
-export function readApprovalReversion(request: object): ApprovalReversion | undefined {
-  const reversion = "reversion" in request ? request.reversion : undefined;
-  return isRecord(reversion) &&
-    typeof reversion.revertedByLabel === "string" &&
-    typeof reversion.revertedAt === "string"
-    ? { revertedByLabel: reversion.revertedByLabel, revertedAt: reversion.revertedAt }
-    : undefined;
 }
 
 /** A decision on a request, as its origin conversation stores it in the history. */

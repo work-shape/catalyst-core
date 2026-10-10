@@ -2,9 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
   ApiError,
-  listAll,
   type ApiClient,
-  type ApprovalRequestStatus,
+  type ApprovalRequestView,
   type OperationInput
 } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
@@ -31,39 +30,41 @@ export const approvalRequestQueryKeys = {
     ["approval-requests", apiBaseUrl, authScope] as const,
   request: (apiBaseUrl: string, authScope: string, requestId: string) =>
     ["approval-requests", apiBaseUrl, authScope, "request", requestId] as const,
-  list: (apiBaseUrl: string, authScope: string, status: ApprovalRequestStatus | "all") =>
-    ["approval-requests", apiBaseUrl, authScope, "list", status] as const,
   pendingCount: (apiBaseUrl: string, authScope: string) =>
     ["approval-requests", apiBaseUrl, authScope, "pending-count"] as const
 };
 
-export function useApprovalRequestQuery(input: ApprovalRequestApiInput & { requestId: string }) {
+/** How one request stands on the page: on its way, absent, failed or there. */
+export type ApprovalRequestState =
+  | { status: "loading" }
+  /** Missing, or not visible to this user: the server does not tell the two apart. */
+  | { status: "not-found" }
+  | { status: "error"; onRetry(): void }
+  | { status: "ready"; request: ApprovalRequestView };
+
+export function approvalRequestState(
+  query: Pick<ReturnType<typeof useApprovalRequestQuery>, "data" | "error" | "isError" | "refetch">
+): ApprovalRequestState {
+  return query.data
+    ? { status: "ready", request: query.data }
+    : isApprovalRequestNotFound(query.error)
+      ? { status: "not-found" }
+      : query.isError
+        ? { status: "error", onRetry: () => void query.refetch() }
+        : { status: "loading" };
+}
+
+export function useApprovalRequestQuery(
+  input: ApprovalRequestApiInput & { requestId: string; enabled?: boolean }
+) {
   return useQuery({
     queryKey: approvalRequestQueryKeys.request(input.apiBaseUrl, input.authScope, input.requestId),
     queryFn: () => input.client.approval_requests.get({ params: { requestId: input.requestId } }),
+    enabled: input.enabled ?? true,
     // The card is the live state of a shared request: another approver may
     // have decided while this tab was in the background.
     refetchOnWindowFocus: true,
     retry: (failureCount, error) => !isApprovalRequestNotFound(error) && failureCount < 2
-  });
-}
-
-/** `status` omitted lists every status the reviewer may see, newest first. */
-export function useApprovalRequestListQuery(
-  input: ApprovalRequestApiInput & { status?: ApprovalRequestStatus; enabled: boolean }
-) {
-  return useQuery({
-    queryKey: approvalRequestQueryKeys.list(
-      input.apiBaseUrl,
-      input.authScope,
-      input.status ?? "all"
-    ),
-    queryFn: () =>
-      listAll((paging) =>
-        input.client.approval_requests.list({ query: { status: input.status, ...paging } })
-      ),
-    enabled: input.enabled,
-    refetchOnWindowFocus: true
   });
 }
 
@@ -170,7 +171,7 @@ export function useApprovalRequestActions(
   };
 }
 
-export function isApprovalRequestNotFound(error: unknown): boolean {
+function isApprovalRequestNotFound(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 404 || error.code === "NOT_FOUND");
 }
 

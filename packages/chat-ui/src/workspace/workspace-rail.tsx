@@ -1,10 +1,9 @@
-import { Blocks, ClipboardCheck, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
+import { Blocks, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import {
   Avatar,
   Button,
-  CountBadge,
   EmptyState,
   IconButton,
   NavGroup,
@@ -16,7 +15,12 @@ import {
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
-import { railSections, shownRailSections, type RailSection } from "./rail-sections";
+import {
+  railSections,
+  shownRailSections,
+  type RailSection,
+  type RailSectionsGiven
+} from "./rail-sections";
 import type { WorkspaceRouteView } from "./workspace-route";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
@@ -35,8 +39,8 @@ interface WorkspaceRailProps {
   canViewAdministration: boolean;
   /** The viewer may open Build: the rail shows its row above the account row. */
   canViewBuild?: boolean;
-  /** Present only for users who may review Approval Requests. */
-  approvals?: { pendingCount: number };
+  /** Present for a person who may decide requests or has made one: the Inbox row shows. */
+  inbox?: RailSectionsGiven["inbox"];
   view: WorkspaceView;
   deletingConversation: boolean;
   canMoveConversation: boolean;
@@ -58,12 +62,12 @@ interface WorkspaceRailProps {
 
 /**
  * The frame's navigation: the workspace selector with search and collapse, New chat, the
- * section rows, the conversations under "Recent", and a footer with the account menu, the
- * approvals and the settings. Collapsed it is a strip of icons; under 768 px it is a drawer.
+ * section rows, the conversations under "Recent", and a footer with the account menu and the
+ * settings. Collapsed it is a strip of icons; under 768 px it is a drawer.
  */
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
-  const sections = shownRailSections(props.sections ?? railSections);
+  const sections = shownRailSections(props.sections ?? railSections, { inbox: props.inbox });
 
   return (
     <Sidebar
@@ -83,6 +87,7 @@ function RailHeader({
   config,
   collaborationWorkspaceSelector,
   sections,
+  inbox,
   view,
   collapsed,
   onToggleCollapsed,
@@ -125,16 +130,23 @@ function RailHeader({
   const sectionRows =
     sections.length === 0 ? null : (
       <NavGroup className={iconsOnly ? undefined : "mt-4"}>
-        {sections.map((section) => (
-          <NavItem
-            key={section.id}
-            icon={<section.icon aria-hidden="true" />}
-            selected={view === section.view}
-            onClick={() => onViewChange(section.view)}
-          >
-            {t(section.label)}
-          </NavItem>
-        ))}
+        {sections.map((section) => {
+          const count = section.count?.({ inbox }) ?? 0;
+          return (
+            <NavItem
+              key={section.id}
+              icon={<section.icon aria-hidden="true" />}
+              selected={view === section.view}
+              count={count > 0 ? count : undefined}
+              aria-label={
+                count > 0 && section.countLabel ? t(section.countLabel, { count }) : undefined
+              }
+              onClick={() => onViewChange(section.view)}
+            >
+              {t(section.label)}
+            </NavItem>
+          );
+        })}
       </NavGroup>
     );
 
@@ -263,37 +275,13 @@ function RecentSkeleton() {
 function RailFooter({
   canViewAdministration,
   canViewBuild = false,
-  approvals,
   view,
   accountMenu,
   onViewChange
 }: WorkspaceRailProps) {
   const { t } = useTranslation();
   const iconsOnly = useSidebarCollapsed();
-  const approvalsLabel =
-    view === "approvals"
-      ? t("returnToChat")
-      : approvals && approvals.pendingCount > 0
-        ? t("openApprovalsPending", { count: approvals.pendingCount })
-        : t("openApprovals");
   const activeClassName = "bg-state-selected text-foreground hover:bg-state-selected";
-  const approvalsButton = approvals ? (
-    <IconButton
-      className={view === "approvals" ? activeClassName : undefined}
-      label={approvalsLabel}
-      aria-pressed={view === "approvals"}
-      onClick={() => onViewChange(view === "approvals" ? "chat" : "approvals")}
-    >
-      <ClipboardCheck aria-hidden="true" />
-      {approvals.pendingCount > 0 ? (
-        <CountBadge
-          count={approvals.pendingCount}
-          className="absolute -top-0.5 -right-0.5"
-          aria-hidden="true"
-        />
-      ) : null}
-    </IconButton>
-  ) : null;
   const settingsButton = canViewAdministration ? (
     <IconButton
       className={view === "settings" ? activeClassName : undefined}
@@ -319,7 +307,6 @@ function RailFooter({
     return (
       <div className="grid justify-items-center gap-0.5">
         {buildRow}
-        {approvalsButton}
         {settingsButton}
         {accountMenu}
       </div>
@@ -330,7 +317,6 @@ function RailFooter({
       {buildRow ? <div className="pb-2">{buildRow}</div> : null}
       <div className="flex min-w-0 items-center gap-1">
         {accountMenu}
-        {approvalsButton}
         {settingsButton}
       </div>
     </>

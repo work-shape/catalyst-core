@@ -8,6 +8,7 @@ import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { conversation } from "./conversation";
 import { files } from "./files";
+import { inbox } from "./inbox";
 import { navigation } from "./navigation";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
@@ -29,6 +30,7 @@ export const translations = combineTranslations(common)
   .and(configAssets)
   .and(conversation)
   .and(files)
+  .and(inbox)
   .and(navigation)
   .and(settings)
   .and(signIn)

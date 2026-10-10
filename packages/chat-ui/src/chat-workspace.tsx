@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { cn, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
-import { ApprovalsView } from "./approvals/approvals-view";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
@@ -10,6 +9,7 @@ import { CollaborationWorkspacePanel } from "./collaboration-workspace/collabora
 import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider, useTranslation } from "./i18n";
+import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
@@ -132,7 +132,9 @@ function ChatWorkspaceContent({
   });
   const displayPanel = useToolDisplayPanel();
   // The slot reports its placement a render late; a surface that has closed covers nothing at once.
-  const chatCovered = surfaceCovering && displayPanel.open;
+  const inboxRoute = model.route.view === "inbox" ? model.route.route : undefined;
+  const chatCovered =
+    surfaceCovering && (inboxRoute ? inboxRoute.kind === "inbox-item" : displayPanel.open);
   const resourcesVisible = resourcesPanel.open && !displayPanel.open;
   const showsLogin = model.auth.loginRequired || Boolean(passwordSetupToken);
   const themeMode = model.config.resolvedThemeMode;
@@ -238,7 +240,6 @@ function ChatWorkspaceContent({
   );
   const chat = model.selectedChat;
   const collaborationWorkspace = model.collaborationWorkspace;
-  const approvals = model.conversationRail.approvals;
   const userLabel = model.auth.user.displayLabel || (model.auth.user.email ?? "");
   const collaborationWorkspaceSelector = collaborationWorkspacesAvailable ? (
     <CollaborationWorkspaceSelector
@@ -303,7 +304,7 @@ function ChatWorkspaceContent({
             selectedConversationId={rail.selectedConversationId}
             canViewAdministration={rail.canViewAdministration}
             canViewBuild={model.controlPlane.canViewBuild}
-            approvals={approvals}
+            inbox={rail.inbox}
             view={rail.view}
             deletingConversation={rail.deletingConversation}
             canMoveConversation={rail.canMoveConversation}
@@ -335,7 +336,8 @@ function ChatWorkspaceContent({
               surfaceBesideWidth={surfaceBesideWidth}
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
-              showAgentSelector={!onStartPage}
+              // The Inbox is not a conversation: there is no agent to choose.
+              showAgentSelector={!onStartPage && !inboxRoute}
               onSelectAgent={model.config.selectAgentName}
               onOpenSidebar={model.chrome.openSidebarDrawer}
             />
@@ -362,9 +364,15 @@ function ChatWorkspaceContent({
             <ApprovalRevisionHostProvider value={model.approvalRevision}>
               <ControlPlaneRoutes
                 controlPlane={model.controlPlane}
-                approvalsView={
-                  approvals && model.route.view === "approvals" ? (
-                    <ApprovalsView pendingCount={approvals.pendingCount} />
+                inboxArea={
+                  inboxRoute ? (
+                    <InboxArea
+                      itemId={inboxRoute.kind === "inbox-item" ? inboxRoute.itemId : undefined}
+                      onOpenItem={(itemId) => model.route.showRoute({ kind: "inbox-item", itemId })}
+                      onCloseItem={() => model.route.showRoute({ kind: "inbox" })}
+                      onBesideWidthChange={setSurfaceBesideWidth}
+                      onCoveringChange={setSurfaceCovering}
+                    />
                   ) : undefined
                 }
               >

@@ -19,6 +19,10 @@ export interface ApprovalRevisionHost {
    * could not be sent is left in the composer for the reviewer to send.
    */
   startRevision(input: ApprovalRevisionStart): void;
+  /** The name an agent shows under, or nothing for an agent this person does not see. */
+  agentDisplayName(agentName: string): string | undefined;
+  /** Opens a conversation of the person's own, such as the one a request of theirs came from. */
+  openConversation(conversationId: string): void;
 }
 
 export interface ApprovalRevisionStart {

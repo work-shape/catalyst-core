@@ -3,7 +3,6 @@
 
   ],
   "counts": {
-    "packages/chat-ui/src/approvals/approvals-view.tsx": {"elements":1},
     "packages/chat-ui/src/approvals/skill-change-body.tsx": {"font-size":1},
     "packages/chat-ui/src/artifact-download-card.tsx": {"palette":1,"font-size":1},
     "packages/chat-ui/src/artifact-preview-live.tsx": {"palette":2},

@@ -100,6 +100,22 @@ Full message access should require:
 - reason capture
 - audit event
 
+## Inbox
+
+The Inbox is where a person finds what waits for a decision. It is a section of the sidebar, below Chat, at `/inbox`. The older address `/approvals` leads there.
+
+The sidebar shows the Inbox to a person who may decide a kind of Approval Request, and to a person who has made a request. The number beside it counts the pending requests that person can decide. It does not count unread items.
+
+The Inbox has three lists:
+
+- **To decide**: the pending requests the person can decide, oldest first.
+- **My requests**: the requests the person made, in every state, with who decided and the comment.
+- **Decided**: the requests of the kinds the person may decide that were decided in the last 30 days. An accepted change is undone from here.
+
+To decide and Decided need a right to decide, such as `agent_skills.approve` for skill changes. A person without one sees their own requests as a single list. Every signed-in person can read their own requests through `approval_requests.list_mine`; `approval_requests.list` stays with the people who may decide.
+
+Opening a row shows the request beside the list at `/inbox/<id>`. A decision is made there or on the card in the conversation; both read and change the same Approval Request. Who may decide is answered by the server for each request.
+
 ## Deletion
 
 Support deletion as a product workflow, not a manual database habit.
