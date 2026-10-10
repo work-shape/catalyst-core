@@ -6,6 +6,7 @@ import {
 } from "@vivd-catalyst/api-client";
 import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 import { sha256Base64 } from "./sha256";
+import { writeStaticViewBody } from "./static-view-html";
 
 // The document a generated view runs in. A stored view is the model's HTML and nothing else;
 // its head, with the content policy, the default theme, the view runtime and the bootstrap
@@ -18,9 +19,11 @@ export type ViewDisplayKind = "html.rendered" | "private_hydrated_view";
 /**
  * Whether a view that holds private rows runs scripts. It does not, because a script can send
  * packets to any host over WebRTC and no browser lets a document forbid that. Without scripts
- * such a view shows its HTML and CSS alone: a template that draws its rows with a script
- * shows none of them, and the frame keeps a fixed height and scrolls, since nothing in it can
- * report its height. Set to true, these views run their inline scripts again, as they did.
+ * such a view is static: its body is written anew from an allowlist of elements and
+ * attributes (`static-view-html.ts`), and the frame keeps a fixed height and scrolls, since
+ * nothing in it can report its height. Set to true, these views run their inline scripts
+ * again and their stored HTML is shown as it is. The tool that makes such views then has to
+ * stop escaping the rows it places.
  */
 const PRIVATE_ROW_VIEWS_RUN_SCRIPTS: boolean = false;
 
@@ -86,6 +89,9 @@ export function viewShellUrl(apiBaseUrl: string, pageUrl: string): string {
  * stored HTML is merged by the parser.
  */
 export function composeViewDocument(input: ViewDocumentInput): string {
+  if (!viewRunsScripts(input.kind)) {
+    return `<!doctype html><html><head>${createStaticHead()}</head>\n<body>${writeStaticViewBody(input.html)}</body></html>`;
+  }
   const html = stripLegacyRuntimeTags(stripContentSecurityPolicyMeta(input.html));
   const head = createHead(input, collectInlineScriptHashSources(html));
   return `<!doctype html><html><head>${head}</head>\n${html}`;
@@ -150,6 +156,16 @@ const DISPLAY_HEIGHT_SCRIPT = `(()=>{const t="${VIEW_SHELL_MESSAGES.height}";let
 // view holding private rows runs no script at all.
 const WEBRTC_REMOVAL_SCRIPT =
   'for(const name of ["RTCPeerConnection","webkitRTCPeerConnection","mozRTCPeerConnection"]){try{delete window[name]}catch{}}';
+// Hardening, not a boundary. A link in a view leads nowhere: the shell refuses the address.
+// But a click with a modifier key or the middle button opens the address in a new tab or
+// downloads it, outside the frame, and the request leaves. So a link, an image map area and
+// an SVG link lose their address as soon as they are in the document, whoever put them
+// there, and a click on one that still has an address is cancelled before the browser acts
+// on it. Every address goes, `#fragment` too: in a `srcdoc` frame the browser resolves it
+// against the address of the shell, and the shell's refusal replaces the view. A script of
+// the view can undo all of this, for example in a frame it writes itself.
+const LINK_REMOVAL_SCRIPT =
+  '(()=>{const names=["href","xlink:href","ping"];function isLink(node){return node.nodeType===1&&(node.localName==="a"||node.localName==="area")}function strip(node){if(isLink(node)){for(const name of names){node.removeAttribute(name)}}}function sweep(node){strip(node);if(node.nodeType===1){for(const link of node.querySelectorAll("a,area")){strip(link)}}}new MutationObserver((records)=>{for(const record of records){if(record.type==="attributes"){if(record.target.hasAttribute(record.attributeName)){strip(record.target)}}else{for(const node of record.addedNodes){sweep(node)}}}}).observe(document,{subtree:true,childList:true,attributes:true,attributeFilter:names});function cancel(event){if(event.composedPath().some((node)=>isLink(node)&&names.some((name)=>node.hasAttribute(name)))){event.preventDefault()}}window.addEventListener("click",cancel,true);window.addEventListener("auxclick",cancel,true)})();';
 // Tells the host that the content policy refused a script file, so it can say so above the
 // frame. Inline handlers and data addresses are refused silently, as before.
 const BLOCKED_SCRIPT_REPORT_SCRIPT = `document.addEventListener("securitypolicyviolation",function(event){if(event.effectiveDirective==="script-src-elem"&&/^https?:/.test(event.blockedURI)){parent.postMessage({type:"${VIEW_SHELL_MESSAGES.blocked}"},"*")}});`;
@@ -206,22 +222,25 @@ const CLOSED_DIRECTIVES = [
   "form-action 'none'"
 ];
 
+const HEAD_OPENING = [
+  '<meta charset="utf-8">',
+  '<meta name="viewport" content="width=device-width, initial-scale=1">',
+  DEFAULT_THEME_STYLE
+];
+
+/** The head of a view that runs no script. Its frame runs none; the policy says so again. */
+function createStaticHead(): string {
+  const policy = ["default-src 'none'", "script-src 'none'", ...CLOSED_DIRECTIVES].join("; ");
+  return [`<meta http-equiv="Content-Security-Policy" content="${policy}">`, ...HEAD_OPENING].join(
+    "\n"
+  );
+}
+
 function createHead(input: ViewDocumentInput, inlineScriptHashSources: string[]): string {
-  const opening = [
-    '<meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    DEFAULT_THEME_STYLE
-  ];
-  if (!viewRunsScripts(input.kind)) {
-    // The frame of this view runs no script; the policy says so a second time.
-    const policy = ["default-src 'none'", "script-src 'none'", ...CLOSED_DIRECTIVES].join("; ");
-    return [`<meta http-equiv="Content-Security-Policy" content="${policy}">`, ...opening].join(
-      "\n"
-    );
-  }
   const runtime = input.kind === "html.rendered" ? input.runtime : undefined;
   const scripts = [
     WEBRTC_REMOVAL_SCRIPT,
+    LINK_REMOVAL_SCRIPT,
     BLOCKED_SCRIPT_REPORT_SCRIPT,
     ...(runtime ? [TAILWIND_THEME_SCRIPT, LUCIDE_SCRIPT] : []),
     THEME_HELPER_SCRIPT,
@@ -246,8 +265,9 @@ function createHead(input: ViewDocumentInput, inlineScriptHashSources: string[])
     // The policies are the first elements of the document: nothing is parsed before they apply.
     `<meta http-equiv="Content-Security-Policy" content="${policy}">`,
     `<meta http-equiv="Content-Security-Policy" content="${scriptFilePolicy}">`,
-    ...opening,
+    ...HEAD_OPENING,
     `<script>${WEBRTC_REMOVAL_SCRIPT}</script>`,
+    `<script>${LINK_REMOVAL_SCRIPT}</script>`,
     `<script>${BLOCKED_SCRIPT_REPORT_SCRIPT}</script>`,
     ...(runtime
       ? [

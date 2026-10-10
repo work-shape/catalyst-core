@@ -35,6 +35,8 @@ export function registerViewShellRoutes(
           viewShellContentPolicy(options.config.views.allowedScriptSrc)
         )
         .header("cache-control", `public, max-age=${VIEW_SHELL_MAX_AGE_SECONDS}`)
+        // The answer depends on what the request is for, so a cache keeps one per destination.
+        .header("vary", "Sec-Fetch-Dest")
         .header("x-content-type-options", "nosniff")
         .header("referrer-policy", "no-referrer")
         // The shell has no origin of its own, so the load of its script is cross-origin.

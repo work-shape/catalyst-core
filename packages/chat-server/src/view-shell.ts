@@ -22,8 +22,13 @@ export function viewShellContentPolicy(allowedScriptSrc: readonly string[]): str
   return [
     "sandbox allow-scripts",
     "default-src 'none'",
-    // 'self' is the shell's script and the view runtime. Inline scripts and eval are a view's:
-    // its own policy holds inline scripts to the hashed ones, and the Tailwind compiler evaluates.
+    // 'self' is the shell's script and the view runtime. It is the whole origin and not their
+    // two directories: 'self' takes no path, and a source with a path needs the public host
+    // of the instance, which the API knows only from the Host header of a request. A proxy
+    // that hands on another one would then have every view refuse its runtime. The view's own
+    // policy names the runtime directory with the address the interface loads it from.
+    // Inline scripts and eval are a view's: its own policy holds inline scripts to the hashed
+    // ones, and the Tailwind compiler evaluates.
     `script-src ${["'self'", "'unsafe-inline'", "'unsafe-eval'", ...allowedScriptSrc].join(" ")}`,
     "style-src 'unsafe-inline'",
     "img-src data: blob:",

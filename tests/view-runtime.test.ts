@@ -155,6 +155,7 @@ describe("view shell", () => {
       "content-type": "text/html; charset=utf-8",
       "content-security-policy": shellPolicy,
       "cache-control": "public, max-age=300",
+      vary: expect.stringContaining("Sec-Fetch-Dest"),
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
       "cross-origin-resource-policy": "cross-origin"
@@ -178,6 +179,7 @@ describe("view shell", () => {
     expect(response.headers).toMatchObject({
       "content-type": "text/javascript; charset=utf-8",
       "content-security-policy": shellPolicy,
+      vary: expect.stringContaining("Sec-Fetch-Dest"),
       "x-content-type-options": "nosniff"
     });
     for (const type of Object.values(VIEW_SHELL_MESSAGES)) {

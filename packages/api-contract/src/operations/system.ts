@@ -43,8 +43,9 @@ export const systemOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  // Beside the view runtime and for the same reason outside `/api`: the address of a frame,
-  // called without credentials. It answers a frame only.
+  // Beside the view runtime and for the same reason outside `/api`: the address of a frame.
+  // It reads no credentials and answers everyone the same. A browser may still attach cookies
+  // of the instance to the request. It answers a frame only.
   "view_shell.files.get": defineOperation({
     id: "view_shell.files.get",
     method: "GET",

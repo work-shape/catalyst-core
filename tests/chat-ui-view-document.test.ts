@@ -134,9 +134,27 @@ describe("composed view document", () => {
     // Its frame runs no script. The policy says so too, and the composer writes none.
     expect(readCspDirective(html, "script-src")).toEqual(["'none'"]);
     expect(html.match(policyPattern)).toHaveLength(1);
-    expect(countOccurrences(html, "<script")).toBe(countOccurrences(stored, "<script"));
     expect(readCsp(html)).toContain("connect-src 'none'");
     expect(html.startsWith(composedOpening)).toBe(true);
+    // No stored byte is handed on as it is: the body is written from the parsed tree alone.
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain(stored);
+    expect(html.endsWith("</head>\n<body></body></html>")).toBe(true);
+  });
+
+  it("takes the address from every link of a view that runs scripts, as hardening only", () => {
+    const html = compose('<a href="https://elsewhere.example.test/?rows=1">Open</a>');
+    const linkScript = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gu)]
+      .map((match) => match[1] ?? "")
+      .find((script) => script.includes("MutationObserver"));
+
+    expect(linkScript).toContain('["href","xlink:href","ping"]');
+    expect(linkScript).toContain('querySelectorAll("a,area")');
+    for (const event of ["click", "auxclick"]) {
+      expect(linkScript).toContain(`window.addEventListener("${event}",cancel,true)`);
+    }
+    // It stands before the stored HTML, so it watches every element the parser adds.
+    expect(html.indexOf(linkScript ?? "")).toBeLessThan(html.indexOf("<a href="));
   });
 
   it("replaces a content policy the stored HTML carries and hashes its inline scripts", () => {
@@ -217,21 +235,16 @@ describe("composed view document", () => {
       `<html><title><head></title><script src="${outsideScript}"></script><body>x</body></html>`
     ]
   ])("puts the policy before every byte of the stored HTML: %s", (_name, stored) => {
-    for (const kind of ["html.rendered", "private_hydrated_view"] as const) {
-      const html = compose(stored, { kind });
+    const html = compose(stored);
 
-      expect(html.startsWith(composedOpening)).toBe(true);
-      // A view that runs scripts has a second policy for script files; the other needs none.
-      expect(countOccurrences(html, "Content-Security-Policy")).toBe(
-        kind === "html.rendered" ? 2 : 1
-      );
-      // The stored HTML follows the closed head, byte for byte.
-      expect(html.slice(html.indexOf("</head>\n") + "</head>\n".length)).toBe(stored);
-      expect(html.indexOf(composedOpening)).toBeLessThan(html.indexOf(stored));
-      expect(sourcesOf(readCspDirective(html, "script-src"))).not.toContain(
-        new URL(outsideScript).origin
-      );
-    }
+    expect(html.startsWith(composedOpening)).toBe(true);
+    expect(countOccurrences(html, "Content-Security-Policy")).toBe(2);
+    // The stored HTML follows the closed head, byte for byte.
+    expect(html.slice(html.indexOf("</head>\n") + "</head>\n".length)).toBe(stored);
+    expect(html.indexOf(composedOpening)).toBeLessThan(html.indexOf(stored));
+    expect(sourcesOf(readCspDirective(html, "script-src"))).not.toContain(
+      new URL(outsideScript).origin
+    );
   });
 
   it("provides semantic status and chart theme colors to Tailwind and the default theme", () => {
