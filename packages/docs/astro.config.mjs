@@ -29,12 +29,21 @@ export default defineConfig({
   markdown: { rehypePlugins: [rehypeBaseLinks] },
   integrations: [
     starlight({
-      title: "Workshape Catalyst Operator Docs",
+      title: "Workshape Catalyst",
       description:
         "Documentation for configuring, extending, and running dedicated Workshape Catalyst client instances.",
+      // The mark is the application's own: the file the chat interface ships as its favicon.
+      logo: { src: "./public/favicon.svg", alt: "" },
+      customCss: ["./src/styles/theme.css"],
+      // Code is highlighted with the themes the chat interface uses, on the site's own surfaces.
+      expressiveCode: {
+        themes: ["github-dark", "github-light"],
+        useStarlightUiThemeColors: true,
+        styleOverrides: { borderRadius: "8px" }
+      },
       sidebar: [
         {
-          label: "Start Here",
+          label: "Get started",
           items: [
             "getting-started/overview",
             "getting-started/operating-models",
@@ -43,7 +52,7 @@ export default defineConfig({
           ]
         },
         {
-          label: "Configure A Client Instance",
+          label: "Configure",
           items: [
             "configure/client-assembly",
             "configure/release-config",
@@ -53,30 +62,34 @@ export default defineConfig({
           ]
         },
         {
-          label: "Extend The Agent",
+          label: "Extend",
           items: ["extend/custom-tools", "extend/openapi-tools"]
         },
         {
-          label: "Run And Govern",
+          label: "Operate",
           items: [
+            "operate/instance-brief",
             "operate/deployment",
-            "operate/config-asset-migration",
-            "operate/execution-workspaces",
-            "operate/runner-security",
             "operate/auth-and-embedding",
             "operate/governance",
             "operate/rights-and-namespaces",
-            "operate/instance-brief"
+            "operate/execution-workspaces",
+            "operate/runner-security",
+            "operate/config-asset-migration"
           ]
         },
         {
-          // Written by scripts/generate-api-reference.mjs from the release's OpenAPI document.
-          label: "API Reference",
-          items: [{ autogenerate: { directory: "reference/api" } }]
-        },
-        {
           label: "Reference",
-          items: ["reference/current-status", "reference/glossary"]
+          items: [
+            "reference/current-status",
+            "reference/glossary",
+            {
+              // Written by scripts/generate-api-reference.mjs from the release's OpenAPI document.
+              label: "API",
+              collapsed: true,
+              items: [{ autogenerate: { directory: "reference/api" } }]
+            }
+          ]
         }
       ]
     })
