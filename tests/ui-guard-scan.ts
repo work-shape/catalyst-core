@@ -34,7 +34,7 @@ export const uiGuardHints: Record<UiGuardCategory, string> = {
   "overlay-imports":
     "Import the component from @vivd-catalyst/ui. Only the library imports radix-ui and cmdk.",
   "library-imports":
-    "The library imports only react, react-dom, radix-ui, cmdk, lucide-react, class-variance-authority, clsx, tailwind-merge and its own files.",
+    "The library imports only react, react-dom, radix-ui, cmdk, lucide-react, class-variance-authority, clsx, tailwind-merge and its own files. Only data/chart-engine.ts imports echarts.",
   "library-storage": "The library keeps nothing in storage and loads nothing.",
   "library-text":
     "The library shows no text of its own: take it as a prop or from the UiRoot labels."
@@ -54,6 +54,10 @@ const LIBRARY_IMPORTS = new Set([
   "clsx",
   "tailwind-merge"
 ]);
+/** A package one library file wraps, so that no other file and no caller sees it. */
+const LIBRARY_ENGINE_IMPORTS: Readonly<Record<string, string>> = {
+  "packages/ui/src/data/chart-engine.ts": "echarts"
+};
 const STORAGE_NAMES = new Set([
   "localStorage",
   "sessionStorage",
@@ -172,6 +176,15 @@ function scanSource(file: string, text: string, findings: UiGuardFinding[]): voi
       // An import holds no class names, so its strings are not scanned.
       return;
     }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      scanImport(node, node.arguments[0].text);
+      return;
+    }
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const name = node.tagName.getText(source);
       if (!inLibrary && RAW_ELEMENTS.has(name)) {
@@ -207,7 +220,9 @@ function scanSource(file: string, text: string, findings: UiGuardFinding[]): voi
       add(node, "overlay-imports", specifier);
     }
     const packageName = specifier.split("/")[0] ?? specifier;
-    if (inLibrary && !specifier.startsWith(".") && !LIBRARY_IMPORTS.has(packageName)) {
+    const isAllowed =
+      LIBRARY_IMPORTS.has(packageName) || LIBRARY_ENGINE_IMPORTS[file] === packageName;
+    if (inLibrary && !specifier.startsWith(".") && !isAllowed) {
       add(node, "library-imports", specifier);
     }
   };

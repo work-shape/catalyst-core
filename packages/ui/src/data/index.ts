@@ -1,3 +1,14 @@
+export { Chart, type ChartProps } from "./chart";
+export {
+  CHART_MAX_ROWS,
+  CHART_MAX_SERIES,
+  ChartFieldError,
+  type ChartData,
+  type ChartFormat,
+  type ChartRow,
+  type ChartSeries
+} from "./chart-data";
+export type { ChartType } from "./chart-engine";
 export { FilterBar, type FilterBarProps } from "./filter-bar";
 export {
   KeyValue,

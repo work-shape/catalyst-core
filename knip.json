@@ -17,7 +17,12 @@
       "vite": false
     },
     "packages/ui": {
-      "entry": ["src/index.ts", "src/theme/index.ts", "src/gallery/index.tsx"],
+      "entry": [
+        "src/index.ts",
+        "src/theme/index.ts",
+        "src/gallery/index.tsx",
+        "src/data/chart-engine.ts"
+      ],
       "project": ["src/**/*.{ts,tsx}"],
       "vite": false
     },

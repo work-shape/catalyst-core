@@ -34,6 +34,11 @@
       "development": "./src/gallery/index.tsx",
       "import": "./dist/gallery/index.js"
     },
+    "./chart-engine": {
+      "types": "./dist/data/chart-engine.d.ts",
+      "development": "./src/data/chart-engine.ts",
+      "import": "./dist/data/chart-engine.js"
+    },
     "./styles.css": "./src/styles.css"
   },
   "publishConfig": {
@@ -52,17 +57,22 @@
         "types": "./dist/gallery/index.d.ts",
         "import": "./dist/gallery/index.js"
       },
+      "./chart-engine": {
+        "types": "./dist/data/chart-engine.d.ts",
+        "import": "./dist/data/chart-engine.js"
+      },
       "./styles.css": "./src/styles.css"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/theme/index.ts src/gallery/index.tsx --format esm --dts --external react --external react-dom",
+    "build": "tsup src/index.ts src/theme/index.ts src/gallery/index.tsx src/data/chart-engine.ts --format esm --dts --external react --external react-dom",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "echarts": "6.1.0",
     "lucide-react": "^1.17.0",
     "radix-ui": "^1.6.2",
     "tailwind-merge": "^3.6.0"

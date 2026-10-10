@@ -325,8 +325,9 @@ describe("SurfaceFrame", () => {
 });
 
 describe("UI gallery", () => {
-  // The root is what the gallery's panels are, so it has no entry of its own.
-  const withoutEntry = new Set(["UiRoot"]);
+  // The root is what the gallery's panels are, and `ChartFieldError` is an error class, so
+  // neither has an entry of its own.
+  const withoutEntry = new Set(["UiRoot", "ChartFieldError"]);
   const exportedComponents = Object.entries(library)
     .filter(([name, value]) => /^[A-Z]/u.test(name) && isComponent(value))
     .map(([name]) => name)

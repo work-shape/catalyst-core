@@ -13,6 +13,7 @@ import { Badge } from "../status/badge";
 import { Samples, type GalleryGroup } from "./entry";
 import { EmptyState } from "../feedback/empty-state";
 import { Avatar } from "../status/avatar";
+import { chartGalleryEntry } from "./chart";
 import type { GalleryText } from "./text";
 
 const rowSizes: readonly ListRowSize[] = ["default", "compact"];
@@ -337,6 +338,7 @@ export const dataGallery: GalleryGroup = {
           ))}
         </div>
       )
-    }
+    },
+    chartGalleryEntry
   ]
 };
