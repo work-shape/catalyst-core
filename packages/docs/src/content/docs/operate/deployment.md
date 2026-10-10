@@ -171,7 +171,7 @@ Everything else goes to the interface. A deployment with its own proxy routes th
 
 `docker/Caddyfile` routes all of them.
 
-An address below `/app-content/` holds a token in its path: `/app-content/<file set>/<token>/<file>`. The token is a bearer capability. The API mints it after it has checked that the person may read the Page, and for one hour (`APP_CONTENT_TOKEN_TTL_SECONDS`) it serves the built files of that one revision to whoever holds the address. It is not bound to the person's session: signing out or losing access to the conversation does not end it before the hour is over.
+An address below `/app-content/` holds a token in its path: `/app-content/<file set>/<token>/<file>`. The token is a bearer capability. The API mints it after it has checked that the person may read the Page, and for one hour (`APP_CONTENT_TOKEN_TTL_SECONDS`) it serves the built files of that one revision to whoever holds the address, as long as that person may still read the Page. The API asks again every 30 seconds per address (`APP_CONTENT_VIEWER_CHECK_SECONDS`): once the account is deactivated or the person no longer reads the conversation, the address answers `404` at most 30 seconds later. It is not bound to the person's session: signing out does not end it before the hour is over.
 
 So no layer may write these addresses down:
 

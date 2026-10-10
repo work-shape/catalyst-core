@@ -83,7 +83,13 @@ export type {
 } from "./types";
 export { loadViewRuntimeFiles } from "./view-runtime";
 import { holdsAppContentToken } from "./app-content";
-export { APP_CONTENT_TOKEN_TTL_SECONDS, deriveAppContentKey } from "./app-content";
+export {
+  APP_CONTENT_TOKEN_TTL_SECONDS,
+  APP_CONTENT_VIEWER_CHECK_MAX_ENTRIES,
+  APP_CONTENT_VIEWER_CHECK_SECONDS,
+  createAppContentViewerChecks,
+  deriveAppContentKey
+} from "./app-content";
 export { storePageFileSet } from "./page-file-sets";
 export type { PageFileInput, StorePageFileSetInput } from "./page-file-sets";
 export { createInProcessRateLimiter } from "./http/rate-limit";

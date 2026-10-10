@@ -106,6 +106,11 @@ export interface FileSet extends FileSetSummary {
   builtFiles: FileSetFile[];
 }
 
+/** A file set as the content route reads it: with the conversation its Page belongs to. */
+export interface ServedFileSet extends FileSet {
+  conversationId: ConversationId;
+}
+
 /** What a caller hands over to store a file set. The store assigns the number. */
 export interface NewFileSet {
   id: FileSetId;
@@ -165,12 +170,13 @@ export interface PagesStore {
   /**
    * A file set by its id alone, for the content route, which knows nothing else. Only a file
    * set whose conversation is active is found: a deleted or expired conversation serves
-   * nothing, also before its cleanup ran.
+   * nothing, also before its cleanup ran. The conversation is named, because who may still be
+   * served is decided by who may read it.
    */
   getServedFileSet(input: {
     clientInstanceId: ClientInstanceId;
     fileSetId: FileSetId;
-  }): Promise<FileSet | undefined>;
+  }): Promise<ServedFileSet | undefined>;
   /** The Pages of a conversation whose rows are still there, for its cleanup. */
   listConversationPageIds(input: {
     clientInstanceId: ClientInstanceId;

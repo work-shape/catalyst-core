@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  asUserId,
+  authenticatedUserFromRecord,
   getSubjectUserId,
+  isAppError,
   isFileSetId,
   isPageId,
   normalizeAllowedOrigins,
@@ -11,7 +14,8 @@ import {
   type FileSetId,
   type FileSetSummary,
   type Page,
-  type PageId
+  type PageId,
+  type ServedFileSet
 } from "@vivd-catalyst/core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
@@ -22,6 +26,7 @@ import {
   appContentPath,
   checkAppContentToken,
   composePageShell,
+  createAppContentViewerChecks,
   holdsAppContentToken,
   isAppContentAddress,
   isHtmlContentType,
@@ -71,6 +76,37 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
       throw pageNotFound();
     }
     return page;
+  }
+
+  const viewerChecks = createAppContentViewerChecks();
+
+  /**
+   * Whether the user a content token names may read the Page's conversation now: the account
+   * is active and the conversation is one this user reads, by the rule of every other route.
+   */
+  async function viewerMayRead(viewerId: string, fileSet: ServedFileSet): Promise<boolean> {
+    const viewer = await options.stores.users.getUser({
+      clientInstanceId: options.clientInstanceId,
+      userId: asUserId(viewerId)
+    });
+    if (!viewer || viewer.status !== "active") {
+      return false;
+    }
+    try {
+      await conversations.requireConversationAccess(
+        fileSet.conversationId,
+        authenticatedUserFromRecord({
+          user: viewer,
+          identity: viewer.identities[0] ?? { authSource: "app-content", externalUserId: viewer.id }
+        })
+      );
+      return true;
+    } catch (error) {
+      if (isAppError(error) && error.code === "NOT_FOUND") {
+        return false;
+      }
+      throw error;
+    }
   }
 
   async function requireFileSet(pageId: PageId, fileSetId: string | undefined): Promise<FileSet> {
@@ -130,9 +166,9 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     };
   });
 
-  // The one place a caller's right to a Page is checked. The address it answers is then the
-  // whole authorization of every file request until it expires: a frame without an origin has
-  // no session to send. Whoever holds the address is served, so it is a secret for that long.
+  // Where a caller's right to a Page is checked with the caller present. A frame without an
+  // origin has no session to send, so the address this answers is all a file request carries:
+  // it is a secret until it expires, and it serves while its viewer may still read the Page.
   route(apiOperations["pages.preview"], async ({ user, params, body, reply }) => {
     const page = await requirePage(params, user);
     const fileSet = await requireFileSet(page.id, body.fileSetId);
@@ -173,6 +209,14 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
       fileSetId: address.fileSetId
     });
     if (!fileSet) {
+      throw contentRefusal("file_set_unknown");
+    }
+    // Every file request passes here, the document and each file it loads. A viewer who lost
+    // access is answered as if the file set were unknown.
+    const allowed = await viewerChecks.allows(address.token, nowSeconds, () =>
+      viewerMayRead(checked.claims.viewerId, fileSet)
+    );
+    if (!allowed) {
       throw contentRefusal("file_set_unknown");
     }
     const requested = address.path;

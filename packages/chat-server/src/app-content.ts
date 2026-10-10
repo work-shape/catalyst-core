@@ -14,10 +14,13 @@ import { z } from "zod";
 // Page therefore runs under the header below, loads its files from below the address of the
 // shell, and can navigate nowhere.
 //
-// The address holds a token. The token is a bearer capability: it is minted after the check
-// that a viewer may read the Page, it is valid for `APP_CONTENT_TOKEN_TTL_SECONDS`, and until
-// then it serves the built files of its one file set to whoever holds the address. It is not
-// bound to the viewer's session, and signing out or losing access does not end it early.
+// The address holds a token. It is minted after the check that a viewer may read the Page, it
+// is valid for `APP_CONTENT_TOKEN_TTL_SECONDS`, and it names that viewer. A request below the
+// address is served while the viewer it names may still read the Page: the account is active
+// and reads the conversation the Page belongs to. That is asked again for every token every
+// `APP_CONTENT_VIEWER_CHECK_SECONDS`, so an address stops serving at most that long after its
+// viewer lost access. While the viewer keeps access the address serves whoever holds it: it is
+// not bound to the viewer's sign-in session, and signing out does not end it early.
 
 /**
  * How long an address a frame was given stays valid, for anyone who holds it. A frame that
@@ -41,7 +44,7 @@ export interface AppContentClaims {
   fileSetId: FileSetId;
   /**
    * The user the address was minted for, after the check that this user may read the Page. A
-   * record of who asked, not a condition: no request is compared with it.
+   * condition of every answer: the address serves while this user may still read the Page.
    */
   viewerId: string;
   /** One mount of the frame. */
@@ -133,6 +136,58 @@ function readJson(text: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * How long the answer to "may the viewer of this token still read the Page" is kept. One Page
+ * load is many file requests, and they share one answer. It is also the longest an address
+ * keeps serving after its viewer lost access.
+ */
+export const APP_CONTENT_VIEWER_CHECK_SECONDS = 30;
+/**
+ * How many tokens an API process keeps an answer for. One entry is a token of about 200
+ * characters and a promise, so the map stays below about 10 MB. Past it the oldest answer
+ * goes, and the token it was for is asked about again with its next request.
+ */
+export const APP_CONTENT_VIEWER_CHECK_MAX_ENTRIES = 20_000;
+
+/** The kept answers of one API process. */
+export interface AppContentViewerChecks {
+  /**
+   * Whether the viewer of a verified token may still be served. `ask` reads the current state
+   * and is called at most once per token and window, also for requests that arrive together.
+   * A refusal is kept like a permission. An `ask` that fails is not kept.
+   */
+  allows(token: string, nowSeconds: number, ask: () => Promise<boolean>): Promise<boolean>;
+}
+
+export function createAppContentViewerChecks(): AppContentViewerChecks {
+  // In the order the answers were asked for, so the first entry is always the oldest.
+  const answers = new Map<string, { askedAt: number; allowed: Promise<boolean> }>();
+  return {
+    allows(token, nowSeconds, ask) {
+      const kept = answers.get(token);
+      // A clock that was set back does not make an answer last longer than its window.
+      if (kept && Math.abs(nowSeconds - kept.askedAt) < APP_CONTENT_VIEWER_CHECK_SECONDS) {
+        return kept.allowed;
+      }
+      answers.delete(token);
+      for (const oldest of answers.keys()) {
+        if (answers.size < APP_CONTENT_VIEWER_CHECK_MAX_ENTRIES) {
+          break;
+        }
+        answers.delete(oldest);
+      }
+      const entry = { askedAt: nowSeconds, allowed: ask() };
+      answers.set(token, entry);
+      void entry.allowed.catch(() => {
+        if (answers.get(token) === entry) {
+          answers.delete(token);
+        }
+      });
+      return entry.allowed;
+    }
+  };
 }
 
 const APP_CONTENT_SEGMENT = "app-content";

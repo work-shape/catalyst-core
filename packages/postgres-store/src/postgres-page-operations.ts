@@ -8,7 +8,8 @@ import {
   type FileSetSummary,
   type Page,
   type PageId,
-  type PagesStore
+  type PagesStore,
+  type ServedFileSet
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
@@ -207,9 +208,9 @@ export async function getPageFileSet(
 export async function getServedFileSet(
   db: PostgresConnection,
   input: Input<"getServedFileSet">
-): Promise<FileSet | undefined> {
+): Promise<ServedFileSet | undefined> {
   const [row] = await db
-    .select({ fileSet: fileSets, pageId: pages.id })
+    .select({ fileSet: fileSets, pageId: pages.id, conversationId: pages.conversationId })
     .from(fileSets)
     .innerJoin(
       pages,
@@ -231,7 +232,9 @@ export async function getServedFileSet(
       )
     )
     .limit(1);
-  return row ? mapFileSet(row.fileSet, row.pageId) : undefined;
+  return row
+    ? { ...mapFileSet(row.fileSet, row.pageId), conversationId: row.conversationId }
+    : undefined;
 }
 
 export async function listConversationPageIds(
