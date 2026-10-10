@@ -306,6 +306,16 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
     await expect(approverPage.getByTestId("operation-call")).toBeVisible();
   });
 
+  // The full view shows everything the call runs with, as it was frozen.
+  await approverPage.getByTestId("operation-call-full-input-open").click();
+  const fullInput = approverPage.getByRole("dialog", { name: "Full input" });
+  await expect(fullInput.getByTestId("operation-call-full-input")).toContainText(NOTE);
+  await shoot(approverPage, "inbox-operation-call-full-input", async () => {
+    await expect(fullInput).toBeVisible();
+  });
+  await approverPage.keyboard.press("Escape");
+  await expect(fullInput).toHaveCount(0);
+
   // In German the same item.
   await approverPage.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
   await approverPage.reload();
@@ -316,7 +326,7 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   await approverPage.reload();
   await expect(call).toBeVisible();
 
-  // Approving executes the call.
+  // Approving records the decision at once; a job then executes the call.
   const [decided] = await Promise.all([
     approverPage.waitForResponse(
       (response) =>
@@ -337,6 +347,23 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
     { data: { decision: "approve" } }
   );
   expect(again.status()).toBe(409);
+
+  // The item says what became of the call, and the input is gone from the request.
+  await expect
+    .poll(async () => {
+      const run = await approverPage.request.get(`${apiBaseUrl}/api/v1/operations/runs/${runId}`);
+      return (await run.json()).status;
+    })
+    .toBe("done");
+  await approverPage.reload();
+  const outcome = approverPage.getByTestId("operation-call-outcome");
+  await expect(outcome).toHaveAttribute("data-outcome", "done");
+  await expect(outcome).toContainText("Approved and executed.");
+  await expect(approverPage.getByTestId("operation-call-input-removed")).toBeVisible();
+  await expect(approverPage.getByTestId("operation-call-full-input-open")).toHaveCount(0);
+  await shoot(approverPage, "inbox-operation-call-executed", async () => {
+    await expect(outcome).toBeVisible();
+  });
 
   // Instance > Operations lists the call: done, for the member, approved by the approver.
   const answers: Promise<string>[] = [];
