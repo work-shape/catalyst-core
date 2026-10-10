@@ -19,6 +19,7 @@ import {
   type ConfigAssetMutation,
   type ConfigAssetRecord,
   type JsonObject,
+  type Namespace,
   type PlatformAction,
   type RuntimeCallContext,
   type SkillConfig
@@ -122,10 +123,11 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
-    await this.assertNamespaceAllowlists(access, current, validated.agents);
+    const namespaces = await this.assertNamespaceAllowlists(access, current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
       access,
+      bindingListed: hasModelBindingList(namespaces, command.name),
       kind: command.kind,
       name: command.name,
       currentConfig: findBundleConfig(current, command.kind, command.name),
@@ -346,10 +348,11 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
-    await this.assertNamespaceAllowlists(access, current, validated.agents);
+    const namespaces = await this.assertNamespaceAllowlists(access, current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
       access,
+      bindingListed: hasModelBindingList(namespaces, command.name),
       kind: command.kind,
       name: command.name,
       currentConfig: findBundleConfig(current, command.kind, command.name),
@@ -626,7 +629,7 @@ export class ConfigAssetWorkflow {
     access: ActorAccess,
     current: ConfigAssetBundleInput,
     nextAgents: AgentConfig[]
-  ): Promise<void> {
+  ): Promise<Namespace[]> {
     const namespaces = await this.options.stores.access.listNamespaces({
       clientInstanceId: this.options.clientInstanceId
     });
@@ -676,6 +679,7 @@ export class ConfigAssetWorkflow {
         );
       }
     }
+    return namespaces;
   }
 
   private recordAccess(
@@ -756,6 +760,8 @@ export class ConfigAssetWorkflow {
 
   private assertInteractiveAssetUpsertAllowed(input: {
     access: ActorAccess;
+    /** The agent is in a Namespace that lists model bindings; the list was checked before. */
+    bindingListed: boolean;
     kind: ConfigAssetKind;
     name: string;
     currentConfig: AgentConfig | SkillConfig | undefined;
@@ -778,9 +784,12 @@ export class ConfigAssetWorkflow {
     const changedFields = AGENT_EDITABLE_FIELDS.filter(
       (field) => !configValuesEqual(currentAgent?.[field], nextAgent[field])
     );
-    // Model settings are governed by a permission, not by the editable-field policy.
+    // Model settings are governed by a permission, not by the editable-field policy. The one
+    // exception is the binding of an agent in a Namespace that lists bindings: the list is the
+    // operator's choice of models for that Namespace, so its writer picks among them.
     const changedModelSettings = AGENT_MODEL_SETTING_FIELDS.filter(
       (field) =>
+        !(field === "modelBindingId" && input.bindingListed) &&
         !configValuesEqual(
           modelSettingValue(currentAgent, field),
           modelSettingValue(nextAgent, field)
@@ -858,6 +867,13 @@ export class ConfigAssetWorkflow {
 
 function isAgentModelSettingField(field: string): field is AgentModelSettingField {
   return (AGENT_MODEL_SETTING_FIELDS as readonly string[]).includes(field);
+}
+
+function hasModelBindingList(namespaces: Namespace[], agentName: string): boolean {
+  return namespaces.some(
+    (namespace) =>
+      agentName.startsWith(namespace.prefix) && namespace.allowedModelBindingIds !== undefined
+  );
 }
 
 function modelSettingValue(agent: AgentConfig | undefined, field: AgentModelSettingField) {

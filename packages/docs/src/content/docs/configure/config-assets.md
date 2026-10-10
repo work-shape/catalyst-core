@@ -115,6 +115,8 @@ Fields outside `editableAgentFields` are owned by the CLI workflow: the UI shows
 
 Five agent fields are not governed by `editableAgentFields`: `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts`. They are editable exactly when the caller holds `agent_models.manage`, and read-only otherwise. Listing `modelBindingId` or `reasoningEffort` in `editableAgentFields` is still accepted but has no effect.
 
+One exception: a Namespace can carry a list of allowed model bindings. A user who may write agents in such a Namespace sets `modelBindingId` to a binding on that list without holding `agent_models.manage`. A binding that is not on the list is refused for every writer. An agent there that names a provider or no model is refused unless the writer holds `agent_models.manage`. The other four fields keep the rule above.
+
 `fastMode` (boolean, default `false`) runs the agent on the provider's priority tier, billed at the rate card's fast rates. It is valid only when the agent's model binding declares `supportsFastMode` in release config. The CLI writes `fastMode: true` to the agent YAML and omits the key when it is off.
 
 ### Models users may choose
@@ -192,3 +194,5 @@ removed first. Reverting retains the original approval and proposal history.
 | `agent_models.manage`   | Interactive changes to an agent's model settings and user-selectable models  | superadmin                 |
 
 Effective permissions resolve from role defaults plus per-user grants (`"config_assets.write"`) and revocations (`"!config_assets.write"`) stored on the product user.
+
+Beside these, an administrator can allow or deny one user read, write or delete on agents or skills in a Namespace (a registered name prefix) or on one asset, through the operations under `/api/v1/instance/access`. A deny on an asset belongs to its name: it stays until it is revoked, also when the asset is deleted and created again, and the grant list keeps showing it. Allow rows on an asset are removed when the asset is deleted.

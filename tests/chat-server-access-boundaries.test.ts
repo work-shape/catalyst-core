@@ -165,6 +165,115 @@ describe("a Namespace's model list and an agent without a binding", () => {
   });
 });
 
+describe("a Namespace's model list and its writer", () => {
+  it("lets the writer pick a listed binding without the model right, there and nowhere else", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-", { allowedModelBindingIds: ["plain"] });
+    await t.createNamespace("free-");
+    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.write", { namespace: "free-" });
+    const bound = (name: string, modelBindingId: string, overrides = {}) => {
+      const { modelProviderId: _modelProviderId, ...rest } = agent(name, overrides);
+      return { ...rest, modelBindingId };
+    };
+    const put = (name: string, config: Record<string, unknown>) => ({
+      params: { kind: "agent", name },
+      payload: { config }
+    });
+
+    await t.expectOk(t.kai.id, "config_assets.put", put("kai-new", bound("kai-new", "plain")));
+    await t.expectRefused(
+      t.kai.id,
+      "config_assets.put",
+      put("kai-other", bound("kai-other", "other")),
+      {
+        status: 403,
+        code: "FORBIDDEN",
+        details: { reason: "model_not_allowed", modelBindingId: "other", namespace: "kai-" }
+      }
+    );
+    // Editing the agent keeps working, and every other model setting still needs the right.
+    await t.expectOk(
+      t.kai.id,
+      "config_assets.put",
+      put("kai-new", bound("kai-new", "plain", { instructions: "More." }))
+    );
+    const effort = await t.expectRefused(
+      t.kai.id,
+      "config_assets.put",
+      put("kai-new", { ...bound("kai-new", "plain"), reasoningEffort: "low" }),
+      { status: 403, code: "FORBIDDEN" }
+    );
+    expect(effort.message).toContain("agent_models.manage");
+    // A Namespace without a list, and a name in no Namespace, keep the rule as it was.
+    for (const [userId, name] of [
+      [t.kai.id, "free-helper"],
+      [t.admin.id, "plain-helper"]
+    ] as const) {
+      const refusal = await t.expectRefused(
+        userId,
+        "config_assets.put",
+        put(name, bound(name, "plain")),
+        { status: 403, code: "FORBIDDEN" }
+      );
+      expect(refusal.message).toContain("agent_models.manage");
+    }
+
+    // The release sync is bound by the list as before and needs no model right for a binding.
+    await t.stores.users.updateUser({
+      clientInstanceId,
+      userId: t.admin.id,
+      permissions: ["config_assets.release"]
+    });
+    const bundle = (modelBindingId: string) => ({
+      baseVersion: null,
+      defaultAgentName: "assistant",
+      agents: [agent("assistant"), bound("kai-new", modelBindingId)],
+      skills: []
+    });
+    await t.expectRefused(
+      t.admin.id,
+      "config_assets.replace",
+      { payload: bundle("other") },
+      {
+        status: 403,
+        code: "FORBIDDEN",
+        details: { reason: "model_not_allowed", modelBindingId: "other", namespace: "kai-" }
+      }
+    );
+    await t.expectOk(t.admin.id, "config_assets.replace", { payload: bundle("plain") });
+  });
+});
+
+describe("a deny that outlived its asset", () => {
+  it("is still listed, and revoking it lets a new asset of the name start clean", async () => {
+    const t = await setup();
+    expect((await t.putAgent(t.admin.id, "shared-one")).statusCode).toBe(200);
+    const assetId = await t.assetId("agent", "shared-one");
+    const denyId = await t.grant(t.kai.id, "agent.read", { assetId }, "deny");
+    await t.expectOk(t.admin.id, "config_assets.delete", {
+      params: { kind: "agent", name: "shared-one" },
+      payload: {}
+    });
+
+    const page = z.object({
+      items: z.array(z.object({ id: z.string(), effect: z.string(), scopeId: z.string() }))
+    });
+    const listed = page.parse(
+      (
+        await t.expectOk(t.admin.id, "permissions.list", {
+          query: { holderKind: "user", holderId: t.kai.id }
+        })
+      ).json()
+    );
+    expect(listed.items).toEqual([{ id: denyId, effect: "deny", scopeId: assetId }]);
+
+    await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: denyId } });
+    expect((await t.putAgent(t.admin.id, "shared-one")).statusCode).toBe(200);
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
+  });
+});
+
 describe("attribution to a hidden superadmin", () => {
   it("leaves grantedBy and createdBy out for an administrator and shows them to a superadmin", async () => {
     const t = await setup();
