@@ -1,117 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
-import {
-  SCOPES_HEADER,
-  SERVICE_HEADER,
-  agent,
-  clientInstanceId,
-  errorSchema,
-  setupAccessInstance,
-  skill,
-  type AccessInstance,
-  type AccessInstanceOptions
-} from "./support/access-instance";
+import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
+import {
+  RELEASE_ONLY,
+  SERVICE,
+  asService,
+  deleteAgent,
+  putAgent,
+  putSkill,
+  refusedItems,
+  setupRelease as setup,
+  syncAs,
+  syncAsService
+} from "./support/asset-release";
 
 // A whole release through `assets.sync`: what a holder of the release right is exempt from in
 // that call, and that nobody else and no other operation is. The service principal of these
 // tests holds `config_assets.read` and `config_assets.release`, as a key for the CLI does.
-
-const SERVICE = "sp_test";
-/** The limits of an instance that is edited by release only, but for the display name. */
-const RELEASE_ONLY = {
-  editableAgentFields: ["displayName"],
-  allowAgentCreation: false,
-  allowAgentDeletion: false,
-  allowSkillEditing: false
-};
-
-const refusalSchema = z.object({
-  items: z.array(
-    z.object({
-      index: z.number(),
-      name: z.string().optional(),
-      status: z.enum(["refused", "not_applied"]),
-      error: z
-        .object({ code: z.string(), message: z.string(), action: z.string().optional() })
-        .optional()
-    })
-  )
-});
-
-type Item = Record<string, unknown>;
-const putAgent = (name: string, overrides: Item = {}, expectedRevision?: number): Item => ({
-  type: "put",
-  kind: "agent",
-  config: agent(name, overrides),
-  ...(expectedRevision === undefined ? {} : { expectedRevision })
-});
-const putSkill = (name: string, content: string, expectedRevision?: number): Item => ({
-  type: "put",
-  kind: "skill",
-  config: skill(name, content),
-  ...(expectedRevision === undefined ? {} : { expectedRevision })
-});
-const deleteAgent = (name: string, expectedRevision = 1): Item => ({
-  type: "delete",
-  kind: "agent",
-  name,
-  expectedRevision
-});
-
-async function setup(options: AccessInstanceOptions = {}) {
-  const t = await setupAccessInstance(options);
-  // An administrator who also holds the release right: bound outside a sync like anyone.
-  const releaser = await t.stores.users.createUser({
-    clientInstanceId,
-    displayLabel: "Releaser",
-    roles: ["user", "admin"],
-    permissions: ["config_assets.release"]
-  });
-  await t.stores.configAssets.applyConfigAssetMutations({
-    clientInstanceId,
-    mutations: [
-      { type: "upsert", kind: "agent", name: "old", config: agent("old") },
-      { type: "upsert", kind: "skill", name: "guide", config: skill("guide") }
-    ]
-  });
-  const stored = (kind: string, name: string) =>
-    t.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
-  const version = async () =>
-    (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).version;
-  return { ...t, releaser, stored, version };
-}
-
-/** A call of the service principal, with the scopes of its key where the test names them. */
-function asService(
-  t: AccessInstance,
-  operation: Parameters<AccessInstance["call"]>[1],
-  input: Parameters<AccessInstance["instance"]["call"]>[1],
-  scopes?: string
-) {
-  return t.instance.call(operation, {
-    ...input,
-    headers: { [SERVICE_HEADER]: SERVICE, ...(scopes ? { [SCOPES_HEADER]: scopes } : {}) }
-  });
-}
-
-const syncAsService = (t: AccessInstance, items: Item[], scopes?: string) =>
-  asService(t, "assets.sync", { payload: { items } }, scopes);
-const syncAs = (t: AccessInstance, userId: string, items: Item[]) =>
-  t.call(userId, "assets.sync", { payload: { items } });
-
-function refusedItems(response: { json(): unknown }) {
-  const { error } = errorSchema.parse(response.json());
-  return {
-    code: error.code,
-    items: refusalSchema.parse(error.details).items.map((item) => ({
-      name: item.name,
-      status: item.status,
-      ...(item.error ? { code: item.error.code, message: item.error.message } : {}),
-      ...(item.error?.action ? { action: item.error.action } : {})
-    }))
-  };
-}
+// What a release does as the release path did before it is in asset-release-parity.
 
 describe("a release through assets.sync", () => {
   it("lands in one version on an instance that is edited by release only, and binds everyone else", async () => {

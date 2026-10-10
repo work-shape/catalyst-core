@@ -30,6 +30,7 @@ import {
   assertChangedAgentsAllowed,
   assetKey,
   authorizeInteractiveWrite,
+  isHiddenEverywhere,
   loadStoredAssets,
   requireConfigName,
   toJsonObject
@@ -394,15 +395,6 @@ export class ConfigAssetWorkflow {
       metadata
     });
   }
-}
-
-function isHiddenEverywhere(availability: AgentAvailability | undefined): boolean {
-  return (
-    !availability ||
-    (availability.mode === "selected" &&
-      !availability.personalWorkspaces &&
-      availability.collaborationWorkspaceIds.length === 0)
-  );
 }
 
 function assetBundle(

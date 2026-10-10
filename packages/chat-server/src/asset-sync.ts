@@ -29,14 +29,19 @@ import {
   authorizeInteractiveWrite,
   findChangedAgentRefusals,
   findIssuesOfChange,
-  initialAvailabilityOf,
+  isHiddenEverywhere,
   isReleaseSync,
+  isReleasedKind,
   itemWriteDecision,
   loadReferableAssets,
   loadStoredAssets,
+  maxSyncItems,
   mayChangeInstanceDefault,
   missingUpsertRightOf,
+  preparedUpsert,
+  releaseInitialAvailability,
   requireAssetManagementOn,
+  requireReleaseSync,
   toJsonObject
 } from "./asset-write-rules";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
@@ -53,6 +58,10 @@ export interface AssetSyncInput {
    */
   namespace?: string;
   items: AssetSyncItem[];
+  /** The default agent a release names, `null` for none. Left out, the batch names none. */
+  defaultAgentName?: string | null;
+  /** The default agent the batch was made against, where its caller says so. */
+  expectedDefaultAgentName?: string | null;
 }
 
 /** Why one item stops the batch. */
@@ -72,6 +81,8 @@ interface PlannedItem {
   kind?: WorkflowAssetKind;
   /** The instance's own row of the name, a deleted one included. */
   asset?: ConfigAssetRecord;
+  /** A delete of a release whose asset is not there: nothing is written for it. */
+  absent?: boolean;
   refusal?: ItemRefusal;
 }
 
@@ -106,6 +117,8 @@ export async function syncAssets(
   // now: a call that waited for an approval runs later than it was authorized.
   const planned = await authorizeItems(options, call.access, input);
   const ready = () => planned.filter(isReady);
+  /** The items that write something. */
+  const writing = () => ready().filter((entry) => !entry.absent);
   const stopIfRefused = (issues?: AssetSetIssue[]) => {
     if (planned.some((entry) => entry.refusal) || issues?.length) {
       throw refusedBatch(planned, issues);
@@ -126,6 +139,11 @@ export async function syncAssets(
   for (const entry of ready()) {
     const current = entry.asset?.status === "active" ? entry.asset.revision : null;
     if (entry.item.type === "delete") {
+      if (releaseSync && current === null) {
+        // A release says what the instance holds. An asset that is gone already is as it says.
+        entry.absent = true;
+        continue;
+      }
       entry.refusal =
         refusalOf(() => assertDeleteWithinLimits(call.access, "sync", entry.kind)) ??
         (current === null
@@ -151,16 +169,24 @@ export async function syncAssets(
 
   const stored = await loadStoredAssets(options);
   /** The set as the batch would leave it. */
-  const withItems = (set: AssetSet) => leftByItems(stored.set, ready(), set);
+  const withItems = (set: AssetSet) => leftByItems(call.access, stored.set, ready(), set);
   let candidate = withItems(stored.set);
   // The first asset of a kind with an instance default becomes it and the last one takes it
-  // away. Either changes the default, which no Namespace or asset grant opens.
-  const defaultChange = planDefaultChange(kinds.kinds, stored.set, candidate, ready());
+  // away. Either changes the default, which no Namespace or asset grant opens. A release that
+  // names the default is taken at its word instead.
+  const impliedDefault =
+    input.defaultAgentName === undefined
+      ? planDefaultChange(kinds.kinds, stored.set, candidate, ready())
+      : undefined;
+  if (impliedDefault && !mayChangeInstanceDefault(call.access, "sync", impliedDefault.entry.kind)) {
+    impliedDefault.entry.refusal = defaultChangeRefusal(impliedDefault.entry.kind);
+  }
+  const defaultChange =
+    input.defaultAgentName === undefined
+      ? impliedDefault
+      : { agentName: input.defaultAgentName ?? undefined };
   if (defaultChange) {
     candidate = withDefaultAgentName(candidate, defaultChange.agentName);
-    if (!mayChangeInstanceDefault(call.access, "sync", defaultChange.entry.kind)) {
-      defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
-    }
   }
   stopIfRefused();
 
@@ -210,7 +236,7 @@ export async function syncAssets(
   }
   stopIfRefused();
 
-  const mutations: ConfigAssetMutation[] = ready().map((entry) =>
+  const mutations: ConfigAssetMutation[] = writing().map((entry) =>
     entry.item.type === "delete"
       ? { type: "delete", kind: entry.kind.kind, name: entry.name, scope: INSTANCE_ASSET_SCOPE }
       : {
@@ -228,13 +254,20 @@ export async function syncAssets(
     clientInstanceId: options.clientInstanceId,
     actor: auditActorFromIdentity(call.actor),
     baseRevisions: Object.fromEntries(
-      ready().map((entry) => [
+      writing().map((entry) => [
         assetKey(entry.kind.kind, entry.name),
         entry.item.expectedRevision ?? null
       ])
     ),
-    ...(defaultChange ? { baseDefaultAgentName: stored.state.defaultAgentName ?? null } : {}),
-    ...initialAvailabilityOf(call.origin, mutations),
+    ...(defaultChange
+      ? {
+          baseDefaultAgentName:
+            input.expectedDefaultAgentName === undefined
+              ? (stored.state.defaultAgentName ?? null)
+              : input.expectedDefaultAgentName
+        }
+      : {}),
+    ...releaseInitialAvailability(call.access, "sync"),
     mutations
   }).catch((error: unknown) => {
     // Another write got between the check above and the store's lock.
@@ -263,6 +296,15 @@ export async function syncAssets(
   const auditRecorder = call.audit;
   const items = [];
   for (const entry of ready()) {
+    if (entry.absent) {
+      items.push({
+        type: "delete" as const,
+        kind: entry.kind.kind,
+        name: entry.name,
+        status: "absent" as const
+      });
+      continue;
+    }
     // The store appends exactly one revision to the one the batch was checked against. A
     // name that is created again continues the revisions of its deleted row.
     const revision = (entry.asset?.revision ?? 0) + 1;
@@ -281,7 +323,28 @@ export async function syncAssets(
       revision
     });
   }
-  return { version: result.version, items, warnings: [] };
+  return {
+    version: result.version,
+    items,
+    ...(releaseSync ? await hiddenAgentNamesOf(options, writing()) : {}),
+    warnings: []
+  };
+}
+
+/** The agents a release wrote that no workspace shows afterwards, as its answer names them. */
+async function hiddenAgentNamesOf(
+  options: ChatServerOptions,
+  written: readonly ReadyItem[]
+): Promise<{ hiddenAgentNames?: string[] }> {
+  const names = written
+    .filter((entry) => entry.item.type === "put" && entry.kind.hasWorkspaceAvailability)
+    .map((entry) => entry.name);
+  if (names.length === 0) return {};
+  const availability = await options.configAssets.store.listAgentAvailability({
+    clientInstanceId: options.clientInstanceId
+  });
+  const hidden = names.filter((name) => isHiddenEverywhere(availability.get(name)));
+  return hidden.length > 0 ? { hiddenAgentNames: hidden } : {};
 }
 
 /**
@@ -298,8 +361,26 @@ async function authorizeItems(
   // The module's switch is asked here because the release holder passes it: the operation
   // itself belongs to no module, so the route does not refuse it before the caller is known.
   requireAssetManagementOn(options, access, "sync");
+  if (input.defaultAgentName !== undefined || input.expectedDefaultAgentName !== undefined) {
+    requireReleaseSync(access, "sync");
+  }
+  if (input.items.length === 0 && input.defaultAgentName === undefined) {
+    throw new AppError("VALIDATION_FAILED", "A batch needs an item or a default agent");
+  }
+  const maxItems = maxSyncItems(access);
+  if (input.items.length > maxItems) {
+    throw new AppError("VALIDATION_FAILED", `A batch holds at most ${maxItems} items`);
+  }
+  const releaseSync = isReleaseSync(access, "sync");
   const planned = planItems(options, input);
   for (const entry of planned.filter(isReady)) {
+    if (releaseSync && !isReleasedKind(entry.kind)) {
+      entry.refusal = {
+        code: "VALIDATION_FAILED",
+        message: `Asset kind '${entry.kind.kind}' is not part of a release`
+      };
+      continue;
+    }
     const row = await options.configAssets.store.getConfigAsset({
       clientInstanceId: options.clientInstanceId,
       kind: entry.kind.kind,
@@ -332,7 +413,7 @@ async function authorizeItems(
   if (planned.some((entry) => entry.refusal)) {
     throw refusedBatch(planned);
   }
-  await requireFurtherRights(options, access, planned);
+  await requireFurtherRights(options, access, input, planned);
   return planned;
 }
 
@@ -345,6 +426,7 @@ async function authorizeItems(
 async function requireFurtherRights(
   options: ChatServerOptions,
   access: ActorAccess,
+  input: AssetSyncInput,
   planned: PlannedItem[]
 ): Promise<void> {
   const ready = planned.filter(isReady);
@@ -352,12 +434,15 @@ async function requireFurtherRights(
     loadStoredAssets(options),
     options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId })
   ]);
-  const defaultChange = planDefaultChange(
-    options.configAssets.kinds.kinds,
-    stored.set,
-    leftByItems(stored.set, ready, stored.set),
-    ready
-  );
+  const defaultChange =
+    input.defaultAgentName === undefined
+      ? planDefaultChange(
+          options.configAssets.kinds.kinds,
+          stored.set,
+          leftByItems(access, stored.set, ready, stored.set),
+          ready
+        )
+      : undefined;
   if (defaultChange && !mayChangeInstanceDefault(access, "sync", defaultChange.entry.kind)) {
     defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
   }
@@ -367,7 +452,7 @@ async function requireFurtherRights(
     const action = missingUpsertRightOf(access, "sync", entry.kind, {
       name: entry.name,
       current,
-      next: entry.kind.prepareInteractiveUpsert({ current, next: entry.item.config }),
+      next: preparedUpsert(access, "sync", entry.kind, { current, next: entry.item.config }),
       namespaces
     });
     if (action !== undefined) {
@@ -388,7 +473,12 @@ function defaultChangeRefusal(kind: WorkflowAssetKind): ItemRefusal {
 }
 
 /** The set as the items would leave it. `stored` is what each put is prepared against. */
-function leftByItems(stored: AssetSet, entries: readonly ReadyItem[], set: AssetSet): AssetSet {
+function leftByItems(
+  access: ActorAccess,
+  stored: AssetSet,
+  entries: readonly ReadyItem[],
+  set: AssetSet
+): AssetSet {
   return entries.reduce(
     (left, entry) =>
       entry.item.type === "delete"
@@ -397,7 +487,7 @@ function leftByItems(stored: AssetSet, entries: readonly ReadyItem[], set: Asset
             left,
             entry.kind.kind,
             entry.name,
-            entry.kind.prepareInteractiveUpsert({
+            preparedUpsert(access, "sync", entry.kind, {
               current: findDefinition(stored, entry.kind.kind, entry.name),
               next: entry.item.config
             })

@@ -11467,37 +11467,66 @@
         ]
       },
       "AssetSyncAppliedItem": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "put",
-              "delete"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "put",
+                  "delete"
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "const": "applied"
+              },
+              "revision": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "type",
+              "kind",
+              "name",
+              "status",
+              "revision"
             ]
           },
-          "kind": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "const": "applied"
-          },
-          "revision": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "maximum": 9007199254740991
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "delete"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "const": "absent"
+              }
+            },
+            "required": [
+              "type",
+              "kind",
+              "name",
+              "status"
+            ]
           }
-        },
-        "required": [
-          "type",
-          "kind",
-          "name",
-          "status",
-          "revision"
         ]
       },
       "AssetSyncItem": {
@@ -17524,12 +17553,33 @@
             "minLength": 1
           },
           "items": {
-            "minItems": 1,
-            "maxItems": 200,
+            "maxItems": 2000,
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AssetSyncItem"
             }
+          },
+          "defaultAgentName": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expectedDefaultAgentName": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -17548,6 +17598,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AssetSyncAppliedItem"
+            }
+          },
+          "hiddenAgentNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "warnings": {

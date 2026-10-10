@@ -4,6 +4,7 @@ import {
   findNamespaceOfAssetName,
   isJsonObject,
   moduleOffError,
+  operationDenialError,
   unknownToJsonValue,
   type AccessResource,
   type ActorAccess,
@@ -12,16 +13,16 @@ import {
   type AuditRecorder,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
-  type ConfigAssetMutation,
   type ConfigAssetRecord,
   type ConfigAssetState,
+  type AgentAvailability,
   type InitialAgentAvailability,
   type JsonObject,
   type Namespace,
   type OperationAuthorization,
-  type OperationOrigin,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
+import { ASSET_RELEASE_SYNC_MAX_ITEMS, ASSET_SYNC_MAX_ITEMS } from "@vivd-catalyst/api-contract";
 import {
   agentConfigSchema,
   findAgentUserSelectableModelIssues
@@ -193,7 +194,7 @@ const ASSET_MANAGEMENT_MODULE = "assetManagement";
 const RELEASE_ACTION = "assets.release";
 
 /**
- * The exemptions of the release holder, all of them, decided here and nowhere else.
+ * What a release is, all of it, decided here and nowhere else.
  *
  * A caller who holds `assets.release` on the instance and writes through `assets.sync` pushes
  * a release: the batch is what the operator's working copy says the instance holds. Inside
@@ -207,9 +208,20 @@ const RELEASE_ACTION = "assets.release";
  *    `assertUpsertWithinLimits`, `assertDeleteWithinLimits`)
  * 3. The model settings right. `agent_models.manage` is not asked for the model settings a
  *    pushed agent carries. (`missingUpsertRightOf`, `assertUpsertWithinLimits`)
- * 4. The default agent. The first agent of the instance becomes its default and the last one
- *    takes it away without the kind's write right on the instance.
- *    (`mayChangeInstanceDefault`)
+ * 4. The default agent. The holder names the instance default with the batch, and the first
+ *    agent becomes the default and the last one takes it away without the kind's write right
+ *    on the instance. (`requireReleaseSync`, `mayChangeInstanceDefault`)
+ *
+ * And a release is handled in five ways no other write is:
+ *
+ * 5. A definition is written as it was sent. Nothing is adjusted on the way, so a setting the
+ *    instance cannot run is refused and never dropped. (`preparedUpsert`)
+ * 6. An agent it creates is available everywhere, and hidden only where the batch also
+ *    deletes an agent that was available in chosen workspaces: that is a rename, and the new
+ *    name must not reach more people than the old one did. (`releaseInitialAvailability`)
+ * 7. A delete of an asset that is not there is no refusal. (`asset-sync.ts`)
+ * 8. It may hold `ASSET_RELEASE_SYNC_MAX_ITEMS` items. (`maxSyncItems`)
+ * 9. It reaches only the kinds a release carries. (`isReleasedKind`)
  *
  * Everything else binds the release holder as it binds everyone: the validation of the
  * definitions and of the set, the lists of a Namespace, the expected revisions, the policy and
@@ -219,6 +231,56 @@ const RELEASE_ACTION = "assets.release";
 export function isReleaseSync(access: ActorAccess, surface: AssetWriteSurface): boolean {
   // Asked without a resource, so only an entry at instance scope answers.
   return surface === "sync" && access.authorize(RELEASE_ACTION).allowed;
+}
+
+/** Refuses what only a release may carry, naming the release right. */
+export function requireReleaseSync(access: ActorAccess, surface: AssetWriteSurface): void {
+  if (!isReleaseSync(access, surface)) {
+    throw operationDenialError({ kind: "forbidden", action: RELEASE_ACTION, reason: "no_grant" });
+  }
+}
+
+/** What a save writes of what its caller sent: adjusted by the kind, or untouched in a release. */
+export function preparedUpsert(
+  access: ActorAccess,
+  surface: AssetWriteSurface,
+  kind: WorkflowAssetKind,
+  input: Parameters<WorkflowAssetKind["prepareInteractiveUpsert"]>[0]
+): Record<string, unknown> {
+  return isReleaseSync(access, surface) ? input.next : kind.prepareInteractiveUpsert(input);
+}
+
+/** Where the agents a batch creates start. Nothing leaves it to the store's default. */
+export function releaseInitialAvailability(
+  access: ActorAccess,
+  surface: AssetWriteSurface
+): { initialAgentAvailability?: InitialAgentAvailability } {
+  return isReleaseSync(access, surface)
+    ? { initialAgentAvailability: "selected_when_replacing_selected" }
+    : {};
+}
+
+/** How many items one batch of this caller may hold. */
+export function maxSyncItems(access: ActorAccess): number {
+  return isReleaseSync(access, "sync") ? ASSET_RELEASE_SYNC_MAX_ITEMS : ASSET_SYNC_MAX_ITEMS;
+}
+
+/**
+ * Whether a release carries the kind. A kind without a slot in the release bundle was never
+ * written by a release, so the exemptions above do not reach it until it is given one.
+ */
+export function isReleasedKind(kind: WorkflowAssetKind): boolean {
+  return kind.bundle !== undefined;
+}
+
+/** An agent no workspace shows: it has no availability, or one that selects nothing. */
+export function isHiddenEverywhere(availability: AgentAvailability | undefined): boolean {
+  return (
+    !availability ||
+    (availability.mode === "selected" &&
+      !availability.personalWorkspaces &&
+      availability.collaborationWorkspaceIds.length === 0)
+  );
 }
 
 /**
@@ -335,23 +397,6 @@ export function requireInstanceDefaultChange(
   if (changesDefault && !mayChangeInstanceDefault(access, surface, kind)) {
     access.require(kind.actions.write);
   }
-}
-
-/**
- * Where an agent a write creates starts. One that arrives from the CLI starts hidden in every
- * workspace until someone sets its availability: a push must not put an agent in front of
- * every user. One created in the interface starts as the store's default says. So does a
- * write that makes one of its agents the instance default, which is the first agent of an
- * instance: the default must be available everywhere, and the store refuses a hidden one.
- */
-export function initialAvailabilityOf(
-  origin: OperationOrigin,
-  mutations: readonly ConfigAssetMutation[]
-): { initialAgentAvailability?: InitialAgentAvailability } {
-  const setsDefault = mutations.some(
-    (mutation) => mutation.type === "setDefaultAgent" && mutation.agentName !== undefined
-  );
-  return origin.kind === "cli" && !setsDefault ? { initialAgentAvailability: "selected" } : {};
 }
 
 export function setsInitialDefault(set: AssetSet, kind: WorkflowAssetKind): boolean {

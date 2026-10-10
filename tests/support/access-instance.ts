@@ -1,18 +1,21 @@
 import { expect } from "vitest";
 import { z } from "zod";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
+import type { WorkflowAssetKind } from "@vivd-catalyst/chat-server";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   StoreBackedAuditRecorder,
   asApiCredentialId,
   asClientInstanceId,
   asServicePrincipalId,
+  createAssetKindRegistry,
   type UserRecord,
   type UserRole
 } from "@vivd-catalyst/core";
 import { atCurrentRevision } from "./asset-revisions";
 import type { TestCallInput, TestOperationName } from "./operations";
 import {
+  createTestAssetKinds,
   createTestInstanceWith,
   type TestInstance,
   type TestServerOptions,
@@ -199,14 +202,30 @@ export interface AccessInstanceOptions {
   furtherToolNames?: string[];
   /** Fields of `administration.agentConfiguration` that differ from the open default. */
   editingLimits?: EditingLimits;
+  /** Kinds registered beside agent and skill. */
+  furtherKinds?: WorkflowAssetKind[];
+  /** The model bindings that support fast mode. */
+  fastModeModelBindingIds?: string[];
 }
 
 export async function setupAccessInstance(
   options: AccessInstanceOptions = {}
 ): Promise<AccessInstance> {
-  const { operations, furtherToolNames = [], editingLimits = {} } = options;
+  const { operations, furtherToolNames = [], editingLimits = {}, furtherKinds = [] } = options;
+  const config = configWith(editingLimits);
+  const validationRefs = {
+    modelProviderIds: ["local"],
+    modelBindingIds: ["plain", "other"],
+    modelBindings: [
+      { id: "plain", model: "local" },
+      { id: "other", model: "local" }
+    ],
+    fastModeModelBindingIds: options.fastModeModelBindingIds ?? [],
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+    enabledToolNames: ["known.tool", "second.tool", ...furtherToolNames]
+  };
   const instance = await createTestInstanceWith((stores) => ({
-    config: configWith(editingLimits),
+    config,
     ...(operations ? { operations } : {}),
     // A call the policy holds is filed and decided as on an assembled instance.
     approvalRequests: { store: stores.approvals, handlers: new Map() },
@@ -214,17 +233,15 @@ export async function setupAccessInstance(
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
     configAssets: {
       store: stores.configAssets,
-      validationRefs: {
-        modelProviderIds: ["local"],
-        modelBindingIds: ["plain", "other"],
-        modelBindings: [
-          { id: "plain", model: "local" },
-          { id: "other", model: "local" }
-        ],
-        fastModeModelBindingIds: [],
-        reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-        enabledToolNames: ["known.tool", "second.tool", ...furtherToolNames]
-      }
+      validationRefs,
+      ...(furtherKinds.length === 0
+        ? {}
+        : {
+            kinds: createAssetKindRegistry([
+              ...createTestAssetKinds({ config, validationRefs }).kinds,
+              ...furtherKinds
+            ])
+          })
     }
   }));
   const { stores } = instance;

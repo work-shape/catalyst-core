@@ -54,7 +54,6 @@ import {
   clearsLastDefault,
   findChangedAgentRefusals,
   findIssuesOfChange,
-  initialAvailabilityOf,
   isReleaseSync,
   loadReferableAssets,
   loadStoredAssets,
@@ -550,7 +549,6 @@ export class AssetWorkflow {
       return await applyValidatedConfigAssetMutations(this.options, {
         clientInstanceId: this.options.clientInstanceId,
         actor: auditActorFromIdentity(call.actor),
-        ...initialAvailabilityOf(call.origin, batch.mutations),
         ...batch
       });
     } catch (error) {

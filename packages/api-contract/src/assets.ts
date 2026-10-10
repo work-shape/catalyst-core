@@ -5,6 +5,13 @@ import { timestampSchema } from "./shared";
 /** How many puts and deletes one `assets.sync` call may carry. */
 export const ASSET_SYNC_MAX_ITEMS = 200;
 
+/**
+ * How many items a release may hold: a batch of a holder of the release right, which is applied
+ * in one transaction so that a release lands whole or not at all. Each item costs a handful of
+ * statements in that transaction, and the request body limit of the server bounds the bytes.
+ */
+export const ASSET_RELEASE_SYNC_MAX_ITEMS = 2000;
+
 /** Who owns an asset: the instance, or one workspace. */
 export const assetScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("instance") }),
@@ -141,20 +148,42 @@ export const syncAssetsRequestSchema = z.object({
    * Left out, the batch may name any asset of the instance its caller may write.
    */
   namespace: nameText(z.string().min(1)).optional(),
-  items: z.array(assetSyncItemSchema).min(1).max(ASSET_SYNC_MAX_ITEMS)
+  /**
+   * At most `ASSET_SYNC_MAX_ITEMS` items, or `ASSET_RELEASE_SYNC_MAX_ITEMS` for a holder of
+   * the release right. A batch without items names the default agent.
+   */
+  items: z.array(assetSyncItemSchema).max(ASSET_RELEASE_SYNC_MAX_ITEMS),
+  /**
+   * The agent that becomes the instance default with this batch, or `null` for none. Only a
+   * holder of the release right may name it. Left out, the default stays as it is.
+   */
+  defaultAgentName: nameText(z.string().min(1)).nullable().optional(),
+  /** The default agent the caller last read. Given, a batch made against another is refused. */
+  expectedDefaultAgentName: nameText(z.string().min(1)).nullable().optional()
 });
 
-export const assetSyncAppliedItemSchema = z.object({
-  type: z.enum(["put", "delete"]),
-  kind: z.string(),
-  name: z.string(),
-  status: z.literal("applied"),
-  revision: revisionNumberSchema
-});
+export const assetSyncAppliedItemSchema = z.discriminatedUnion("status", [
+  z.object({
+    type: z.enum(["put", "delete"]),
+    kind: z.string(),
+    name: z.string(),
+    status: z.literal("applied"),
+    revision: revisionNumberSchema
+  }),
+  // A delete in a release of an asset that is not there: nothing was written for it.
+  z.object({
+    type: z.literal("delete"),
+    kind: z.string(),
+    name: z.string(),
+    status: z.literal("absent")
+  })
+]);
 
 export const syncAssetsResponseSchema = z.object({
   version: z.number().int().positive(),
   items: z.array(assetSyncAppliedItemSchema),
+  /** Agents a release wrote that are available in no workspace afterwards. */
+  hiddenAgentNames: z.array(z.string()).optional(),
   warnings: z.array(assetWarningSchema)
 });
 
