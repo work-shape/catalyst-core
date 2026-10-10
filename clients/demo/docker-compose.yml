@@ -125,6 +125,10 @@ services:
           path: ../../packages
           ignore: *backend-package-watch-ignore
         - action: rebuild
+          path: ../../packages
+          include: "**/package.json"
+          ignore: *watch-ignore
+        - action: rebuild
           path: ../../docker
         - action: rebuild
           path: ../../package.json
@@ -168,6 +172,10 @@ services:
         - action: rebuild
           path: ../../packages
           ignore: *backend-package-watch-ignore
+        - action: rebuild
+          path: ../../packages
+          include: "**/package.json"
+          ignore: *watch-ignore
         - action: rebuild
           path: ../../docker
         - action: rebuild
@@ -221,6 +229,16 @@ services:
           target: /app/packages/api-contract/src
           initial_sync: true
           ignore: *watch-ignore
+        - action: sync
+          path: ../../packages/core/src
+          target: /app/packages/core/src
+          initial_sync: true
+          ignore: *watch-ignore
+        - action: sync
+          path: ../../packages/config-schema/src
+          target: /app/packages/config-schema/src
+          initial_sync: true
+          ignore: *watch-ignore
         - action: rebuild
           path: ../../clients/demo/package.json
         - action: rebuild
@@ -228,11 +246,11 @@ services:
         - action: rebuild
           path: ../../clients/demo/vite.config.ts
         - action: rebuild
-          path: ../../packages/chat-ui/package.json
+          path: ../../packages
+          include: "**/package.json"
+          ignore: *watch-ignore
         - action: rebuild
           path: ../../packages/chat-ui/tsconfig.json
-        - action: rebuild
-          path: ../../packages/ui/package.json
         - action: rebuild
           path: ../../docker
         - action: rebuild
