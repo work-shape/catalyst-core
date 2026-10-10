@@ -5,6 +5,7 @@ import {
   type ConversationId,
   type UserId
 } from "@vivd-catalyst/core";
+import { deleteConversationPages } from "./page-file-sets";
 import type { ChatServerOptions } from "./types";
 import { cleanupExecutionWorkspaceForConversation } from "./workspace-cleanup";
 
@@ -23,8 +24,8 @@ export type ConversationDataCleanupOutcome =
   ({ cleanup: "complete" } & ConversationDataDeletionTotals) | { cleanup: "pending" };
 
 /**
- * Removes the stored objects, file and artifact records, preview state and execution workspace
- * of a Conversation that is already deleted or expired. Call it only after the claim: it does
+ * Removes the stored objects, file and artifact records, preview state, execution workspace and
+ * Pages of a Conversation that is already deleted or expired. Call it only after the claim: it does
  * not check that the Conversation may be deleted. Safe to repeat.
  */
 async function cleanUpConversationData(
@@ -39,6 +40,7 @@ async function cleanUpConversationData(
     conversationId,
     deletedAt
   });
+  await deleteConversationPages(options, conversationId);
   return {
     attachmentCount: objects?.attachmentCount ?? 0,
     fileCount: objects?.fileObjectKeys.length ?? 0,

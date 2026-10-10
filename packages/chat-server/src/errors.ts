@@ -4,7 +4,11 @@ import { AppError, isAppError, toErrorEnvelope } from "@vivd-catalyst/core";
 
 const catalogRoutes = Object.values(apiOperations).map((operation) => ({
   method: operation.method,
-  path: new RegExp(`^${operation.path.replaceAll(/:[A-Za-z][A-Za-z0-9_]*/gu, "[^/]+")}$`, "u")
+  // A parameter is one segment. A path that ends in `/*` takes the rest, slashes included.
+  path: new RegExp(
+    `^${operation.path.replaceAll(/:[A-Za-z][A-Za-z0-9_]*/gu, "[^/]+").replace(/\/\*$/u, "/.*")}$`,
+    "u"
+  )
 }));
 
 function isCatalogOperation(method: string, url: string): boolean {

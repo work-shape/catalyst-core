@@ -12,7 +12,8 @@ import type {
   ConfigAssetStore,
   ExecutionWorkspaceCleanupStore,
   ManagedArtifactId,
-  ModuleSnapshot
+  ModuleSnapshot,
+  ObjectStorage
 } from "@vivd-catalyst/core";
 import type {
   AuditRecorder,
@@ -89,6 +90,16 @@ export interface ChatServerOptions {
       deleteObject(key: string): Promise<void>;
     };
     jobOptions?: ExecutionWorkspaceCleanupJobOptions;
+  };
+  /**
+   * What Pages are stored in and served with. Present where the instance has the `files`
+   * object store and a secret to derive the key from; the module `apps` needs both.
+   */
+  pages?: {
+    /** The `files` object store. File sets live below `pages/`. */
+    objects: ObjectStorage;
+    /** Signs the token in the address a frame loads a Page from. See `deriveAppContentKey`. */
+    contentKey: Uint8Array;
   };
   /** What the server's own model calls go through, and what tells it what a model can do. */
   modelGateway: SystemModelGateway;
