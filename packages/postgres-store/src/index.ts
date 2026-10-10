@@ -21,6 +21,7 @@ import { createPostgresStructuredDataStore } from "./stores/structuredData";
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./stores/operationRuns";
 import { createPostgresInfrastructureChecksStore } from "./stores/infrastructure";
+import { createPostgresPagesStore } from "./stores/pages";
 
 export interface PostgresStoresOptions {
   databaseUrl: string;
@@ -73,6 +74,7 @@ function bindStores(
     jobs: createPostgresJobsStore(db, enqueued),
     operationRuns: createPostgresOperationRunsStore(db),
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
+    pages: createPostgresPagesStore(db),
     async transaction(fn) {
       // A nested transaction reports to the outermost one: nothing is visible before that commits.
       if (inTransaction) return db.transaction((tx) => fn(bindStores(tx, enqueued, true)));

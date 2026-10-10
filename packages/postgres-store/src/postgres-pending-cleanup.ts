@@ -108,6 +108,14 @@ export function conversationsPendingCleanup(input: {
           and shared.conversation_id <> ca.conversation_id
           and shared.status <> 'deleted'
       )
+    union
+    select c.id, c.deleted_at
+    from pages p
+    join conversations c
+      on c.id = p.conversation_id
+     and c.client_instance_id = p.client_instance_id
+    where p.client_instance_id = ${input.clientInstanceId}
+      and ${notActive}
     ${executionWorkspaces}
   `;
 }

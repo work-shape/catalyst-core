@@ -9,7 +9,8 @@ export const MODULE_NAMES = [
   "documents",
   "resources",
   "assetManagement",
-  "userInvitations"
+  "userInvitations",
+  "apps"
 ] as const;
 
 export type ModuleName = (typeof MODULE_NAMES)[number];
