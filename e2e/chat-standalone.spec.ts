@@ -2792,8 +2792,8 @@ test("the Settings pages and Build are route-backed", async ({ page }) => {
   await expect(page.getByText("Billable this month")).toBeVisible();
 
   await page.getByRole("button", { name: "Build", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/config$/u);
-  await expect(page.getByRole("heading", { name: "Build", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
   await expect(settingsPages(page)).toHaveCount(0);
 
   await settingsGear(page).click();
@@ -2840,6 +2840,92 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
   await expect(panel.getByRole("heading", { name: "API-Zugang", exact: true })).toBeVisible();
 });
 
+test("Build opens on a list, and a list and an asset each have an address", async ({ page }) => {
+  await signInViaApi(page, superadminUser);
+  await page.goto("/");
+
+  // Build lands on the Agents list: names as titles, the id beneath, nothing to select first.
+  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
+  const agents = page.getByRole("list", { name: "Agents" });
+  const research = agents.getByRole("button", { name: /Research Assistant/u });
+  await expect(research).toContainText("research_assistant");
+  await expect(agents.getByRole("button", { name: /Application Assistant/u })).toBeVisible();
+  await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
+  await expect(page.getByText("Also editable with the catalyst CLI.")).toHaveCount(0);
+
+  // The CLI is one entry of the list head's menu.
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit with the CLI", exact: true }).click();
+  const cli = page.getByRole("dialog", { name: "Edit with the CLI", exact: true });
+  await expect(cli.getByText("catalyst config push")).toBeVisible();
+  await cli.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(cli).toBeHidden();
+
+  // Search matches the name and the id, whatever the case.
+  const search = page.getByRole("searchbox", { name: "Search agents" });
+  await search.fill("no such agent");
+  await expect(page.getByText("Nothing matches “no such agent”.", { exact: true })).toBeVisible();
+  await search.fill("application_ass");
+  await expect(agents.getByRole("button")).toHaveCount(1);
+  await expect(agents.getByRole("button", { name: /Application Assistant/u })).toBeVisible();
+  await search.fill("RESEARCH");
+  await expect(agents.getByRole("button")).toHaveCount(1);
+  await expect(page.getByText(/^1 of \d+$/u)).toBeVisible();
+
+  // A click opens the agent on its own address; back returns to the list as it was left.
+  await research.click();
+  await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
+  await expect(page.getByRole("heading", { name: "Research Assistant", level: 1 })).toBeVisible();
+  await expect(page.locator("form").getByLabel("Instructions", { exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(search).toHaveValue("RESEARCH");
+  await expect(agents.getByRole("button")).toHaveCount(1);
+
+  // The address alone opens an agent, and a reload stays on it.
+  await page.goto("/build/agents/application_assistant");
+  await expect(
+    page.getByRole("heading", { name: "Application Assistant", level: 1 })
+  ).toBeVisible();
+  await page.reload();
+  await expect(page).toHaveURL(/\/build\/agents\/application_assistant$/u);
+  await expect(
+    page.getByRole("heading", { name: "Application Assistant", level: 1 })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(agents.getByRole("button", { name: /Research Assistant/u })).toBeVisible();
+
+  // The kind rail switches the list; New starts a skill from there.
+  await page
+    .getByRole("navigation", { name: "Kinds in Build" })
+    .getByRole("button", { name: /^Skills/u })
+    .click();
+  await expect(page).toHaveURL(/\/build\/skills$/u);
+  await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "New skill", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "New skill", level: 1 })).toBeVisible();
+  await expect(page.locator('input[placeholder="generic_workflow_review"]')).toBeVisible();
+  await page.getByRole("button", { name: "Back to Skills", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
+
+  // Build without a kind, and the old Config address, open the list last visited.
+  await page.goto("/build");
+  await expect(page).toHaveURL(/\/build\/skills$/u);
+  await page.goto("/admin/config");
+  await expect(page).toHaveURL(/\/build\/skills$/u);
+
+  // An address without an asset says so and leads back to the list.
+  await page.goto("/build/agents/not_an_agent");
+  await expect(
+    page.getByText("There is no agent with the id not_an_agent.", { exact: true })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+});
+
 test("superadmin config follows the German locale", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("vivd-catalyst:locale", "de");
@@ -2848,26 +2934,29 @@ test("superadmin config follows the German locale", async ({ page }) => {
 
   await page.goto("/admin/config");
 
+  await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("region", { name: "Bauen" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Bauen", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Bauen", exact: true })).toBeVisible();
-  await expect(page.getByText("Agenten", { exact: true })).toBeVisible();
-  await expect(page.getByText("Fähigkeiten", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agenten", level: 1 })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Agenten oder Fähigkeit auswählen", exact: true })
+    page
+      .getByRole("navigation", { name: "Arten in Bauen" })
+      .getByRole("button", { name: /^Skills/u })
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Neuer Agent", exact: true })).toBeVisible();
 
   await page
-    .getByRole("region", { name: "Agenten", exact: true })
-    .getByRole("button", { name: "research_assistant Alle Arbeitsbereiche", exact: true })
+    .getByRole("list", { name: "Agenten" })
+    .getByRole("button", { name: /research_assistant · Alle Arbeitsbereiche/u })
     .click();
+  await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
 
   const form = page.locator("form");
   await expect(form.getByText("Identität und Begrüßung", { exact: true })).toBeVisible();
   await expect(form.getByText("Verhalten", { exact: true })).toBeVisible();
   await expect(form.getByText("Denkaufwand", { exact: true })).toBeVisible();
   await expect(form.getByRole("group", { name: "Werkzeuge", exact: true })).toBeVisible();
-  await expect(form.getByRole("group", { name: "Fähigkeiten", exact: true })).toBeVisible();
+  await expect(form.getByRole("group", { name: "Skills", exact: true })).toBeVisible();
   await expect(form.getByText("Einstiegsvorschläge", { exact: true })).toBeVisible();
   await expect(
     form.getByRole("button", { name: "Änderungen speichern", exact: true })
@@ -2895,27 +2984,57 @@ test("superadmin manages config assets with validation and conflict protection",
   );
   expect(originalResearchAgent).toBeDefined();
 
-  const versionLabel = (version: number) => page.getByText(`Version ${version}`, { exact: false });
+  // The page shows no version counter; the instance's own answer says whether a save went through.
+  const expectVersion = async (version: number) => {
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(`${apiBaseUrl}/api/v1/instance/config/export`);
+        const body: unknown = await response.json();
+        return typeof body === "object" && body !== null && "version" in body
+          ? body.version
+          : undefined;
+      })
+      .toBe(version);
+  };
+  /** Opens a kind's list from wherever Build is: back out of an asset page, then the kind rail. */
+  const openList = async (kind: "Agents" | "Skills") => {
+    const back = page.getByRole("button", { name: /^Back to /u });
+    if ((await back.count()) > 0) {
+      await back.click();
+    }
+    await page
+      .getByRole("navigation", { name: "Kinds in Build" })
+      .getByRole("button", { name: new RegExp(`^${kind}`, "u") })
+      .click();
+    await expect(page.getByRole("heading", { name: kind, level: 1 })).toBeVisible();
+  };
   const form = () => page.locator("form");
   const fieldset = (name: string) => form().getByRole("group", { name, exact: true });
   const fieldControl = (label: string) => form().getByLabel(label, { exact: true });
   const clickAgent = async () => {
+    await openList("Agents");
     await page
-      .getByRole("region", { name: "Agents", exact: true })
-      .getByRole("button", { name: "research_assistant All workspaces", exact: true })
+      .getByRole("list", { name: "Agents" })
+      .getByRole("button", { name: /research_assistant · All workspaces/u })
       .click();
+    await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
     await expect(form()).toBeVisible();
   };
   const clickSkill = async () => {
-    await page.getByRole("button", { name: "config_e2e_skill", exact: true }).click();
+    await openList("Skills");
+    await page
+      .getByRole("list", { name: "Skills" })
+      .getByRole("button", { name: /config_e2e_skill/u })
+      .click();
+    await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
     await expect(form()).toBeVisible();
   };
 
   try {
     await page.goto("/admin/config");
     await expect(page.getByRole("region", { name: "Build" })).toBeVisible();
-    await expect(page).toHaveURL(/\/admin\/config$/u);
-    await expect(versionLabel(original.version)).toBeVisible();
+    await expect(page).toHaveURL(/\/build\/agents$/u);
+    await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
 
     await clickAgent();
     await expect
@@ -2946,13 +3065,16 @@ test("superadmin manages config assets with validation and conflict protection",
         .locator("option")
     ).toContainText(["Model default", "none", "low", "medium", "high", "xhigh"]);
 
-    await page.getByRole("button", { name: "New skill", exact: true }).click();
+    await openList("Skills");
+    // An empty list offers the one button twice: in its head and with its sentence.
+    await page.getByRole("button", { name: "New skill", exact: true }).first().click();
     await page.locator('input[placeholder="generic_workflow_review"]').fill("config_e2e_skill");
     await fieldControl("Title").fill("Config E2E skill");
     await fieldControl("Description").fill("Verifies config asset editing");
     await fieldControl("Content").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
-    await expect(versionLabel(original.version + 1)).toBeVisible();
+    await expectVersion(original.version + 1);
+    await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
     await expect(
       page.getByRole("heading", { name: "Config E2E skill", exact: true })
     ).toBeVisible();
@@ -2969,13 +3091,13 @@ test("superadmin manages config assets with validation and conflict protection",
         { exact: true }
       )
     ).toBeVisible();
-    await expect(versionLabel(original.version + 1)).toBeVisible();
+    await expectVersion(original.version + 1);
 
     await fieldset("Tools").getByLabel("read_skill", { exact: true }).check();
     const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
     await firstPromptText.fill(updatedPrompt);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(versionLabel(original.version + 2)).toBeVisible();
+    await expectVersion(original.version + 2);
     await expect(firstPromptText).toHaveValue(updatedPrompt);
 
     await clickSkill();
@@ -2999,7 +3121,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(deleteSkillDialog).toBeHidden();
     expect(configWrites).toEqual([]);
     page.off("request", recordConfigWrite);
-    await expect(versionLabel(original.version + 2)).toBeVisible();
+    await expectVersion(original.version + 2);
 
     await form().getByRole("button", { name: "Delete", exact: true }).click();
     await page
@@ -3011,22 +3133,22 @@ test("superadmin manages config assets with validation and conflict protection",
         exact: true
       })
     ).toBeVisible();
-    await expect(versionLabel(original.version + 2)).toBeVisible();
+    await expectVersion(original.version + 2);
 
     await clickAgent();
     await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).uncheck();
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(versionLabel(original.version + 3)).toBeVisible();
+    await expectVersion(original.version + 3);
     await clickSkill();
     await form().getByRole("button", { name: "Delete", exact: true }).click();
     await page
       .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
-    await expect(versionLabel(original.version + 4)).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Skills" }).getByText("None yet.", { exact: true })
-    ).toBeVisible();
+    await expectVersion(original.version + 4);
+    // A deleted asset has no page: Build is back on the kind's list, which is empty again.
+    await expect(page).toHaveURL(/\/build\/skills$/u);
+    await expect(page.getByText(/^No skills yet\./u)).toBeVisible();
 
     await clickAgent();
     const instructions = fieldControl("Instructions");
@@ -3052,7 +3174,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(conflict).toBeVisible();
     await conflict.getByRole("button", { name: "Reload latest", exact: true }).click();
     await expect(conflict).toBeHidden();
-    await expect(versionLabel(original.version + 5)).toBeVisible();
+    await expectVersion(original.version + 5);
     await expect(fieldControl("Instructions")).toHaveValue(serverInstructions);
   } finally {
     const restored = await requestWithOrigin(
