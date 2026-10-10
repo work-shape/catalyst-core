@@ -142,11 +142,8 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
       }
     );
 
-    await page.goto("/admin/config");
-    await page
-      .getByRole("region", { name: "Agents", exact: true })
-      .getByRole("button", { name: `${agentName} All workspaces`, exact: true })
-      .click();
+    // The agent's page in the Build area.
+    await page.goto(`/build/agents/${agentName}`);
     const form = page.locator("form");
     const tools = form.getByRole("group", { name: "Tools", exact: true });
     // The tool is not on offer, and the agent's reference to it is there to see and to remove.
@@ -161,6 +158,13 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     await stale.getByRole("button", { name: "Remove" }).click();
     await expect(stale).toHaveCount(0);
     await expect(tools).toContainText("0 selected");
+    // The removal is an unsaved change: leaving the page asks first, and staying keeps it.
+    const question = page.getByRole("dialog", { name: "Leave without saving?", exact: true });
+    await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
+    await expect(question).toBeVisible();
+    await question.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(question).toBeHidden();
+    await expect(stale).toHaveCount(0);
     // A write of another file between the load and the save is a conflict: the editor loads
     // the latest, and the reference is removed and saved again.
     const conflict = page.getByRole("dialog", { name: "Configuration changed on the server" });

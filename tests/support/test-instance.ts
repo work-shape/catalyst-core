@@ -382,7 +382,8 @@ export function completeServerOptions(
         createTestAssetKinds({
           config: options.config,
           validationRefs: configAssets.validationRefs,
-          validateAgents: configAssets.validateAgents
+          // A definition handed to the kind is one that is being written.
+          validateAgents: (agents) => configAssets.validateAgents?.(agents, agents) ?? []
         })
     }
   };
