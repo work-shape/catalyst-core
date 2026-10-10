@@ -1,0 +1,5 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "operation_runs_list_idx" ON "operation_runs" USING btree ("client_instance_id","created_at","id");--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "operation_runs_status_created_idx" ON "operation_runs" USING btree ("client_instance_id","status","created_at","id");--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "operation_runs_operation_created_idx" ON "operation_runs" USING btree ("client_instance_id","operation","created_at","id");--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "operation_runs_origin_created_idx" ON "operation_runs" USING btree ("client_instance_id","origin_kind","created_at","id");--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "operation_runs_workspace_created_idx" ON "operation_runs" USING btree ("client_instance_id","collaboration_workspace_id","created_at","id") WHERE "operation_runs"."collaboration_workspace_id" is not null;

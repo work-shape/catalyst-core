@@ -13,7 +13,6 @@ import type {
   ClientInstanceId,
   CollaborationWorkspaceId,
   ConversationId,
-  JsonObject,
   JsonValue,
   OperationDenial,
   OperationEffect,
@@ -22,13 +21,14 @@ import type {
   OperationRunDecision,
   OperationRunError,
   OperationRunId,
-  OperationRunStatus
+  OperationRunStatus,
+  OperationRunUsage
 } from "@vivd-catalyst/core";
 
 /**
  * One row per call of a registered operation. No foreign key to `conversations`: a run of an
- * app outlives the conversation that built the app. Retention of run rows is not built yet:
- * nothing deletes a row, neither with its conversation nor after a time.
+ * app outlives the conversation that built the app. A run a conversation caused is deleted
+ * with the conversation; every other run is deleted with the audit events of its age.
  */
 export const operationRuns = pgTable(
   "operation_runs",
@@ -58,7 +58,7 @@ export const operationRuns = pgTable(
     resultRef: text("result_ref"),
     // A code and a safe message, and for a refused run what refused it. Never provider text.
     error: jsonb("error").$type<OperationRunError & { denial?: OperationDenial }>(),
-    usage: jsonb("usage").$type<JsonObject>(),
+    usage: jsonb("usage").$type<OperationRunUsage>(),
     correlationId: text("correlation_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -87,6 +87,33 @@ export const operationRuns = pgTable(
       table.actorId,
       table.createdAt.desc()
     ),
+    // The list of runs and its filters. Each reads the newest runs of one value in the order
+    // of the list, newest first with the id as the tie-break, without sorting and without
+    // walking past the runs of every other value. The columns are ascending and read
+    // backwards: an index declared descending puts nulls last, which `ORDER BY ... DESC` does
+    // not ask for, so PostgreSQL would sort every matching run instead.
+    index("operation_runs_list_idx").on(table.clientInstanceId, table.createdAt, table.id),
+    index("operation_runs_status_created_idx").on(
+      table.clientInstanceId,
+      table.status,
+      table.createdAt,
+      table.id
+    ),
+    index("operation_runs_operation_created_idx").on(
+      table.clientInstanceId,
+      table.operation,
+      table.createdAt,
+      table.id
+    ),
+    index("operation_runs_origin_created_idx").on(
+      table.clientInstanceId,
+      table.originKind,
+      table.createdAt,
+      table.id
+    ),
+    index("operation_runs_workspace_created_idx")
+      .on(table.clientInstanceId, table.collaborationWorkspaceId, table.createdAt, table.id)
+      .where(sql`${table.collaborationWorkspaceId} is not null`),
     index("operation_runs_open_idx")
       .on(table.clientInstanceId, table.status, table.expiresAt)
       .where(sql`${table.status} in ('running', 'pending_confirmation', 'pending_approval')`),
