@@ -1,4 +1,4 @@
-import { WORKSPACE_COMMAND_PATH_ENV_NAME, readToolExecutionEnv } from "./env";
+import { readToolExecutionEnv } from "./env";
 import { createHash, randomUUID } from "node:crypto";
 import {
   lstat,
@@ -487,7 +487,7 @@ export class LocalWorkspaceCommandRunner {
       tempDirectory,
       env: {
         HOME: workspaceDirectory,
-        [WORKSPACE_COMMAND_PATH_ENV_NAME]: readToolExecutionEnv().path,
+        PATH: readToolExecutionEnv().path,
         TMPDIR: tempDirectory,
         WORKSPACE_DIR: workspaceDirectory
       },

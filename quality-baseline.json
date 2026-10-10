@@ -206,6 +206,13 @@
     },
     {
       "target": "lint",
+      "rule": "catalyst/env-boundary",
+      "scope": "packages/deployment-kit",
+      "count": 3,
+      "owner": "CB-8c"
+    },
+    {
+      "target": "lint",
       "rule": "catalyst/fetch-boundary",
       "scope": "packages/config-cli",
       "count": 5,

@@ -10,7 +10,7 @@ import {
   type CreateClientInstanceAppInput
 } from "./app";
 import type { ClientInstanceCapability } from "./capabilities";
-import { CLIENT_INSTANCE_ENV_NAMES, readClientInstanceEnv, type ClientInstanceEnv } from "./env";
+import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createClientInstanceAgentRunWorker,
   runClientInstanceAgentRunWorker,
@@ -103,10 +103,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   ): string {
     const env = readClientInstanceEnv(resolveInput.env);
     const configuredPath =
-      resolveInput.configPath ??
-      env[CLIENT_INSTANCE_ENV_NAMES.CLIENT_CONFIG_PATH] ??
-      input.configFile ??
-      "config/app.yaml";
+      resolveInput.configPath ?? env.CLIENT_CONFIG_PATH ?? input.configFile ?? "config/app.yaml";
     if (isAbsolute(configuredPath)) {
       return configuredPath;
     }

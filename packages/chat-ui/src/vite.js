@@ -1,7 +1,7 @@
-import { readChatUiEnv } from "../dist/env.js";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readChatUiEnv } from "./env.js";
 import {
   createClientBranding,
   loadClientInstanceConfigFromFile

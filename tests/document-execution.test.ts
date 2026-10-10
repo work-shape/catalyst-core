@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,54 +13,112 @@ import {
   runNativeProcess
 } from "@vivd-catalyst/document-execution";
 
-vi.mock("node:child_process", { spy: true });
-
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
   vi.unstubAllEnvs();
-  vi.clearAllMocks();
   await Promise.all(
     tempDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true }))
   );
 });
 
 describe("native document execution", () => {
-  it("passes only allowed parent variables and explicit caller values to native children", async () => {
-    for (const name of ["PATH", "HOME", "TMPDIR", "LANG"]) {
-      vi.stubEnv(name, "parent-fixture");
-    }
+  it("hands every native child the whole parent environment, and LibreOffice its own profile on top", async () => {
     vi.stubEnv("CATALYST_PARENT_ONLY_MARKER", "parent-fixture");
-    const args = ["-e", "process.stdout.write(JSON.stringify(Object.keys(process.env).sort()))"];
-    const inherited = await runNativeProcess({
-      command: process.execPath,
-      args,
-      timeoutMs: 15_000
-    });
-    const inheritedEnv = vi.mocked(spawn).mock.calls.at(-1)?.[2]?.env;
-    expect(Object.keys(inheritedEnv ?? {}).sort()).toEqual(["HOME", "LANG", "PATH", "TMPDIR"]);
-    // macOS adds __CF_USER_TEXT_ENCODING after exec, independently of the supplied map.
-    expect(JSON.parse(inherited.stdout)).not.toContain("CATALYST_PARENT_ONLY_MARKER");
+    const directory = await temporaryDirectory("native-child-environment-");
+    const outputDirectory = join(directory, "output");
+    await mkdir(outputDirectory);
+    const sourcePath = join(outputDirectory, "proposal.docx");
+    const pdfPath = join(directory, "source.pdf");
+    await Promise.all([writeFile(sourcePath, "source"), writeFile(pdfPath, "%PDF fixture")]);
+    const received = join(directory, "received-environment.json");
+    // Stands in for each native tool: records what it was given, then writes the file its
+    // caller expects.
+    const command = await writeExecutable(
+      directory,
+      "fake-native-tool",
+      String.raw`
+const { basename, extname, join } = require("node:path");
+const { writeFileSync } = require("node:fs");
+const args = process.argv.slice(2);
+writeFileSync(${JSON.stringify(received)}, JSON.stringify(process.env));
+if (args.includes("--outdir")) {
+  const source = args.at(-1);
+  const name = basename(source, extname(source)) + "." + args[args.indexOf("--convert-to") + 1];
+  writeFileSync(join(args[args.indexOf("--outdir") + 1], name), "converted");
+} else if (args.includes("-singlefile")) writeFileSync(args.at(-1) + ".png", "rendered");
+`
+    );
+    const parent = { ...process.env };
+    const receivedBy = async (run: () => Promise<unknown>): Promise<Record<string, string>> => {
+      await rm(received, { force: true });
+      await run();
+      const value: unknown = JSON.parse(await readFile(received, "utf8"));
+      return Object.fromEntries(
+        Object.entries(Object(value)).map(([name, text]) => [name, String(text)])
+      );
+    };
+    // macOS adds this one to every process it starts.
+    const added = (child: Record<string, string>, expected: object) =>
+      Object.keys(child).filter(
+        (name) => !(name in expected) && name !== "__CF_USER_TEXT_ENCODING"
+      );
 
-    const explicit = await runNativeProcess({
-      command: process.execPath,
-      args: [
-        "-e",
-        "process.stdout.write(JSON.stringify({ markerLeaked: 'CATALYST_PARENT_ONLY_MARKER' in process.env, overrideApplied: process.env.HOME === 'caller-fixture' }))"
-      ],
-      env: { HOME: "caller-fixture", LANG: undefined, CALLER_ONLY_MARKER: "caller-fixture" },
-      timeoutMs: 15_000
-    });
-    const explicitEnv = vi.mocked(spawn).mock.calls.at(-1)?.[2]?.env;
-    expect(
-      Object.keys(explicitEnv ?? {})
-        .filter((name) => explicitEnv?.[name] !== undefined)
-        .sort()
-    ).toEqual(["CALLER_ONLY_MARKER", "HOME", "PATH", "TMPDIR"]);
-    expect(JSON.parse(explicit.stdout)).toEqual({
-      markerLeaked: false,
-      overrideApplied: true
-    });
+    const plainChildren = [
+      // The call the PDF extraction in Python makes: no environment stated.
+      () => runNativeProcess({ command, args: [], timeoutMs: 15_000 }),
+      () => inspectPdf({ command, pdfPath, timeoutMs: 15_000 }),
+      () =>
+        renderPdfPage({
+          command,
+          pdfPath,
+          outputDirectory: directory,
+          pageNumber: 1,
+          resolution: { dpi: 72 },
+          timeoutMs: 15_000
+        })
+    ];
+    for (const run of plainChildren) {
+      const child = await receivedBy(run);
+      expect(child).toMatchObject(parent);
+      expect(child.CATALYST_PARENT_ONLY_MARKER).toBe("parent-fixture");
+      expect(added(child, parent)).toEqual([]);
+    }
+
+    const office = await receivedBy(() =>
+      convertOfficeDocument({
+        command,
+        sourcePath,
+        outputDirectory,
+        outputFormat: "pdf",
+        timeoutMs: 15_000
+      })
+    );
+    const profile = office.HOME ?? "";
+    expect(profile).toMatch(/\.catalyst-office-operation-[^/\\]+[/\\]\.catalyst-office-profile-$/u);
+    const expectedOffice = {
+      ...parent,
+      HOME: profile,
+      XDG_CONFIG_HOME: join(profile, "xdg_config"),
+      XDG_CACHE_HOME: join(profile, "xdg_cache"),
+      ...(process.platform === "darwin"
+        ? { TMPDIR: "/private/tmp", TEMP: "/private/tmp", TMP: "/private/tmp" }
+        : {})
+    };
+    expect(office).toMatchObject(expectedOffice);
+    expect(added(office, expectedOffice)).toEqual([]);
+
+    // A caller that states an environment replaces the parent's; nothing is merged in.
+    const stated = await receivedBy(() =>
+      runNativeProcess({
+        command,
+        args: [],
+        env: { PATH: parent.PATH, CALLER_ONLY_MARKER: "caller-fixture" },
+        timeoutMs: 15_000
+      })
+    );
+    expect(stated).toMatchObject({ PATH: parent.PATH, CALLER_ONLY_MARKER: "caller-fixture" });
+    expect(added(stated, { PATH: "", CALLER_ONLY_MARKER: "" })).toEqual([]);
   });
 
   it("bounds process output and reports failed processes without shell interpolation", async () => {

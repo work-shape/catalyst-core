@@ -14,7 +14,7 @@ Counts are exact by target, rule and package in each repository's `quality-basel
 | lint           | `@typescript-eslint/return-await`                  | typescript-eslint |        1 |            2 | CB-6b, PA-1b                                                                                            |
 | lint           | `catalyst/console-boundary`                        | ESLint plugin     |       25 |            2 | CB-8c                                                                                                   |
 | lint           | `catalyst/database-skip`                           | ESLint plugin     |       10 |            0 | CB-3b                                                                                                   |
-| lint           | `catalyst/env-boundary`                            | ESLint plugin     |        0 |           30 | CB-8c                                                                                                   |
+| lint           | `catalyst/env-boundary`                            | ESLint plugin     |        3 |           33 | CB-8c                                                                                                   |
 | lint           | `catalyst/fetch-boundary`                          | ESLint plugin     |       10 |            2 | CB-6a, CB-10a, PA-3                                                                                     |
 | lint           | `catalyst/host-object-boundary`                    | ESLint plugin     |        1 |            0 | CB-8c                                                                                                   |
 | lint           | `catalyst/memory-store`                            | ESLint plugin     |        6 |            0 | CB-3b                                                                                                   |
@@ -44,7 +44,7 @@ The relative imports into another package are almost all tests that import a pac
 
 Module cycles count one finding per member file. Platform has three groups with 4, 6 and 6 members (chat-server, chat-ui, core), capabilities has five groups with 11 members in all, in artifact-helpers.
 
-S3-07 removed all direct environment-read findings. The remaining 30 capabilities findings are artifact-helper CLI entries that pass the whole `process` object to the command runner, whose contract reads only stdout, stderr and exitCode.
+S3-07 moved the environment reads of package sources into each package's one environment module. Six reads in two scripts remain: three in `packages/deployment-kit/verify/compose-helpers.mjs` in platform and three in `packages/artifact-helpers/scripts/artifact-parity-probe.mjs` in capabilities. The other 30 capabilities findings are artifact-helper CLI entries that pass the whole `process` object to the command runner, whose contract reads only stdout, stderr and exitCode.
 
 C-126 owns the 16 artifact-helper source and script files over 800 lines.
 

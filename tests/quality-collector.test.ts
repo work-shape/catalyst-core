@@ -566,36 +566,49 @@ describe("quality collector", { timeout: 180_000 }, () => {
     );
   });
 
-  it("limits environment exemptions and checks import.meta.env outside named frontend entries", () => {
-    const fixtures = {
-      "packages/config-schema/package.json": JSON.stringify({ name: "@fixture/config-schema" }),
-      "packages/config-schema/src/reader.ts": "export const mode = process.env.MODE;\n",
+  it("allows environment reads only in a package's one env module and checks import.meta.env outside named frontend entries", () => {
+    const read = "export const mode = process.env.MODE;\n";
+    const allowed = {
       "packages/artifact-helpers/package.json": JSON.stringify({
         name: "@fixture/artifact-helpers"
       }),
-      "packages/artifact-helpers/src/lib/env.ts": "export const read = () => process.env;\n",
+      "packages/artifact-helpers/src/lib/env.ts": read,
+      "packages/chat-ui/package.json": JSON.stringify({ name: "@fixture/chat-ui" }),
+      "packages/chat-ui/src/env.js": read,
       "packages/chat-standalone/package.json": JSON.stringify({ name: "@fixture/chat-standalone" }),
       "packages/chat-standalone/src/main.tsx": "export const mode = import.meta.env.MODE;\n",
-      "scripts/env-script.mjs": "export const mode = process.env.MODE;\n",
+      // A script at the repository root belongs to no package.
+      "scripts/env-script.mjs": read
+    };
+    const refused = {
+      "packages/config-schema/package.json": JSON.stringify({ name: "@fixture/config-schema" }),
+      "packages/config-schema/src/reader.ts": read,
+      // The package root, a scripts folder and a second env module are not the one module.
+      "packages/alpha/root-read.mjs": read,
+      "packages/alpha/scripts/tool.mjs": read,
+      [`${source}/scripts/tool.ts`]: read,
+      [`${source}/nested/env.ts`]: read,
+      // A package that keeps its module elsewhere has no second one at the usual path.
+      "packages/artifact-helpers/src/env.ts": read,
+      "packages/chat-ui/src/env.ts": read,
       [`${source}/import-meta-env.mts`]: "export const mode = import.meta.env.MODE;\n",
       [`${source}/import-meta-computed.mts`]: 'export const mode = import.meta["env"].MODE;\n',
       [`${source}/import-meta-alias.mts`]:
         "const meta = import.meta; export const mode = meta.env.MODE;\n"
     };
+    const fixtures = { ...allowed, ...refused };
     try {
       write(fixtures);
       const findings = measure("lint").filter((finding) =>
         finding.startsWith("catalyst/env-boundary ")
       );
-      expect(findings.filter((finding) => finding.includes("/import-meta-"))).toEqual([
-        `catalyst/env-boundary ${source}/import-meta-alias.mts`,
-        `catalyst/env-boundary ${source}/import-meta-computed.mts`,
-        `catalyst/env-boundary ${source}/import-meta-env.mts`
-      ]);
-      for (const file of Object.keys(fixtures).filter((file) => !file.includes("/import-meta-"))) {
+      for (const file of Object.keys(refused).filter((file) => !file.endsWith("package.json"))) {
+        expect(findings).toContain(`catalyst/env-boundary ${file}`);
+      }
+      for (const file of Object.keys(allowed)) {
         expect(findings).not.toContain(`catalyst/env-boundary ${file}`);
       }
-      write({ "packages/chat-standalone/src/main.tsx": "export const mode = process.env.MODE;\n" });
+      write({ "packages/chat-standalone/src/main.tsx": read });
       expect(measure("lint")).toContain(
         "catalyst/env-boundary packages/chat-standalone/src/main.tsx"
       );

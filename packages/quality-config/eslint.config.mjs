@@ -58,6 +58,17 @@ const isPackageFile = (filename, path) => {
 };
 
 /**
+ * The one module of a package that may read the environment is `src/env.ts`. These two
+ * packages keep theirs elsewhere: the Vite plugin of chat-ui is plain JavaScript that loads
+ * without a build, and the artifact helpers keep their library under `src/lib`.
+ * @type {Record<string, string>}
+ */
+const ENV_MODULE_ELSEWHERE = {
+  "packages/chat-ui": "src/env.js",
+  "packages/artifact-helpers": "src/lib/env.ts"
+};
+
+/**
  * A rule with one message. `inScope` decides per file whether the rule applies.
  * @param {string} message
  * @param {(filename: string) => boolean} inScope
@@ -384,13 +395,10 @@ const plugin = {
     "env-boundary": rule(
       "Environment reads belong in the package's src/env.ts",
       (filename) => {
-        const path = relative(root, filename).replaceAll("\\", "/");
+        const pkg = packageAt(filename);
         return (
-          /^(?:(?:packages|clients)\/[^/]+\/)?src\//u.test(path) &&
-          !path.startsWith("packages/config-schema/src/") &&
-          !/(?:^|\/)src\/env\.ts$/u.test(path) &&
-          !/(?:^|\/)scripts\//u.test(path) &&
-          path !== "packages/artifact-helpers/src/lib/env.ts"
+          pkg !== undefined &&
+          !isPackageFile(filename, ENV_MODULE_ELSEWHERE[pkg.directory] ?? "src/env.ts")
         );
       },
       (context, report) => {
