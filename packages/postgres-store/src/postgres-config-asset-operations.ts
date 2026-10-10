@@ -1,8 +1,10 @@
 import { keysetFilter } from "./paging";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, like } from "drizzle-orm";
 import {
   AppError,
+  INSTANCE_ASSET_SCOPE,
   assertConfigAssetBases,
+  assetScopesEqual,
   createPlatformId,
   resolveInitialAgentAvailabilityMode,
   type AgentAvailability,
@@ -13,6 +15,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import {
+  mapAssetScope,
   mapConfigAsset,
   mapConfigAssetRevision,
   mapConfigAssetState,
@@ -49,6 +52,10 @@ export async function listActiveConfigAssets(
   ];
   if (input.kind !== undefined) {
     conditions.push(eq(configAssets.kind, input.kind));
+  }
+  if (input.namePrefix !== undefined) {
+    // A constant pattern, so the planner reads it as a range of the prefix index.
+    conditions.push(like(configAssets.name, `${escapeLikePattern(input.namePrefix)}%`));
   }
   const rows = await db
     .select({ asset: configAssets, revision: configAssetRevisions })
@@ -247,6 +254,7 @@ export async function applyConfigAssetMutations(
         continue;
       }
 
+      const scope = mutation.scope ?? INSTANCE_ASSET_SCOPE;
       if (!asset) {
         const assetId = createPlatformId("cfga");
         const revisionId = createPlatformId("cfgr");
@@ -255,6 +263,8 @@ export async function applyConfigAssetMutations(
           clientInstanceId: input.clientInstanceId,
           kind: mutation.kind,
           name: mutation.name,
+          scopeKind: scope.kind,
+          scopeId: scope.kind === "workspace" ? scope.workspaceId : null,
           status: "active",
           activeRevisionId: revisionId,
           createdAt: now,
@@ -278,6 +288,14 @@ export async function applyConfigAssetMutations(
         continue;
       }
 
+      // A write never moves an asset: the name stays with its owner, also across a delete.
+      if (mutation.scope !== undefined && !assetScopesEqual(scope, mapAssetScope(asset))) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Config ${mutation.kind} '${mutation.name}' belongs to another scope`,
+          { reason: "invalid_scope" }
+        );
+      }
       await appendAndActivateRevision(tx, {
         asset,
         operation: mutation.operation ?? (asset.status === "deleted" ? "create" : "update"),
@@ -436,6 +454,10 @@ export async function setAgentAvailability(
     }
     return { ...input.availability, collaborationWorkspaceIds };
   });
+}
+
+function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/gu, (character) => `\\${character}`);
 }
 
 async function findConfigAssetRow(

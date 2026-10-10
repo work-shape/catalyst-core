@@ -267,6 +267,27 @@
       "when": 1791615983185,
       "tag": "0037_approval_requests_requester_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791634288373,
+      "tag": "0038_asset_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791634289310,
+      "tag": "0039_asset_scope_validate",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791634290217,
+      "tag": "0040_asset_scope_indexes",
+      "breakpoints": true
     }
   ]
 }

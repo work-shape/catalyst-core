@@ -2,6 +2,7 @@ import {
   AppError,
   type AgentRun,
   type ApprovalRequest,
+  type AssetScope,
   type ArtifactPreviewJobRecord,
   type ArtifactPreviewManifest,
   type AuditEvent,
@@ -617,6 +618,16 @@ export function mapConfigAssetState(row: ConfigAssetStateRow | undefined): Confi
   };
 }
 
+export function mapAssetScope(row: Pick<ConfigAssetRow, "scopeKind" | "scopeId">): AssetScope {
+  if (row.scopeKind === "instance") {
+    return { kind: "instance" };
+  }
+  if (row.scopeId === null) {
+    throw new AppError("INTERNAL", "A workspace-owned config asset names no workspace");
+  }
+  return { kind: "workspace", workspaceId: asCollaborationWorkspaceId(row.scopeId) };
+}
+
 export function mapConfigAsset(
   row: ConfigAssetRow | undefined,
   revision: ConfigAssetRevisionRow | undefined
@@ -629,6 +640,7 @@ export function mapConfigAsset(
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
     kind: row.kind,
     name: row.name,
+    scope: mapAssetScope(row),
     status: row.status,
     activeRevisionId: row.activeRevisionId,
     revision: revision.revision,

@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   AgentAvailability,
+  AssetScope,
   AuditActor,
   CollaborationWorkspace,
   ConfigAssetRecord,
@@ -37,16 +38,33 @@ export const configAssets = pgTable(
     clientInstanceId: text("client_instance_id").notNull(),
     kind: text("kind").$type<ConfigAssetRecord["kind"]>().notNull(),
     name: text("name").notNull(),
+    // The owner: the instance, or the workspace `scopeId` names. The Namespace is not a
+    // column, it is derived from the name against the registered prefixes.
+    scopeKind: text("scope_kind").$type<AssetScope["kind"]>().notNull().default("instance"),
+    scopeId: text("scope_id"),
     status: text("status").$type<ConfigAssetRecord["status"]>().notNull(),
     activeRevisionId: text("active_revision_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },
   (table) => [
+    // A name is unique per client instance and kind whatever the scope: references are by name.
+    // That also keeps it unique within one workspace, so no index per workspace is needed.
     uniqueIndex("config_assets_client_kind_name_idx").on(
       table.clientInstanceId,
       table.kind,
       table.name
+    ),
+    // A name prefix, such as a Namespace's, is a range of this index under any collation.
+    index("config_assets_client_kind_name_prefix_idx").on(
+      table.clientInstanceId,
+      table.kind,
+      table.name.op("text_pattern_ops")
+    ),
+    check("config_assets_scope_kind_check", sql`${table.scopeKind} in ('instance', 'workspace')`),
+    check(
+      "config_assets_scope_id_check",
+      sql`(${table.scopeKind} = 'instance') = (${table.scopeId} is null)`
     )
   ]
 );
