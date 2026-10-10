@@ -59,6 +59,9 @@ export function createRetentionOptions(input: {
   modelProvider?: ScriptedModelProvider;
   /** The instance's daily model call limit. Left out, there is none. */
   modelCallsPerDay?: number;
+  /** The model entries of the instance. Left out, there is one local model without a region. */
+  models?: Record<string, Record<string, string>>;
+  modelBindings?: Array<{ id: string; providerId: string; model?: string }>;
 }): ChatServerOptions {
   const { store } = input;
   const config = parseClientInstanceConfig({
@@ -79,7 +82,10 @@ export function createRetentionOptions(input: {
       auditDays: 365,
       allowUserDelete: true
     },
-    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
+    infrastructure: {
+      models: input.models ?? { local: { provider: "deterministic", model: "local" } }
+    },
+    ...(input.modelBindings ? { modelBindings: input.modelBindings } : {}),
     ...(input.modelCallsPerDay
       ? { usage: { safeguards: { modelCallsPerDay: input.modelCallsPerDay } } }
       : {}),

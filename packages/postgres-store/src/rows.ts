@@ -506,9 +506,18 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
       ? {}
       : { conversationId: asConversationId(row.conversationId) }),
     ...(row.agentRunId === null ? {} : { agentRunId: asAgentRunId(row.agentRunId) }),
-    agentName: row.agentName,
+    // A row holds the agent of its run or the purpose of a call the product made for itself.
+    agentName: row.agentName ?? row.purpose ?? "",
+    ...(row.purpose === null ? {} : { purpose: row.purpose }),
     providerId: row.providerId,
     model: row.model,
+    ...(row.region === null ? {} : { region: row.region }),
+    ...(row.bindingId === null ? {} : { bindingId: row.bindingId }),
+    ...(row.userId === null ? {} : { userId: asUserId(row.userId) }),
+    ...(row.collaborationWorkspaceId === null
+      ? {}
+      : { collaborationWorkspaceId: asCollaborationWorkspaceId(row.collaborationWorkspaceId) }),
+    ...(row.operationRunId === null ? {} : { operationRunId: row.operationRunId }),
     inputTokens: row.inputTokens,
     cachedInputTokens: row.cachedInputTokens ?? undefined,
     outputTokens: row.outputTokens,

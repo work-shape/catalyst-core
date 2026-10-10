@@ -20,6 +20,7 @@ import {
 import {
   ALL_MODEL_CAPABILITIES,
   adapterFromFakeProvider,
+  createRecordingGovernance,
   silentTestLogger
 } from "./support/model-gateway";
 
@@ -83,10 +84,7 @@ function gatewayDeclaring(nativeTools: ModelNativeToolId[]) {
         )
       ]
     ]),
-    governance: {
-      runModelCall: (_call, execute) => execute(),
-      recordModelUsage: async () => undefined
-    },
+    governance: createRecordingGovernance(),
     logger: silentTestLogger
   });
   /** One model call for the agent, with the tools the runtime would offer its model. */

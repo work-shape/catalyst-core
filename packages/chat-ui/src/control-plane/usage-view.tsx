@@ -24,6 +24,7 @@ import {
   TableRow
 } from "@vivd-catalyst/ui";
 import { formatDateTime } from "./locale-format";
+import { usageCaller, usageRegion } from "./usage-attribution-labels";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 
 export function UsageView({
@@ -203,7 +204,10 @@ export function UsageView({
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("settings.time")}</TableHead>
+                    <TableHead>{t("settings.usageCaller")}</TableHead>
                     <TableHead>{t("settings.usageModel")}</TableHead>
+                    <TableHead>{t("settings.usageProvider")}</TableHead>
+                    <TableHead>{t("settings.usageRegion")}</TableHead>
                     <TableHead>{t("settings.usageTokens")}</TableHead>
                     <TableHead>{t("settings.usageCachedInput")}</TableHead>
                     <TableHead>{t("settings.usageBillable")}</TableHead>
@@ -222,10 +226,17 @@ export function UsageView({
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDateTime(event.createdAt, locale)}
                       </TableCell>
+                      <TableCell className="break-words">{usageCaller(event, t)}</TableCell>
                       <TableCell className="font-medium break-words">
                         {event.billedAsFast
                           ? t("settings.usageModelFast", { model: event.model })
                           : event.model}
+                      </TableCell>
+                      <TableCell className="break-words text-muted-foreground">
+                        {event.providerId}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {usageRegion(event.region, t)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {event.totalTokens.toLocaleString(locale)}

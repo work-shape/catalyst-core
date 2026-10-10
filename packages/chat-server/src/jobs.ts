@@ -12,6 +12,8 @@ import { ConversationWorkflow } from "./conversation-workflow";
 import {
   adoptLegacyJobsJob,
   adoptLegacyJobsSchedule,
+  backfillUsageAttributionJob,
+  backfillUsageAttributionSchedule,
   cleanUpExecutionWorkspacesJob,
   deleteAccountJob,
   deleteWorkspaceJob,
@@ -29,6 +31,7 @@ import { ConversationRetentionWorkflow } from "./retention";
 import { RunRecoveryWatchdog } from "./run-recovery";
 import { deletionActor } from "./subject-deletion";
 import type { ChatServerOptions, ConversationRetentionOptions, RunRecoveryOptions } from "./types";
+import { createUsageAttributionBackfill } from "./usage-backfill";
 import { ExecutionWorkspaceCleanupWorkflow } from "./workspace-cleanup";
 import { completeWorkspaceDeletion, recordWorkspaceDeletionStalled } from "./workspace-deletion";
 
@@ -56,6 +59,7 @@ export function createChatServerJobs(
     ...jobOptions.retention
   });
   const runRecovery = new RunRecoveryWatchdog(options, options.logger, jobOptions.runRecovery);
+  const usageAttributionBackfill = createUsageAttributionBackfill(options);
   // The runs a process-bound runtime lost are the ones from before this process started.
   const processStartedAt = now();
   let recoveredRunsLostWithProcess = false;
@@ -188,6 +192,11 @@ export function createChatServerJobs(
         if (previews + attachments > 0)
           control.logger.info({ previews, attachments }, "Adopted rows without a job");
       }
+    }),
+    defineJobHandler({
+      kind: backfillUsageAttributionJob,
+      slots: 1,
+      run: (_job, control) => usageAttributionBackfill.run(control)
     })
   ];
   const schedules: JobSchedule[] = [
@@ -195,7 +204,8 @@ export function createChatServerJobs(
     recoverAgentRunsSchedule,
     pruneAuditEventsSchedule,
     pruneJobsSchedule,
-    adoptLegacyJobsSchedule
+    adoptLegacyJobsSchedule,
+    backfillUsageAttributionSchedule
   ];
 
   const cleanup = options.executionWorkspaceCleanup;

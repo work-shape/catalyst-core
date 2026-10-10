@@ -1,4 +1,5 @@
 import {
+  createRecordingGovernance,
   withoutStreaming,
   withTestModelGateway,
   type FakeModelProvider
@@ -35,7 +36,6 @@ import {
   ModelProviderError,
   modelContentImages,
   modelContentText,
-  type ModelCallGovernance,
   type ModelCompletionStreamEvent,
   type ModelMessage
 } from "@vivd-catalyst/model-provider";
@@ -2192,14 +2192,10 @@ describe("local agent runtime", () => {
         };
       }
     };
-    const usageGovernance: ModelCallGovernance = {
-      runModelCall(_clientInstanceId, execute) {
-        return execute();
-      },
-      async recordModelUsage() {
-        throw Object.assign(new Error("usage persistence timed out"), { code: "ETIMEDOUT" });
-      }
-    };
+    const usageGovernance = createRecordingGovernance();
+    usageGovernance.failSettlement = Object.assign(new Error("usage persistence timed out"), {
+      code: "ETIMEDOUT"
+    });
     const runtime = new LocalAgentRuntime(
       withTestModelGateway({
         assetSource: createStaticConfigAssetSource({

@@ -1,4 +1,3 @@
-import { deferred } from "./support/assertions";
 import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import {
@@ -267,12 +266,7 @@ describe("model usage governance", () => {
     });
     await governance.recordModelUsage(usageInput(clientInstanceId));
 
-    await expect(
-      governance.runModelCall(
-        { clientInstanceId, attribution: usageAttribution },
-        async () => "blocked"
-      )
-    ).rejects.toMatchObject({
+    await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Daily customer billable cost is incomplete; spend budget cannot be evaluated safely"
     });
@@ -296,124 +290,61 @@ describe("model usage governance", () => {
     const summary = await governance.createSafeSummary({ clientInstanceId });
     expect(summary.today.cost.billableCostMicros).toBe(4_000_000);
     expect(summary).not.toHaveProperty("costSafetyMultiplier");
-    await expect(
-      governance.runModelCall(
-        { clientInstanceId, attribution: usageAttribution },
-        async () => "blocked"
-      )
-    ).rejects.toMatchObject({
+    await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Daily model spend budget has been reached"
     });
   });
 
-  it("uses the private safety multiplier for budgets without changing billable costs", async () => {
-    const { governance, clientInstanceId } = await createGovernance({
-      dailySpendLimit: 5,
-      costSafetyMultiplier: 1.3
-    });
-    await governance.recordModelUsage(
-      usageInput(clientInstanceId, {
-        inputTokens: 0,
-        cachedInputTokens: 0,
-        outputTokens: 100_000,
-        totalTokens: 100_000,
-        webSearchCallCount: 1
-      })
-    );
-
-    const summary = await governance.createSafeSummary({ clientInstanceId });
-    expect(summary.today.cost.billableCostMicros).toBe(4_000_000);
-    expect(summary).not.toHaveProperty("costSafetyMultiplier");
-    await expect(
-      governance.runModelCall(
-        { clientInstanceId, attribution: usageAttribution },
-        async () => "blocked"
-      )
-    ).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "Daily model spend budget has been reached"
-    });
-  });
-
-  it("reserves model calls so a daily call limit cannot be raced", async () => {
+  it("admits one of two calls that ask at once for the last place of a daily limit", async () => {
     const { governance, clientInstanceId } = await createGovernance({}, { modelCallsPerDay: 1 });
 
     const attempts = await Promise.allSettled([
-      governance.runModelCall({ clientInstanceId, attribution: usageAttribution }, async () => {
-        await delay(20);
-        return "first";
-      }),
-      governance.runModelCall(
-        { clientInstanceId, attribution: usageAttribution },
-        async () => "second"
-      )
+      governance.admitModelCall(admission(clientInstanceId)),
+      governance.admitModelCall(admission(clientInstanceId))
     ]);
 
     expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
     expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
   });
 
-  it.each(["complete", "reject"] as const)(
-    "holds admission until a call settles: %s",
-    async (outcome) => {
-      const { governance, clientInstanceId } = await createGovernance({}, { modelCallsPerDay: 1 });
-      const started = deferred<void>();
-      const execution = deferred<string>();
-      const first = governance.runModelCall(
-        { clientInstanceId, attribution: usageAttribution },
-        () => {
-          started.resolve();
-          return execution.promise;
-        }
-      );
-      const settled = first.then(
-        (value) => ({ value }),
-        (error: unknown) => ({ error })
-      );
-      await started.promise;
-      await expect(
-        governance.runModelCall(
-          { clientInstanceId, attribution: usageAttribution },
-          async () => "blocked"
-        )
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
-      const failure = new Error("Provider rejected the call");
-      if (outcome === "complete") execution.resolve("done");
-      else execution.reject(failure);
-      expect(await settled).toEqual(
-        outcome === "complete" ? { value: "done" } : { error: failure }
-      );
-      await expect(
-        governance.runModelCall(
-          { clientInstanceId, attribution: usageAttribution },
-          async () => "next"
-        )
-      ).resolves.toBe("next");
-    }
-  );
+  it("counts an admitted call once from its admission, settled or not", async () => {
+    const { governance, clientInstanceId, store } = await createGovernance(
+      {},
+      { modelCallsPerDay: 2 }
+    );
+    const refusal = {
+      code: "FORBIDDEN",
+      message: "Daily model call safeguard has been reached"
+    };
 
-  it("does not hold the accounting lock across provider latency", async () => {
-    const { governance, clientInstanceId } = await createGovernance();
-    let activeCalls = 0;
-    let maxActiveCalls = 0;
+    const settled = await governance.admitModelCall(admission(clientInstanceId));
+    // Never settled, as after a call that failed or a process that died.
+    await governance.admitModelCall(admission(clientInstanceId));
+    await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject(
+      refusal
+    );
 
-    await Promise.all([
-      governance.runModelCall({ clientInstanceId, attribution: usageAttribution }, async () => {
-        activeCalls += 1;
-        maxActiveCalls = Math.max(maxActiveCalls, activeCalls);
-        await delay(20);
-        activeCalls -= 1;
-      }),
-      governance.runModelCall({ clientInstanceId, attribution: usageAttribution }, async () => {
-        activeCalls += 1;
-        maxActiveCalls = Math.max(maxActiveCalls, activeCalls);
-        await delay(20);
-        activeCalls -= 1;
-      })
+    await governance.settleModelCall(settled, {
+      inputTokens: 1_000,
+      cachedInputTokens: 0,
+      outputTokens: 500,
+      totalTokens: 1_500,
+      source: "provider_reported"
+    });
+    await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject(
+      refusal
+    );
+
+    const events = await store.usage.listModelUsageEvents({ clientInstanceId });
+    expect(events.map((event) => [event.totalTokens, event.source]).sort()).toEqual([
+      [0, "estimated"],
+      [1_500, "provider_reported"]
     ]);
-
-    expect(maxActiveCalls).toBe(2);
+    expect(events.find((event) => event.id === settled.id)?.customerBillableCost).toMatchObject({
+      status: "settled",
+      totalCostMicros: 20_000
+    });
   });
 });
 
@@ -451,6 +382,16 @@ const usageAttribution = {
   userId: "user_usage"
 };
 
+function admission(clientInstanceId: ReturnType<typeof asClientInstanceId>) {
+  return {
+    clientInstanceId,
+    attribution: usageAttribution,
+    providerId: "azure-eu",
+    model: "gpt-5.6-sol",
+    correlationId: "corr_usage"
+  };
+}
+
 function usageInput(
   clientInstanceId: ReturnType<typeof asClientInstanceId>,
   overrides: Partial<{
@@ -475,8 +416,4 @@ function usageInput(
     correlationId: "corr_usage",
     ...overrides
   };
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

@@ -30,6 +30,8 @@ export type DeletionTransaction = <Result>(
 const PENDING_CLEANUP_BATCH_SIZE = 100;
 // The most pending Conversations a deletion counts, for its refusal and its stalled event.
 const STALLED_PENDING_COUNT_LIMIT = 1000;
+// Usage events one statement of a deletion takes its subject off.
+const USAGE_ATTRIBUTION_CLEAR_BATCH = 5_000;
 const RUN_CANCELLED_BY_DELETION = "The account or workspace of this run is being deleted";
 
 /**
@@ -190,6 +192,28 @@ export async function requireRunsEnded(
     throw new AppError("CONFLICT", "Agent runs of the deleted subject are still ending", {
       activeRunCount: runs.length
     });
+  }
+}
+
+/**
+ * Takes the subject off its usage events, a bounded number per statement, until none names it.
+ * The events and their amounts stay: they are the accounting of the instance. The database
+ * clears what is written between here and the removal of the subject's row.
+ */
+export async function clearUsageAttribution(
+  options: ChatServerOptions,
+  subject: { userId: UserId } | { collaborationWorkspaceId: CollaborationWorkspaceId }
+): Promise<void> {
+  const batch = {
+    clientInstanceId: options.clientInstanceId,
+    limit: USAGE_ATTRIBUTION_CLEAR_BATCH
+  };
+  for (;;) {
+    const cleared =
+      "userId" in subject
+        ? await options.stores.usage.clearUserFromModelUsageEvents({ ...batch, ...subject })
+        : await options.stores.usage.clearWorkspaceFromModelUsageEvents({ ...batch, ...subject });
+    if (cleared === 0) return;
   }
 }
 

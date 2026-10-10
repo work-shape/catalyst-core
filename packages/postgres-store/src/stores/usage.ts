@@ -1,37 +1,27 @@
-import type { StorePage } from "@vivd-catalyst/core";
+import type { ModelUsageEventStore } from "@vivd-catalyst/core";
 import {
-  type ClientInstanceId,
-  type ModelUsageEvent,
-  type ModelUsageEventRecordInput,
-  type ModelUsageEventStore,
-  type ModelUsageWindowSummary
-} from "@vivd-catalyst/core";
-import {
-  appendModelUsageEvent as appendPostgresModelUsageEvent,
-  listModelUsageEvents as listPostgresModelUsageEvents,
-  summarizeModelUsageEvents as summarizePostgresModelUsageEvents
+  appendModelUsageEvent,
+  backfillModelUsageAttribution,
+  clearUserFromModelUsageEvents,
+  clearWorkspaceFromModelUsageEvents,
+  listModelUsageEvents,
+  reserveModelUsageEvent,
+  settleModelUsageEvent,
+  summarizeModelUsageHistory,
+  summarizeRecentModelUsage
 } from "../postgres-audit-usage-operations";
 import type { PostgresConnection } from "../postgres-database";
+
 export function createPostgresUsageStore(db: PostgresConnection): ModelUsageEventStore {
   return {
-    async appendModelUsageEvent(input: ModelUsageEventRecordInput): Promise<ModelUsageEvent> {
-      return appendPostgresModelUsageEvent(db, input);
-    },
-    async summarizeModelUsageEvents(input: {
-      clientInstanceId: ClientInstanceId;
-      start?: string;
-      end?: string;
-    }): Promise<ModelUsageWindowSummary> {
-      return summarizePostgresModelUsageEvents(db, input);
-    },
-    async listModelUsageEvents(input: {
-      clientInstanceId: ClientInstanceId;
-      start?: string;
-      end?: string;
-      limit?: number;
-      page?: StorePage;
-    }): Promise<ModelUsageEvent[]> {
-      return listPostgresModelUsageEvents(db, input);
-    }
+    appendModelUsageEvent: (input) => appendModelUsageEvent(db, input),
+    reserveModelUsageEvent: (input) => reserveModelUsageEvent(db, input),
+    settleModelUsageEvent: (input) => settleModelUsageEvent(db, input),
+    summarizeModelUsageHistory: (input) => summarizeModelUsageHistory(db, input),
+    summarizeRecentModelUsage: (input) => summarizeRecentModelUsage(db, input),
+    listModelUsageEvents: (input) => listModelUsageEvents(db, input),
+    clearUserFromModelUsageEvents: (input) => clearUserFromModelUsageEvents(db, input),
+    clearWorkspaceFromModelUsageEvents: (input) => clearWorkspaceFromModelUsageEvents(db, input),
+    backfillModelUsageAttribution: (input) => backfillModelUsageAttribution(db, input)
   };
 }

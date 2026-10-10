@@ -57,15 +57,28 @@ Admin-facing usage views expose consumption volume and customer billable totals:
 
 Record:
 
-- provider id
-- model id
+- provider id, and the region of the provider entry: `eu`, `global`, or none for a provider that runs inside the instance
+- model id, and the model binding the call named
 - token counts when reported by the provider
 - conversation id, where a conversation caused the call
-- agent run id, or for a call the product made for itself what it was for: `conversation_title` or `guardrail_judge`
+- agent run id and agent name, or for a call the product made for itself what it was for: `conversation_title`, `guardrail_judge` or `document_extraction`
+- the user who caused the call and the workspace it happened in, where there is one
 - correlation id
 - persisted customer billable cost and completeness state
 
-Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped: such a call is recorded with zero tokens and counts toward the daily call limit. Titles and approval checks count toward the limits of the instance like every other call. A record names no user yet; usage per user comes with a later release.
+Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped: such a call is recorded with zero tokens and counts toward the daily call limit. Titles and approval checks count toward the limits of the instance like every other call. The record is written when the call is admitted and completed when it ends, so a call in flight shows as a call without tokens.
+
+A call is admitted against the limits in the database, under a lock per instance. Several API and worker processes together admit no more than the limit allows.
+
+The Usage page lists the caller, the provider and the region of the recent calls. The summary of the API also answers `attributedUsage`: the last 30 days by day, model, provider, region and purpose or agent.
+
+### What stays after a deletion
+
+Usage records are the accounting of the instance and are kept. When an account is deleted, the user is removed from its usage records and the amounts stay. When a workspace is deleted, the workspace is removed from its usage records and the amounts stay. A usage record keeps the conversation id and the agent run id as plain values after the conversation is gone.
+
+### After an upgrade
+
+Records written before provider region, purpose, user and workspace were recorded are filled by a background job, `usage.backfill_attribution`. It needs no action. Until it ends, older records show no region. A record whose provider and model are no longer in `infrastructure.models` keeps no region, because nothing says where it was processed.
 
 Use provider-side billing alerts or budgets as an external backstop.
 

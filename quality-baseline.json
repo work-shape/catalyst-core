@@ -494,13 +494,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/usage-governance/src/index.ts",
-      "count": 1,
-      "owner": "LU-1"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "tests/agent-runtime.test.ts",
       "count": 1,
       "owner": "CB-2"

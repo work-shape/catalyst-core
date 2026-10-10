@@ -6,8 +6,7 @@ import {
   asConversationId,
   ProviderRegistry,
   type Logger,
-  type ModelProviderConfig,
-  type ModelUsageEventInput
+  type ModelProviderConfig
 } from "@vivd-catalyst/core";
 import {
   MODEL_PROVIDER_MESSAGE_MAX_CHARS,
@@ -19,14 +18,13 @@ import {
   type ModelAdapter,
   type ModelAdapterRequest,
   type ModelCall,
-  type ModelCallGovernance,
   type ModelCallStreamEvent,
   type ModelCapabilities,
   type ModelCompletion,
   type ModelCompletionStreamEvent
 } from "@vivd-catalyst/model-provider";
 import { createFakeSecrets } from "./support/fixtures";
-import { ALL_MODEL_CAPABILITIES } from "./support/model-gateway";
+import { ALL_MODEL_CAPABILITIES, createRecordingGovernance } from "./support/model-gateway";
 
 const provider: ModelProviderConfig = {
   id: "main",
@@ -55,7 +53,9 @@ describe("model gateway", () => {
       "entry-model",
       "other-model"
     ]);
-    expect(f.recorded.map((event) => [event.providerId, event.model, event.region])).toEqual([
+    expect(
+      f.governance.recorded.map((event) => [event.providerId, event.model, event.region])
+    ).toEqual([
       ["main", "bound-model", "eu"],
       ["main", "entry-model", "eu"],
       ["main", "other-model", "eu"]
@@ -105,8 +105,8 @@ describe("model gateway", () => {
         message: expect.stringContaining(named)
       });
       expect(f.requests).toHaveLength(0);
-      expect(f.admitted).toBe(0);
-      expect(f.recorded).toHaveLength(0);
+      expect(f.governance.admitted).toBe(0);
+      expect(f.governance.recorded).toHaveLength(0);
     }
   );
 
@@ -139,8 +139,8 @@ describe("model gateway", () => {
     expect(error).toBeInstanceOf(ModelProviderError);
     expect(error).toMatchObject({ kind: "server_error", status: 503 });
     expect(waitsBetween(attemptTimes)).toEqual([1_000, 4_000]);
-    expect(f.admitted).toBe(1);
-    expect(f.recorded).toHaveLength(1);
+    expect(f.governance.admitted).toBe(1);
+    expect(f.governance.recorded).toHaveLength(1);
   });
 
   it("answers with the attempt that succeeds and records the call once", async () => {
@@ -164,8 +164,8 @@ describe("model gateway", () => {
 
     await expect(answered).resolves.toMatchObject({ text: "third time" });
     expect(attempts).toBe(3);
-    expect(f.admitted).toBe(1);
-    expect(f.recorded).toEqual([
+    expect(f.governance.admitted).toBe(1);
+    expect(f.governance.recorded).toEqual([
       expect.objectContaining({ totalTokens: 7, source: "provider_reported" })
     ]);
   });
@@ -249,11 +249,11 @@ describe("model gateway", () => {
     expect(Date.now()).toBe(startedAt);
 
     // A deadline that has passed admits nothing and records nothing.
-    const recordedBefore = f.recorded.length;
+    const recordedBefore = f.governance.recorded.length;
     await expect(
       f.gateway.complete(call({ deadline: new Date(Date.now() - 1) }))
     ).rejects.toMatchObject({ code: "TIMEOUT" });
-    expect(f.recorded).toHaveLength(recordedBefore);
+    expect(f.governance.recorded).toHaveLength(recordedBefore);
   });
 
   it("sends a stream again while the caller has only seen an announced tool call", async () => {
@@ -283,7 +283,7 @@ describe("model gateway", () => {
       "text_delta",
       "completed"
     ]);
-    expect(f.recorded).toHaveLength(1);
+    expect(f.governance.recorded).toHaveLength(1);
   });
 
   it("does not send a stream again once the caller has received output", async () => {
@@ -311,7 +311,7 @@ describe("model gateway", () => {
 
     expect(attempts).toBe(1);
     expect(seen).toEqual([{ type: "text_delta", delta: "Visible" }]);
-    expect(f.recorded).toHaveLength(1);
+    expect(f.governance.recorded).toHaveLength(1);
   });
 
   it("throws the abort of a stopped call and records it once", async () => {
@@ -330,17 +330,16 @@ describe("model gateway", () => {
 
     await expect(stopped).rejects.toBe(abort);
     expect(f.requests).toHaveLength(1);
-    expect(f.recorded).toEqual([
+    expect(f.governance.recorded).toEqual([
       expect.objectContaining({ inputTokens: 0, outputTokens: 0, totalTokens: 0 })
     ]);
-    expect(f.inFlight).toBe(0);
 
     // A call that is already stopped reaches neither admission nor the adapter.
     await expect(f.gateway.complete(call({ signal: stop.signal }))).rejects.toMatchObject({
       code: "CONFLICT"
     });
     expect(f.requests).toHaveLength(1);
-    expect(f.recorded).toHaveLength(1);
+    expect(f.governance.recorded).toHaveLength(1);
   });
 
   // Without the gateway's check of the caller's signal this fails: the transport reports the cut
@@ -374,7 +373,7 @@ describe("model gateway", () => {
       error: (input) => void logged.push(input),
       child: () => logger
     };
-    const recorded: ModelUsageEventInput[] = [];
+    const governance = createRecordingGovernance();
     const gateway = await createInstanceModelGateway({
       registry: new ProviderRegistry(modelProviderDefinitions),
       providers: [{ id: "main", type: "openai-compatible", model: "test-model" }],
@@ -389,12 +388,7 @@ describe("model gateway", () => {
       },
       context: { logger, secrets: createFakeSecrets({ MODEL_KEY: "model-key-value" }) },
       bindings: [],
-      governance: {
-        runModelCall: (_admission, execute) => execute(),
-        async recordModelUsage(input) {
-          recorded.push(input);
-        }
-      }
+      governance
     });
     const seen: ModelCallStreamEvent[] = [];
 
@@ -410,7 +404,7 @@ describe("model gateway", () => {
     expect(error).toMatchObject({ name: "AbortError", message: "Agent run was cancelled" });
     expect(logged).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(recorded).toEqual([expect.objectContaining({ totalTokens: 0 })]);
+    expect(governance.recorded).toEqual([expect.objectContaining({ totalTokens: 0 })]);
   });
 
   it("clears the wait and fails when the call is stopped while it waits", async () => {
@@ -436,7 +430,7 @@ describe("model gateway", () => {
     expect(await failed).toMatchObject({ code: "RATE_LIMITED" });
     expect(vi.getTimerCount()).toBe(0);
     expect(f.requests).toHaveLength(1);
-    expect(f.recorded).toHaveLength(1);
+    expect(f.governance.recorded).toHaveLength(1);
   });
 
   it("records the answer of a stream its caller stops reading at the completion", async () => {
@@ -450,27 +444,28 @@ describe("model gateway", () => {
       if (event.type === "completed") break;
     }
 
-    expect(f.recorded).toEqual([expect.objectContaining({ totalTokens: 11 })]);
-    expect(f.inFlight).toBe(0);
+    expect(f.governance.recorded).toEqual([expect.objectContaining({ totalTokens: 11 })]);
   });
 
   it("fails a completed call whose usage cannot be recorded, without calling the model again", async () => {
     const f = fixture({ complete: async () => completion("answered") });
-    f.failRecording = new Error("usage store is down");
+    f.governance.failSettlement = new Error("usage store is down");
 
     await expect(f.gateway.complete(call())).rejects.toThrow("usage store is down");
     expect(f.requests).toHaveLength(1);
-    expect(f.inFlight).toBe(0);
   });
 
   it("records nothing and calls nothing when admission refuses the call", async () => {
     const f = fixture({ complete: async () => completion("never") });
-    f.refuseAdmission = new AppError("FORBIDDEN", "Daily model call safeguard has been reached");
+    f.governance.refuseAdmission = new AppError(
+      "FORBIDDEN",
+      "Daily model call safeguard has been reached"
+    );
 
-    await expect(f.gateway.complete(call())).rejects.toBe(f.refuseAdmission);
-    await expect(drain(f.gateway.stream(call()))).rejects.toBe(f.refuseAdmission);
+    await expect(f.gateway.complete(call())).rejects.toBe(f.governance.refuseAdmission);
+    await expect(drain(f.gateway.stream(call()))).rejects.toBe(f.governance.refuseAdmission);
     expect(f.requests).toHaveLength(0);
-    expect(f.recorded).toHaveLength(0);
+    expect(f.governance.recorded).toHaveLength(0);
   });
 
   it("keeps the provider's message out of the error and logs it cut to the limit", async () => {
@@ -547,8 +542,10 @@ describe("model gateway", () => {
       text: "A title"
     });
 
-    expect(f.admitted).toBe(1);
-    expect(f.recorded).toEqual([expect.objectContaining({ attribution, totalTokens: 3 })]);
+    expect(f.governance.admitted).toBe(1);
+    expect(f.governance.recorded).toEqual([
+      expect.objectContaining({ attribution, totalTokens: 3 })
+    ]);
   });
 
   it("names the purpose of a system call in the provider error log", async () => {
@@ -569,20 +566,25 @@ describe("model gateway", () => {
     vi.useFakeTimers();
     const f = fixture({ complete: () => new Promise<ModelCompletion>(() => {}) });
 
+    let ended = false;
     const pending = f.gateway
       .complete(call({ deadline: new Date(Date.now() + 5_000) }))
-      .catch((thrown: unknown) => thrown);
+      .catch((thrown: unknown) => thrown)
+      .finally(() => {
+        ended = true;
+      });
     await vi.advanceTimersByTimeAsync(4_999);
     expect(f.requests[0]?.signal?.aborted).toBe(false);
-    expect(f.recorded).toHaveLength(0);
+    expect(ended).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
 
     expect(await pending).toMatchObject({ code: "TIMEOUT" });
     // The adapter was told to stop, the call is not sent again, and it is recorded once.
     expect(f.requests).toHaveLength(1);
     expect(f.requests[0]?.signal?.aborted).toBe(true);
-    expect(f.recorded).toEqual([expect.objectContaining({ totalTokens: 0, source: "estimated" })]);
-    expect(f.inFlight).toBe(0);
+    expect(f.governance.recorded).toEqual([
+      expect.objectContaining({ totalTokens: 0, source: "estimated" })
+    ]);
     expect(f.warnings).toEqual([]);
   });
 
@@ -610,7 +612,7 @@ describe("model gateway", () => {
 
     expect(await pending).toMatchObject({ code: "TIMEOUT" });
     expect(f.requests).toHaveLength(1);
-    expect(f.recorded).toHaveLength(1);
+    expect(f.governance.recorded).toHaveLength(1);
   });
 
   it("keeps a caller's stop a stop when the call also has a deadline", async () => {
@@ -630,7 +632,7 @@ describe("model gateway", () => {
     stop.abort();
 
     await expect(stopped).rejects.toBe(abort);
-    expect(f.recorded).toHaveLength(1);
+    expect(f.governance.recorded).toHaveLength(1);
   });
 });
 
@@ -674,36 +676,8 @@ function fixture(
       return logger;
     }
   };
-  const state = {
-    requests,
-    warnings,
-    capabilities: declared,
-    recorded: [] as ModelUsageEventInput[],
-    admitted: 0,
-    inFlight: 0,
-    refuseAdmission: undefined as Error | undefined,
-    failRecording: undefined as Error | undefined
-  };
-  const governance: ModelCallGovernance = {
-    async runModelCall(_call, execute) {
-      if (state.refuseAdmission) {
-        throw state.refuseAdmission;
-      }
-      state.admitted += 1;
-      state.inFlight += 1;
-      try {
-        return await execute();
-      } finally {
-        state.inFlight -= 1;
-      }
-    },
-    async recordModelUsage(input) {
-      if (state.failRecording) {
-        throw state.failRecording;
-      }
-      state.recorded.push(input);
-    }
-  };
+  const governance = createRecordingGovernance();
+  const state = { requests, warnings, capabilities: declared, governance };
   return Object.assign(state, {
     gateway: createModelGateway({
       providers: [provider],

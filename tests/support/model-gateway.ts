@@ -1,4 +1,10 @@
-import type { Logger, ModelBindingConfig, ModelProviderConfig } from "@vivd-catalyst/core";
+import {
+  createPlatformId,
+  type Logger,
+  type ModelBindingConfig,
+  type ModelProviderConfig,
+  type ModelUsageEventInput
+} from "@vivd-catalyst/core";
 import type { LocalAgentRuntimeOptions } from "@vivd-catalyst/agent-runtime";
 import {
   createModelGateway,
@@ -37,6 +43,59 @@ export function withoutStreaming(provider: FakeModelProvider): FakeModelProvider
     id: provider.id,
     complete: (request, context) => provider.complete(request, context)
   };
+}
+
+/** A scripted usage governance with what it saw. */
+export interface RecordingGovernance extends ModelCallGovernance {
+  /** One record per admitted call: zero tokens from admission, the call's usage once settled. */
+  recorded: ModelUsageEventInput[];
+  admitted: number;
+  /** Set to refuse every admission with this error. */
+  refuseAdmission: Error | undefined;
+  /** Set to fail every settlement with this error. */
+  failSettlement: Error | undefined;
+}
+
+/**
+ * A usage governance as gateway tests script it. Like the real one it holds one record per
+ * admitted call, which stands at zero tokens until the call is settled.
+ */
+export function createRecordingGovernance(): RecordingGovernance {
+  const records = new Map<string, ModelUsageEventInput>();
+  const governance: RecordingGovernance = {
+    recorded: [],
+    admitted: 0,
+    refuseAdmission: undefined,
+    failSettlement: undefined,
+    async admitModelCall(call) {
+      if (governance.refuseAdmission) throw governance.refuseAdmission;
+      governance.admitted += 1;
+      const id = createPlatformId<"ModelUsageEventId">("usage");
+      const record: ModelUsageEventInput = {
+        ...call,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        source: "estimated",
+        webSearchCallCount: 0
+      };
+      records.set(id, record);
+      governance.recorded.push(record);
+      return {
+        id,
+        clientInstanceId: call.clientInstanceId,
+        providerId: call.providerId,
+        model: call.model,
+        fastMode: call.fastMode === true
+      };
+    },
+    async settleModelCall(admitted, usage) {
+      if (governance.failSettlement) throw governance.failSettlement;
+      const record = records.get(admitted.id);
+      if (record) Object.assign(record, usage);
+    }
+  };
+  return governance;
 }
 
 /** Everything a call can ask for, so a scripted provider is refused nothing. */

@@ -1,15 +1,22 @@
 import {
   AppError,
   ModelUsageLimitReachedError,
+  type AdmittedModelCall,
   type ClientInstanceId,
   type ModelAttribution,
+  type ModelCallAdmission,
+  type ModelCallUsage,
+  type ModelUsageAttributionGroup,
+  type ModelUsageBudgetUsage,
+  type ModelUsageBudgetWindow,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventRecordInput,
   type ModelUsageEventStore,
   type ModelUsageRecorder,
+  type ModelUsageSettlement,
+  type ModelUsageTotals,
   type ModelUsageWindowSummary,
-  type SettledUsageCostRecord,
   type UsageBudgetConfig,
   type UsageCostComponents,
   type UsageCostConfig,
@@ -60,6 +67,15 @@ export interface SafeCostedModelUsageMonthlyBucket extends SafeCostedModelUsageW
   month: string;
 }
 
+/** What one purpose or one agent used of one model on one day. */
+export interface SafeCostedModelUsageAttributionGroup
+  extends
+    SafeCostedModelUsageWindowSummary,
+    Pick<
+      ModelUsageAttributionGroup,
+      "date" | "model" | "providerId" | "region" | "purpose" | "agentName"
+    > {}
+
 export type SafeModelUsageEvent = Pick<
   ModelUsageEvent,
   | "id"
@@ -67,8 +83,10 @@ export type SafeModelUsageEvent = Pick<
   | "conversationId"
   | "agentRunId"
   | "agentName"
+  | "purpose"
   | "providerId"
   | "model"
+  | "region"
   | "inputTokens"
   | "cachedInputTokens"
   | "outputTokens"
@@ -92,17 +110,6 @@ export interface SafeUsageSpendBudget {
   monthlyLimitMicros?: number;
 }
 
-export interface UsageSummary {
-  generatedAt: string;
-  budget: UsageBudgetConfig;
-  safeguards: UsageSafeguardsConfig;
-  costs: UsageCostConfig;
-  today: ModelUsageWindowSummary;
-  currentMonth: ModelUsageWindowSummary;
-  allTime: ModelUsageWindowSummary;
-  recentEvents: ModelUsageEvent[];
-}
-
 export interface SafeUsageSummary {
   generatedAt: string;
   spendBudget: SafeUsageSpendBudget;
@@ -112,16 +119,33 @@ export interface SafeUsageSummary {
   allTime: SafeCostedModelUsageWindowSummary;
   dailyUsage: SafeCostedModelUsageDailyBucket[];
   monthlyUsage: SafeCostedModelUsageMonthlyBucket[];
+  /** The days of `dailyUsage`, split by model, provider, region and purpose or agent. */
+  attributedUsage: SafeCostedModelUsageAttributionGroup[];
   recentEvents: SafeCostedModelUsageEvent[];
 }
+
+/** The budget every call of an instance counts toward. Limits per user and workspace add keys. */
+const INSTANCE_BUDGET_KEY = "instance";
+const DAILY_USAGE_BUCKET_COUNT = 30;
+const RECENT_EVENT_COUNT = 25;
+
+/**
+ * What a call counts as from its admission until it is settled, and for good when it never is:
+ * one call that used nothing. A row that said "not reported" would count as an unpriced cost.
+ */
+const USAGE_BEFORE_SETTLEMENT: ModelCallUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+  source: "estimated",
+  webSearchCallCount: 0
+};
 
 export class ModelUsageGovernance implements ModelUsageRecorder {
   private readonly store: ModelUsageEventStore;
   private readonly budget: UsageBudgetConfig;
   private readonly safeguards: UsageSafeguardsConfig;
   private readonly costs: UsageCostConfig;
-  private readonly clientLocks = new Map<string, Promise<void>>();
-  private readonly inFlightModelCalls = new Map<string, number>();
 
   constructor(options: ModelUsageGovernanceOptions) {
     this.store = options.store;
@@ -131,96 +155,44 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }
 
   /**
-   * Admits one model call and holds its place until `execute` settles. The attribution says who
-   * and what the call is for; admission decides on the instance alone until limits per user and
-   * workspace read it.
+   * Admits one model call or refuses it with the limit that is reached. The database decides:
+   * the call's usage event is written in the transaction that read the budget under its lock,
+   * so two processes cannot both admit the last call of a budget. The event counts as one call
+   * from here on, whatever becomes of the call.
    */
-  async runModelCall<T>(call: ModelCallAdmission, execute: () => Promise<T>): Promise<T> {
-    const reservation = await this.reserveModelCall(call.clientInstanceId);
-    try {
-      return await execute();
-    } finally {
-      await this.settleModelCall(reservation);
-    }
+  admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall> {
+    const { todayStart, currentMonthStart } = createModelUsageWindowBounds();
+    return this.store.reserveModelUsageEvent({
+      event: this.eventOf(call, USAGE_BEFORE_SETTLEMENT),
+      ...(this.hasLimits()
+        ? {
+            admission: {
+              budgetKey: INSTANCE_BUDGET_KEY,
+              windows: {
+                todayStart,
+                ...(this.safeguards.tokensPerMonth || this.budget.monthlySpendLimit
+                  ? { currentMonthStart }
+                  : {})
+              },
+              decide: (usage) => assertWithinLimits(usage, this.safeguards, this.budget)
+            }
+          }
+        : {})
+    });
   }
 
+  /** Writes what an admitted call used onto its usage event. */
+  settleModelCall(admitted: AdmittedModelCall, usage: ModelCallUsage): Promise<ModelUsageEvent> {
+    return this.store.settleModelUsageEvent({
+      clientInstanceId: admitted.clientInstanceId,
+      id: admitted.id,
+      settlement: settlementOf(admitted, usage, this.costs.customer)
+    });
+  }
+
+  /** Records usage of a call that was not admitted here, such as usage a tool reports. */
   recordModelUsage(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
-    const normalizedInput: ModelUsageEventInput = {
-      ...input,
-      inputTokens: normalizeCount(input.inputTokens),
-      ...(input.cachedInputTokens === undefined
-        ? {}
-        : {
-            cachedInputTokens: normalizeCachedInputTokens(
-              input.cachedInputTokens,
-              input.inputTokens
-            )
-          }),
-      outputTokens: normalizeCount(input.outputTokens),
-      totalTokens: normalizeCount(input.totalTokens),
-      webSearchCallCount: normalizeCount(input.webSearchCallCount ?? 0)
-    };
-    return this.store.appendModelUsageEvent({
-      clientInstanceId: normalizedInput.clientInstanceId,
-      ...usageEventOrigin(input.attribution),
-      providerId: normalizedInput.providerId,
-      model: normalizedInput.model,
-      inputTokens: normalizedInput.inputTokens,
-      ...(normalizedInput.cachedInputTokens === undefined
-        ? {}
-        : { cachedInputTokens: normalizedInput.cachedInputTokens }),
-      outputTokens: normalizedInput.outputTokens,
-      totalTokens: normalizedInput.totalTokens,
-      source: normalizedInput.source,
-      webSearchCallCount: normalizedInput.webSearchCallCount ?? 0,
-      fastMode: normalizedInput.fastMode === true,
-      ...(normalizedInput.providerServiceTier === undefined
-        ? {}
-        : { providerServiceTier: normalizedInput.providerServiceTier }),
-      customerBillableCost: calculateUsageCost(normalizedInput, this.costs.customer),
-      correlationId: normalizedInput.correlationId
-    });
-  }
-
-  summarizeModelUsageEvents(input: {
-    clientInstanceId: ClientInstanceId;
-    start?: string;
-    end?: string;
-  }): Promise<ModelUsageWindowSummary> {
-    return this.store.summarizeModelUsageEvents(input);
-  }
-
-  listModelUsageEvents(input: {
-    clientInstanceId: ClientInstanceId;
-    start?: string;
-    end?: string;
-    limit?: number;
-  }): Promise<ModelUsageEvent[]> {
-    return this.store.listModelUsageEvents(input);
-  }
-
-  async createSummary(input: {
-    clientInstanceId: ClientInstanceId;
-    now?: Date;
-  }): Promise<UsageSummary> {
-    const now = input.now ?? new Date();
-    const { todayStart, currentMonthStart } = createModelUsageWindowBounds(now);
-    const allEvents = await this.store.listModelUsageEvents({
-      clientInstanceId: input.clientInstanceId
-    });
-    return {
-      generatedAt: now.toISOString(),
-      budget: this.budget,
-      safeguards: this.safeguards,
-      costs: this.costs,
-      today: summarizeEvents(filterEventsByWindow(allEvents, todayStart), todayStart),
-      currentMonth: summarizeEvents(
-        filterEventsByWindow(allEvents, currentMonthStart),
-        currentMonthStart
-      ),
-      allTime: summarizeEvents(allEvents),
-      recentEvents: allEvents.slice(0, 25)
-    };
+    return this.store.appendModelUsageEvent(this.eventOf(input, input));
   }
 
   async createSafeSummary(input: {
@@ -230,22 +202,60 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }): Promise<SafeUsageSummary> {
     const now = input.now ?? new Date();
     const { todayStart, currentMonthStart } = createModelUsageWindowBounds(now);
-    const allEvents = await this.store.listModelUsageEvents({
-      clientInstanceId: input.clientInstanceId
-    });
-    const todayEvents = filterEventsByWindow(allEvents, todayStart);
-    const currentMonthEvents = filterEventsByWindow(allEvents, currentMonthStart);
+    const [history, recent, recentEvents] = await Promise.all([
+      this.store.summarizeModelUsageHistory({ clientInstanceId: input.clientInstanceId }),
+      this.store.summarizeRecentModelUsage({
+        clientInstanceId: input.clientInstanceId,
+        from: utcDayStart(now, 1 - DAILY_USAGE_BUCKET_COUNT).toISOString()
+      }),
+      this.store.listModelUsageEvents({
+        clientInstanceId: input.clientInstanceId,
+        limit: RECENT_EVENT_COUNT
+      })
+    ]);
+    const rateCard = this.costs.customer;
     const showWebSearchCost =
       input.webSearchEnabled ??
-      Boolean(
-        this.costs.customer?.webSearch?.length ||
-        allEvents.some((event) => event.webSearchCallCount > 0)
-      );
+      Boolean(rateCard?.webSearch?.length || history.allTime.webSearchCallCount > 0);
+    const costed = (
+      totals: ModelUsageTotals | undefined,
+      start?: string,
+      end?: string
+    ): SafeCostedModelUsageWindowSummary =>
+      toSafeWindow(totals ?? NO_USAGE, start, end, rateCard, showWebSearchCost);
+
+    const days = new Map(recent.days.map((day) => [day.date, day]));
+    const months = new Map(history.months.map((month) => [month.month, month]));
+    const dailyUsage: SafeCostedModelUsageDailyBucket[] = [];
+    for (let offset = 1 - DAILY_USAGE_BUCKET_COUNT; offset <= 0; offset += 1) {
+      const start = utcDayStart(now, offset).toISOString();
+      const date = start.slice(0, 10);
+      dailyUsage.push({
+        date,
+        ...costed(days.get(date), start, utcDayStart(now, offset + 1).toISOString())
+      });
+    }
+    // From the month of the first event to this one, months without an event included.
+    const firstMonth = history.months[0]?.month ?? currentMonthStart.slice(0, 7);
+    const firstMonthStart = new Date(`${firstMonth}-01T00:00:00.000Z`);
+    const monthlyUsage: SafeCostedModelUsageMonthlyBucket[] = [];
+    for (let offset = 0; utcMonthStart(firstMonthStart, offset) <= now; offset += 1) {
+      const start = utcMonthStart(firstMonthStart, offset).toISOString();
+      const month = start.slice(0, 7);
+      monthlyUsage.push({
+        month,
+        ...costed(
+          months.get(month),
+          start,
+          utcMonthStart(firstMonthStart, offset + 1).toISOString()
+        )
+      });
+    }
 
     return {
       generatedAt: now.toISOString(),
       spendBudget: {
-        ...(this.costs.customer?.currency ? { currency: this.costs.customer.currency } : {}),
+        ...(rateCard?.currency ? { currency: rateCard.currency } : {}),
         ...(this.budget.dailySpendLimit === undefined
           ? {}
           : { dailyLimitMicros: toMicros(this.budget.dailySpendLimit) }),
@@ -254,149 +264,76 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
           : { monthlyLimitMicros: toMicros(this.budget.monthlySpendLimit) })
       },
       safeguards: this.safeguards,
-      today: summarizeSafeEvents(
-        todayEvents,
-        todayStart,
-        undefined,
-        this.costs.customer,
-        showWebSearchCost
-      ),
-      currentMonth: summarizeSafeEvents(
-        currentMonthEvents,
-        currentMonthStart,
-        undefined,
-        this.costs.customer,
-        showWebSearchCost
-      ),
-      allTime: summarizeSafeEvents(
-        allEvents,
-        undefined,
-        undefined,
-        this.costs.customer,
-        showWebSearchCost
-      ),
-      dailyUsage: summarizeSafeDailyBuckets(allEvents, now, this.costs.customer, showWebSearchCost),
-      monthlyUsage: summarizeSafeMonthlyBuckets(
-        allEvents,
-        now,
-        this.costs.customer,
-        showWebSearchCost
-      ),
-      recentEvents: allEvents.slice(0, 25).map((event) => toSafeEvent(event, showWebSearchCost))
+      today: costed(days.get(todayStart.slice(0, 10)), todayStart),
+      currentMonth: costed(months.get(currentMonthStart.slice(0, 7)), currentMonthStart),
+      allTime: costed(history.allTime),
+      dailyUsage,
+      monthlyUsage,
+      attributedUsage: recent.byAttribution.map((group) => ({
+        date: group.date,
+        model: group.model,
+        providerId: group.providerId,
+        ...(group.region === undefined ? {} : { region: group.region }),
+        ...(group.purpose === undefined ? {} : { purpose: group.purpose }),
+        ...(group.agentName === undefined ? {} : { agentName: group.agentName }),
+        ...costed(group)
+      })),
+      recentEvents: recentEvents.map((event) => toSafeEvent(event, showWebSearchCost))
     };
   }
 
-  private async assertAllowed(clientInstanceId: ClientInstanceId): Promise<void> {
-    if (
-      !this.safeguards.modelCallsPerDay &&
-      !this.safeguards.tokensPerDay &&
-      !this.safeguards.tokensPerMonth &&
-      !this.budget.dailySpendLimit &&
-      !this.budget.monthlySpendLimit
-    ) {
-      return;
-    }
-
-    const { todayStart, currentMonthStart } = createModelUsageWindowBounds();
-    const today = await this.store.summarizeModelUsageEvents({
-      clientInstanceId,
-      start: todayStart
-    });
-    assertDailySafeguards(today, this.safeguards, this.countInFlightModelCalls(clientInstanceId));
-
-    if (this.budget.dailySpendLimit) {
-      const todayEvents = await this.store.listModelUsageEvents({
-        clientInstanceId,
-        start: todayStart
-      });
-      assertSpendBudget(
-        todayEvents,
-        this.budget.dailySpendLimit,
-        this.budget.costSafetyMultiplier ?? 1,
-        "Daily"
-      );
-    }
-
-    if (this.safeguards.tokensPerMonth || this.budget.monthlySpendLimit) {
-      const currentMonth = await this.store.summarizeModelUsageEvents({
-        clientInstanceId,
-        start: currentMonthStart
-      });
-      if (
-        this.safeguards.tokensPerMonth &&
-        currentMonth.totalTokens >= this.safeguards.tokensPerMonth
-      ) {
-        throw new ModelUsageLimitReachedError("Monthly model token safeguard has been reached");
-      }
-
-      if (this.budget.monthlySpendLimit) {
-        const currentMonthEvents = await this.store.listModelUsageEvents({
-          clientInstanceId,
-          start: currentMonthStart
-        });
-        assertSpendBudget(
-          currentMonthEvents,
-          this.budget.monthlySpendLimit,
-          this.budget.costSafetyMultiplier ?? 1,
-          "Monthly"
-        );
-      }
-    }
+  private hasLimits(): boolean {
+    return Boolean(
+      this.safeguards.modelCallsPerDay ||
+      this.safeguards.tokensPerDay ||
+      this.safeguards.tokensPerMonth ||
+      this.budget.dailySpendLimit ||
+      this.budget.monthlySpendLimit
+    );
   }
 
-  private async reserveModelCall(clientInstanceId: ClientInstanceId): Promise<{
-    clientInstanceId: ClientInstanceId;
-  }> {
-    return this.withClientLock(clientInstanceId, async () => {
-      await this.assertAllowed(clientInstanceId);
-      this.inFlightModelCalls.set(
-        clientInstanceId,
-        this.countInFlightModelCalls(clientInstanceId) + 1
-      );
-      return { clientInstanceId };
-    });
-  }
-
-  private async settleModelCall(reservation: {
-    clientInstanceId: ClientInstanceId;
-  }): Promise<void> {
-    await this.withClientLock(reservation.clientInstanceId, async () => {
-      const nextCount = Math.max(0, this.countInFlightModelCalls(reservation.clientInstanceId) - 1);
-      if (nextCount === 0) {
-        this.inFlightModelCalls.delete(reservation.clientInstanceId);
-        return;
-      }
-      this.inFlightModelCalls.set(reservation.clientInstanceId, nextCount);
-    });
-  }
-
-  private countInFlightModelCalls(clientInstanceId: ClientInstanceId): number {
-    return this.inFlightModelCalls.get(clientInstanceId) ?? 0;
-  }
-
-  private withClientLock<T>(
-    clientInstanceId: ClientInstanceId,
-    execute: () => Promise<T>
-  ): Promise<T> {
-    const previous = this.clientLocks.get(clientInstanceId) ?? Promise.resolve();
-    let release: (() => void) | undefined;
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    this.clientLocks.set(clientInstanceId, current);
-    return previous.then(execute).finally(() => {
-      release?.();
-      if (this.clientLocks.get(clientInstanceId) === current) {
-        this.clientLocks.delete(clientInstanceId);
-      }
-    });
+  private eventOf(call: ModelCallAdmission, usage: ModelCallUsage): ModelUsageEventRecordInput {
+    return {
+      clientInstanceId: call.clientInstanceId,
+      ...usageEventOrigin(call.attribution),
+      providerId: call.providerId,
+      model: call.model,
+      ...(call.region === undefined ? {} : { region: call.region }),
+      ...(call.bindingId === undefined ? {} : { bindingId: call.bindingId }),
+      fastMode: call.fastMode === true,
+      correlationId: call.correlationId,
+      ...settlementOf(call, usage, this.costs.customer)
+    };
   }
 }
 
-/** What a model call is admitted with. */
-export interface ModelCallAdmission {
-  clientInstanceId: ClientInstanceId;
-  attribution: ModelAttribution;
+/** What a call used, its counts made whole numbers and its cost settled. */
+function settlementOf(
+  call: Pick<ModelCallAdmission, "providerId" | "model" | "fastMode">,
+  usage: ModelCallUsage,
+  rateCard: UsageRateCardConfig | undefined
+): ModelUsageSettlement {
+  const inputTokens = normalizeCount(usage.inputTokens);
+  const measured = {
+    inputTokens,
+    ...(usage.cachedInputTokens === undefined
+      ? {}
+      : { cachedInputTokens: Math.min(normalizeCount(usage.cachedInputTokens), inputTokens) }),
+    outputTokens: normalizeCount(usage.outputTokens),
+    totalTokens: normalizeCount(usage.totalTokens),
+    source: usage.source,
+    webSearchCallCount: normalizeCount(usage.webSearchCallCount ?? 0),
+    ...(usage.providerServiceTier === undefined
+      ? {}
+      : { providerServiceTier: usage.providerServiceTier })
+  };
+  return {
+    ...measured,
+    customerBillableCost: calculateUsageCost(
+      { providerId: call.providerId, model: call.model, fastMode: call.fastMode, ...measured },
+      rateCard
+    )
+  };
 }
 
 /** The fields of a usage event that its cost is settled from. */
@@ -412,28 +349,6 @@ export type UsageCostEvent = Pick<
   | "fastMode"
   | "providerServiceTier"
 >;
-
-/**
- * Where a usage event says its call came from. A call the product made for itself has no run;
- * until the event has a column for the purpose, the purpose stands where the agent's name does.
- * No event names a user yet: every call counts toward the limits of the instance, and usage
- * per user comes with S3-09.
- */
-function usageEventOrigin(
-  attribution: ModelAttribution
-): Pick<ModelUsageEventRecordInput, "conversationId" | "agentRunId" | "agentName"> {
-  if (attribution.kind === "agent_run") {
-    return {
-      conversationId: attribution.conversationId,
-      agentRunId: attribution.runId,
-      agentName: attribution.agentName
-    };
-  }
-  return {
-    ...(attribution.conversationId ? { conversationId: attribution.conversationId } : {}),
-    agentName: attribution.purpose
-  };
-}
 
 export function calculateUsageCost(
   event: UsageCostEvent,
@@ -571,72 +486,91 @@ function findWebSearchRate(
   );
 }
 
-function summarizeEvents(
-  events: ModelUsageEvent[],
-  start?: string,
-  end?: string
-): ModelUsageWindowSummary {
-  return events.reduce<ModelUsageWindowSummary>(
-    (summary, event) => ({
-      ...summary,
-      modelCallCount: summary.modelCallCount + 1,
-      inputTokens: summary.inputTokens + event.inputTokens,
-      cachedInputTokens: summary.cachedInputTokens + (event.cachedInputTokens ?? 0),
-      outputTokens: summary.outputTokens + event.outputTokens,
-      totalTokens: summary.totalTokens + event.totalTokens,
-      webSearchCallCount: summary.webSearchCallCount + event.webSearchCallCount
-    }),
-    {
-      start,
-      end,
-      modelCallCount: 0,
-      inputTokens: 0,
-      cachedInputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      webSearchCallCount: 0
-    }
-  );
+/** Where a usage event says its call came from: a run with its agent, or a purpose. */
+function usageEventOrigin(
+  attribution: ModelAttribution
+): Pick<
+  ModelUsageEventRecordInput,
+  | "conversationId"
+  | "agentRunId"
+  | "agentName"
+  | "purpose"
+  | "userId"
+  | "collaborationWorkspaceId"
+  | "operationRunId"
+> {
+  const who = {
+    ...(attribution.userId === undefined ? {} : { userId: attribution.userId }),
+    ...(attribution.workspaceId === undefined
+      ? {}
+      : { collaborationWorkspaceId: attribution.workspaceId })
+  };
+  if (attribution.kind === "agent_run") {
+    return {
+      ...who,
+      conversationId: attribution.conversationId,
+      agentRunId: attribution.runId,
+      agentName: attribution.agentName
+    };
+  }
+  return {
+    ...who,
+    ...(attribution.conversationId ? { conversationId: attribution.conversationId } : {}),
+    ...(attribution.operationRunId ? { operationRunId: attribution.operationRunId } : {}),
+    purpose: attribution.purpose
+  };
 }
 
-function summarizeSafeEvents(
-  events: ModelUsageEvent[],
+const NO_USAGE: ModelUsageTotals = {
+  modelCallCount: 0,
+  inputTokens: 0,
+  cachedInputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+  webSearchCallCount: 0,
+  settledModelCallCount: 0,
+  settledCost: {
+    uncachedInputCostMicros: 0,
+    cachedInputCostMicros: 0,
+    outputCostMicros: 0,
+    webSearchCostMicros: 0
+  },
+  settledCurrencyCount: 0,
+  settledWebSearchCallCount: 0
+};
+
+/**
+ * The sums of a window as the Usage page reads them. A cost is shown only when it is whole:
+ * every event settled, in one currency.
+ */
+function toSafeWindow(
+  totals: ModelUsageTotals,
   start: string | undefined,
   end: string | undefined,
   customerRateCard: UsageRateCardConfig | undefined,
   showWebSearchCost: boolean
 ): SafeCostedModelUsageWindowSummary {
-  const usage = summarizeEvents(events, start, end);
-  const settled = events.filter(
-    (
-      event
-    ): event is ModelUsageEvent & {
-      customerBillableCost: SettledUsageCostRecord;
-    } => event.customerBillableCost.status === "settled"
-  );
-  const incomplete = events.length - settled.length;
-  const currencies = new Set(settled.map((event) => event.customerBillableCost.currency));
+  const empty = totals.modelCallCount === 0;
+  const incomplete = totals.modelCallCount - totals.settledModelCallCount;
   const complete =
     incomplete === 0 &&
-    currencies.size <= 1 &&
-    (events.length > 0 || customerRateCard !== undefined);
-  const components = settled.reduce<UsageCostComponents>(
-    (total, event) => addComponents(total, event.customerBillableCost.components),
-    emptyComponents()
-  );
-  const currency =
-    currencies.values().next().value ??
-    (events.length === 0 ? customerRateCard?.currency : undefined);
-  const modelBillableCostMicros =
-    components.uncachedInputCostMicros +
-    components.cachedInputCostMicros +
-    components.outputCostMicros;
+    totals.settledCurrencyCount <= 1 &&
+    (!empty || customerRateCard !== undefined);
+  const currency = totals.settledCurrency ?? (empty ? customerRateCard?.currency : undefined);
+  const components = totals.settledCost;
   return {
-    ...usage,
+    start,
+    end,
+    modelCallCount: totals.modelCallCount,
+    inputTokens: totals.inputTokens,
+    cachedInputTokens: totals.cachedInputTokens,
+    outputTokens: totals.outputTokens,
+    totalTokens: totals.totalTokens,
+    webSearchCallCount: totals.webSearchCallCount,
     cost: {
       status: complete
         ? "settled"
-        : events.length === 0 && customerRateCard === undefined
+        : empty && customerRateCard === undefined
           ? "unpriced"
           : "incomplete",
       ...(currency ? { currency } : {}),
@@ -648,20 +582,15 @@ function summarizeSafeEvents(
             ...(showWebSearchCost
               ? { webSearchBillableCostMicros: components.webSearchCostMicros }
               : {}),
-            billableCostMicros: modelBillableCostMicros + components.webSearchCostMicros
+            billableCostMicros: totalComponents(components)
           }
         : {}),
       complete,
       webSearchCostVisible: showWebSearchCost,
-      settledModelCallCount: settled.length,
+      settledModelCallCount: totals.settledModelCallCount,
       incompleteModelCallCount: incomplete,
-      settledWebSearchCallCount: settled.reduce(
-        (count, event) => count + event.webSearchCallCount,
-        0
-      ),
-      incompleteWebSearchCallCount: events
-        .filter((event) => event.customerBillableCost.status !== "settled")
-        .reduce((count, event) => count + event.webSearchCallCount, 0)
+      settledWebSearchCallCount: totals.settledWebSearchCallCount,
+      incompleteWebSearchCallCount: totals.webSearchCallCount - totals.settledWebSearchCallCount
     }
   };
 }
@@ -678,8 +607,10 @@ function toSafeEvent(
     conversationId: event.conversationId,
     agentRunId: event.agentRunId,
     agentName: event.agentName,
+    ...(event.purpose === undefined ? {} : { purpose: event.purpose }),
     providerId: event.providerId,
     model: event.model,
+    ...(event.region === undefined ? {} : { region: event.region }),
     inputTokens: event.inputTokens,
     ...(event.cachedInputTokens === undefined
       ? {}
@@ -711,135 +642,52 @@ function toSafeEvent(
   };
 }
 
-const DAILY_USAGE_BUCKET_COUNT = 30;
-
-function summarizeSafeDailyBuckets(
-  events: ModelUsageEvent[],
-  now: Date,
-  customerRateCard: UsageRateCardConfig | undefined,
-  showWebSearchCost: boolean
-): SafeCostedModelUsageDailyBucket[] {
-  const buckets: SafeCostedModelUsageDailyBucket[] = [];
-  for (let offset = DAILY_USAGE_BUCKET_COUNT - 1; offset >= 0; offset -= 1) {
-    const start = utcDayStart(now, -offset).toISOString();
-    const end = utcDayStart(now, -offset + 1).toISOString();
-    buckets.push({
-      date: start.slice(0, 10),
-      ...summarizeSafeEvents(
-        filterEventsByWindow(events, start, end),
-        start,
-        end,
-        customerRateCard,
-        showWebSearchCost
-      )
-    });
-  }
-  return buckets;
-}
-
-function summarizeSafeMonthlyBuckets(
-  events: ModelUsageEvent[],
-  now: Date,
-  customerRateCard: UsageRateCardConfig | undefined,
-  showWebSearchCost: boolean
-): SafeCostedModelUsageMonthlyBucket[] {
-  const earliestCreatedAt = events.reduce<string | undefined>(
-    (earliest, event) => (!earliest || event.createdAt < earliest ? event.createdAt : earliest),
-    undefined
-  );
-  const firstMonthStart = earliestCreatedAt
-    ? utcMonthStart(new Date(earliestCreatedAt), 0)
-    : utcMonthStart(now, 0);
-  const buckets: SafeCostedModelUsageMonthlyBucket[] = [];
-  for (let offset = 0; ; offset += 1) {
-    const startDate = utcMonthStart(firstMonthStart, offset);
-    if (startDate > now) {
-      break;
-    }
-    const start = startDate.toISOString();
-    const end = utcMonthStart(firstMonthStart, offset + 1).toISOString();
-    buckets.push({
-      month: start.slice(0, 7),
-      ...summarizeSafeEvents(
-        filterEventsByWindow(events, start, end),
-        start,
-        end,
-        customerRateCard,
-        showWebSearchCost
-      )
-    });
-  }
-  return buckets;
-}
-
-function assertDailySafeguards(
-  summary: ModelUsageWindowSummary,
+/**
+ * Holds what the windows hold against the limits of the instance, and throws the one that is
+ * reached. An admitted call counts from its admission, so calls in flight count too.
+ */
+function assertWithinLimits(
+  usage: ModelUsageBudgetUsage,
   safeguards: UsageSafeguardsConfig,
-  inFlightCalls: number
+  budget: UsageBudgetConfig
 ): void {
-  if (
-    safeguards.modelCallsPerDay &&
-    summary.modelCallCount + inFlightCalls >= safeguards.modelCallsPerDay
-  ) {
+  const { today } = usage;
+  if (safeguards.modelCallsPerDay && today.modelCallCount >= safeguards.modelCallsPerDay) {
     throw new ModelUsageLimitReachedError("Daily model call safeguard has been reached");
   }
-  if (safeguards.tokensPerDay && summary.totalTokens >= safeguards.tokensPerDay) {
+  if (safeguards.tokensPerDay && today.totalTokens >= safeguards.tokensPerDay) {
     throw new ModelUsageLimitReachedError("Daily model token safeguard has been reached");
+  }
+  const costSafetyMultiplier = budget.costSafetyMultiplier ?? 1;
+  if (budget.dailySpendLimit) {
+    assertSpendBudget(today, budget.dailySpendLimit, costSafetyMultiplier, "Daily");
+  }
+  if (!safeguards.tokensPerMonth && !budget.monthlySpendLimit) return;
+  const { currentMonth } = usage;
+  if (!currentMonth) throw new AppError("INTERNAL", "Admission did not read the month");
+  if (safeguards.tokensPerMonth && currentMonth.totalTokens >= safeguards.tokensPerMonth) {
+    throw new ModelUsageLimitReachedError("Monthly model token safeguard has been reached");
+  }
+  if (budget.monthlySpendLimit) {
+    assertSpendBudget(currentMonth, budget.monthlySpendLimit, costSafetyMultiplier, "Monthly");
   }
 }
 
 function assertSpendBudget(
-  events: ModelUsageEvent[],
+  window: ModelUsageBudgetWindow,
   limit: number,
   costSafetyMultiplier: number,
   label: "Daily" | "Monthly"
 ): void {
-  const incomplete = events.find((event) => event.customerBillableCost.status !== "settled");
-  if (incomplete) {
+  if (window.unsettledModelCallCount > 0) {
     throw new AppError(
       "FORBIDDEN",
       `${label} customer billable cost is incomplete; spend budget cannot be evaluated safely`
     );
   }
-  const total = events.reduce(
-    (sum, event) =>
-      sum +
-      (event.customerBillableCost.status === "settled"
-        ? event.customerBillableCost.totalCostMicros
-        : 0),
-    0
-  );
-  if (total * costSafetyMultiplier >= toMicros(limit)) {
+  if (window.settledCostMicros * costSafetyMultiplier >= toMicros(limit)) {
     throw new ModelUsageLimitReachedError(`${label} model spend budget has been reached`);
   }
-}
-
-function filterEventsByWindow(
-  events: ModelUsageEvent[],
-  start?: string,
-  end?: string
-): ModelUsageEvent[] {
-  return events.filter(
-    (event) => (!start || event.createdAt >= start) && (!end || event.createdAt < end)
-  );
-}
-
-function addComponents(left: UsageCostComponents, right: UsageCostComponents): UsageCostComponents {
-  return {
-    uncachedInputCostMicros: left.uncachedInputCostMicros + right.uncachedInputCostMicros,
-    cachedInputCostMicros: left.cachedInputCostMicros + right.cachedInputCostMicros,
-    outputCostMicros: left.outputCostMicros + right.outputCostMicros,
-    webSearchCostMicros: left.webSearchCostMicros + right.webSearchCostMicros
-  };
-}
-
-function emptyComponents(): UsageCostComponents {
-  return {
-    uncachedInputCostMicros: 0,
-    cachedInputCostMicros: 0,
-    outputCostMicros: 0,
-    webSearchCostMicros: 0
-  };
 }
 
 function totalComponents(components: UsageCostComponents): number {
@@ -853,10 +701,6 @@ function totalComponents(components: UsageCostComponents): number {
 
 function normalizeCount(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
-}
-
-function normalizeCachedInputTokens(cached: number, input: number): number {
-  return Math.min(normalizeCount(cached), normalizeCount(input));
 }
 
 function priceTokens(tokens: number, pricePerMillionTokens: number): number {

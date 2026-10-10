@@ -12,6 +12,7 @@ import {
   countPendingCleanup,
   deletionDedupeKey,
   cancelRunsInProgress,
+  clearUsageAttribution,
   retryPendingCleanup,
   type DeletionOutcome,
   type DeletionTransaction
@@ -137,6 +138,8 @@ export async function completeWorkspaceDeletion(
     fileCount,
     memberCount: inDeletion.memberships.length
   };
+  // Usage events are kept for the accounting of the instance and no longer name the workspace.
+  await clearUsageAttribution(options, { collaborationWorkspaceId });
   return transaction(async (stores) => {
     // The store refuses while data of a deleted Conversation is still being removed.
     await stores.workspaces.deleteWorkspace(scope);

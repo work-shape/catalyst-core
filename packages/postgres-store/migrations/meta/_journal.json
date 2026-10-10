@@ -288,6 +288,27 @@
       "when": 1791634290217,
       "tag": "0040_asset_scope_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791636834592,
+      "tag": "0041_usage_attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791636840172,
+      "tag": "0042_usage_attribution_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791636840707,
+      "tag": "0043_usage_attribution_validate",
+      "breakpoints": true
     }
   ]
 }

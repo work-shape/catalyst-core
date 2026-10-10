@@ -357,7 +357,7 @@ describe("approval checks at creation", () => {
     f.complete.mockResolvedValue(
       completion('{"violates":false,"reason":"Keine personenbezogenen Daten."}')
     );
-    vi.spyOn(f.usageGovernance, "recordModelUsage").mockRejectedValueOnce(
+    vi.spyOn(f.usageGovernance, "settleModelCall").mockRejectedValueOnce(
       new Error("Storage unavailable")
     );
     // An answer whose usage could not be recorded is no answer: the rule was not evaluated.

@@ -2,10 +2,12 @@ import {
   AppError,
   type ClientInstanceId,
   type Logger,
+  type AdmittedModelCall,
   type ModelAttribution,
   type ModelBindingConfig,
+  type ModelCallAdmission,
+  type ModelCallUsage,
   type ModelProviderConfig,
-  type ModelUsageEventInput,
   type ReasoningEffortConfig
 } from "@vivd-catalyst/core";
 import { ModelProviderError, normalizeModelAdapterError } from "./model-provider-error";
@@ -81,11 +83,10 @@ export interface ModelGateway {
  * gateway is its only caller for the calls it sends.
  */
 export interface ModelCallGovernance {
-  runModelCall<T>(
-    call: { clientInstanceId: ClientInstanceId; attribution: ModelAttribution },
-    execute: () => Promise<T>
-  ): Promise<T>;
-  recordModelUsage(input: ModelUsageEventInput): Promise<unknown>;
+  /** Admits the call and writes its usage event, or refuses with the limit that is reached. */
+  admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall>;
+  /** Writes what the admitted call used onto its usage event. */
+  settleModelCall(admitted: AdmittedModelCall, usage: ModelCallUsage): Promise<unknown>;
 }
 
 export interface ModelGatewayOptions {
@@ -102,19 +103,9 @@ interface ResolvedModelTarget {
   provider: ModelProviderConfig;
   adapter: ModelAdapter;
   model: string;
+  /** The binding the call named, when it named one. */
+  bindingId?: string;
 }
-
-/**
- * What a call that did not complete is recorded with. The provider reported nothing, and a row
- * that says so would count as an unpriced cost; the row states zero tokens as an estimate.
- */
-const USAGE_OF_UNCOMPLETED_CALL: ModelCompletion["usage"] = {
-  inputTokens: 0,
-  outputTokens: 0,
-  totalTokens: 0,
-  source: "estimated",
-  webSearchCallCount: 0
-};
 
 export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
   const { governance, logger } = options;
@@ -122,6 +113,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
   function resolve(ref: ModelBindingRef): ResolvedModelTarget {
     let providerId: string;
     let model: string | undefined;
+    const bindingId = "bindingId" in ref ? ref.bindingId : undefined;
     if ("bindingId" in ref) {
       const binding = options.bindings.find((candidate) => candidate.id === ref.bindingId);
       if (!binding) {
@@ -138,7 +130,12 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     if (!provider || !adapter) {
       throw new AppError("NOT_FOUND", `Model provider '${providerId}' is not defined`);
     }
-    return { provider, adapter, model: model ?? provider.model };
+    return {
+      provider,
+      adapter,
+      model: model ?? provider.model,
+      ...(bindingId === undefined ? {} : { bindingId })
+    };
   }
 
   function logProviderError(
@@ -242,9 +239,10 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
   }
 
   /**
-   * The one call path: resolve, check the capabilities, admit, call, record. A call that is
-   * refused before or at admission records nothing. Every admitted call records exactly one
-   * usage event, whether it completed, failed, was stopped or was left unread by its caller.
+   * The one call path: resolve, check the capabilities, admit, call, settle. A call that is
+   * refused before or at admission records nothing. Admission writes the usage event of the
+   * call, so every admitted call has exactly one, whether it completed, failed, was stopped or
+   * was left unread by its caller; a call that did not complete leaves it at zero tokens.
    */
   async function* run(
     call: ModelCall,
@@ -254,39 +252,37 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     assertWithinCapabilities(call, target, streaming);
     const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
     policy.assertAttemptMayStart();
-    const admission = await holdAdmission(governance, {
+    const admitted = await governance.admitModelCall({
       clientInstanceId: call.clientInstanceId,
-      attribution: call.attribution
+      attribution: call.attribution,
+      providerId: target.provider.id,
+      model: target.model,
+      ...(target.provider.region ? { region: target.provider.region } : {}),
+      ...(target.bindingId === undefined ? {} : { bindingId: target.bindingId }),
+      fastMode: call.fastTier === true,
+      correlationId: call.correlationId
     });
     const seen: { completion?: ModelCompletion } = {};
     const settle = async (answerHandedOn: boolean): Promise<void> => {
+      // A call without a completion used nothing the provider reported: its event stays as
+      // admission wrote it, one call with zero tokens.
+      if (!seen.completion) return;
       try {
-        await governance.recordModelUsage({
-          clientInstanceId: call.clientInstanceId,
-          attribution: call.attribution,
-          providerId: target.provider.id,
-          model: target.model,
-          ...(target.provider.region ? { region: target.provider.region } : {}),
-          fastMode: call.fastTier === true,
-          correlationId: call.correlationId,
-          ...(seen.completion?.usage ?? USAGE_OF_UNCOMPLETED_CALL)
-        });
-      } catch (recordError) {
+        await governance.settleModelCall(admitted, seen.completion.usage);
+      } catch (settleError) {
         if (answerHandedOn) {
-          // A call whose usage could not be recorded fails, so no answer goes unrecorded.
-          throw recordError;
+          // A call whose usage could not be settled fails, so no answer goes unrecorded.
+          throw settleError;
         }
         logger.error(
           {
             type: "model_usage.record_failed",
             providerId: target.provider.id,
             model: target.model,
-            error: recordError
+            error: settleError
           },
           "Usage of a model call that did not complete could not be recorded"
         );
-      } finally {
-        await admission.release();
       }
     };
     const limit = limitModelCall(call.signal, call.deadline);
@@ -363,35 +359,6 @@ function assertWithinCapabilities(
       `Model '${target.model}' of provider '${target.provider.id}' does not support: ${missing.join(", ")}`
     );
   }
-}
-
-/**
- * Admits a call and keeps its place until `release`. Admission is a function that wraps the
- * call; a streamed call hands events to its caller in between, so the place is held open here.
- */
-async function holdAdmission(
-  governance: ModelCallGovernance,
-  call: { clientInstanceId: ClientInstanceId; attribution: ModelAttribution }
-): Promise<{ release(): Promise<void> }> {
-  let finish: () => void = () => undefined;
-  const finished = new Promise<void>((resolve) => {
-    finish = resolve;
-  });
-  let held: Promise<void> = Promise.resolve();
-  await new Promise<void>((admitted, refused) => {
-    held = governance.runModelCall(call, () => {
-      admitted();
-      return finished;
-    });
-    // A refusal settles before `execute` runs; afterwards this rejection has no reader.
-    held.catch(refused);
-  });
-  return {
-    async release() {
-      finish();
-      await held;
-    }
-  };
 }
 
 /** What bounds one call in time: the caller's stop and the call's deadline. */

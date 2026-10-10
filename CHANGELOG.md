@@ -301,8 +301,8 @@ id from config_assets where status = 'deleted')`.
   by the provider, and counts toward the daily call limit and the other limits of the
   instance. Such a record carries the purpose (`conversation_title`, `guardrail_judge`) where
   an agent run's record carries the agent name, names the conversation when one caused the
-  call, and names no agent run. No record names a user yet: everything is counted toward the
-  instance's limits, and usage per user comes with a later release. A title that a limit
+  call, and names no agent run. Everything is counted toward the instance's limits. A title
+  that a limit
   refuses fails only its job and never a user's message. An approval check that a limit
   refuses blocks under `onFail: block` with the reason "Check '<id>' could not run because
   the model usage limit of this instance is reached. Try again later."; under `onFail: warn`
@@ -316,6 +316,44 @@ id from config_assets where status = 'deleted')`.
   release keeps summing usage and admitting calls correctly with such rows, but its Usage
   page fails for as long as a record of a title or an approval check is among the recent
   events it lists.
+- **Usage:** every model call is recorded with its provider, the region of the provider entry
+  (`eu`, `global`, or none for a provider inside the instance), the model binding it named,
+  the user and the workspace. A title or an approval check is recorded with its purpose and
+  no agent name. The Usage page lists Caller, Provider and Region for the recent calls, and
+  the summary answers a new optional field `attributedUsage`: the last 30 days by day, model,
+  provider, region and purpose or agent. A usage event in the API adds the optional fields
+  `purpose` and `region`. The sums are computed by the database.
+- **Usage:** a call is admitted against the limits of the instance in the database, under a
+  lock per instance, so several API and worker processes together admit no more than the
+  limit allows. An admitted call is written at once as a record without tokens and completed
+  when the call ends; a call in flight is therefore visible in Usage as a call without
+  tokens. An instance without limits takes no lock.
+- **Usage and deletion:** usage records are kept for the accounting of the instance. When an
+  account is deleted, the user is removed from its usage records and the amounts stay. When
+  a workspace is deleted, the workspace is removed from its usage records and the amounts
+  stay. The database enforces both: no user and no workspace row can go while a usage record
+  still names it.
+- **Database:** migrations `0037_usage_attribution`, `0038_usage_attribution_indexes` and
+  `0039_usage_attribution_validate` add the nullable columns `purpose`, `region` and
+  `binding_id` to `model_usage_events`, drop `NOT NULL` from `agent_name`, tie `user_id` and
+  `collaboration_workspace_id` to their tables with `ON DELETE SET NULL`, and add one partial
+  index for each of the two. No column is dropped. After the upgrade a background job fills
+  older usage rows. Until it ends, older rows show no region. The job
+  (`usage.backfill_attribution`) runs in the API and worker processes, 5,000 rows per
+  statement, and may be interrupted at any time. A row whose provider and model are no longer
+  configured keeps no region. `0038` is the first migration that builds an index with
+  `CREATE INDEX CONCURRENTLY`; a migration step that finds another step running now asks for
+  the migration lock again every 250 ms and no longer waits inside a statement, because the
+  index build would wait for that statement and the two would stop each other. **Rollback:**
+  the previous release runs against the migrated
+  database and its limits keep working, but its Usage page fails for as long as a title or an
+  approval check recorded by this release is among the recent events it lists.
+- **Breaking, extension API:** `ModelCallGovernance` is `admitModelCall` and
+  `settleModelCall` in place of `runModelCall`. `ModelUsageEventStore` replaces
+  `summarizeModelUsageEvents` with `summarizeModelUsageHistory` and
+  `summarizeRecentModelUsage` and adds `reserveModelUsageEvent`, `settleModelUsageEvent`,
+  `clearUserFromModelUsageEvents`, `clearWorkspaceFromModelUsageEvents` and
+  `backfillModelUsageAttribution`.
 - **Breaking, extension API:** `ChatServerOptions` takes `modelGateway` in place of
   `modelProvider`; `ApprovalCheckRunner` takes `{ clientInstanceId, config, modelGateway }`;
   `reasoningEffortChoiceForBinding` takes the efforts the model's adapter declares as its

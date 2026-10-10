@@ -3453,6 +3453,52 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
 });
 
+test("the usage panel names the caller, the provider and the region of a call in English and German", async ({
+  page
+}) => {
+  await signInViaUi(page, superadminUser);
+  await page.goto("/");
+  await page.getByPlaceholder("Message").fill(`Which regions do our providers use ${Date.now()}`);
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByTestId("run-activity")).toHaveCount(0);
+
+  const texts = [
+    {
+      locale: "en",
+      panel: "Settings",
+      headers: ["Caller", "Provider", "Region"],
+      title: "Conversation title",
+      noRegion: "Not stated"
+    },
+    {
+      locale: "de",
+      panel: "Einstellungen",
+      headers: ["Aufrufer", "Anbieter", "Region"],
+      title: "Unterhaltungstitel",
+      noRegion: "Nicht angegeben"
+    }
+  ];
+  for (const text of texts) {
+    await page.evaluate(
+      (locale) => window.localStorage.setItem("vivd-catalyst:locale", locale),
+      text.locale
+    );
+    const panel = page.getByRole("region", { name: text.panel });
+    const titleCall = panel.getByRole("row", { name: new RegExp(text.title, "u") }).first();
+    // The title is written by a job after the message, so the panel is read until it is there.
+    await expect(async () => {
+      await page.goto("/settings/instance/usage");
+      await expect(titleCall).toBeVisible({ timeout: 2_000 });
+    }).toPass();
+    for (const name of text.headers) {
+      await expect(panel.getByRole("columnheader", { name, exact: true })).toBeVisible();
+    }
+    await expect(titleCall).toContainText("local");
+    // The model of this instance runs inside it, so its entry states no region.
+    await expect(titleCall).toContainText(text.noRegion);
+  }
+});
+
 test("demo chat can run a configured tool widget", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   const forecastLocation = `Oslo ${Date.now()}`;

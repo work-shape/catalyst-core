@@ -11,6 +11,7 @@ import { deleteAccountJob } from "./job-kinds";
 import {
   acceptDeletion,
   cancelRunsInProgress,
+  clearUsageAttribution,
   countPendingCleanup,
   deletionDedupeKey,
   requireRunsEnded,
@@ -77,7 +78,7 @@ export async function requestAccountDeletion(
 /**
  * One pass of the deletion of an account whose deletion was requested. It removes the
  * password sign-in first, so the credentials are gone whatever the stored data does, then
- * the user's own data, then the user. It asks the user's runs to stop, and throws while one
+ * the user's own data, then the user's id on usage events, then the user. It asks the user's runs to stop, and throws while one
  * has not ended or data of a Conversation the user created is still being removed; the next
  * pass goes on from there. Resolves undefined when the user is gone.
  */
@@ -96,6 +97,7 @@ export async function completeAccountDeletion(
   const personalWorkspaceId = await personalWorkspaceIdOf(options.stores, options, user.id);
   if (personalWorkspaceId) {
     await retryPendingCleanup(options, { collaborationWorkspaceId: personalWorkspaceId });
+    await clearUsageAttribution(options, { collaborationWorkspaceId: personalWorkspaceId });
   }
   await retryPendingCleanup(options, { createdByUserId: user.id });
   const totals = await cleanupProductUserData({
@@ -112,6 +114,8 @@ export async function completeAccountDeletion(
   });
   if (pendingCleanupCount > 0)
     throw pendingConversationCleanupError("personal", pendingCleanupCount);
+  // Usage events are kept for the accounting of the instance and no longer name the user.
+  await clearUsageAttribution(options, { userId: user.id });
   return transaction(async (stores) => {
     const deleted = await stores.users.deleteUser({
       clientInstanceId: options.clientInstanceId,

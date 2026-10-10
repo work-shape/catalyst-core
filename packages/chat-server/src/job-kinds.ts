@@ -103,6 +103,13 @@ export const pruneJobsJob = defineScheduledKind("platform_jobs.prune");
  */
 export const adoptLegacyJobsJob = defineScheduledKind("platform_jobs.adopt_legacy", 2 * MINUTE_MS);
 
+/**
+ * Transition release only: fills, on usage events written before they had the columns, the
+ * purpose, the region and binding, and the user and workspace. It goes with the agent name of
+ * calls the product makes for itself in the contract step.
+ */
+export const backfillUsageAttributionJob = defineScheduledKind("usage.backfill_attribution");
+
 export const expireConversationsSchedule = defineSchedule({
   kind: expireConversationsJob,
   every: HOUR_MS
@@ -122,5 +129,11 @@ export const adoptLegacyJobsSchedule = defineSchedule({
   kind: adoptLegacyJobsJob,
   every: MINUTE_MS,
   // Work that was in flight at the upgrade gets its job as soon as the new API is up.
+  dueAtStart: true
+});
+export const backfillUsageAttributionSchedule = defineSchedule({
+  kind: backfillUsageAttributionJob,
+  every: HOUR_MS,
+  // Older usage events show no region until the first pass after the upgrade is through.
   dueAtStart: true
 });

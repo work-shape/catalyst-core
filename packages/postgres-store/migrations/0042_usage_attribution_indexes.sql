@@ -1,0 +1,2 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "model_usage_events_user_idx" ON "model_usage_events" USING btree ("user_id") WHERE "model_usage_events"."user_id" is not null;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "model_usage_events_workspace_idx" ON "model_usage_events" USING btree ("collaboration_workspace_id") WHERE "model_usage_events"."collaboration_workspace_id" is not null;

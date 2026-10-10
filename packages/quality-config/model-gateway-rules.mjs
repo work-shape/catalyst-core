@@ -73,7 +73,14 @@ const registeredModelProviderTypes = () => {
 };
 
 const equality = ["==", "===", "!=", "!=="];
-const usageWriters = ["recordModelUsage", "appendModelUsageEvent"];
+const usageWriters = [
+  "recordModelUsage",
+  "appendModelUsageEvent",
+  "admitModelCall",
+  "settleModelCall",
+  "reserveModelUsageEvent",
+  "settleModelUsageEvent"
+];
 const usageInsert = /insert\s+into\s+(?:"?\w+"?\.)?"?model_usage_events\b/iu;
 
 /**

@@ -19,19 +19,15 @@ import {
   createInstanceModelGateway,
   modelProviderDefinitions,
   type ModelAdapterFactory,
-  type ModelCall,
-  type ModelCallGovernance
+  type ModelCall
 } from "@vivd-catalyst/model-provider";
-import { adapterFromFakeProvider } from "./support/model-gateway";
+import { adapterFromFakeProvider, createRecordingGovernance } from "./support/model-gateway";
 import { createFailingTestLogger, createFakeSecrets } from "./support/fixtures";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 
 const logger = createFailingTestLogger("A provider must not log an error in this test");
 // These tests are about which adapter answers; every call is admitted and its usage dropped.
-const admitEverything: ModelCallGovernance = {
-  runModelCall: (_call, execute) => execute(),
-  recordModelUsage: async () => undefined
-};
+const admitEverything = createRecordingGovernance();
 
 function callTo(model: string): ModelCall {
   return {

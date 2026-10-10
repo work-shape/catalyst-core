@@ -48,9 +48,14 @@ export const modelUsageVolumeEventSchema = z.object({
   clientInstanceId: z.string(),
   conversationId: z.string().optional(),
   agentRunId: z.string().optional(),
+  /** The agent of the run. A call the product made for itself carries its purpose here too. */
   agentName: z.string(),
+  /** What a call the product made for itself was for, such as `conversation_title`. */
+  purpose: z.string().optional(),
   providerId: z.string(),
   model: z.string(),
+  /** Where the provider processed the call. Absent for a provider inside the instance. */
+  region: z.string().optional(),
   inputTokens: z.number(),
   cachedInputTokens: z.number().optional(),
   outputTokens: z.number(),
@@ -108,6 +113,16 @@ export const modelUsageMonthlyBucketSchema = modelUsageWindowSummarySchema.exten
   month: z.string()
 });
 
+/** What one purpose or one agent used of one model on one day. */
+export const modelUsageAttributionGroupSchema = modelUsageWindowSummarySchema.extend({
+  date: z.string(),
+  model: z.string(),
+  providerId: z.string(),
+  region: z.string().optional(),
+  purpose: z.string().optional(),
+  agentName: z.string().optional()
+});
+
 export const usageSpendBudgetSchema = z.object({
   currency: z.string().optional(),
   dailyLimitMicros: z.number().int().nonnegative().optional(),
@@ -123,6 +138,8 @@ export const usageSummarySchema = z.object({
   allTime: modelUsageWindowSummarySchema,
   dailyUsage: z.array(modelUsageDailyBucketSchema),
   monthlyUsage: z.array(modelUsageMonthlyBucketSchema),
+  /** The days of `dailyUsage`, split by model, provider, region and purpose or agent. */
+  attributedUsage: z.array(modelUsageAttributionGroupSchema).optional(),
   recentEvents: z.array(modelUsageEventSchema)
 });
 
