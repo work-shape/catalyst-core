@@ -111,6 +111,8 @@ export interface BuildAccess {
   page: PageDefinition | undefined;
   /** The instance runs with editable agents and skills. */
   enabled: boolean;
+  /** The instance said what the viewer may do. Until then Build is neither open nor closed. */
+  ready: boolean;
 }
 
 function visibleBuildPage(build: BuildAccess, viewer: SettingsViewer): PageDefinition | undefined {
@@ -143,6 +145,8 @@ export type SettingsResolution =
   | { kind: "pending" }
   | { kind: "page"; page: SettingsPageDefinition }
   | { kind: "build"; page: PageDefinition }
+  /** Build exists here and nothing in it is the viewer's: the area says so. */
+  | { kind: "build-closed"; page: PageDefinition }
   /** A page of Settings the viewer may not open: the area says so in place of the page. */
   | { kind: "no-access" }
   /** The address leads elsewhere. */
@@ -153,7 +157,8 @@ export type SettingsResolution =
 /**
  * Resolves an address the way the old areas answered it: an administration address the viewer
  * may not open leads to the first one they may, else to chat; Security without a changeable
- * password leads to Profile; any other closed page says that it is closed.
+ * password leads to Profile; any other closed page says that it is closed, and so does Build
+ * for a viewer who holds no right on an agent or a skill.
  */
 export function resolveSettingsRoute(input: {
   route: WorkspaceRoute;
@@ -177,7 +182,13 @@ export function resolveSettingsRoute(input: {
   }
   if (route.kind === "build" || route.kind === "build-kind" || route.kind === "build-asset") {
     const page = visibleBuildPage(build, viewer);
-    return page ? { kind: "build", page } : administration();
+    if (page) {
+      return { kind: "build", page };
+    }
+    if (!build.enabled || !build.page) {
+      return administration();
+    }
+    return build.ready ? { kind: "build-closed", page: build.page } : { kind: "pending" };
   }
   if (route.kind !== "settings") {
     return undefined;

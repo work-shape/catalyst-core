@@ -1,5 +1,9 @@
 import type { ComponentType } from "react";
-import type { ApiUser, CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
+import type {
+  ApiUser,
+  CollaborationWorkspaceWithRole,
+  PlatformContext
+} from "@vivd-catalyst/api-client";
 import type { PageWidth } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
 
@@ -7,12 +11,15 @@ import type { TranslationKey } from "../i18n";
 export type SettingsGroupId = "you" | "workspace" | "instance";
 
 /**
- * Who looks at Settings: the user with the permission list the server put on it, and the
- * workspaces with the role the user acts in. A visibility function reads nothing else.
+ * Who looks at Settings: the user with the permission list the server put on it, the
+ * workspaces with the role the user acts in, and the Namespaces the user holds a right in. A
+ * visibility function reads nothing else.
  */
 export interface SettingsViewer {
   user: ApiUser | undefined;
   workspaces: readonly CollaborationWorkspaceWithRole[];
+  /** What the instance says the user may do in it. Absent until it answered. */
+  platform?: PlatformContext;
 }
 
 /** What a page is told about the scope its group is switched to. */

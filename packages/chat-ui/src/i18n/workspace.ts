@@ -3,6 +3,7 @@ import { defineTranslations } from "./translation-area";
 export const workspace = defineTranslations({
   en: {
     accountMenuLabel: "{label} account",
+    releaseVersion: "Version {version}",
     checkingSession: "Checking session",
     couldNotLoadWorkspace: "Could not load workspace",
     loadingUser: "Loading",
@@ -28,6 +29,7 @@ export const workspace = defineTranslations({
   },
   de: {
     accountMenuLabel: "Konto von {label}",
+    releaseVersion: "Version {version}",
     checkingSession: "Sitzung wird geprüft",
     couldNotLoadWorkspace: "Arbeitsbereich konnte nicht geladen werden",
     loadingUser: "Lädt",

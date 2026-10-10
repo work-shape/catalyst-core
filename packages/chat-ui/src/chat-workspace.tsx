@@ -226,6 +226,7 @@ function ChatWorkspaceContent({
       user={model.auth.user}
       signingOut={model.auth.signingOut}
       themeMode={themeMode}
+      platform={model.controlPlane.platform}
       onOpenProfile={() => {
         model.chrome.closeSidebarDrawer();
         model.auth.openSettings("profile");

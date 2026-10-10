@@ -1,5 +1,4 @@
 import {
-  canEditConfigAssets,
   canManageApiAccess,
   canManageUsers,
   canViewAudit,
@@ -10,6 +9,7 @@ import { AccessPage } from "./pages/access";
 import { ApiAccessPage } from "./pages/api-access";
 import { AuditPage } from "./pages/audit";
 import { InfrastructurePage } from "./pages/infrastructure";
+import { resolveBuildRights } from "../build-area/build-rights";
 import { BuildPage } from "./pages/build";
 import { JobsPage } from "./pages/jobs";
 import { ModulesPage } from "./pages/modules";
@@ -100,7 +100,7 @@ export const administration: ChatShellAdministration = {
   ],
   build: {
     labelKey: "nav.build",
-    visible: (viewer) => canEditConfigAssets(viewer.user),
+    visible: (viewer) => resolveBuildRights(viewer.user, viewer.platform).readsAny,
     component: BuildPage
   }
 };

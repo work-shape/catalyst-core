@@ -12,11 +12,14 @@ import {
   visibleSettingsPages,
   type BuildAccess
 } from "../packages/chat-ui/src/settings/catalog";
+import { platformContext } from "./chat-ui-build-fixtures";
 import { personalWorkspace, settingsUser, sharedWorkspace } from "./chat-ui-settings-fixtures";
 
 const catalog = settingsCatalog(administration);
-const buildOn: BuildAccess = { page: administration.build, enabled: true };
-const buildOff: BuildAccess = { page: administration.build, enabled: false };
+const buildOn: BuildAccess = { page: administration.build, enabled: true, ready: true };
+const buildOff: BuildAccess = { page: administration.build, enabled: false, ready: true };
+/** The instance has not said yet which Namespaces the viewer holds. */
+const buildUnanswered: BuildAccess = { page: administration.build, enabled: true, ready: false };
 
 function viewer(
   user: Partial<ApiUser> = {},
@@ -54,6 +57,13 @@ const instance = [
 ];
 
 const member = viewer();
+/** No permission on the instance, and a right in one Namespace. */
+const namespaceHolder: SettingsViewer = {
+  ...viewer(),
+  platform: platformContext([{ prefix: "tax-", displayName: "Tax", actions: ["skill.read"] }])
+};
+/** The instance answered, and the viewer holds nothing in it. */
+const answeredMember: SettingsViewer = { ...viewer(), platform: platformContext() };
 const workspaceOwner = viewer({}, [personalWorkspace(), sharedWorkspace()]);
 const instanceAdmin = viewer(
   {
@@ -151,6 +161,38 @@ describe("Settings catalog", () => {
       "build"
     );
   });
+
+  it("shows Build to a holder of a Namespace who has no permission on the instance", () => {
+    const targets = (build: BuildAccess, of: SettingsViewer) =>
+      settingsGoToTargets(catalog, build, of).map((target) => target.id);
+
+    expect(pageIds(namespaceHolder)).toEqual(you);
+    expect(targets(buildOn, namespaceHolder)).toEqual([
+      ...you.map((id) => `settings/${id}`),
+      "build"
+    ]);
+    expect(firstAdministrationRoute(catalog, buildOn, namespaceHolder)).toEqual({ kind: "build" });
+    // Build is the instance's switch first: off, no Namespace opens it.
+    expect(targets(buildOff, namespaceHolder)).not.toContain("build");
+    expect(firstAdministrationRoute(catalog, buildOff, namespaceHolder)).toBeUndefined();
+  });
+
+  it("shows no Build to a viewer who holds no right on an agent or a skill", () => {
+    for (const of of [member, answeredMember, instanceAdmin]) {
+      expect(settingsGoToTargets(catalog, buildOn, of).map((target) => target.id)).not.toContain(
+        "build"
+      );
+    }
+    expect(firstAdministrationRoute(catalog, buildOn, answeredMember)).toBeUndefined();
+  });
+
+  it("shows Build to a holder of config_assets.write alone", () => {
+    expect(
+      settingsGoToTargets(catalog, buildOn, viewer({ permissions: ["config_assets.write"] })).map(
+        (target) => target.id
+      )
+    ).toContain("build");
+  });
 });
 
 describe("the four role views", () => {
@@ -217,16 +259,50 @@ describe("old addresses", () => {
     });
   });
 
-  it.each(["/build", "/build/agents", "/build/skills/tax-review"])(
-    "answers %s with Build for a viewer who may open it, and leads everyone else away",
+  const buildAddresses = ["/build", "/build/agents", "/build/skills/tax-review"];
+
+  it.each(buildAddresses)("answers %s with Build for a viewer who may open it", (path) => {
+    const open = { kind: "build", page: administration.build };
+
+    expect(resolve(path, superadminWithoutMembership)).toEqual(open);
+    expect(resolve(path, namespaceHolder)).toEqual(open);
+    // The session names an instance right, so its holder does not wait for the instance.
+    expect(resolve(path, superadminWithoutMembership, buildUnanswered)).toEqual(open);
+  });
+
+  it.each(buildAddresses)(
+    "says at %s that Build is closed to a viewer who holds nothing in it",
     (path) => {
-      expect(resolve(path, superadminWithoutMembership)).toEqual({
-        kind: "build",
-        page: administration.build
-      });
-      expect(resolve(path, member)).toEqual({ kind: "chat" });
+      const closed = { kind: "build-closed", page: administration.build };
+
+      expect(resolve(path, answeredMember)).toEqual(closed);
+      expect(resolve(path, instanceAdmin)).toEqual(closed);
     }
   );
+
+  it.each(buildAddresses)("waits at %s until the instance said what the viewer may do", (path) => {
+    expect(resolve(path, member, buildUnanswered)).toEqual({ kind: "pending" });
+    // Once it answered, the same viewer is told, and a holder of a Namespace is let in.
+    expect(resolve(path, answeredMember, buildOn)).toMatchObject({ kind: "build-closed" });
+    expect(resolve(path, namespaceHolder, buildOn)).toMatchObject({ kind: "build" });
+  });
+
+  it.each(buildAddresses)("leads %s away where the instance runs without Build", (path) => {
+    expect(resolve(path, member, buildOff)).toEqual({ kind: "chat" });
+    expect(resolve(path, namespaceHolder, buildOff)).toEqual({ kind: "chat" });
+    expect(resolve(path, member, { ...buildOff, ready: false })).toEqual({ kind: "chat" });
+    expect(resolve(path, instanceAdmin, buildOff)).toEqual({
+      kind: "redirect",
+      route: { kind: "settings", group: "instance", page: "users" }
+    });
+    // An assembly without a Build page has nothing to say that it is closed.
+    expect(
+      resolve(path, superadminWithoutMembership, { page: undefined, enabled: true, ready: true })
+    ).toEqual({
+      kind: "redirect",
+      route: { kind: "settings", group: "instance", page: "users" }
+    });
+  });
 
   it("leads /admin to the first permitted Settings page, else to Build, else to chat", () => {
     const users: WorkspaceRoute = { kind: "settings", group: "instance", page: "users" };
@@ -248,7 +324,12 @@ describe("old addresses", () => {
       route: { kind: "settings", group: "instance", page: "usage" }
     });
     expect(resolve("/admin/users", member)).toEqual({ kind: "chat" });
-    expect(resolve("/admin/config", member)).toEqual({ kind: "chat" });
+    // The old address of Build is a Build address: closed to a viewer who holds nothing in it.
+    expect(resolve("/admin/config", member)).toEqual({
+      kind: "build-closed",
+      page: administration.build
+    });
+    expect(resolve("/admin/config", member, buildOff)).toEqual({ kind: "chat" });
     expect(resolve("/admin/config", superadminWithoutMembership, buildOff)).toEqual({
       kind: "redirect",
       route: { kind: "settings", group: "instance", page: "users" }

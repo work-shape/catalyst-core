@@ -27,6 +27,7 @@ import type {
   SettingsPageDefinition,
   SettingsViewer
 } from "../settings/page-definition";
+import { usePlatformContextQuery } from "../api/workspace-queries";
 import { workspaceRoutePath } from "../routes";
 import type { SettingsPageContextValue } from "../settings/settings-page-context";
 import type { ThemeModePreference } from "../theme";
@@ -77,8 +78,10 @@ export interface ControlPlaneModel {
   goToTargets: SettingsGoToTarget[];
   /** Present while a Settings route is open. */
   settings: SettingsAreaModel | undefined;
-  /** Present while the Build route is open for a viewer who may see it. */
+  /** Present while a Build route is open and the instance runs with Build. */
   build: BuildAreaModel | undefined;
+  /** Which instance this is and what release it runs. Absent until the instance answered. */
+  platform: PlatformIdentity | undefined;
 }
 
 export interface SettingsAreaModel {
@@ -95,8 +98,16 @@ export interface SettingsAreaModel {
   context: SettingsPageContextValue;
 }
 
+/** The instance and the release the account menu names. */
+export interface PlatformIdentity {
+  instanceName: string;
+  releaseVersion: string;
+}
+
 export interface BuildAreaModel {
   page: PageDefinition;
+  /** Nothing in Build is the viewer's: the area says that it is not available. */
+  closed: boolean;
   context: SettingsPageContextValue;
   /** The open place in Build and the way to another one. */
   navigation: BuildNavigation;
@@ -129,16 +140,24 @@ export function useControlPlaneModel({
   onCollaborationWorkspaceDeleted
 }: ControlPlaneModelInput): ControlPlaneModel {
   const catalog = useMemo(() => settingsCatalog(administration), [administration]);
+  const platformQuery = usePlatformContextQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: isAuthenticated
+  });
+  const platformContext = platformQuery.data;
   const viewer = useMemo<SettingsViewer>(
-    () => ({ user, workspaces: collaborationWorkspaces }),
-    [collaborationWorkspaces, user]
+    () => ({ user, workspaces: collaborationWorkspaces, platform: platformContext }),
+    [collaborationWorkspaces, platformContext, user]
   );
   const build = useMemo<BuildAccess>(
     () => ({
       page: administration?.build,
-      enabled: config?.features.configAssets.enabled === true
+      enabled: config?.features.configAssets.enabled === true,
+      ready: !platformQuery.isPending
     }),
-    [administration, config?.features.configAssets.enabled]
+    [administration, config?.features.configAssets.enabled, platformQuery.isPending]
   );
   // An address is answered once the user and the configuration are known.
   const resolution =
@@ -223,8 +242,21 @@ export function useControlPlaneModel({
           }
         : undefined,
     build:
-      context && buildNavigation && resolution?.kind === "build"
-        ? { page: resolution.page, context, navigation: buildNavigation }
-        : undefined
+      context &&
+      buildNavigation &&
+      (resolution?.kind === "build" || resolution?.kind === "build-closed")
+        ? {
+            page: resolution.page,
+            closed: resolution.kind === "build-closed",
+            context,
+            navigation: buildNavigation
+          }
+        : undefined,
+    platform: platformContext
+      ? {
+          instanceName: platformContext.instance.name,
+          releaseVersion: platformContext.release.version
+        }
+      : undefined
   };
 }

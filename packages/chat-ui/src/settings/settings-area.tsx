@@ -93,7 +93,13 @@ export function BuildArea({ build }: { build: BuildAreaModel }) {
     <AreaFrame ref={areaRef} label={t(build.page.labelKey)}>
       <SettingsPageProvider value={build.context}>
         <BuildNavigationProvider value={build.navigation}>
-          <BuildPage />
+          {build.closed ? (
+            <Page>
+              <EmptyState icon={<Lock aria-hidden="true" />}>{t("build.noAccess")}</EmptyState>
+            </Page>
+          ) : (
+            <BuildPage />
+          )}
         </BuildNavigationProvider>
       </SettingsPageProvider>
     </AreaFrame>

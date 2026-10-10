@@ -12,6 +12,7 @@ import {
   IconButton,
   useSidebarCollapsed
 } from "@vivd-catalyst/ui";
+import type { PlatformIdentity } from "../control-plane/control-plane-model";
 import { useTranslation } from "../i18n";
 import type { ResolvedThemeMode } from "../theme";
 
@@ -23,6 +24,7 @@ export function UserMenu({
   user,
   signingOut,
   themeMode,
+  platform,
   onOpenProfile,
   onOpenLanguageAppearance,
   onToggleTheme,
@@ -31,6 +33,8 @@ export function UserMenu({
   user: ApiUser | undefined;
   signingOut: boolean;
   themeMode: ResolvedThemeMode;
+  /** The instance and its release, named at the foot of the menu once the instance answered. */
+  platform?: PlatformIdentity;
   onOpenProfile: () => void;
   onOpenLanguageAppearance: () => void;
   onToggleTheme: () => void;
@@ -95,6 +99,20 @@ export function UserMenu({
         >
           {t(signingOut ? "signingOut" : "signOut")}
         </DropdownMenuItem>
+        {platform ? (
+          <>
+            <DropdownMenuSeparator />
+            <p
+              className="flex min-w-0 items-baseline justify-between gap-3 px-2 py-1 text-caption text-muted-foreground"
+              data-platform-identity=""
+            >
+              <span className="min-w-0 truncate">{platform.instanceName}</span>
+              <span className="shrink-0">
+                {t("releaseVersion", { version: platform.releaseVersion })}
+              </span>
+            </p>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
