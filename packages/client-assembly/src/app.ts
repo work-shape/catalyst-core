@@ -43,7 +43,10 @@ import {
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
-import { createInstanceModelGateway } from "@vivd-catalyst/model-provider";
+import {
+  createInstanceModelGateway,
+  unbilledModelProviderIds
+} from "@vivd-catalyst/model-provider";
 import { createDataSourceTools, createDataSourceRegistry } from "@vivd-catalyst/data-source";
 import { createWebFetchToolDefinitions } from "@vivd-catalyst/web-access";
 import {
@@ -345,9 +348,7 @@ export async function createClientInstanceExecutionAssembly(
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
     costs: config.usage.costs,
-    freeProviderIds: modelProviders
-      .filter((provider) => provider.type === "deterministic")
-      .map((provider) => provider.id)
+    freeProviderIds: unbilledModelProviderIds(modelProviders)
   });
   const modelGateway = await createInstanceModelGateway({
     registry: infrastructure.registry,
