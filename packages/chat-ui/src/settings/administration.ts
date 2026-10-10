@@ -11,6 +11,7 @@ import { ApiAccessPage } from "./pages/api-access";
 import { AuditPage } from "./pages/audit";
 import { BuildPage } from "./pages/build";
 import { JobsPage } from "./pages/jobs";
+import { ModulesPage } from "./pages/modules";
 import { UsagePage } from "./pages/usage";
 import { UsersPage } from "./pages/users";
 
@@ -67,6 +68,15 @@ export const administration: ChatShellAdministration = {
       width: "wide",
       visible: (viewer) => canViewAudit(viewer.user),
       component: JobsPage
+    },
+    {
+      id: "modules",
+      group: "instance",
+      labelKey: "modules.title",
+      // The config key of a module stays on one line.
+      width: "wide",
+      visible: (viewer) => canViewAudit(viewer.user),
+      component: ModulesPage
     }
   ],
   build: {
