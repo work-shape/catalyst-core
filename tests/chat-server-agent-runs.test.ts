@@ -554,6 +554,85 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
+  it("does not answer a run under another conversation's address", async () => {
+    const app = await createTestInstance({
+      config: createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          defaultUserId: "user-1",
+          users: [
+            {
+              id: "user-1",
+              externalUserId: "user-1",
+              displayLabel: "User One",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            },
+            {
+              id: "user-2",
+              externalUserId: "user-2",
+              displayLabel: "User Two",
+              roles: ["user"],
+              permissionRefs: ["demo-tools"]
+            }
+          ]
+        }
+      }),
+      env: {},
+      tools: []
+    });
+    async function createConversation(userId: string, title: string): Promise<{ id: string }> {
+      const created = await app.call("conversations.create", {
+        headers: { "x-dev-user-id": userId },
+        payload: { title }
+      });
+      expect(created.statusCode).toBe(200);
+      return created.json<{ id: string }>();
+    }
+    const running = await createConversation("user-1", "Conversation with the run");
+    const otherOfSameUser = await createConversation("user-1", "Another conversation of the user");
+    const ofOtherUser = await createConversation("user-2", "A conversation of another user");
+
+    const baseUrl = await listenTestInstance(app);
+    const started = await fetchStartConversationRun(baseUrl, running.id, "answer in one place", {
+      headers: { "x-dev-user-id": "user-1" }
+    });
+    const runId = started.run.id;
+
+    // Each caller may read the conversation in the address, but the run is not part of it.
+    for (const [userId, conversationId] of [
+      ["user-1", otherOfSameUser.id],
+      ["user-2", ofOtherUser.id]
+    ] as const) {
+      const events = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
+        params: { conversationId, runId },
+        headers: { "x-dev-user-id": userId }
+      });
+      expect(events.status).toBe(404);
+      expect(await events.text()).not.toContain("answer in one place");
+
+      const cancel = await fetchTestOperation(baseUrl, "conversations.runs.cancel", {
+        params: { conversationId, runId },
+        method: "POST",
+        headers: { "content-type": "application/json", "x-dev-user-id": userId },
+        body: JSON.stringify({ reason: "not this conversation's run" })
+      });
+      expect(cancel.status).toBe(404);
+      await cancel.text();
+    }
+
+    const events = await fetchTestOperation(baseUrl, "conversations.runs.observe", {
+      params: { conversationId: running.id, runId },
+      headers: { "x-dev-user-id": "user-1" }
+    });
+    expect(events.status).toBe(200);
+    expect(
+      parseSseChunks(await events.text()).some((chunk) => chunk.type === "run_completed")
+    ).toBe(true);
+
+    await app.close();
+  });
+
   it("cancels a backend run through the cancel route and records cancellation", async () => {
     const app = await createTestInstance({
       config: createTestConfig(),
