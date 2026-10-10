@@ -18,6 +18,7 @@ import type { PlatformFileStore } from "./files";
 import type { AccessAdministrationStore } from "./permissions";
 import type { JobsStore } from "./jobs";
 import type { OperationRunStore } from "./operation-runs";
+import type { InfrastructureCheckStore } from "./infrastructure-checks";
 import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
@@ -65,6 +66,7 @@ export interface PlatformStores {
   structuredData: StructuredDataStore;
   jobs: JobsStore;
   operationRuns: OperationRunStore;
+  infrastructureChecks: InfrastructureCheckStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;

@@ -9,6 +9,9 @@ import type {
 import {
   AppError,
   isSecretName,
+  type ClientInstanceId,
+  type InfrastructureCheckOutcome,
+  type InfrastructureCheckStore,
   type Logger,
   type ProviderCheckResult,
   type ProviderRegion,
@@ -48,25 +51,21 @@ export interface InfrastructureEntry {
   secrets: readonly { name: string; field?: string }[];
   /**
    * Asks the provider. It must end by itself and never throw, which a provider definition's
-   * `check` does. Absent when another process holds the provider.
+   * `check` does. Absent when another process holds the provider: that process checks it and
+   * writes the outcome under this entry's id.
    */
   check?: () => Promise<ProviderCheckResult>;
 }
 
-interface CheckOutcome {
-  checkedAt: Date;
-  result: ProviderCheckResult;
-}
-
 /**
  * Instance > Infrastructure: what the instance runs on and whether each provider answers. The
- * results of the last run are kept in this process and nowhere else. A read answers from them
- * and calls no provider; only the schedule and "Check now" do.
+ * results and the moment of the last manual check are kept in the database, one row for the
+ * instance, so every API process shows the same and "Check now" runs once a minute for all of
+ * them. A read answers from that row and calls no provider; only the schedule and "Check now"
+ * do.
  */
 export class InfrastructureWorkflow {
-  private readonly outcomes = new Map<string, CheckOutcome>();
   private running: Promise<void> | undefined;
-  private checkedNowAt: number | undefined;
   private readonly now: () => Date;
 
   constructor(
@@ -78,6 +77,8 @@ export class InfrastructureWorkflow {
        */
       declaredSecretNames: ReadonlySet<string>;
       secrets: SecretResolver;
+      store: InfrastructureCheckStore;
+      clientInstanceId: ClientInstanceId;
       logger: Logger;
       now?: () => Date;
     }
@@ -86,12 +87,16 @@ export class InfrastructureWorkflow {
   }
 
   async get(): Promise<Infrastructure> {
+    const { clientInstanceId } = this.options;
+    const state = await this.options.store.read({ clientInstanceId });
     const availableAt =
-      this.checkedNowAt === undefined
+      state.manualCheckAt === undefined
         ? undefined
-        : this.checkedNowAt + INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS;
+        : state.manualCheckAt.getTime() + INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS;
     return {
-      items: await Promise.all(this.options.entries.map((entry) => this.listed(entry))),
+      items: await Promise.all(
+        this.options.entries.map((entry) => this.listed(entry, state.outcomes[entry.id]))
+      ),
       checkIntervalSeconds: INFRASTRUCTURE_CHECK_INTERVAL_MS / 1000,
       ...(availableAt !== undefined && availableAt > this.now().getTime()
         ? { checkAvailableAt: new Date(availableAt).toISOString() }
@@ -101,25 +106,28 @@ export class InfrastructureWorkflow {
 
   /** "Check now": one run for the instance per minute, then the results. */
   async checkNow(): Promise<Infrastructure> {
-    const now = this.now().getTime();
-    const waitMs =
-      this.checkedNowAt === undefined
-        ? 0
-        : this.checkedNowAt + INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS - now;
-    if (waitMs > 0) {
+    const at = this.now();
+    // The database decides: of the API processes asked inside one minute, one runs the check.
+    const claim = await this.options.store.claimManualCheck({
+      clientInstanceId: this.options.clientInstanceId,
+      at,
+      minIntervalMs: INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS
+    });
+    if (!claim.claimed) {
+      const waitMs =
+        claim.manualCheckAt.getTime() + INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS - at.getTime();
       throw new AppError("RATE_LIMITED", "The providers were checked less than a minute ago", {
-        retryAfterSeconds: Math.ceil(waitMs / 1000)
+        retryAfterSeconds: Math.max(1, Math.ceil(waitMs / 1000))
       });
     }
-    this.checkedNowAt = now;
     await this.runChecks();
     return this.get();
   }
 
   /**
-   * Asks every provider once, all at the same time. A caller that arrives while a run is under
-   * way waits for that run instead of starting another, so a provider is never asked twice at
-   * once.
+   * Asks every provider this process holds once, all at the same time, and writes what it
+   * found. A caller that arrives while a run is under way waits for that run instead of
+   * starting another, so this process never asks a provider twice at once.
    */
   runChecks(): Promise<void> {
     this.running ??= this.checkAll().finally(() => {
@@ -129,6 +137,8 @@ export class InfrastructureWorkflow {
   }
 
   private async checkAll(): Promise<void> {
+    const { clientInstanceId, store } = this.options;
+    const outcomes: Record<string, InfrastructureCheckOutcome> = {};
     await Promise.all(
       this.options.entries.map(async (entry) => {
         if (!entry.check) {
@@ -140,30 +150,26 @@ export class InfrastructureWorkflow {
         } catch {
           result = { ok: false, errorClass: "failed" };
         }
-        this.record(entry, { checkedAt: this.now(), result });
+        const checkedAt = this.now().toISOString();
+        outcomes[entry.id] = result.ok
+          ? { ok: true, checkedAt }
+          : { ok: false, checkedAt, errorClass: result.errorClass };
       })
     );
-  }
-
-  /** Keeps the outcome and logs a provider that stopped answering or answers again. */
-  private record(entry: InfrastructureEntry, outcome: CheckOutcome): void {
-    const before = this.outcomes.get(entry.id)?.result;
-    this.outcomes.set(entry.id, outcome);
-    const { result } = outcome;
-    if (!result.ok && (before?.ok !== false || before.errorClass !== result.errorClass)) {
-      this.options.logger.warn(
-        { provider: entry.id, type: entry.type, errorClass: result.errorClass },
-        "A provider does not answer its check"
-      );
-    } else if (result.ok && before?.ok === false) {
-      this.options.logger.info(
-        { provider: entry.id, type: entry.type },
-        "A provider answers its check again"
-      );
+    const before = (await store.read({ clientInstanceId })).outcomes;
+    await store.recordOutcomes({ clientInstanceId, outcomes });
+    for (const entry of this.options.entries) {
+      const outcome = outcomes[entry.id];
+      if (outcome) {
+        logProviderCheckChange(this.options.logger, entry, before[entry.id], outcome);
+      }
     }
   }
 
-  private async listed(entry: InfrastructureEntry): Promise<InfrastructureProvider> {
+  private async listed(
+    entry: InfrastructureEntry,
+    outcome: InfrastructureCheckOutcome | undefined
+  ): Promise<InfrastructureProvider> {
     return {
       id: entry.id,
       class: entry.class,
@@ -176,7 +182,7 @@ export class InfrastructureWorkflow {
       ...(entry.bucket === undefined ? {} : { bucket: entry.bucket }),
       ...(entry.withheld?.length ? { withheld: [...entry.withheld] } : {}),
       secrets: (await Promise.all(entry.secrets.map((secret) => this.listedSecret(secret)))).flat(),
-      check: this.checkOf(entry)
+      check: checkOf(entry, outcome)
     };
   }
 
@@ -209,18 +215,40 @@ export class InfrastructureWorkflow {
       return "missing";
     }
   }
+}
 
-  private checkOf(entry: InfrastructureEntry): InfrastructureCheck {
-    if (!entry.check) {
-      return { status: "not_checked" };
-    }
-    const outcome = this.outcomes.get(entry.id);
-    if (!outcome) {
-      return { status: "pending" };
-    }
-    const checkedAt = outcome.checkedAt.toISOString();
-    return outcome.result.ok
-      ? { status: "ok", checkedAt }
-      : { status: "failed", checkedAt, errorClass: outcome.result.errorClass };
+function checkOf(
+  entry: InfrastructureEntry,
+  outcome: InfrastructureCheckOutcome | undefined
+): InfrastructureCheck {
+  if (!outcome) {
+    // A provider another process holds has an outcome once that process published one.
+    return { status: entry.check ? "pending" : "not_checked" };
+  }
+  return outcome.ok
+    ? { status: "ok", checkedAt: outcome.checkedAt }
+    : { status: "failed", checkedAt: outcome.checkedAt, errorClass: outcome.errorClass };
+}
+
+/**
+ * Logs a provider that stopped answering, fails in another way than before, or answers again.
+ * The line holds the provider's place in the config, its type and the class: nothing else.
+ */
+export function logProviderCheckChange(
+  logger: Logger,
+  provider: { id: string; type: string },
+  before: InfrastructureCheckOutcome | undefined,
+  outcome: InfrastructureCheckOutcome
+): void {
+  if (!outcome.ok && (before?.ok !== false || before.errorClass !== outcome.errorClass)) {
+    logger.warn(
+      { provider: provider.id, type: provider.type, errorClass: outcome.errorClass },
+      "A provider does not answer its check"
+    );
+  } else if (outcome.ok && before?.ok === false) {
+    logger.info(
+      { provider: provider.id, type: provider.type },
+      "A provider answers its check again"
+    );
   }
 }

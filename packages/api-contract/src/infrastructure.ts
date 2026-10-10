@@ -19,9 +19,9 @@ export type InfrastructureOrigin = z.infer<typeof infrastructureOriginSchema>;
 
 /** The last check of a provider. It carries a class of failure and never a provider's text. */
 export const infrastructureCheckSchema = z.discriminatedUnion("status", [
-  /** No check has ended since this process started. */
+  /** No check of it has ended yet. */
   z.object({ status: z.literal("pending") }),
-  /** Another process holds the provider, so the API cannot ask it. */
+  /** The process that holds the provider, which is not the API, has not reported a check. */
   z.object({ status: z.literal("not_checked") }),
   z.object({ status: z.literal("ok"), checkedAt: timestampSchema }),
   z.object({

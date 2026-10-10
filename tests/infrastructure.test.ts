@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ import {
   declaredSecretNames,
   infrastructureOverview
 } from "@vivd-catalyst/client-assembly";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { getClientInstanceId, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   defineProvider,
   legacyPermissionFor,
@@ -114,6 +115,8 @@ async function createServer(
     extraEntries?: InfrastructureEntry[];
     /** Replaces the resolver in which every secret of the instance is set. */
     secrets?: SecretResolver;
+    /** The instance of another server of this file: both then are API processes of it. */
+    instanceId?: string;
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), "infrastructure-test-"));
@@ -121,7 +124,9 @@ async function createServer(
   const config = parseClientInstanceConfig({
     version: 1,
     clientInstance: {
-      id: "infrastructure-test",
+      // Every test file has one database: an instance of its own keeps a test's results and
+      // its minute of "Check now" apart from the others'.
+      id: options.instanceId ?? `infrastructure-test-${randomUUID()}`,
       displayName: "Infrastructure Test",
       environment: "staging"
     },
@@ -189,6 +194,8 @@ async function createServer(
       entries: [...overview, ...(options.extraEntries ?? [])],
       declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
       secrets,
+      store: stores.infrastructureChecks,
+      clientInstanceId: getClientInstanceId(config),
       logger,
       now: () => now
     });
@@ -196,6 +203,9 @@ async function createServer(
   });
   return {
     server,
+    config,
+    infrastructure,
+    instanceId: config.clientInstance.id,
     /** The entry of the release config with this id, once the API process has started. */
     entry(id: string): InfrastructureEntry {
       const found = overview.find((entry) => entry.id === id);
@@ -287,7 +297,7 @@ describe("Instance > Infrastructure: what an operator reads", () => {
       endpointHost: "127.0.0.1:9"
     });
     expect(items.database?.secrets).toEqual([{ name: "DATABASE_URL", state: "set" }]);
-    // The sandbox runs in the command worker, so the API does not ask it.
+    // The sandbox runs in the command worker, which has reported no check.
     expect(items.sandbox?.check).toEqual({ status: "not_checked" });
     // A read asks no provider.
     expect(infrastructure.items.filter((item) => item.check.status === "pending")).toHaveLength(9);
@@ -508,6 +518,47 @@ describe("Instance > Infrastructure: the checks", () => {
     await scheduled;
     expect(asked).toBe(1);
     expect(byId(read(await checking))["models.slow"]?.check.status).toBe("ok");
+  });
+});
+
+describe("Instance > Infrastructure: several processes of one instance", () => {
+  it("shows in every API process what one of them found, and runs 'Check now' once a minute for all", async () => {
+    stubProviders();
+    const first = await createServer();
+    const second = await createServer({ instanceId: first.instanceId });
+
+    const checked = await first.server.call("instance.infrastructure.check", {}, administrator);
+    expect(checked.statusCode).toBe(200);
+
+    // The second process ran no check and reads the first one's results.
+    const elsewhere = read(
+      await second.server.call("instance.infrastructure.get", {}, administrator)
+    );
+    expect(elsewhere.items.map((item) => [item.id, item.check])).toEqual(
+      read(checked).items.map((item) => [item.id, item.check])
+    );
+    expect(byId(elsewhere).database?.check).toEqual({
+      status: "ok",
+      checkedAt: "2026-10-10T08:00:00.000Z"
+    });
+    expect(elsewhere.checkAvailableAt).toBe("2026-10-10T08:01:00.000Z");
+    // The minute is the instance's, not the process's.
+    const refused = await second.server.call("instance.infrastructure.check", {}, administrator);
+    expect(refused.statusCode).toBe(429);
+    expect(apiErrorResponseSchema.parse(refused.json()).error).toMatchObject({
+      code: "RATE_LIMITED",
+      details: { retryAfterSeconds: 60 }
+    });
+
+    // Asked at the same moment after the minute, one of the two runs the check.
+    first.advance(INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS);
+    second.advance(INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS);
+    const together = await Promise.all(
+      [first, second].map(({ server }) =>
+        server.call("instance.infrastructure.check", {}, administrator)
+      )
+    );
+    expect(together.map((response) => response.statusCode).sort()).toEqual([200, 429]);
   });
 });
 

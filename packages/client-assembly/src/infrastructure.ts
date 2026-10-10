@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { InfrastructureWorkflow, type InfrastructureEntry } from "@vivd-catalyst/chat-server";
-import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { getClientInstanceId, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createEnvironmentSecretResolver,
   createProvider,
@@ -170,6 +170,11 @@ export async function createSandbox(
   );
 }
 
+/** The id of an entry on Instance > Infrastructure: its place in the section. */
+function overviewId(entry: ProviderEntry): string {
+  return entry.path.slice("infrastructure.".length);
+}
+
 /**
  * The ports whose providers the API process uses itself, so it can ask them. The sandbox runs
  * in the workspace command worker, which alone reaches the Docker engine: asked from the API
@@ -272,7 +277,7 @@ function providerOverview<Port extends ProviderPort>(
 ): InfrastructureEntry {
   const definition = registry.find(port, entry);
   const validated = definition.validate(entry);
-  const id = entry.path.slice("infrastructure.".length);
+  const id = overviewId(entry);
   const name = id.includes(".") ? id.slice(id.indexOf(".") + 1) : undefined;
   const { shown, withheld } = shownDescription(id, validated.description, context.logger);
   // The provider the check asks is created at the first check and kept. It is one of its own:
@@ -331,7 +336,7 @@ export function declaredSecretNames(
 
 /** Instance > Infrastructure of an API process: the overview with the checks behind it. */
 export function createInfrastructureWorkflow(
-  config: Pick<ClientInstanceConfig, "infrastructure">,
+  config: ClientInstanceConfig,
   infrastructure: InstanceInfrastructure,
   stores: PlatformStores
 ): InfrastructureWorkflow {
@@ -339,6 +344,8 @@ export function createInfrastructureWorkflow(
     entries: infrastructureOverview({ config, infrastructure, stores }),
     declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
     secrets: infrastructure.secrets,
+    store: stores.infrastructureChecks,
+    clientInstanceId: getClientInstanceId(config),
     logger: infrastructure.context.logger
   });
 }
