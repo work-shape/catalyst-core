@@ -13,6 +13,7 @@ import {
 import { ModelProviderError, normalizeModelAdapterError } from "./model-provider-error";
 import { createModelRetryPolicy, modelCallFailureFor, type ModelRetryPolicy } from "./retry";
 import {
+  WEB_SEARCH_MODEL_TOOL_NAME,
   isModelFunctionTool,
   isModelProviderNativeTool,
   type ModelAdapter,
@@ -88,7 +89,7 @@ export interface ModelCallGovernance {
   admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall>;
   /**
    * Ends the admitted call: writes what it used onto its usage event. Without usage the call
-   * ended without an answer, and what admission reserved for it is released.
+   * ended before any answer arrived, and what admission reserved for it is released.
    */
   settleModelCall(admitted: AdmittedModelCall, usage?: ModelCallUsage): Promise<unknown>;
 }
@@ -176,7 +177,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     streaming: boolean,
     policy: ModelRetryPolicy,
     limit: ModelCallLimit,
-    seen: { completion?: ModelCompletion }
+    seen: SeenOfCall
   ): AsyncGenerator<ModelCallStreamEvent, void, void> {
     const request: ModelAdapterRequest = {
       model: target.model,
@@ -192,6 +193,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     for (;;) {
       policy.assertAttemptMayStart();
       const attempt = { retrySafe: true };
+      let answering = false;
       const preparingToolCallIds: string[] = [];
       try {
         if (!streaming) {
@@ -202,6 +204,14 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           return;
         }
         for await (const event of target.adapter.stream(request)) {
+          const received = receivedWith(event);
+          if (received) {
+            // The provider read the request of this attempt once more to answer it.
+            if (!answering) seen.received.inputCharacters += seen.requestCharacters;
+            answering = true;
+            seen.received.outputCharacters += received.characters;
+            seen.received.webSearchCallCount += received.webSearchCalls;
+          }
           if (event.type === "tool_call_preparing") {
             preparingToolCallIds.push(event.toolCallId);
           } else if (event.type === "completed") {
@@ -246,8 +256,10 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
    * The one call path: resolve, check the capabilities, admit, call, settle. A call that is
    * refused before or at admission records nothing. Admission writes the usage event of the
    * call, so every admitted call has exactly one, whether it completed, failed, was stopped or
-   * was left unread by its caller; a call that did not complete is settled as failed with
-   * nothing used. Only a process that goes away leaves an event that is not settled.
+   * was left unread by its caller. A call that did not complete and gave nothing is settled as
+   * failed with nothing used. A stream that was cut off after its answer began is settled with
+   * `estimateInterruptedCallUsage`: its provider counted what it sent, and reported nothing.
+   * Only a process that goes away leaves an event that is not settled.
    */
   async function* run(
     call: ModelCall,
@@ -257,6 +269,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     assertWithinCapabilities(call, target, streaming);
     const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
     policy.assertAttemptMayStart();
+    const inputCharacters = requestCharacters(call);
     const admitted = await governance.admitModelCall({
       clientInstanceId: call.clientInstanceId,
       attribution: call.attribution,
@@ -266,13 +279,23 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       ...(target.bindingId === undefined ? {} : { bindingId: target.bindingId }),
       fastMode: call.fastTier === true,
       correlationId: call.correlationId,
-      request: { inputCharacters: requestCharacters(call) }
+      request: { inputCharacters }
     });
-    const seen: { completion?: ModelCompletion } = {};
+    const seen: SeenOfCall = {
+      requestCharacters: inputCharacters,
+      received: { inputCharacters: 0, outputCharacters: 0, webSearchCallCount: 0 }
+    };
     const settle = async (answerHandedOn: boolean): Promise<void> => {
       try {
-        // A call without a completion used nothing the provider reported.
-        await governance.settleModelCall(admitted, seen.completion?.usage);
+        // What the provider reported. Without it: an estimate where an answer began, and
+        // nothing where none did.
+        await governance.settleModelCall(
+          admitted,
+          seen.completion?.usage ??
+            (seen.received.outputCharacters > 0
+              ? estimateInterruptedCallUsage(seen.received)
+              : undefined)
+        );
       } catch (settleError) {
         if (answerHandedOn) {
           // A call whose usage could not be settled fails, so no answer goes unrecorded.
@@ -324,6 +347,79 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       return target.adapter.capabilities(target.model);
     }
   };
+}
+
+/** What the gateway saw of a call: its completion, or what arrived of an answer without one. */
+interface SeenOfCall {
+  completion?: ModelCompletion;
+  /** The characters of the request, as admission sized it. */
+  requestCharacters: number;
+  received: InterruptedCallSize;
+}
+
+/** What arrived of a streamed call that reported no usage, over all its attempts. */
+export interface InterruptedCallSize {
+  /** The characters of the request, once for each attempt that began to answer. */
+  inputCharacters: number;
+  /** The characters of the text, the reasoning and the tool events that arrived. */
+  outputCharacters: number;
+  webSearchCallCount: number;
+}
+
+/**
+ * Characters taken as one token when a call that was cut off is estimated. Text runs at about
+ * four characters a token; three keeps the estimate above what the provider counts.
+ */
+const ESTIMATED_CHARACTERS_PER_TOKEN = 3;
+
+/**
+ * What a streamed call is settled with when it was stopped or broke off after its answer began
+ * and its provider had reported no usage. The rule: every `ESTIMATED_CHARACTERS_PER_TOKEN`
+ * characters that were sent or that arrived count as one token, rounded up, and at least one
+ * output token; the input counts as not cached, which is the dearer rate; a web search counts
+ * from its start. The usage is marked `estimated`. It is never nothing: a provider bills what
+ * it sent, whether or not the caller read to the end.
+ */
+export function estimateInterruptedCallUsage(received: InterruptedCallSize): ModelCallUsage {
+  const inputTokens = Math.ceil(received.inputCharacters / ESTIMATED_CHARACTERS_PER_TOKEN);
+  const outputTokens = Math.max(
+    1,
+    Math.ceil(received.outputCharacters / ESTIMATED_CHARACTERS_PER_TOKEN)
+  );
+  return {
+    inputTokens,
+    cachedInputTokens: 0,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    source: "estimated",
+    webSearchCallCount: received.webSearchCallCount
+  };
+}
+
+/** What one stream event shows the provider to have produced. Nothing for an empty delta. */
+function receivedWith(
+  event: ModelCompletionStreamEvent
+): { characters: number; webSearchCalls: number } | undefined {
+  const sizeOf = (value: unknown): number =>
+    value === undefined ? 0 : JSON.stringify(value).length;
+  switch (event.type) {
+    case "text_delta":
+    case "reasoning_delta":
+      return event.delta.length > 0
+        ? { characters: event.delta.length, webSearchCalls: 0 }
+        : undefined;
+    case "tool_call_preparing":
+      return { characters: event.toolName.length, webSearchCalls: 0 };
+    case "provider_tool_started":
+      return {
+        characters: event.toolName.length + sizeOf(event.input),
+        webSearchCalls: event.toolName === WEB_SEARCH_MODEL_TOOL_NAME ? 1 : 0
+      };
+    case "provider_tool_completed":
+      return { characters: event.toolName.length + sizeOf(event.output), webSearchCalls: 0 };
+    case "completed":
+      return undefined;
+  }
 }
 
 /**

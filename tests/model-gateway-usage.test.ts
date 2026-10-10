@@ -5,7 +5,8 @@ import {
   asClientInstanceId,
   asConversationId,
   type ModelProviderConfig,
-  type ModelUsageEvent
+  type ModelUsageEvent,
+  type UsageCostConfig
 } from "@vivd-catalyst/core";
 import {
   ModelProviderError,
@@ -14,7 +15,8 @@ import {
   type ModelAdapter,
   type ModelAdapterRequest,
   type ModelCall,
-  type ModelCompletion
+  type ModelCompletion,
+  type ModelCompletionStreamEvent
 } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
@@ -152,6 +154,89 @@ describe("model gateway usage recording", () => {
     expect(events.reduce((sum, event) => sum + event.totalTokens, 0)).toBe(120);
   });
 
+  // Fails without the change: a stream that ended without its completion was settled as
+  // failed with nothing used, whatever had arrived of its answer.
+  it.each([
+    {
+      how: "the caller stops",
+      end: (stop: AbortController): void => {
+        stop.abort();
+        throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+      }
+    },
+    {
+      how: "the provider breaks off",
+      end: (): void => {
+        throw new ModelProviderError({
+          kind: "server_error",
+          status: 500,
+          message: "Model provider stream failed"
+        });
+      }
+    }
+  ])("settles a stream with an estimate when $how after text arrived", async ({ end }) => {
+    const stop = new AbortController();
+    // Thirty characters: ten tokens at three characters a token.
+    const answer = "Thirty characters of an answer";
+    const costs: UsageCostConfig = {
+      customer: {
+        id: "customer",
+        version: "2026-10",
+        currency: "EUR",
+        models: [
+          {
+            providerId: "main",
+            model: "entry-model",
+            uncachedInputPricePerMillionTokens: 2,
+            cachedInputPricePerMillionTokens: 0.5,
+            outputPricePerMillionTokens: 8
+          }
+        ]
+      }
+    };
+    const f = await fixture(
+      async () => completion(120),
+      {},
+      {
+        costs,
+        async *stream() {
+          yield { type: "text_delta", delta: answer };
+          end(stop);
+        }
+      }
+    );
+
+    await expect(
+      (async () => {
+        for await (const _event of f.gateway.stream(call({ signal: stop.signal }))) {
+          // Read to the end.
+        }
+      })()
+    ).rejects.toBeDefined();
+
+    // "hello" is five characters: two input tokens, taken as not cached.
+    expect(await f.events()).toEqual([
+      expect.objectContaining({
+        status: "settled",
+        source: "estimated",
+        inputTokens: 2,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        totalTokens: 12,
+        customerBillableCost: expect.objectContaining({
+          status: "settled",
+          totalCostMicros: 2 * 2 + 10 * 8
+        })
+      })
+    ]);
+    const summary = await f.summary();
+    expect(summary.today).toMatchObject({
+      modelCallCount: 1,
+      totalTokens: 12,
+      cost: { status: "settled", billableCostMicros: 84 }
+    });
+  });
+
   it("leaves no event for a call admission refuses", async () => {
     const f = await fixture(async () => completion(120), { modelCallsPerDay: 1 });
 
@@ -165,7 +250,11 @@ describe("model gateway usage recording", () => {
 
 async function fixture(
   complete: (request: ModelAdapterRequest) => Promise<ModelCompletion>,
-  safeguards: { modelCallsPerDay?: number } = {}
+  safeguards: { modelCallsPerDay?: number } = {},
+  streamed?: {
+    stream: (request: ModelAdapterRequest) => AsyncIterable<ModelCompletionStreamEvent>;
+    costs: UsageCostConfig;
+  }
 ) {
   const store = (await createTestInstance()).stores;
   const requests: ModelAdapterRequest[] = [];
@@ -175,8 +264,10 @@ async function fixture(
       requests.push(request);
       return complete(request);
     },
-    stream() {
-      throw new Error("These calls do not stream");
+    stream(request) {
+      requests.push(request);
+      if (!streamed) throw new Error("These calls do not stream");
+      return streamed.stream(request);
     }
   };
   return {
@@ -185,10 +276,22 @@ async function fixture(
       providers: [provider],
       bindings: [],
       adapters: new Map([["main", adapter]]),
-      governance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards }),
+      governance: new ModelUsageGovernance({
+        store: store.usage,
+        budget: {},
+        safeguards,
+        ...(streamed ? { costs: streamed.costs } : {})
+      }),
       logger: silentTestLogger
     }),
-    events: (): Promise<ModelUsageEvent[]> => store.usage.listModelUsageEvents({ clientInstanceId })
+    events: (): Promise<ModelUsageEvent[]> => store.usage.listModelUsageEvents({ clientInstanceId }),
+    summary: () =>
+      new ModelUsageGovernance({
+        store: store.usage,
+        budget: {},
+        safeguards,
+        ...(streamed ? { costs: streamed.costs } : {})
+      }).createSafeSummary({ clientInstanceId })
   };
 }
 

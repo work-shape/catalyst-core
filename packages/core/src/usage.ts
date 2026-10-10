@@ -68,8 +68,9 @@ export type UsageCostRecord = SettledUsageCostRecord | IncompleteUsageCostRecord
 
 /**
  * Where the call of a usage event stands. `pending`: admitted and not ended. `settled`: ended
- * with the usage its provider reported. `failed`: ended without an answer. `abandoned`: never
- * ended as far as the instance knows, because its process went away.
+ * with the usage its provider reported, or with an estimate when it was cut off after its
+ * answer began; the event's `source` says which. `failed`: ended before any answer arrived.
+ * `abandoned`: never ended as far as the instance knows, because its process went away.
  */
 export type ModelUsageEventStatus = "pending" | "settled" | "failed" | "abandoned";
 
