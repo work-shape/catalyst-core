@@ -117,7 +117,14 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
   expect(template).toBeDefined();
   // The agent names the tool, as it did before the module was turned off.
   const stored = await requestWithOrigin(page, "put", agentUrl, {
-    data: { config: { ...template, name: agentName, toolNames: [staleTool] } }
+    data: {
+      config: {
+        ...template,
+        name: agentName,
+        displayName: { en: "Modules test agent", de: "Modul-Testagent" },
+        toolNames: [staleTool]
+      }
+    }
   });
   expect(stored.ok(), await stored.text()).toBe(true);
   try {

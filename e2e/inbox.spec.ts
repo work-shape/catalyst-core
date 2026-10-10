@@ -173,7 +173,13 @@ test("a decision on a request that was decided meanwhile is refused in a sentenc
       ...proposal,
       skillName: "inbox_e2e_mileage",
       summary: lateSummary,
-      operations: [{ ...proposal.operations[0], name: "inbox_e2e_mileage" }]
+      operations: [
+        {
+          ...proposal.operations[0],
+          name: "inbox_e2e_mileage",
+          title: "Mileage expense checklist"
+        }
+      ]
     })}`
   );
   await page.getByRole("button", { name: "Send message" }).click();
