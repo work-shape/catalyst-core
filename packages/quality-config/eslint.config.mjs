@@ -647,7 +647,7 @@ const plugin = {
         return (
           isServerSource(filename) &&
           !file.startsWith("packages/postgres-store/") &&
-          // The client, and the worker at the other end of the queue.
+          // The client, and the job handler that runs the command at the other end.
           file !== "packages/tool-execution/src/workspace-command-client.ts" &&
           file !== "packages/tool-execution/src/workspace-command-worker.ts"
         );

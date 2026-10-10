@@ -6,43 +6,23 @@
  * @type {{ file: string, within: string, count: number, removedBy: string }[]}
  */
 export const leaseExemptions = [
-  // The agent run lease: CB-7b.
+  // The agent run lease: CB-7c.
   {
     file: "packages/postgres-store/src/postgres-agent-run-worker-operations.ts",
     within: "claimNextAgentRun",
     count: 1,
-    removedBy: "CB-7b"
+    removedBy: "CB-7c"
   },
   {
     file: "packages/postgres-store/src/postgres-agent-run-worker-operations.ts",
     within: "recoverExpiredAgentRuns",
     count: 1,
-    removedBy: "CB-7b"
+    removedBy: "CB-7c"
   },
   // Heartbeat and cancellation timers.
   {
     file: "packages/agent-runtime/src/agent-run-worker.ts",
     within: "runClaimed",
-    count: 2,
-    removedBy: "CB-7b"
-  },
-  // The workspace command lease: CB-7c.
-  {
-    file: "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
-    within: "claimNextWorkspaceCommand",
-    count: 1,
-    removedBy: "CB-7c"
-  },
-  {
-    file: "packages/postgres-store/src/postgres-execution-workspace-operations.ts",
-    within: "recoverStaleWorkspaceCommands",
-    count: 1,
-    removedBy: "CB-7c"
-  },
-  // Heartbeat and cancellation timers.
-  {
-    file: "packages/tool-execution/src/workspace-command-worker.ts",
-    within: "runClaimedCommand",
     count: 2,
     removedBy: "CB-7c"
   }

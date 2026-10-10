@@ -68,6 +68,7 @@ export default [...config, { files: ["**/warned.ts"], rules: { "no-debugger": "w
     "@fixture/model-provider": [],
     "@fixture/postgres-store": [],
     "@fixture/tool-execution": [],
+    "@fixture/agent-runtime": [],
     "@fixture/auth": []
   }),
   "packages/alpha/package.json": JSON.stringify({
@@ -372,10 +373,22 @@ export function recoverStaleArtifactPreviewJobs() {
   return "select id from conversation_attachments for update skip locked";
 }
 `,
-  // Two timers in this method are a named exemption. The third is the ninth occurrence. The
-  // same timer under another name is not the exempted one.
+  // The command lease left the list with the move onto the executor: put back, it is a finding.
   "packages/tool-execution/src/workspace-command-worker.ts": `export class WorkspaceCommandWorker {
   runClaimedCommand() {
+    return setInterval(() => {}, 1000);
+  }
+}
+`,
+  "packages/postgres-store/src/postgres-execution-workspace-operations.ts": `
+export const claimNextWorkspaceCommand = () => "select id from c for update skip locked";
+export const recoverStaleWorkspaceCommands = () => "select id from c for update skip locked";
+`,
+  "packages/agent-runtime/package.json": JSON.stringify({ name: "@fixture/agent-runtime" }),
+  // Two timers in this method are a named exemption. The third is the fifth occurrence. The
+  // same timer under another name is not the exempted one.
+  "packages/agent-runtime/src/agent-run-worker.ts": `export class AgentRunWorker {
+  runClaimed() {
     return [
       setInterval(() => {}, 1000),
       setInterval(() => {}, 1000),
@@ -716,7 +729,10 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "catalyst/job-executor-boundary packages/postgres-store/src/postgres-file-store.ts",
         "catalyst/job-executor-boundary packages/tool-execution/src/artifact-preview-worker.ts",
         "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
-        "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
+        "catalyst/job-executor-boundary packages/postgres-store/src/postgres-execution-workspace-operations.ts",
+        "catalyst/job-executor-boundary packages/postgres-store/src/postgres-execution-workspace-operations.ts",
+        "catalyst/job-executor-boundary packages/agent-runtime/src/agent-run-worker.ts",
+        "catalyst/job-executor-boundary packages/agent-runtime/src/agent-run-worker.ts",
         "catalyst/workspace-command-boundary packages/tool-execution/src/workspace-tools/queue-member.ts",
         "catalyst/workspace-command-boundary packages/tool-execution/src/workspace-tools/queue-destructured.ts",
         "catalyst/gateway-boundary packages/model-provider/src/adapter-call.ts",
