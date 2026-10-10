@@ -91,6 +91,9 @@ export interface LayoutGalleryText {
   saveDiscard: string;
   saveInline: string;
   saveSticky: string;
+  saveWhenClean: string;
+  saveOneChange: string;
+  saveTwoChanges: string;
   surfaceBeside: string;
   surfaceFullscreen: string;
   surfaceCovering: string;
@@ -240,6 +243,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     saveDiscard: "Discard changes",
     saveInline: "Inline",
     saveSticky: "Sticky, with a second action",
+    saveWhenClean: "Hidden until the first change, with the count and discard",
+    saveOneChange: "1 change",
+    saveTwoChanges: "2 changes",
     surfaceBeside: "Beside the conversation",
     surfaceFullscreen: "Fullscreen",
     surfaceCovering: "Covering the main area",
@@ -388,6 +394,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     saveDiscard: "Änderungen verwerfen",
     saveInline: "Im Fluss",
     saveSticky: "Haftend, mit zweiter Aktion",
+    saveWhenClean: "Verborgen bis zur ersten Änderung, mit Anzahl und Verwerfen",
+    saveOneChange: "1 Änderung",
+    saveTwoChanges: "2 Änderungen",
     surfaceBeside: "Neben der Unterhaltung",
     surfaceFullscreen: "Vollbild",
     surfaceCovering: "Über dem Hauptbereich",

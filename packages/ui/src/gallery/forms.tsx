@@ -41,8 +41,11 @@ function SelectAllSample({ text }: { text: GalleryText }) {
   );
 }
 
+const INSTRUCTIONS_LIMIT = 200;
+
 function FieldSamples({ text }: { text: GalleryText }) {
   const [name, setName] = useState("");
+  const [instructions, setInstructions] = useState(text.instructionsSample);
   const tooShort = name.trim().length > 0 && name.trim().length < 3;
   return (
     <div className="grid max-w-sm gap-5">
@@ -73,12 +76,54 @@ function FieldSamples({ text }: { text: GalleryText }) {
       <Field label={text.name} hint={text.nameHint}>
         <Input defaultValue={text.namePlaceholder} disabled />
       </Field>
+      <Field label={text.instructions} labelEnd={`${instructions.length} / ${INSTRUCTIONS_LIMIT}`}>
+        <Textarea
+          value={instructions}
+          maxLength={INSTRUCTIONS_LIMIT}
+          onChange={(event) => setInstructions(event.target.value)}
+        />
+      </Field>
       <Field layout="inline" label={text.liveChanges} hint={text.liveChangesHint}>
         <Switch />
       </Field>
       <Field layout="inline" label={text.notifyByEmail} hint={text.notifyByEmailHint}>
         <Checkbox defaultChecked />
       </Field>
+    </div>
+  );
+}
+
+/** The bar is absent until a field differs from what was saved, then counts the changes. */
+function SaveBarWhenCleanSample({ text }: { text: GalleryText }) {
+  const saved = { name: text.namePlaceholder, description: text.cardBody };
+  const [name, setName] = useState(saved.name);
+  const [description, setDescription] = useState(saved.description);
+  const changed = Number(name !== saved.name) + Number(description !== saved.description);
+  const discard = () => {
+    setName(saved.name);
+    setDescription(saved.description);
+  };
+  return (
+    <div className="grid w-full max-w-sm gap-3" data-gallery-sample="save-bar-when-clean">
+      <Input
+        aria-label={text.name}
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+      />
+      <Input
+        aria-label={text.description}
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
+      />
+      <SaveBar
+        label={text.saveChanges}
+        whenClean="hidden"
+        dirty={changed > 0}
+        changes={changed === 1 ? text.saveOneChange : text.saveTwoChanges}
+        discardLabel={text.saveDiscard}
+        onDiscard={discard}
+        onSave={discard}
+      />
     </div>
   );
 }
@@ -122,6 +167,9 @@ function SaveBarSamples({ text }: { text: GalleryText }) {
             onSave={noop}
           />
         </div>
+      </Samples>
+      <Samples label={text.saveWhenClean}>
+        <SaveBarWhenCleanSample text={text} />
       </Samples>
     </>
   );

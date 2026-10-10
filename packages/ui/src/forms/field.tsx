@@ -15,6 +15,8 @@ export interface FieldProps extends Omit<HTMLAttributes<HTMLDivElement>, "childr
   required?: boolean;
   /** Says beside the label that the field may stay empty. */
   optional?: boolean;
+  /** Stands at the far end of the label's row, outside the label: a count, a state, an action. */
+  labelEnd?: ReactNode;
   /** `inline` puts the control beside the label, as a row with a switch has it. */
   layout?: FieldLayout;
   /** The one control of this field: Input, Textarea, Select, Switch or Checkbox. */
@@ -31,6 +33,7 @@ export function Field({
   error,
   required = false,
   optional = false,
+  labelEnd,
   layout = "stacked",
   className,
   children,
@@ -46,7 +49,7 @@ export function Field({
     [id, messageId, hasMessage, hasError, required]
   );
 
-  const labelElement = (
+  const labelOnly = (
     <label htmlFor={id} className="flex min-w-0 items-baseline gap-1.5 text-label">
       <span className="min-w-0">{label}</span>
       {required ? (
@@ -61,6 +64,16 @@ export function Field({
         <span className="text-caption font-normal text-muted-foreground">{labels.optional}</span>
       ) : null}
     </label>
+  );
+  const labelElement = isShown(labelEnd) ? (
+    <div className="flex min-w-0 items-baseline justify-between gap-3">
+      {labelOnly}
+      <div data-field-label-end="" className="shrink-0 text-caption text-muted-foreground">
+        {labelEnd}
+      </div>
+    </div>
+  ) : (
+    labelOnly
   );
   const message = hasError ? (
     <p id={messageId} role="alert" className="text-caption text-destructive">

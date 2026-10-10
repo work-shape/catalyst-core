@@ -234,6 +234,31 @@ describe("form components", () => {
     expect(markup).toContain(`<p id="${hintId}" class="text-caption text-muted-foreground">`);
   });
 
+  it("puts a field's end slot on the label's row, outside the label", () => {
+    const markup = render(
+      createElement(Field, {
+        label: "Instructions",
+        labelEnd: "12 / 200",
+        children: createElement(Input)
+      })
+    );
+    const row =
+      /<div class="[^"]*justify-between[^"]*">(<label[\s\S]*?<\/label>)(<div[\s\S]*?<\/div>)<\/div>/u.exec(
+        markup
+      );
+
+    expect(row?.[1]).toContain("Instructions");
+    expect(row?.[1]).not.toContain("12 / 200");
+    expect(row?.[2]).toMatch(/^<div data-field-label-end=""[^>]*>12 \/ 200<\/div>$/u);
+    // The control is still named by the label alone.
+    const id = /<input[^>]*id="([^"]+)"/u.exec(markup)?.[1];
+    expect(markup).toContain(`<label for="${id}"`);
+    // Without the slot the label stands as before, with no row around it.
+    const plain = render(createElement(Field, { label: "Name", children: createElement(Input) }));
+    expect(plain).not.toContain("data-field-label-end");
+    expect(plain).toMatch(/^(<div[^>]*>)+<label/u);
+  });
+
   it("names a picker's button with its label and what is chosen, and takes the field's error", () => {
     const button = (value: string | undefined, error?: string) =>
       render(

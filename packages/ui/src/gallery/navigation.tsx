@@ -496,6 +496,14 @@ function SegmentedControlSamples({ text }: { text: GalleryText }) {
               {text.segmentNever}
             </SegmentedControlItem>
           </SegmentedControl>
+          <SegmentedControl label={text.tabsLabel} size={size} defaultValue="members">
+            <SegmentedControlItem value="members" count={12}>
+              {text.tabsMembers}
+            </SegmentedControlItem>
+            <SegmentedControlItem value="requests" count={3}>
+              {text.tabsRequests}
+            </SegmentedControlItem>
+          </SegmentedControl>
           <SegmentedControl label={text.segmentLabel} size={size} defaultValue="users" disabled>
             <SegmentedControlItem value="users">{text.segmentUsers}</SegmentedControlItem>
             <SegmentedControlItem value="permissions">

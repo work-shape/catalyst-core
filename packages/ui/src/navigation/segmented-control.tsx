@@ -1,6 +1,7 @@
 import { RadioGroup } from "radix-ui";
 import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
 import { cn } from "../cn";
+import { CountBadge } from "../status/count-badge";
 
 export type SegmentedControlSize = "sm" | "md";
 
@@ -52,9 +53,16 @@ export interface SegmentedControlItemProps extends Omit<
   "value"
 > {
   value: string;
+  /** A plain count after the label, such as how many rows the view holds. */
+  count?: number;
 }
 
-export function SegmentedControlItem({ className, ...props }: SegmentedControlItemProps) {
+export function SegmentedControlItem({
+  className,
+  count,
+  children,
+  ...props
+}: SegmentedControlItemProps) {
   return (
     <RadioGroup.Item
       className={cn(
@@ -62,6 +70,9 @@ export function SegmentedControlItem({ className, ...props }: SegmentedControlIt
         className
       )}
       {...props}
-    />
+    >
+      {children}
+      {count === undefined ? null : <CountBadge count={count} tone="muted" />}
+    </RadioGroup.Item>
   );
 }

@@ -1,4 +1,4 @@
-import { createElement, type ReactElement } from "react";
+import { createElement, Fragment, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,6 +8,7 @@ import {
   NavItem,
   PageHeader,
   SaveBar,
+  type SaveBarProps,
   Section,
   SegmentedControl,
   SegmentedControlItem,
@@ -146,6 +147,23 @@ describe("navigation, page structure and data components", () => {
     expect(markup).toMatch(/role="radiogroup"[^>]*aria-label="View"/u);
     expect(markup.match(/role="radio"/gu)).toHaveLength(2);
     expect(markup.match(/aria-checked="true"/gu)).toHaveLength(1);
+    expect(markup).not.toContain("tabular-nums");
+  });
+
+  it("shows a segment's count after its label, inside the radio", () => {
+    const markup = render(
+      createElement(
+        SegmentedControl,
+        { label: "View", value: "list" },
+        createElement(SegmentedControlItem, { value: "list", count: 120 }, "List"),
+        createElement(SegmentedControlItem, { value: "rights", count: 0 }, "Rights")
+      )
+    );
+
+    expect(markup).toMatch(
+      /role="radio"[^>]*>List<span[^>]*tabular-nums[^>]*>99\+<\/span><\/button>/u
+    );
+    expect(markup).toMatch(/role="radio"[^>]*>Rights<span[^>]*>0<\/span><\/button>/u);
   });
 
   it("renders a navigation item as a 32 px button or as the caller's link", () => {
@@ -414,5 +432,39 @@ describe("navigation, page structure and data components", () => {
     );
     expect(sticky).toMatch(/class="[^"]*\bsticky\b[^"]*shadow-raised/u);
     expect(sticky).toMatch(/role="status"[^>]*>.*Saved/u);
+    // Without the newer props nothing else is drawn: one button and no count.
+    expect(inline.match(/<button/gu)).toHaveLength(1);
+    expect(inline).not.toContain("data-save-bar-changes");
+  });
+
+  it("gives the save bar a change count and a discard button, and hides it while clean", () => {
+    const bar = (props: Partial<SaveBarProps>) =>
+      render(
+        createElement(SaveBar, {
+          label: "Save",
+          changes: "3 changes",
+          discardLabel: "Discard",
+          onDiscard: () => undefined,
+          ...props
+        })
+      );
+
+    const dirty = bar({ whenClean: "hidden", dirty: true });
+    expect(dirty).toMatch(/<span data-save-bar-changes=""[^>]*>3 changes<\/span>/u);
+    // Discard never submits the form, and it stands after the save button.
+    expect(dirty).toMatch(
+      /<button[^>]*type="submit"[\s\S]*<button[^>]*type="button"[^>]*>Discard/u
+    );
+    expect(dirty).not.toMatch(/<button[^>]*disabled=""[^>]*>Discard/u);
+
+    expect(bar({ whenClean: "hidden", dirty: false })).toBe(render(createElement(Fragment)));
+    expect(bar({ whenClean: "hidden" })).not.toContain("data-mode");
+    // A save under way keeps the bar, and holds discard.
+    expect(bar({ whenClean: "hidden", saving: true })).toMatch(
+      /<button[^>]*disabled=""[^>]*>Discard/u
+    );
+    // The default keeps the bar while clean, and a label without a handler draws no button.
+    expect(bar({ dirty: false })).toContain("3 changes");
+    expect(bar({ onDiscard: undefined })).not.toContain("Discard");
   });
 });
