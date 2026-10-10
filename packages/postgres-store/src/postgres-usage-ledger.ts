@@ -99,9 +99,11 @@ function attribution(event: ModelUsageEventRecordInput): SQL {
 }
 
 /**
- * The insert of an event. It reads `attributed_user` and `attributed_workspace`. The event of a
- * user whose account is being deleted names nothing that leads back to them: the deletion has
- * taken that off the user's events already and does not come back for this one.
+ * The insert of an event. It reads `attributed_user` and `attributed_workspace`. An event made
+ * for a user keeps what leads back to them, its conversation, run, operation and correlation
+ * id, only while that user's row exists and is open. Where the account is being deleted or
+ * the row is gone, the deletion has been through the user's events and does not come back
+ * for this one, so the event is written without them.
  */
 function insertEvent(input: {
   id: string;
@@ -114,7 +116,7 @@ function insertEvent(input: {
   const personal = (value: string | undefined, absent: SQL = drizzleSql`null`): SQL =>
     event.userId === undefined
       ? drizzleSql`${value ?? null}`
-      : drizzleSql`case when exists (select 1 from attributed_user where not open) then ${absent} else ${value ?? null} end`;
+      : drizzleSql`case when exists (select 1 from attributed_user where open) then ${value ?? null} else ${absent} end`;
   return drizzleSql`
     insert into model_usage_events (
       id, client_instance_id, conversation_id, agent_run_id, agent_name, purpose, provider_id,

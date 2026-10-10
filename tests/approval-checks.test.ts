@@ -1,5 +1,6 @@
 import { accessOf, callerOf } from "./support/access";
 import { createTestAssetKinds, createTestInstance } from "./support/test-instance";
+import { ensureTestUser } from "./support/test-store";
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-clock";
 import {
@@ -107,6 +108,8 @@ async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
   });
   config.approvalChecks = checks;
   const store = (await createTestInstance()).stores;
+  // The requester exists: an event keeps its conversation only for a user that does.
+  await ensureTestUser(clientInstanceId, user.id);
   const complete = vi
     .fn<ModelProvider["complete"]>()
     .mockResolvedValue(completion('{"violates":false,"reason":"Keine personenbezogenen Daten."}'));

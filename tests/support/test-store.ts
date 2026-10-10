@@ -23,26 +23,40 @@ export interface TestStore extends PostgresStores {
   createAgentRunForTesting(conversation: Conversation): Promise<AgentRun>;
 }
 
+/**
+ * The row of a user, where a test needs one to exist: a usage event keeps what leads back to
+ * its user only while that user's row is there.
+ */
+export async function ensureTestUser(
+  clientInstanceId: string,
+  userId: string,
+  options: { displayLabel?: string } = {}
+): Promise<void> {
+  const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+  try {
+    await sql`
+      insert into product_users (id, client_instance_id, display_label, roles, permission_refs, permissions, status, created_at, updated_at)
+      values (${userId}, ${clientInstanceId}, ${options.displayLabel ?? userId}, '["user"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'active', now(), now())
+      on conflict (id) do nothing
+    `;
+    const [user] = await sql<
+      { client_instance_id: string }[]
+    >`select client_instance_id from product_users where id = ${userId}`;
+    if (user?.client_instance_id !== clientInstanceId)
+      throw new AppError("CONFLICT", "Test user belongs to another client instance");
+  } finally {
+    await sql.end();
+  }
+}
+
 /** Arrange the synthetic identity through real constraints, then use the named stores. */
 export function addTestStoreHelpers(stores: PostgresStores): TestStore {
   return {
     ...stores,
     async createConversationForTesting(input) {
-      const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
-      try {
-        await sql`
-          insert into product_users (id, client_instance_id, display_label, roles, permission_refs, permissions, status, created_at, updated_at)
-          values (${input.createdByUserId}, ${input.clientInstanceId}, ${input.createdByExternalUserId}, '["user"]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'active', now(), now())
-          on conflict (id) do nothing
-        `;
-        const [user] = await sql<
-          { client_instance_id: string }[]
-        >`select client_instance_id from product_users where id = ${input.createdByUserId}`;
-        if (user?.client_instance_id !== input.clientInstanceId)
-          throw new AppError("CONFLICT", "Test user belongs to another client instance");
-      } finally {
-        await sql.end();
-      }
+      await ensureTestUser(input.clientInstanceId, input.createdByUserId, {
+        displayLabel: input.createdByExternalUserId
+      });
       const workspace = await stores.workspaces.ensurePersonalWorkspace({
         clientInstanceId: input.clientInstanceId,
         userId: asUserId(input.createdByUserId)

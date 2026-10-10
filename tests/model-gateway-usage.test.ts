@@ -22,6 +22,7 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { advanceFakeClockUntilSettled, useFakeClockBesidePostgres } from "./support/fake-clock";
 import { ALL_MODEL_CAPABILITIES, silentTestLogger } from "./support/model-gateway";
 import { createTestInstance } from "./support/test-instance";
+import { ensureTestUser } from "./support/test-store";
 
 const provider: ModelProviderConfig = { id: "main", type: "fake", model: "entry-model" };
 const clientInstanceId = asClientInstanceId("client-gateway-usage");
@@ -257,6 +258,8 @@ async function fixture(
   }
 ) {
   const store = (await createTestInstance()).stores;
+  // The user of the calls: an event keeps its run and conversation only for a user that exists.
+  await ensureTestUser(clientInstanceId, "user-1");
   const requests: ModelAdapterRequest[] = [];
   const adapter: ModelAdapter = {
     capabilities: () => ALL_MODEL_CAPABILITIES,

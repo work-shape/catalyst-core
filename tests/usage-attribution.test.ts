@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   asAgentRunId,
+  asConversationId,
   asUserId,
   type ClientInstanceId,
   type ModelAttribution,
+  type ModelCallAdmission,
   type ModelProviderConfig
 } from "@vivd-catalyst/core";
 import {
@@ -466,8 +468,10 @@ describe("usage attribution", () => {
     ]);
   });
 
-  // Fails without the change: the event was written with whatever user id the caller gave.
-  it("names no user on an event for a user who is unknown or being deleted", async () => {
+  // Fails without the change: the event was written with whatever user id the caller gave,
+  // and for a user whose row was gone it kept the conversation, the run, the operation and
+  // the correlation id.
+  it("names no user and nothing that leads back to one for a user who is unknown, being deleted or gone", async () => {
     const t = await arrangeDeletion(db, "closing");
     const closing = await t.createUser("closing");
     await db.sql`update product_users set deletion_requested_at = now() where id = ${closing.id}`;
@@ -500,10 +504,65 @@ describe("usage attribution", () => {
       { user_id: null, collaboration_workspace_id: null, total_tokens: 120 },
       { user_id: null, collaboration_workspace_id: null, total_tokens: 120 }
     ]);
-    // The deletion of the account has been through its events and does not come back.
-    await expect(leadsBack(t.clientInstanceId)).resolves.toMatchObject([
-      { operation_run_id: null, correlation_id: "" },
-      { operation_run_id: "operation_of_usr_never_existed", correlation_id: "corr_usage_closing" }
+    // The deletion of an account has been through its events and does not come back.
+    await expect(leadsBack(t.clientInstanceId)).resolves.toEqual([
+      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: "" },
+      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: "" }
+    ]);
+  });
+
+  // Fails without the change: a call that was admitted after its user's row was removed kept
+  // the conversation, the run and the correlation id of that user.
+  it("admits and settles a call for a user whose row is gone without what leads back to them", async () => {
+    const t = await arrangeDeletion(db, "gone");
+    const leaving = await t.createUser("leaving");
+    const staying = await t.createUser("staying");
+    const governance = new ModelUsageGovernance({
+      store: db.store.usage,
+      budget: {},
+      safeguards: {}
+    });
+    const callOf = (userId: string): ModelCallAdmission => ({
+      clientInstanceId: t.clientInstanceId,
+      attribution: {
+        kind: "agent_run",
+        conversationId: asConversationId(`conv_of_${userId}`),
+        runId: asAgentRunId(`run_of_${userId}`),
+        agentName: "assistant",
+        userId
+      },
+      providerId: "azure-eu",
+      model: "gpt-main",
+      correlationId: `corr_of_${userId}`,
+      request: { inputCharacters: 30 }
+    });
+    const reported = {
+      inputTokens: 100,
+      outputTokens: 20,
+      totalTokens: 120,
+      source: "provider_reported" as const
+    };
+    // The account is deleted to the end: the row of the user is gone.
+    await db.sql`delete from product_users where id = ${leaving.id}`;
+
+    // A call that was on its way reaches admission now, and ends.
+    const late = await governance.admitModelCall(callOf(leaving.id));
+    await governance.settleModelCall(late, reported);
+    const kept = await governance.admitModelCall(callOf(staying.id));
+    await governance.settleModelCall(kept, reported);
+
+    await expect(usageRows(t.clientInstanceId)).resolves.toEqual([
+      { user_id: null, collaboration_workspace_id: null, total_tokens: 120 },
+      { user_id: staying.id, collaboration_workspace_id: null, total_tokens: 120 }
+    ]);
+    await expect(leadsBack(t.clientInstanceId)).resolves.toEqual([
+      { conversation_id: null, agent_run_id: null, operation_run_id: null, correlation_id: "" },
+      {
+        conversation_id: `conv_of_${staying.id}`,
+        agent_run_id: `run_of_${staying.id}`,
+        operation_run_id: null,
+        correlation_id: `corr_of_${staying.id}`
+      }
     ]);
   });
 

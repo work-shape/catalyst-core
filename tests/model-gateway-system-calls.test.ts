@@ -28,6 +28,7 @@ import {
 } from "./support/model-gateway";
 import { createRetentionOptions } from "./support/retention-harness";
 import { createTestInstance } from "./support/test-instance";
+import { ensureTestUser } from "./support/test-store";
 
 const clientInstanceId = asClientInstanceId("system-calls-test");
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -254,6 +255,8 @@ describe("an approval check through the gateway", () => {
     });
     config.approvalChecks = [rule];
     const store = (await createTestInstance()).stores;
+    // The requester exists: an event keeps its conversation only for a user that does.
+    await ensureTestUser(clientInstanceId, user.id);
     const runner = new ApprovalCheckRunner({
       config,
       clientInstanceId,
