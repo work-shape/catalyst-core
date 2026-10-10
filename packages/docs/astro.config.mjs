@@ -22,6 +22,7 @@ export default defineConfig({
           items: [
             "configure/client-assembly",
             "configure/release-config",
+            "configure/modules",
             "configure/config-assets",
             "configure/chat-experience"
           ]

@@ -13,7 +13,8 @@ Release config should cover:
 
 - tool enablement and tool parameters
 - model providers and approved model bindings
-- capability activation and settings
+- which optional features run, as [modules](/configure/modules/)
+- capability settings
 - interactive agent-configuration policy
 - supported locales and default locale
 - client branding and theme
@@ -32,9 +33,12 @@ clientInstance:
   id: example-support
   displayName: Example Support Chat
 
+modules:
+  assetManagement:
+    enabled: true
+
 administration:
   agentConfiguration:
-    enabled: true
     editableAgentFields:
       - displayName
       - welcomeMessage
@@ -103,7 +107,7 @@ Changing `conversationDays` or `extendOnActivity` does not rewrite the dates of 
 
 In its last seven days, or the last half of a period shorter than fourteen days, a Conversation carries a clock in the list, and the open Conversation shows one line above the message field with the deletion date. With `extendOnActivity: true` the line adds that a new message keeps the Conversation.
 
-The conversation Resources panel is enabled by default and appears only after a user enters a persisted Conversation. Set `ui.resources.enabled: false` only when a deployment must opt out of that surface.
+The conversation Resources panel appears only after a user enters a persisted Conversation. It is the module `resources`; turn it off with `modules.resources.enabled: false` when a deployment must opt out of that surface. [Modules](/configure/modules/) lists every optional feature and its switch.
 
 Daily and monthly spend limits use `usage.costs.customer.currency`. Set it to the invoice currency and express every configured model and web-search price in that same currency.
 

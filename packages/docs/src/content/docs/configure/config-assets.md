@@ -97,12 +97,15 @@ selector when the pointer is on it. `ui.showAgentDescriptions` is `false` by
 default; with `true` the selector lists each description, and otherwise, or
 without a description, only the display name.
 
-Admins with the `config_assets.write` permission edit assets in the admin panel's Config tab. Release config decides how much of an agent is interactively editable:
+Admins with the `config_assets.write` permission edit assets in the admin panel's Config tab. The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
 
 ```yaml
+modules:
+  assetManagement:
+    enabled: true
+
 administration:
   agentConfiguration:
-    enabled: true
     editableAgentFields:
       - displayName
       - description
