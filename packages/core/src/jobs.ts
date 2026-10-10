@@ -33,6 +33,11 @@ export interface JobKind<Payload extends JsonObject = JsonObject> {
   readonly backoff: { readonly baseMs: number; readonly maxMs: number };
   /** A running job whose lease is this old without a heartbeat is recovered. */
   readonly leaseMs: number;
+  /**
+   * How often the lease is renewed. Without it a third of the lease. A kind whose dead worker
+   * must be noticed soon takes a short lease and names its heartbeat.
+   */
+  readonly heartbeatMs?: number;
   /** Limits on running jobs across the instance. A missing limit is no limit. */
   readonly concurrency: { readonly global?: number; readonly perKey?: number };
   /**
@@ -45,7 +50,7 @@ export interface JobKind<Payload extends JsonObject = JsonObject> {
 export function defineJobKind<Payload extends JsonObject>(
   definition: JobKind<Payload>
 ): JobKind<Payload> {
-  const { kind, maxAttempts, backoff, leaseMs, concurrency } = definition;
+  const { kind, maxAttempts, backoff, leaseMs, heartbeatMs, concurrency } = definition;
   if (!/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/u.test(kind))
     throw new AppError("VALIDATION_FAILED", `Job kind '${kind}' must be named <subject>.<verb>`);
   const positive = [maxAttempts, leaseMs, concurrency.global ?? 1, concurrency.perKey ?? 1];
@@ -53,6 +58,14 @@ export function defineJobKind<Payload extends JsonObject>(
     throw new AppError(
       "VALIDATION_FAILED",
       `Job kind '${kind}' needs positive whole numbers for attempts, lease and concurrency`
+    );
+  if (
+    heartbeatMs !== undefined &&
+    !(Number.isInteger(heartbeatMs) && heartbeatMs > 0 && heartbeatMs < leaseMs)
+  )
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Job kind '${kind}' needs a heartbeat that is a positive whole number below its lease`
     );
   if (!(backoff.baseMs >= 0 && backoff.maxMs >= backoff.baseMs))
     throw new AppError("VALIDATION_FAILED", `Job kind '${kind}' has an invalid backoff`);

@@ -501,7 +501,9 @@ export async function completeWorkspaceCommand(
       completedAt,
       updatedAt: completedAt
     })
-    .where(claimedCommandWhere(input, "running"))
+    // A cancellation that was requested after the process had ended changes nothing about its
+    // result: the command is recorded as it ended, and the request stays on the row.
+    .where(claimedCommandWhere(input, "running", "cancelling"))
     .returning();
   if (!row) {
     throw new AppError("CONFLICT", "Workspace command lease is no longer active");

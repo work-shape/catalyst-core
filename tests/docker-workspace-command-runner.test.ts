@@ -220,11 +220,11 @@ describe("docker workspace command runner", () => {
         signal: controller.signal
       })
     );
-    controller.abort("Received SIGTERM");
+    controller.abort("Workspace command worker is stopping");
 
     await expect(running).resolves.toMatchObject({
       cancelled: true,
-      cancellationReason: "Received SIGTERM"
+      cancellationReason: "Workspace command worker is stopping"
     });
     expect(fakeDocker.removedContainers).toEqual(["fake-container"]);
   });

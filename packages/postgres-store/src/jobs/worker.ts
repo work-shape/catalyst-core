@@ -40,7 +40,10 @@ import {
 const POLL_INTERVAL_MS = 1_000;
 const STOP_GRACE_MS = 20_000;
 const SCHEDULE_CHECK_INTERVAL_MS = 60_000;
-/** The heartbeat runs every third of the lease and sets the expiry to now plus the lease. */
+/**
+ * The heartbeat sets the expiry to now plus the lease. It runs every third of the lease unless
+ * the kind names its own interval.
+ */
 const HEARTBEATS_PER_LEASE = 3;
 
 export interface CreatePostgresJobWorkerInput {
@@ -192,17 +195,20 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         return held;
       });
     };
-    const heartbeat = setInterval(() => {
-      beat()
-        .then((held) => {
-          if (held) return;
-          clearInterval(heartbeat);
-          abort.abort(new JobLeaseLostError(row.id));
-        })
-        .catch((error: unknown) => {
-          jobLogger.warn(describeWithoutMessage(error), "Job heartbeat failed");
-        });
-    }, handler.kind.leaseMs / HEARTBEATS_PER_LEASE);
+    const heartbeat = setInterval(
+      () => {
+        beat()
+          .then((held) => {
+            if (held) return;
+            clearInterval(heartbeat);
+            abort.abort(new JobLeaseLostError(row.id));
+          })
+          .catch((error: unknown) => {
+            jobLogger.warn(describeWithoutMessage(error), "Job heartbeat failed");
+          });
+      },
+      handler.kind.heartbeatMs ?? handler.kind.leaseMs / HEARTBEATS_PER_LEASE
+    );
     const control: JobControl = {
       leaseToken: lease.token,
       signal: abort.signal,

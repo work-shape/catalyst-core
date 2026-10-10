@@ -8,10 +8,12 @@ import {
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 
-// The lease of a running command and of the copy on its row, as the command worker's own loop
-// held it. A worker that dies is noticed after this long; the executor renews the lease every
-// third of it.
-export const WORKSPACE_COMMAND_LEASE_MS = 10 * 60 * 1000;
+// The lease of a running command and of the copy on its row. A worker that was killed is
+// noticed after this long, and until then the later commands of its workspace wait behind it.
+export const WORKSPACE_COMMAND_LEASE_MS = 2 * 60 * 1000;
+// How often the lease is renewed: three heartbeats may fail before the lease runs out. A
+// heartbeat that finds the lease lost ends the command's process group.
+export const WORKSPACE_COMMAND_HEARTBEAT_MS = 30 * 1000;
 // How often a running command looks for a cancellation request on its row, as the old loop did.
 export const WORKSPACE_COMMAND_CANCELLATION_CHECK_INTERVAL_MS = 1000;
 // Transition release only: how often commands without a job are given one. Such a command
@@ -33,6 +35,7 @@ export const runWorkspaceCommandJob = defineJobKind({
   maxAttempts: 1,
   backoff: { baseMs: 0, maxMs: 0 },
   leaseMs: WORKSPACE_COMMAND_LEASE_MS,
+  heartbeatMs: WORKSPACE_COMMAND_HEARTBEAT_MS,
   concurrency: { perKey: 1 }
 });
 

@@ -485,7 +485,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     `claimNextQueuedConversationAttachment`; a row is claimed by id with
     `claimArtifactPreviewJob` and `claimConversationAttachmentForPreprocessing`.
 - **Jobs (operator-relevant, breaking for integrators):** workspace commands run on the job
-  executor, as the kind `workspace.command` (one attempt, a lease of 10 minutes, one command
+  executor, as the kind `workspace.command` (one attempt, a lease of 2 minutes renewed every 30 seconds, one command
   per workspace at a time, so two commands of a workspace run in the order they were queued).
   The command row stays the record a tool reads; the row and its job are written in one
   transaction. No migration. A command is never run twice: when its worker dies, the command
@@ -493,14 +493,19 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   of `WORKSPACE_COMMAND_STALE`, once the lease has run out. What `workspace.exec` returns is
   unchanged.
   - A cancelled command ends within about a second: the job reads its row once a second and
-    stops the process group. On SIGTERM a running command is recorded as cancelled with the
+    stops the process group. A cancellation that arrives after the process has ended does
+    not change the record: the command is completed or failed with its real result. A tool
+    that waits for a result still asks the row every 500 ms; it is not woken by a
+    notification yet. On SIGTERM a running command is recorded as cancelled with the
     reason "Workspace command worker is stopping" and is not run again.
   - The command worker reads only `executionWorkspaces.worker.concurrency`, which is how many
     commands one process runs at once. `pollIntervalMs`, `leaseDurationMs`,
     `heartbeatIntervalMs`, `cancellationPollIntervalMs`, `staleRecoveryIntervalMs` and
     `staleRecoveryLimit` under `executionWorkspaces.worker` are still accepted and no longer
-    read. The lease is renewed every third of its length, so a worker that died is noticed
-    after up to 10 minutes; until now it was noticed after the configured lease.
+    read. After a command worker is killed, its command fails as lost within two minutes,
+    and the later commands of that workspace wait until then; until now they ran at once. A
+    worker that finds at a heartbeat that it lost its lease stops the process group of its
+    command at once.
   - Temporary command state is removed by the schedule `workspace_command.clean_temp_state`,
     which the command worker serves. With several command workers on separate disks one tick
     cleans one host.
@@ -512,6 +517,8 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     every 15 seconds, which covers commands the previous release's API queues. A job that
     waits for a worker of the previous release holds one slot of the new worker. The copy,
     the schedule and the lease columns go in a later release.
+  - A job kind may name its heartbeat interval with `heartbeatMs`, below its lease; without
+    it the lease is renewed every third of its length, as before.
   - `@vivd-catalyst/tool-execution` exports `createWorkspaceCommandJobs` in place of the class
     `WorkspaceCommandWorker`, and the client and the tools take a store with `transaction`.
     `ClientInstanceWorkspaceCommandWorker.worker` is a `JobWorker` and its `stop()` takes no

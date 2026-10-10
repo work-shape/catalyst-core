@@ -185,9 +185,10 @@ class WorkspaceCommandJobRun {
       await this.recordRunningCommand(command);
       await this.runUntilEnded(command, control);
     } catch (error: unknown) {
-      // The store refuses a row that this attempt no longer holds: a worker of the previous
-      // release ended it. That is no failure of the job.
-      if (isRowConflict(error)) return;
+      // The store refuses a row that this attempt no longer holds. When the row is ended, a
+      // worker of the previous release ended it, and that is no failure of the job. A row that
+      // is not ended fails the job, whose `onExhausted` ends the row.
+      if (isRowConflict(error) && (await this.isEnded(command))) return;
       throw error;
     }
   }
@@ -206,6 +207,19 @@ class WorkspaceCommandJobRun {
       leaseMs: LOST_COMMAND_LEASE_MS
     });
     if (claim.status === "claimed") await this.failLostCommand(claim.row, stores);
+  }
+
+  private async isEnded(command: WorkspaceCommand): Promise<boolean> {
+    const latest = await this.stores.executionWorkspaces.getWorkspaceCommand({
+      clientInstanceId: command.clientInstanceId,
+      commandId: command.id
+    });
+    return (
+      !latest ||
+      latest.status === "completed" ||
+      latest.status === "failed" ||
+      latest.status === "cancelled"
+    );
   }
 
   async cleanTempState(job: Job): Promise<void> {

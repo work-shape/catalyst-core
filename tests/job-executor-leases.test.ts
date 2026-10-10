@@ -7,7 +7,7 @@ import {
   type JobControl,
   type JobWorker
 } from "@vivd-catalyst/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { deferred, required, waitUntil } from "./support/assertions";
 import { kindOf, useJobExecutorHarness } from "./support/job-executor-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
@@ -56,6 +56,38 @@ describe("job executor leases, wake and start", () => {
     const users = await db.store.users.listUsers({ clientInstanceId });
     expect(users.map((candidate) => candidate.displayLabel)).toEqual(["Before"]);
     expect(await onlyJob(clientInstanceId)).toMatchObject({ status: "running", attempts: 1 });
+  });
+
+  it("renews the lease at the interval a kind names, which must be below its lease", async () => {
+    const clientInstanceId = db.clientInstance("own_heartbeat");
+    const kind = kindOf("test.own_heartbeat", { leaseMs: 60_000, heartbeatMs: 5_000 });
+    heartbeatsByHand();
+    const started = deferred<JobControl>();
+    const only = worker(db.store, clientInstanceId, [
+      defineJobHandler({
+        kind,
+        slots: 1,
+        async run(_job, control) {
+          started.resolve(control);
+          await hang(control);
+        }
+      })
+    ]);
+    await db.store.jobs.enqueue(kind, { n: 1 }, { clientInstanceId });
+    startPass(only);
+    const control = await started.promise;
+
+    // A third of the lease is 20 seconds. The heartbeat that finds the lease over comes after 5.
+    await expireLeases(clientInstanceId);
+    vi.advanceTimersByTime(4_999);
+    const before = (await onlyJob(clientInstanceId)).status;
+    expect([before, control.signal.aborted]).toEqual(["running", false]);
+    vi.advanceTimersByTime(1);
+    await waitUntil(() => control.signal.aborted, "the heartbeat came at the kind's interval");
+
+    expect(() => kindOf("test.slow_heartbeat", { leaseMs: 60_000, heartbeatMs: 60_000 })).toThrow(
+      "needs a heartbeat that is a positive whole number below its lease"
+    );
   });
 
   it("runs a job once when its transaction outlives the lease", async () => {
