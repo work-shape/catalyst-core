@@ -194,8 +194,9 @@ interface UsageReconciliationState {
 /**
  * The comparison of the counters and the daily sums with the usage events, as its schedule
  * runs it. The first run after the upgrade reads every event and builds the sums of the days
- * before the upgrade; it is recorded, and the runs after it read the events from the month of
- * the run before, at least those of the current month. They find what a process of the
+ * before the upgrade; it is recorded with its moment, and the runs after it read the events
+ * from the month of the run before, at least those of the current month. A record without a
+ * moment counts as none. They find what a process of the
  * previous release wrote, which adds to no counter and no sum: also after a rollback of any
  * length, during which no run was made and that release wrote every event.
  */
@@ -212,8 +213,10 @@ export function createUsageReconciliation(
         clientInstanceId,
         task: USAGE_RECONCILIATION_TASK
       });
-      const built = stored?.sumsBuilt === true;
       const since = typeof stored?.reconciledAt === "string" ? stored.reconciledAt : undefined;
+      // A state without the moment of its run says nothing of the months since: a release
+      // before this one wrote it, and a rollback may lie between. Every event is read then.
+      const built = stored?.sumsBuilt === true && since !== undefined;
       const state: UsageReconciliationState = {
         sumsBuilt: true,
         reconciledAt: now().toISOString()

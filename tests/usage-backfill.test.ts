@@ -438,6 +438,36 @@ describe("the usage attribution backfill", () => {
     );
   });
 
+  // Fails without the change: a record that the sums were built, written by a release that
+  // did not yet record when, made the comparison read the current month only.
+  it("reads every event when the record of the last comparison names no moment", async () => {
+    const clientInstanceId = db.clientInstance("legacy_state");
+    await runBackfill(clientInstanceId, () => monthsAgo(3));
+    await db.sql`
+      update model_usage_maintenance set state = '{"sumsBuilt": true}'::jsonb
+      where client_instance_id = ${clientInstanceId} and task = 'reconciliation'`;
+    for (const months of [2, 1]) {
+      await oldEvent(clientInstanceId, `usage_legacy_${months}`, {
+        agentRunId: null,
+        conversationId: null,
+        agentName: "test_agent",
+        providerId: "gone",
+        totalTokens: 100,
+        createdAt: new Date(monthsAgo(months).getTime() - 14 * DAY_MS).toISOString()
+      });
+    }
+
+    await runBackfill(clientInstanceId);
+
+    const after = await sumsAndEvents(clientInstanceId);
+    expect(after.sums).toEqual({ calls: 2, tokens: 200 });
+    expect(after.sums).toEqual(after.events);
+    const [record] = await db.sql<Array<{ state: { reconciledAt?: string } }>>`
+      select state from model_usage_maintenance
+      where client_instance_id = ${clientInstanceId} and task = 'reconciliation'`;
+    expect(record?.state.reconciledAt).toEqual(expect.any(String));
+  });
+
   // Fails without the change: there was no backfill. It also fails when the batch is taken in
   // an order the index does not give: the statement then reads the whole table to sort it.
   it("takes a batch through the index on instance and creation time, without reading the table", async () => {
