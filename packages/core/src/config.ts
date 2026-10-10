@@ -16,7 +16,7 @@ export type ModelProviderAuthModeConfig = "bearer" | "api-key";
 export interface ModelProviderConfig {
   /** The entry's name under `infrastructure.models`. */
   id: string;
-  /** The registered provider type, such as `openai-compatible`. */
+  /** The registered provider type. Only its adapter knows what the type means. */
   type: string;
   model: string;
   /** Present when the provider sends data outside the instance. */
@@ -108,7 +108,7 @@ export function modelUsageTierFromRates(
   return MODEL_USAGE_TIERS[tier === -1 ? MODEL_USAGE_TIERS.length - 1 : tier] ?? "very_high";
 }
 
-/** Offered for a model whose binding does not say which efforts users may pick. */
+/** Offered, where the model takes them, when a binding does not say which efforts users may pick. */
 const DEFAULT_USER_SELECTABLE_REASONING_EFFORTS: readonly ReasoningEffortConfig[] = [
   "low",
   "medium",
@@ -121,20 +121,22 @@ const ASSUMED_REASONING_EFFORT: ReasoningEffortConfig = "medium";
 
 /**
  * The reasoning efforts a user may pick for a model, weakest first, and the one a run uses
- * when they pick none. A binding offers low, medium and high unless it lists its own efforts;
- * an empty list leaves no choice. The default is always among the efforts offered, so the
- * user can return to it. A model without a binding or on a provider without reasoning offers
- * no choice.
+ * when they pick none. A binding offers the default efforts its model takes unless it lists its
+ * own; an empty list leaves no choice. The default is always among the efforts offered, so the
+ * user can return to it. A model without a binding, or one that takes no reasoning effort,
+ * offers no choice. `modelReasoningEfforts` is what the model's adapter declares.
  */
 export function reasoningEffortChoiceForBinding(
   binding: Pick<ModelBindingConfig, "userSelectableReasoningEfforts"> | undefined,
-  provider: Pick<ModelProviderConfig, "type">,
+  modelReasoningEfforts: readonly ReasoningEffortConfig[],
   configuredEffort: ReasoningEffortConfig | undefined
 ): { defaultEffort: ReasoningEffortConfig | undefined; selectable: ReasoningEffortConfig[] } {
   const offered = new Set(
     binding?.userSelectableReasoningEfforts ??
-      (binding && provider.type === "openai-compatible"
-        ? DEFAULT_USER_SELECTABLE_REASONING_EFFORTS
+      (binding
+        ? DEFAULT_USER_SELECTABLE_REASONING_EFFORTS.filter((effort) =>
+            modelReasoningEfforts.includes(effort)
+          )
         : [])
   );
   if (offered.size === 0) {
@@ -323,12 +325,9 @@ export interface WebAccessFetchConfig {
   maxRedirects: number;
 }
 
-export type WebAccessSearchModeConfig = "native_or_managed" | "native_only" | "managed_only";
-
+/** The instance switch for web search. Whether a model can search is its adapter's to declare. */
 export interface WebAccessSearchConfig {
   enabled: boolean;
-  mode: WebAccessSearchModeConfig;
-  managedProvider?: string;
 }
 
 export interface WebAccessConfig {

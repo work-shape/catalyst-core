@@ -285,8 +285,7 @@ describe("web access app assembly", () => {
     expect(config.webAccess).toMatchObject({
       enabled: false,
       search: {
-        enabled: false,
-        mode: "native_or_managed"
+        enabled: false
       },
       fetch: {
         enabled: false
@@ -389,62 +388,13 @@ describe("web access app assembly", () => {
     );
   });
 
-  it("fails closed when native web_search is requested for an unsupported provider", () => {
-    const config = createTestConfig({
-      webAccess: {
-        enabled: true,
-        search: {
-          enabled: true,
-          mode: "native_only"
-        }
-      },
-      toolNames: ["web_search"],
-      tools: [{ name: "web_search", enabled: true }]
-    });
-    expectModelToolInvalid(
-      config,
-      "Agent 'test_agent' references web_search but model provider 'local' does not support provider-native web search"
-    );
-  });
-
-  it("fails closed when managed web_search is pinned before a managed provider exists", () => {
-    const config = createTestConfig({
-      webAccess: {
-        enabled: true,
-        search: {
-          enabled: true,
-          mode: "native_or_managed",
-          managedProvider: "serper"
-        }
-      },
-      modelProviders: [
-        {
-          id: "openai",
-          type: "openai-compatible",
-          api: "responses",
-          model: "gpt-test",
-          baseUrl: "https://api.openai.com/v1",
-          credentialSecret: "OPENAI_API_KEY"
-        }
-      ],
-      modelProviderId: "openai",
-      toolNames: ["web_search"],
-      tools: [{ name: "web_search", enabled: true }]
-    });
-    expectModelToolInvalid(
-      config,
-      "Agent 'test_agent' references web_search with managed provider 'serper', but managed web search providers are not implemented"
-    );
-  });
-
   it("accepts native web_search for OpenAI-compatible Responses providers without a local tool", async () => {
     const app = await createTestInstance({
       config: createTestConfig({
         webAccess: {
           enabled: true,
           search: {
-            enabled: true,
-            mode: "native_or_managed"
+            enabled: true
           }
         },
         modelProviders: [
@@ -500,7 +450,6 @@ describe("web search model tool materialization", () => {
 
     const tools = materializeModelTools({
       agent,
-      modelProvider: required(getModelProviderConfigs(config)[0]),
       capabilities: builtInModelCapabilities(config)({
         providerId: required(getModelProviderConfigs(config)[0]).id
       }),
@@ -522,7 +471,6 @@ describe("web search model tool materialization", () => {
       expect.objectContaining({ kind: "function", name: "demo.echo" }),
       {
         kind: "provider",
-        id: "openai.web_search",
         name: "web_search"
       }
     ]);
@@ -670,7 +618,6 @@ function expectModelToolInvalid(
   expect(
     findModelToolMaterializationIssues({
       agent,
-      modelProvider: required(getModelProviderConfigs(config)[0]),
       capabilities: builtInModelCapabilities(config)({
         providerId: required(getModelProviderConfigs(config)[0]).id
       }),

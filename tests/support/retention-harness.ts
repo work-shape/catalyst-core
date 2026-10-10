@@ -20,6 +20,7 @@ import type { PostgresStores } from "@vivd-catalyst/postgres-store";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 import { completeServerOptions } from "./test-instance";
+import type { ScriptedModelProvider } from "./model-gateway";
 
 export type ManagedObjectAccess = ReturnType<typeof createManagedObjectAccess>;
 
@@ -55,6 +56,8 @@ export function createRetentionOptions(input: {
   expireConversations?: boolean;
   /** Who a request is made by. Only the tests that send requests need it. */
   authenticate?: (userId: string | undefined) => AuthenticatedUser;
+  /** What answers the server's own model calls. Only the tests of such a call need it. */
+  modelProvider?: ScriptedModelProvider;
 }): ChatServerOptions {
   const { store } = input;
   const config = parseClientInstanceConfig({
@@ -112,7 +115,7 @@ export function createRetentionOptions(input: {
             objects: input.workspaceObjects
           }
         : undefined,
-      modelProvider: createUnusedModelProvider()
+      modelProvider: input.modelProvider ?? createUnusedModelProvider()
     },
     store
   );

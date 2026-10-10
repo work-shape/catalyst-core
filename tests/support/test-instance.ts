@@ -30,6 +30,7 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { testOperations, type TestOperationName, type TestCallInput } from "./operations";
 import { createTestConfig, seedTestAssets } from "./fixtures";
+import { createScriptedInstanceModelGateway, type ScriptedModelProvider } from "./model-gateway";
 
 type TestHttpServer = NonNullable<ReturnType<typeof frameworkBehind>>["app"];
 type TestResponse = Awaited<ReturnType<TestHttpServer["inject"]>>;
@@ -59,10 +60,18 @@ export interface TestInstance<S extends PlatformStores = PlatformStores> {
 type TestIdentity = string | { headers: TestCallInput["headers"] };
 export type { TestStore } from "./test-store";
 export type TestPostgresStore = PostgresStores;
-export type TestServerOptions = Omit<ChatServerOptions, "configAssets" | "logger"> &
+export type TestServerOptions = Omit<
+  ChatServerOptions,
+  "configAssets" | "logger" | "modelGateway"
+> &
   Partial<Pick<ChatServerOptions, "logger">> & {
     configAssets?: Omit<ChatServerOptions["configAssets"], "source"> &
       Partial<Pick<ChatServerOptions["configAssets"], "source">>;
+    /**
+     * What answers the server's own model calls, such as a conversation title. It stands
+     * behind the gateway for every model entry of the config. Left out, such a call fails.
+     */
+    modelProvider?: ScriptedModelProvider;
   };
 
 type TestAppInput = CreateClientInstanceAppInput & { seedAssets?: boolean; fixtureFile?: string };
@@ -223,11 +232,6 @@ async function createDefaultInstance(
             throw new Error("No runtime configured");
           }
         },
-        modelProvider: {
-          async complete() {
-            throw new Error("No provider configured");
-          }
-        },
         ...replace(stores)
       },
       stores
@@ -323,13 +327,25 @@ async function createConfiguredInstance(
   }
 }
 
+const providerOfNoAnswers: ScriptedModelProvider = {
+  async complete() {
+    throw new Error("No provider configured");
+  }
+};
+
 export function completeServerOptions(
   options: TestServerOptions,
   stores: PlatformStores
 ): ChatServerOptions {
+  const { modelProvider = providerOfNoAnswers, ...serverOptions } = options;
   return {
-    ...options,
+    ...serverOptions,
     logger: options.logger ?? createLogger(),
+    modelGateway: createScriptedInstanceModelGateway({
+      config: options.config,
+      modelProvider,
+      usageGovernance: options.usageGovernance
+    }),
     stores: options.stores,
     configAssets: options.configAssets
       ? {

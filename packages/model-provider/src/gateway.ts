@@ -16,13 +16,11 @@ import {
   type ModelAdapterRequest,
   type ModelCapabilities,
   type ModelCompletion,
-  type ModelCompletionRequest,
   type ModelCompletionStreamEvent,
   type ModelMessage,
   type ModelOutputFormat,
   type ModelProviderContinuation,
-  type ModelTool,
-  type ModelTransportContext
+  type ModelTool
 } from "./types";
 
 export type {
@@ -52,7 +50,10 @@ export interface ModelCall {
   /** Ties the usage event to the request that caused the call. */
   correlationId: string;
   signal?: AbortSignal;
-  /** No attempt starts and no wait ends after it. */
+  /**
+   * No attempt starts and no wait ends after it, and an attempt that is still going then is
+   * stopped: the call fails as timed out.
+   */
   deadline?: Date;
 }
 
@@ -62,18 +63,6 @@ export interface ModelCall {
  */
 export type ModelCallStreamEvent =
   ModelCompletionStreamEvent | { type: "tool_call_preparation_cancelled"; toolCallId: string };
-
-/**
- * The completion that titles and the approval check call until they get a system attribution.
- * It resolves the provider and types its errors, but admits nothing, records no usage and sends
- * a request once; those callers still do their own admission and recording.
- */
-export interface UnsettledModelCompletion {
-  complete(
-    request: ModelCompletionRequest,
-    context: ModelTransportContext
-  ): Promise<ModelCompletion>;
-}
 
 export interface ModelGateway {
   /** Sends the call and returns the answer. */
@@ -85,7 +74,6 @@ export interface ModelGateway {
   stream(call: ModelCall): AsyncIterable<ModelCallStreamEvent>;
   /** What the model behind a binding can do. */
   capabilities(binding: ModelBindingRef): ModelCapabilities;
-  readonly unsettled: UnsettledModelCompletion;
 }
 
 /**
@@ -156,7 +144,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
   function logProviderError(
     error: ModelProviderError,
     target: ResolvedModelTarget,
-    attribution?: ModelAttribution
+    attribution: ModelAttribution
   ): void {
     logger.warn(
       {
@@ -169,7 +157,9 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         providerCode: error.providerCode,
         providerRequestId: error.providerRequestId,
         providerMessage: error.providerMessage,
-        ...(attribution?.kind === "agent_run" ? { runId: attribution.runId } : {})
+        ...(attribution.kind === "agent_run"
+          ? { runId: attribution.runId }
+          : { purpose: attribution.purpose })
       },
       "Model provider call failed"
     );
@@ -184,6 +174,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     target: ResolvedModelTarget,
     streaming: boolean,
     policy: ModelRetryPolicy,
+    limit: ModelCallLimit,
     seen: { completion?: ModelCompletion }
   ): AsyncGenerator<ModelCallStreamEvent, void, void> {
     const request: ModelAdapterRequest = {
@@ -194,7 +185,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       reasoningEffort: call.reasoningEffort,
       fastTier: call.fastTier,
       continuation: call.continuation,
-      signal: call.signal,
+      signal: limit.signal,
       deadline: call.deadline
     };
     for (;;) {
@@ -203,7 +194,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       const preparingToolCallIds: string[] = [];
       try {
         if (!streaming) {
-          const completion = await target.adapter.complete(request);
+          const completion = await limit.bound(target.adapter.complete(request));
           attempt.retrySafe = false;
           seen.completion = completion;
           yield { type: "completed", completion };
@@ -233,6 +224,10 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           // neither logged as a provider's error nor sent again.
           throw stopOf(call.signal, thrown);
         }
+        if (limit.expired()) {
+          // Whatever the adapter made of being stopped at the deadline, the call timed out.
+          throw deadlinePassed();
+        }
         const error = normalizeModelAdapterError(thrown);
         if (error instanceof ModelProviderError) {
           logProviderError(error, target, call.attribution);
@@ -257,13 +252,6 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
   ): AsyncGenerator<ModelCallStreamEvent, void, void> {
     const target = resolve(call.binding);
     assertWithinCapabilities(call, target, streaming);
-    if (call.attribution.kind !== "agent_run") {
-      // The usage event has no columns for a system call yet, and no call goes out unrecorded.
-      throw new AppError(
-        "INTERNAL",
-        `A model call with attribution '${call.attribution.kind}' cannot be recorded yet`
-      );
-    }
     const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
     policy.assertAttemptMayStart();
     const admission = await holdAdmission(governance, {
@@ -301,14 +289,16 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         await admission.release();
       }
     };
+    const limit = limitModelCall(call.signal, call.deadline);
     let ended: "completed" | "failed" | "left_unread" = "left_unread";
     try {
-      yield* attempts(call, target, streaming, policy, seen);
+      yield* attempts(call, target, streaming, policy, limit, seen);
       ended = "completed";
     } catch (error) {
       ended = "failed";
       throw error;
     } finally {
+      limit.release();
       await settle(ended === "completed");
     }
   }
@@ -332,29 +322,6 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     capabilities(binding) {
       const target = resolve(binding);
       return target.adapter.capabilities(target.model);
-    },
-    unsettled: {
-      async complete(request, context) {
-        const target = resolve({ providerId: request.providerId, model: request.model });
-        try {
-          return await target.adapter.complete({
-            model: target.model,
-            messages: request.messages,
-            tools: request.tools,
-            reasoningEffort: request.reasoningEffort,
-            fastTier: request.fastMode,
-            continuation: request.continuation,
-            signal: context.signal,
-            deadline: context.deadline
-          });
-        } catch (thrown) {
-          const error = normalizeModelAdapterError(thrown);
-          if (error instanceof ModelProviderError) {
-            logProviderError(error, target);
-          }
-          throw modelCallFailureFor(error);
-        }
-      }
     }
   };
 }
@@ -424,6 +391,60 @@ async function holdAdmission(
       finish();
       await held;
     }
+  };
+}
+
+/** What bounds one call in time: the caller's stop and the call's deadline. */
+interface ModelCallLimit {
+  /** Aborts on the caller's stop and at the deadline. An adapter stops with it. */
+  signal: AbortSignal | undefined;
+  /** Whether the deadline has passed. */
+  expired(): boolean;
+  /** Settles as `pending` does, or rejects at the deadline when `pending` is still open then. */
+  bound<T>(pending: Promise<T>): Promise<T>;
+  release(): void;
+}
+
+function deadlinePassed(): AppError {
+  return new AppError("TIMEOUT", "The model call did not finish before its deadline");
+}
+
+// The longest delay a timer takes. A deadline further away is checked again when it fires.
+const TIMER_MAX_DELAY_MS = 2 ** 31 - 1;
+
+/**
+ * Stops a call at its deadline. The adapter is told through the signal, and a completion is
+ * given up at the deadline even when the adapter does not listen, so a provider that never
+ * answers cannot hold its caller. A stream is told through the signal alone.
+ */
+function limitModelCall(
+  signal: AbortSignal | undefined,
+  deadline: Date | undefined
+): ModelCallLimit {
+  if (!deadline) {
+    return { signal, expired: () => false, bound: (pending) => pending, release: () => undefined };
+  }
+  const timedOut = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (): void => {
+    const leftMs = deadline.getTime() - Date.now();
+    if (leftMs <= 0) {
+      timedOut.abort();
+      return;
+    }
+    timer = setTimeout(arm, Math.min(leftMs, TIMER_MAX_DELAY_MS));
+  };
+  arm();
+  const atDeadline = new Promise<never>((_resolve, reject) => {
+    timedOut.signal.addEventListener("abort", () => reject(deadlinePassed()), { once: true });
+  });
+  // Nothing may be waiting when the deadline passes; the rejection then has no reader.
+  atDeadline.catch(() => undefined);
+  return {
+    signal: signal ? AbortSignal.any([signal, timedOut.signal]) : timedOut.signal,
+    expired: () => timedOut.signal.aborted,
+    bound: (pending) => Promise.race([pending, atDeadline]),
+    release: () => clearTimeout(timer)
   };
 }
 

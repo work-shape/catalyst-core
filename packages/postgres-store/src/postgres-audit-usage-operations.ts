@@ -99,8 +99,8 @@ export async function appendModelUsageEvent(
     .values({
       id,
       clientInstanceId: input.clientInstanceId,
-      conversationId: input.conversationId,
-      agentRunId: input.agentRunId,
+      conversationId: input.conversationId ?? null,
+      agentRunId: input.agentRunId ?? null,
       agentName: input.agentName,
       providerId: input.providerId,
       model: input.model,

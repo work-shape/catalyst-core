@@ -6,8 +6,10 @@ export const modelUsageEvents = pgTable(
   {
     id: text("id").primaryKey(),
     clientInstanceId: text("client_instance_id").notNull(),
-    conversationId: text("conversation_id").notNull(),
-    agentRunId: text("agent_run_id").notNull(),
+    // Null for a call the product made for itself: such a call has no run, and a conversation
+    // only when one caused it.
+    conversationId: text("conversation_id"),
+    agentRunId: text("agent_run_id"),
     agentName: text("agent_name").notNull(),
     providerId: text("provider_id").notNull(),
     model: text("model").notNull(),

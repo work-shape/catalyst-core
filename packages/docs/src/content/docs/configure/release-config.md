@@ -144,9 +144,9 @@ approvalChecks:
     onFail: warn
 ```
 
-Checks run concurrently when a request is created. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Checks use the instance's usage budgets and safeguards, with usage recorded against the originating conversation and run when available.
+Checks run concurrently when a request is created. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the usage budgets and safeguards and leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
 
-`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 10-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking rule never lets unchecked content through. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking rule never lets unchecked content through. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
 
 Creation audit metadata contains only check ids and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
 
@@ -200,6 +200,34 @@ Startup validation fails when:
 - a configured tool's `config` does not match its schema
 - an agent references a disabled or missing tool
 - an enabled tool requires approval before approval resume is implemented
+
+## Web Access
+
+`webAccess` holds the instance switches for reaching the web. Everything is off by default.
+
+```yaml
+webAccess:
+  enabled: true
+  search:
+    enabled: true
+  fetch:
+    enabled: true
+```
+
+- `webAccess.enabled` is the gate for both search and fetch.
+- `webAccess.search.enabled` lets agents that list the tool `web_search` search the web. The
+  search is the model provider's own: whether a model can search is declared by its provider,
+  not set in config. An `openai-compatible` entry with `api: responses` can; an entry on
+  `chat_completions` and the `deterministic` provider cannot. An agent whose model cannot
+  search runs without the tool, and saving that agent is refused with "the model of this agent
+  cannot search the web". There is no search provider run by the platform.
+- `webAccess.fetch` enables the `web_fetch` tool and bounds what one fetch may read.
+
+`webAccess.search.mode` and `webAccess.search.managedProvider` were removed. A config that
+still sets either is refused at startup with a message naming the key; delete them.
+
+An agent with `web_search` also needs a customer price for web search calls of its provider
+under `usage.costs.customer.webSearch`.
 
 ## Generated Views
 
@@ -341,8 +369,8 @@ modelBindings:
 
 - `description` is the text on the model card, localized like other display strings.
 - `userSelectableReasoningEfforts` lists the efforts a chat user may pick for this model.
-  Unset, a binding on an `openai-compatible` provider offers `low`, `medium`, `high`, `xhigh`
-  and `max`. Catalyst passes the pick to the provider unchanged, so list fewer for a model
+  Unset, a binding offers those of `low`, `medium`, `high`, `xhigh` and `max` that its model
+  takes; a model that takes no reasoning effort offers none. Catalyst passes the pick to the provider unchanged, so list fewer for a model
   that rejects some of them: a run with an effort the model does not accept fails. An empty
   list gives users no choice and leaves the effort to the agent's model settings. The
   effort the agent would use anyway is always offered, so the user can return to it. Where

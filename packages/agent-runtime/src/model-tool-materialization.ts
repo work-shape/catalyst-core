@@ -1,14 +1,7 @@
-import type {
-  AgentConfig,
-  ModelProviderConfig,
-  ToolDescriptor,
-  WebAccessConfig
-} from "@vivd-catalyst/core";
+import type { AgentConfig, ToolDescriptor, WebAccessConfig } from "@vivd-catalyst/core";
 import {
-  OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID,
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelCapabilities,
-  type ModelProviderNativeTool,
   type ModelTool
 } from "@vivd-catalyst/model-provider";
 
@@ -18,13 +11,17 @@ export interface ModelToolRegistryView {
 
 export interface ModelToolMaterializationInput {
   agent: AgentConfig;
-  modelProvider: Pick<ModelProviderConfig, "id">;
   /** What the agent's model can do, as the gateway reports it. */
   capabilities: Pick<ModelCapabilities, "nativeTools">;
   toolRegistry: ModelToolRegistryView;
   webAccess?: WebAccessConfig;
 }
 
+/**
+ * The tools a model call offers for an agent: the agent's function tools, and web search as the
+ * provider's own tool when the instance allows it and the model has it. Web search that cannot
+ * be offered is left out; `findModelToolMaterializationIssues` says why.
+ */
 export function materializeModelTools(input: ModelToolMaterializationInput): ModelTool[] {
   const functionToolNames = input.agent.toolNames.filter(
     (toolName) => toolName !== WEB_SEARCH_MODEL_TOOL_NAME
@@ -37,102 +34,35 @@ export function materializeModelTools(input: ModelToolMaterializationInput): Mod
       description: tool.description,
       inputJsonSchema: tool.inputJsonSchema
     }));
-  const webSearch = resolveWebSearchModelTool(input);
-  return webSearch.kind === "provider" ? [...functionTools, webSearch.tool] : functionTools;
+  return input.agent.toolNames.includes(WEB_SEARCH_MODEL_TOOL_NAME) &&
+    findWebSearchIssue(input) === undefined
+    ? [...functionTools, { kind: "provider", name: WEB_SEARCH_MODEL_TOOL_NAME }]
+    : functionTools;
 }
 
+/** Why a tool the agent lists cannot be offered to its model. Empty when every tool can. */
 export function findModelToolMaterializationIssues(
   input: Omit<ModelToolMaterializationInput, "toolRegistry">
 ): string[] {
-  const webSearch = resolveWebSearchModelTool(input);
-  return webSearch.kind === "issue" ? [webSearch.message] : [];
-}
-
-type WebSearchResolution =
-  | {
-      kind: "none";
-    }
-  | {
-      kind: "provider";
-      tool: ModelProviderNativeTool;
-    }
-  | {
-      kind: "issue";
-      message: string;
-    };
-
-function resolveWebSearchModelTool(
-  input: Omit<ModelToolMaterializationInput, "toolRegistry">
-): WebSearchResolution {
   if (!input.agent.toolNames.includes(WEB_SEARCH_MODEL_TOOL_NAME)) {
-    return { kind: "none" };
+    return [];
   }
+  const issue = findWebSearchIssue(input);
+  return issue === undefined ? [] : [issue];
+}
 
+function findWebSearchIssue(
+  input: Omit<ModelToolMaterializationInput, "toolRegistry">
+): string | undefined {
+  const reference = `Agent '${input.agent.name}' references ${WEB_SEARCH_MODEL_TOOL_NAME}`;
   if (!input.webAccess?.enabled) {
-    return {
-      kind: "issue",
-      message: `Agent '${input.agent.name}' references ${WEB_SEARCH_MODEL_TOOL_NAME} but web access is disabled`
-    };
+    return `${reference} but web access is disabled`;
   }
-
   if (!input.webAccess.search.enabled) {
-    return {
-      kind: "issue",
-      message: `Agent '${input.agent.name}' references ${WEB_SEARCH_MODEL_TOOL_NAME} but webAccess.search is disabled`
-    };
+    return `${reference} but webAccess.search is disabled`;
   }
-
-  const search = input.webAccess.search;
-  if (search.mode === "managed_only") {
-    return {
-      kind: "issue",
-      message: createManagedUnsupportedMessage(input.agent.name, search.managedProvider)
-    };
+  if (!input.capabilities.nativeTools.includes(WEB_SEARCH_MODEL_TOOL_NAME)) {
+    return `${reference} but the model of this agent cannot search the web`;
   }
-
-  const nativeSupported = input.capabilities.nativeTools.includes(WEB_SEARCH_MODEL_TOOL_NAME);
-  if (search.mode === "native_only") {
-    return nativeSupported
-      ? createOpenAiWebSearchTool()
-      : {
-          kind: "issue",
-          message: `Agent '${input.agent.name}' references ${WEB_SEARCH_MODEL_TOOL_NAME} but model provider '${input.modelProvider.id}' does not support provider-native web search`
-        };
-  }
-
-  if (!search.managedProvider && nativeSupported) {
-    return createOpenAiWebSearchTool();
-  }
-
-  if (search.managedProvider) {
-    return {
-      kind: "issue",
-      message: createManagedUnsupportedMessage(input.agent.name, search.managedProvider)
-    };
-  }
-
-  return {
-    kind: "issue",
-    message: `Agent '${input.agent.name}' references ${WEB_SEARCH_MODEL_TOOL_NAME} but model provider '${input.modelProvider.id}' does not support native web search and managed web search providers are not implemented`
-  };
-}
-
-function createOpenAiWebSearchTool(): WebSearchResolution {
-  return {
-    kind: "provider",
-    tool: {
-      kind: "provider",
-      id: OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID,
-      name: WEB_SEARCH_MODEL_TOOL_NAME
-    }
-  };
-}
-
-function createManagedUnsupportedMessage(
-  agentName: string,
-  managedProvider: string | undefined
-): string {
-  return managedProvider
-    ? `Agent '${agentName}' references ${WEB_SEARCH_MODEL_TOOL_NAME} with managed provider '${managedProvider}', but managed web search providers are not implemented`
-    : `Agent '${agentName}' references ${WEB_SEARCH_MODEL_TOOL_NAME} with managed web search mode, but managed web search providers are not implemented`;
+  return undefined;
 }

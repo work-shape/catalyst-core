@@ -60,7 +60,6 @@ export function findConfigAssetAgentValidationIssues(
       const selection = getModelSelectionForAgent(config, agent);
       const materializationIssues = findModelToolMaterializationIssues({
         agent,
-        modelProvider: selection.provider,
         capabilities: capabilitiesOf({
           providerId: selection.provider.id,
           model: selection.model

@@ -8,10 +8,10 @@ import type {
   WebSource
 } from "@vivd-catalyst/core";
 
-export const OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID = "openai.web_search";
 export const WEB_SEARCH_MODEL_TOOL_NAME = "web_search";
 
-export type ModelProviderNativeToolId = typeof OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID;
+/** A native tool of a provider, named by the product. Each adapter maps it to its own wire form. */
+export type ModelNativeToolId = typeof WEB_SEARCH_MODEL_TOOL_NAME;
 
 export interface ModelFunctionTool {
   kind?: "function";
@@ -20,10 +20,10 @@ export interface ModelFunctionTool {
   inputJsonSchema?: JsonObject;
 }
 
+/** A tool the provider runs itself. The call names it by its product id alone. */
 export interface ModelProviderNativeTool {
   kind: "provider";
-  id: ModelProviderNativeToolId;
-  name: typeof WEB_SEARCH_MODEL_TOOL_NAME;
+  name: ModelNativeToolId;
 }
 
 export type ModelTool = ModelFunctionTool | ModelProviderNativeTool;
@@ -81,11 +81,7 @@ export type ModelMessage =
       toolCallId: string;
     };
 
-/**
- * A request addressed to one provider entry by its id. The transports inside the adapters take
- * it, and so does the narrow completion that titles and the approval check call until they get
- * an attribution of their own.
- */
+/** A request addressed to one provider entry by its id. The transports inside the adapters take it. */
 export interface ModelCompletionRequest {
   providerId: string;
   model: string;
@@ -156,9 +152,6 @@ export interface ModelTransportContext {
   deadline?: Date;
 }
 
-/** A native tool of a provider, named by the product. Each adapter maps it to its own wire form. */
-export type ModelNativeToolId = typeof WEB_SEARCH_MODEL_TOOL_NAME;
-
 /**
  * What one model of one provider entry can do, as its adapter declares it. The gateway refuses a
  * call that asks for more; callers read it instead of asking which provider serves the model.
@@ -192,6 +185,7 @@ export interface ModelAdapterRequest {
   reasoningEffort?: ReasoningEffortConfig;
   fastTier?: boolean;
   continuation?: ModelProviderContinuation;
+  /** Aborts when the caller stops the call or its deadline passes. The adapter stops with it. */
   signal?: AbortSignal;
   deadline?: Date;
 }

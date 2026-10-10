@@ -24,9 +24,9 @@ import type { OperationApprovalRequests } from "@vivd-catalyst/tool-execution";
 import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
-import type { UnsettledModelCompletion } from "@vivd-catalyst/model-provider";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ChatAttachmentService } from "./attachments";
+import type { SystemModelGateway } from "./system-model-call";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
 
 export interface ConversationRetentionOptions {
@@ -86,8 +86,8 @@ export interface ChatServerOptions {
     };
     jobOptions?: ExecutionWorkspaceCleanupJobOptions;
   };
-  /** What conversation titles call. They get the gateway with a system attribution in S3-08. */
-  modelProvider: UnsettledModelCompletion;
+  /** What the server's own model calls go through, and what tells it what a model can do. */
+  modelGateway: SystemModelGateway;
   allowedOrigins?: string | string[];
   standaloneAuth?: Pick<
     StandaloneAuthRuntime,

@@ -31,6 +31,14 @@ export interface FakeModelProvider {
   ): AsyncIterable<ModelCompletionStreamEvent>;
 }
 
+/** A provider that answers with whole completions only, so the runtime does not stream it. */
+export function withoutStreaming(provider: FakeModelProvider): FakeModelProvider {
+  return {
+    id: provider.id,
+    complete: (request, context) => provider.complete(request, context)
+  };
+}
+
 /** Everything a call can ask for, so a scripted provider is refused nothing. */
 export const ALL_MODEL_CAPABILITIES: ModelCapabilities = {
   reasoningEfforts: REASONING_EFFORTS,
@@ -54,9 +62,13 @@ export const silentTestLogger: Logger = {
   }
 };
 
+/** A scripted provider where the test does not care which entry it stands for. */
+export type ScriptedModelProvider = Omit<FakeModelProvider, "id"> &
+  Partial<Pick<FakeModelProvider, "id">>;
+
 export function adapterFromFakeProvider(
   entry: Pick<ModelProviderConfig, "id">,
-  provider: FakeModelProvider,
+  provider: ScriptedModelProvider,
   capabilities: Partial<ModelCapabilities> = {}
 ): ModelAdapter {
   const declared = {
@@ -153,6 +165,36 @@ export function withTestModelGateway<
       logger: options.logger
     })
   };
+}
+
+/**
+ * The gateway of a test server: every model entry of the config answers through the scripted
+ * provider and declares what its built-in adapter declares, so the server offers what the
+ * product would offer for that config.
+ */
+export function createScriptedInstanceModelGateway(input: {
+  config: Pick<ClientInstanceConfig, "infrastructure" | "modelBindings">;
+  modelProvider: ScriptedModelProvider;
+  usageGovernance: ModelCallGovernance;
+  logger?: Logger;
+}): ModelGateway {
+  const capabilitiesOf = builtInModelCapabilities(input.config);
+  return createModelGateway({
+    providers: getModelProviderConfigs(input.config),
+    bindings: input.config.modelBindings,
+    adapters: new Map(
+      getModelProviderConfigs(input.config).map((entry) => [
+        entry.id,
+        adapterFromFakeProvider(
+          entry,
+          input.modelProvider,
+          capabilitiesOf({ providerId: entry.id })
+        )
+      ])
+    ),
+    governance: input.usageGovernance,
+    logger: input.logger ?? silentTestLogger
+  });
 }
 
 /**

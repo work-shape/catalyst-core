@@ -4,6 +4,7 @@ import {
   type ModelAttribution,
   type ModelUsageEvent,
   type ModelUsageEventInput,
+  type ModelUsageEventRecordInput,
   type ModelUsageEventStore,
   type ModelUsageRecorder,
   type ModelUsageWindowSummary,
@@ -143,7 +144,6 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }
 
   recordModelUsage(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
-    const attribution = assertRecordableAttribution(input.attribution);
     const normalizedInput: ModelUsageEventInput = {
       ...input,
       inputTokens: normalizeCount(input.inputTokens),
@@ -161,9 +161,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     };
     return this.store.appendModelUsageEvent({
       clientInstanceId: normalizedInput.clientInstanceId,
-      conversationId: attribution.conversationId,
-      agentRunId: attribution.runId,
-      agentName: attribution.agentName,
+      ...usageEventOrigin(input.attribution),
       providerId: normalizedInput.providerId,
       model: normalizedInput.model,
       inputTokens: normalizedInput.inputTokens,
@@ -414,17 +412,24 @@ export type UsageCostEvent = Pick<
   | "providerServiceTier"
 >;
 
-/** The usage event has columns for an agent run only, until a system call gets its own. */
-function assertRecordableAttribution(
+/**
+ * Where a usage event says its call came from. A call the product made for itself has no run;
+ * until the event has a column for the purpose, the purpose stands where the agent's name does.
+ */
+function usageEventOrigin(
   attribution: ModelAttribution
-): Extract<ModelAttribution, { kind: "agent_run" }> {
-  if (attribution.kind !== "agent_run") {
-    throw new AppError(
-      "INTERNAL",
-      `Usage of a model call with attribution '${attribution.kind}' cannot be recorded yet`
-    );
+): Pick<ModelUsageEventRecordInput, "conversationId" | "agentRunId" | "agentName"> {
+  if (attribution.kind === "agent_run") {
+    return {
+      conversationId: attribution.conversationId,
+      agentRunId: attribution.runId,
+      agentName: attribution.agentName
+    };
   }
-  return attribution;
+  return {
+    ...(attribution.conversationId ? { conversationId: attribution.conversationId } : {}),
+    agentName: attribution.purpose
+  };
 }
 
 export function calculateUsageCost(

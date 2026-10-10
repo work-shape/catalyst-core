@@ -18,12 +18,25 @@ import {
   type ConfigLocaleInput
 } from "./localization";
 
+export interface SafeConfigViewOptions extends ConfigLocaleInput {
+  /**
+   * The reasoning efforts the model behind a binding takes, as the instance's model gateway
+   * reports them. Left out, a binding offers only the efforts it lists itself.
+   */
+  reasoningEffortsOfBinding?: (bindingId: string) => readonly ReasoningEffortConfig[];
+}
+
 export function createSafeConfigView(
   config: ClientInstanceConfig,
   assets: RuntimeAssetSnapshot,
-  localeInput: ConfigLocaleInput = {}
+  options: SafeConfigViewOptions = {}
 ) {
-  const locale = resolveConfigLocale(config.localization, localeInput);
+  const locale = resolveConfigLocale(config.localization, options);
+  const models: ModelViewContext = {
+    config,
+    locale,
+    reasoningEffortsOfBinding: options.reasoningEffortsOfBinding ?? (() => [])
+  };
   const {
     environment: _environment,
     passwordResetEnabled: _passwordResetEnabled,
@@ -80,7 +93,7 @@ export function createSafeConfigView(
       ),
       ...compactionThresholdView(getModelSelectionForAgent(config, agent).provider),
       ...(agent.modelBindingId ? { defaultModelBindingId: agent.modelBindingId } : {}),
-      selectableModels: agentSelectableModels(config, agent, locale),
+      selectableModels: agentSelectableModels(models, agent),
       welcomeMessage: resolveLocalizedString(
         agent.welcomeMessage,
         locale,
@@ -109,14 +122,11 @@ export function createSafeConfigView(
 }
 
 /** The agent's own model first, then the bindings users may pick instead. */
-function agentSelectableModels(
-  config: ClientInstanceConfig,
-  agent: AgentConfig,
-  locale: LocaleCode
-) {
+function agentSelectableModels(context: ModelViewContext, agent: AgentConfig) {
+  const { config } = context;
   const own = getModelSelectionForAgent(config, agent);
   return [
-    modelView(config, locale, {
+    modelView(context, {
       provider: own.provider,
       binding: own.binding,
       model: own.model,
@@ -124,7 +134,7 @@ function agentSelectableModels(
     }),
     ...userSelectableModelBindingsForAgent(agent, config.modelBindings).map((binding) => {
       const selection = resolveModelBinding(config, binding.id);
-      return modelView(config, locale, {
+      return modelView(context, {
         provider: selection.provider,
         binding,
         model: selection.model,
@@ -135,10 +145,15 @@ function agentSelectableModels(
   ];
 }
 
+interface ModelViewContext {
+  config: ClientInstanceConfig;
+  locale: LocaleCode;
+  reasoningEffortsOfBinding: (bindingId: string) => readonly ReasoningEffortConfig[];
+}
+
 /** What the model picker shows for one model: who makes it, where it runs and what it costs. */
 function modelView(
-  config: ClientInstanceConfig,
-  locale: LocaleCode,
+  { config, locale, reasoningEffortsOfBinding }: ModelViewContext,
   selection: {
     provider: ModelProviderConfig;
     binding: ModelBindingConfig | undefined;
@@ -154,7 +169,11 @@ function modelView(
     (candidate) => candidate.providerId === provider.id && candidate.model === model
   );
   const usageTier = binding?.usageTier ?? (rates ? modelUsageTierFromRates(rates) : undefined);
-  const reasoning = reasoningEffortChoiceForBinding(binding, provider, selection.reasoningEffort);
+  const reasoning = reasoningEffortChoiceForBinding(
+    binding,
+    binding ? reasoningEffortsOfBinding(binding.id) : [],
+    selection.reasoningEffort
+  );
   return {
     ...(binding ? { bindingId: binding.id } : {}),
     model,

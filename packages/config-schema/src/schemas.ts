@@ -463,21 +463,34 @@ export const modelContextConfigSchema = z
     }
   });
 
+const REMOVED_WEB_SEARCH_KEYS = ["mode", "managedProvider"] as const;
+
+/**
+ * The instance switch for web search. The two keys that chose between a provider's own search
+ * and a managed one are refused by name: a model's adapter declares whether it can search.
+ */
+const webSearchConfigSchema = z.preprocess(
+  (raw, context) => {
+    if (typeof raw === "object" && raw !== null) {
+      for (const key of REMOVED_WEB_SEARCH_KEYS) {
+        if (key in raw) {
+          context.addIssue({
+            code: "custom",
+            path: [key],
+            message: `'webAccess.search.${key}' was removed: whether a model can search the web is declared by its provider, and 'webAccess.search.enabled' is the only switch. Delete the key`
+          });
+        }
+      }
+    }
+    return raw;
+  },
+  z.object({ enabled: z.boolean().default(false) }).default({ enabled: false })
+);
+
 export const webAccessConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
-    search: z
-      .object({
-        enabled: z.boolean().default(false),
-        mode: z
-          .enum(["native_or_managed", "native_only", "managed_only"])
-          .default("native_or_managed"),
-        managedProvider: z.string().min(1).optional()
-      })
-      .default({
-        enabled: false,
-        mode: "native_or_managed"
-      }),
+    search: webSearchConfigSchema,
     fetch: z
       .object({
         enabled: z.boolean().default(false),
@@ -502,8 +515,7 @@ export const webAccessConfigSchema = z
   .default({
     enabled: false,
     search: {
-      enabled: false,
-      mode: "native_or_managed"
+      enabled: false
     },
     fetch: {
       enabled: false,

@@ -12708,8 +12708,6 @@
         "required": [
           "id",
           "clientInstanceId",
-          "conversationId",
-          "agentRunId",
           "agentName",
           "providerId",
           "model",

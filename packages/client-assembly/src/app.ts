@@ -165,7 +165,7 @@ export async function createClientInstanceApp(
           }
         }
       : undefined,
-    modelProvider: modelGateway.unsettled,
+    modelGateway,
     allowedOrigins,
     standaloneAuth,
     mail: await createClientInstanceMail({
@@ -343,8 +343,7 @@ export async function createClientInstanceExecutionAssembly(
     checkRunner: new ApprovalCheckRunner({
       clientInstanceId,
       config,
-      modelProvider: modelGateway.unsettled,
-      usageGovernance
+      modelGateway
     }),
     onDecided: (request) => store.approvals.appendApprovalDecision(request),
     auditRecorder

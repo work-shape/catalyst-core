@@ -46,8 +46,8 @@ export const auditActivitySchema = z.object({
 export const modelUsageVolumeEventSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
-  conversationId: z.string(),
-  agentRunId: z.string(),
+  conversationId: z.string().optional(),
+  agentRunId: z.string().optional(),
   agentName: z.string(),
   providerId: z.string(),
   model: z.string(),

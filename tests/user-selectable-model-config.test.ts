@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  createSafeConfigView,
+  parseClientInstanceConfig,
+  type ClientInstanceConfig
+} from "@vivd-catalyst/config-schema";
+import { builtInModelCapabilities } from "./support/model-gateway";
+
+/** The efforts the adapters declare, as the config route reads them from the gateway. */
+const adapterEfforts = (config: ClientInstanceConfig) => (bindingId: string) =>
+  builtInModelCapabilities(config)({ bindingId }).reasoningEfforts;
 
 const noChoice = { selectableReasoningEfforts: [] };
 // What a binding offers when release config does not say, starting on an assumed medium.
@@ -62,43 +71,47 @@ describe("user-selectable model config", () => {
       ]
     });
 
-    const safeConfig = createSafeConfigView(config, {
-      version: 1,
-      defaultAgentName: "assistant",
-      agents: [
-        {
-          name: "assistant",
-          displayName: "Assistant",
-          instructions: "Help the user.",
-          modelBindingId: "sol",
-          toolNames: [],
-          skillNames: [],
-          initialPrompts: []
-        },
-        {
-          name: "chooser",
-          displayName: "Chooser",
-          instructions: "Help the user.",
-          // "retired" no longer exists and agents may not use "guard": both are ignored.
-          // Listing the agent's own binding does not duplicate it.
-          modelBindingId: "conversationTitle",
-          userSelectableModelBindingIds: ["terra", "conversationTitle", "retired", "guard"],
-          toolNames: [],
-          skillNames: [],
-          initialPrompts: []
-        },
-        {
-          name: "provider_default",
-          displayName: "Provider default",
-          instructions: "Help the user.",
-          userSelectableModelBindingIds: ["sol"],
-          toolNames: [],
-          skillNames: [],
-          initialPrompts: []
-        }
-      ],
-      skills: []
-    });
+    const safeConfig = createSafeConfigView(
+      config,
+      {
+        version: 1,
+        defaultAgentName: "assistant",
+        agents: [
+          {
+            name: "assistant",
+            displayName: "Assistant",
+            instructions: "Help the user.",
+            modelBindingId: "sol",
+            toolNames: [],
+            skillNames: [],
+            initialPrompts: []
+          },
+          {
+            name: "chooser",
+            displayName: "Chooser",
+            instructions: "Help the user.",
+            // "retired" no longer exists and agents may not use "guard": both are ignored.
+            // Listing the agent's own binding does not duplicate it.
+            modelBindingId: "conversationTitle",
+            userSelectableModelBindingIds: ["terra", "conversationTitle", "retired", "guard"],
+            toolNames: [],
+            skillNames: [],
+            initialPrompts: []
+          },
+          {
+            name: "provider_default",
+            displayName: "Provider default",
+            instructions: "Help the user.",
+            userSelectableModelBindingIds: ["sol"],
+            toolNames: [],
+            skillNames: [],
+            initialPrompts: []
+          }
+        ],
+        skills: []
+      },
+      { reasoningEffortsOfBinding: adapterEfforts(config) }
+    );
 
     expect(safeConfig).not.toHaveProperty("selectableModels");
     // An empty list leaves only the agent's own model, so the chat shows no selector.
@@ -234,7 +247,7 @@ describe("user-selectable model config", () => {
         ],
         skills: []
       },
-      { requestedLocale: "de" }
+      { requestedLocale: "de", reasoningEffortsOfBinding: adapterEfforts(config) }
     );
 
     expect(safeConfig.agents[0]?.selectableModels).toEqual([

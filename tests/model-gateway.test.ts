@@ -74,7 +74,6 @@ describe("model gateway", () => {
         tools: [
           {
             kind: "provider" as const,
-            id: "openai.web_search" as const,
             name: "web_search" as const
           }
         ]
@@ -535,28 +534,103 @@ describe("model gateway", () => {
     ).toBe(false);
   });
 
-  it("gives titles and the approval check one unrecorded attempt", async () => {
-    let attempts = 0;
+  it("admits and records a call the product makes for itself, with its purpose", async () => {
+    const f = fixture({ complete: async () => completion("A title") });
+    const attribution = {
+      kind: "system" as const,
+      purpose: "conversation_title" as const,
+      conversationId: asConversationId("conv_gateway"),
+      userId: "user-1"
+    };
+
+    await expect(f.gateway.complete(call({ attribution }))).resolves.toMatchObject({
+      text: "A title"
+    });
+
+    expect(f.admitted).toBe(1);
+    expect(f.recorded).toEqual([expect.objectContaining({ attribution, totalTokens: 3 })]);
+  });
+
+  it("names the purpose of a system call in the provider error log", async () => {
     const f = fixture({
       async complete() {
-        attempts += 1;
-        throw new ModelProviderError({
-          kind: "server_error",
-          status: 500,
-          message: "Model provider request failed"
-        });
+        throw new ModelProviderError({ kind: "invalid_request", status: 400, message: "refused" });
       }
     });
 
     await expect(
-      f.gateway.unsettled.complete(
-        { providerId: "main", model: "entry-model", messages: [], tools: [] },
-        {}
-      )
-    ).rejects.toMatchObject({ kind: "server_error" });
-    expect(attempts).toBe(1);
-    expect(f.admitted).toBe(0);
+      f.gateway.complete(call({ attribution: { kind: "system", purpose: "guardrail_judge" } }))
+    ).rejects.toMatchObject({ kind: "invalid_request" });
+
+    expect(f.warnings).toEqual([expect.objectContaining({ purpose: "guardrail_judge" })]);
+  });
+
+  it("gives up a completion at the deadline even when the adapter ignores the stop", async () => {
+    vi.useFakeTimers();
+    const f = fixture({ complete: () => new Promise<ModelCompletion>(() => {}) });
+
+    const pending = f.gateway
+      .complete(call({ deadline: new Date(Date.now() + 5_000) }))
+      .catch((thrown: unknown) => thrown);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(f.requests[0]?.signal?.aborted).toBe(false);
     expect(f.recorded).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(await pending).toMatchObject({ code: "TIMEOUT" });
+    // The adapter was told to stop, the call is not sent again, and it is recorded once.
+    expect(f.requests).toHaveLength(1);
+    expect(f.requests[0]?.signal?.aborted).toBe(true);
+    expect(f.recorded).toEqual([expect.objectContaining({ totalTokens: 0, source: "estimated" })]);
+    expect(f.inFlight).toBe(0);
+    expect(f.warnings).toEqual([]);
+  });
+
+  it("fails a stream as timed out when its adapter stops at the deadline", async () => {
+    vi.useFakeTimers();
+    const f = fixture({
+      stream: (request) => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () =>
+            new Promise<IteratorResult<ModelCompletionStreamEvent>>((_resolve, reject) => {
+              request.signal?.addEventListener(
+                "abort",
+                () => reject(new DOMException("This operation was aborted", "AbortError")),
+                { once: true }
+              );
+            })
+        })
+      })
+    });
+
+    const pending = drain(f.gateway.stream(call({ deadline: new Date(Date.now() + 5_000) }))).catch(
+      (thrown: unknown) => thrown
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(await pending).toMatchObject({ code: "TIMEOUT" });
+    expect(f.requests).toHaveLength(1);
+    expect(f.recorded).toHaveLength(1);
+  });
+
+  it("keeps a caller's stop a stop when the call also has a deadline", async () => {
+    const stop = new AbortController();
+    const abort = new DOMException("This operation was aborted", "AbortError");
+    const f = fixture({
+      complete: (request) =>
+        new Promise<ModelCompletion>((_resolve, reject) => {
+          request.signal?.addEventListener("abort", () => reject(abort), { once: true });
+        })
+    });
+
+    const stopped = f.gateway.complete(
+      call({ signal: stop.signal, deadline: new Date(Date.now() + 60_000) })
+    );
+    await vi.waitFor(() => expect(f.requests).toHaveLength(1));
+    stop.abort();
+
+    await expect(stopped).rejects.toBe(abort);
+    expect(f.recorded).toHaveLength(1);
   });
 });
 

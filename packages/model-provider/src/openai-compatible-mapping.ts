@@ -6,7 +6,7 @@ import {
   type WebSource
 } from "@vivd-catalyst/core";
 import {
-  OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID,
+  WEB_SEARCH_MODEL_TOOL_NAME,
   isModelFunctionTool,
   isModelProviderNativeTool,
   modelContentImages,
@@ -15,6 +15,7 @@ import {
   type ModelContentPart,
   type ModelFunctionTool,
   type ModelMessage,
+  type ModelNativeToolId,
   type ModelProviderContinuation,
   type ModelProviderNativeTool,
   type ModelTool
@@ -582,13 +583,13 @@ export function toProviderToolName(toolName: string): string {
   return providerName;
 }
 
+/** The product's native tools as the responses format names them. */
+const OPENAI_RESPONSES_NATIVE_TOOLS: Record<ModelNativeToolId, OpenAiResponsesTool> = {
+  [WEB_SEARCH_MODEL_TOOL_NAME]: { type: "web_search" }
+};
+
 function toOpenAiResponsesProviderNativeTool(tool: ModelProviderNativeTool): OpenAiResponsesTool {
-  if (tool.id === OPENAI_WEB_SEARCH_PROVIDER_TOOL_ID) {
-    return {
-      type: "web_search"
-    };
-  }
-  throw new AppError("VALIDATION_FAILED", `Unsupported provider-native model tool '${tool.id}'`);
+  return OPENAI_RESPONSES_NATIVE_TOOLS[tool.name];
 }
 
 function readUrlCitationPayload(value: unknown): Record<string, unknown> | undefined {

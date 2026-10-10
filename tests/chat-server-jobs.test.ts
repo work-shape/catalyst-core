@@ -215,37 +215,38 @@ describe("the title job and a rename by the user", () => {
       role: "user",
       text: "please summarize the release notes"
     });
-    const options = createRetentionOptions({ clientInstanceId: titleInstance, store });
+    const options = createRetentionOptions({
+      clientInstanceId: titleInstance,
+      store,
+      modelProvider: {
+        // The job has read the conversation and has not written the title yet.
+        async complete() {
+          if (renameDuringGeneration)
+            await store.conversations.updateConversationTitle({
+              clientInstanceId: titleInstance,
+              conversationId: conversation.id,
+              title: renameDuringGeneration,
+              updatedAt: new Date().toISOString()
+            });
+          return {
+            text: "Release Notes Summary",
+            toolCalls: [],
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+              source: "not_reported",
+              webSearchCallCount: 0
+            }
+          };
+        }
+      }
+    });
     const worker = createJobWorker({
       stores: store,
       clientInstanceId: titleInstance,
       logger: createFailingTestLogger("The title job failed"),
-      ...createChatServerJobs({
-        ...options,
-        modelProvider: {
-          // The job has read the conversation and has not written the title yet.
-          async complete() {
-            if (renameDuringGeneration)
-              await store.conversations.updateConversationTitle({
-                clientInstanceId: titleInstance,
-                conversationId: conversation.id,
-                title: renameDuringGeneration,
-                updatedAt: new Date().toISOString()
-              });
-            return {
-              text: "Release Notes Summary",
-              toolCalls: [],
-              usage: {
-                inputTokens: 0,
-                outputTokens: 0,
-                totalTokens: 0,
-                source: "not_reported",
-                webSearchCallCount: 0
-              }
-            };
-          }
-        }
-      })
+      ...createChatServerJobs(options)
     });
     await store.jobs.enqueue(
       generateConversationTitleJob,

@@ -342,7 +342,6 @@ export class LocalAgentRuntime implements AgentRuntime {
     const { capabilities } = modelSelection;
     const tools = materializeModelTools({
       agent,
-      modelProvider: modelSelection.provider,
       capabilities,
       toolRegistry: this.options.toolRegistry,
       webAccess: this.options.webAccess
@@ -699,9 +698,11 @@ export class LocalAgentRuntime implements AgentRuntime {
         // no longer offers falls back to the configured effort instead of failing the run.
         reasoningEffort:
           userSelectedReasoningEffort &&
-          reasoningEffortChoiceForBinding(binding, provider, configuredEffort).selectable.includes(
-            userSelectedReasoningEffort
-          )
+          reasoningEffortChoiceForBinding(
+            binding,
+            capabilities.reasoningEfforts,
+            configuredEffort
+          ).selectable.includes(userSelectedReasoningEffort)
             ? userSelectedReasoningEffort
             : configuredEffort,
         // A user-selected binding gets fast mode only when that binding supports it.

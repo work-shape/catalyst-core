@@ -7,7 +7,6 @@ import {
 
 const OPENAI_WEB_SEARCH_TOOL = {
   kind: "provider",
-  id: "openai.web_search",
   name: "web_search"
 } as const;
 

@@ -30,7 +30,9 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
     // The instance-wide agent list is what the caller sees in their Personal Workspace.
     const assets = await getWorkspaceAssetSnapshot(options, { kind: "personal" });
     const config = createSafeConfigView(options.config, assets, {
-      requestedLocale: resolveRequestLocale(options, request)
+      requestedLocale: resolveRequestLocale(options, request),
+      reasoningEffortsOfBinding: (bindingId) =>
+        options.modelGateway.capabilities({ bindingId }).reasoningEfforts
     });
     return {
       ...config,

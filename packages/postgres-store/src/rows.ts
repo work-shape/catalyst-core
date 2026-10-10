@@ -501,8 +501,10 @@ export function mapModelUsageEvent(row: ModelUsageEventRow | undefined): ModelUs
   return {
     id: row.id as ModelUsageEvent["id"],
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
-    conversationId: asConversationId(row.conversationId),
-    agentRunId: row.agentRunId as ModelUsageEvent["agentRunId"],
+    ...(row.conversationId === null
+      ? {}
+      : { conversationId: asConversationId(row.conversationId) }),
+    ...(row.agentRunId === null ? {} : { agentRunId: asAgentRunId(row.agentRunId) }),
     agentName: row.agentName,
     providerId: row.providerId,
     model: row.model,

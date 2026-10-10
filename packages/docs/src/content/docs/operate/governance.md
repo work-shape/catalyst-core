@@ -60,10 +60,12 @@ Record:
 - provider id
 - model id
 - token counts when reported by the provider
-- conversation id
-- agent run id
+- conversation id, where a conversation caused the call
+- agent run id, or for a call the product made for itself what it was for: `conversation_title` or `guardrail_judge`
 - correlation id
 - persisted customer billable cost and completeness state
+
+Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped: such a call is recorded with zero tokens and counts toward the daily call limit.
 
 Use provider-side billing alerts or budgets as an external backstop.
 

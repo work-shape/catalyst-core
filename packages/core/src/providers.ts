@@ -55,7 +55,7 @@ export interface ProviderDefinitionInput<
   Instance
 > {
   port: Port;
-  /** The value of `provider` in an entry, such as `openai-compatible` or `docker`. */
+  /** The value of `provider` in an entry, such as `docker` or `mailjet`. */
   type: string;
   /** Owned by the adapter. A field that takes a secret is `secretRef()`. */
   configSchema: Schema;

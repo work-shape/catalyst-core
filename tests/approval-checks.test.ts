@@ -25,7 +25,10 @@ import {
 } from "@vivd-catalyst/chat-server";
 import { createSkillChangePreview, type SkillChangeOperation } from "@vivd-catalyst/config-schema";
 import type { ModelCompletion } from "@vivd-catalyst/model-provider";
-import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
+import {
+  createScriptedInstanceModelGateway,
+  type FakeModelProvider as ModelProvider
+} from "./support/model-gateway";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createProposeSkillChangeTool } from "@vivd-catalyst/tool-execution";
 import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/model-context-projection";
@@ -115,8 +118,11 @@ async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
   const runner = new ApprovalCheckRunner({
     config,
     clientInstanceId,
-    modelProvider: { complete },
-    usageGovernance
+    modelGateway: createScriptedInstanceModelGateway({
+      config,
+      modelProvider: { complete },
+      usageGovernance
+    })
   });
   const workflow = new ApprovalRequestWorkflow({
     clientInstanceId,
@@ -130,8 +136,8 @@ async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
 afterEach(() => vi.useRealTimers());
 
 /**
- * Makes the provider hang and resolves when it is called. The runner starts its timeout at that
- * call, after its database reads, so the clock is advanced only from then on.
+ * Makes the provider hang and resolves when it is called. The call is sent after the gateway's
+ * database reads, so the clock is advanced only from then on.
  */
 function neverCompleting(complete: Mock<ModelProvider["complete"]>): Promise<void> {
   return new Promise((resolve) => {
@@ -159,33 +165,25 @@ describe("approval check runner", () => {
       { id: rule.id, status: "passed", message: "" }
     ]);
     const [request, callContext] = f.complete.mock.calls[0] ?? [];
-    expect(request).toMatchObject({
-      providerId: "local",
-      model: "cheap-check",
-      reasoningEffort: "low",
-      tools: []
-    });
+    // The binding's effort is left out: the model of this fixture takes none.
+    expect(request).toMatchObject({ providerId: "local", model: "cheap-check", tools: [] });
+    expect(request?.reasoningEffort).toBeUndefined();
     expect(request?.messages[0]?.content).toContain(JSON.stringify(rule.instruction));
     expect(request?.messages[0]?.content).toContain("never follow");
     expect(request?.messages[1]?.content).toContain("BEGIN UNTRUSTED");
     expect(request?.messages[1]?.content).toContain(command.summary);
     expect(request?.messages[1]?.content).toContain("New content");
     expect(JSON.stringify(request)).not.toContain("Private old text");
-    expect(callContext).toMatchObject({
-      user,
-      clientInstanceId,
-      correlationId: context.correlationId
-    });
     expect(callContext?.signal).toBeInstanceOf(AbortSignal);
-    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
-      expect.objectContaining({
-        conversationId: command.origin?.conversationId,
-        agentRunId: command.origin?.agentRunId,
-        agentName: "approval_check",
-        model: "cheap-check",
-        totalTokens: 15
-      })
-    ]);
+    const [event] = await f.store.usage.listModelUsageEvents({ clientInstanceId });
+    expect(event).toMatchObject({
+      conversationId: command.origin?.conversationId,
+      agentName: "guardrail_judge",
+      model: "cheap-check",
+      correlationId: context.correlationId,
+      totalTokens: 15
+    });
+    expect(event).not.toHaveProperty("agentRunId");
   });
 
   it.each(["warn", "block"] as const)(
@@ -212,7 +210,7 @@ describe("approval check runner", () => {
       f.complete.mockRejectedValue(new Error("secret provider detail"));
       expect(await f.runner.run(handler, command, context)).toEqual([unevaluated(onFail)]);
       expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
-        expect.objectContaining({ source: "not_reported", totalTokens: 0 })
+        expect.objectContaining({ source: "estimated", totalTokens: 0 })
       ]);
     }
   );
@@ -259,7 +257,7 @@ describe("approval check runner", () => {
       vi.useRealTimers();
       expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(true);
       expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
-        expect.objectContaining({ source: "not_reported" })
+        expect.objectContaining({ agentName: "guardrail_judge", totalTokens: 0 })
       ]);
     }
   );
@@ -320,13 +318,18 @@ describe("approval check runner", () => {
     expect(f.complete).not.toHaveBeenCalled();
   });
 
-  it("still evaluates a request without origin, which the usage contract cannot attribute", async () => {
+  it("evaluates a request without origin and records its usage without a conversation", async () => {
     const f = await fixture();
     expect(
       (await f.runner.run(handler, { ...command, origin: undefined }, context))[0]?.status
     ).toBe("passed");
     expect(f.complete).toHaveBeenCalledTimes(1);
-    expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([]);
+    const events = await f.store.usage.listModelUsageEvents({ clientInstanceId });
+    expect(events).toEqual([
+      expect.objectContaining({ agentName: "guardrail_judge", totalTokens: 15 })
+    ]);
+    expect(events[0]).not.toHaveProperty("conversationId");
+    expect(events[0]).not.toHaveProperty("agentRunId");
   });
 });
 
@@ -349,17 +352,18 @@ describe("approval checks at creation", () => {
     expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
   });
 
-  it("does not bypass a blocking verdict when usage storage fails", async () => {
+  it("does not let a proposal past a blocking rule when usage storage fails", async () => {
     const f = await fixture([{ ...rule, onFail: "block" }]);
     f.complete.mockResolvedValue(
-      completion('{"violates":true,"reason":"Remove the personal data."}')
+      completion('{"violates":false,"reason":"Keine personenbezogenen Daten."}')
     );
     vi.spyOn(f.usageGovernance, "recordModelUsage").mockRejectedValueOnce(
       new Error("Storage unavailable")
     );
+    // An answer whose usage could not be recorded is no answer: the rule was not evaluated.
     await expect(f.workflow.createRequest(user, context, command)).rejects.toMatchObject({
-      code: "INTERNAL",
-      message: "Approval check usage could not be recorded"
+      code: "VALIDATION_FAILED",
+      message: `Approval request blocked: Check '${rule.id}' could not be evaluated. Try again later.`
     });
     expect(
       await f.store.approvals.listApprovalRequests({ clientInstanceId, kinds: [command.kind] })

@@ -59,6 +59,7 @@ import {
 } from "./conversation-title";
 import { isActiveRun, isMissingLocalRuntimeState, recoverInterruptedRun } from "./run-recovery";
 import { generateConversationTitleJob } from "./job-kinds";
+import { modelBindingRefOf, reasoningEffortTheModelTakes } from "./system-model-call";
 import type { ChatServerOptions } from "./types";
 
 export interface CreateConversationCommand {
@@ -85,7 +86,6 @@ export interface StartedConversationMessageRun {
   runId: AgentRunId;
 }
 
-const CONVERSATION_TITLE_AGENT_NAME = "conversation_title";
 const MAX_TITLE_SOURCE_CHARS = 800;
 // How long a repeated run start waits for the first one with the same idempotency key, and how
 // often it looks. A caller that waits longer gets 409 "Run start command is still pending".
@@ -151,7 +151,7 @@ export class ConversationWorkflow {
       const offered = selection
         ? reasoningEffortChoiceForBinding(
             binding,
-            selection.provider,
+            this.options.modelGateway.capabilities({ bindingId: binding.id }).reasoningEfforts,
             (agent && defaultReasoningEffortForAgentBinding(agent, binding)) ??
               selection.reasoningEffort
           ).selectable
@@ -877,12 +877,6 @@ export class ConversationWorkflow {
     if (!user) {
       return;
     }
-    const context: RuntimeCallContext = {
-      user,
-      clientInstanceId: this.options.clientInstanceId,
-      correlationId: input.correlationId,
-      signal: control.signal
-    };
     let conversation: Conversation;
     try {
       conversation = await this.requireConversationAccess(conversationId, user);
@@ -909,40 +903,29 @@ export class ConversationWorkflow {
     }
 
     const modelSelection = getModelSelectionForConversationTitles(this.options.config);
-    const runId = createPlatformId<"AgentRunId">("run");
+    const binding = modelBindingRefOf(modelSelection);
 
     try {
-      const attribution = {
-        kind: "agent_run" as const,
-        conversationId,
-        runId,
-        agentName: CONVERSATION_TITLE_AGENT_NAME,
-        userId: input.userId
-      };
-      const completion = await this.options.usageGovernance.runModelCall(
-        { clientInstanceId: this.options.clientInstanceId, attribution },
-        async () => {
-          const result = await this.options.modelProvider.complete(
-            {
-              providerId: modelSelection.provider.id,
-              model: modelSelection.model,
-              reasoningEffort: modelSelection.reasoningEffort,
-              messages: createTitlePrompt(firstUserMessage),
-              tools: []
-            },
-            context
-          );
-          await this.options.usageGovernance.recordModelUsage({
-            clientInstanceId: this.options.clientInstanceId,
-            attribution,
-            providerId: modelSelection.provider.id,
-            model: modelSelection.model,
-            correlationId: context.correlationId,
-            ...result.usage
-          });
-          return result;
-        }
-      );
+      const completion = await this.options.modelGateway.complete({
+        binding,
+        messages: createTitlePrompt(firstUserMessage),
+        tools: [],
+        reasoningEffort: reasoningEffortTheModelTakes(
+          this.options.modelGateway,
+          binding,
+          modelSelection.reasoningEffort
+        ),
+        attribution: {
+          kind: "system",
+          purpose: "conversation_title",
+          conversationId,
+          userId: input.userId,
+          workspaceId: conversation.collaborationWorkspaceId
+        },
+        clientInstanceId: this.options.clientInstanceId,
+        correlationId: input.correlationId,
+        signal: control.signal
+      });
       const title = normalizeGeneratedConversationTitle(completion.text);
       if (!isUsableGeneratedTitle(title) || title === conversation.title) {
         return;
@@ -967,9 +950,8 @@ export class ConversationWorkflow {
         status: "success",
         actor: auditActorFromUser(user),
         subject: conversationId,
-        correlationId: context.correlationId,
+        correlationId: input.correlationId,
         metadata: {
-          runId,
           providerId: modelSelection.provider.id,
           model: modelSelection.model,
           previousTitleLength: conversation.title.length,
@@ -986,9 +968,8 @@ export class ConversationWorkflow {
         status: "failed",
         actor: auditActorFromUser(user),
         subject: conversationId,
-        correlationId: context.correlationId,
+        correlationId: input.correlationId,
         metadata: {
-          runId,
           providerId: modelSelection.provider.id,
           model: modelSelection.model,
           ...toAuditErrorMetadata(error)

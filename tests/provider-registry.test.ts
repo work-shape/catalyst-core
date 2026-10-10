@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createEnvironmentSecrets } from "@vivd-catalyst/client-assembly";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
+  asClientInstanceId,
   createProvider,
   defineProvider,
   ProviderRegistry,
@@ -17,22 +18,31 @@ import { mailProviderDefinitions } from "@vivd-catalyst/mail";
 import {
   createInstanceModelGateway,
   modelProviderDefinitions,
-  type ModelAdapterFactory
+  type ModelAdapterFactory,
+  type ModelCall,
+  type ModelCallGovernance
 } from "@vivd-catalyst/model-provider";
 import { adapterFromFakeProvider } from "./support/model-gateway";
 import { createFailingTestLogger, createFakeSecrets } from "./support/fixtures";
 import { createTestInstanceOnSecrets } from "./support/test-instance";
 
 const logger = createFailingTestLogger("A provider must not log an error in this test");
-// The unsettled completion these tests call admits and records nothing.
-const unusedGovernance = {
-  runModelCall(): never {
-    throw new Error("No model call is admitted in this test");
-  },
-  recordModelUsage(): never {
-    throw new Error("No usage is recorded in this test");
-  }
+// These tests are about which adapter answers; every call is admitted and its usage dropped.
+const admitEverything: ModelCallGovernance = {
+  runModelCall: (_call, execute) => execute(),
+  recordModelUsage: async () => undefined
 };
+
+function callTo(model: string): ModelCall {
+  return {
+    binding: { providerId: "main", model },
+    messages: [{ role: "user", content: "hello" }],
+    tools: [],
+    attribution: { kind: "system", purpose: "conversation_title" },
+    clientInstanceId: asClientInstanceId("provider-registry-test"),
+    correlationId: "provider-registry-test"
+  };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -133,7 +143,7 @@ describe("instance startup on the secret resolver", () => {
     };
     const providers = await createInstanceModelGateway({
       bindings: [],
-      governance: unusedGovernance,
+      governance: admitEverything,
       registry: new ProviderRegistry(modelProviderDefinitions),
       providers: [{ id: "main", type: "openai-compatible", model: "test-model", region: "eu" }],
       entries,
@@ -146,15 +156,7 @@ describe("instance startup on the secret resolver", () => {
       }
     });
 
-    await providers.unsettled.complete(
-      {
-        providerId: "main",
-        model: "test-model",
-        messages: [{ role: "user", content: "hello" }],
-        tools: []
-      },
-      {}
-    );
+    await providers.complete(callTo("test-model"));
 
     const [url, init] = fetchMock.mock.calls[0] ?? [];
     expect(String(url)).toBe("https://models.example.test/v1/chat/completions");
@@ -392,7 +394,7 @@ describe("provider registry", () => {
 
     const providers = await createInstanceModelGateway({
       bindings: [],
-      governance: unusedGovernance,
+      governance: admitEverything,
       registry,
       providers: [{ id: "main", type: "capability-model", model: "m", region: "eu" }],
       entries: {
@@ -407,17 +409,7 @@ describe("provider registry", () => {
     });
 
     expect(created).toEqual(["resolved"]);
-    await expect(
-      providers.unsettled.complete(
-        {
-          providerId: "main",
-          model: "m",
-          messages: [{ role: "user", content: "hello" }],
-          tools: []
-        },
-        {}
-      )
-    ).resolves.toBeDefined();
+    await expect(providers.complete(callTo("m"))).resolves.toBeDefined();
   });
 
   it("creates a provider with the secrets its schema names", async () => {

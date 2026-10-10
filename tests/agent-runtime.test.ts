@@ -1,4 +1,8 @@
-import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
+import {
+  withoutStreaming,
+  withTestModelGateway,
+  type FakeModelProvider
+} from "./support/model-gateway";
 import { type TestStore, createTestInstance } from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -1833,7 +1837,7 @@ describe("local agent runtime", () => {
             modelProviders: [providerConfig],
             defaultModelProvider: providerConfig,
             conversationHistory: store.conversations,
-            modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
+            modelProvider: withoutStreaming(provider),
             toolRegistry: new ToolRegistry({ tools: [] }),
             toolExecution: createUnusedToolExecution(),
             usageGovernance: new ModelUsageGovernance({
@@ -3409,7 +3413,7 @@ async function storedContinuationFixture(name: string, encryptedContent: string)
       defaultModelProvider: providerConfig,
       conversationHistory: store.conversations,
       modelProviderContinuationStore: store.conversations,
-      modelProvider: { id: provider.id, complete: provider.complete.bind(provider) },
+      modelProvider: withoutStreaming(provider),
       toolRegistry: new ToolRegistry({ tools: [] }),
       toolExecution: createUnusedToolExecution(),
       usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })

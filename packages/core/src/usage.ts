@@ -61,8 +61,11 @@ export type UsageCostRecord = SettledUsageCostRecord | IncompleteUsageCostRecord
 export interface ModelUsageEvent extends ModelTokenUsage {
   id: ModelUsageEventId;
   clientInstanceId: ClientInstanceId;
-  conversationId: ConversationId;
-  agentRunId: AgentRunId;
+  /** Absent for a call no conversation caused. */
+  conversationId?: ConversationId;
+  /** Absent for a call the product made for itself. */
+  agentRunId?: AgentRunId;
+  /** The agent of the run, or for a call the product made for itself what it was for. */
   agentName: string;
   providerId: string;
   model: string;
@@ -117,8 +120,8 @@ export interface ModelUsageEventInput extends ModelTokenUsage {
 
 export interface ModelUsageEventRecordInput extends ModelTokenUsage {
   clientInstanceId: ClientInstanceId;
-  conversationId: ConversationId;
-  agentRunId: AgentRunId;
+  conversationId?: ConversationId;
+  agentRunId?: AgentRunId;
   agentName: string;
   providerId: string;
   model: string;
