@@ -75,6 +75,7 @@ import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
+import { createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
@@ -126,6 +127,7 @@ export async function createClientInstanceApp(
     managedObjects,
     jobRetries,
     workspaceObjectStore,
+    pages,
     auditRecorder,
     usageGovernance,
     modelGateway
@@ -166,6 +168,7 @@ export async function createClientInstanceApp(
     attachments,
     managedObjects,
     jobRetries,
+    pages,
     executionWorkspaceCleanup: workspaceObjectStore
       ? {
           store: store.executionWorkspaces,
@@ -252,6 +255,7 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)
     : undefined;
+  const pages = await createInstancePages({ config, modules, infrastructure });
   const modelProviders = getModelProviderConfigs(config);
   // Before the capabilities: one of them may call a model, and asks at startup what the model
   // of its binding can do.
@@ -505,6 +509,7 @@ export async function createClientInstanceExecutionAssembly(
     managedObjects,
     jobRetries,
     workspaceObjectStore,
+    pages,
     auditRecorder,
     assetSource,
     usageGovernance,

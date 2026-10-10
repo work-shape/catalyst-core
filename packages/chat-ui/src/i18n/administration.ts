@@ -131,6 +131,9 @@ export const administration = defineTranslations({
     "modules.assetManagementDescription": "Changing agents and skills in the interface.",
     "modules.userInvitations": "User invitations",
     "modules.userInvitationsDescription": "Inviting a user by an emailed link to set a password.",
+    "modules.apps": "Apps",
+    "modules.appsDescription":
+      "The Pages of a conversation and the sandboxed frame that shows them.",
     newPasswordsDoNotMatch: "New passwords do not match",
     passwordUpdated: "Password updated",
     passwordUpdateFailed: "Password update failed",
@@ -302,6 +305,9 @@ export const administration = defineTranslations({
     "modules.userInvitations": "Einladungen",
     "modules.userInvitationsDescription":
       "Benutzer per E-Mail-Link einladen, über den sie ein Passwort festlegen.",
+    "modules.apps": "Apps",
+    "modules.appsDescription":
+      "Die Pages einer Unterhaltung und der abgeschirmte Rahmen, der sie anzeigt.",
     passwordUpdated: "Passwort aktualisiert",
     passwordUpdateFailed: "Passwortaktualisierung fehlgeschlagen",
     profile: "Profil",

@@ -73,6 +73,7 @@ function secretProviderDefinitions(
 }
 
 const SECRETS_PATH = "infrastructure.secrets";
+export const FILES_STORE_PATH = "infrastructure.objectStorage.files";
 export const WORKSPACE_STORE_PATH = "infrastructure.objectStorage.workspaces";
 export const SANDBOX_PATH = "infrastructure.sandbox";
 
@@ -137,7 +138,7 @@ export function infrastructureEntries(
   const single: [ProviderPort, string, unknown][] = [
     ["secrets", SECRETS_PATH, secrets],
     ["mail", "infrastructure.mail", mail],
-    ["objectStorage", "infrastructure.objectStorage.files", objectStorage.files],
+    ["objectStorage", FILES_STORE_PATH, objectStorage.files],
     ["objectStorage", WORKSPACE_STORE_PATH, objectStorage.workspaces],
     ["sandbox", SANDBOX_PATH, sandbox]
   ];
@@ -164,6 +165,19 @@ export async function createWorkspacesStore(
     objectStorageProviderDefinitions,
     "objectStorage",
     { path: WORKSPACE_STORE_PATH, entry: config.infrastructure.objectStorage.workspaces },
+    context
+  );
+}
+
+/** The `files` object store of an instance. The Pages of the `apps` module keep their files there. */
+export async function createFilesStore(
+  config: ClientInstanceConfig,
+  context: ProviderCreateContext
+): Promise<ObjectStorage> {
+  return createProvider(
+    objectStorageProviderDefinitions,
+    "objectStorage",
+    { path: FILES_STORE_PATH, entry: config.infrastructure.objectStorage.files },
     context
   );
 }

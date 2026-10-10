@@ -35,8 +35,25 @@ const userInvitationsModule = defineModule({
   ui: ["settings.users.invitation"]
 });
 
+/** Pages: the file sets a conversation keeps, their history and the route that serves them. */
+const appsModule = defineModule({
+  name: "apps",
+  operations: [
+    "pages.list",
+    "pages.get",
+    "pages.files.get",
+    "pages.preview",
+    "app_content.files.get"
+  ]
+});
+
 /** The modules whose code ships with the platform. A capability declares its own. */
-export const platformModules = [resourcesModule, assetManagementModule, userInvitationsModule];
+export const platformModules = [
+  resourcesModule,
+  assetManagementModule,
+  userInvitationsModule,
+  appsModule
+];
 
 export interface InstanceModules {
   /** The modules this build ships: the platform's and each capability's. */
