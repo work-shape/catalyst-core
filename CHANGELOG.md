@@ -103,6 +103,30 @@ contain breaking changes; a patch version does not.
   of these writes is replaced by the asset's `expectedRevision`. Three migrations (0047 to 0049)
   tie an asset a workspace owns to that workspace: deleting the workspace deletes its assets and
   the grants on them.
+- **Operations:** an agent's tool call is a call of an operation. Every tool call leaves an
+  Operation Run with the person as actor and the agent, conversation and tool as origin, and a
+  tool is handed its run as `context.operationRun`. A capability's model call that passes it on
+  (`workspaceId` and `operationRunId` of `models.complete`) is a usage row of that person,
+  workspace and run. A call the policy
+  sends to another person is held: the answer over HTTP is `202` with the run, an approval
+  request of the kind `operation_call` appears in the **Inbox** of everyone who holds the new
+  right `operations.approve` (admins hold it by default, and the legacy permission
+  `agent_skills.approve` includes it), and the agent is told that its call has not run. The
+  request shows the operation, who called it, through which agent, and the input. Approving runs
+  the call once, as the person who made it and with their rights of that moment; the caller may
+  approve their own call when they hold the right. A second or late decision is refused with
+  `409`. Declining or withdrawing ends the run as `denied` with the reason `DECLINED`. A call
+  whose caller lost the right, whose policy became `deny` or whose target changed is not run: its
+  request ends as superseded. A held call expires after seven days. One person may have 25 calls
+  waiting and an instance 2,000; a held input may be 256 KiB; one more is refused and says so.
+  The page **Instance > Operations** in the settings lists the runs with filters for operation,
+  status, origin and workspace and shows one run with its decision and correlation id, without
+  input or output; it needs `audit.view`. Two scheduled job kinds keep runs from staying open:
+  `operation_runs.expire` every five minutes and `operation_runs.recover` every minute, which
+  fails a run whose process is gone as `interrupted`. Deleting a conversation deletes the runs
+  its agents caused, and the audit retention also removes ended runs no conversation caused.
+  Migration `0050_operation_run_list_indexes` adds four indexes, created concurrently.
+
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
   `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
   caller who is authenticated; a call without a credential gets `401` as on any route. Its agent tools are not offered to the model and cannot be called,
@@ -312,6 +336,18 @@ id from config_assets where status = 'deleted')`.
   dark square at the bottom right that follows the colour scheme by itself. It replaces the
   shield in `packages/chat-ui/assets/favicon.svg`, the standalone app, the demo client and the
   docs site. A client that ships its own `favicon.svg` keeps it.
+- **Tools:** `defineTool` requires `effect: "reading" | "changing"`. A tool that only reads
+  declares `reading`; one that writes, sends, spends or starts work declares `changing`. An
+  assembly whose tool lacks it does not compile. The audit log records a tool call as
+  `operation.authorization_checked`, `operation.started`, `operation.completed`,
+  `operation.failed` or `operation.denied` with the tool's name as operation; the events
+  `tool.authorization_checked`, `tool.started`, `tool.completed` and `tool.failed` are no longer
+  written, and rows already stored keep their labels. `InProcessToolExecution`,
+  `ToolAuthorizationDecision` and the `toolExecution` option of the local agent runtime are
+  removed; an assembly built on `createClientInstanceApp` needs no change beyond `effect`.
+- **Startup:** an enabled tool with the mode `approval_required` still stops the start until an
+  agent's run can be paused, and the message names that. A tool that declares `reading` together
+  with `approval_required` is refused too, because an approval cannot hold a read.
 - **Views:** a view can no longer move its own frame to another host. Every view is framed in
   a shell document the instance serves at `/app-runtime/view-shell/1/shell.html`, with the
   header `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'self'
