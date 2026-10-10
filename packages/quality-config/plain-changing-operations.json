@@ -1,0 +1,302 @@
+{
+  "changing": {
+    "access_tokens.exchange": {
+      "class": "identity",
+      "reason": "This operation establishes the actor."
+    },
+    "api_credentials.create": {
+      "class": "pending",
+      "ticket": "CONV-4"
+    },
+    "api_credentials.revoke": {
+      "class": "pending",
+      "ticket": "CONV-4"
+    },
+    "approval_requests.decide": {
+      "class": "decision",
+      "reason": "A decision on a held call cannot itself be held."
+    },
+    "approval_requests.revert": {
+      "class": "decision",
+      "reason": "A decision on a held call cannot itself be held."
+    },
+    "approval_requests.withdraw": {
+      "class": "decision",
+      "reason": "A decision on a held call cannot itself be held."
+    },
+    "config_agents.set_availability": {
+      "class": "pending",
+      "ticket": "CONV-5"
+    },
+    "config_agents.set_default": {
+      "class": "pending",
+      "ticket": "CONV-5"
+    },
+    "config_assets.replace": {
+      "class": "pending",
+      "ticket": "CONV-2b"
+    },
+    "conversations.artifacts.retry_preview": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.artifacts.start_preview": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.attachments.start_preview": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.create": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.delete": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.draft_attachments.delete": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.draft_attachments.retry": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.draft_attachments.upload": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.move": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.rename": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.runs.cancel": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.runs.command": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.runs.create": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "conversations.runs.start": {
+      "class": "conversation",
+      "reason": "The Agent Run is the record for this operation."
+    },
+    "me.delete": {
+      "class": "own_account",
+      "reason": "The signed-in person changes their own account."
+    },
+    "me.model_preference.set": {
+      "class": "own_account",
+      "reason": "The signed-in person changes their own account."
+    },
+    "me.password.change": {
+      "class": "own_account",
+      "reason": "The signed-in person changes their own account."
+    },
+    "me.update": {
+      "class": "own_account",
+      "reason": "The signed-in person changes their own account."
+    },
+    "namespaces.create": {
+      "class": "pending",
+      "ticket": "CONV-3"
+    },
+    "namespaces.delete": {
+      "class": "pending",
+      "ticket": "CONV-3"
+    },
+    "namespaces.update": {
+      "class": "pending",
+      "ticket": "CONV-3"
+    },
+    "password_reset.request": {
+      "class": "own_account",
+      "reason": "This operation restores access to the person's own account."
+    },
+    "password_setup.complete": {
+      "class": "own_account",
+      "reason": "This operation restores access to the person's own account."
+    },
+    "permissions.grant": {
+      "class": "pending",
+      "ticket": "CONV-3"
+    },
+    "permissions.revoke": {
+      "class": "pending",
+      "ticket": "CONV-3"
+    },
+    "service_principals.create": {
+      "class": "pending",
+      "ticket": "CONV-4"
+    },
+    "service_principals.update": {
+      "class": "pending",
+      "ticket": "CONV-4"
+    },
+    "session_tokens.issue": {
+      "class": "identity",
+      "reason": "This operation establishes the actor."
+    },
+    "users.create": {
+      "class": "pending",
+      "ticket": "CONV-6"
+    },
+    "users.delete": {
+      "class": "pending",
+      "ticket": "CONV-6"
+    },
+    "users.identities.delete": {
+      "class": "pending",
+      "ticket": "CONV-6"
+    },
+    "users.identities.upsert": {
+      "class": "pending",
+      "ticket": "CONV-6"
+    },
+    "users.invitation.send": {
+      "class": "pending",
+      "ticket": "CONV-6"
+    },
+    "users.password.reset": {
+      "class": "pending",
+      "ticket": "CONV-6"
+    },
+    "users.update": {
+      "class": "pending",
+      "ticket": "CONV-6"
+    },
+    "workspaces.access_requests.approve": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.access_requests.create": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.access_requests.decline": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.create": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.delete": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.ensure_personal": {
+      "class": "own_account",
+      "reason": "The interface calls this on every load, so an Operation Run per page load would record a hot path for no benefit."
+    },
+    "workspaces.members.add": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.members.leave": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.members.remove": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.members.update_role": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    },
+    "workspaces.update": {
+      "class": "pending",
+      "ticket": "CONV-7"
+    }
+  },
+  "rightDecidedBy": {
+    "access_tokens.exchange": "public",
+    "app_content.files.get": "public",
+    "approval_requests.count_pending": "own",
+    "approval_requests.decide": "own",
+    "approval_requests.get": "own",
+    "approval_requests.list": "own",
+    "approval_requests.list_mine": "own",
+    "approval_requests.revert": "own",
+    "approval_requests.withdraw": "own",
+    "branding.get": "public",
+    "captured_mail.list": "public",
+    "config.get": "own",
+    "conversations.artifacts.get_content": "conversation_access",
+    "conversations.artifacts.get_preview": "conversation_access",
+    "conversations.artifacts.retry_preview": "conversation_access",
+    "conversations.artifacts.start_preview": "conversation_access",
+    "conversations.attachments.get_preview": "conversation_access",
+    "conversations.attachments.start_preview": "conversation_access",
+    "conversations.create": "workspace_role",
+    "conversations.delete": "conversation_access",
+    "conversations.draft_attachments.delete": "conversation_access",
+    "conversations.draft_attachments.list": "conversation_access",
+    "conversations.draft_attachments.retry": "conversation_access",
+    "conversations.draft_attachments.upload": "conversation_access",
+    "conversations.files.get_content": "conversation_access",
+    "conversations.list": "own",
+    "conversations.messages.list": "conversation_access",
+    "conversations.move": "conversation_access",
+    "conversations.rename": "conversation_access",
+    "conversations.resources.list": "conversation_access",
+    "conversations.runs.cancel": "conversation_access",
+    "conversations.runs.command": "conversation_access",
+    "conversations.runs.create": "workspace_role",
+    "conversations.runs.observe": "conversation_access",
+    "conversations.runs.start": "conversation_access",
+    "conversations.structured_data.get": "conversation_access",
+    "conversations.thread.get": "conversation_access",
+    "docs.get": "own",
+    "health.get": "public",
+    "me.delete": "own",
+    "me.get": "own",
+    "me.model_preference.get": "own",
+    "me.model_preference.set": "own",
+    "me.password.change": "own",
+    "me.update": "own",
+    "openapi.get": "own",
+    "operations.get_run": "own",
+    "pages.files.get": "conversation_access",
+    "pages.get": "conversation_access",
+    "pages.list": "conversation_access",
+    "pages.preview": "conversation_access",
+    "password_reset.request": "public",
+    "password_setup.complete": "public",
+    "ready.get": "public",
+    "session_tokens.issue": "public",
+    "view_runtime.files.get": "public",
+    "view_shell.files.get": "public",
+    "workspaces.access_requests.approve": "workspace_role",
+    "workspaces.access_requests.create": "own",
+    "workspaces.access_requests.decline": "workspace_role",
+    "workspaces.access_requests.list": "workspace_role",
+    "workspaces.agents.list": "workspace_role",
+    "workspaces.create": "own",
+    "workspaces.delete": "workspace_role",
+    "workspaces.deletion_impact.get": "workspace_role",
+    "workspaces.directory.list": "own",
+    "workspaces.ensure_personal": "own",
+    "workspaces.get": "workspace_role",
+    "workspaces.list": "own",
+    "workspaces.member_candidates.list": "workspace_role",
+    "workspaces.members.add": "workspace_role",
+    "workspaces.members.leave": "workspace_role",
+    "workspaces.members.list": "workspace_role",
+    "workspaces.members.remove": "workspace_role",
+    "workspaces.members.update_role": "workspace_role",
+    "workspaces.update": "workspace_role"
+  }
+}

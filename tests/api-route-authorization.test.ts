@@ -1,6 +1,13 @@
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { describe, expect, it } from "vitest";
-import { apiOperations, type ApiOperationName, type Operation } from "@vivd-catalyst/api-contract";
+import { readFileSync } from "node:fs";
+import { z } from "zod";
+import {
+  apiOperations,
+  isRegisteredOperation,
+  type ApiOperationName,
+  type Operation
+} from "@vivd-catalyst/api-contract";
 import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
 import { platformModules } from "@vivd-catalyst/client-assembly";
 import { createModuleRegistry } from "@vivd-catalyst/core";
@@ -18,32 +25,6 @@ import { createTestInstanceWith, listTestRoutes, type TestInstance } from "./sup
 
 const authAdapter = createCallerAuthAdapter();
 let instance: TestInstance;
-beforeAll(async () => {
-  instance = await createTestInstanceWith((stores) => ({
-    authAdapter,
-    // Every module is on: an operation of a module that is off answers 404 before any of the
-    // refusals this file asks for.
-    modules: createModuleRegistry(platformModules).snapshot(
-      Object.fromEntries(platformModules.map((module) => [module.name, { enabled: true }]))
-    ),
-    approvalRequests: { store: stores.approvals, handlers: new Map() },
-    allowedOrigins: ["https://ui.example.test"],
-    mail: {
-      sender: { send: () => Promise.resolve({ ok: true }) },
-      appUrl: "https://ui.example.test",
-      listCaptured: () => []
-    },
-    sessionToken: {
-      serverCredential: "route-authorization-server-credential",
-      issuer: new HmacSessionTokenIssuer({
-        secret: "route-authorization-session-token-secret",
-        issuer: "test",
-        clientInstanceId: "route_authorization_test",
-        ttlSeconds: 60
-      })
-    }
-  }));
-});
 
 const names = Object.keys(apiOperations).filter(
   (name): name is ApiOperationName => name in apiOperations
@@ -105,6 +86,33 @@ function call(name: ApiOperationName, as: ReturnType<typeof asCaller>, headers =
 const everyRight = { roles: ["superadmin"], permissions: [...PERMISSIONS] };
 
 describe("every operation of the catalog", () => {
+  beforeAll(async () => {
+    instance = await createTestInstanceWith((stores) => ({
+      authAdapter,
+      // Every module is on: an operation of a module that is off answers 404 before any of the
+      // refusals this file asks for.
+      modules: createModuleRegistry(platformModules).snapshot(
+        Object.fromEntries(platformModules.map((module) => [module.name, { enabled: true }]))
+      ),
+      approvalRequests: { store: stores.approvals, handlers: new Map() },
+      allowedOrigins: ["https://ui.example.test"],
+      mail: {
+        sender: { send: () => Promise.resolve({ ok: true }) },
+        appUrl: "https://ui.example.test",
+        listCaptured: () => []
+      },
+      sessionToken: {
+        serverCredential: "route-authorization-server-credential",
+        issuer: new HmacSessionTokenIssuer({
+          secret: "route-authorization-session-token-secret",
+          issuer: "test",
+          clientInstanceId: "route_authorization_test",
+          ttlSeconds: 60
+        })
+      }
+    }));
+  });
+
   // This instance runs without the sign-in library, so its mount is absent. The preflight
   // route belongs to the CORS plugin.
   it("is registered, and nothing else is", async () => {
@@ -275,4 +283,60 @@ describe("every operation of the catalog", () => {
       });
     }
   );
+});
+
+// The list of plain operations is data a person reads: which changing operations are not an
+// Operation Run and why, and where the right of an operation without `requires` is decided.
+// These tests read the catalog and two files and need no database.
+describe("a changing operation is registered or named as plain", () => {
+  const readJson = (path: string): unknown =>
+    JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+  const classes = ["identity", "own_account", "decision", "conversation", "pending"] as const;
+  const list = z
+    .strictObject({
+      changing: z.record(
+        z.string(),
+        z.union([
+          // A pending operation names the ticket that registers or deletes it.
+          z.strictObject({ class: z.literal("pending"), ticket: z.string().regex(/^CONV-\w+$/u) }),
+          z.strictObject({
+            class: z.enum(classes).exclude(["pending"]),
+            reason: z.string().trim().min(1)
+          })
+        ])
+      ),
+      rightDecidedBy: z.record(
+        z.string(),
+        z.enum(["workspace_role", "conversation_access", "own", "public"])
+      )
+    })
+    .parse(readJson("../packages/quality-config/plain-changing-operations.json"));
+  const baseline = z
+    .object({
+      entries: z.array(
+        z.object({ target: z.string(), rule: z.string(), scope: z.string(), count: z.number() })
+      )
+    })
+    .parse(readJson("../quality-baseline.json"));
+  const plain = names.filter((name) => !isRegisteredOperation(descriptor(name)));
+  const plainChanging = plain.filter((name) => descriptor(name).effect === "changing");
+  const withoutRequires = plain.filter((name) => !descriptor(name).requires?.length);
+
+  it("names every plain changing operation, and nothing registered, reading or gone", () => {
+    expect(Object.keys(list.changing).sort()).toEqual([...plainChanging].sort());
+  });
+
+  // A count may only fall: the baseline guard refuses a pull request that raises one, so an
+  // operation cannot be moved into a class that stays plain without that being seen.
+  it.each(classes)("counts the class %s as the baseline does", (kind) => {
+    const counted = Object.values(list.changing).filter((entry) => entry.class === kind).length;
+    const recorded = baseline.entries
+      .filter((entry) => entry.target === "operations" && entry.rule === "plain-changing")
+      .find((entry) => entry.scope === kind);
+    expect({ class: kind, count: counted }).toEqual({ class: kind, count: recorded?.count });
+  });
+
+  it("names where the right of every plain operation without requires is decided", () => {
+    expect(Object.keys(list.rightDecidedBy).sort()).toEqual([...withoutRequires].sort());
+  });
 });

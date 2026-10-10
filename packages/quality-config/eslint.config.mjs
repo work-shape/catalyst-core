@@ -6,6 +6,7 @@ import tseslint from "typescript-eslint";
 import { envBoundaryRule } from "./env-boundary-rule.mjs";
 import { moduleSnapshotBoundaryRule } from "./module-snapshot-rule.mjs";
 import { modelGatewayRules } from "./model-gateway-rules.mjs";
+import { runOperationBoundaryRule } from "./run-operation-rule.mjs";
 
 /**
  * @typedef {import("eslint").Rule.RuleContext} Context
@@ -654,6 +655,14 @@ const plugin = {
         };
       }
     ),
+    "run-operation-boundary": runOperationBoundaryRule({
+      rule,
+      isServerSource,
+      packageAt,
+      isPackageFile,
+      keyName,
+      staticReads
+    }),
     "workspace-command-boundary": rule(
       "A workspace command is queued, read and cancelled only through tool-execution/src/workspace-command-client.ts",
       (filename) => {
