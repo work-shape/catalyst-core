@@ -22,6 +22,7 @@ export interface LayoutGalleryText {
   navItemLink: string;
   navGroupPlain: string;
   navGroupFolding: string;
+  navGroupPinned: string;
   subRailRoutes: string;
   subRailAnchors: string;
   subRailSettings: string;
@@ -170,6 +171,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navItemLink: "As a link",
     navGroupPlain: "Group label",
     navGroupFolding: "Group that folds",
+    navGroupPinned: "Label that stays while its items scroll",
     subRailRoutes: "Routes",
     subRailAnchors: "Anchors",
     subRailSettings: "Settings pages",
@@ -317,6 +319,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navItemLink: "Als Link",
     navGroupPlain: "Gruppenbezeichnung",
     navGroupFolding: "Einklappbare Gruppe",
+    navGroupPinned: "Bezeichnung bleibt stehen, während die Einträge rollen",
     subRailRoutes: "Seiten",
     subRailAnchors: "Anker",
     subRailSettings: "Einstellungsseiten",

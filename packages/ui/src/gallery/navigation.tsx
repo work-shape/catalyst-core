@@ -252,6 +252,28 @@ function NavItemSamples({ text }: { text: GalleryText }) {
           <NavItem>{text.navConversationLease}</NavItem>
         </NavGroup>
       </div>
+      {/* In the scrolling body of a sidebar the label of a group stays at the top. */}
+      <div
+        className="flex h-64 overflow-hidden rounded-lg border max-md:hidden"
+        data-gallery-sample="nav-group-pinned-label"
+      >
+        <Sidebar
+          label={text.navGroupPinned}
+          header={
+            <div className="flex h-(--layout-header) items-center px-2 text-label">
+              {text.navMain}
+            </div>
+          }
+        >
+          <NavGroup label={text.navGroupPinned}>
+            {Array.from({ length: 12 }, (_, index) => (
+              <NavItem key={index}>
+                {index % 2 === 0 ? text.navConversationLease : text.navConversationOffer}
+              </NavItem>
+            ))}
+          </NavGroup>
+        </Sidebar>
+      </div>
     </div>
   );
 }

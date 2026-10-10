@@ -101,14 +101,13 @@ export function useScrollEdgeFade<Element extends HTMLElement>(
     return () => observer.disconnect();
   }, [syncOverflow, revision]);
 
-  const mask = scrollEdgeFadeMask(overflow);
+  return { ref, overflow, onScroll: syncOverflow, style: scrollEdgeFadeStyle(overflow) };
+}
 
-  return {
-    ref,
-    overflow,
-    onScroll: syncOverflow,
-    style: mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined
-  };
+/** The fade for the edges named, for a container that keeps one of its edges clear itself. */
+export function scrollEdgeFadeStyle(overflow: ScrollEdgeOverflow): CSSProperties | undefined {
+  const mask = scrollEdgeFadeMask(overflow);
+  return mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined;
 }
 
 function sameItems(first: readonly unknown[], second: readonly unknown[]): boolean {

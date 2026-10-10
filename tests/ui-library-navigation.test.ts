@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   CountBadge,
   ListRow,
+  NavGroup,
   NavItem,
   PageHeader,
   SaveBar,
@@ -202,6 +203,57 @@ describe("navigation, page structure and data components", () => {
       )
     );
     expect(counted).toMatch(/absolute -top-0\.5 -right-0\.5[^>]*>7<\/span>/u);
+  });
+
+  it("pins a group's label in the scrolling body of a sidebar, and nowhere else", () => {
+    const group = createElement(
+      NavGroup,
+      { key: "g", label: "Recent" },
+      createElement(NavItem, null, "Lease")
+    );
+    const folding = createElement(
+      NavGroup,
+      { key: "f", label: "Folding", collapsible: true },
+      createElement(NavItem, null, "Offer")
+    );
+    const pinned = [
+      "sticky",
+      "top-0",
+      "z-(--layer-sticky-header)",
+      "-mt-2",
+      "h-9",
+      "bg-sidebar",
+      "pt-2"
+    ];
+    const labelClasses = (markup: string) =>
+      Array.from(markup.matchAll(/data-nav-group-label="" class="([^"]*)"/gu), (match) =>
+        (match[1] ?? "").split(" ")
+      );
+
+    const inSidebar = render(
+      createElement(Sidebar, { label: "Main navigation" }, [group, folding])
+    );
+    const sidebarLabels = labelClasses(inSidebar);
+    expect(sidebarLabels).toHaveLength(2);
+    for (const classes of sidebarLabels) {
+      expect(classes).toEqual(expect.arrayContaining(pinned));
+      // The label's own height gives way to the one that holds the room above it.
+      expect(classes).not.toContain("h-7");
+    }
+    // The room above the first group belongs to what scrolls, so the label lies over it.
+    const bodyClasses = inSidebar.match(/data-sidebar-body="" class="([^"]*)"/u)?.[1]?.split(" ");
+    expect(bodyClasses).not.toContain("pt-2");
+    expect(bodyClasses).not.toContain("p-2");
+    expect(inSidebar).toMatch(/data-sidebar-body=""[^>]*><div class="flex flex-col gap-4 pt-2">/u);
+
+    // Outside a sidebar a label is on a surface it does not know, and stays where it is.
+    const alone = labelClasses(render(createElement("div", null, [group, folding])));
+    expect(alone).toHaveLength(2);
+    for (const classes of alone) {
+      expect(classes).toContain("h-7");
+      expect(classes).not.toContain("sticky");
+      expect(classes).not.toContain("bg-sidebar");
+    }
   });
 
   it("ends the sidebar's scrolling body with a line above the footer, and draws none without one", () => {

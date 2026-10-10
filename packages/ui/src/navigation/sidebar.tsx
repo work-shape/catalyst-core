@@ -1,14 +1,15 @@
 import {
   useEffect,
   useRef,
+  useState,
   useSyncExternalStore,
   type HTMLAttributes,
   type ReactNode
 } from "react";
 import { cn } from "../cn";
-import { useScrollEdgeFade } from "../scroll-edge-fade";
+import { scrollEdgeFadeStyle, useScrollEdgeFade } from "../scroll-edge-fade";
 import { OverlayScope } from "../ui-root";
-import { NavCollapsedContext } from "./sidebar-collapsed";
+import { NavCollapsedContext, NavGroupLabelPinnedContext } from "./sidebar-collapsed";
 
 /** The width under which the sidebar leaves the layout and becomes a drawer. */
 const DRAWER_QUERY = "(width < 48rem)";
@@ -53,6 +54,19 @@ export function Sidebar({
   const drawer = useMediaQuery(DRAWER_QUERY);
   const iconsOnly = collapsed && !drawer;
   const body = useScrollEdgeFade<HTMLDivElement>([iconsOnly, drawer]);
+  // A group label pinned at the top of the body covers what scrolls under it, so the body
+  // fades nothing there: the fade would take the label with it.
+  const [labelPinned, setLabelPinned] = useState(false);
+  const onBodyScroll = () => {
+    body.onScroll();
+    const node = body.ref.current;
+    const top = node?.getBoundingClientRect().top;
+    setLabelPinned(
+      Array.from(node?.querySelectorAll("[data-nav-group-label]") ?? []).some(
+        (label) => Math.abs(label.getBoundingClientRect().top - (top ?? 0)) < 1
+      )
+    );
+  };
 
   const frame = (
     <nav
@@ -73,16 +87,23 @@ export function Sidebar({
       {header === undefined ? null : <div className="shrink-0 px-2">{header}</div>}
       <div
         ref={body.ref}
-        style={body.style}
-        onScroll={body.onScroll}
+        style={scrollEdgeFadeStyle({
+          above: body.overflow.above && !labelPinned,
+          below: body.overflow.below
+        })}
+        onScroll={onBodyScroll}
         data-sidebar-body=""
         // Positioned, so that what an item places absolutely or hides for screen readers
         // scrolls with the list and does not lengthen the page.
         // The room under the last item is that between two groups, so the last item scrolls
         // clear of the footer's line.
-        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pt-2 pb-4 [scrollbar-width:thin]"
+        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4 [scrollbar-width:thin]"
       >
-        <div className="flex flex-col gap-4">{children}</div>
+        {/* The room above the first group is the content's, not the body's: a pinned group
+            label lies over it, at the very top of what scrolls. */}
+        <NavGroupLabelPinnedContext value>
+          <div className="flex flex-col gap-4 pt-2">{children}</div>
+        </NavGroupLabelPinnedContext>
       </div>
       {footer === undefined ? null : (
         // A line ends the scrolling body, so its last item does not read as part of the footer.

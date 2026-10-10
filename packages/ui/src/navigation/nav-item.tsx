@@ -1,11 +1,17 @@
 import { Collapsible } from "radix-ui";
 import { ChevronRight } from "lucide-react";
-import { useId, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import {
+  useContext,
+  useId,
+  type ButtonHTMLAttributes,
+  type HTMLAttributes,
+  type ReactNode
+} from "react";
 import { cn } from "../cn";
 import { LinkSlot, splitLinkChild } from "../link-slot";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
-import { useSidebarCollapsed } from "./sidebar-collapsed";
+import { NavGroupLabelPinnedContext, useSidebarCollapsed } from "./sidebar-collapsed";
 
 export interface NavItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** A 16 px icon before the label. A collapsed sidebar shows only items that have one. */
@@ -163,8 +169,16 @@ export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {
 
 const groupLabelClassName =
   "flex h-7 items-center px-2 text-caption font-medium text-muted-foreground";
+// In the scrolling body of a sidebar the label stays at the top while its group is in view.
+// It takes the room above it along, as padding on the sidebar's surface, so no item shows
+// between the label and what stands above the body. Where it rests it stands as without.
+const pinnedGroupLabelClassName =
+  "sticky top-0 z-(--layer-sticky-header) -mt-2 h-9 bg-sidebar pt-2";
 
-/** A run of navigation items under an optional label. Groups are set apart by space, not by a rule. */
+/**
+ * A run of navigation items under an optional label. Groups are set apart by space, not by a
+ * rule. In the scrolling body of a `Sidebar` the label stays in view while its items scroll.
+ */
 export function NavGroup({
   className,
   label,
@@ -176,6 +190,10 @@ export function NavGroup({
   ...props
 }: NavGroupProps) {
   const collapsed = useSidebarCollapsed();
+  const labelClassName = cn(
+    groupLabelClassName,
+    useContext(NavGroupLabelPinnedContext) && pinnedGroupLabelClassName
+  );
   const labelId = useId();
   const groupClassName = cn("grid min-w-0 gap-0.5", collapsed && "justify-items-center", className);
 
@@ -190,7 +208,7 @@ export function NavGroup({
   if (!collapsible) {
     return (
       <div role="group" aria-labelledby={labelId} className={groupClassName} {...props}>
-        <span id={labelId} className={groupLabelClassName}>
+        <span id={labelId} data-nav-group-label="" className={labelClassName}>
           {label}
         </span>
         {children}
@@ -209,8 +227,9 @@ export function NavGroup({
     >
       <Collapsible.Trigger
         id={labelId}
+        data-nav-group-label=""
         className={cn(
-          groupLabelClassName,
+          labelClassName,
           "group/nav-group-label w-full gap-1 rounded-md text-left transition-colors hover:text-foreground focus-visible:focus-ring"
         )}
       >

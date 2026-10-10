@@ -160,6 +160,58 @@ test("navigation items, list rows, sections and the save bar keep their measures
   expect(await root.locator('[data-gallery-entry="CountBadge"]').innerText()).toContain("99+");
 });
 
+// Fails without the pinned label: it scrolled away with the items, and an item cut in half
+// stood against the row above the list.
+test("a group's label stays at the top of a sidebar's body while its items scroll under it", async ({
+  page
+}) => {
+  const root = await openGallery(page, "Navigation");
+  const sample = root.locator('[data-gallery-sample="nav-group-pinned-label"]');
+  const body = sample.locator("[data-sidebar-body]");
+  const label = sample.locator("[data-nav-group-label]");
+  const measure = () =>
+    body.evaluate((element) => {
+      const top = element.getBoundingClientRect().top;
+      const pinned = element.querySelector("[data-nav-group-label]");
+      const labelBox = pinned?.getBoundingClientRect();
+      // What shows at the top edge of the body, and just under the label.
+      const at = (y: number) =>
+        document.elementFromPoint(element.getBoundingClientRect().left + 40, y);
+      return {
+        labelTop: (labelBox?.top ?? 0) - top,
+        labelHeight: labelBox?.height,
+        labelAtTopEdge: at(top + 1) === pinned,
+        labelAboveItems: at((labelBox?.bottom ?? 0) - 1) === pinned,
+        mask: getComputedStyle(element).maskImage
+      };
+    });
+
+  await expect(label).toHaveText("Label that stays while its items scroll");
+  await sample.scrollIntoViewIfNeeded();
+  const resting = await measure();
+  expect(resting).toMatchObject({ labelTop: 0, labelHeight: 36, labelAtTopEdge: true });
+  expect(await style(label, "padding-top")).toBe("8px");
+  expect(await style(label, "position")).toBe("sticky");
+  expect(await style(label, "background-color")).toBe(
+    await style(sample.locator("nav"), "background-color")
+  );
+
+  await body.evaluate((element) => {
+    element.scrollTop = 100;
+  });
+  await expect.poll(async () => (await measure()).mask).toContain("linear-gradient");
+  const scrolled = await measure();
+  expect(scrolled).toMatchObject({
+    labelTop: 0,
+    labelHeight: 36,
+    labelAtTopEdge: true,
+    labelAboveItems: true
+  });
+  // The body fades its end and not its start: a fade there would take the label with it.
+  expect(scrolled.mask).not.toContain("transparent 0");
+  await expect(label).toBeInViewport();
+});
+
 test("the sidebar is 280 px wide, collapses to icons and is a drawer under 768 px", async ({
   page
 }) => {

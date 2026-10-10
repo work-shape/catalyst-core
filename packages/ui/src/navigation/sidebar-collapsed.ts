@@ -7,3 +7,9 @@ export const NavCollapsedContext = createContext(false);
 export function useSidebarCollapsed(): boolean {
   return useContext(NavCollapsedContext);
 }
+
+/**
+ * Whether a group's label stays in view while its items scroll under it. The scrolling body of
+ * a `Sidebar` sets it.
+ */
+export const NavGroupLabelPinnedContext = createContext(false);
