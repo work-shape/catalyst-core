@@ -22,6 +22,7 @@ import {
   type AgentAvailability
 } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
+import { createHeldModel, HELD_MODEL_PROVIDER } from "./support/held-model";
 import {
   injectStartConversationRun,
   drainRunEvents,
@@ -690,9 +691,15 @@ describe("client instance app vertical slice", () => {
   });
 
   it("cancels a backend run through the cancel route and records cancellation", async () => {
+    // The model stops after its first piece, so the run is in progress when the cancel
+    // arrives, however fast the machine is.
+    const model = createHeldModel();
+    const config = createTestConfig();
+    config.infrastructure.models = { local: { provider: HELD_MODEL_PROVIDER, model: "local" } };
     const app = await createTestInstance({
-      config: createTestConfig(),
+      config,
       env: {},
+      capabilities: [model.capability],
       tools: []
     });
 
@@ -747,6 +754,8 @@ describe("client instance app vertical slice", () => {
       }
       sentPayload += sentDecoder.decode(next.value, { stream: true });
     }
+    // The run has ended as cancelled. The model may go on now; nobody listens to it.
+    model.release();
 
     const auditEvents = await waitForAuditEvents(app, "message.cancelled");
     expect(auditEvents).toContainEqual(
