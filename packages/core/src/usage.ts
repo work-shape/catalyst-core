@@ -150,6 +150,13 @@ export interface ModelCallAdmission {
   request: ModelCallRequestSize;
 }
 
+/**
+ * Output tokens admission reserves for a call whose request states no maximum. With the size
+ * of the request it is what one call holds on the token counters until it ends, so a token
+ * limit at or below it admits no call: config validation refuses such a limit.
+ */
+export const MODEL_CALL_RESERVED_OUTPUT_TOKENS = 16_000;
+
 /** What admission knows of a request before it is sent. */
 export interface ModelCallRequestSize {
   /** The characters of the messages and tool definitions. */

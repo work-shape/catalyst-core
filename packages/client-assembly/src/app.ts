@@ -344,7 +344,10 @@ export async function createClientInstanceExecutionAssembly(
     store: store.usage,
     budget: config.usage.budget,
     safeguards: config.usage.safeguards,
-    costs: config.usage.costs
+    costs: config.usage.costs,
+    freeProviderIds: modelProviders
+      .filter((provider) => provider.type === "deterministic")
+      .map((provider) => provider.id)
   });
   const modelGateway = await createInstanceModelGateway({
     registry: infrastructure.registry,

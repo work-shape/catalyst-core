@@ -1,4 +1,4 @@
-import { AppError } from "@vivd-catalyst/core";
+import { AppError, MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@vivd-catalyst/core";
 import { clientInstanceConfigSchema, type AgentConfig, type ClientInstanceConfig } from "./schemas";
 import { isPasswordMailEnabled } from "./branding";
 import { resolveModuleSwitches } from "./module-normalization";
@@ -24,6 +24,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertExecutionWorkspaceInfrastructure(parsed.data);
   assertModuleSwitches(parsed.data);
   assertConfigReferences(parsed.data);
+  assertTokenSafeguardsAdmitACall(parsed.data);
   assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
   return parsed.data;
@@ -193,6 +194,27 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
       "VALIDATION_FAILED",
       `Conversation title generation references missing model binding '${config.conversationTitles.modelBindingId}'`
     );
+  }
+}
+
+/**
+ * A call reserves `MODEL_CALL_RESERVED_OUTPUT_TOKENS` for its answer and the size of its
+ * request on top, and is admitted only while that fits under the token limits. A limit at or
+ * below the reservation would start an instance that refuses every call.
+ */
+function assertTokenSafeguardsAdmitACall(config: ClientInstanceConfig): void {
+  const { tokensPerDay, tokensPerMonth } = config.usage.safeguards;
+  const limits: [string, number | undefined][] = [
+    ["usage.safeguards.tokensPerDay", tokensPerDay],
+    ["usage.safeguards.tokensPerMonth", tokensPerMonth]
+  ];
+  for (const [key, limit] of limits) {
+    if (limit !== undefined && limit <= MODEL_CALL_RESERVED_OUTPUT_TOKENS) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `${key} is ${limit}, but one model call reserves ${MODEL_CALL_RESERVED_OUTPUT_TOKENS} tokens for its answer and the size of its request on top, so no call would be admitted. Set it above ${MODEL_CALL_RESERVED_OUTPUT_TOKENS} or leave it out`
+      );
+    }
   }
 }
 

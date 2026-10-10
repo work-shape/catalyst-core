@@ -1,5 +1,6 @@
 import {
   AppError,
+  MODEL_CALL_RESERVED_OUTPUT_TOKENS,
   ModelUsageLimitReachedError,
   type AdmittedModelCall,
   type ClientInstanceId,
@@ -36,6 +37,12 @@ export interface ModelUsageGovernanceOptions {
   budget: UsageBudgetConfig;
   safeguards: UsageSafeguardsConfig;
   costs?: UsageCostConfig;
+  /**
+   * The provider entries that run inside the instance and bill nothing: the deterministic
+   * ones. A call to one counts as priced at zero, as config validation takes it, so a spend
+   * budget does not refuse it for having no entry on the rate card.
+   */
+  freeProviderIds?: readonly string[];
   /** What a test sets to have recovery take a call as abandoned sooner. */
   abandonedAfterMs?: number;
 }
@@ -137,8 +144,6 @@ const RECENT_EVENT_COUNT = 25;
  * about four characters a token; three keeps the reservation above what the provider counts.
  */
 const RESERVED_CHARACTERS_PER_INPUT_TOKEN = 3;
-/** Output tokens reserved for a call whose request states no maximum. */
-const RESERVED_OUTPUT_TOKENS = 16_000;
 /**
  * How long a call may stay `pending` before recovery takes it as abandoned and releases its
  * reservation. Well above any call: a call that still ends after it is settled all the same.
@@ -162,6 +167,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   private readonly budget: UsageBudgetConfig;
   private readonly safeguards: UsageSafeguardsConfig;
   private readonly costs: UsageCostConfig;
+  private readonly freeProviderIds: ReadonlySet<string>;
   private readonly abandonedAfterMs: number;
 
   constructor(options: ModelUsageGovernanceOptions) {
@@ -169,6 +175,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     this.budget = options.budget;
     this.safeguards = options.safeguards;
     this.costs = options.costs ?? {};
+    this.freeProviderIds = new Set(options.freeProviderIds ?? []);
     this.abandonedAfterMs = options.abandonedAfterMs ?? USAGE_ABANDONED_AFTER_MS;
   }
 
@@ -370,15 +377,19 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
    * The most a call can use, taken from its request before it is sent: the input by its size,
    * the output by the request's maximum, and both at the highest price the rate card has for
    * the model. With a spend budget, a model without a price is refused: nothing bounds what
-   * its call costs.
+   * its call costs. A provider that bills nothing needs no price: its calls reserve no cost.
    */
   private reservationOf(call: ModelCallAdmission): ModelUsageCounted {
     const inputTokens = Math.ceil(
       normalizeCount(call.request.inputCharacters) / RESERVED_CHARACTERS_PER_INPUT_TOKEN
     );
-    const outputTokens = normalizeCount(call.request.maxOutputTokens ?? RESERVED_OUTPUT_TOKENS);
+    const outputTokens = normalizeCount(
+      call.request.maxOutputTokens ?? MODEL_CALL_RESERVED_OUTPUT_TOKENS
+    );
     const tokens = inputTokens + outputTokens;
-    const costMicros = this.highestCost(call, inputTokens, outputTokens);
+    const costMicros = this.freeProviderIds.has(call.providerId)
+      ? 0
+      : this.highestCost(call, inputTokens, outputTokens);
     if (
       costMicros === undefined &&
       (this.budget.dailySpendLimit || this.budget.monthlySpendLimit)

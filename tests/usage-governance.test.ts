@@ -1,6 +1,8 @@
-import { createTestInstance } from "./support/test-instance";
+import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
+import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
+  MODEL_CALL_RESERVED_OUTPUT_TOKENS,
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
@@ -287,6 +289,59 @@ describe("model usage governance", () => {
         "The model has no price on the rate card; the spend budget cannot be evaluated safely"
     });
   });
+
+  // Fails without the change: config validation asked no price of a deterministic provider,
+  // and admission then refused each of its calls under the spend budget.
+  it("admits a call to a provider that bills nothing under a spend budget, as config validation allows it", async () => {
+    const config = parseClientInstanceConfig({
+      clientInstance: { id: "client-usage-free", displayName: "Free provider" },
+      infrastructure: { models: { local: { provider: "deterministic" } } },
+      modelBindings: [{ id: "judge", providerId: "local", agentSelectable: false }],
+      usage: {
+        budget: { dailySpendLimit: 10 },
+        costs: { customer: { id: "rates", version: "1", currency: "EUR", models: [] } }
+      }
+    });
+    const instance = await createTestInstance({ execution: { config, tools: [], env: {} } });
+    const { modelGateway } = getTestExecution(instance);
+    const clientInstanceId = asClientInstanceId("client-usage-free");
+
+    await expect(
+      modelGateway.complete({
+        binding: { bindingId: "judge" },
+        messages: [{ role: "user", content: "hello" }],
+        tools: [],
+        attribution: { kind: "system", purpose: "guardrail_judge" },
+        clientInstanceId,
+        correlationId: "corr_usage_free"
+      })
+    ).resolves.toMatchObject({ toolCalls: [] });
+    const [event] = await instance.stores.usage.listModelUsageEvents({ clientInstanceId });
+    expect(event).toMatchObject({ providerId: "local", status: "settled" });
+  });
+
+  // Fails without the change: the instance started and refused every call, because one call
+  // reserves more tokens than the limit holds.
+  it.each(["tokensPerDay", "tokensPerMonth"])(
+    "refuses a %s at or below what one call reserves, and names both numbers",
+    (key) => {
+      const withLimit = (limit: number) => ({
+        clientInstance: { id: "client-usage-limit", displayName: "Token limit" },
+        infrastructure: { models: { local: { provider: "deterministic" } } },
+        usage: { safeguards: { [key]: limit } }
+      });
+
+      expect(() => parseClientInstanceConfig(withLimit(10_000))).toThrow(
+        `usage.safeguards.${key} is 10000, but one model call reserves 16000 tokens for its answer and the size of its request on top, so no call would be admitted. Set it above 16000 or leave it out`
+      );
+      expect(() => parseClientInstanceConfig(withLimit(MODEL_CALL_RESERVED_OUTPUT_TOKENS))).toThrow(
+        "so no call would be admitted"
+      );
+      expect(
+        parseClientInstanceConfig(withLimit(MODEL_CALL_RESERVED_OUTPUT_TOKENS + 1)).usage.safeguards
+      ).toMatchObject({ [key]: 16_001 });
+    }
+  );
 
   it("uses the private safety multiplier for budgets without changing billable costs", async () => {
     const { governance, clientInstanceId } = await createGovernance({
