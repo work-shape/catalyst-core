@@ -46,6 +46,9 @@
       "name": "Instance"
     },
     {
+      "name": "Jobs"
+    },
+    {
       "name": "Operations"
     },
     {
@@ -4487,6 +4490,302 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/instance/jobs": {
+      "get": {
+        "operationId": "instance.jobs.list",
+        "summary": "List background jobs, newest first, without their payload",
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/JobStatusList"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "audit.view"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/instance/jobs/summary": {
+      "get": {
+        "operationId": "instance.jobs.summary",
+        "summary": "Count the queued, running, failed and dead background jobs of each kind",
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/JobKindSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "audit.view"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/instance/jobs/{jobId}/retry": {
+      "post": {
+        "operationId": "instance.jobs.retry",
+        "summary": "Queue a failed or dead background job again; superadmins only",
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/instance/service-principals": {
       "get": {
         "operationId": "service_principals.list",
@@ -8052,6 +8351,46 @@
               "$ref": "#/components/schemas/ApiErrorResponse"
             }
           }
+        }
+      },
+      "ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined": {
+        "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it. `DECLINED`: The person asked to approve the call declined it. `details.by` names them, `details.comment` holds their reason where they gave one.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
+      "ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained": {
+        "description": "`CONFLICT`: The request conflicts with the current state of the resource. `IDEMPOTENCY_KEY_REUSED`: The `Idempotency-Key` was already used for another operation or another input. Send a new key. `OPERATION_IN_PROGRESS`: The first call with this `Idempotency-Key` has not ended, or it was interrupted and its outcome is not known (`details.interrupted` is `true`). `details.operationRunId` names its run. An interrupted call is never run again under its key: check what it changed, then send a new key. `OPERATION_EXPIRED`: The call waited for an approval until it expired, and nothing was executed. Call again with a new key. `OUTPUT_NOT_RETAINED`: The call with this `Idempotency-Key` completed, and its answer was too large to keep. Read the result from what the call changed.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "headers": {
+      "OperationRunId": {
+        "description": "`Operation-Run-Id`: The id of the Operation Run that records this call. Set on every answer of a call that got as far as a run, a refusal and a failure included.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Location": {
+        "description": "`Location`: Where the Operation Run of a call that waits for an approval is read.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IdempotentReplayed": {
+        "description": "`Idempotent-Replayed`: `true` when the answer is the recorded one of an earlier call with the same `Idempotency-Key`.",
+        "schema": {
+          "type": "string"
         }
       }
     },
@@ -12334,6 +12673,106 @@
           "chatSessionToken",
           "expiresAt"
         ]
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "subject": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "startedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "finishedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "attempts",
+          "maxAttempts",
+          "createdAt"
+        ]
+      },
+      "JobKindSummary": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "queued": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "running": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "dead": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "waitingSince": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "kind",
+          "queued",
+          "running",
+          "failed",
+          "dead"
+        ]
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "dead",
+          "cancelled"
+        ]
+      },
+      "JobStatusList": {
+        "type": "string",
+        "pattern": "^(?:queued|running|succeeded|failed|dead|cancelled)(?:,(?:queued|running|succeeded|failed|dead|cancelled))*$"
       },
       "LocaleCode": {
         "type": "string",

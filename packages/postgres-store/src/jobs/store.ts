@@ -17,6 +17,7 @@ import type { PostgresConnection } from "../postgres-database";
 import { platformJobs } from "../schema/jobs";
 import { productUsers } from "../schema/users";
 import { collaborationWorkspaces } from "../schema/workspaces";
+import { listJobOverview, retryJob, summarizeJobsByKind } from "./admin-queries";
 
 export type JobRow = typeof platformJobs.$inferSelect;
 
@@ -83,7 +84,14 @@ export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => 
           )
         );
     },
-    pruneEndedJobs: (input) => pruneEndedJobs(db, input)
+    pruneEndedJobs: (input) => pruneEndedJobs(db, input),
+    summarizeByKind: (input) => summarizeJobsByKind(db, input),
+    listOverview: (input) => listJobOverview(db, input),
+    async retry(input) {
+      const result = await retryJob(db, input);
+      if (result.outcome === "requeued") enqueued();
+      return result;
+    }
   };
   connections.set(store, db);
   return store;

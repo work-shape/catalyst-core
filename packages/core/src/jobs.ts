@@ -1,6 +1,7 @@
 import { AppError } from "./errors";
 import type { Brand, ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
+import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
 export type JobId = Brand<string, "JobId">;
@@ -148,6 +149,50 @@ export interface PruneEndedJobsResult {
   failedCount: number;
 }
 
+/**
+ * What an operator is shown of a job. It carries the class of the last error and never the
+ * payload or an error message: a message can quote a provider or a record.
+ */
+export interface JobOverview {
+  id: JobId;
+  kind: string;
+  status: JobStatus;
+  attempts: number;
+  maxAttempts: number;
+  /** The id of the record the job works on. */
+  subject?: string;
+  /** The class of the last error, such as `INTERNAL` or `LEASE_EXPIRED`. */
+  errorCode?: string;
+  createdAt: ISODateString;
+  startedAt?: ISODateString;
+  finishedAt?: ISODateString;
+}
+
+/** Which jobs a list asks for. Every filter that is set must hold. */
+export interface JobListFilters {
+  kind?: string;
+  statuses?: readonly JobStatus[];
+}
+
+/** What one kind has waiting, running and ended in an error. */
+export interface JobKindSummary {
+  kind: string;
+  queued: number;
+  running: number;
+  failed: number;
+  dead: number;
+  /** Since when the longest waiting queued job has been due. Missing when none is due. */
+  waitingSince?: ISODateString;
+}
+
+export type RetryJobResult =
+  | { outcome: "requeued"; job: JobOverview }
+  | { outcome: "not_found" }
+  /** Only a job that ended as `failed` or `dead` is retried. */
+  | { outcome: "not_ended"; status: JobStatus }
+  /** Another job of the kind is queued or running under the same dedupe key. */
+  | { outcome: "superseded" };
+
 export interface JobsStore {
   /**
    * Enqueues a job. Inside `stores.transaction` it commits or rolls back with the subject
@@ -172,6 +217,19 @@ export interface JobsStore {
    * ones 30 days after. A dead job whose subject is still marked for deletion is kept.
    */
   pruneEndedJobs(input: { clientInstanceId: ClientInstanceId }): Promise<PruneEndedJobsResult>;
+  /** Per kind, the jobs that are queued, running, failed and dead. Kinds with none are left out. */
+  summarizeByKind(input: { clientInstanceId: ClientInstanceId }): Promise<JobKindSummary[]>;
+  /** Jobs as an operator sees them, newest first. */
+  listOverview(input: {
+    clientInstanceId: ClientInstanceId;
+    filters?: JobListFilters;
+    page?: StorePage;
+  }): Promise<JobOverview[]>;
+  /**
+   * Queues a `failed` or `dead` job again, due at once, with its attempts reset. The last
+   * error class stays on the row until the next attempt ends.
+   */
+  retry(input: { clientInstanceId: ClientInstanceId; id: string }): Promise<RetryJobResult>;
 }
 
 /** A handler throws this when another attempt cannot help. The job becomes `failed`. */

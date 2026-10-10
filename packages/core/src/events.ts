@@ -312,6 +312,7 @@ export const EVENTS = {
     name: "governance.users_viewed",
     subject: "instance"
   },
+  "job.retried": { ...LEGACY_AUDIT, name: "job.retried", subject: "job" },
   "message.cancelled": { ...LEGACY_AUDIT, name: "message.cancelled", subject: "message" },
   "message.completed": { ...LEGACY_AUDIT, name: "message.completed", subject: "message" },
   "message.created": { ...LEGACY_AUDIT, name: "message.created", subject: "message" },
