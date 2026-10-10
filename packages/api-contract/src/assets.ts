@@ -13,6 +13,20 @@ export const assetScopeSchema = z.discriminatedUnion("kind", [
 
 const revisionNumberSchema = z.number().int().positive();
 
+const NUL = "\u0000";
+const NUL_REFUSAL = "A name must not contain a NUL byte";
+
+/** Text that names assets, whole or in part. No store holds a NUL byte, so none is accepted. */
+function nameText<Schema extends z.ZodType<string>>(schema: Schema) {
+  return schema.refine((value) => !value.includes(NUL), NUL_REFUSAL);
+}
+
+/** A definition as a call carries it. Its kind reads it; only the name is looked at here. */
+const assetDefinitionSchema = configAssetConfigSchema.refine(
+  (config) => typeof config.name !== "string" || !config.name.includes(NUL),
+  { path: ["name"], message: NUL_REFUSAL }
+);
+
 /**
  * The scope a call addresses. Without it the call means the instance's own assets. An asset a
  * workspace owns is reached only by naming that workspace.
@@ -50,16 +64,16 @@ export const assetWarningSchema = z.object({ code: z.string(), message: z.string
 
 export const listAssetsQuerySchema = z.object({
   /** Only names that start with this text, such as a Namespace prefix. */
-  prefix: z.string().min(1).max(200).optional(),
+  prefix: nameText(z.string().min(1).max(200)).optional(),
   /** Only names that contain this text, whatever the case. */
-  text: z.string().min(1).max(200).optional(),
+  text: nameText(z.string().min(1).max(200)).optional(),
   workspaceId: workspaceIdSchema
 });
 
 export const assetScopeQuerySchema = z.object({ workspaceId: workspaceIdSchema });
 
 export const putAssetRequestSchema = z.object({
-  config: configAssetConfigSchema,
+  config: assetDefinitionSchema,
   /**
    * The revision the caller last read. Left out, the call creates the asset and is refused
    * when the name exists.
@@ -91,7 +105,7 @@ export const revertAssetRequestSchema = z.object({
 });
 
 export const validateAssetRequestSchema = z.object({
-  config: configAssetConfigSchema,
+  config: assetDefinitionSchema,
   workspaceId: workspaceIdSchema
 });
 
@@ -109,21 +123,21 @@ export const assetSyncItemSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("put"),
     kind: z.string().min(1),
-    config: configAssetConfigSchema,
+    config: assetDefinitionSchema,
     /** The revision the caller last read. Left out, the item creates the asset. */
     expectedRevision: revisionNumberSchema.optional()
   }),
   z.object({
     type: z.literal("delete"),
     kind: z.string().min(1),
-    name: z.string().min(1),
+    name: nameText(z.string().min(1)),
     expectedRevision: revisionNumberSchema
   })
 ]);
 
 export const syncAssetsRequestSchema = z.object({
   /** The prefix of the one Namespace the batch belongs to. No item may name an asset outside it. */
-  namespace: z.string().min(1),
+  namespace: nameText(z.string().min(1)),
   items: z.array(assetSyncItemSchema).min(1).max(ASSET_SYNC_MAX_ITEMS)
 });
 

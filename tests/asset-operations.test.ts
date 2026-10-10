@@ -537,3 +537,73 @@ describe("the Operation Run of an asset call", () => {
     ).toEqual(done("assets.delete", t.kai.id, "changing"));
   });
 });
+
+describe("a name with a NUL byte", () => {
+  it("is refused readably by every operation that takes a name, and never reaches the store", async () => {
+    const t = await setupNamespace();
+    const name = "kai-\u0000intake";
+    const address = { params: { kind: "agent", name } };
+    const calls: Call[] = [
+      [t.admin.id, "assets.get", address],
+      [t.admin.id, "assets.revisions.list", address],
+      [t.admin.id, "assets.put", { ...address, payload: { config: agent(name) } }],
+      // The definition is read for its name where no address carries one.
+      [
+        t.admin.id,
+        "assets.put",
+        { params: { kind: "agent", name: "kai-intake" }, payload: { config: agent(name) } }
+      ],
+      [t.admin.id, "assets.delete", { ...address, payload: { expectedRevision: 1 } }],
+      [t.admin.id, "assets.revert", { ...address, payload: { revision: 1, expectedRevision: 1 } }],
+      [
+        t.admin.id,
+        "assets.validate",
+        { params: { kind: "agent" }, payload: { config: agent(name) } }
+      ],
+      [t.admin.id, "assets.list", { params: { kind: "agent" }, query: { prefix: "kai-\u0000" } }],
+      [t.admin.id, "assets.list", { params: { kind: "agent" }, query: { text: "\u0000" } }],
+      [
+        t.admin.id,
+        "assets.sync",
+        {
+          payload: {
+            namespace: "kai-",
+            items: [{ type: "put", kind: "agent", config: agent(name) }]
+          }
+        }
+      ],
+      [
+        t.admin.id,
+        "assets.sync",
+        {
+          payload: {
+            namespace: "kai-",
+            items: [{ type: "delete", kind: "agent", name, expectedRevision: 1 }]
+          }
+        }
+      ],
+      [
+        t.admin.id,
+        "assets.sync",
+        {
+          payload: {
+            namespace: "kai-\u0000",
+            items: [{ type: "put", kind: "agent", config: agent("kai-intake") }]
+          }
+        }
+      ]
+    ];
+    for (const [userId, operation, input] of calls) {
+      // The harness reads no revision for the call: the name would not reach its store either.
+      const response = await t.instance.call(operation, {
+        ...input,
+        headers: { "x-test-user": userId }
+      });
+      const label = `${operation} ${JSON.stringify(input)}`;
+      expect(response.statusCode, label).toBe(422);
+      const { error } = errorSchema.parse(response.json());
+      expect(error.code, label).toBe("VALIDATION_FAILED");
+      expect(JSON.stringify(error), label).toContain("A name must not contain a NUL byte");
+    }
+  });
+});

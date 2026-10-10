@@ -244,6 +244,11 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
   };
 }
 
+/** What a path names: an id or a name. No store holds a NUL byte, so none is accepted. */
+const pathParamSchema = z
+  .string()
+  .refine((value) => !value.includes("\u0000"), "A name must not contain a NUL byte");
+
 /**
  * One flat input for every surface: the fields of the body, the query and the path. Two parts
  * that name the same field would hide one of them, so that is refused at registration.
@@ -255,7 +260,9 @@ function operationInputSchema(operation: Operation): z.ZodType {
   const parts: Record<string, z.ZodType>[] = [
     operation.body?.shape ?? {},
     operation.query?.shape ?? {},
-    Object.fromEntries(operationPathParamNames(operation.path).map((name) => [name, z.string()]))
+    Object.fromEntries(
+      operationPathParamNames(operation.path).map((name) => [name, pathParamSchema])
+    )
   ];
   const shape: Record<string, z.ZodType> = {};
   for (const [name, schema] of parts.flatMap((part) => Object.entries(part))) {
