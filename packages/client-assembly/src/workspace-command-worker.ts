@@ -20,7 +20,7 @@ import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
   createSandbox,
-  createWorkspaceObjectStore,
+  createWorkspacesStore,
   SANDBOX_PATH,
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
@@ -72,7 +72,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
     logger
   });
   const clientInstanceId = getClientInstanceId(config);
-  const byteStore = (await createWorkspaceObjectStore(config, infrastructure.context)).fileBytes;
+  const byteStore = await createWorkspacesStore(config, infrastructure.context);
   const auditRecorder = new StoreBackedAuditRecorder({
     clientInstanceId,
     store: store.audit

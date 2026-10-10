@@ -3,6 +3,7 @@ import type {
   ClientInstanceId,
   ConversationId,
   ManagedFileId,
+  ObjectStorage,
   PlatformStores,
   ToolExecutionContext,
   WorkspaceCommand
@@ -12,7 +13,6 @@ import {
   type WorkspaceCommandClient
 } from "../workspace-command-client";
 import type { WorkspaceCommandTelemetry } from "../workspace-command-telemetry";
-import type { WorkspaceFileByteStore, WorkspaceObjectStore } from "../workspace-file-bytes";
 import { DEFAULT_LIMITS, type WorkspaceCommandServiceLimits } from "../workspace-tool-schemas";
 
 export type WorkspaceToolStore = Pick<PlatformStores, "files" | "executionWorkspaces">;
@@ -41,8 +41,10 @@ export interface WorkspaceCommandResultSource {
 export interface WorkspaceCommandServiceOptions {
   /** The stores of the process. A command and its job are queued in one transaction of them. */
   store: Pick<PlatformStores, "files" | "executionWorkspaces" | "transaction">;
-  objectStore?: WorkspaceObjectStore;
-  fileStore?: WorkspaceFileByteStore;
+  /** The `workspaces` store, for tools that only read file bytes. */
+  objectStore?: ObjectStorage;
+  /** The `workspaces` store, for tools that also write. It serves the reads when given alone. */
+  fileStore?: ObjectStorage;
   sourceFileReader?: WorkspaceSourceFileReader;
   commandResults?: WorkspaceCommandResultSource;
   auditRecorder?: AuditRecorder;
@@ -57,8 +59,8 @@ export interface WorkspaceCommandServiceOptions {
 export interface WorkspaceToolDependencies {
   readonly store: Pick<PlatformStores, "files" | "executionWorkspaces">;
   readonly commands: WorkspaceCommandClient;
-  readonly objectStore?: WorkspaceObjectStore;
-  readonly fileStore?: WorkspaceFileByteStore;
+  readonly objectStore?: ObjectStorage;
+  readonly fileStore?: ObjectStorage;
   readonly sourceFileReader?: WorkspaceSourceFileReader;
   readonly commandResults?: WorkspaceCommandResultSource;
   readonly auditRecorder?: AuditRecorder;

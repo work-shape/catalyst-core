@@ -27,7 +27,10 @@ import {
   type RegisteredJobHandler,
   type RegisteredProviderDefinition,
   type RetriedJob,
-  type SecretResolver
+  type SecretResolver,
+  isAppError,
+  readObjectBytes,
+  type ObjectStorage
 } from "@vivd-catalyst/core";
 import type {
   DataSourceDescribeInput,
@@ -251,17 +254,6 @@ export interface ClientInstanceCapability {
   ): ClientInstanceCapabilityContribution | Promise<ClientInstanceCapabilityContribution>;
 }
 
-export interface ManagedObjectByteStore {
-  putObject(input: {
-    key: string;
-    body: Uint8Array | AsyncIterable<Uint8Array>;
-    contentType?: string;
-    contentLength?: number;
-  }): Promise<void>;
-  getObject(key: string): Promise<Uint8Array>;
-  deleteObject(key: string): Promise<void>;
-}
-
 export interface ManagedObjectFileKeyInput {
   clientInstanceId: ClientInstanceId;
   ownerUserId: string;
@@ -360,13 +352,13 @@ export interface ManagedObjectAccess {
 export interface CreateManagedObjectAccessInput {
   clientInstanceId: ClientInstanceId;
   files: PlatformFileStore;
-  byteStore: ManagedObjectByteStore;
+  byteStore: ObjectStorage;
   keyFactory: ManagedObjectKeyFactory;
   logger?: import("@vivd-catalyst/core").Logger;
 }
 
 export interface CreateManagedObjectAccessFromContextInput {
-  byteStore: ManagedObjectByteStore;
+  byteStore: ObjectStorage;
   keyFactory: ManagedObjectKeyFactory;
 }
 
@@ -387,7 +379,7 @@ export function createManagedObjectAccess(
 class DefaultManagedObjectAccess implements ManagedObjectAccess {
   private readonly clientInstanceId: ClientInstanceId;
   private readonly files: PlatformFileStore;
-  private readonly byteStore: ManagedObjectByteStore;
+  private readonly byteStore: ObjectStorage;
   private readonly keyFactory: ManagedObjectKeyFactory;
   private readonly logger: CreateManagedObjectAccessInput["logger"];
 
@@ -412,11 +404,7 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
       extension: input.extension,
       keyContext: input.keyContext
     });
-    await this.byteStore.putObject({
-      key: objectKey,
-      body: input.bytes,
-      contentType: input.mimeType
-    });
+    await this.byteStore.put(objectKey, input.bytes, { contentType: input.mimeType });
     return this.files.createManagedFile({
       clientInstanceId: this.clientInstanceId,
       ownerUserId: input.ownerUserId,
@@ -442,11 +430,9 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
       extension: input.extension,
       keyContext: input.keyContext
     });
-    await this.byteStore.putObject({
-      key: objectKey,
-      body: input.content.openStream(),
+    await this.byteStore.put(objectKey, input.content.openStream(), {
       contentType: input.mimeType,
-      contentLength: input.content.byteSize
+      size: input.content.byteSize
     });
     return this.files.createManagedFile({
       clientInstanceId: this.clientInstanceId,
@@ -474,11 +460,7 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
       metadata: input.metadata,
       keyContext: input.keyContext
     });
-    await this.byteStore.putObject({
-      key: objectKey,
-      body: input.bytes,
-      contentType: input.mimeType
-    });
+    await this.byteStore.put(objectKey, input.bytes, { contentType: input.mimeType });
     try {
       return await this.files.createManagedArtifact({
         clientInstanceId: this.clientInstanceId,
@@ -497,12 +479,14 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
       // record names the bytes then, so they are removed here, best effort.
       if (error instanceof AppError && error.code === "NOT_FOUND") {
         try {
-          await this.byteStore.deleteObject(objectKey);
+          await this.byteStore.delete(objectKey);
         } catch (deleteError: unknown) {
           this.logger?.error(
             {
               objectKey,
-              error: deleteError instanceof Error ? deleteError.message : String(deleteError)
+              // The class and the code only: a provider's message can repeat an address.
+              errorClass: deleteError instanceof Error ? deleteError.name : "unknown",
+              ...(isAppError(deleteError) ? { errorCode: deleteError.code } : {})
             },
             "Could not remove an artifact object after its record was refused"
           );
@@ -522,7 +506,7 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
     }
     return {
       record,
-      bytes: await this.byteStore.getObject(record.objectKey),
+      bytes: await readObjectBytes(this.byteStore, record.objectKey),
       mimeType: record.mimeType
     };
   }
@@ -537,7 +521,7 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
     }
     return {
       record,
-      bytes: await this.byteStore.getObject(record.objectKey),
+      bytes: await readObjectBytes(this.byteStore, record.objectKey),
       mimeType: record.mimeType
     };
   }
@@ -552,7 +536,7 @@ class DefaultManagedObjectAccess implements ManagedObjectAccess {
     });
     await Promise.all(
       [...deletion.artifactObjectKeys, ...deletion.fileObjectKeys].map((objectKey) =>
-        this.byteStore.deleteObject(objectKey)
+        this.byteStore.delete(objectKey)
       )
     );
     return this.files.markConversationManagedObjectsDeleted({

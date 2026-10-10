@@ -177,6 +177,23 @@ id from config_assets where status = 'deleted')`.
   address taken from every link, and a click on a link that still has one is cancelled. Both
   are hardening and not a boundary. Do not put links into a view.
 - **Config assets:** the overview lists the `id` of each agent and skill.
+- **Object storage:** every stored byte goes through one port, `ObjectStorage` in
+  `@vivd-catalyst/core`: `put`, `get` as a stream with its size, `head`, `delete`,
+  `deletePrefix`, `list` in pages and, where the provider can sign, `signedGetUrl`. The new
+  package `@vivd-catalyst/object-storage` holds the providers `s3` and `filesystem`; either one
+  serves either store under `infrastructure.objectStorage`. No config value moves and no object
+  key changes, so a store written by an earlier release is read as it is and a rollback is
+  safe. `s3` is now a provider of the platform: a capability no longer registers it, and the
+  document-processing capability no longer exports an object store. The byte-store interfaces
+  of `capability-sdk` and `tool-execution` and the `createLocalWorkspace...` helpers are gone;
+  code that took one takes `ObjectStorage`, and
+  `putWorkspaceFile(storage, input)` stores a workspace file. A store fails with `ObjectNotFound`
+  or `ObjectStorageUnavailable` and with nothing else: no vendor error, message or address
+  crosses the port. A setup failure of the store (missing bucket, refused credentials,
+  unreachable endpoint) still answers an upload with `422`; its message names the config entry
+  and no longer the bucket. `deletePrefix` and `list` refuse a prefix that does not end with
+  `/`, so `users/usr_1` can never reach `users/usr_10/`. A signed read address lives at most
+  300 seconds and is never logged; nothing in the platform asks for one yet.
 - **Rights:** every rights check of the API and of tool calls is answered by one evaluator,
   `evaluateAccess` in `@vivd-catalyst/core`. `InProcessToolExecution` takes an optional
   `authorizer`; `ChatServerOptions.stores` needs the `access` store, which

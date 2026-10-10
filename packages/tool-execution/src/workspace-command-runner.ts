@@ -25,10 +25,12 @@ import {
   type WorkspaceCommandFailureCategory,
   type WorkspaceCommandOutput,
   type WorkspaceCommandPromotedArtifact,
-  type WorkspaceFile
+  type WorkspaceFile,
+  readObjectBytes,
+  type ObjectStorage
 } from "@vivd-catalyst/core";
 import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
-import { upsertStoredWorkspaceFile, type WorkspaceFileByteStore } from "./workspace-file-bytes";
+import { putWorkspaceFile, upsertStoredWorkspaceFile } from "./workspace-file-bytes";
 import {
   normalizeWorkspaceDirectory,
   normalizeWorkspaceFilePath,
@@ -56,7 +58,8 @@ export type WorkspaceCommandRunnerStore = Pick<PlatformStores, "files" | "execut
 
 export interface LocalWorkspaceCommandRunnerOptions {
   store: Pick<PlatformStores, "files" | "executionWorkspaces">;
-  byteStore: WorkspaceFileByteStore;
+  /** The `workspaces` store. */
+  byteStore: ObjectStorage;
   workerId?: string;
   tempRootDirectory?: string;
   maxPathLength?: number;
@@ -105,7 +108,7 @@ export interface RunClaimedWorkspaceCommandOptions {
 
 export class LocalWorkspaceCommandRunner {
   private readonly store: Pick<PlatformStores, "files" | "executionWorkspaces">;
-  private readonly byteStore: WorkspaceFileByteStore;
+  private readonly byteStore: ObjectStorage;
   private readonly workerId: string;
   private readonly tempRootDirectory: string;
   private readonly maxPathLength: number;
@@ -382,7 +385,7 @@ export class LocalWorkspaceCommandRunner {
         }
         const cached = cachedByPath.get(normalized.value);
         if (cached?.checksum !== file.checksum || cached.byteSize !== file.byteSize) {
-          const bytes = await this.byteStore.getObject(file.objectKey);
+          const bytes = await readObjectBytes(this.byteStore, file.objectKey);
           await mkdir(dirname(target.value), { recursive: true });
           await writeFile(target.value, bytes);
         }
@@ -543,7 +546,7 @@ export class LocalWorkspaceCommandRunner {
       if (baseline?.checksum === scanned.checksum && baseline.byteSize === scanned.byteSize) {
         continue;
       }
-      const stored = await this.byteStore.putWorkspaceFile({
+      const stored = await putWorkspaceFile(this.byteStore, {
         clientInstanceId: command.clientInstanceId,
         conversationId: workspace.conversationId,
         workspaceId: workspace.id,

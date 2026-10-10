@@ -21,6 +21,7 @@ export type { Logger } from "./logger";
 export type { HttpListenInput, HttpRuntime } from "./http-runtime";
 export type { RateLimitDecision, RateLimiter, RateLimitRule } from "./rate-limiter";
 
+export * from "./object-storage";
 export * from "./paging";
 export * from "./providers";
 export * from "./secrets";

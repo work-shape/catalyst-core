@@ -5,9 +5,9 @@ import { uploadContent } from "./support/chat-server-attachment-harness";
 import { type TestInstance, createTestInstance } from "./support/test-instance";
 
 import { createHash } from "node:crypto";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AppError,
@@ -27,7 +27,7 @@ import {
   type ClientInstanceCapability,
   WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES
 } from "@vivd-catalyst/client-assembly";
-import { createLocalWorkspaceObjectStorage } from "@vivd-catalyst/tool-execution";
+import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
 
 describe("execution workspace source attachments", () => {
   it("accepts source artifact formats used by workspace skills", () => {
@@ -435,7 +435,7 @@ async function createSourceAttachmentFixture(input: { maxFileBytes?: number } = 
     handler: createExecutionWorkspaceSourceAttachmentHandler({
       clientInstanceId,
       files: store.files,
-      objectStore: createLocalWorkspaceObjectStorage({ rootDirectory: root }),
+      objectStore: createFilesystemObjectStorage(root),
       markDeletedOnDelete: true,
       ...input
     }),
@@ -559,7 +559,7 @@ function createWorkspaceArtifactSeedingCapability(root: string): ClientInstanceC
     name: "workspace-artifact-seeding",
     create(context) {
       const managedObjects = context.managedObjectAccess.createAccess({
-        byteStore: createWorkspaceArtifactSeedByteStore(root),
+        byteStore: createFilesystemObjectStorage(root),
         keyFactory: createWorkspaceArtifactSeedKeyFactory()
       });
       return {
@@ -657,7 +657,7 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
     name: "workspace-preview-artifact-seeding",
     create(context) {
       const managedObjects = context.managedObjectAccess.createAccess({
-        byteStore: createWorkspaceArtifactSeedByteStore(root),
+        byteStore: createFilesystemObjectStorage(root),
         keyFactory: createWorkspacePreviewArtifactSeedKeyFactory()
       });
       return {
@@ -761,22 +761,6 @@ function createWorkspacePreviewArtifactSeedingCapability(root: string): ClientIn
           }
         ]
       };
-    }
-  };
-}
-
-function createWorkspaceArtifactSeedByteStore(root: string) {
-  return {
-    async putObject(input: { key: string; body: Uint8Array }) {
-      const path = objectPath(root, input.key);
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, input.body);
-    },
-    async getObject(key: string) {
-      return readFile(objectPath(root, key));
-    },
-    async deleteObject(key: string) {
-      await rm(objectPath(root, key), { force: true });
     }
   };
 }

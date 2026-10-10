@@ -19,7 +19,7 @@ import type { ArtifactPreviewSourceReader } from "@vivd-catalyst/tool-execution"
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
-  createWorkspaceObjectStore,
+  createWorkspacesStore,
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
@@ -82,7 +82,7 @@ export async function createClientInstanceArtifactPreviewWorker(
         store
       })
     : undefined;
-  const objectStore = (await createWorkspaceObjectStore(config, infrastructure.context)).objects;
+  const objectStore = await createWorkspacesStore(config, infrastructure.context);
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,

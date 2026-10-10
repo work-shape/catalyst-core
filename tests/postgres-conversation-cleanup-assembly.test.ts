@@ -10,7 +10,7 @@ import {
   type ConversationId,
   type PlatformStores
 } from "@vivd-catalyst/core";
-import { createLocalWorkspaceObjectStorage } from "@vivd-catalyst/tool-execution";
+import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
 import { jsonObject, required, text } from "./support/assertions";
 import { workspaceInfrastructure } from "./support/fixtures";
 import {
@@ -156,14 +156,14 @@ async function createCompletedPreview(input: {
   conversationId: ConversationId;
 }): Promise<string[]> {
   const scope = { clientInstanceId: input.clientInstanceId };
-  const objects = createLocalWorkspaceObjectStorage({ rootDirectory: input.root });
+  const objects = createFilesystemObjectStorage(input.root);
   const keyOf = (prefix: string, name: string) =>
     [prefix, input.clientInstanceId, input.conversationId, name].join("/");
   const bytes = new TextEncoder().encode("rendered");
   const sourceKey = keyOf("execution-workspaces", "report.docx");
   const pageKey = keyOf("artifact-previews", "page-1.png");
-  await objects.putObject({ key: sourceKey, body: bytes });
-  await objects.putObject({ key: pageKey, body: bytes });
+  await objects.put(sourceKey, bytes);
+  await objects.put(pageKey, bytes);
   const source = await input.store.files.createManagedArtifact({
     ...scope,
     conversationId: input.conversationId,

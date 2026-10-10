@@ -18,7 +18,6 @@ import {
 
 import {
   createDockerRunInvocation,
-  createLocalWorkspaceFileByteStore,
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandRunner,
   WorkspaceCommandService,
@@ -27,6 +26,7 @@ import {
   type ProcessResult,
   type WorkspaceCommandProcessInput
 } from "@vivd-catalyst/tool-execution";
+import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
 
 const cleanupDirectories: string[] = [];
 
@@ -245,9 +245,7 @@ async function createDockerHarness(input: {
   });
   const rootDirectory = await mkdtemp(join(tmpdir(), "catalyst-docker-runner-test-"));
   cleanupDirectories.push(rootDirectory);
-  const byteStore = createLocalWorkspaceFileByteStore({
-    rootDirectory: join(rootDirectory, "objects")
-  });
+  const byteStore = createFilesystemObjectStorage(join(rootDirectory, "objects"));
   const fakeDocker = new FakeDockerCommandClient(input.fakeResult);
   const runner = new LocalWorkspaceCommandRunner({
     store,

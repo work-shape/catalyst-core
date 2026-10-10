@@ -23,7 +23,7 @@ describe("workspace.preview_images", () => {
     });
     const previewBytes = encode("page-1-png");
     const settingsHash = createArtifactPreviewSettingsHash({ pages: [1], maxImages: 1 });
-    harness.objectStore.putObject("artifact-previews/private/report-page-1.png", previewBytes);
+    harness.objectStore.seed("artifact-previews/private/report-page-1.png", previewBytes);
     const previewPage = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -121,7 +121,7 @@ describe("workspace.preview_images", () => {
             throw new Error("Missing artifact");
           }
           return {
-            bytes: await harness.objectStore.getObject(artifact.objectKey),
+            bytes: harness.objectStore.bytes(artifact.objectKey),
             mimeType: artifact.mimeType
           };
         }
@@ -163,7 +163,7 @@ describe("workspace.preview_images", () => {
       imageBytes: Uint8Array,
       rendition: { previewRendition?: string }
     ) => {
-      harness.objectStore.putObject(objectKey, imageBytes);
+      harness.objectStore.seed(objectKey, imageBytes);
       return harness.store.files.createManagedArtifact({
         clientInstanceId: harness.clientInstanceId,
         conversationId: harness.conversation.id,
@@ -268,7 +268,7 @@ describe("workspace.preview_images", () => {
     expect(modelOutput.text).toContain(`artifactId: ${source.id}, mimeType: image/jpeg, page: 1`);
     expect(modelOutput.text).toContain("size: 1109x1568");
     // The image a person is shown is untouched.
-    expect(await harness.objectStore.getObject(personImage.objectKey)).toEqual(personBytes);
+    expect(harness.objectStore.bytes(personImage.objectKey)).toEqual(personBytes);
   });
 
   it("loads ready spreadsheet sheet and range previews as model-visible artifacts", async () => {
@@ -289,10 +289,7 @@ describe("workspace.preview_images", () => {
       ranges: ["Summary!A1:H10"],
       maxImages: 1
     });
-    harness.objectStore.putObject(
-      "artifact-previews/private/workbook-summary-range.png",
-      previewBytes
-    );
+    harness.objectStore.seed("artifact-previews/private/workbook-summary-range.png", previewBytes);
     const previewRange = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
@@ -393,7 +390,7 @@ describe("workspace.preview_images", () => {
             throw new Error("Missing artifact");
           }
           return {
-            bytes: await harness.objectStore.getObject(artifact.objectKey),
+            bytes: harness.objectStore.bytes(artifact.objectKey),
             mimeType: artifact.mimeType
           };
         }
@@ -449,10 +446,7 @@ describe("workspace.preview_images", () => {
       ranges: ["summary!A1:B4"],
       maxImages: 1
     });
-    harness.objectStore.putObject(
-      "artifact-previews/private/workbook-summary-a1-b4.png",
-      previewBytes
-    );
+    harness.objectStore.seed("artifact-previews/private/workbook-summary-a1-b4.png", previewBytes);
     const previewRange = await harness.store.files.createManagedArtifact({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,

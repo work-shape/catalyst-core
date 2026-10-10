@@ -1,8 +1,5 @@
 import type { ChatAttachmentService, ChatServerOptions } from "@vivd-catalyst/chat-server";
-import {
-  createManagedObjectAccess,
-  type ManagedObjectByteStore
-} from "@vivd-catalyst/capability-sdk";
+import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
   StoreBackedAuditRecorder,
   type AuthenticatedUser,
@@ -13,6 +10,7 @@ import {
   type ExecutionWorkspaceId,
   type ManagedArtifactRecord,
   type ManagedFileRecord,
+  type ObjectStorage,
   type PlatformFileStore
 } from "@vivd-catalyst/core";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
@@ -20,6 +18,7 @@ import type { PostgresStores } from "@vivd-catalyst/postgres-store";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { createMissingRuntime, createUnusedModelProvider } from "./chat-server-run-harness";
 import { completeServerOptions } from "./test-instance";
+import { MemoryObjectStorage } from "./memory-object-storage";
 import type { ScriptedModelProvider } from "./model-gateway";
 
 export type ManagedObjectAccess = ReturnType<typeof createManagedObjectAccess>;
@@ -28,7 +27,7 @@ export type ManagedObjectAccess = ReturnType<typeof createManagedObjectAccess>;
 export function createTestManagedObjectAccess(input: {
   clientInstanceId: ClientInstanceId;
   files: PlatformFileStore;
-  byteStore: ManagedObjectByteStore;
+  byteStore: ObjectStorage;
   logger?: Logger;
 }): ManagedObjectAccess {
   return createManagedObjectAccess({
@@ -187,7 +186,7 @@ export async function createExecutionWorkspaceData(input: {
   });
   const objectKey = `execution-workspaces/${input.conversation.id}/report.csv`;
   const bytes = new TextEncoder().encode("value\n42\n");
-  await input.byteStore.putObject({ key: objectKey, body: bytes });
+  await input.byteStore.put(objectKey, bytes);
   await input.store.executionWorkspaces.upsertWorkspaceFile({
     clientInstanceId: input.clientInstanceId,
     workspaceId: workspace.id,
@@ -214,7 +213,7 @@ export function createManagedObjectAttachmentService(input: {
           async deleteOrphanedFileObjects({ objectKeys }) {
             const ownKeys = objectKeys.filter((key) => key.startsWith("files/"));
             for (const key of ownKeys) {
-              await byteStore.deleteObject(key);
+              await byteStore.delete(key);
             }
             return ownKeys;
           }
@@ -255,7 +254,8 @@ export function createManagedObjectAttachmentService(input: {
   };
 }
 
-export class RecordingByteStore implements ManagedObjectByteStore {
+/** A store in memory that records every deletion and can be told to fail one. */
+export class RecordingByteStore extends MemoryObjectStorage {
   readonly deletedKeys: string[] = [];
   /** Every key a deletion was asked for, whether or not it went through. */
   readonly deleteAttempts: string[] = [];
@@ -263,22 +263,9 @@ export class RecordingByteStore implements ManagedObjectByteStore {
   failDeletes = false;
   /** Runs before each deletion is attempted, so a test can look at the state it happens in. */
   onDeleteAttempt: ((key: string) => Promise<void>) | undefined;
-  private readonly objects = new Map<string, Uint8Array>();
   private readonly failuresByKey = new Map<string, number>();
 
-  async putObject(input: { key: string; body: Uint8Array }): Promise<void> {
-    this.objects.set(input.key, input.body);
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    const object = this.objects.get(key);
-    if (!object) {
-      throw new Error(`Object ${key} is not available`);
-    }
-    return object;
-  }
-
-  async deleteObject(key: string): Promise<void> {
+  override async delete(key: string): Promise<void> {
     this.deleteAttempts.push(key);
     await this.onDeleteAttempt?.(key);
     if (this.failDeletes) {
@@ -294,15 +281,12 @@ export class RecordingByteStore implements ManagedObjectByteStore {
       throw new Error(`Object ${key} deletion failed`);
     }
     this.deletedKeys.push(key);
-    this.objects.delete(key);
+    await super.delete(key);
   }
 
-  has(key: string): boolean {
-    return this.objects.has(key);
-  }
-
-  keys(): string[] {
-    return [...this.objects.keys()];
+  /** The shape the chat server's workspace cleanup deletes through. */
+  deleteObject(key: string): Promise<void> {
+    return this.delete(key);
   }
 
   failNextDeleteFor(key: string): void {

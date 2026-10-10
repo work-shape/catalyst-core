@@ -1048,7 +1048,7 @@ async function createWorkspaceObjects(input: {
     const objectKey = `execution-workspaces/${input.conversation.id}/${file.path}`;
     const bytes = new TextEncoder().encode(file.body);
     objectKeys.push(objectKey);
-    await input.byteStore.putObject({ key: objectKey, body: bytes });
+    await input.byteStore.put(objectKey, bytes);
     const metadata = unknownToJsonValue(file.metadata);
     if (!isJsonObject(metadata)) throw new Error("Expected workspace file metadata");
     await input.store.executionWorkspaces.upsertWorkspaceFile({
@@ -1067,7 +1067,7 @@ async function createWorkspaceObjects(input: {
   const deletedObjectKey = `execution-workspaces/${input.conversation.id}/tmp/deleted-before-retention.txt`;
   const deletedBytes = new TextEncoder().encode("deleted before retention");
   objectKeys.push(deletedObjectKey);
-  await input.byteStore.putObject({ key: deletedObjectKey, body: deletedBytes });
+  await input.byteStore.put(deletedObjectKey, deletedBytes);
   await input.store.executionWorkspaces.upsertWorkspaceFile({
     clientInstanceId: input.clientInstanceId,
     workspaceId: workspace.id,

@@ -13,14 +13,13 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 
+import { MemoryObjectStorage } from "./memory-object-storage";
 import {
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
   ToolRegistry,
   WorkspaceCommandService,
-  type WorkspaceCommandTelemetry,
-  type WorkspaceFileByteStore,
-  type WorkspaceObjectStore
+  type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
 
 interface WorkspaceHarnessInput {
@@ -74,7 +73,7 @@ export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) 
     retainedUntil: "2026-07-29T00:00:00.000Z"
   });
   const agentRun = await store.createAgentRunForTesting(conversation);
-  const objectStore = new TestWorkspaceObjectStore();
+  const objectStore = new RecordingWorkspaceStore();
   const auditRecorder = input.withAuditRecorder
     ? new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
     : undefined;
@@ -162,7 +161,7 @@ export async function createWorkspaceHarness(input: WorkspaceHarnessInput = {}) 
       });
       const bytes =
         typeof file.bytes === "string" ? new TextEncoder().encode(file.bytes) : file.bytes;
-      objectStore.putObject(file.objectKey, bytes);
+      objectStore.seed(file.objectKey, bytes);
       return store.executionWorkspaces.upsertWorkspaceFile({
         clientInstanceId,
         workspaceId: workspace.id,
@@ -217,44 +216,18 @@ export function encode(value: string): Uint8Array {
   return new TextEncoder().encode(value);
 }
 
-class TestWorkspaceObjectStore implements WorkspaceFileByteStore, WorkspaceObjectStore {
-  private readonly objects = new Map<string, Uint8Array>();
+class RecordingWorkspaceStore extends MemoryObjectStorage {
   readonly deletedKeys: string[] = [];
   /** Runs after the bytes of a workspace file are stored and before its row is written. */
   afterPutWorkspaceFile: (objectKey: string) => Promise<void> = async () => undefined;
 
-  keys(): string[] {
-    return [...this.objects.keys()];
-  }
-
-  async deleteObject(key: string): Promise<void> {
+  override async delete(key: string): Promise<void> {
     this.deletedKeys.push(key);
-    this.objects.delete(key);
+    await super.delete(key);
   }
 
-  putObject(key: string, body: Uint8Array): void {
-    this.objects.set(key, body);
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    const object = this.objects.get(key);
-    if (!object) {
-      throw new Error(`Object '${key}' not found`);
-    }
-    return object;
-  }
-
-  async putWorkspaceFile(input: Parameters<WorkspaceFileByteStore["putWorkspaceFile"]>[0]) {
-    const objectKey = [
-      "execution-workspaces",
-      input.clientInstanceId,
-      input.conversationId,
-      input.workspaceId,
-      input.commandId,
-      input.path
-    ].join("/");
-    this.putObject(objectKey, input.bytes);
-    await this.afterPutWorkspaceFile(objectKey);
-    return { objectKey };
+  override async put(...input: Parameters<MemoryObjectStorage["put"]>): Promise<void> {
+    await super.put(...input);
+    await this.afterPutWorkspaceFile(input[0]);
   }
 }

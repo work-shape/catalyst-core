@@ -13,6 +13,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { MemoryObjectStorage } from "./support/memory-object-storage";
 import * as XLSX from "../packages/tool-execution/node_modules/xlsx";
 import {
   type ArtifactPreviewRenderInput,
@@ -22,8 +23,7 @@ import {
   createArtifactPreviewJobHandler,
   LibreOfficeArtifactPreviewRenderer,
   SPREADSHEET_PREVIEW_MAX_CELLS,
-  createArtifactPreviewSettingsHash,
-  type DeletableWorkspaceObjectStorage
+  createArtifactPreviewSettingsHash
 } from "@vivd-catalyst/tool-execution";
 
 import {
@@ -124,7 +124,7 @@ describe("the artifact preview job handler", () => {
 
   it("reads attachment-backed preview sources through the configured managed-object reader", async () => {
     const fixture = await createWorkerFixture();
-    await fixture.objectStore.deleteObject(fixture.source.objectKey);
+    await fixture.objectStore.delete(fixture.source.objectKey);
     const renderer = new FakeRenderer({
       result: {
         format: "png",
@@ -220,7 +220,7 @@ describe("the artifact preview job handler", () => {
 
   it("reads attachment-backed preview sources through the configured managed-object reader", async () => {
     const fixture = await createWorkerFixture();
-    await fixture.objectStore.deleteObject(fixture.source.objectKey);
+    await fixture.objectStore.delete(fixture.source.objectKey);
     const renderer = new FakeRenderer({
       result: {
         format: "png",
@@ -796,7 +796,7 @@ describe("the artifact preview job handler", () => {
       if (!artifact) {
         throw new Error("Expected a stored preview artifact");
       }
-      return { artifact, bytes: await fixture.objectStore.getObject(artifact.objectKey) };
+      return { artifact, bytes: fixture.objectStore.bytes(artifact.objectKey) };
     };
     const forPerson = await read(page.artifactId);
     expect(forPerson.bytes).toEqual(bytes("page-one-for-a-person"));
@@ -1358,7 +1358,7 @@ async function createWorkerFixture(
     input.server ? "demo-local" : `preview_worker_${globalThis.crypto.randomUUID()}`
   );
   const store = (input.server ?? (await createTestInstance())).stores;
-  const objectStore = new MemoryObjectStorage();
+  const objectStore = new HookedObjectStorage();
   const conversation = await store.createConversationForTesting({
     clientInstanceId,
     createdByUserId: "user-1",
@@ -1390,11 +1390,7 @@ async function createWorkerFixture(
     byteSize: input.byteSize ?? sourceBytes.byteLength,
     checksum: "sha256:source-docx"
   });
-  await objectStore.putObject({
-    key: source.objectKey,
-    body: sourceBytes,
-    contentType: source.mimeType
-  });
+  await objectStore.put(source.objectKey, sourceBytes, { contentType: source.mimeType });
   const previewJob = await store.files.enqueueArtifactPreviewJob({
     clientInstanceId,
     conversationId: conversation.id,
@@ -1419,7 +1415,7 @@ async function createWorkerFixture(
 interface WorkerFixture {
   clientInstanceId: ClientInstanceId;
   store: PostgresStores;
-  objectStore: MemoryObjectStorage;
+  objectStore: HookedObjectStorage;
   conversation: Conversation;
   sourceFile: ManagedFileRecord;
   source: ManagedArtifactRecord;
@@ -1465,30 +1461,13 @@ class FakeRenderer implements ArtifactPreviewRenderer {
   }
 }
 
-class MemoryObjectStorage implements DeletableWorkspaceObjectStorage {
-  private readonly objects = new Map<string, Uint8Array>();
+/** The store in memory with a hook that runs after each write. */
+class HookedObjectStorage extends MemoryObjectStorage {
   onPut?: (key: string) => Promise<void> | void;
 
-  async putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void> {
-    this.objects.set(input.key, input.body);
-    await this.onPut?.(input.key);
-    void input.contentType;
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    const value = this.objects.get(key);
-    if (!value) {
-      throw new Error(`Missing object ${key}`);
-    }
-    return value;
-  }
-
-  keys(): string[] {
-    return [...this.objects.keys()];
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    this.objects.delete(key);
+  override async put(...input: Parameters<MemoryObjectStorage["put"]>): Promise<void> {
+    await super.put(...input);
+    await this.onPut?.(input[0]);
   }
 }
 

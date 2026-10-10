@@ -656,7 +656,7 @@
       "target": "types:packages",
       "rule": "typescript/unused",
       "scope": "packages/tool-execution",
-      "count": 3,
+      "count": 2,
       "owner": "EW-1"
     },
     {
@@ -684,7 +684,7 @@
       "target": "types:tests",
       "rule": "typescript/unused",
       "scope": "packages/tool-execution",
-      "count": 3,
+      "count": 2,
       "owner": "EW-1"
     }
   ]

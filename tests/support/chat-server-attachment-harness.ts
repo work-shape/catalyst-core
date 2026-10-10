@@ -10,6 +10,7 @@ import {
   type ImageFileFormat,
   type ManagedFileId
 } from "@vivd-catalyst/core";
+import { MemoryObjectStorage } from "./memory-object-storage";
 import type { TestInstance as TestServer } from "./test-instance";
 
 export function createMultipartFilePayload(input: {
@@ -41,11 +42,16 @@ export function createMultipartFilePayload(input: {
 
 export function createManagedObjectTestAttachmentCapability(): {
   capability: ClientInstanceCapability;
-  objects: Map<string, Uint8Array>;
+  objects: MemoryObjectStorage;
   deletedObjectKeys: string[];
 } {
-  const objects = new Map<string, Uint8Array>();
   const deletedObjectKeys: string[] = [];
+  const objects = new (class extends MemoryObjectStorage {
+    override async delete(key: string): Promise<void> {
+      deletedObjectKeys.push(key);
+      await super.delete(key);
+    }
+  })();
   return {
     objects,
     deletedObjectKeys,
@@ -53,27 +59,7 @@ export function createManagedObjectTestAttachmentCapability(): {
       name: "managed-object-test-attachments",
       create(context) {
         const managedObjects = context.managedObjectAccess.createAccess({
-          byteStore: {
-            async putObject(input) {
-              if (input.body instanceof Uint8Array) objects.set(input.key, input.body);
-              else {
-                const chunks: Uint8Array[] = [];
-                for await (const chunk of input.body) chunks.push(chunk);
-                objects.set(input.key, Buffer.concat(chunks));
-              }
-            },
-            async getObject(key) {
-              const bytes = objects.get(key);
-              if (!bytes) {
-                throw new Error("Object is not available");
-              }
-              return bytes;
-            },
-            async deleteObject(key) {
-              deletedObjectKeys.push(key);
-              objects.delete(key);
-            }
-          },
+          byteStore: objects,
           keyFactory: {
             createFileObjectKey(input) {
               return `test-files/${input.conversationId}/${input.checksum}`;
@@ -136,8 +122,7 @@ export function createManagedObjectTestAttachmentCapability(): {
               async deleteOrphanedFileObjects(input) {
                 const objectKeys = input.objectKeys.filter((key) => key.startsWith("test-files/"));
                 for (const key of objectKeys) {
-                  deletedObjectKeys.push(key);
-                  objects.delete(key);
+                  await objects.delete(key);
                 }
                 return objectKeys;
               },

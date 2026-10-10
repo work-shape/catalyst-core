@@ -7,6 +7,7 @@ import {
   defineProvider,
   ProviderRegistry,
   type Logger,
+  type ObjectStorage,
   type ProviderCreateContext,
   type ProviderDefinition,
   type ProviderEntry,
@@ -16,10 +17,8 @@ import {
 } from "@vivd-catalyst/core";
 import { mailProviderDefinitions } from "@vivd-catalyst/mail";
 import { modelProviderDefinitions } from "@vivd-catalyst/model-provider";
-import {
-  sandboxProviderDefinitions,
-  workspaceObjectStoreDefinitions
-} from "@vivd-catalyst/tool-execution";
+import { objectStorageProviderDefinitions } from "@vivd-catalyst/object-storage";
+import { sandboxProviderDefinitions } from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceEnv } from "./env";
 
 /**
@@ -94,7 +93,7 @@ export async function createInstanceInfrastructure(input: {
     ...modelProviderDefinitions,
     ...mailProviderDefinitions,
     ...sandboxProviderDefinitions,
-    ...workspaceObjectStoreDefinitions,
+    ...objectStorageProviderDefinitions,
     ...(input.providers ?? [])
   ]);
   for (const { port, entry } of infrastructureEntries(input.config)) {
@@ -137,13 +136,16 @@ export function infrastructureEntries(
   ];
 }
 
-/** The `workspaces` object store of an instance that runs execution workspaces. */
-export async function createWorkspaceObjectStore(
+/**
+ * The `workspaces` object store of an instance that runs execution workspaces. It holds the
+ * workspace files, the source files and the preview images.
+ */
+export async function createWorkspacesStore(
   config: ClientInstanceConfig,
   context: ProviderCreateContext
-) {
+): Promise<ObjectStorage> {
   return createProvider(
-    workspaceObjectStoreDefinitions,
+    objectStorageProviderDefinitions,
     "objectStorage",
     { path: WORKSPACE_STORE_PATH, entry: config.infrastructure.objectStorage.workspaces },
     context

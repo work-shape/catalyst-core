@@ -19,20 +19,22 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ToolExecutionContext,
-  type WorkspaceCommandLimits
+  type WorkspaceCommandLimits,
+  ObjectNotFound,
+  readObjectBytes,
+  type ObjectStorage
 } from "@vivd-catalyst/core";
 
 import {
-  createLocalWorkspaceFileByteStore,
-  createObjectStoreWorkspaceFileByteStore,
   createWorkspaceCommandClient,
   LocalWorkspaceCommandRunner,
   normalizeWorkspaceFilePath,
+  putWorkspaceFile,
   WorkspaceCommandService,
-  type WorkspaceCommandTelemetry,
-  type WorkspaceFileByteStore,
-  type WorkspaceObjectStorage
+  type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
+import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+import { MemoryObjectStorage } from "./support/memory-object-storage";
 
 const cleanupDirectories: string[] = [];
 
@@ -256,7 +258,7 @@ describe("local workspace command runner", () => {
     const workspace = await harness.workspace();
     const updatedBytes = encode("durable update");
     const updatedChecksum = checksum(updatedBytes);
-    const stored = await harness.byteStore.putWorkspaceFile({
+    const stored = await putWorkspaceFile(harness.byteStore, {
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       workspaceId: workspace.id,
@@ -339,7 +341,7 @@ describe("local workspace command runner", () => {
       deletedAt: "2026-06-29T12:05:00.000Z"
     });
     const bytes = encode("durable file");
-    const stored = await harness.byteStore.putWorkspaceFile({
+    const stored = await putWorkspaceFile(harness.byteStore, {
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       workspaceId: workspace.id,
@@ -435,9 +437,9 @@ describe("local workspace command runner", () => {
       changedFiles: []
     });
     await expect(
-      harness.byteStore
-        .getObject(createdFile!.objectKey)
-        .then((bytes) => new TextDecoder().decode(bytes))
+      readObjectBytes(harness.byteStore, createdFile!.objectKey).then((bytes) =>
+        new TextDecoder().decode(bytes)
+      )
     ).resolves.toBe("alpha");
 
     const listedAfterDelete = await harness.store.executionWorkspaces.listWorkspaceFiles({
@@ -555,7 +557,7 @@ describe("local workspace command runner", () => {
     const traversal = await createRunnerHarness({ useResultSource: false });
     const unsafeWorkspace = await traversal.workspace();
     const bytes = encode("secret");
-    const stored = await traversal.byteStore.putWorkspaceFile({
+    const stored = await putWorkspaceFile(traversal.byteStore, {
       clientInstanceId: traversal.clientInstanceId,
       conversationId: traversal.conversation.id,
       workspaceId: unsafeWorkspace.id,
@@ -772,7 +774,7 @@ describe("local workspace command runner", () => {
     const harness = await createRunnerHarness();
     const workspace = await harness.workspace();
     const initialBytes = encode("old-placeholder");
-    const initial = await harness.byteStore.putWorkspaceFile({
+    const initial = await putWorkspaceFile(harness.byteStore, {
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id,
       workspaceId: workspace.id,
@@ -907,9 +909,9 @@ describe("local workspace command runner", () => {
       throw new Error("Expected later hydration command to succeed");
     }
     await expect(
-      harness.byteStore
-        .getObject(artifact!.objectKey)
-        .then((bytes) => new TextDecoder().decode(bytes))
+      readObjectBytes(harness.byteStore, artifact!.objectKey).then((bytes) =>
+        new TextDecoder().decode(bytes)
+      )
     ).resolves.toBe("final-bytes");
   });
 
@@ -1001,17 +1003,16 @@ describe("local workspace command runner", () => {
     let deleteConversation: () => Promise<unknown> = async () => undefined;
     const harness = await createRunnerHarness({
       wrapByteStore: (inner) => ({
-        getObject: (key) => inner.getObject(key),
-        async putWorkspaceFile(file) {
-          const result = await inner.putWorkspaceFile(file);
-          stored.push(result.objectKey);
+        ...inner,
+        async put(key, body, options) {
+          await inner.put(key, body, options);
+          stored.push(key);
           // The Conversation is deleted between the bytes and the record.
           await deleteConversation();
-          return result;
         },
-        async deleteObject(key) {
+        async delete(key) {
           deleted.push(key);
-          await inner.deleteObject?.(key);
+          await inner.delete(key);
         }
       })
     });
@@ -1027,7 +1028,7 @@ describe("local workspace command runner", () => {
 
     expect(stored).toHaveLength(1);
     expect(deleted).toEqual(stored);
-    await expect(harness.byteStore.getObject(required(stored[0]))).rejects.toThrow();
+    await expect(harness.byteStore.get(required(stored[0]))).rejects.toBeInstanceOf(ObjectNotFound);
     await expect(
       harness.store.executionWorkspaces.listWorkspaceFiles({
         clientInstanceId: harness.clientInstanceId,
@@ -1061,29 +1062,27 @@ describe("local workspace command runner", () => {
     });
   });
 
-  it("wraps a generic object store as workspace file byte storage", async () => {
+  it("stores a workspace file under the key its key factory names, with its type", async () => {
     const objectStorage = new MemoryObjectStorage();
-    const byteStore = createObjectStoreWorkspaceFileByteStore({
-      objectStore: objectStorage,
-      keyFactory: {
-        createWorkspaceFileObjectKey: () => "workspace/custom-key.txt"
-      }
-    });
     const bytes = encode("stored");
 
-    const result = await byteStore.putWorkspaceFile({
-      clientInstanceId: asClientInstanceId("client_object_store"),
-      conversationId: asConversationId("conv_object_store"),
-      workspaceId: asExecutionWorkspaceId("ews_object_store"),
-      commandId: asWorkspaceCommandId("wcmd_object_store"),
-      path: "custom-key.txt",
-      bytes,
-      checksum: checksum(bytes),
-      mimeType: "text/plain"
-    });
+    const result = await putWorkspaceFile(
+      objectStorage,
+      {
+        clientInstanceId: asClientInstanceId("client_object_store"),
+        conversationId: asConversationId("conv_object_store"),
+        workspaceId: asExecutionWorkspaceId("ews_object_store"),
+        commandId: asWorkspaceCommandId("wcmd_object_store"),
+        path: "custom-key.txt",
+        bytes,
+        checksum: checksum(bytes),
+        mimeType: "text/plain"
+      },
+      { createWorkspaceFileObjectKey: () => "workspace/custom-key.txt" }
+    );
 
     expect(result.objectKey).toBe("workspace/custom-key.txt");
-    await expect(byteStore.getObject(result.objectKey)).resolves.toEqual(bytes);
+    expect(objectStorage.bytes(result.objectKey)).toEqual(bytes);
     expect(objectStorage.contentType(result.objectKey)).toBe("text/plain");
   });
 });
@@ -1096,7 +1095,7 @@ async function createRunnerHarness(
     useResultSource?: boolean;
     withAuditRecorder?: boolean;
     /** Wraps the byte store the runner writes through. */
-    wrapByteStore?: (byteStore: WorkspaceFileByteStore) => WorkspaceFileByteStore;
+    wrapByteStore?: (byteStore: ObjectStorage) => ObjectStorage;
   } = {}
 ) {
   const clientInstanceId = asClientInstanceId(`workspace_runner_${globalThis.crypto.randomUUID()}`);
@@ -1127,9 +1126,7 @@ async function createRunnerHarness(
   const rootDirectory = await mkdtemp(join(tmpdir(), "catalyst-runner-test-"));
   cleanupDirectories.push(rootDirectory);
   const commandRootDirectory = join(rootDirectory, "commands");
-  const localByteStore = createLocalWorkspaceFileByteStore({
-    rootDirectory: join(rootDirectory, "objects")
-  });
+  const localByteStore = createFilesystemObjectStorage(join(rootDirectory, "objects"));
   const byteStore = input.wrapByteStore?.(localByteStore) ?? localByteStore;
   const auditRecorder = input.withAuditRecorder
     ? new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
@@ -1261,26 +1258,4 @@ function checksum(bytes: Uint8Array): string {
 
 function encode(value: string): Uint8Array {
   return new TextEncoder().encode(value);
-}
-
-class MemoryObjectStorage implements WorkspaceObjectStorage {
-  private readonly objects = new Map<string, Uint8Array>();
-  private readonly contentTypes = new Map<string, string | undefined>();
-
-  async putObject(input: { key: string; body: Uint8Array; contentType?: string }): Promise<void> {
-    this.objects.set(input.key, input.body);
-    this.contentTypes.set(input.key, input.contentType);
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    const object = this.objects.get(key);
-    if (!object) {
-      throw new Error(`Object '${key}' not found`);
-    }
-    return object;
-  }
-
-  contentType(key: string): string | undefined {
-    return this.contentTypes.get(key);
-  }
 }

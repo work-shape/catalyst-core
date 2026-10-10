@@ -4,7 +4,8 @@ import {
   type ToolExecutionContext,
   type ToolHandlerResult,
   type WorkspaceFile,
-  createPlatformId
+  createPlatformId,
+  readObjectBytes
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import {
@@ -12,7 +13,7 @@ import {
   parseWorkspaceApplyPatch,
   type WorkspacePatchChange
 } from "../workspace-apply-patch";
-import { upsertStoredWorkspaceFile } from "../workspace-file-bytes";
+import { putWorkspaceFile, upsertStoredWorkspaceFile } from "../workspace-file-bytes";
 import {
   workspaceApplyPatchInputSchema,
   workspaceApplyPatchOutputSchema
@@ -79,7 +80,7 @@ export async function applyWorkspacePatch(
   const patchObjectKeyId = createPlatformId<"WorkspaceCommandId">("wcmd_patch");
   const changedFiles = [];
   for (const write of prepared.value.writes) {
-    const stored = await deps.fileStore.putWorkspaceFile({
+    const stored = await putWorkspaceFile(deps.fileStore, {
       clientInstanceId: context.clientInstanceId,
       conversationId: workspace.value.conversationId,
       workspaceId: workspace.value.handle.id,
@@ -243,7 +244,7 @@ async function readPatchTargetText(
   if (!deps.objectStore) {
     return failedValidationResult("Workspace file bytes are not available");
   }
-  const bytes = await deps.objectStore.getObject(file.objectKey);
+  const bytes = await readObjectBytes(deps.objectStore, file.objectKey);
   return decodeTextFile(bytes, file.mimeType);
 }
 

@@ -1,15 +1,10 @@
-import { createWriteStream } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
-import { posix as posixPath } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import {
   isAppError,
   type ClientInstanceId,
   type ConversationId,
   type ExecutionWorkspaceFileStore,
   type ExecutionWorkspaceId,
+  type ObjectStorage,
   type UpsertWorkspaceFileInput,
   type WorkspaceCommandId,
   type WorkspaceFile
@@ -19,17 +14,6 @@ import {
   type WorkspaceCommandTelemetry
 } from "./workspace-command-telemetry";
 
-export interface WorkspaceObjectStore {
-  getObject(key: string): Promise<Uint8Array>;
-}
-
-export interface WorkspaceFileByteStore extends WorkspaceObjectStore {
-  putWorkspaceFile(input: PutWorkspaceFileBytesInput): Promise<{
-    objectKey: string;
-  }>;
-  deleteObject?(key: string): Promise<void>;
-}
-
 /**
  * Records a workspace file whose bytes were just stored under `input.objectKey`. The store
  * refuses the row when the Conversation was deleted in the meantime. No row names the bytes
@@ -38,7 +22,7 @@ export interface WorkspaceFileByteStore extends WorkspaceObjectStore {
  */
 export async function upsertStoredWorkspaceFile(
   store: Pick<ExecutionWorkspaceFileStore, "upsertWorkspaceFile">,
-  byteStore: WorkspaceFileByteStore,
+  objectStorage: ObjectStorage,
   telemetry: WorkspaceCommandTelemetry | undefined,
   input: UpsertWorkspaceFileInput
 ): Promise<WorkspaceFile> {
@@ -47,7 +31,7 @@ export async function upsertStoredWorkspaceFile(
   } catch (error: unknown) {
     if (isAppError(error) && error.code === "NOT_FOUND") {
       try {
-        await byteStore.deleteObject?.(input.objectKey);
+        await objectStorage.delete(input.objectKey);
       } catch {
         await emitWorkspaceCommandTelemetry(telemetry, {
           type: "stored_file_removal_failed",
@@ -74,21 +58,6 @@ export interface PutWorkspaceFileBytesInput {
   mimeType?: string;
 }
 
-export interface WorkspaceObjectStorage {
-  putObject(input: {
-    key: string;
-    body: Uint8Array | AsyncIterable<Uint8Array>;
-    contentType?: string;
-    contentLength?: number;
-  }): Promise<void>;
-  getObject(key: string): Promise<Uint8Array>;
-  deleteObject?(key: string): Promise<void>;
-}
-
-export interface DeletableWorkspaceObjectStorage extends WorkspaceObjectStorage {
-  deleteObject(key: string): Promise<void>;
-}
-
 export interface WorkspaceFileObjectKeyFactory {
   createWorkspaceFileObjectKey(input: WorkspaceFileObjectKeyInput): string;
 }
@@ -96,32 +65,6 @@ export interface WorkspaceFileObjectKeyFactory {
 export type WorkspaceFileObjectKeyInput = Omit<PutWorkspaceFileBytesInput, "bytes"> & {
   byteSize: number;
 };
-
-export function createObjectStoreWorkspaceFileByteStore(input: {
-  objectStore: WorkspaceObjectStorage;
-  keyFactory?: WorkspaceFileObjectKeyFactory;
-}): WorkspaceFileByteStore {
-  return new ObjectStoreWorkspaceFileByteStore(
-    input.objectStore,
-    input.keyFactory ?? DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY
-  );
-}
-
-export function createLocalWorkspaceFileByteStore(input: {
-  rootDirectory: string;
-  keyFactory?: WorkspaceFileObjectKeyFactory;
-}): WorkspaceFileByteStore {
-  return new LocalWorkspaceFileByteStore(
-    input.rootDirectory,
-    input.keyFactory ?? DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY
-  );
-}
-
-export function createLocalWorkspaceObjectStorage(input: {
-  rootDirectory: string;
-}): DeletableWorkspaceObjectStorage {
-  return new LocalWorkspaceObjectStorage(input.rootDirectory);
-}
 
 export const DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY: WorkspaceFileObjectKeyFactory = {
   createWorkspaceFileObjectKey(input) {
@@ -137,139 +80,20 @@ export const DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY: WorkspaceFileObjectKeyFa
   }
 };
 
-class ObjectStoreWorkspaceFileByteStore implements WorkspaceFileByteStore {
-  constructor(
-    private readonly objectStore: WorkspaceObjectStorage,
-    private readonly keyFactory: WorkspaceFileObjectKeyFactory
-  ) {}
-
-  async getObject(key: string): Promise<Uint8Array> {
-    return this.objectStore.getObject(key);
-  }
-
-  async putWorkspaceFile(input: PutWorkspaceFileBytesInput): Promise<{ objectKey: string }> {
-    const objectKey = this.keyFactory.createWorkspaceFileObjectKey({
-      ...input,
-      byteSize: input.bytes.byteLength
-    });
-    await this.objectStore.putObject({
-      key: objectKey,
-      body: input.bytes,
-      contentType: input.mimeType
-    });
-    return { objectKey };
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    if (!this.objectStore.deleteObject) {
-      throw new Error("Workspace object storage does not support object deletion");
-    }
-    await this.objectStore.deleteObject(key);
-  }
-}
-
-class LocalWorkspaceFileByteStore implements WorkspaceFileByteStore {
-  private readonly objectStorage: LocalWorkspaceObjectStorage;
-
-  constructor(
-    private readonly rootDirectory: string,
-    private readonly keyFactory: WorkspaceFileObjectKeyFactory
-  ) {
-    this.objectStorage = new LocalWorkspaceObjectStorage(rootDirectory);
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    return this.objectStorage.getObject(key);
-  }
-
-  async putWorkspaceFile(input: PutWorkspaceFileBytesInput): Promise<{ objectKey: string }> {
-    const objectKey = this.keyFactory.createWorkspaceFileObjectKey({
-      ...input,
-      byteSize: input.bytes.byteLength
-    });
-    await this.objectStorage.putObject({
-      key: objectKey,
-      body: input.bytes,
-      contentType: input.mimeType
-    });
-    return { objectKey };
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    await this.objectStorage.deleteObject(key);
-  }
-}
-
-class LocalWorkspaceObjectStorage implements WorkspaceObjectStorage {
-  constructor(private readonly rootDirectory: string) {}
-
-  async putObject(input: {
-    key: string;
-    body: Uint8Array | AsyncIterable<Uint8Array>;
-    contentType?: string;
-    contentLength?: number;
-  }): Promise<void> {
-    const objectPath = this.resolveObjectPath(input.key);
-    await mkdir(dirname(objectPath), { recursive: true });
-    if (input.body instanceof Uint8Array) {
-      await writeFile(objectPath, input.body);
-    } else {
-      try {
-        await pipeline(Readable.from(input.body), createWriteStream(objectPath));
-      } catch (error) {
-        await rm(objectPath, { force: true });
-        throw error;
-      }
-    }
-    void input.contentType;
-    void input.contentLength;
-  }
-
-  async getObject(key: string): Promise<Uint8Array> {
-    return readFile(this.resolveObjectPath(key));
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    await rm(this.resolveObjectPath(key), { force: true });
-  }
-
-  private resolveObjectPath(key: string): string {
-    const normalized = normalizeObjectKey(key);
-    const root = resolve(this.rootDirectory);
-    const target = resolve(root, ...normalized.split("/"));
-    if (target !== root && !target.startsWith(`${root}${sep}`)) {
-      throw new Error(`Workspace object key '${key}' escapes the local object root`);
-    }
-    return target;
-  }
-}
-
-function normalizeObjectKey(key: string): string {
-  if (
-    key.trim().length === 0 ||
-    key.includes("\0") ||
-    key.startsWith("/") ||
-    key.startsWith("\\") ||
-    key.includes("\\")
-  ) {
-    throw new Error(`Invalid workspace object key '${key}'`);
-  }
-  const normalized = posixPath.normalize(key);
-  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) {
-    throw new Error(`Invalid workspace object key '${key}'`);
-  }
-  return normalized;
+/** Stores the bytes of one workspace file in the `workspaces` store and returns their key. */
+export async function putWorkspaceFile(
+  objectStorage: ObjectStorage,
+  input: PutWorkspaceFileBytesInput,
+  keyFactory: WorkspaceFileObjectKeyFactory = DEFAULT_WORKSPACE_FILE_OBJECT_KEY_FACTORY
+): Promise<{ objectKey: string }> {
+  const objectKey = keyFactory.createWorkspaceFileObjectKey({
+    ...input,
+    byteSize: input.bytes.byteLength
+  });
+  await objectStorage.put(objectKey, input.bytes, { contentType: input.mimeType });
+  return { objectKey };
 }
 
 function encodeObjectKeySegment(value: string): string {
   return encodeURIComponent(value);
-}
-
-/**
- * The `workspaces` store as its readers take it today. One `ObjectStorage` port replaces the
- * two shapes.
- */
-export interface ConfiguredWorkspaceStore {
-  fileBytes: WorkspaceFileByteStore;
-  objects: DeletableWorkspaceObjectStorage;
 }

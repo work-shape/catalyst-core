@@ -10,13 +10,13 @@ import { createStaticConfigAssetSource } from "./support/static-config-asset-sou
 import { LocalAgentRuntime } from "@vivd-catalyst/agent-runtime";
 import { modelContentText } from "@vivd-catalyst/model-provider";
 import {
-  createLocalWorkspaceFileByteStore,
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
   LocalWorkspaceCommandRunner,
   ToolRegistry,
   WorkspaceCommandService
 } from "@vivd-catalyst/tool-execution";
+import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 
 describe("agent workspace file e2e", () => {
@@ -63,9 +63,7 @@ describe("agent workspace file e2e", () => {
           ].join("\n")
         )
       };
-      const byteStore = createLocalWorkspaceFileByteStore({
-        rootDirectory: join(rootDirectory, "objects")
-      });
+      const byteStore = createFilesystemObjectStorage(join(rootDirectory, "objects"));
       const runner = new LocalWorkspaceCommandRunner({
         store,
         byteStore,

@@ -1,5 +1,9 @@
 import type { z } from "zod";
-import type { ToolExecutionContext, ToolHandlerResult } from "@vivd-catalyst/core";
+import {
+  type ToolExecutionContext,
+  type ToolHandlerResult,
+  readObjectBytes
+} from "@vivd-catalyst/core";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import {
   workspaceReadFileInputSchema,
@@ -51,7 +55,7 @@ export async function readWorkspaceFile(
     });
   }
 
-  const bytes = await deps.objectStore.getObject(file.value.file.objectKey);
+  const bytes = await readObjectBytes(deps.objectStore, file.value.file.objectKey);
   const decoded = decodeTextFile(bytes, file.value.file.mimeType);
   if (decoded.status === "failed") {
     return decoded.result;

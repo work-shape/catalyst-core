@@ -994,7 +994,7 @@ describe("workspace tools", () => {
         deletedAt: "2026-06-29T12:00:01.000Z"
       });
     };
-    harness.objectStore.deleteObject = async () => {
+    harness.objectStore.delete = async () => {
       throw new Error("object store is down");
     };
 
@@ -1065,7 +1065,7 @@ describe("workspace tools", () => {
         })
       })
     ]);
-    const storedBytes = await harness.objectStore.getObject(workspaceFiles[0]!.objectKey);
+    const storedBytes = harness.objectStore.bytes(workspaceFiles[0]!.objectKey);
     expect(new TextDecoder().decode(storedBytes)).toBe("name,total\nAda,42\n");
   });
 

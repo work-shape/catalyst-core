@@ -64,7 +64,7 @@ import type {
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
-import { createInstanceInfrastructure, createWorkspaceObjectStore } from "./infrastructure";
+import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
@@ -110,7 +110,7 @@ export async function createClientInstanceApp(
     attachments,
     managedObjects,
     jobRetries,
-    workspaceFileByteStore,
+    workspaceObjectStore,
     auditRecorder,
     usageGovernance,
     modelGateway,
@@ -153,16 +153,11 @@ export async function createClientInstanceApp(
     attachments,
     managedObjects,
     jobRetries,
-    executionWorkspaceCleanup: workspaceFileByteStore?.deleteObject
+    executionWorkspaceCleanup: workspaceObjectStore
       ? {
           store: store.executionWorkspaces,
-          objects: {
-            deleteObject(key) {
-              const deleteObject = workspaceFileByteStore.deleteObject;
-              if (!deleteObject) throw new Error("Workspace object deletion is not configured");
-              return deleteObject.call(workspaceFileByteStore, key);
-            }
-          },
+          // Deletion erases by the exact keys its rows name, never by a prefix.
+          objects: { deleteObject: (key) => workspaceObjectStore.delete(key) },
           jobOptions: {
             checkIntervalMs: config.executionWorkspaces.cleanup.deletedWorkspaceCleanupIntervalMs,
             batchSize: config.executionWorkspaces.cleanup.deletedWorkspaceCleanupBatchSize
@@ -237,9 +232,8 @@ export async function createClientInstanceExecutionAssembly(
   });
   const dataSources = await createDataSourceRegistry({ configs: config.dataSources, secrets });
   const workspaceObjectStore = config.executionWorkspaces.enabled
-    ? await createWorkspaceObjectStore(config, infrastructure.context)
+    ? await createWorkspacesStore(config, infrastructure.context)
     : undefined;
-  const workspaceFileByteStore = workspaceObjectStore?.fileBytes;
   const modelProviders = getModelProviderConfigs(config);
   const capabilityContributions = await createCapabilityContributions(capabilities, {
     logger,
@@ -271,7 +265,7 @@ export async function createClientInstanceExecutionAssembly(
     ? createExecutionWorkspaceSourceAttachmentHandler({
         clientInstanceId,
         files: store.files,
-        objectStore: workspaceObjectStore.objects,
+        objectStore: workspaceObjectStore,
         maxFileBytes: config.executionWorkspaces.sourceFiles.maxFileBytes,
         markDeletedOnDelete: capabilityAttachmentHandlers.length === 0
       })
@@ -280,11 +274,11 @@ export async function createClientInstanceExecutionAssembly(
     ...(workspaceSourceAttachment ? [workspaceSourceAttachment] : []),
     ...capabilityAttachmentHandlers
   ]);
-  const workspaceManagedObjectReader = workspaceFileByteStore
+  const workspaceManagedObjectReader = workspaceObjectStore
     ? createExecutionWorkspaceManagedObjectReader({
         clientInstanceId,
         files: store.files,
-        byteStore: workspaceFileByteStore
+        byteStore: workspaceObjectStore
       })
     : undefined;
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
@@ -360,8 +354,8 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceTools = config.executionWorkspaces.enabled
     ? createWorkspaceToolDefinitions({
         store,
-        objectStore: workspaceFileByteStore,
-        fileStore: workspaceFileByteStore,
+        objectStore: workspaceObjectStore,
+        fileStore: workspaceObjectStore,
         auditRecorder,
         telemetry: createConsoleWorkspaceCommandTelemetry(logger),
         limits: config.executionWorkspaces.command,
@@ -480,7 +474,7 @@ export async function createClientInstanceExecutionAssembly(
     attachments,
     managedObjects,
     jobRetries,
-    workspaceFileByteStore,
+    workspaceObjectStore,
     auditRecorder,
     assetSource,
     usageGovernance,

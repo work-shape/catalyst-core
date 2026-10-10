@@ -4,7 +4,8 @@ import {
   type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult,
-  isAppError
+  isAppError,
+  readObjectBytes
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { resolveWorkspacePreviewImages } from "../workspace-preview-images";
@@ -111,7 +112,7 @@ async function previewWorkspaceImagePaths(
     }
     let bytes: Uint8Array;
     try {
-      bytes = await deps.objectStore.getObject(file.objectKey);
+      bytes = await readObjectBytes(deps.objectStore, file.objectKey);
     } catch (error) {
       if (isAppError(error) && error.code !== "NOT_FOUND") {
         throw error;

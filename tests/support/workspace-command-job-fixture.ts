@@ -10,7 +10,6 @@ import {
   type WorkspaceCommand
 } from "@vivd-catalyst/core";
 import {
-  createLocalWorkspaceFileByteStore,
   createWorkspaceCommandClient,
   createWorkspaceCommandJobs,
   LocalWorkspaceCommandRunner,
@@ -20,6 +19,7 @@ import {
   type WorkspaceCommandProcessExecutor,
   type WorkspaceCommandProcessInput
 } from "@vivd-catalyst/tool-execution";
+import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
 import { afterEach } from "vitest";
 import { deferred, required } from "./assertions";
 import type { useJobExecutorHarness } from "./job-executor-harness";
@@ -83,9 +83,7 @@ export function useWorkspaceCommandJobFixture(
       : undefined;
     const runner = new LocalWorkspaceCommandRunner({
       store: db.store,
-      byteStore: createLocalWorkspaceFileByteStore({
-        rootDirectory: join(rootDirectory, "objects")
-      }),
+      byteStore: createFilesystemObjectStorage(join(rootDirectory, "objects")),
       tempRootDirectory: commandRootDirectory,
       ...(input.realProcesses ? {} : { processExecutor: executor }),
       auditRecorder

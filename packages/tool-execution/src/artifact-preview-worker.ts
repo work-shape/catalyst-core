@@ -19,7 +19,9 @@ import {
   type JobControl,
   type ManagedArtifactRecord,
   type PlatformStores,
-  type RegisteredJobHandler
+  type RegisteredJobHandler,
+  readObjectBytes,
+  type ObjectStorage
 } from "@vivd-catalyst/core";
 import { readArtifactPreviewSettingsHash } from "./artifact-preview-settings";
 import {
@@ -35,7 +37,6 @@ import {
   previewFailureMessage,
   type ArtifactPreviewFailure
 } from "./artifact-preview-failures";
-import type { DeletableWorkspaceObjectStorage } from "./workspace-file-bytes";
 
 export {
   LibreOfficeArtifactPreviewRenderer,
@@ -67,7 +68,8 @@ const EXHAUSTED_ROW_LEASE_MS = 60 * 1000;
 export interface ArtifactPreviewJobHandlerOptions {
   /** The stores of the process. Reads go through them, writes through the job's transaction. */
   stores: Pick<PlatformStores, "files">;
-  objectStore: DeletableWorkspaceObjectStorage;
+  /** Where preview images are written and sources are read: the `workspaces` store. */
+  objectStore: ObjectStorage;
   sourceReader?: ArtifactPreviewSourceReader;
   renderer?: ArtifactPreviewRenderer;
   /** How many previews this process renders at once. */
@@ -126,7 +128,7 @@ export function createArtifactPreviewJobHandler(
 
 class ArtifactPreviewRender {
   private readonly store: Pick<PlatformStores, "files">["files"];
-  private readonly objectStore: DeletableWorkspaceObjectStorage;
+  private readonly objectStore: ObjectStorage;
   private readonly sourceReader?: ArtifactPreviewSourceReader;
   private readonly renderer: ArtifactPreviewRenderer;
   private readonly maxSourceBytes: number;
@@ -377,7 +379,7 @@ class ArtifactPreviewRender {
 
   private async readSourceBytes(source: ManagedArtifactRecord): Promise<Uint8Array> {
     try {
-      return await this.objectStore.getObject(source.objectKey);
+      return await readObjectBytes(this.objectStore, source.objectKey);
     } catch (localError) {
       if (!this.sourceReader) {
         throw previewFailure("source_missing", false);
@@ -415,11 +417,7 @@ class ArtifactPreviewRender {
           format: input.rendered.format
         });
         objectKeys.push(objectKey);
-        await this.objectStore.putObject({
-          key: objectKey,
-          body: page.bytes,
-          contentType: page.mimeType
-        });
+        await this.objectStore.put(objectKey, page.bytes, { contentType: page.mimeType });
         const pageNumber =
           input.sourceKind === "document" || input.sourceKind === "pdf"
             ? (page.pageNumber ?? index + 1)
@@ -479,11 +477,7 @@ class ArtifactPreviewRender {
     const extension = imageExtension(image.mimeType);
     const objectKey = `${withoutExtension(pageObjectKey)}.model.${extension}`;
     objectKeys.push(objectKey);
-    await this.objectStore.putObject({
-      key: objectKey,
-      body: image.bytes,
-      contentType: image.mimeType
-    });
+    await this.objectStore.put(objectKey, image.bytes, { contentType: image.mimeType });
     return {
       objectKey,
       filename: `${withoutExtension(pageFilename)}.model.${extension}`,
@@ -496,9 +490,7 @@ class ArtifactPreviewRender {
   }
 
   private async deleteStagedObjects(objectKeys: string[]): Promise<void> {
-    await Promise.allSettled(
-      objectKeys.map((objectKey) => this.objectStore.deleteObject(objectKey))
-    );
+    await Promise.allSettled(objectKeys.map((objectKey) => this.objectStore.delete(objectKey)));
   }
 }
 

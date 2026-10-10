@@ -599,10 +599,17 @@ Providers and their settings:
 | `models`        | `deterministic`             | `model`. Answers without a model; for tests and local runs.                                                                                                                                                  |
 | `mail`          | `mailjet`                   | `appUrl`, `sender`, `apiKeySecret` (default `MAILJET_API_KEY`), `apiSecretSecret` (default `MAILJET_API_SECRET`)                                                                                             |
 | `mail`          | `capture`                   | `appUrl`, `sender`. Development only.                                                                                                                                                                        |
-| `objectStorage` | `s3` (`files`)              | `bucket`, `bucketRegion`, `endpoint`, `forcePathStyle`, `accessKeySecret` (default `AWS_ACCESS_KEY_ID`), `secretKeySecret` (default `AWS_SECRET_ACCESS_KEY`). Comes with the document processing capability, a paid capability. |
-| `objectStorage` | `filesystem` (`workspaces`) | `root`: a directory that the API and its workers share.                                                                                                                                                      |
+| `objectStorage` | `s3`                        | `bucket`, `bucketRegion`, `endpoint`, `forcePathStyle`, `accessKeySecret` (default `AWS_ACCESS_KEY_ID`), `secretKeySecret` (default `AWS_SECRET_ACCESS_KEY`). Any S3-compatible store.                       |
+| `objectStorage` | `filesystem`                | `root`: a directory that the API and its workers share.                                                                                                                                                      |
 | `sandbox`       | `docker`                    | `image`, `cpuCount`, `memoryBytes`, `pidsLimit`, `endpoint` (a `tcp://` or `ssh://` Docker engine on another host; needs `region`). The container has no network and a read-only root file system.           |
 | `sandbox`       | `local`                     | None. Development only.                                                                                                                                                                                      |
+
+Every stored byte goes through one object storage port. `objectStorage.files` holds uploaded
+documents and what is prepared from them, and is used by the document processing capability, a
+paid capability; `objectStorage.workspaces` holds workspace files,
+their source files and preview images. Each store names its own provider and its own bucket or
+directory, and either provider serves either store. Object keys are the same in both providers
+and did not change with the port, so a store written by an earlier release is read as it is.
 
 The platform takes its own secrets from the same provider by fixed names: `DATABASE_URL`,
 `BETTER_AUTH_SECRET`, `SERVICE_ACCESS_TOKEN_SECRET`, `CHAT_SESSION_TOKEN_SECRET` and

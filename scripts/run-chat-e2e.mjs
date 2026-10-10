@@ -18,6 +18,7 @@ const requiredBuilds = [
   ["packages/tool-sdk", "build"],
   ["packages/mail", "build"],
   ["packages/model-provider", "build"],
+  ["packages/object-storage", "build"],
   ["packages/usage-governance", "build"],
   ["packages/data-source", "build"],
   ["packages/document-execution", "build"],

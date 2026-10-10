@@ -9,7 +9,7 @@ import {
   isAppError
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { upsertStoredWorkspaceFile } from "../workspace-file-bytes";
+import { putWorkspaceFile, upsertStoredWorkspaceFile } from "../workspace-file-bytes";
 import {
   workspaceImportFilesInputSchema,
   workspaceImportFilesOutputSchema
@@ -68,7 +68,7 @@ export async function importWorkspaceFiles(
 
   const importedFiles = [];
   for (const file of files.value) {
-    const stored = await deps.fileStore.putWorkspaceFile({
+    const stored = await putWorkspaceFile(deps.fileStore, {
       clientInstanceId: context.clientInstanceId,
       conversationId: workspace.value.conversationId,
       workspaceId: workspace.value.handle.id,

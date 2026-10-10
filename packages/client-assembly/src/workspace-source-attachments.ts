@@ -15,17 +15,15 @@ import {
   type ManagedArtifactRecord,
   type ManagedFileId,
   type ManagedObjectDeletionResult,
-  type PlatformFileStore
+  type PlatformFileStore,
+  readObjectBytes,
+  type ObjectStorage
 } from "@vivd-catalyst/core";
 import type {
   ClientInstanceAttachmentHandler,
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
-import {
-  EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
-  type DeletableWorkspaceObjectStorage,
-  type WorkspaceFileByteStore
-} from "@vivd-catalyst/tool-execution";
+import { EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE } from "@vivd-catalyst/tool-execution";
 
 const WORKSPACE_SOURCE_ATTACHMENT_KIND = "workspace_source";
 const WORKSPACE_SOURCE_METADATA_SOURCE = "execution_workspace_source";
@@ -101,7 +99,7 @@ export interface CreateExecutionWorkspaceSourceAttachmentHandlerInput {
   clientInstanceId: ClientInstanceId;
   files: PlatformFileStore;
   /** The `workspaces` object store of the instance. */
-  objectStore: DeletableWorkspaceObjectStorage;
+  objectStore: ObjectStorage;
   maxFileBytes?: number;
   markDeletedOnDelete: boolean;
 }
@@ -146,7 +144,7 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
     },
     async deleteOrphanedFileObjects(file) {
       const objectKeys = file.objectKeys.filter(isSourceObjectKey);
-      await Promise.all(objectKeys.map((objectKey) => objectStore.deleteObject(objectKey)));
+      await Promise.all(objectKeys.map((objectKey) => objectStore.delete(objectKey)));
       return objectKeys;
     },
     readConversationFile(file) {
@@ -173,7 +171,8 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
 export function createExecutionWorkspaceManagedObjectReader(input: {
   clientInstanceId: ClientInstanceId;
   files: PlatformFileStore;
-  byteStore: WorkspaceFileByteStore;
+  /** The `workspaces` object store of the instance. */
+  byteStore: ObjectStorage;
 }): ClientInstanceManagedObjectReaderContribution {
   return {
     name: "execution-workspace",
@@ -197,7 +196,7 @@ export function createExecutionWorkspaceManagedObjectReader(input: {
         throw new AppError("NOT_FOUND", "Managed workspace artifact is not available");
       }
       return {
-        bytes: await input.byteStore.getObject(artifact.objectKey),
+        bytes: await readObjectBytes(input.byteStore, artifact.objectKey),
         mimeType: artifact.mimeType
       };
     },
@@ -296,13 +295,13 @@ function createWorkspaceSourceAttachmentManifest(
 class ExecutionWorkspaceSourceAttachmentService {
   private readonly clientInstanceId: ClientInstanceId;
   private readonly files: PlatformFileStore;
-  private readonly objectStore: DeletableWorkspaceObjectStorage;
+  private readonly objectStore: ObjectStorage;
   private readonly maxFileBytes: number;
   private readonly markDeletedOnDelete: boolean;
 
   constructor(
     input: CreateExecutionWorkspaceSourceAttachmentHandlerInput & {
-      objectStore: DeletableWorkspaceObjectStorage;
+      objectStore: ObjectStorage;
       maxFileBytes: number;
     }
   ) {
@@ -353,11 +352,9 @@ class ExecutionWorkspaceSourceAttachmentService {
       checksum,
       filename: input.filename
     });
-    await this.objectStore.putObject({
-      key: objectKey,
-      body: input.content.openStream(),
+    await this.objectStore.put(objectKey, input.content.openStream(), {
       contentType: input.mimeType,
-      contentLength: input.content.byteSize
+      size: input.content.byteSize
     });
     const file = await this.files.createManagedFile({
       clientInstanceId: this.clientInstanceId,
@@ -435,7 +432,7 @@ class ExecutionWorkspaceSourceAttachmentService {
       : deletion.artifactObjectKeys.filter(isWorkspaceArtifactObjectKey);
     await Promise.all(
       [...fileObjectKeys, ...artifactObjectKeys].map((objectKey) =>
-        this.objectStore.deleteObject(objectKey)
+        this.objectStore.delete(objectKey)
       )
     );
     if (this.markDeletedOnDelete) {
@@ -475,7 +472,7 @@ class ExecutionWorkspaceSourceAttachmentService {
       fileId: file.id,
       filename: attachment.filename,
       byteSize: attachment.byteSize,
-      bytes: await this.objectStore.getObject(file.objectKey),
+      bytes: await readObjectBytes(this.objectStore, file.objectKey),
       ...(mimeType ? { mimeType } : {})
     };
   }

@@ -212,7 +212,7 @@ describe("Postgres writes into a conversation that is being deleted", () => {
       ...fixture.artifactRow(conversation, "early"),
       id: asManagedArtifactId(`art_${globalThis.crypto.randomUUID()}`)
     };
-    await fixture.byteStore.putObject({ key: early.objectKey, body: new Uint8Array([1]) });
+    await fixture.byteStore.put(early.objectKey, new Uint8Array([1]));
     // An uncommitted row with the same id makes the insert wait in the middle of its
     // transaction, with the Conversation lock taken.
     const held = await db.hold(
