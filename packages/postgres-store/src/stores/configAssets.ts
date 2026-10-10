@@ -9,6 +9,7 @@ import {
   getConfigAsset as getPostgresConfigAsset,
   getConfigAssetState as getPostgresConfigAssetState,
   listActiveConfigAssets as listActivePostgresConfigAssets,
+  listConfigAssetPage as listPostgresConfigAssetPage,
   listAgentAvailability as listPostgresAgentAvailability,
   listConfigAssetRevisions as listPostgresConfigAssetRevisions,
   setAgentAvailability as setPostgresAgentAvailability
@@ -25,6 +26,11 @@ export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigA
       input: Parameters<ConfigAssetStore["listActiveConfigAssets"]>[0]
     ): Promise<ConfigAssetRecord[]> {
       return listActivePostgresConfigAssets(db, input);
+    },
+    async listConfigAssetPage(
+      input: Parameters<ConfigAssetStore["listConfigAssetPage"]>[0]
+    ): Promise<ConfigAssetRecord[]> {
+      return listPostgresConfigAssetPage(db, input);
     },
     async getConfigAsset(
       input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]

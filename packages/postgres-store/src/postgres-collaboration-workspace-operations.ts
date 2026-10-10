@@ -18,6 +18,7 @@ import {
   validateWorkspaceCreation
 } from "@vivd-catalyst/core";
 import { containsPattern } from "./like-pattern";
+import { deleteWorkspaceOwnedAssets } from "./postgres-config-asset-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
 import {
@@ -583,6 +584,10 @@ export async function deletePersonalWorkspaceForUser(
           eq(conversations.collaborationWorkspaceId, workspace.id)
         )
       );
+    await deleteWorkspaceOwnedAssets(tx, {
+      clientInstanceId: input.clientInstanceId,
+      collaborationWorkspaceId: workspace.id
+    });
     await tx
       .delete(collaborationWorkspaces)
       .where(

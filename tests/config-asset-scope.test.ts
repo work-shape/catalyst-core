@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { AppError, type AssetScope, type ConfigAssetMutation } from "@vivd-catalyst/core";
 import { applyValidatedConfigAssetMutations } from "@vivd-catalyst/chat-server";
 import {
   agent,
@@ -15,12 +15,21 @@ import { withTestSql } from "./support/test-sql";
 // Who owns an asset. Every asset is owned by the instance until the first kind a workspace can
 // own: the columns and the indexes exist, the write path refuses the scope.
 
-const workspaceId = asCollaborationWorkspaceId("cw_scope_test");
+/** A workspace that exists: an asset names its owner through a foreign key. */
+async function createWorkspace(t: Awaited<ReturnType<typeof setup>>, name = "Scope test") {
+  const workspace = await t.stores.workspaces.createWorkspace({
+    clientInstanceId,
+    kind: "shared",
+    name,
+    creatorUserId: t.admin.id
+  });
+  return workspace.id;
+}
 
 describe("scope on a config asset", () => {
   it("stores an asset written without a scope as owned by the instance", async () => {
     const t = await setup();
-    await t.expectOk(t.admin.id, "config_assets.put", {
+    await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "research" },
       payload: { config: skill("research") }
     });
@@ -75,7 +84,7 @@ describe("scope on a config asset", () => {
             kind: "agent",
             name: "team-agent",
             config: agent("team-agent"),
-            scope: { kind: "workspace", workspaceId }
+            scope: { kind: "workspace", workspaceId: await createWorkspace(t) }
           }
         ]
       }
@@ -91,42 +100,49 @@ describe("scope on a config asset", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("keeps the scope an asset was created with and refuses a write that names another", async () => {
+  it("keeps the scope an asset was created with and refuses a write that means another", async () => {
     const t = await setup();
-    const upsert = (name: string, scope?: { kind: "workspace"; workspaceId: typeof workspaceId }) =>
-      t.stores.configAssets.applyConfigAssetMutations({
-        clientInstanceId,
-        mutations: [
-          { type: "upsert", kind: "skill", name, config: skill(name), ...(scope ? { scope } : {}) }
-        ]
+    const workspaceId = await createWorkspace(t);
+    const otherWorkspaceId = await createWorkspace(t, "Another");
+    const write = (mutation: ConfigAssetMutation) =>
+      t.stores.configAssets.applyConfigAssetMutations({ clientInstanceId, mutations: [mutation] });
+    const upsert = (scope?: AssetScope) =>
+      write({
+        type: "upsert",
+        kind: "skill",
+        name: "team-notes",
+        config: skill("team-notes"),
+        ...(scope ? { scope } : {})
       });
-    await upsert("team-notes", { kind: "workspace", workspaceId });
-    await upsert("team-notes");
+    const invalidScope = { code: "VALIDATION_FAILED", details: { reason: "invalid_scope" } };
+    const owner: AssetScope = { kind: "workspace", workspaceId };
+    await upsert(owner);
 
-    const stored = await t.stores.configAssets.getConfigAsset({
-      clientInstanceId,
-      kind: "skill",
-      name: "team-notes"
-    });
-    expect(stored).toMatchObject({ revision: 2, scope: { kind: "workspace", workspaceId } });
+    // A write that names no scope means the instance's own assets: it never reaches this one.
+    await expect(upsert()).rejects.toMatchObject(invalidScope);
+    await expect(upsert({ kind: "instance" })).rejects.toMatchObject(invalidScope);
     await expect(
-      t.stores.configAssets.applyConfigAssetMutations({
-        clientInstanceId,
-        mutations: [
-          {
-            type: "upsert",
-            kind: "skill",
-            name: "team-notes",
-            config: skill("team-notes"),
-            scope: { kind: "instance" }
-          }
-        ]
-      })
-    ).rejects.toMatchObject({ code: "VALIDATION_FAILED", details: { reason: "invalid_scope" } });
+      upsert({ kind: "workspace", workspaceId: otherWorkspaceId })
+    ).rejects.toMatchObject(invalidScope);
+    // Neither does a delete, with or without a scope that is not the owner's.
+    await expect(
+      write({ type: "delete", kind: "skill", name: "team-notes" })
+    ).rejects.toMatchObject(invalidScope);
+    const stored = () =>
+      t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "skill", name: "team-notes" });
+    expect(await stored()).toMatchObject({ revision: 1, status: "active", scope: owner });
+
+    await upsert(owner);
+    expect(await stored()).toMatchObject({ revision: 2, scope: owner });
+    await write({ type: "delete", kind: "skill", name: "team-notes", scope: owner });
+    expect(await stored()).toMatchObject({ revision: 3, status: "deleted", scope: owner });
+    // The name stays with its owner across the delete.
+    await expect(upsert()).rejects.toMatchObject(invalidScope);
   });
 
   it("holds scope_id null exactly for instance scope, and a name once per kind", async () => {
     const t = await setup();
+    const workspaceId = await createWorkspace(t);
     await t.stores.configAssets.applyConfigAssetMutations({
       clientInstanceId,
       mutations: [{ type: "upsert", kind: "skill", name: "research", config: skill("research") }]
@@ -149,6 +165,10 @@ describe("scope on a config asset", () => {
       "config_assets_scope_kind_check"
     );
     await insert("a4", "four", "workspace", workspaceId);
+    // The owner of an asset is a workspace that exists.
+    await expect(insert("a6", "six", "workspace", "cw_none")).rejects.toThrow(
+      "config_assets_scope_workspace_fk"
+    );
     // The name of an instance asset is taken for every workspace, too.
     await expect(insert("a5", "research", "workspace", workspaceId)).rejects.toThrow(
       "config_assets_client_kind_name_idx"

@@ -61,6 +61,17 @@ export const configAssets = pgTable(
       table.kind,
       table.name.op("text_pattern_ops")
     ),
+    // An asset a workspace owns cannot outlive it. Nothing cascades: the workspace delete
+    // removes its assets itself, with the grants on them, and this key refuses one that does not.
+    foreignKey({
+      name: "config_assets_scope_workspace_fk",
+      columns: [table.scopeId],
+      foreignColumns: [collaborationWorkspaces.id]
+    }),
+    // What a workspace owns, for its delete and for the key above. Instance assets are not in it.
+    index("config_assets_scope_idx")
+      .on(table.scopeId)
+      .where(sql`${table.scopeId} is not null`),
     check("config_assets_scope_kind_check", sql`${table.scopeKind} in ('instance', 'workspace')`),
     check(
       "config_assets_scope_id_check",

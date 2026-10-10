@@ -10,6 +10,7 @@ import {
   notInDeletion,
   workspaceRowWhere
 } from "./postgres-collaboration-workspace-operations";
+import { deleteWorkspaceOwnedAssets } from "./postgres-config-asset-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { requireNoPendingConversationCleanup } from "./postgres-pending-cleanup";
 import { mapCollaborationWorkspace, mapWorkspaceMembership } from "./rows";
@@ -175,6 +176,7 @@ export async function deleteWorkspace(
           )
         )
       );
+    await deleteWorkspaceOwnedAssets(tx, input);
     const [row] = await tx
       .delete(collaborationWorkspaces)
       .where(

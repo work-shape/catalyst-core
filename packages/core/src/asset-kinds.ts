@@ -41,10 +41,15 @@ export interface AssetKindActions {
   delete: string;
 }
 
-/** What a validator may look up besides the definition it checks. */
+/** What a validator may look up besides the definitions it checks. */
 export interface AssetValidationContext {
   /** The definitions of one kind as they stand once the change is applied. */
   definitions(kind: string): readonly unknown[];
+  /**
+   * Whether the change adds or changes this definition. A rule that tolerates what is stored
+   * already asks, so a stored asset never stands in the way of a write to another one.
+   */
+  changes(kind: string, name: string): boolean;
 }
 
 /** What a list shows of one asset without knowing its kind. */
@@ -62,23 +67,59 @@ export interface AssetKindDefinition<Definition, Kind extends string = string> {
   schema: AssetKindSchema<Definition>;
   nameRule: AssetNameRule;
   actions: AssetKindActions;
-  /** Reference and cross-asset checks of one definition the schema accepted. */
-  validate(context: AssetValidationContext, definition: Definition): AssetValidationIssue[];
+  /**
+   * Reference and cross-asset checks of this kind's definitions the schema accepted. All of
+   * them are handed over at once, so a kind decides the order of its issues across them.
+   */
+  validate(
+    context: AssetValidationContext,
+    definitions: readonly Definition[]
+  ): AssetValidationIssue[];
+  /**
+   * The instance's own rules for a write, asked only once no schema, name or reference issue
+   * is left. Returns issues or throws the refusal itself.
+   */
+  validateWrite?(
+    context: AssetValidationContext,
+    definitions: readonly Definition[]
+  ): AssetValidationIssue[];
   summarize(definition: Definition): AssetSummary;
 }
 
+/** A definition the schema or the name rule refused, with its place among those read. */
+export interface RefusedAssetDefinition {
+  index: number;
+  /** The name the definition carries, where it has one. */
+  name?: string;
+  issues: AssetValidationIssue[];
+}
+
 /**
- * A kind as the registry holds it. The definition type is closed over: `validate` and
- * `summarize` take what a caller received and parse it with the kind's schema first, so shared
- * code handles every kind without knowing its definition.
+ * What a kind made of the definitions it was handed. The accepted ones stay with the reading
+ * in the kind's own type, so the checks run over them without a second parse.
+ */
+export interface AssetKindReading {
+  /** The accepted definitions as the schema reads them, defaults applied, in input order. */
+  readonly accepted: readonly unknown[];
+  readonly refused: readonly RefusedAssetDefinition[];
+  /** The kind's reference and cross-asset checks over the accepted definitions. */
+  validate(context: AssetValidationContext): AssetValidationIssue[];
+  /** The instance's own rules for a write over the accepted definitions. */
+  validateWrite(context: AssetValidationContext): AssetValidationIssue[];
+}
+
+/**
+ * A kind as the registry holds it. The definition type is closed over: `read` parses what a
+ * caller received with the kind's schema, so shared code handles every kind without knowing
+ * its definition.
  */
 export interface RegisteredAssetKind<Kind extends string = string> {
   readonly kind: Kind;
   readonly plural: string;
   readonly nameRule: AssetNameRule;
   readonly actions: Readonly<AssetKindActions>;
-  /** Schema issues, then the name rule, then the kind's own checks. Empty when valid. */
-  validate(context: AssetValidationContext, definition: unknown): AssetValidationIssue[];
+  /** Reads definitions: the schema first, then the name rule. The checks follow on the reading. */
+  read(definitions: readonly unknown[]): AssetKindReading;
   /** Throws `VALIDATION_FAILED` for a definition the schema refuses. */
   summarize(definition: unknown): AssetSummary;
 }
@@ -115,13 +156,34 @@ export function defineAssetKind<Definition, Kind extends string>(
     plural: definition.plural,
     nameRule,
     actions: Object.freeze({ ...definition.actions }),
-    validate(context: AssetValidationContext, input: unknown) {
-      const parsed = definition.schema.safeParse(input);
-      if (!parsed.success) {
-        return parsed.error.issues.map(({ message, path }) => ({ message, path }));
+    read(inputs: readonly unknown[]): AssetKindReading {
+      const accepted: Definition[] = [];
+      const refused: RefusedAssetDefinition[] = [];
+      for (const [index, input] of inputs.entries()) {
+        const parsed = definition.schema.safeParse(input);
+        if (!parsed.success) {
+          const name = readName(input);
+          refused.push({
+            index,
+            ...(name === undefined ? {} : { name }),
+            issues: parsed.error.issues.map(({ message, path }) => ({ message, path }))
+          });
+          continue;
+        }
+        const { name } = definition.summarize(parsed.data);
+        const nameIssue = assetNameIssue({ nameRule }, name);
+        if (nameIssue) {
+          refused.push({ index, name, issues: [nameIssue] });
+        } else {
+          accepted.push(parsed.data);
+        }
       }
-      const nameIssue = assetNameIssue({ nameRule }, definition.summarize(parsed.data).name);
-      return nameIssue ? [nameIssue] : definition.validate(context, parsed.data);
+      return {
+        accepted,
+        refused,
+        validate: (context) => definition.validate(context, accepted),
+        validateWrite: (context) => definition.validateWrite?.(context, accepted) ?? []
+      };
     },
     summarize(input: unknown) {
       const parsed = definition.schema.safeParse(input);
@@ -136,6 +198,13 @@ export function defineAssetKind<Definition, Kind extends string>(
       return definition.summarize(parsed.data);
     }
   });
+}
+
+function readName(input: unknown): string | undefined {
+  if (typeof input !== "object" || input === null || !("name" in input)) {
+    return undefined;
+  }
+  return typeof input.name === "string" ? input.name : undefined;
 }
 
 /** The kinds this build ships, in registration order. */

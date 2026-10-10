@@ -6,7 +6,11 @@ import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
 import type { ClientInstanceId, CollaborationWorkspaceId } from "./ids";
 import type { JsonObject } from "./json";
 
-export type ConfigAssetKind = "agent" | "skill";
+/**
+ * The id of a registered asset kind, such as `agent`. The registry of the instance says which
+ * exist; the store keeps whatever kind a checked write names.
+ */
+export type ConfigAssetKind = string;
 
 export type AgentAvailabilityMode = "all" | "selected";
 
@@ -106,13 +110,27 @@ export type ConfigAssetMutation =
       config: JsonObject;
       operation?: "revert";
       /**
-       * The owner of a new asset; the instance when left out. An existing asset keeps its
-       * scope: naming another one is refused with `invalid_scope`.
+       * The owner of the asset; the instance when left out. An existing asset keeps its
+       * scope: a write that means another one is refused with `invalid_scope`.
        */
       scope?: AssetScope;
     }
-  | { type: "delete"; kind: ConfigAssetKind; name: string }
+  | {
+      type: "delete";
+      kind: ConfigAssetKind;
+      name: string;
+      /** The owner of the asset; the instance when left out. Another one is refused. */
+      scope?: AssetScope;
+    }
   | { type: "setDefaultAgent"; agentName: string | undefined };
+
+/** What a list needs to decide whether its caller may read an asset, without its content. */
+export interface ConfigAssetKey {
+  id: string;
+  kind: ConfigAssetKind;
+  name: string;
+  scope: AssetScope;
+}
 
 export interface ConfigAssetStore {
   getConfigAssetState(input: { clientInstanceId: ClientInstanceId }): Promise<ConfigAssetState>;
@@ -121,6 +139,24 @@ export interface ConfigAssetStore {
     kind?: ConfigAssetKind;
     /** Only assets whose name starts with this text, such as a Namespace prefix. */
     namePrefix?: string;
+  }): Promise<ConfigAssetRecord[]>;
+  /**
+   * One page of the active assets of a kind in one scope, in the byte order of their names.
+   * The store reads keys in batches and asks `readable` for each, so the page holds only what
+   * the caller may read and the content of no other asset is loaded.
+   */
+  listConfigAssetPage(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    scope: AssetScope;
+    /** Only assets whose name starts with this text, such as a Namespace prefix. */
+    namePrefix?: string;
+    /** Only assets whose name contains this text, whatever the case. */
+    nameContains?: string;
+    /** The name the page starts after. */
+    afterName?: string;
+    limit: number;
+    readable(asset: ConfigAssetKey): boolean;
   }): Promise<ConfigAssetRecord[]>;
   getConfigAsset(input: {
     clientInstanceId: ClientInstanceId;

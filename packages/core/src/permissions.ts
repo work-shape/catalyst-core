@@ -296,10 +296,13 @@ function entryCovers(entry: AccessEntry, resource: AccessResource | undefined): 
     case "instance":
       return true;
     case "namespace":
+      // A Namespace is a prefix among the instance's own assets. An asset a workspace owns is
+      // reached through a right on that workspace, on the asset or on the instance.
       return (
         entry.namespace !== undefined &&
         entry.namespace.length > 0 &&
         resource?.name !== undefined &&
+        resource.workspaceId === undefined &&
         resource.name.startsWith(entry.namespace)
       );
     case "asset":
@@ -489,7 +492,10 @@ export interface AccessAdministrationStore extends AccessStore {
     clientInstanceId: ClientInstanceId;
     prefix: string;
   }): Promise<Namespace | undefined>;
+  /** The Namespaces with what refers to each. It counts per Namespace: for a page that shows the counts. */
   listNamespaces(input: { clientInstanceId: ClientInstanceId }): Promise<NamespaceUsage[]>;
+  /** The Namespaces alone, in the byte order of their prefixes: what a write and a list read. */
+  listNamespaceRecords(input: { clientInstanceId: ClientInstanceId }): Promise<Namespace[]>;
   /** The active agent or skill an asset-scoped grant names. */
   getGrantableAsset(input: {
     clientInstanceId: ClientInstanceId;

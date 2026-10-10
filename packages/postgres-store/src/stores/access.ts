@@ -281,6 +281,15 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
       });
     },
 
+    async listNamespaceRecords(input) {
+      const rows = await db
+        .select()
+        .from(namespaces)
+        .where(eq(namespaces.clientInstanceId, input.clientInstanceId))
+        .orderBy(sql`${namespaces.prefix} COLLATE "C"`);
+      return rows.map(mapNamespace);
+    },
+
     async listNamespaces(input) {
       const rows = await db
         .select({

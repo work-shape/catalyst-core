@@ -1,5 +1,6 @@
+import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { and, asc, eq, inArray, like } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, like, sql } from "drizzle-orm";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
@@ -64,6 +65,86 @@ export async function listActiveConfigAssets(
     .where(and(...conditions))
     .orderBy(asc(configAssets.kind), asc(configAssets.name));
   return rows.map((row) => mapConfigAsset(row.asset, row.revision));
+}
+
+/**
+ * How many asset keys one read of a list takes while it looks for the rows its caller may
+ * read. A caller who may read everything needs one read per page. A caller who may read
+ * little needs one per this many assets that match the filter, until the page is full.
+ */
+const ASSET_LIST_SCAN_BATCH = 1000;
+
+export async function listConfigAssetPage(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["listConfigAssetPage"]>[0]
+): Promise<ConfigAssetRecord[]> {
+  const conditions = [
+    eq(configAssets.clientInstanceId, input.clientInstanceId),
+    eq(configAssets.kind, input.kind),
+    eq(configAssets.status, "active"),
+    input.scope.kind === "workspace"
+      ? and(
+          eq(configAssets.scopeKind, "workspace"),
+          eq(configAssets.scopeId, input.scope.workspaceId)
+        )
+      : eq(configAssets.scopeKind, "instance")
+  ];
+  if (input.namePrefix !== undefined) {
+    // A constant pattern, so the planner reads it as a range of the prefix index.
+    conditions.push(like(configAssets.name, `${escapeLikePattern(input.namePrefix)}%`));
+  }
+  if (input.nameContains !== undefined) {
+    conditions.push(ilike(configAssets.name, containsPattern(input.nameContains)));
+  }
+  // Byte order through the operators of the prefix index: one index range answers the
+  // filter, the cursor and the order, under any collation of the database.
+  const ids: string[] = [];
+  let afterName = input.afterName;
+  while (ids.length < input.limit) {
+    const keys = await db
+      .select({
+        id: configAssets.id,
+        kind: configAssets.kind,
+        name: configAssets.name,
+        scopeKind: configAssets.scopeKind,
+        scopeId: configAssets.scopeId
+      })
+      .from(configAssets)
+      .where(
+        and(
+          ...conditions,
+          afterName === undefined ? undefined : sql`${configAssets.name} ~>~ ${afterName}`
+        )
+      )
+      .orderBy(sql`${configAssets.name} using ~<~`)
+      .limit(ASSET_LIST_SCAN_BATCH);
+    for (const key of keys) {
+      if (
+        ids.length < input.limit &&
+        input.readable({ id: key.id, kind: key.kind, name: key.name, scope: mapAssetScope(key) })
+      ) {
+        ids.push(key.id);
+      }
+    }
+    const last = keys.at(-1);
+    if (keys.length < ASSET_LIST_SCAN_BATCH || !last) {
+      break;
+    }
+    afterName = last.name;
+  }
+  if (ids.length === 0) {
+    return [];
+  }
+  const rows = await db
+    .select({ asset: configAssets, revision: configAssetRevisions })
+    .from(configAssets)
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+    .where(and(inArray(configAssets.id, ids), eq(configAssets.status, "active")));
+  const byId = new Map(rows.map((row) => [row.asset.id, row]));
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [mapConfigAsset(row.asset, row.revision)] : [];
+  });
 }
 
 export async function getConfigAsset(
@@ -221,6 +302,17 @@ export async function applyConfigAssetMutations(
         kind: mutation.kind,
         name: mutation.name
       });
+      // A mutation that names no scope means the instance's own assets. It never reaches an
+      // asset a workspace owns, and a write never moves an asset: the name stays with its
+      // owner, also across a delete.
+      const scope = mutation.scope ?? INSTANCE_ASSET_SCOPE;
+      if (asset && !assetScopesEqual(scope, mapAssetScope(asset))) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Config ${mutation.kind} '${mutation.name}' belongs to another scope`,
+          { reason: "invalid_scope" }
+        );
+      }
       if (mutation.type === "delete") {
         if (!asset || asset.status === "deleted") {
           continue;
@@ -254,7 +346,6 @@ export async function applyConfigAssetMutations(
         continue;
       }
 
-      const scope = mutation.scope ?? INSTANCE_ASSET_SCOPE;
       if (!asset) {
         const assetId = createPlatformId("cfga");
         const revisionId = createPlatformId("cfgr");
@@ -288,14 +379,6 @@ export async function applyConfigAssetMutations(
         continue;
       }
 
-      // A write never moves an asset: the name stays with its owner, also across a delete.
-      if (mutation.scope !== undefined && !assetScopesEqual(scope, mapAssetScope(asset))) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `Config ${mutation.kind} '${mutation.name}' belongs to another scope`,
-          { reason: "invalid_scope" }
-        );
-      }
       await appendAndActivateRevision(tx, {
         asset,
         operation: mutation.operation ?? (asset.status === "deleted" ? "create" : "update"),
@@ -454,6 +537,67 @@ export async function setAgentAvailability(
     }
     return { ...input.availability, collaborationWorkspaceIds };
   });
+}
+
+/**
+ * Removes what a workspace owns, in the transaction that removes the workspace. An asset
+ * belongs to its owner: once the workspace is gone nothing could read or write it, so its
+ * rows go with it, revisions and availability through their own keys, and the grant rows that
+ * name one of them here. The foreign key on `scope_id` refuses a workspace delete that skips
+ * this.
+ *
+ * It takes the lock every asset write takes, after the caller's lock on the workspace. A
+ * write that creates an asset in this workspace at the same moment holds the two the other
+ * way round; the database then ends one of the two transactions, and the call is repeated.
+ */
+export async function deleteWorkspaceOwnedAssets(
+  tx: PostgresTransaction,
+  input: { clientInstanceId: string; collaborationWorkspaceId: string }
+): Promise<void> {
+  const owned = and(
+    eq(configAssets.clientInstanceId, input.clientInstanceId),
+    eq(configAssets.scopeKind, "workspace"),
+    eq(configAssets.scopeId, input.collaborationWorkspaceId)
+  );
+  const [any] = await tx.select({ id: configAssets.id }).from(configAssets).where(owned).limit(1);
+  if (!any) {
+    return;
+  }
+  const [state] = await tx
+    .select()
+    .from(configAssetState)
+    .where(eq(configAssetState.clientInstanceId, input.clientInstanceId))
+    .for("update")
+    .limit(1);
+  const removed = await tx
+    .delete(configAssets)
+    .where(owned)
+    .returning({ id: configAssets.id, kind: configAssets.kind, name: configAssets.name });
+  await tx.delete(permissionGrants).where(
+    and(
+      eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+      eq(permissionGrants.scopeKind, "asset"),
+      inArray(
+        permissionGrants.scopeId,
+        removed.map((asset) => asset.id)
+      )
+    )
+  );
+  if (!state) {
+    return;
+  }
+  // The set changed, so its version moves, and a default that named a removed agent is gone.
+  const defaultRemoved = removed.some(
+    (asset) => asset.kind === "agent" && asset.name === state.defaultAgentName
+  );
+  await tx
+    .update(configAssetState)
+    .set({
+      version: state.version + 1,
+      ...(defaultRemoved ? { defaultAgentName: null } : {}),
+      updatedAt: new Date()
+    })
+    .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
 }
 
 function escapeLikePattern(text: string): string {
