@@ -107,7 +107,8 @@ async function startInstance(appsEnabled = true) {
     modules: resolveInstanceModules(config).snapshot,
     pages,
     logger,
-    allowedOrigins: ["https://ui.example.test"]
+    // A policy cannot name an address in brackets, so the header set leaves the second one out.
+    allowedOrigins: ["https://ui.example.test", "http://[::1]:5173"]
   }));
   const context = {
     clientInstanceId: asClientInstanceId(config.clientInstance.id),

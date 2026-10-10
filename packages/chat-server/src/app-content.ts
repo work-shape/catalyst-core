@@ -173,8 +173,17 @@ function appContentPolicy(frameAncestors: readonly string[]): string {
     "form-action 'none'",
     // A worker is a second place scripts run in, and the Page's own script does not need one.
     "worker-src 'none'",
-    `frame-ancestors ${["'self'", ...frameAncestors].join(" ")}`
+    `frame-ancestors ${["'self'", ...frameAncestors.filter(isPolicySource)].join(" ")}`
   ].join("; ");
+}
+
+/**
+ * Whether a policy can name an origin. The grammar of a source has no address in brackets, so
+ * an interface that runs on an IPv6 literal cannot frame a Page; a browser would ignore the
+ * source and say so on every answer.
+ */
+function isPolicySource(origin: string): boolean {
+  return URL.canParse(origin) && !new URL(origin).hostname.startsWith("[");
 }
 
 /** What every answer of the content route carries, an error included. */
