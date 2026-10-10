@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { SafeConfig } from "@vivd-catalyst/api-client";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import { safeConfigSchema } from "@vivd-catalyst/api-contract";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
 import { shouldExpandComposer } from "../packages/chat-ui/src/assistant/assistant-composer";
 import {
@@ -370,8 +371,13 @@ describe("the retention line above the composer", () => {
   const day = 24 * 60 * 60 * 1000;
   const noop = () => undefined;
   type Retention = SafeConfig["retention"];
+  const testConfig = createTestConfig();
   const safeConfig: SafeConfig = safeConfigSchema.parse(
-    createSafeConfigView(createTestConfig(), { version: 0, agents: [], skills: [] })
+    createSafeConfigView(
+      testConfig,
+      { version: 0, agents: [], skills: [] },
+      resolveInstanceModules(testConfig).snapshot
+    )
   );
   const retention: Retention = {
     ...safeConfig.retention,
