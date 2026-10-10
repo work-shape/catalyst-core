@@ -5,7 +5,8 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
-const member = { email: "e2e-user@example.test", password: "e2e-user-password" };
+/** The member of this file alone: its tests fill and count that member's conversations. */
+const member = { email: "e2e-navigation@example.test", password: "e2e-navigation-password" };
 /** May decide skill changes, so the rail shows this person the Inbox row. */
 const reviewer = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 

@@ -5,8 +5,11 @@ import type { Page, Response } from "@playwright/test";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
-/** Holds no right to decide anything. */
-const member = { email: "e2e-user@example.test", password: "e2e-user-password" };
+/**
+ * Holds no right to decide anything. The member of this file alone: its first test needs one
+ * who has asked for nothing.
+ */
+const member = { email: "e2e-inbox@example.test", password: "e2e-inbox-password" };
 /** May decide skill changes and operation calls, and may view the audit log. */
 const reviewer = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 
@@ -78,7 +81,7 @@ test("a member's proposal waits in the reviewer's Inbox, is rejected there and c
   const memberRow = memberInbox.getByTestId("inbox-row").filter({ hasText: summary });
   await expect(memberRow).toHaveCount(1);
   await expect(memberRow).toContainText("Awaiting approval");
-  await expect(memberRow).toContainText("E2E User via Application Assistant");
+  await expect(memberRow).toContainText("E2E Inbox via Application Assistant");
 
   // The reviewer sees it counted in the rail.
   const reviewerContext = await browser.newContext({ baseURL });
@@ -119,7 +122,7 @@ test("a member's proposal waits in the reviewer's Inbox, is rejected there and c
   await expect(surface.getByTestId("inbox-item")).toContainText(
     "Check the receipt date against the trip."
   );
-  await expect(surface.getByTestId("inbox-item")).toContainText("Requested by E2E User");
+  await expect(surface.getByTestId("inbox-item")).toContainText("Requested by E2E Inbox");
   await expect(row.getByRole("button")).toHaveAttribute("aria-current", "true");
   // The origin conversation is the member's own.
   await expect(surface.getByRole("button", { name: "Open conversation" })).toHaveCount(0);
@@ -288,12 +291,12 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   const call = approverPage.getByTestId("operation-call");
   await expect(call).toBeVisible();
   await expect(call.locator('[data-field="operation"]')).toContainText(TOOL);
-  await expect(call.locator('[data-field="actor"]')).toContainText("E2E User");
+  await expect(call.locator('[data-field="actor"]')).toContainText("E2E Inbox");
   await expect(call.locator('[data-field="origin"]')).toContainText(
     "Agent, through agent Application Assistant"
   );
   await expect(call.locator('[data-input-key="text"]')).toContainText(NOTE);
-  await expect(call).toContainText("Approving runs this call once, as E2E User.");
+  await expect(call).toContainText("Approving runs this call once, as E2E Inbox.");
   const runId = await call.getAttribute("data-run-id");
   expect(runId).toBeTruthy();
 
@@ -322,7 +325,7 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   // In German the same item.
   await approverPage.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
   await approverPage.reload();
-  await expect(call).toContainText("Mit der Freigabe läuft dieser Aufruf einmal, als E2E User.");
+  await expect(call).toContainText("Mit der Freigabe läuft dieser Aufruf einmal, als E2E Inbox.");
   await expect(approverPage.locator('button[data-decision="approve"]')).toHaveText("Freigeben");
   await expect(approverPage.locator('button[data-decision="reject"]')).toHaveText("Ablehnen");
   await approverPage.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
@@ -384,7 +387,7 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   const runRow = approverPage.locator(`tr[data-operation-run-id="${runId}"]`);
   await expect(runRow).toHaveAttribute("data-status", "done");
   await expect(runRow).toContainText(TOOL);
-  await expect(runRow).toContainText("E2E User");
+  await expect(runRow).toContainText("E2E Inbox");
   await expect(runRow).toContainText("Done");
 
   // The filters narrow the list and say when nothing matches.

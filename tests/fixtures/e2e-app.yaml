@@ -42,6 +42,33 @@ auth:
           - admin
         permissionRefs:
           - demo-tools
+      # A member for each spec file that fills that member's conversation list or Inbox. Spec
+      # files run side by side on this one instance, so a file that shared its member with
+      # another pushed the other's rows out of the rail's cap.
+      - email: e2e-views@example.test
+        displayLabel: E2E Views
+        passwordEnvName: E2E_VIEWS_PASSWORD
+        developmentPassword: e2e-views-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
+      - email: e2e-navigation@example.test
+        displayLabel: E2E Navigation
+        passwordEnvName: E2E_NAVIGATION_PASSWORD
+        developmentPassword: e2e-navigation-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
+      - email: e2e-inbox@example.test
+        displayLabel: E2E Inbox
+        passwordEnvName: E2E_INBOX_PASSWORD
+        developmentPassword: e2e-inbox-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
