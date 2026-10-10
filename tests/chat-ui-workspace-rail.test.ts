@@ -347,6 +347,27 @@ describe("workspace rail section rows", () => {
   });
 });
 
+describe("workspace rail Build row and Settings gear", () => {
+  it("shows Build above the account row only to a viewer who may open it", () => {
+    expect(renderRail()).not.toContain("lucide-blocks");
+
+    const markup = renderRail(undefined, undefined, [], { canViewBuild: true, view: "build" });
+    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Build/u);
+  });
+
+  it("offers the gear to a viewer with an administration page and marks it on Settings", () => {
+    expect(renderRail()).not.toContain('aria-label="Settings"');
+
+    const markup = renderRail(undefined, undefined, [], { canViewAdministration: true });
+    expect(markup).toMatch(/<button[^>]*aria-label="Settings"[^>]*aria-pressed="false"/u);
+    const onSettings = renderRail(undefined, undefined, [], {
+      canViewAdministration: true,
+      view: "settings"
+    });
+    expect(onSettings).toMatch(/<button[^>]*aria-label="Return to chat"[^>]*aria-pressed="true"/u);
+  });
+});
+
 describe("workspace rail conversation list states", () => {
   it("shows placeholder rows while the first page loads", () => {
     const markup = renderRail(undefined, undefined, [], { conversationsStatus: "loading" });

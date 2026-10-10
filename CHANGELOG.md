@@ -152,10 +152,11 @@ contain breaking changes; a patch version does not.
   alone carries the tone.
 - **Interface, navigation:** the rail is 280 px wide and collapses to a strip of icons with one
   visible control; under 768 px it is a drawer the header opens. Its filter field is gone:
-  Search in the rail, or ⌘K (Ctrl+K), opens a command palette that offers New chat and the
-  conversations of the active workspace and searches their titles on the server. New chat also
-  has ⌘⇧O (Ctrl+Shift+O). The theme switch and sign out moved into the account menu in the
-  rail's footer, next to the user's settings. The retention clock and the row menu of a
+  Search in the rail, or ⌘K (Ctrl+K), opens a command palette that offers New chat, the
+  conversations of the active workspace, whose titles it searches on the server, and under
+  "Go to" the Settings pages the viewer may open and Build. New chat also has ⌘⇧O
+  (Ctrl+Shift+O). The account menu in the rail's footer leads to Profile and to Language and
+  appearance and holds the theme switch and sign out. The retention clock and the row menu of a
   conversation show while the pointer or the keyboard is on the row. The list shows placeholder
   rows while it loads and a retry when the load failed. A skip link leads past the rail.
 - **Interface, surface:** closing a surface returns the focus to what opened it, a surface that

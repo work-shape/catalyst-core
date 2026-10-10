@@ -3213,6 +3213,12 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await expect(palette.getByText("Recent", { exact: true })).toBeVisible();
   await expect(palette.getByRole("option", { name: alphaTitle })).toBeVisible();
   await expect(palette.getByRole("option", { name: betaTitle })).toBeVisible();
+  // "Go to" lists the Settings pages this user may open and nothing of the instance.
+  await expect(palette.getByText("Go to", { exact: true })).toBeVisible();
+  await expect(palette.getByRole("option", { name: "Profile", exact: true })).toBeVisible();
+  await expect(palette.getByRole("option", { name: "Security", exact: true })).toBeVisible();
+  await expect(palette.getByRole("option", { name: "Users", exact: true })).toHaveCount(0);
+  await expect(palette.getByRole("option", { name: "Build", exact: true })).toHaveCount(0);
   expect(searches).toBe(0);
   // Escape closes it and the focus is back on what opened it.
   await page.keyboard.press("Escape");
@@ -3252,6 +3258,28 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await page.keyboard.press("ControlOrMeta+Shift+O");
   await expect(page).not.toHaveURL(conversationUrlPattern(alphaId));
   await expect(composer).toBeFocused();
+
+  // A typed text narrows the places too, and Enter goes there.
+  await page.keyboard.press("ControlOrMeta+k");
+  await field.fill("langu");
+  await expect(palette.getByRole("option")).toHaveText(["Language and appearance"]);
+  await page.keyboard.press("Enter");
+  await expect(palette).toBeHidden();
+  await expect(page).toHaveURL(/\/settings\/you\/language-appearance$/u);
+});
+
+test("the palette's Go to group offers an administrator the instance pages and Build", async ({
+  page
+}) => {
+  await signInViaUi(page, superadminUser);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  const palette = page.getByRole("dialog", { name: "Search" });
+  for (const name of ["Profile", "Users", "Usage", "Audit", "Build"]) {
+    await expect(palette.getByRole("option", { name, exact: true })).toBeVisible();
+  }
+  await palette.getByRole("option", { name: "Usage", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
+  await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
 });
 
 test("the account menu names the account and holds the settings, the theme and sign out", async ({
@@ -3268,7 +3296,8 @@ test("the account menu names the account and holds the settings, the theme and s
   await expect(menu).toContainText("E2E User");
   await expect(menu).toContainText(normalUser.email);
   await expect(menu.getByRole("menuitem")).toHaveText([
-    "Settings",
+    "Profile",
+    "Language and appearance",
     /^Switch to (dark|light) theme$/u,
     "Sign out"
   ]);
@@ -3298,8 +3327,14 @@ test("the account menu names the account and holds the settings, the theme and s
   expect(sideMenuBox?.x ?? 0).toBeGreaterThanOrEqual(
     (collapsedTriggerBox?.x ?? 0) + (collapsedTriggerBox?.width ?? 0)
   );
-  await menu.getByRole("menuitem", { name: "Settings" }).click();
-  await expect(page.getByRole("region", { name: "User settings" })).toBeVisible();
+  await menu.getByRole("menuitem", { name: "Language and appearance" }).click();
+  await expect(page).toHaveURL(/\/settings\/you\/language-appearance$/u);
+  await expect(page.getByRole("combobox", { name: "Language" })).toBeVisible();
+  await expect(menu).toBeHidden();
+  await trigger.click();
+  await menu.getByRole("menuitem", { name: "Profile" }).click();
+  await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
+  await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
   await expect(menu).toBeHidden();
 
   await trigger.click();

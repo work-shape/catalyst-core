@@ -18,7 +18,7 @@
     "packages/chat-ui/src/attachment-preview.tsx": {"elements":1,"font-size":2},
     "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-accent.ts": {"hex":72},
     "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-fields.tsx": {"elements":5},
-    "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector.tsx": {"elements":1,"roles":1},
+    "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector.tsx": {"roles":1},
     "packages/chat-ui/src/collaboration-workspace/collaboration-workspace-member-search.tsx": {"roles":1,"font-size":1},
     "packages/chat-ui/src/collaboration-workspace/move-conversation-dialog.tsx": {"elements":1},
     "packages/chat-ui/src/control-plane/api-access-panel.tsx": {"elements":3},

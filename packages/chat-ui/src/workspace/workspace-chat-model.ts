@@ -218,7 +218,7 @@ export interface WorkspaceConfigModel {
 }
 
 /** The pages of the Settings group "You" that the account menu leads to. */
-export type OwnSettingsPage = "profile" | "language-appearance";
+type OwnSettingsPage = "profile" | "language-appearance";
 
 export interface WorkspaceRouteModel {
   route: WorkspaceRoute;

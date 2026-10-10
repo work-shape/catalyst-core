@@ -18,7 +18,7 @@ const NEW_CHAT_VALUE = "command:new-chat";
 const GO_TO_PREFIX = "go-to:";
 
 /** One place of the "Go to" group: a Settings page the viewer may open, or Build. */
-export interface PaletteGoToTarget {
+interface PaletteGoToTarget {
   id: string;
   labelKey: TranslationKey;
 }
