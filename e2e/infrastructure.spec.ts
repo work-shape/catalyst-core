@@ -99,10 +99,11 @@ test("an operator reads what the instance runs on and checks it now, in English 
   await expect(providerRow(page, "models.local")).toContainText("Intern");
   await expect(health(page, "database")).toContainText("Antwortet");
   await expect(health(page, "database")).toContainText("Geprüft ");
-  await expect(main.locator("[data-operator-managed]")).toContainText(
+  // The region's own name is German now, so these are found on the page.
+  await expect(page.locator("[data-operator-managed]")).toContainText(
     "Der Betreiber dieser Instanz legt das in der Release-Konfiguration fest."
   );
-  await expect(main.getByRole("button", { name: "Jetzt prüfen" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Jetzt prüfen" })).toBeDisabled();
 });
 
 test.describe("with a provider that does not answer", () => {
