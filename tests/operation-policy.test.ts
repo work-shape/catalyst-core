@@ -128,6 +128,59 @@ describe("resolvePolicy: where the value comes from", () => {
   });
 });
 
+describe("resolvePolicy: a call with several targets", () => {
+  const skillAllowed = [{ operation: "items.create", value: "allow", assetKind: "skill" }] as const;
+  const skill = { assetKind: "skill", namespace: "sales" };
+  const agent = { assetKind: "agent", namespace: "sales" };
+
+  it("never lets the setting of one target loosen another target", () => {
+    for (const base of ["approval", "deny", "confirm"] as const) {
+      const instance = { instanceDefaults: { reading: "allow", changing: base } } as const;
+      // The skill alone is allowed, the agent alone stands at the default.
+      expect(
+        resolve({ ...instance, centralSettings: skillAllowed, targets: [skill] })
+      ).toMatchObject({ value: "allow", source: "central_setting" });
+      const alone = resolve({ ...instance, centralSettings: skillAllowed, targets: [agent] });
+      expect(alone).toMatchObject({ value: base, source: "instance_default" });
+      // Together the batch is what its strictest target is, in either order.
+      for (const targets of [
+        [skill, agent],
+        [agent, skill]
+      ]) {
+        expect(resolve({ ...instance, centralSettings: skillAllowed, targets })).toEqual(alone);
+      }
+    }
+  });
+
+  it("takes the strictest of what each target's own settings resolve to", () => {
+    const centralSettings = [
+      ...skillAllowed,
+      { operation: "items.create", value: "confirm", assetKind: "agent" },
+      { operation: "items.create", value: "approval", namespace: "support" }
+    ] as const;
+    const instance = { instanceDefaults: { reading: "allow", changing: "deny" } } as const;
+    expect(resolve({ ...instance, centralSettings, targets: [skill, agent] })).toMatchObject({
+      value: "confirm",
+      source: "central_setting"
+    });
+    expect(
+      resolve({
+        ...instance,
+        centralSettings,
+        targets: [skill, { assetKind: "skill", namespace: "support" }]
+      })
+    ).toMatchObject({ value: "approval", source: "central_setting" });
+    // A declared default is the base of every target as the instance default is.
+    expect(
+      resolve({
+        definition: { ...changing, defaultPolicy: "approval" },
+        centralSettings: skillAllowed,
+        targets: [skill, agent]
+      })
+    ).toMatchObject({ value: "approval", source: "declared_default" });
+  });
+});
+
 describe("resolvePolicy: guardrails", () => {
   it("lets a guardrail tighten and never loosen", () => {
     expect(resolve({ guardrailOutcome: "block" })).toEqual({

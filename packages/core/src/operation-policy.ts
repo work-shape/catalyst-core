@@ -40,7 +40,10 @@ export interface PolicyInput {
   origin: OperationOrigin;
   instanceDefaults: PolicyDefaults;
   centralSettings: readonly CentralPolicySetting[];
-  /** Every target of the call. A setting applies when it matches one of them. */
+  /**
+   * Every target of the call. The policy is resolved for each one from the settings that match
+   * it, and the strictest of them is the call's: a setting never loosens another target.
+   */
   targets?: readonly PolicyTarget[];
   personSetting?: PersonPolicySetting;
   /** What the guardrails of the before-event answered, once they ran. */
@@ -71,8 +74,8 @@ export type PolicyResolution = { source: PolicySource } & (
 /**
  * The one function that says what the policy asks of a call. The base is the operation's
  * declared default or, without one, the instance default of its effect. A central setting
- * replaces the base, and of several that match the strictest wins. A guardrail can only
- * tighten. `confirm` and `approval` are values of changing operations: on a reading operation
+ * replaces the base, and of several that match the strictest wins. A call with several targets
+ * takes the strictest of what each target resolves to. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
  * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
  * `deny`. A surface that can neither confirm nor pause is refused what would have to wait.
  */
@@ -92,16 +95,21 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
     value = definition.defaultPolicy;
     source = "declared_default";
   }
+  const base: { value: PolicyValue; source: PolicySource } = { value, source };
   // A call that names no target still has one, which carries nothing a setting is narrowed to.
   const targets = input.targets?.length ? input.targets : [{}];
-  const central = input.centralSettings
-    .filter((setting) => targets.some((target) => matches(setting, definition.name, target)))
-    .map((setting) => setting.value)
-    .filter(applies);
-  if (central.length > 0) {
-    value = central.reduce(stricter);
-    source = "central_setting";
-  }
+  const perTarget = targets.map((target): typeof base => {
+    const central = input.centralSettings
+      .filter((setting) => matches(setting, definition.name, target))
+      .map((setting) => setting.value)
+      .filter(applies);
+    return central.length > 0
+      ? { value: central.reduce(stricter), source: "central_setting" }
+      : base;
+  });
+  ({ value, source } = perTarget.reduce((left, right) =>
+    stricter(left.value, right.value) === left.value ? left : right
+  ));
 
   if (input.guardrailOutcome === "block") {
     return { value: "deny", next: "refuse", source: "guardrail" };
