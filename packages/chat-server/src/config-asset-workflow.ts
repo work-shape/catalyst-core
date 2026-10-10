@@ -68,7 +68,6 @@ export class ConfigAssetWorkflow {
         clientInstanceId: this.options.clientInstanceId
       })
     ]);
-    const refs = this.options.configAssets.validationRefs;
     return {
       version: state.version,
       ...(state.defaultAgentName === undefined ? {} : { defaultAgentName: state.defaultAgentName }),
@@ -85,18 +84,7 @@ export class ConfigAssetWorkflow {
             ? { availability: availability.get(asset.name) }
             : {})
         })),
-      references: {
-        ...refs,
-        // A tool of a module that is off is not offered for an agent.
-        enabledToolNames: refs.enabledToolNames.filter(
-          (toolName) => this.options.modules.offModuleOf("tool", toolName) === undefined
-        ),
-        // An agent that still names one shows it as unavailable and can drop it.
-        moduleOffTools: refs.enabledToolNames.flatMap((name) => {
-          const module = this.options.modules.offModuleOf("tool", name);
-          return module === undefined ? [] : [{ name, module }];
-        })
-      }
+      references: configAssetReferences(this.options)
     };
   }
 
@@ -395,6 +383,28 @@ export class ConfigAssetWorkflow {
       metadata
     });
   }
+}
+
+/**
+ * What a definition may refer to on this instance. It is read from the release config and the
+ * module switches alone, so it costs no store read.
+ */
+export function configAssetReferences(
+  options: Pick<ChatServerOptions, "configAssets" | "modules">
+) {
+  const refs = options.configAssets.validationRefs;
+  return {
+    ...refs,
+    // A tool of a module that is off is not offered for an agent.
+    enabledToolNames: refs.enabledToolNames.filter(
+      (toolName) => options.modules.offModuleOf("tool", toolName) === undefined
+    ),
+    // An agent that still names one shows it as unavailable and can drop it.
+    moduleOffTools: refs.enabledToolNames.flatMap((name) => {
+      const module = options.modules.offModuleOf("tool", name);
+      return module === undefined ? [] : [{ name, module }];
+    })
+  };
 }
 
 function assetBundle(

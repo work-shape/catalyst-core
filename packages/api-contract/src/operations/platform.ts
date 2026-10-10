@@ -1,5 +1,6 @@
+import { configAssetReferencesSchema } from "../configuration";
 import { platformContextSchema } from "../platform";
-import { defineRegisteredOperation, json } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, json } from "./define-operation";
 
 export const platformOperations = {
   // The first read of an outside editor, a service principal's included. It asks for no scope
@@ -15,6 +16,24 @@ export const platformOperations = {
     requires: [],
     effect: "reading",
     response: json(platformContextSchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  // A plain operation: an editor reads it every time it opens a definition, and a registered
+  // read would write an Operation Run and its audit rows each time. Its caller holds at least
+  // one action of a registered asset kind, on the instance or in a Namespace, that the
+  // credential's scopes let it use. The handler decides that, so `requires` names nothing.
+  "platform.references.get": defineOperation({
+    id: "platform.references.get",
+    method: "GET",
+    path: "/api/v1/context/references",
+    summary: "Read what a definition may refer to on this instance: models, efforts and tools",
+    tag: "Platform",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(configAssetReferencesSchema),
     errors: [],
     rateClass: "read"
   })

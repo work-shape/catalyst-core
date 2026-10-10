@@ -229,28 +229,31 @@ export const configAssetRevisionSchema = z.object({
   createdAt: timestampSchema
 });
 
+/** What a definition may refer to on this instance: its models, efforts and tools. */
+export const configAssetReferencesSchema = z.object({
+  modelProviderIds: z.array(z.string()),
+  modelBindingIds: z.array(z.string()),
+  modelBindings: z.array(
+    z.object({
+      id: z.string(),
+      model: z.string()
+    })
+  ),
+  fastModeModelBindingIds: z.array(z.string()),
+  reasoningEfforts: z.array(reasoningEffortSchema),
+  enabledToolNames: z.array(z.string()),
+  /**
+   * Tools the instance enables whose module is off. No agent can use one. An agent that
+   * still names one shows it as unavailable, so it can be removed.
+   */
+  moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional()
+});
+
 export const configAssetsOverviewSchema = z.object({
   version: z.number().int().nonnegative(),
   defaultAgentName: z.string().optional(),
   assets: z.array(configAssetSummarySchema),
-  references: z.object({
-    modelProviderIds: z.array(z.string()),
-    modelBindingIds: z.array(z.string()),
-    modelBindings: z.array(
-      z.object({
-        id: z.string(),
-        model: z.string()
-      })
-    ),
-    fastModeModelBindingIds: z.array(z.string()),
-    reasoningEfforts: z.array(reasoningEffortSchema),
-    enabledToolNames: z.array(z.string()),
-    /**
-     * Tools the instance enables whose module is off. No agent can use one. An agent that
-     * still names one shows it as unavailable, so it can be removed.
-     */
-    moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional()
-  })
+  references: configAssetReferencesSchema
 });
 
 export const configAssetBundleSchema = z.object({
@@ -298,6 +301,7 @@ export type ConfigAssetKind = z.infer<typeof configAssetKindSchema>;
 export type ConfigAssetSummary = z.infer<typeof configAssetSummarySchema>;
 export type ConfigAssetRevision = z.infer<typeof configAssetRevisionSchema>;
 export type ConfigAssetsOverview = z.infer<typeof configAssetsOverviewSchema>;
+export type ConfigAssetReferences = z.infer<typeof configAssetReferencesSchema>;
 export type AgentAvailability = z.infer<typeof agentAvailabilitySchema>;
 export type CollaborationWorkspaceAgents = z.infer<typeof collaborationWorkspaceAgentsSchema>;
 export type AdministeredCollaborationWorkspace = z.infer<

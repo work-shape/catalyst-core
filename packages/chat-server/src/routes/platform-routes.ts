@@ -1,5 +1,13 @@
 import { RELEASE_VERSION, apiOperations } from "@vivd-catalyst/api-contract";
-import { hasAuthScope, type AssetKindActions, type OperationScope } from "@vivd-catalyst/core";
+import {
+  AppError,
+  hasAuthScope,
+  type ActorAccess,
+  type AssetKindActions,
+  type AuthenticatedIdentity,
+  type OperationScope
+} from "@vivd-catalyst/core";
+import { configAssetReferences } from "../config-asset-workflow";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
@@ -11,6 +19,30 @@ const SCOPE_OF_VERB = {
 } as const satisfies Record<keyof AssetKindActions, OperationScope>;
 
 const VERBS = ["read", "write", "delete"] as const;
+
+/**
+ * The actions of the registered kinds a caller can use: the ones its grants allow on what
+ * `name` says and its credential's scopes let it call. With a Namespace prefix that is the
+ * Namespace, without a name the instance's own assets as a whole.
+ */
+function usableActions(
+  options: ChatServerOptions,
+  caller: { access: ActorAccess; actor: AuthenticatedIdentity },
+  name?: string
+): string[] {
+  const usable = VERBS.filter((verb) => hasAuthScope(caller.actor, SCOPE_OF_VERB[verb]));
+  return options.configAssets.kinds.kinds.flatMap((kind) =>
+    usable
+      .map((verb) => kind.actions[verb])
+      .filter(
+        (action) =>
+          caller.access.authorize(action, {
+            kind: kind.kind,
+            ...(name === undefined ? {} : { name })
+          }).allowed
+      )
+  );
+}
 
 export function registerPlatformRoutes(route: Route, options: ChatServerOptions): void {
   // Orientation for an outside editor, a person or a service principal. A Namespace is listed
@@ -26,7 +58,6 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
       const namespaces = await options.stores.access.listNamespaceRecords({
         clientInstanceId: options.clientInstanceId
       });
-      const usable = VERBS.filter((verb) => hasAuthScope(actor, SCOPE_OF_VERB[verb]));
       return {
         instance: {
           id: options.clientInstanceId,
@@ -39,19 +70,33 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
           actions: { ...kind.actions }
         })),
         namespaces: namespaces.flatMap((namespace) => {
-          const actions = kinds.flatMap((kind) =>
-            usable
-              .map((verb) => kind.actions[verb])
-              .filter(
-                (action) =>
-                  access.authorize(action, { kind: kind.kind, name: namespace.prefix }).allowed
-              )
-          );
+          const actions = usableActions(options, { access, actor }, namespace.prefix);
           return actions.length > 0
             ? [{ prefix: namespace.prefix, displayName: namespace.displayName, actions }]
             : [];
         })
       };
     }
+  });
+
+  // What an editor offers for a definition: the models, efforts and tools of this instance.
+  // It is for whoever can use an action of a registered kind somewhere, on the instance as a
+  // whole or in one Namespace, decided as the context decides which Namespaces it lists. The
+  // answer comes from the release config, so the store is read for the Namespaces only, and
+  // only for a caller who holds nothing on the instance as a whole.
+  route(apiOperations["platform.references.get"], async ({ access, identity }) => {
+    const caller = { access, actor: identity };
+    if (usableActions(options, caller).length === 0) {
+      const namespaces = await options.stores.access.listNamespaceRecords({
+        clientInstanceId: options.clientInstanceId
+      });
+      if (!namespaces.some(({ prefix }) => usableActions(options, caller, prefix).length > 0)) {
+        throw new AppError(
+          "FORBIDDEN",
+          "Reading the references needs a right on an asset kind, on the instance or in a Namespace"
+        );
+      }
+    }
+    return configAssetReferences(options);
   });
 }

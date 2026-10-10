@@ -1656,6 +1656,65 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/context/references": {
+      "get": {
+        "operationId": "platform.references.get",
+        "summary": "Read what a definition may refer to on this instance: models, efforts and tools",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigAssetReferences"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/conversations": {
       "get": {
         "operationId": "conversations.list",
@@ -12615,6 +12674,85 @@
           "version"
         ]
       },
+      "ConfigAssetReferences": {
+        "type": "object",
+        "properties": {
+          "modelProviderIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "modelBindingIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "modelBindings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "model"
+              ]
+            }
+          },
+          "fastModeModelBindingIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reasoningEfforts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReasoningEffort"
+            }
+          },
+          "enabledToolNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "moduleOffTools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "module": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "module"
+              ]
+            }
+          }
+        },
+        "required": [
+          "modelProviderIds",
+          "modelBindingIds",
+          "modelBindings",
+          "fastModeModelBindingIds",
+          "reasoningEfforts",
+          "enabledToolNames"
+        ]
+      },
       "ConfigAssetRevision": {
         "type": "object",
         "properties": {
@@ -12739,83 +12877,7 @@
             }
           },
           "references": {
-            "type": "object",
-            "properties": {
-              "modelProviderIds": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "modelBindingIds": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "modelBindings": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "model": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "model"
-                  ]
-                }
-              },
-              "fastModeModelBindingIds": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "reasoningEfforts": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ReasoningEffort"
-                }
-              },
-              "enabledToolNames": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "moduleOffTools": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "module": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "module"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "modelProviderIds",
-              "modelBindingIds",
-              "modelBindings",
-              "fastModeModelBindingIds",
-              "reasoningEfforts",
-              "enabledToolNames"
-            ]
+            "$ref": "#/components/schemas/ConfigAssetReferences"
           }
         },
         "required": [

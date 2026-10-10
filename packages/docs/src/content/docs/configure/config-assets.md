@@ -191,17 +191,18 @@ removed first. Reverting retains the original approval and proposal history.
 
 Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. The admin panel uses these operations, and so can a script or an outside editor. Each call is one Operation Run with its actor, effect and outcome. The [API reference](/reference/api/) lists the fields.
 
-| Operation               | Address                                      | Right                |
-| ----------------------- | -------------------------------------------- | -------------------- |
-| `assets.list`           | `GET /api/v1/assets/{kind}`                  | `<kind>.read`        |
-| `assets.get`            | `GET /api/v1/assets/{kind}/{name}`           | `<kind>.read`        |
-| `assets.put`            | `PUT /api/v1/assets/{kind}/{name}`           | `<kind>.write`       |
-| `assets.delete`         | `POST /api/v1/assets/{kind}/{name}/delete`   | `<kind>.delete`      |
-| `assets.revisions.list` | `GET /api/v1/assets/{kind}/{name}/revisions` | `<kind>.read`        |
-| `assets.revert`         | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
-| `assets.validate`       | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
-| `assets.sync`           | `POST /api/v1/assets/sync`                   | per item             |
-| `platform.context.get`  | `GET /api/v1/context`                        | any signed-in caller |
+| Operation                 | Address                                      | Right                |
+| ------------------------- | -------------------------------------------- | -------------------- |
+| `assets.list`             | `GET /api/v1/assets/{kind}`                  | `<kind>.read`        |
+| `assets.get`              | `GET /api/v1/assets/{kind}/{name}`           | `<kind>.read`        |
+| `assets.put`              | `PUT /api/v1/assets/{kind}/{name}`           | `<kind>.write`       |
+| `assets.delete`           | `POST /api/v1/assets/{kind}/{name}/delete`   | `<kind>.delete`      |
+| `assets.revisions.list`   | `GET /api/v1/assets/{kind}/{name}/revisions` | `<kind>.read`        |
+| `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
+| `assets.validate`         | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
+| `assets.sync`             | `POST /api/v1/assets/sync`                   | per item             |
+| `platform.context.get`    | `GET /api/v1/context`                        | any signed-in caller |
+| `platform.references.get` | `GET /api/v1/context/references`             | a right on any kind  |
 
 The right is decided for the one asset: an instance right, a grant in the Namespace of its name, or a grant on the asset. `assets.list` answers only the assets the caller may read, as summaries without content, in the order of their names. It filters by `prefix` (a name prefix such as a Namespace) and by `text` (a part of the name, in any case), and pages with `limit` and `cursor`. It is built for up to 10,000 assets of a kind.
 
@@ -214,6 +215,10 @@ A definition is checked against what its caller may read. A reference to an asse
 The writing operations and `assets.sync` belong to the module `assetManagement` and follow the same rules as edits in the admin panel: `editableAgentFields`, the lists of a Namespace, and the rights for the default agent and for model settings. `catalyst config push` keeps using the release import and is not affected.
 
 `platform.context.get` tells a caller where it is: the instance, its release, the asset kinds with their rights, and the Namespaces in which the caller may do something. It answers a person and a service principal. An action is named only when the credential's scopes allow it: `config_assets:read` for reading, `config_assets:write` for writing and deleting.
+
+`assets.list` and `assets.get` mark the instance's default agent with `isDefault: true` and leave the field out on every other asset. `assets.get` of an agent also carries its `availability`, the workspaces it is offered in, when one is stored.
+
+`platform.references.get` answers what a definition may refer to on this instance: the model providers and bindings, the reasoning efforts, the enabled tools, and the tools whose module is off. It answers a caller who holds at least one right on an asset kind, on the instance or in one Namespace, with a credential that carries `config_assets:read` and the scope of that right. It writes no Operation Run, so an editor may read it each time it opens a definition.
 
 ## Permissions
 

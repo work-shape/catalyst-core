@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { platformContextSchema } from "@vivd-catalyst/api-contract";
+import { configAssetReferencesSchema, platformContextSchema } from "@vivd-catalyst/api-contract";
 import {
   SCOPES_HEADER,
   SERVICE_HEADER,
@@ -141,5 +141,75 @@ describe("platform.context.get", () => {
       { prefix: "kai-", displayName: "kai-", actions: ["skill.write"] }
     ]);
     expect((await asService("chat")).namespaces).toEqual([]);
+  });
+});
+
+// `platform.references.get` is what an editor offers for a definition. It is for whoever can
+// use an action of a registered kind somewhere, which is who the context lists a Namespace for.
+describe("platform.references.get", () => {
+  const references = {
+    modelProviderIds: ["local"],
+    modelBindingIds: ["plain", "other"],
+    modelBindings: [
+      { id: "plain", model: "local" },
+      { id: "other", model: "local" }
+    ],
+    fastModeModelBindingIds: [],
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+    enabledToolNames: ["known.tool", "second.tool"],
+    moduleOffTools: []
+  };
+  const refused = { status: 403, code: "FORBIDDEN" };
+
+  it("answers the holder of one right in one Namespace, and the administrator, the same as the overview", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+
+    const read = async (userId: string) =>
+      configAssetReferencesSchema.parse(
+        (await t.expectOk(userId, "platform.references.get")).json()
+      );
+    expect(await read(t.kai.id)).toEqual(references);
+    expect(await read(t.admin.id)).toEqual(references);
+    // The overview stays closed to the Namespace holder, and tells the administrator the same.
+    await t.expectRefused(t.kai.id, "config_assets.get_overview", {}, refused);
+    const overview = (await t.expectOk(t.admin.id, "config_assets.get_overview")).json();
+    expect(overview).toMatchObject({ references });
+  });
+
+  it("refuses a user who holds no right on any kind anywhere", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+
+    const error = await t.expectRefused(t.lena.id, "platform.references.get", {}, refused);
+    // The refusal tells nothing of the instance.
+    expect(JSON.stringify(error)).not.toContain("known.tool");
+  });
+
+  it("refuses a credential whose scopes open no action its holder is granted", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
+    const withScopes = (userId: string, scopes: string) =>
+      t.call(userId, "platform.references.get", { headers: { [SCOPES_HEADER]: scopes } });
+
+    expect((await withScopes(t.kai.id, "config_assets:read")).statusCode).toBe(200);
+    // Without `config_assets:read` nobody reads it, the administrator included.
+    expect((await withScopes(t.kai.id, "chat")).statusCode).toBe(403);
+    expect((await withScopes(t.admin.id, "config_assets:write")).statusCode).toBe(403);
+    expect((await withScopes(t.admin.id, "config_assets:read")).statusCode).toBe(200);
+  });
+
+  it("writes no Operation Run", async () => {
+    const t = await setup();
+    const runs = () => t.stores.operationRuns.list({ clientInstanceId });
+    const before = (await runs()).length;
+    await t.expectOk(t.admin.id, "platform.references.get");
+    expect((await runs()).length).toBe(before);
+    // The context is a registered read, which shows the count would have moved.
+    await t.expectOk(t.admin.id, "platform.context.get");
+    expect((await runs()).length).toBe(before + 1);
   });
 });
