@@ -552,6 +552,43 @@ describe("tenant and holder boundaries of the access store", () => {
   });
 });
 
+describe("deleting a holder", () => {
+  it("deletes the user's grant rows with the user and leaves every other holder's", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "skill.read", { namespace: "kai-" }, "deny");
+    const lenaGrant = await t.grant(t.lena.id, "agent.read", { namespace: "kai-" });
+
+    await t.expectOk(t.root.id, "users.delete", { params: { userId: t.kai.id } });
+
+    const left = await t.stores.access.listGrants({ clientInstanceId });
+    expect(left.map((row) => row.id)).toEqual([lenaGrant]);
+    // Nothing answers for the id any more, whoever carries it next.
+    const persisted = await t.stores.access.loadPersistedAccess({
+      clientInstanceId,
+      holder: { kind: "user", id: t.kai.id }
+    });
+    expect(persisted.grants).toEqual([]);
+    // The Namespace is held by Lena's row alone, and is free after its revoke.
+    await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: lenaGrant } });
+    await t.expectOk(t.admin.id, "namespaces.delete", { params: { prefix: "kai-" } });
+  });
+
+  it("keeps the rows when the deletion is refused", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.expectRefused(
+      t.lena.id,
+      "users.delete",
+      { params: { userId: t.kai.id } },
+      t.forbidden("users.manage", "no_grant")
+    );
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
+  });
+});
+
 describe("audit of grants and Namespaces", () => {
   it("records each write with holder id, action and scope, and no name or list", async () => {
     const t = await setup();

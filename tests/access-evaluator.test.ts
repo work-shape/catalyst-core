@@ -389,7 +389,7 @@ describe("actor access", () => {
       expect(thrown).toMatchObject({
         code: "FORBIDDEN",
         statusCode: 403,
-        message: `Missing permission '${action}'`,
+        message: `Missing the right '${action}'`,
         details: { action, reason }
       });
     }

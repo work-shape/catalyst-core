@@ -22,7 +22,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
-import { productUsers, userIdentities } from "./schema";
+import { permissionGrants, productUsers, userIdentities } from "./schema";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 
 export async function resolveUserIdentity(
@@ -403,15 +403,28 @@ export async function deleteUser(
     throw new AppError("NOT_FOUND", "User is not available");
   }
 
-  const rows = await db
-    .delete(productUsers)
-    .where(
-      and(
-        eq(productUsers.clientInstanceId, input.clientInstanceId),
-        eq(productUsers.id, input.userId)
+  // The user's grant rows go with the user: a row left behind would answer for whoever
+  // carried the id next.
+  const rows = await db.transaction(async (tx) => {
+    await tx
+      .delete(permissionGrants)
+      .where(
+        and(
+          eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+          eq(permissionGrants.holderKind, "user"),
+          eq(permissionGrants.holderId, input.userId)
+        )
+      );
+    return tx
+      .delete(productUsers)
+      .where(
+        and(
+          eq(productUsers.clientInstanceId, input.clientInstanceId),
+          eq(productUsers.id, input.userId)
+        )
       )
-    )
-    .returning();
+      .returning();
+  });
   if (rows.length === 0) {
     throw new AppError("NOT_FOUND", "User is not available");
   }

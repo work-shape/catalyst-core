@@ -12,7 +12,8 @@ contain breaking changes; a patch version does not.
   prefix such as `kai-`; it can carry a list of allowed tools and a list of allowed model
   bindings, which bind every writer of an agent in it, an administrator and the release sync
   included. Eight operations under `/api/v1/instance/access` write and read grants and
-  Namespaces; they need `users.manage`. A matching deny wins over every allow. No interface
+  Namespaces; they need `users.manage`. A matching deny wins over every allow. Deleting a user
+  deletes the user's grant rows. No interface
   for it ships yet. A migration adds the tables `permission_grants` and `namespaces` and
   changes no other table; no user, service principal or API key gains or loses a right.
   `node --experimental-strip-types scripts/verify-permissions.ts` with `DATABASE_URL` set
