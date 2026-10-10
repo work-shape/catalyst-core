@@ -1,3 +1,4 @@
+import { AGENT_RUN_HELD_END_MAX_EVENTS } from "@vivd-catalyst/agent-runtime";
 import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
 import {
   JobLeaseLostError,
@@ -48,6 +49,77 @@ describe("the writes of an agent run under the lease of its job", () => {
     expect(stored).toMatchObject([{ id: message.id, text: "Done." }]);
   });
 
+  it("holds the answer back through events that are consumed after it, until the run ends", async () => {
+    const fixture = await createFixture("end_interleaved");
+    harness.heartbeatsByHand();
+    const run = await fixture.accept();
+    const pass = fixture.worker().runDue();
+    const execution = await fixture.executor.next();
+    await execution.finalMessage("Done.");
+    // The run produced faster than it was stored: the worker takes this event after the
+    // answer, and cannot tell that it is older.
+    execution.reasoning("Thinking.");
+    await execution.consumed();
+
+    expect(await assistantTexts(fixture)).toEqual([]);
+    expect(await fixture.eventTypes(run)).toEqual([]);
+
+    // The worker is killed here: the run fails and no answer stands beside it.
+    await fixture.expireJobLeases();
+    await fixture.worker({ stores: db.secondStore }).runDue();
+    execution.complete();
+    await pass;
+
+    expect(await fixture.run(run)).toMatchObject({ status: "failed" });
+    expect(await fixture.eventTypes(run)).toEqual(["run_failed"]);
+    expect(await assistantTexts(fixture)).toEqual([]);
+  });
+
+  it("stores the answer, the events consumed after it and the end of the run together", async () => {
+    const fixture = await createFixture("end_interleaved_stored");
+    const run = await fixture.accept();
+    const pass = fixture.worker().runDue();
+    const execution = await fixture.executor.next();
+    await execution.finalMessage("Done.");
+    execution.reasoning("Thinking.");
+    await execution.consumed();
+    expect(await fixture.eventTypes(run)).toEqual([]);
+    execution.complete();
+    await pass;
+
+    expect(await fixture.run(run)).toMatchObject({ status: "completed", lastSequence: 3 });
+    expect(await fixture.eventTypes(run)).toEqual([
+      "message_completed",
+      "reasoning_delta",
+      "run_completed"
+    ]);
+    expect(await assistantTexts(fixture)).toEqual(["Done."]);
+  });
+
+  it("stores a held answer at once when more events are held behind it than the limit", async () => {
+    const fixture = await createFixture("end_over_limit");
+    const run = await fixture.accept();
+    const pass = fixture.worker().runDue();
+    const execution = await fixture.executor.next();
+    await execution.finalMessage("Done.");
+    // The event of the answer is held too, so this many more reach the limit and not above.
+    for (let held = 1; held < AGENT_RUN_HELD_END_MAX_EVENTS; held += 1) execution.reasoning(".");
+    await execution.consumed();
+    expect(await assistantTexts(fixture)).toEqual([]);
+
+    execution.reasoning("One too many.");
+    await execution.consumed();
+    expect(await assistantTexts(fixture)).toEqual(["Done."]);
+    expect(await fixture.run(run)).toMatchObject({
+      status: "running",
+      lastSequence: AGENT_RUN_HELD_END_MAX_EVENTS + 1
+    });
+
+    execution.complete();
+    await pass;
+    expect(await fixture.run(run)).toMatchObject({ status: "completed" });
+  });
+
   it("leaves no answer beside a failed run when the worker is lost at the end of the run", async () => {
     const fixture = await createFixture("end_lost");
     harness.heartbeatsByHand();
@@ -91,7 +163,7 @@ describe("the writes of an agent run under the lease of its job", () => {
     expect(await assistantTexts(fixture)).toEqual(["Done."]);
   });
 
-  it("stores a held answer when the run goes on or ends without its last event", async () => {
+  it("stores a held answer when the run goes on, and with the failure of a run that ends without its last event", async () => {
     const fixture = await createFixture("end_flushed");
     const run = await fixture.accept();
     const pass = fixture.worker().runDue();

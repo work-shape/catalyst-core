@@ -241,6 +241,7 @@ export interface AgentRunJobFixture {
 class ControlledExecution {
   private readonly queue: AgentRuntimeEvent[] = [];
   private wake: (() => void) | undefined;
+  private readonly idleWaiters: Array<() => void> = [];
   private ended = false;
   private sequence = 0;
   /** Resolves with the reason when the worker asks the execution to cancel. */
@@ -254,6 +255,22 @@ class ControlledExecution {
 
   get runId(): AgentRun["id"] {
     return required(this.input.preparedRun).id;
+  }
+
+  /**
+   * Resolves when the worker has handled every event emitted so far: it asks for the next
+   * one only after it stored or held the one before.
+   */
+  consumed(): Promise<void> {
+    if (this.queue.length === 0 && this.wake) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      this.idleWaiters.push(resolve);
+    });
+  }
+
+  /** An event that is neither a piece of the answer nor the end of the run. */
+  reasoning(text: string): void {
+    this.push({ type: "reasoning_delta", ...this.next(), id: "reasoning_1", delta: text });
   }
 
   delta(text: string): void {
@@ -337,6 +354,7 @@ class ControlledExecution {
       if (this.ended) return;
       await new Promise<void>((resolve) => {
         this.wake = resolve;
+        for (const waiter of this.idleWaiters.splice(0)) waiter();
       });
       this.wake = undefined;
     }

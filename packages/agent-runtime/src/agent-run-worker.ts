@@ -38,6 +38,12 @@ import type { AgentRunSignal } from "./store-backed-agent-runtime";
 // A run that stored no event for this long is ended as interrupted, so a model or a tool that
 // never answers cannot hold its conversation closed. Every stored event starts the time anew.
 export const AGENT_RUN_IDLE_LIMIT_MS = 30 * 60 * 1000;
+// The most events a run holds back behind its last assistant message. The runtime emits two
+// events after that message, so what is held beyond them is what the run produced faster than
+// it was stored. Above the limit the held message and events are stored at once and the run
+// goes on unheld: its answer is kept, and a worker killed before the end of that run may
+// leave the answer beside a failed run.
+export const AGENT_RUN_HELD_END_MAX_EVENTS = 1000;
 
 /** One run in execution: its events in order, and the way to cancel it. */
 export interface AgentRunExecution {
@@ -207,10 +213,12 @@ async function executeClaimedRun(
     }
   };
   /**
-   * The last assistant message of the run, held back with the events that follow it until
-   * the event that ends the run: all of them are stored in one transaction. A worker that is
-   * killed at the end of a run leaves either the whole answer with a run that ended, or a
-   * failed run without the answer, never an answer beside a failed run.
+   * The last assistant message of the run, held back with every event consumed after it
+   * until the event that ends the run: all of them are stored in one transaction. An event
+   * consumed after the message may have been produced before it, so no event but the one
+   * that ends the run says the answer may be stored. A worker that is killed at the end of a
+   * run leaves either the whole answer with a run that ended, or a failed run without the
+   * answer, never an answer beside a failed run.
    */
   let heldEnd: RunWrite | undefined;
   const storeWrite = (batch: RunWrite) =>
@@ -240,7 +248,7 @@ async function executeClaimedRun(
     restartIdleTimer();
     options.onObservation?.(run.id);
   };
-  /** Stores what is held when the run goes on or ends without the event that ends it. */
+  /** Stores what is held when the run goes on: it wrote to its conversation again. */
   const flushHeldEnd = async (): Promise<void> => {
     const held = heldEnd;
     heldEnd = undefined;
@@ -248,15 +256,18 @@ async function executeClaimedRun(
   };
   const append = async (event: AgentRuntimeEvent): Promise<void> => {
     if (!heldEnd) return write({ events: [event] });
-    if (event.type === "message_delta" || event.type === "message_completed") {
-      heldEnd.events.push(event);
-      return;
+    if (isTerminalEvent(event)) {
+      const held = heldEnd;
+      heldEnd = undefined;
+      return write({ ...held, events: [...held.events, event] });
     }
-    const held = heldEnd;
-    heldEnd = undefined;
-    if (isTerminalEvent(event)) return write({ ...held, events: [...held.events, event] });
-    await write(held);
-    await write({ events: [event] });
+    heldEnd.events.push(event);
+    if (heldEnd.events.length <= AGENT_RUN_HELD_END_MAX_EVENTS) return;
+    control.logger.warn(
+      { runId: run.id, events: heldEnd.events.length },
+      "Agent run held more events behind its answer than the limit; the answer is stored now"
+    );
+    await flushHeldEnd();
   };
   const holdFinalMessage = (message: AppendAssistantMessageInput): ChatMessage => {
     const id = message.id ?? createPlatformId<"MessageId">("msg");
@@ -323,6 +334,17 @@ async function executeClaimedRun(
     if (latest.status === "cancelling") {
       cancellation ??= { reason: latest.cancellationReason };
     }
+    // What is held is stored with the event that ends the run, after the last held event.
+    const held = heldEnd;
+    if (held) {
+      const lastHeld = held.events.at(-1)?.sequence ?? latest.lastSequence;
+      try {
+        return await append(closingEvent(lastHeld + 1, failure));
+      } catch (error) {
+        // The answer could not be stored. The run ends without it.
+        if (error instanceof JobLeaseLostError) throw error;
+      }
+    }
     await append(closingEvent(latest.lastSequence + 1, failure));
   };
 
@@ -370,15 +392,9 @@ async function executeClaimedRun(
         await append(event);
         if (terminalWritten) break;
       }
-      if (!terminalWritten && stopCause !== "lease_lost") {
-        await flushHeldEnd();
-        await closeRun(EXECUTOR_ENDED_ERROR);
-      }
+      if (!terminalWritten && stopCause !== "lease_lost") await closeRun(EXECUTOR_ENDED_ERROR);
     } catch (error) {
-      if (terminalWritten || stopCause === "lease_lost") throw error;
-      // An answer that is still held is stored when it can be, and the run ends as failed.
-      await flushHeldEnd().catch(() => undefined);
-      if (hasLostLease()) throw error;
+      if (terminalWritten || hasLostLease()) throw error;
       await closeRun(workerFailure(error));
     }
   } finally {
