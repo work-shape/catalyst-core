@@ -581,8 +581,10 @@ describe("quality collector", { timeout: 180_000 }, () => {
       "scripts/env-script.mjs": read
     };
     const refused = {
-      "packages/config-schema/package.json": JSON.stringify({ name: "@fixture/config-schema" }),
-      "packages/config-schema/src/reader.ts": read,
+      // A package of its own: the cleanup below removes every file written here, and the
+      // project's packages are needed by the tests that follow.
+      "packages/env-reader/package.json": JSON.stringify({ name: "@fixture/env-reader" }),
+      "packages/env-reader/src/reader.ts": read,
       // The package root, a scripts folder and a second env module are not the one module.
       "packages/alpha/root-read.mjs": read,
       "packages/alpha/scripts/tool.mjs": read,
