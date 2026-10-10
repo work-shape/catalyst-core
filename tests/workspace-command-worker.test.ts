@@ -122,13 +122,28 @@ describe("workspace command worker", () => {
     });
     const queued = await harness.enqueue("sleep 60");
     const loop = harness.worker.start();
-    await harness.executor.started;
+    const execution = await harness.executor.started;
+    const heartbeatAtStop = (
+      await waitForCommand(harness, queued.id, (command) =>
+        command.heartbeatAt !== undefined ? command : undefined
+      )
+    ).heartbeatAt;
 
     let stopped = false;
     const stop = harness.worker.stop().then(() => {
       stopped = true;
     });
-    await sleep(20);
+    // The stop leaves the command alone: its process is not told to end, and its lease is
+    // renewed again while the worker waits for it.
+    expect(execution.signal?.aborted).toBe(false);
+    await waitForCommand(harness, queued.id, (command) =>
+      command.heartbeatAt !== undefined &&
+      heartbeatAtStop !== undefined &&
+      command.heartbeatAt > heartbeatAtStop
+        ? command
+        : undefined
+    );
+    expect(execution.signal?.aborted).toBe(false);
     expect(stopped).toBe(false);
 
     harness.executor.complete(successProcessResult({ stdoutPreview: "finished" }));
@@ -154,15 +169,19 @@ describe("workspace command worker", () => {
     });
     const queued = await harness.enqueue("sleep 60");
     const loop = harness.worker.start();
-    await harness.executor.started;
+    const execution = await harness.executor.started;
+    expect(execution.signal?.aborted).toBe(false);
 
     const stop = harness.worker.stop({
       cancelActive: true,
       reason: "Received SIGTERM"
     });
 
-    const stopResult = Promise.race([stop.then(() => "stopped"), sleep(100).then(() => "timeout")]);
-    await expect(stopResult).resolves.toBe("stopped");
+    // Promptly: the process is told to end before the stop waits for anything. Nothing else
+    // ends this execution, so a stop that did not cancel it would never return.
+    expect(execution.signal?.aborted).toBe(true);
+    expect(execution.signal?.reason).toBe("Received SIGTERM");
+    await stop;
     await loop;
 
     await expect(
@@ -381,6 +400,9 @@ function successProcessResult(input: Partial<ProcessResult> = {}): ProcessResult
   };
 }
 
+/** Ends a wait for a state that never comes. Generous: no test asserts how long a state takes. */
+const WAIT_FOR_COMMAND_DEADLINE_MS = 15_000;
+
 async function waitForCommand(
   harness: {
     clientInstanceId: ClientInstanceId;
@@ -389,7 +411,7 @@ async function waitForCommand(
   commandId: WorkspaceCommand["id"],
   predicate: (command: WorkspaceCommand) => WorkspaceCommand | undefined
 ): Promise<WorkspaceCommand> {
-  const deadline = Date.now() + 1000;
+  const deadline = Date.now() + WAIT_FOR_COMMAND_DEADLINE_MS;
   while (Date.now() < deadline) {
     const command = await harness.store.executionWorkspaces.getWorkspaceCommand({
       clientInstanceId: harness.clientInstanceId,

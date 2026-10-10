@@ -1605,6 +1605,13 @@ describe("Collaboration Workspace API", () => {
   });
 });
 
+/**
+ * For the test that sends every conversation route as every role: some two hundred requests with
+ * no wait among them, seconds alone and many times that beside other suites. The limit only ends
+ * a run that hangs; nothing asserts a duration.
+ */
+const EVERY_ROUTE_FOR_EVERY_ROLE_TIMEOUT_MS = 180_000;
+
 describe("Conversation visibility", () => {
   it("lists a conversation without messages only to its creator while it holds draft attachments", async () => {
     const app = await createWorkspaceApp();
@@ -1675,106 +1682,110 @@ describe("Conversation visibility", () => {
     await app.close();
   });
 
-  it("hides a private conversation from every non-author role on every conversation route", async () => {
-    const fixture = await createPrivateConversationFixture();
-    const { app, workspaceId, conversationId, sharedConversationId } = fixture;
-    const routes = conversationRoutes(fixture);
+  it(
+    "hides a private conversation from every non-author role on every conversation route",
+    async () => {
+      const fixture = await createPrivateConversationFixture();
+      const { app, workspaceId, conversationId, sharedConversationId } = fixture;
+      const routes = conversationRoutes(fixture);
 
-    // "owner" is a superadmin with a membership, "superadmin" one without.
-    for (const actor of ["owner", "admin", "member", "outsider", "superadmin"]) {
-      for (const route of routes) {
-        const denied = await route.send(actor, conversationId);
-        const missing = await route.send(actor, "conv_missing");
-        expect(
-          { route: route.name, actor, status: denied.statusCode, body: denied.json() },
-          `${actor} ${route.name}`
-        ).toEqual({
-          route: route.name,
-          actor,
-          status: 404,
-          body: {
-            error: {
-              correlationId: expect.any(String),
-              code: "NOT_FOUND",
-              message: "Conversation is not available"
+      // "owner" is a superadmin with a membership, "superadmin" one without.
+      for (const actor of ["owner", "admin", "member", "outsider", "superadmin"]) {
+        for (const route of routes) {
+          const denied = await route.send(actor, conversationId);
+          const missing = await route.send(actor, "conv_missing");
+          expect(
+            { route: route.name, actor, status: denied.statusCode, body: denied.json() },
+            `${actor} ${route.name}`
+          ).toEqual({
+            route: route.name,
+            actor,
+            status: 404,
+            body: {
+              error: {
+                correlationId: expect.any(String),
+                code: "NOT_FOUND",
+                message: "Conversation is not available"
+              }
             }
-          }
-        });
-        expect(denied.statusCode).toBe(missing.statusCode);
-        expect(denied.json().error).toEqual({
-          ...missing.json().error,
-          correlationId: expect.any(String)
-        });
+          });
+          expect(denied.statusCode).toBe(missing.statusCode);
+          expect(denied.json().error).toEqual({
+            ...missing.json().error,
+            correlationId: expect.any(String)
+          });
+        }
       }
-    }
 
-    for (const actor of ["owner", "admin", "member", "superadmin"]) {
-      const listed = await app.call(
+      for (const actor of ["owner", "admin", "member", "superadmin"]) {
+        const listed = await app.call(
+          "conversations.list",
+          { query: { collaborationWorkspaceId: workspaceId } },
+          actor
+        );
+        expect(listed.statusCode).toBe(200);
+        expect(listed.json<{ items: Array<{ id: string }> }>().items.map((row) => row.id)).toEqual([
+          sharedConversationId
+        ]);
+      }
+      const listedByAuthor = await app.call(
         "conversations.list",
         { query: { collaborationWorkspaceId: workspaceId } },
-        actor
+        "direct"
       );
-      expect(listed.statusCode).toBe(200);
-      expect(listed.json<{ items: Array<{ id: string }> }>().items.map((row) => row.id)).toEqual([
-        sharedConversationId
-      ]);
-    }
-    const listedByAuthor = await app.call(
-      "conversations.list",
-      { query: { collaborationWorkspaceId: workspaceId } },
-      "direct"
-    );
-    expect(
-      listedByAuthor
-        .json<{ items: Array<{ id: string }> }>()
-        .items.map((row) => row.id)
-        .sort()
-    ).toEqual([conversationId, sharedConversationId].sort());
-
-    // Nothing a non-author sent may have changed the conversation: still the two fixture
-    // messages and the one draft attachment.
-    await expect(
-      app.stores.conversations.getConversation(clientInstanceId, asConversationId(conversationId))
-    ).resolves.toMatchObject({
-      status: "active",
-      title: "Private thread",
-      visibility: "private",
-      collaborationWorkspaceId: workspaceId
-    });
-    await expect(
-      app.stores.conversations.listMessages({
-        clientInstanceId,
-        conversationId: asConversationId(conversationId)
-      })
-    ).resolves.toHaveLength(2);
-    await expect(
-      app.stores.files.listDraftAttachments({
-        clientInstanceId,
-        conversationId: asConversationId(conversationId)
-      })
-    ).resolves.toHaveLength(1);
-
-    // The deletion impact keeps counting every conversation, private ones included.
-    const impact = await app.call(
-      "workspaces.deletion_impact.get",
-      { params: { collaborationWorkspaceId: workspaceId } },
-      "owner"
-    );
-    expect(impact.json()).toMatchObject({ conversationCount: 2 });
-
-    // Positive control: the author passes the access check on every route, so the matrix above
-    // cannot pass because of a mistyped URL.
-    for (const route of routes) {
-      const allowed = await route.send("direct", conversationId);
       expect(
-        allowed.statusCode === 404 &&
-          allowed.json<{ error?: { message?: string } }>().error?.message ===
-            "Conversation is not available",
-        `author ${route.name} -> ${allowed.statusCode} ${allowed.body.slice(0, 200)}`
-      ).toBe(false);
-    }
-    await app.close();
-  });
+        listedByAuthor
+          .json<{ items: Array<{ id: string }> }>()
+          .items.map((row) => row.id)
+          .sort()
+      ).toEqual([conversationId, sharedConversationId].sort());
+
+      // Nothing a non-author sent may have changed the conversation: still the two fixture
+      // messages and the one draft attachment.
+      await expect(
+        app.stores.conversations.getConversation(clientInstanceId, asConversationId(conversationId))
+      ).resolves.toMatchObject({
+        status: "active",
+        title: "Private thread",
+        visibility: "private",
+        collaborationWorkspaceId: workspaceId
+      });
+      await expect(
+        app.stores.conversations.listMessages({
+          clientInstanceId,
+          conversationId: asConversationId(conversationId)
+        })
+      ).resolves.toHaveLength(2);
+      await expect(
+        app.stores.files.listDraftAttachments({
+          clientInstanceId,
+          conversationId: asConversationId(conversationId)
+        })
+      ).resolves.toHaveLength(1);
+
+      // The deletion impact keeps counting every conversation, private ones included.
+      const impact = await app.call(
+        "workspaces.deletion_impact.get",
+        { params: { collaborationWorkspaceId: workspaceId } },
+        "owner"
+      );
+      expect(impact.json()).toMatchObject({ conversationCount: 2 });
+
+      // Positive control: the author passes the access check on every route, so the matrix above
+      // cannot pass because of a mistyped URL.
+      for (const route of routes) {
+        const allowed = await route.send("direct", conversationId);
+        expect(
+          allowed.statusCode === 404 &&
+            allowed.json<{ error?: { message?: string } }>().error?.message ===
+              "Conversation is not available",
+          `author ${route.name} -> ${allowed.statusCode} ${allowed.body.slice(0, 200)}`
+        ).toBe(false);
+      }
+      await app.close();
+    },
+    EVERY_ROUTE_FOR_EVERY_ROLE_TIMEOUT_MS
+  );
 
   it("keeps a private conversation closed while its author is not a member", async () => {
     const { app, workspaceId, conversationId, author } = await createPrivateConversationFixture();
