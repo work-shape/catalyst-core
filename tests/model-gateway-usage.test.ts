@@ -229,6 +229,9 @@ function uncompletedEvent() {
     providerId: "main",
     model: "entry-model",
     agentRunId: "run_gateway_usage",
+    // Settled when the call ended, with nothing used: nothing stays reserved for it.
+    status: "failed",
+    source: "not_reported",
     inputTokens: 0,
     outputTokens: 0,
     totalTokens: 0

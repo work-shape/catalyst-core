@@ -7,20 +7,19 @@ import {
   type ModelCallAdmission,
   type ModelCallUsage,
   type ModelUsageAttributionGroup,
-  type ModelUsageBudgetUsage,
-  type ModelUsageBudgetWindow,
+  type ModelUsageCounted,
+  type ModelUsageCounterLimits,
   type ModelUsageEvent,
   type ModelUsageEventInput,
   type ModelUsageEventRecordInput,
   type ModelUsageEventStore,
   type ModelUsageRecorder,
+  type ModelUsageRefusal,
   type ModelUsageSettlement,
   type ModelUsageTotals,
   type ModelUsageWindowSummary,
   type UsageBudgetConfig,
-  type UsageCostComponents,
   type UsageCostConfig,
-  type UsageCostMissingMeter,
   type UsageCostRecord,
   type UsageRateCardConfig,
   type UsageRateCardTokenRatesConfig,
@@ -28,12 +27,17 @@ import {
   createModelUsageWindowBounds,
   isBilledAsFast
 } from "@vivd-catalyst/core";
+import { calculateUsageCost, normalizeCount, priceTokens, totalComponents } from "./cost";
+
+export { calculateUsageCost, type UsageCostEvent } from "./cost";
 
 export interface ModelUsageGovernanceOptions {
   store: ModelUsageEventStore;
   budget: UsageBudgetConfig;
   safeguards: UsageSafeguardsConfig;
   costs?: UsageCostConfig;
+  /** What a test sets to have recovery take a call as abandoned sooner. */
+  abandonedAfterMs?: number;
 }
 
 export interface SafeModelUsageBillableCost {
@@ -79,6 +83,7 @@ export interface SafeCostedModelUsageAttributionGroup
 export type SafeModelUsageEvent = Pick<
   ModelUsageEvent,
   | "id"
+  | "status"
   | "clientInstanceId"
   | "conversationId"
   | "agentRunId"
@@ -124,20 +129,31 @@ export interface SafeUsageSummary {
   recentEvents: SafeCostedModelUsageEvent[];
 }
 
-/** The budget every call of an instance counts toward. Limits per user and workspace add keys. */
-const INSTANCE_BUDGET_KEY = "instance";
 const DAILY_USAGE_BUCKET_COUNT = 30;
 const RECENT_EVENT_COUNT = 25;
 
 /**
- * What a call counts as from its admission until it is settled, and for good when it never is:
- * one call that used nothing. A row that said "not reported" would count as an unpriced cost.
+ * Characters taken as one input token when a request is sized before it is sent. Text runs at
+ * about four characters a token; three keeps the reservation above what the provider counts.
  */
-const USAGE_BEFORE_SETTLEMENT: ModelCallUsage = {
+const RESERVED_CHARACTERS_PER_INPUT_TOKEN = 3;
+/** Output tokens reserved for a call whose request states no maximum. */
+const RESERVED_OUTPUT_TOKENS = 16_000;
+/**
+ * How long a call may stay `pending` before recovery takes it as abandoned and releases its
+ * reservation. Well above any call: a call that still ends after it is settled all the same.
+ */
+const USAGE_ABANDONED_AFTER_MS = 6 * 60 * 60 * 1000;
+/** Abandoned calls recovery releases between two looks at whether it was stopped. */
+const USAGE_RECOVERY_BATCH = 200;
+
+/** What a call that reported nothing is settled with. */
+const NOTHING_REPORTED: ModelCallUsage = {
   inputTokens: 0,
+  cachedInputTokens: 0,
   outputTokens: 0,
   totalTokens: 0,
-  source: "estimated",
+  source: "not_reported",
   webSearchCallCount: 0
 };
 
@@ -146,53 +162,103 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   private readonly budget: UsageBudgetConfig;
   private readonly safeguards: UsageSafeguardsConfig;
   private readonly costs: UsageCostConfig;
+  private readonly abandonedAfterMs: number;
 
   constructor(options: ModelUsageGovernanceOptions) {
     this.store = options.store;
     this.budget = options.budget;
     this.safeguards = options.safeguards;
     this.costs = options.costs ?? {};
+    this.abandonedAfterMs = options.abandonedAfterMs ?? USAGE_ABANDONED_AFTER_MS;
   }
 
   /**
-   * Admits one model call or refuses it with the limit that is reached. The database decides:
-   * the call's usage event is written in the transaction that read the budget under its lock,
-   * so two processes cannot both admit the last call of a budget. The event counts as one call
-   * from here on, whatever becomes of the call.
+   * Admits one model call or refuses it with the limit that is reached. The database decides
+   * in one statement: it adds one call and the call's reservation to the counters of the day
+   * and the month when every limit still holds afterwards, and writes the usage event as
+   * `pending`. Of any number of processes that ask at once, exactly as many are admitted as
+   * the limits have room for. The event counts as one call from here on, whatever becomes of
+   * the call.
    */
-  admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall> {
-    const { todayStart, currentMonthStart } = createModelUsageWindowBounds();
-    return this.store.reserveModelUsageEvent({
-      event: this.eventOf(call, USAGE_BEFORE_SETTLEMENT),
-      ...(this.hasLimits()
-        ? {
-            admission: {
-              budgetKey: INSTANCE_BUDGET_KEY,
-              windows: {
-                todayStart,
-                ...(this.safeguards.tokensPerMonth || this.budget.monthlySpendLimit
-                  ? { currentMonthStart }
-                  : {})
-              },
-              decide: (usage) => assertWithinLimits(usage, this.safeguards, this.budget)
-            }
-          }
-        : {})
+  async admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall> {
+    const reserved = this.reservationOf(call);
+    const admitted = await this.store.admitModelUsageEvent({
+      event: this.eventOf(call, NOTHING_REPORTED),
+      reservation: reserved,
+      limits: this.limits()
+    });
+    if ("refused" in admitted) throw refusalError(admitted.refused);
+    return {
+      id: admitted.id,
+      clientInstanceId: call.clientInstanceId,
+      providerId: call.providerId,
+      model: call.model,
+      fastMode: call.fastMode === true,
+      reserved
+    };
+  }
+
+  /**
+   * Ends an admitted call: writes what it used onto its usage event and replaces its
+   * reservation on the counters by that. A call that ended without an answer passes no usage:
+   * it is settled as `failed` with nothing used, and its reservation is released.
+   */
+  async settleModelCall(admitted: AdmittedModelCall, usage?: ModelCallUsage): Promise<void> {
+    const settlement = settlementOf(admitted, usage ?? NOTHING_REPORTED, this.costs.customer);
+    await this.store.settleModelUsageEvent({
+      clientInstanceId: admitted.clientInstanceId,
+      id: admitted.id,
+      // Recovery may have taken a call that ran very long as abandoned. It ends all the same.
+      from: ["pending", "abandoned"],
+      status: usage ? "settled" : "failed",
+      settlement,
+      counted: usage ? countedOf(settlement, admitted.reserved) : NOTHING_COUNTED
     });
   }
 
-  /** Writes what an admitted call used onto its usage event. */
-  settleModelCall(admitted: AdmittedModelCall, usage: ModelCallUsage): Promise<ModelUsageEvent> {
-    return this.store.settleModelUsageEvent({
-      clientInstanceId: admitted.clientInstanceId,
-      id: admitted.id,
-      settlement: settlementOf(admitted, usage, this.costs.customer)
-    });
+  /**
+   * Takes the calls that were admitted more than `USAGE_ABANDONED_AFTER_MS` ago and never
+   * ended as abandoned: nothing used, the reservation released. Resolves with how many.
+   */
+  async releaseAbandonedModelCalls(input: {
+    clientInstanceId: ClientInstanceId;
+    signal?: AbortSignal;
+  }): Promise<number> {
+    let released = 0;
+    while (!input.signal?.aborted) {
+      const abandoned = await this.store.listPendingModelUsageEvents({
+        clientInstanceId: input.clientInstanceId,
+        olderThanMs: this.abandonedAfterMs,
+        limit: USAGE_RECOVERY_BATCH
+      });
+      for (const call of abandoned) {
+        const changed = await this.store.settleModelUsageEvent({
+          clientInstanceId: call.clientInstanceId,
+          id: call.id,
+          from: ["pending"],
+          status: "abandoned",
+          settlement: settlementOf(call, NOTHING_REPORTED, this.costs.customer),
+          counted: NOTHING_COUNTED
+        });
+        if (changed) released += 1;
+      }
+      if (abandoned.length < USAGE_RECOVERY_BATCH) break;
+    }
+    return released;
   }
 
   /** Records usage of a call that was not admitted here, such as usage a tool reports. */
   recordModelUsage(input: ModelUsageEventInput): Promise<ModelUsageEvent> {
-    return this.store.appendModelUsageEvent(this.eventOf(input, input));
+    const event = this.eventOf(input, input);
+    // Nothing was reserved for it. Where its cost is not whole, its tokens count at the
+    // highest price of the model, so an unknown cost never counts as none.
+    return this.store.appendModelUsageEvent(
+      event,
+      countedOf(event, {
+        tokens: event.totalTokens,
+        costMicros: this.highestCost(input, event.inputTokens, event.outputTokens) ?? 0
+      })
+    );
   }
 
   async createSafeSummary(input: {
@@ -282,17 +348,87 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     };
   }
 
-  private hasLimits(): boolean {
-    return Boolean(
-      this.safeguards.modelCallsPerDay ||
-      this.safeguards.tokensPerDay ||
-      this.safeguards.tokensPerMonth ||
-      this.budget.dailySpendLimit ||
-      this.budget.monthlySpendLimit
+  private limits(): { day: ModelUsageCounterLimits; month: ModelUsageCounterLimits } {
+    const { safeguards, budget } = this;
+    // A counter holds costs as they are settled. The safety multiplier lowers the limit.
+    const spend = (limit: number | undefined): { costMicros?: number } =>
+      limit ? { costMicros: Math.floor(toMicros(limit) / (budget.costSafetyMultiplier ?? 1)) } : {};
+    return {
+      day: {
+        ...(safeguards.modelCallsPerDay ? { modelCallCount: safeguards.modelCallsPerDay } : {}),
+        ...(safeguards.tokensPerDay ? { tokens: safeguards.tokensPerDay } : {}),
+        ...spend(budget.dailySpendLimit)
+      },
+      month: {
+        ...(safeguards.tokensPerMonth ? { tokens: safeguards.tokensPerMonth } : {}),
+        ...spend(budget.monthlySpendLimit)
+      }
+    };
+  }
+
+  /**
+   * The most a call can use, taken from its request before it is sent: the input by its size,
+   * the output by the request's maximum, and both at the highest price the rate card has for
+   * the model. With a spend budget, a model without a price is refused: nothing bounds what
+   * its call costs.
+   */
+  private reservationOf(call: ModelCallAdmission): ModelUsageCounted {
+    const inputTokens = Math.ceil(
+      normalizeCount(call.request.inputCharacters) / RESERVED_CHARACTERS_PER_INPUT_TOKEN
+    );
+    const outputTokens = normalizeCount(call.request.maxOutputTokens ?? RESERVED_OUTPUT_TOKENS);
+    const tokens = inputTokens + outputTokens;
+    const costMicros = this.highestCost(call, inputTokens, outputTokens);
+    if (
+      costMicros === undefined &&
+      (this.budget.dailySpendLimit || this.budget.monthlySpendLimit)
+    ) {
+      throw new AppError(
+        "FORBIDDEN",
+        "The model has no price on the rate card; the spend budget cannot be evaluated safely"
+      );
+    }
+    return { tokens, costMicros: costMicros ?? 0 };
+  }
+
+  /** What the tokens cost at the highest price the rate card has for the model, if it has one. */
+  private highestCost(
+    call: Pick<ModelCallAdmission, "providerId" | "model" | "fastMode">,
+    inputTokens: number,
+    outputTokens: number
+  ): number | undefined {
+    const rate = this.costs.customer?.models.find(
+      (candidate) => candidate.providerId === call.providerId && candidate.model === call.model
+    );
+    if (!rate || (call.fastMode && !rate.fast)) return undefined;
+    // A call asked for as fast may be billed at either rate.
+    const rates: UsageRateCardTokenRatesConfig[] = [
+      rate,
+      ...(call.fastMode && rate.fast ? [rate.fast] : [])
+    ];
+    const highest = (price: (rates: UsageRateCardTokenRatesConfig) => number): number =>
+      Math.max(...rates.map(price));
+    return (
+      priceTokens(
+        inputTokens,
+        highest((candidate) =>
+          Math.max(
+            candidate.uncachedInputPricePerMillionTokens,
+            candidate.cachedInputPricePerMillionTokens
+          )
+        )
+      ) +
+      priceTokens(
+        outputTokens,
+        highest((candidate) => candidate.outputPricePerMillionTokens)
+      )
     );
   }
 
-  private eventOf(call: ModelCallAdmission, usage: ModelCallUsage): ModelUsageEventRecordInput {
+  private eventOf(
+    call: Omit<ModelCallAdmission, "request">,
+    usage: ModelCallUsage
+  ): ModelUsageEventRecordInput {
     return {
       clientInstanceId: call.clientInstanceId,
       ...usageEventOrigin(call.attribution),
@@ -307,7 +443,37 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }
 }
 
-/** What a call used, its counts made whole numbers and its cost settled. */
+const NOTHING_COUNTED: ModelUsageCounted = { tokens: 0, costMicros: 0 };
+
+/**
+ * What an ended call holds on its counters: what it used where that is known. Where the
+ * provider reported no tokens, or the cost cannot be settled, the reservation stays, so an
+ * unknown amount never counts as none.
+ */
+function countedOf(
+  settlement: ModelUsageSettlement,
+  reserved: ModelUsageCounted
+): ModelUsageCounted {
+  const cost = settlement.customerBillableCost;
+  return {
+    tokens: settlement.source === "not_reported" ? reserved.tokens : settlement.totalTokens,
+    costMicros: cost.status === "settled" ? cost.totalCostMicros : reserved.costMicros
+  };
+}
+
+function refusalError(refusal: ModelUsageRefusal): ModelUsageLimitReachedError {
+  const period = refusal.period === "day" ? "Daily" : "Monthly";
+  if (refusal.metric === "modelCallCount")
+    return new ModelUsageLimitReachedError(`${period} model call safeguard has been reached`);
+  if (refusal.metric === "tokens")
+    return new ModelUsageLimitReachedError(`${period} model token safeguard has been reached`);
+  return new ModelUsageLimitReachedError(`${period} model spend budget has been reached`);
+}
+
+/**
+ * What a call used, its counts made whole numbers and its cost settled. A call that reported
+ * nothing costs nothing: its cost is settled at zero, not left open.
+ */
 function settlementOf(
   call: Pick<ModelCallAdmission, "providerId" | "model" | "fastMode">,
   usage: ModelCallUsage,
@@ -330,160 +496,16 @@ function settlementOf(
   return {
     ...measured,
     customerBillableCost: calculateUsageCost(
-      { providerId: call.providerId, model: call.model, fastMode: call.fastMode, ...measured },
+      {
+        providerId: call.providerId,
+        model: call.model,
+        fastMode: call.fastMode,
+        ...measured,
+        ...(usage === NOTHING_REPORTED ? { source: "estimated" as const } : {})
+      },
       rateCard
     )
   };
-}
-
-/** The fields of a usage event that its cost is settled from. */
-export type UsageCostEvent = Pick<
-  ModelUsageEventInput,
-  | "providerId"
-  | "model"
-  | "inputTokens"
-  | "cachedInputTokens"
-  | "outputTokens"
-  | "source"
-  | "webSearchCallCount"
-  | "fastMode"
-  | "providerServiceTier"
->;
-
-export function calculateUsageCost(
-  event: UsageCostEvent,
-  rateCard: UsageRateCardConfig | undefined,
-  source: UsageCostRecord["source"] = "rate_card"
-): UsageCostRecord {
-  if (!rateCard) {
-    return incompleteCost("unpriced", source, ["model_rate"]);
-  }
-  if (event.source === "not_reported") {
-    return incompleteCost("incomplete", source, ["token_usage"], rateCard);
-  }
-
-  const modelRate = rateCard.models.find(
-    (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
-  );
-  if (!modelRate) {
-    return incompleteCost("unpriced", source, ["model_rate"], rateCard);
-  }
-  // A call billed as fast is never settled with the normal rates.
-  const tokenRates = isBilledAsFast(event) ? modelRate.fast : modelRate;
-  if (!tokenRates) {
-    return incompleteCost("unpriced", source, ["fast_model_rate"], rateCard);
-  }
-
-  const webSearchRate = findWebSearchRate(rateCard, event);
-  const missingMeters: UsageCostMissingMeter[] = [];
-  const cachedInputTokens = event.cachedInputTokens;
-  const cachePriceDiffers =
-    tokenRates.cachedInputPricePerMillionTokens !== tokenRates.uncachedInputPricePerMillionTokens;
-  if (cachedInputTokens === undefined && cachePriceDiffers) {
-    missingMeters.push("cached_input_tokens");
-  }
-  if ((event.webSearchCallCount ?? 0) > 0 && !webSearchRate) {
-    missingMeters.push("web_search_rate");
-  }
-
-  const components = calculateKnownComponents(event, tokenRates, webSearchRate);
-  const provenance = {
-    source,
-    calculationVersion: 1 as const,
-    rateCardId: rateCard.id,
-    rateCardVersion: rateCard.version,
-    currency: rateCard.currency,
-    appliedRates: {
-      uncachedInputPricePerMillionTokens: tokenRates.uncachedInputPricePerMillionTokens,
-      cachedInputPricePerMillionTokens: tokenRates.cachedInputPricePerMillionTokens,
-      outputPricePerMillionTokens: tokenRates.outputPricePerMillionTokens,
-      ...(webSearchRate ? { webSearchPricePerCall: webSearchRate.pricePerCall } : {})
-    }
-  };
-
-  if (missingMeters.length > 0) {
-    return {
-      status: "incomplete",
-      ...provenance,
-      knownComponents: components,
-      knownCostMicros: totalComponents(components),
-      missingMeters
-    };
-  }
-
-  return {
-    status: "settled",
-    ...provenance,
-    components,
-    totalCostMicros: totalComponents(components)
-  };
-}
-
-function calculateKnownComponents(
-  event: UsageCostEvent,
-  tokenRates: UsageRateCardTokenRatesConfig,
-  webSearchRate: { pricePerCall: number } | undefined
-): UsageCostComponents {
-  const cachedInputTokens =
-    event.cachedInputTokens ??
-    (tokenRates.cachedInputPricePerMillionTokens === tokenRates.uncachedInputPricePerMillionTokens
-      ? 0
-      : undefined);
-  const inputKnown = cachedInputTokens !== undefined;
-  const uncachedInputTokens = inputKnown
-    ? Math.max(0, normalizeCount(event.inputTokens) - cachedInputTokens)
-    : 0;
-  return {
-    uncachedInputCostMicros: inputKnown
-      ? priceTokens(uncachedInputTokens, tokenRates.uncachedInputPricePerMillionTokens)
-      : 0,
-    cachedInputCostMicros: inputKnown
-      ? priceTokens(cachedInputTokens, tokenRates.cachedInputPricePerMillionTokens)
-      : 0,
-    outputCostMicros: priceTokens(
-      normalizeCount(event.outputTokens),
-      tokenRates.outputPricePerMillionTokens
-    ),
-    webSearchCostMicros: webSearchRate
-      ? Math.round((event.webSearchCallCount ?? 0) * webSearchRate.pricePerCall * 1_000_000)
-      : 0
-  };
-}
-
-function incompleteCost(
-  status: "incomplete" | "unpriced",
-  source: UsageCostRecord["source"],
-  missingMeters: UsageCostMissingMeter[],
-  rateCard?: UsageRateCardConfig
-): UsageCostRecord {
-  return {
-    status,
-    source,
-    calculationVersion: 1,
-    ...(rateCard
-      ? {
-          rateCardId: rateCard.id,
-          rateCardVersion: rateCard.version,
-          currency: rateCard.currency
-        }
-      : {}),
-    missingMeters
-  };
-}
-
-function findWebSearchRate(
-  rateCard: UsageRateCardConfig,
-  event: UsageCostEvent
-): { pricePerCall: number } | undefined {
-  const rates = rateCard.webSearch ?? [];
-  return (
-    rates.find(
-      (candidate) => candidate.providerId === event.providerId && candidate.model === event.model
-    ) ??
-    rates.find(
-      (candidate) => candidate.providerId === event.providerId && candidate.model === undefined
-    )
-  );
 }
 
 /** Where a usage event says its call came from: a run with its agent, or a purpose. */
@@ -517,6 +539,9 @@ function usageEventOrigin(
     ...who,
     ...(attribution.conversationId ? { conversationId: attribution.conversationId } : {}),
     ...(attribution.operationRunId ? { operationRunId: attribution.operationRunId } : {}),
+    // Transition release only: the Usage page of the previous release reads the purpose of a
+    // call the product made for itself from the agent name. It goes in the contract step.
+    agentName: attribution.purpose,
     purpose: attribution.purpose
   };
 }
@@ -603,6 +628,7 @@ function toSafeEvent(
   const settled = cost.status === "settled";
   return {
     id: event.id,
+    status: event.status,
     clientInstanceId: event.clientInstanceId,
     conversationId: event.conversationId,
     agentRunId: event.agentRunId,
@@ -640,71 +666,6 @@ function toSafeEvent(
       webSearchCostVisible: showWebSearchCost
     }
   };
-}
-
-/**
- * Holds what the windows hold against the limits of the instance, and throws the one that is
- * reached. An admitted call counts from its admission, so calls in flight count too.
- */
-function assertWithinLimits(
-  usage: ModelUsageBudgetUsage,
-  safeguards: UsageSafeguardsConfig,
-  budget: UsageBudgetConfig
-): void {
-  const { today } = usage;
-  if (safeguards.modelCallsPerDay && today.modelCallCount >= safeguards.modelCallsPerDay) {
-    throw new ModelUsageLimitReachedError("Daily model call safeguard has been reached");
-  }
-  if (safeguards.tokensPerDay && today.totalTokens >= safeguards.tokensPerDay) {
-    throw new ModelUsageLimitReachedError("Daily model token safeguard has been reached");
-  }
-  const costSafetyMultiplier = budget.costSafetyMultiplier ?? 1;
-  if (budget.dailySpendLimit) {
-    assertSpendBudget(today, budget.dailySpendLimit, costSafetyMultiplier, "Daily");
-  }
-  if (!safeguards.tokensPerMonth && !budget.monthlySpendLimit) return;
-  const { currentMonth } = usage;
-  if (!currentMonth) throw new AppError("INTERNAL", "Admission did not read the month");
-  if (safeguards.tokensPerMonth && currentMonth.totalTokens >= safeguards.tokensPerMonth) {
-    throw new ModelUsageLimitReachedError("Monthly model token safeguard has been reached");
-  }
-  if (budget.monthlySpendLimit) {
-    assertSpendBudget(currentMonth, budget.monthlySpendLimit, costSafetyMultiplier, "Monthly");
-  }
-}
-
-function assertSpendBudget(
-  window: ModelUsageBudgetWindow,
-  limit: number,
-  costSafetyMultiplier: number,
-  label: "Daily" | "Monthly"
-): void {
-  if (window.unsettledModelCallCount > 0) {
-    throw new AppError(
-      "FORBIDDEN",
-      `${label} customer billable cost is incomplete; spend budget cannot be evaluated safely`
-    );
-  }
-  if (window.settledCostMicros * costSafetyMultiplier >= toMicros(limit)) {
-    throw new ModelUsageLimitReachedError(`${label} model spend budget has been reached`);
-  }
-}
-
-function totalComponents(components: UsageCostComponents): number {
-  return (
-    components.uncachedInputCostMicros +
-    components.cachedInputCostMicros +
-    components.outputCostMicros +
-    components.webSearchCostMicros
-  );
-}
-
-function normalizeCount(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
-}
-
-function priceTokens(tokens: number, pricePerMillionTokens: number): number {
-  return Math.round(normalizeCount(tokens) * pricePerMillionTokens);
 }
 
 function toMicros(value: number): number {

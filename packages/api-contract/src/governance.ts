@@ -45,6 +45,12 @@ export const auditActivitySchema = z.object({
 
 export const modelUsageVolumeEventSchema = z.object({
   id: z.string(),
+  /**
+   * Where the call stands. `pending`: it has not ended and its amounts are not known yet.
+   * `settled`: it ended with the usage its provider reported. `failed`: it ended without an
+   * answer. `abandoned`: it never ended as far as the instance knows.
+   */
+  status: z.enum(["pending", "settled", "failed", "abandoned"]),
   clientInstanceId: z.string(),
   conversationId: z.string().optional(),
   agentRunId: z.string().optional(),

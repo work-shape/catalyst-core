@@ -210,7 +210,7 @@ describe("approval check runner", () => {
       f.complete.mockRejectedValue(new Error("secret provider detail"));
       expect(await f.runner.run(handler, command, context)).toEqual([unevaluated(onFail)]);
       expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
-        expect.objectContaining({ source: "estimated", totalTokens: 0 })
+        expect.objectContaining({ status: "failed", source: "not_reported", totalTokens: 0 })
       ]);
     }
   );

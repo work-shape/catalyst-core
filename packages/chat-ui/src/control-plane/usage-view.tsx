@@ -24,7 +24,7 @@ import {
   TableRow
 } from "@vivd-catalyst/ui";
 import { formatDateTime } from "./locale-format";
-import { usageCaller, usageRegion } from "./usage-attribution-labels";
+import { usageCaller, usageRegion, usageSource } from "./usage-attribution-labels";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 
 export function UsageView({
@@ -86,7 +86,7 @@ export function UsageView({
   return (
     <>
       {header}
-      <div className="grid min-w-0 content-start gap-4">
+      <div className="grid min-w-0 grid-cols-1 content-start gap-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <UsageMetric
             icon={<DollarSign size={15} />}
@@ -206,8 +206,7 @@ export function UsageView({
                     <TableHead>{t("settings.time")}</TableHead>
                     <TableHead>{t("settings.usageCaller")}</TableHead>
                     <TableHead>{t("settings.usageModel")}</TableHead>
-                    <TableHead>{t("settings.usageProvider")}</TableHead>
-                    <TableHead>{t("settings.usageRegion")}</TableHead>
+                    <TableHead>{t("settings.usageProviderAndRegion")}</TableHead>
                     <TableHead>{t("settings.usageTokens")}</TableHead>
                     <TableHead>{t("settings.usageCachedInput")}</TableHead>
                     <TableHead>{t("settings.usageBillable")}</TableHead>
@@ -234,19 +233,25 @@ export function UsageView({
                       </TableCell>
                       <TableCell className="break-words text-muted-foreground">
                         {event.providerId}
+                        <span className="block whitespace-nowrap">
+                          {usageRegion(event.region, t)}
+                        </span>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {usageRegion(event.region, t)}
+                        {event.status === "pending"
+                          ? t("settings.usageUnknown")
+                          : event.totalTokens.toLocaleString(locale)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {event.totalTokens.toLocaleString(locale)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {event.cachedInputTokens?.toLocaleString(locale) ??
+                        {(event.status === "pending"
+                          ? undefined
+                          : event.cachedInputTokens?.toLocaleString(locale)) ??
                           t("settings.usageUnknown")}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatBillableCost(event.cost, i18n)}
+                        {event.status === "pending"
+                          ? t("settings.usageUnknown")
+                          : formatBillableCost(event.cost, i18n)}
                       </TableCell>
                       {showWebSearchCosts ? (
                         <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -258,7 +263,9 @@ export function UsageView({
                           {formatWebSearchBillableCost(event.cost, i18n)}
                         </TableCell>
                       ) : null}
-                      <TableCell className="text-muted-foreground">{event.source}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {usageSource(event, t)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

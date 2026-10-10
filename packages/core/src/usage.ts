@@ -9,6 +9,7 @@ import type {
 } from "./ids";
 import type { ISODateString } from "./time";
 import type { ProviderRegion } from "./providers";
+import type { JsonObject } from "./json";
 
 export type ModelUsageSource = "provider_reported" | "not_reported" | "estimated";
 
@@ -65,8 +66,16 @@ export interface IncompleteUsageCostRecord extends Partial<UsageCostRecordProven
 
 export type UsageCostRecord = SettledUsageCostRecord | IncompleteUsageCostRecord;
 
+/**
+ * Where the call of a usage event stands. `pending`: admitted and not ended. `settled`: ended
+ * with the usage its provider reported. `failed`: ended without an answer. `abandoned`: never
+ * ended as far as the instance knows, because its process went away.
+ */
+export type ModelUsageEventStatus = "pending" | "settled" | "failed" | "abandoned";
+
 export interface ModelUsageEvent extends ModelTokenUsage {
   id: ModelUsageEventId;
+  status: ModelUsageEventStatus;
   clientInstanceId: ClientInstanceId;
   /** Absent for a call no conversation caused. */
   conversationId?: ConversationId;
@@ -136,13 +145,26 @@ export interface ModelCallAdmission {
   fastMode?: boolean;
   /** Ties the usage event to the request that caused the call. */
   correlationId: string;
+  /** The size of the request. Admission reserves tokens and cost from it. */
+  request: ModelCallRequestSize;
+}
+
+/** What admission knows of a request before it is sent. */
+export interface ModelCallRequestSize {
+  /** The characters of the messages and tool definitions. */
+  inputCharacters: number;
+  /** The most tokens the answer may have, where the request states it. */
+  maxOutputTokens?: number;
 }
 
 /** A call that was admitted: its usage event, which settlement completes. */
-export type AdmittedModelCall = Pick<
+export interface AdmittedModelCall extends Pick<
   ModelUsageEvent,
   "id" | "clientInstanceId" | "providerId" | "model" | "fastMode"
->;
+> {
+  /** What the call holds on the counters of its day and month until it ends. */
+  reserved: ModelUsageCounted;
+}
 
 /** What a call used, as its provider reported it or as it is estimated. */
 export interface ModelCallUsage extends ModelTokenUsage {
@@ -150,13 +172,13 @@ export interface ModelCallUsage extends ModelTokenUsage {
   providerServiceTier?: string;
 }
 
-export interface ModelUsageEventInput extends ModelCallAdmission, ModelCallUsage {}
+export interface ModelUsageEventInput extends Omit<ModelCallAdmission, "request">, ModelCallUsage {}
 
 export interface ModelUsageEventRecordInput extends ModelTokenUsage {
   clientInstanceId: ClientInstanceId;
   conversationId?: ConversationId;
   agentRunId?: AgentRunId;
-  /** The agent of the run. Absent for a call the product made for itself. */
+  /** The agent of the run. A call the product made for itself carries its purpose here too. */
   agentName?: string;
   purpose?: ModelSystemPurpose;
   providerId: string;
@@ -173,6 +195,25 @@ export interface ModelUsageEventRecordInput extends ModelTokenUsage {
   providerServiceTier?: string;
   customerBillableCost: UsageCostRecord;
   correlationId: string;
+}
+
+/** What a usage event holds on the counters of its day and month. */
+export interface ModelUsageCounted {
+  tokens: number;
+  costMicros: number;
+}
+
+/** The most a period's counter may hold. An absent metric is not limited. */
+export interface ModelUsageCounterLimits {
+  modelCallCount?: number;
+  tokens?: number;
+  costMicros?: number;
+}
+
+/** The limit that refused a call. */
+export interface ModelUsageRefusal {
+  period: "day" | "month";
+  metric: "modelCallCount" | "tokens" | "costMicros";
 }
 
 /** What settlement writes onto the usage event of an admitted call. */
@@ -260,21 +301,6 @@ export interface RecentModelUsage {
   byAttribution: ModelUsageAttributionGroup[];
 }
 
-/** What admission reads of one window: enough to hold it against every instance limit. */
-export interface ModelUsageBudgetWindow {
-  modelCallCount: number;
-  totalTokens: number;
-  /** Events whose cost is not settled. A spend budget cannot be evaluated while there are any. */
-  unsettledModelCallCount: number;
-  settledCostMicros: number;
-}
-
-export interface ModelUsageBudgetUsage {
-  today: ModelUsageBudgetWindow;
-  /** Absent when admission asked for the day alone. */
-  currentMonth?: ModelUsageBudgetWindow;
-}
-
 /**
  * Where a backfill call ended: the creation time, as the database writes it, and the id of the
  * last event it read. Events are stored in the order of their creation time, so a batch in
@@ -294,41 +320,76 @@ export interface ModelUsageBackfillTarget {
 }
 
 export interface ModelUsageEventStore {
-  /** Writes the event of a call nobody admitted, such as usage a tool reports. */
-  appendModelUsageEvent(input: ModelUsageEventRecordInput): Promise<ModelUsageEvent>;
   /**
-   * Admits a call and writes its event in one transaction. With `admission` it first takes the
-   * lock of the instance's budget, reads what the windows hold and calls `decide`, which throws
-   * to refuse; of two processes that ask at once the second sees the first one's event. The
-   * event stands for the call from here on: it counts as one call with no tokens until
-   * `settleModelUsageEvent` writes what the call used.
+   * Writes the event of a call nobody admitted, such as usage a tool reports, and adds it to
+   * the counters of its day and month and to the sums of its day. Without `counted` the
+   * counters take its tokens and its settled cost.
    */
-  reserveModelUsageEvent(input: {
+  appendModelUsageEvent(
+    input: ModelUsageEventRecordInput,
+    counted?: ModelUsageCounted
+  ): Promise<ModelUsageEvent>;
+  /**
+   * Admits a call in one statement: it adds one call and the reservation to the counters of the
+   * instance's day and month when every limit still holds afterwards, and writes the event as
+   * `pending` with it. Otherwise it changes nothing and names the limit. The day and the month
+   * are those of the database clock. It reads no usage event, except once per period to start
+   * a counter that does not exist yet from the events the period already has.
+   */
+  admitModelUsageEvent(input: {
     event: ModelUsageEventRecordInput;
-    admission?: {
-      budgetKey: string;
-      /**
-       * The windows to read. Without the start of the month only the events of the day are
-       * read, which is all an instance without a monthly limit needs.
-       */
-      windows: { todayStart: ISODateString; currentMonthStart?: ISODateString };
-      decide(usage: ModelUsageBudgetUsage): void;
-    };
-  }): Promise<ModelUsageEvent>;
+    reservation: ModelUsageCounted;
+    limits: { day: ModelUsageCounterLimits; month: ModelUsageCounterLimits };
+  }): Promise<{ id: ModelUsageEventId } | { refused: ModelUsageRefusal }>;
+  /**
+   * Ends the call of an event in one statement: writes what it used and its status, replaces
+   * what the event held on its counters by `counted`, and adds the event to the sums of its
+   * day. It changes an event only while its status is one of `from`, and resolves with whether
+   * it did.
+   */
   settleModelUsageEvent(input: {
     clientInstanceId: ClientInstanceId;
     id: ModelUsageEventId;
+    from: readonly ModelUsageEventStatus[];
+    status: Exclude<ModelUsageEventStatus, "pending">;
     settlement: ModelUsageSettlement;
-  }): Promise<ModelUsageEvent>;
-  /** Reads every event of the instance once. */
+    counted: ModelUsageCounted;
+  }): Promise<boolean>;
+  /** Up to `limit` events that are `pending` and were admitted more than `olderThanMs` ago. */
+  listPendingModelUsageEvents(input: {
+    clientInstanceId: ClientInstanceId;
+    olderThanMs: number;
+    limit: number;
+  }): Promise<AdmittedModelCall[]>;
+  /** The sums of every day of the instance: in total and by UTC month. Reads no usage event. */
   summarizeModelUsageHistory(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<ModelUsageHistory>;
-  /** Reads the events from `from` on, through the index on instance and creation time. */
+  /** The sums of the days from `from` on. Reads no usage event. */
   summarizeRecentModelUsage(input: {
     clientInstanceId: ClientInstanceId;
     from: ISODateString;
   }): Promise<RecentModelUsage>;
+  /**
+   * Compares the counters of the current day and month and the daily sums with the usage
+   * events, and corrects what differs, such as what a process of the previous release wrote.
+   * `recent` reads the events from the start of the month, `all` every event. Each comparison
+   * is one statement on one snapshot and its correction is added, not set, so calls that are
+   * admitted or end meanwhile stay counted. It takes no lock that admission waits for.
+   */
+  reconcileModelUsage(input: {
+    clientInstanceId: ClientInstanceId;
+    scope: "recent" | "all";
+  }): Promise<{ correctedCounters: number; correctedSums: number }>;
+  readModelUsageMaintenance(input: {
+    clientInstanceId: ClientInstanceId;
+    task: string;
+  }): Promise<JsonObject | undefined>;
+  writeModelUsageMaintenance(input: {
+    clientInstanceId: ClientInstanceId;
+    task: string;
+    state: JsonObject;
+  }): Promise<void>;
   listModelUsageEvents(input: {
     clientInstanceId: ClientInstanceId;
     start?: ISODateString;
@@ -337,8 +398,9 @@ export interface ModelUsageEventStore {
     page?: StorePage;
   }): Promise<ModelUsageEvent[]>;
   /**
-   * Takes the user off up to `limit` usage events and resolves with how many it changed. The
-   * amounts stay. The deletion of an account calls it until it resolves with 0.
+   * Takes the user off up to `limit` usage events, with what leads back to them: the
+   * conversation, the run, the operation and the correlation id. Resolves with how many it
+   * changed. The amounts stay. The deletion of an account calls it until it resolves with 0.
    */
   clearUserFromModelUsageEvents(input: {
     clientInstanceId: ClientInstanceId;

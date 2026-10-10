@@ -13313,6 +13313,15 @@
           "id": {
             "type": "string"
           },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "settled",
+              "failed",
+              "abandoned"
+            ]
+          },
           "clientInstanceId": {
             "type": "string"
           },
@@ -13377,6 +13386,7 @@
         },
         "required": [
           "id",
+          "status",
           "clientInstanceId",
           "agentName",
           "providerId",

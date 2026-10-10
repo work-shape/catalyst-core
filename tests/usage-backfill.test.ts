@@ -16,8 +16,8 @@ const BATCH_IN_LARGE_FIXTURE = 1_000;
 describe("the usage attribution backfill", () => {
   const db = usePostgresSuite("usagebackfill");
 
-  /** One pass of the backfill as a freshly started process runs it. */
-  async function runBackfill(clientInstanceId: ClientInstanceId) {
+  /** The due jobs as a freshly started process runs them: the backfill among them. */
+  async function runBackfill(clientInstanceId: ClientInstanceId, now?: () => Date) {
     const worker = createJobWorker({
       stores: db.store,
       clientInstanceId,
@@ -31,7 +31,8 @@ describe("the usage attribution backfill", () => {
             local: { provider: "deterministic", model: "local" }
           },
           modelBindings: [{ id: "main", providerId: "azure-eu" }]
-        })
+        }),
+        now ? { now } : {}
       )
     });
     await worker.runDue();
@@ -124,6 +125,8 @@ describe("the usage attribution backfill", () => {
       model: "local",
       totalTokens: 5
     });
+    // The sums of events the previous release wrote come from the comparison with the events.
+    await db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "all" });
     const totalsBefore = await db.store.usage.summarizeModelUsageHistory({ clientInstanceId });
 
     await runBackfill(clientInstanceId);
@@ -233,6 +236,78 @@ describe("the usage attribution backfill", () => {
     expect(filled.map((row) => [row.purpose, row.region])).toEqual(
       Array.from({ length: 5 }, () => ["document_extraction", "eu"])
     );
+  });
+
+  // Fails without the change: where a pass stood was in the memory of its process, and a
+  // process that was killed started over an hour later.
+  it("goes on after the last batch a killed process recorded", async () => {
+    const clientInstanceId = db.clientInstance("resume");
+    for (const n of [1, 2, 3, 4]) {
+      await oldEvent(clientInstanceId, `usage_resume_${n}`, {
+        agentRunId: null,
+        conversationId: null,
+        agentName: "document_extraction",
+        totalTokens: n,
+        createdAt: `2026-01-01T00:00:0${n}.000000Z`
+      });
+    }
+    // What the batch of a killed process left: the pass stands after the second event.
+    await db.store.usage.writeModelUsageMaintenance({
+      clientInstanceId,
+      task: "attribution_backfill",
+      state: {
+        after: { createdAt: "2026-01-01T00:00:02.000000Z", id: "usage_resume_2" },
+        changedInPass: 0
+      }
+    });
+
+    await runBackfill(clientInstanceId);
+
+    const resumed = await rows(clientInstanceId);
+    expect(resumed.map((row) => row.purpose)).toEqual([
+      null,
+      null,
+      "document_extraction",
+      "document_extraction"
+    ]);
+    // The pass changed something, so the next tick reads the events from the start.
+    await runBackfill(clientInstanceId);
+    const complete = await rows(clientInstanceId);
+    expect(complete.map((row) => row.purpose)).toEqual(
+      Array.from({ length: 4 }, () => "document_extraction")
+    );
+  });
+
+  // Fails without the change: after a pass without a change the backfill never read again,
+  // and what a process of the previous release wrote after it stayed without attribution.
+  it("records a pass without a change and reads the events again a day later", async () => {
+    const clientInstanceId = db.clientInstance("verify");
+    const start = new Date("2026-03-01T08:00:00.000Z");
+    await runBackfill(clientInstanceId, () => start);
+    await oldEvent(clientInstanceId, "usage_late", {
+      agentRunId: null,
+      conversationId: null,
+      agentName: "document_extraction",
+      totalTokens: 3
+    });
+
+    // An hour later, in a new process: the recorded pass stands and nothing is read.
+    await runBackfill(clientInstanceId, () => new Date(start.getTime() + DAY_MS / 24));
+    await expect(rows(clientInstanceId)).resolves.toMatchObject([{ purpose: null }]);
+
+    await runBackfill(clientInstanceId, () => new Date(start.getTime() + DAY_MS + 1));
+    await expect(rows(clientInstanceId)).resolves.toMatchObject([
+      { purpose: "document_extraction" }
+    ]);
+    // The event moved to the sum of its purpose.
+    const recent = await db.store.usage.summarizeRecentModelUsage({
+      clientInstanceId,
+      from: new Date(Date.now() - DAY_MS).toISOString()
+    });
+    expect(recent.byAttribution).toMatchObject([
+      { purpose: "document_extraction", totalTokens: 3 }
+    ]);
+    expect(recent.byAttribution).toHaveLength(1);
   });
 
   // Fails without the change: there was no backfill. It also fails when the batch is taken in

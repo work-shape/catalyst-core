@@ -66,15 +66,34 @@ Record:
 - correlation id
 - persisted customer billable cost and completeness state
 
-Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped: such a call is recorded with zero tokens and counts toward the daily call limit. Titles and approval checks count toward the limits of the instance like every other call. The record is written when the call is admitted and completed when it ends, so a call in flight shows as a call without tokens.
+Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped. Titles and approval checks count toward the limits of the instance like every other call.
 
-A call is admitted against the limits in the database, under a lock per instance. Several API and worker processes together admit no more than the limit allows.
+A record has a status:
 
-The Usage page lists the caller, the provider and the region of the recent calls. The summary of the API also answers `attributedUsage`: the last 30 days by day, model, provider, region and purpose or agent.
+- `pending`: the call was admitted and has not ended. The Usage page shows it as "Running".
+- `settled`: the call ended with the usage its provider reported.
+- `failed`: the call ended without an answer, was stopped or timed out. It counts as one call toward the daily call limit, uses no tokens and shows "No usage reported".
+- `abandoned`: the process that made the call went away before the call ended. The job `usage.recover_abandoned_calls` runs every 10 minutes and takes a call that is still `pending` six hours after its admission as abandoned.
+
+### How a call is admitted
+
+A call is admitted against the limits in the database, in one statement on two counter rows: the day's and the month's. Several API and worker processes together admit no more than the limits allow, for calls, tokens and spend. Admission reads no usage record and no process waits for a lock per instance.
+
+At admission a call reserves the most it can use: its input by the size of the request, 16,000 output tokens, and both at the highest price the rate card has for the model. When the call ends, the reservation is replaced by what the call used. A failed or abandoned call releases its reservation.
+
+This has three consequences for how you set limits:
+
+- A call is refused when its reservation no longer fits, so a token or spend limit is reached slightly before it is used up.
+- A token limit below about 20,000 admits no call.
+- With a spend budget, a model without a price on the customer rate card is refused.
+
+A cost that cannot be settled, such as one whose provider reported no cached tokens, counts toward a spend budget at the highest price of the model. It does not stop later calls.
+
+The Usage page lists the caller and the provider with its region for the recent calls. Its sums are read from daily sums that are kept as each call ends. The summary of the API also answers `attributedUsage`: the last 30 days by day, model, provider, region and purpose or agent.
 
 ### What stays after a deletion
 
-Usage records are the accounting of the instance and are kept. When an account is deleted, the user is removed from its usage records and the amounts stay. When a workspace is deleted, the workspace is removed from its usage records and the amounts stay. A usage record keeps the conversation id and the agent run id as plain values after the conversation is gone.
+Usage records are the accounting of the instance and are kept. When an account is deleted, the user is removed from its usage records together with the conversation id, the agent run id, the operation id and the correlation id. The amounts, the model, the provider and the agent or purpose stay. When a workspace is deleted, the workspace is removed from its usage records and the amounts stay.
 
 ### After an upgrade
 
@@ -144,3 +163,7 @@ Deletion should cover:
 - minimal retained audit records where legally or contractually required
 
 The customer or legal owner decides the lawful basis and exact retention durations. Workshape Catalyst provides the mechanisms and evidence path.
+
+The job `usage.reconcile` builds the daily sums of the days before the upgrade from the usage records. Until it ends, the Usage page shows no sums for those days. It takes about 3 seconds per million records and needs no action. Afterwards it runs once a day and at every start, compares the counters and the sums with the usage records of the month, and corrects what differs.
+
+During a rolling upgrade a process of the previous release writes usage records that are in no counter and no sum. A limit can be passed by what those processes admit until the next run of `usage.reconcile`. To avoid that, stop the previous release before the new one takes calls.

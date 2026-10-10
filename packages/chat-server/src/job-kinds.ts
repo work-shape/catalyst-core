@@ -109,6 +109,10 @@ export const adoptLegacyJobsJob = defineScheduledKind("platform_jobs.adopt_legac
  * calls the product makes for itself in the contract step.
  */
 export const backfillUsageAttributionJob = defineScheduledKind("usage.backfill_attribution");
+/** Releases what calls reserved that were admitted and never ended. */
+export const recoverAbandonedModelCallsJob = defineScheduledKind("usage.recover_abandoned_calls");
+/** Corrects the usage counters and the daily sums from the usage events. */
+export const reconcileUsageJob = defineScheduledKind("usage.reconcile");
 
 export const expireConversationsSchedule = defineSchedule({
   kind: expireConversationsJob,
@@ -133,7 +137,20 @@ export const adoptLegacyJobsSchedule = defineSchedule({
 });
 export const backfillUsageAttributionSchedule = defineSchedule({
   kind: backfillUsageAttributionJob,
-  every: HOUR_MS,
+  // A tick that finds the last pass recorded as unchanged reads one row and ends. A pass that
+  // a killed process left goes on at the next tick.
+  every: 10 * MINUTE_MS,
   // Older usage events show no region until the first pass after the upgrade is through.
+  dueAtStart: true
+});
+export const recoverAbandonedModelCallsSchedule = defineSchedule({
+  kind: recoverAbandonedModelCallsJob,
+  every: 10 * MINUTE_MS,
+  dueAtStart: true
+});
+export const reconcileUsageSchedule = defineSchedule({
+  kind: reconcileUsageJob,
+  every: DAY_MS,
+  // The Usage page shows no sums of the days before the upgrade until the first run is through.
   dueAtStart: true
 });

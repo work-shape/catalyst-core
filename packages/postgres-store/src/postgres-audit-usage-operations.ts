@@ -1,19 +1,12 @@
 import { keysetFilter } from "./paging";
 import type { StorePage } from "@vivd-catalyst/core";
-import { and, desc, eq, gte, lt, sql as drizzleSql, type SQL } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { and, desc, eq, gte, lt, sql as drizzleSql } from "drizzle-orm";
 import {
   type AuditEvent,
   type AuditEventInput,
   type ClientInstanceId,
-  type ModelUsageBudgetUsage,
-  type ModelUsageBudgetWindow,
   type ModelUsageEvent,
-  type ModelUsageEventRecordInput,
   type ModelUsageEventStore,
-  type ModelUsageHistory,
-  type ModelUsageTotals,
-  type RecentModelUsage,
   AppError,
   createPlatformId
 } from "@vivd-catalyst/core";
@@ -102,332 +95,6 @@ export async function deleteAuditEventsOlderThan(
   return { deletedCount: removed.count, createdBefore: createdBefore.toISOString() };
 }
 
-export async function appendModelUsageEvent(
-  db: PostgresConnection,
-  input: ModelUsageEventRecordInput
-): Promise<ModelUsageEvent> {
-  const id = createPlatformId<"ModelUsageEventId">("usage");
-  const [row] = await db
-    .insert(modelUsageEvents)
-    .values({
-      id,
-      clientInstanceId: input.clientInstanceId,
-      conversationId: input.conversationId ?? null,
-      agentRunId: input.agentRunId ?? null,
-      agentName: input.agentName ?? null,
-      purpose: input.purpose ?? null,
-      providerId: input.providerId,
-      model: input.model,
-      region: input.region ?? null,
-      bindingId: input.bindingId ?? null,
-      inputTokens: input.inputTokens,
-      cachedInputTokens: input.cachedInputTokens ?? null,
-      outputTokens: input.outputTokens,
-      totalTokens: input.totalTokens,
-      webSearchCallCount: input.webSearchCallCount,
-      fastMode: input.fastMode,
-      providerServiceTier: input.providerServiceTier ?? null,
-      source: input.source,
-      customerBillableCost: input.customerBillableCost,
-      userId: attributableUser(input),
-      collaborationWorkspaceId: attributableWorkspace(input),
-      operationRunId: input.operationRunId ?? null,
-      correlationId: input.correlationId,
-      createdAt: new Date()
-    })
-    .returning();
-  return mapModelUsageEvent(row);
-}
-
-/**
- * The user an event may name: one who exists and whose account is not being deleted. Read by
- * the statement that writes the event, so no event names a user once their deletion is marked.
- */
-function attributableUser(input: ModelUsageEventRecordInput): SQL {
-  if (input.userId === undefined) return drizzleSql`null`;
-  return drizzleSql`(
-    select ${productUsers.id} from ${productUsers}
-    where ${productUsers.clientInstanceId} = ${input.clientInstanceId}
-      and ${productUsers.id} = ${input.userId}
-      and ${productUsers.deletionRequestedAt} is null
-  )`;
-}
-
-/**
- * The workspace an event may name: the one given, else the one of the event's conversation,
- * while it exists and is not being deleted.
- */
-function attributableWorkspace(input: ModelUsageEventRecordInput): SQL {
-  if (input.collaborationWorkspaceId === undefined && input.conversationId === undefined)
-    return drizzleSql`null`;
-  const named =
-    input.collaborationWorkspaceId === undefined
-      ? drizzleSql`(
-          select ${conversations.collaborationWorkspaceId} from ${conversations}
-          where ${conversations.clientInstanceId} = ${input.clientInstanceId}
-            and ${conversations.id} = ${input.conversationId}
-        )`
-      : drizzleSql`${input.collaborationWorkspaceId}`;
-  return drizzleSql`(
-    select ${collaborationWorkspaces.id} from ${collaborationWorkspaces}
-    where ${collaborationWorkspaces.clientInstanceId} = ${input.clientInstanceId}
-      and ${collaborationWorkspaces.id} = ${named}
-      and ${collaborationWorkspaces.deletionRequestedAt} is null
-  )`;
-}
-
-export async function reserveModelUsageEvent(
-  db: PostgresConnection,
-  input: Parameters<ModelUsageEventStore["reserveModelUsageEvent"]>[0]
-): Promise<ModelUsageEvent> {
-  const { admission, event } = input;
-  if (!admission) return appendModelUsageEvent(db, event);
-  return db.transaction(async (tx) => {
-    // Held until the transaction ends: the next call for this budget reads this one's event.
-    await tx.execute(drizzleSql`
-      select pg_advisory_xact_lock(
-        hashtextextended(${`model_usage_budget:${event.clientInstanceId}:${admission.budgetKey}`}, 0)
-      )
-    `);
-    admission.decide(
-      await readModelUsageBudgetUsage(tx, event.clientInstanceId, admission.windows)
-    );
-    return appendModelUsageEvent(tx, event);
-  });
-}
-
-const costStatus = drizzleSql`${modelUsageEvents.customerBillableCost}->>'status'`;
-const settled = drizzleSql`${costStatus} = 'settled'`;
-const costComponent = (name: string): SQL =>
-  drizzleSql`(${modelUsageEvents.customerBillableCost}->'components'->>${name})::bigint`;
-// Sums leave the database as double precision: exact up to 2^53, and a number in JavaScript.
-const sumOf = (value: SQL | AnyPgColumn, filter?: SQL): SQL<number> =>
-  filter
-    ? drizzleSql<number>`coalesce(sum(${value}) filter (where ${filter}), 0)::float8`
-    : drizzleSql<number>`coalesce(sum(${value}), 0)::float8`;
-
-/** One statement over the current month: what admission holds against the instance limits. */
-async function readModelUsageBudgetUsage(
-  db: PostgresConnection,
-  clientInstanceId: ClientInstanceId,
-  windows: { todayStart: string; currentMonthStart?: string }
-): Promise<ModelUsageBudgetUsage> {
-  const today = drizzleSql`${modelUsageEvents.createdAt} >= ${windows.todayStart}::timestamptz`;
-  const settledCost = drizzleSql`(${modelUsageEvents.customerBillableCost}->>'totalCostMicros')::bigint`;
-  // One scan of the index on instance and creation time, from the start of the widest window.
-  const [row] = await db
-    .select({
-      calls: drizzleSql<number>`count(*)::float8`,
-      tokens: sumOf(modelUsageEvents.totalTokens),
-      unsettled: drizzleSql<number>`(count(*) filter (where ${costStatus} is distinct from 'settled'))::float8`,
-      cost: sumOf(settledCost, settled),
-      todayCalls: drizzleSql<number>`(count(*) filter (where ${today}))::float8`,
-      todayTokens: sumOf(modelUsageEvents.totalTokens, today),
-      todayUnsettled: drizzleSql<number>`(count(*) filter (where ${today} and ${costStatus} is distinct from 'settled'))::float8`,
-      todayCost: sumOf(settledCost, drizzleSql`${today} and ${settled}`)
-    })
-    .from(modelUsageEvents)
-    .where(
-      and(
-        eq(modelUsageEvents.clientInstanceId, clientInstanceId),
-        gte(modelUsageEvents.createdAt, new Date(windows.currentMonthStart ?? windows.todayStart))
-      )
-    );
-  if (!row) throw new AppError("INTERNAL", "The database returned no usage sums");
-  const window = (
-    modelCallCount: number,
-    totalTokens: number,
-    unsettledModelCallCount: number,
-    settledCostMicros: number
-  ): ModelUsageBudgetWindow => ({
-    modelCallCount,
-    totalTokens,
-    unsettledModelCallCount,
-    settledCostMicros
-  });
-  return {
-    today: window(row.todayCalls, row.todayTokens, row.todayUnsettled, row.todayCost),
-    ...(windows.currentMonthStart === undefined
-      ? {}
-      : { currentMonth: window(row.calls, row.tokens, row.unsettled, row.cost) })
-  };
-}
-
-export async function settleModelUsageEvent(
-  db: PostgresConnection,
-  input: Parameters<ModelUsageEventStore["settleModelUsageEvent"]>[0]
-): Promise<ModelUsageEvent> {
-  const { settlement } = input;
-  const [row] = await db
-    .update(modelUsageEvents)
-    .set({
-      inputTokens: settlement.inputTokens,
-      cachedInputTokens: settlement.cachedInputTokens ?? null,
-      outputTokens: settlement.outputTokens,
-      totalTokens: settlement.totalTokens,
-      webSearchCallCount: settlement.webSearchCallCount,
-      providerServiceTier: settlement.providerServiceTier ?? null,
-      source: settlement.source,
-      customerBillableCost: settlement.customerBillableCost
-    })
-    .where(
-      and(
-        eq(modelUsageEvents.clientInstanceId, input.clientInstanceId),
-        eq(modelUsageEvents.id, input.id)
-      )
-    )
-    .returning();
-  return mapModelUsageEvent(row);
-}
-
-const totalsColumns = {
-  modelCallCount: drizzleSql<number>`count(*)::float8`,
-  inputTokens: sumOf(modelUsageEvents.inputTokens),
-  cachedInputTokens: sumOf(modelUsageEvents.cachedInputTokens),
-  outputTokens: sumOf(modelUsageEvents.outputTokens),
-  totalTokens: sumOf(modelUsageEvents.totalTokens),
-  webSearchCallCount: sumOf(modelUsageEvents.webSearchCallCount),
-  settledModelCallCount: drizzleSql<number>`(count(*) filter (where ${settled}))::float8`,
-  uncachedInputCostMicros: sumOf(costComponent("uncachedInputCostMicros"), settled),
-  cachedInputCostMicros: sumOf(costComponent("cachedInputCostMicros"), settled),
-  outputCostMicros: sumOf(costComponent("outputCostMicros"), settled),
-  webSearchCostMicros: sumOf(costComponent("webSearchCostMicros"), settled),
-  settledCurrencyCount: drizzleSql<number>`(count(distinct ${modelUsageEvents.customerBillableCost}->>'currency') filter (where ${settled}))::float8`,
-  settledCurrency: drizzleSql<
-    string | null
-  >`min(${modelUsageEvents.customerBillableCost}->>'currency') filter (where ${settled})`,
-  settledWebSearchCallCount: sumOf(modelUsageEvents.webSearchCallCount, settled)
-};
-
-interface TotalsRow {
-  modelCallCount: number;
-  inputTokens: number;
-  cachedInputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  webSearchCallCount: number;
-  settledModelCallCount: number;
-  uncachedInputCostMicros: number;
-  cachedInputCostMicros: number;
-  outputCostMicros: number;
-  webSearchCostMicros: number;
-  settledCurrencyCount: number;
-  settledCurrency: string | null;
-  settledWebSearchCallCount: number;
-}
-
-function toTotals(row: TotalsRow): ModelUsageTotals {
-  return {
-    modelCallCount: row.modelCallCount,
-    inputTokens: row.inputTokens,
-    cachedInputTokens: row.cachedInputTokens,
-    outputTokens: row.outputTokens,
-    totalTokens: row.totalTokens,
-    webSearchCallCount: row.webSearchCallCount,
-    settledModelCallCount: row.settledModelCallCount,
-    settledCost: {
-      uncachedInputCostMicros: row.uncachedInputCostMicros,
-      cachedInputCostMicros: row.cachedInputCostMicros,
-      outputCostMicros: row.outputCostMicros,
-      webSearchCostMicros: row.webSearchCostMicros
-    },
-    settledCurrencyCount: row.settledCurrencyCount,
-    ...(row.settledCurrency === null ? {} : { settledCurrency: row.settledCurrency }),
-    settledWebSearchCallCount: row.settledWebSearchCallCount
-  };
-}
-
-// Days and months are those of UTC, as the windows of the limits are.
-const utcDay = drizzleSql<string>`to_char(${modelUsageEvents.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
-const utcMonth = drizzleSql<string>`to_char(${modelUsageEvents.createdAt} at time zone 'UTC', 'YYYY-MM')`;
-
-/** Every event of the instance, read once and grouped by the database: the months and the total. */
-export async function summarizeModelUsageHistory(
-  db: PostgresConnection,
-  input: Parameters<ModelUsageEventStore["summarizeModelUsageHistory"]>[0]
-): Promise<ModelUsageHistory> {
-  const periods = await db
-    .select({
-      ...totalsColumns,
-      month: utcMonth,
-      isTotal: drizzleSql<number>`grouping(${utcMonth})`
-    })
-    .from(modelUsageEvents)
-    .where(eq(modelUsageEvents.clientInstanceId, input.clientInstanceId))
-    .groupBy(drizzleSql`grouping sets ((), (${utcMonth}))`)
-    .orderBy(utcMonth);
-  const total = periods.find((row) => row.isTotal === 1);
-  if (!total) throw new AppError("INTERNAL", "The database returned no usage total");
-  return {
-    allTime: toTotals(total),
-    months: periods
-      .filter((row) => row.isTotal === 0)
-      .map((row) => ({ month: row.month, ...toTotals(row) }))
-  };
-}
-
-/**
- * The events from `from` on, read through `model_usage_events_client_created_idx` and grouped
- * by the database: by day, and by day, model, provider, region and purpose or agent.
- */
-export async function summarizeRecentModelUsage(
-  db: PostgresConnection,
-  input: Parameters<ModelUsageEventStore["summarizeRecentModelUsage"]>[0]
-): Promise<RecentModelUsage> {
-  // For one release the purpose of a call written before the column is its agent name.
-  const purpose = drizzleSql<
-    string | null
-  >`coalesce(${modelUsageEvents.purpose}, case when ${modelUsageEvents.agentRunId} is null then ${modelUsageEvents.agentName} end)`;
-  const agentName = drizzleSql<
-    string | null
-  >`case when ${modelUsageEvents.purpose} is null and ${modelUsageEvents.agentRunId} is not null then ${modelUsageEvents.agentName} end`;
-  const attribution = [
-    modelUsageEvents.model,
-    modelUsageEvents.providerId,
-    modelUsageEvents.region,
-    purpose,
-    agentName
-  ];
-  const groups = await db
-    .select({
-      ...totalsColumns,
-      date: utcDay,
-      model: modelUsageEvents.model,
-      providerId: modelUsageEvents.providerId,
-      region: modelUsageEvents.region,
-      purpose,
-      agentName,
-      isDay: drizzleSql<number>`grouping(${modelUsageEvents.model})`
-    })
-    .from(modelUsageEvents)
-    .where(
-      and(
-        eq(modelUsageEvents.clientInstanceId, input.clientInstanceId),
-        gte(modelUsageEvents.createdAt, new Date(input.from))
-      )
-    )
-    .groupBy(
-      drizzleSql`grouping sets ((${utcDay}), (${utcDay}, ${drizzleSql.join(attribution, drizzleSql`, `)}))`
-    )
-    .orderBy(utcDay, ...attribution);
-  return {
-    days: groups
-      .filter((row) => row.isDay === 1)
-      .map((row) => ({ date: row.date, ...toTotals(row) })),
-    byAttribution: groups
-      .filter((row) => row.isDay === 0)
-      .map((row) => ({
-        date: row.date,
-        model: row.model,
-        providerId: row.providerId,
-        ...(row.region === null ? {} : { region: row.region }),
-        ...(row.purpose === null ? {} : { purpose: row.purpose }),
-        ...(row.agentName === null ? {} : { agentName: row.agentName }),
-        ...toTotals(row)
-      }))
-  };
-}
-
 export async function listModelUsageEvents(
   db: PostgresConnection,
   input: {
@@ -447,7 +114,8 @@ export async function listModelUsageEvents(
         keysetFilter(input.page, [modelUsageEvents.createdAt, modelUsageEvents.id], true)
       )
     )
-    .orderBy(desc(modelUsageEvents.createdAt), desc(modelUsageEvents.id));
+    // The order of the index on instance and creation time, so the newest are read from it.
+    .orderBy(drizzleSql`${modelUsageEvents.createdAt} desc nulls last`, desc(modelUsageEvents.id));
   const rows = await query.limit(input.page?.limit ?? input.limit ?? 2147483647);
   return rows.map(mapModelUsageEvent);
 }
@@ -469,7 +137,12 @@ export async function clearUserFromModelUsageEvents(
   input: Parameters<ModelUsageEventStore["clearUserFromModelUsageEvents"]>[0]
 ): Promise<number> {
   const cleared = await db.execute(drizzleSql`
-    update ${modelUsageEvents} set user_id = null
+    update ${modelUsageEvents} set
+      user_id = null,
+      conversation_id = null,
+      agent_run_id = null,
+      operation_run_id = null,
+      correlation_id = ''
     where ${modelUsageEvents.id} in (
       select ${modelUsageEvents.id} from ${modelUsageEvents}
       where ${modelUsageEvents.userId} = ${input.userId}
@@ -536,7 +209,12 @@ export async function backfillModelUsageAttribution(
         ${e}.id,
         coalesce(${e}.purpose, case
           when ${e}.agent_name = 'approval_check' then 'guardrail_judge'
-          when ${e}.agent_name = 'conversation_title' or ${e}.agent_run_id is null then ${e}.agent_name
+          when ${e}.agent_name = 'conversation_title' then ${e}.agent_name
+          -- By name, not by the missing run alone: the deletion of an account takes the run
+          -- off the events of an agent too.
+          when ${e}.agent_run_id is null
+            and ${e}.agent_name in ('guardrail_judge', 'document_extraction')
+            then ${e}.agent_name
         end) as purpose,
         coalesce(${e}.region, target.region) as region,
         coalesce(${e}.binding_id, target.binding_id) as binding_id,

@@ -13,6 +13,7 @@ import {
 import { ModelProviderError, normalizeModelAdapterError } from "./model-provider-error";
 import { createModelRetryPolicy, modelCallFailureFor, type ModelRetryPolicy } from "./retry";
 import {
+  isModelFunctionTool,
   isModelProviderNativeTool,
   type ModelAdapter,
   type ModelAdapterRequest,
@@ -85,8 +86,11 @@ export interface ModelGateway {
 export interface ModelCallGovernance {
   /** Admits the call and writes its usage event, or refuses with the limit that is reached. */
   admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall>;
-  /** Writes what the admitted call used onto its usage event. */
-  settleModelCall(admitted: AdmittedModelCall, usage: ModelCallUsage): Promise<unknown>;
+  /**
+   * Ends the admitted call: writes what it used onto its usage event. Without usage the call
+   * ended without an answer, and what admission reserved for it is released.
+   */
+  settleModelCall(admitted: AdmittedModelCall, usage?: ModelCallUsage): Promise<unknown>;
 }
 
 export interface ModelGatewayOptions {
@@ -242,7 +246,8 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
    * The one call path: resolve, check the capabilities, admit, call, settle. A call that is
    * refused before or at admission records nothing. Admission writes the usage event of the
    * call, so every admitted call has exactly one, whether it completed, failed, was stopped or
-   * was left unread by its caller; a call that did not complete leaves it at zero tokens.
+   * was left unread by its caller; a call that did not complete is settled as failed with
+   * nothing used. Only a process that goes away leaves an event that is not settled.
    */
   async function* run(
     call: ModelCall,
@@ -260,15 +265,14 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       ...(target.provider.region ? { region: target.provider.region } : {}),
       ...(target.bindingId === undefined ? {} : { bindingId: target.bindingId }),
       fastMode: call.fastTier === true,
-      correlationId: call.correlationId
+      correlationId: call.correlationId,
+      request: { inputCharacters: requestCharacters(call) }
     });
     const seen: { completion?: ModelCompletion } = {};
     const settle = async (answerHandedOn: boolean): Promise<void> => {
-      // A call without a completion used nothing the provider reported: its event stays as
-      // admission wrote it, one call with zero tokens.
-      if (!seen.completion) return;
       try {
-        await governance.settleModelCall(admitted, seen.completion.usage);
+        // A call without a completion used nothing the provider reported.
+        await governance.settleModelCall(admitted, seen.completion?.usage);
       } catch (settleError) {
         if (answerHandedOn) {
           // A call whose usage could not be settled fails, so no answer goes unrecorded.
@@ -320,6 +324,36 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       return target.adapter.capabilities(target.model);
     }
   };
+}
+
+/**
+ * The characters of what a call sends: its texts, the inputs of its tool calls and its tool
+ * definitions. An image counts as nothing here; its tokens do not follow from its bytes.
+ */
+function requestCharacters(call: ModelCall): number {
+  let characters = 0;
+  for (const message of call.messages) {
+    if (typeof message.content === "string") {
+      characters += message.content.length;
+    } else {
+      for (const part of message.content) {
+        if (part.type === "text") characters += part.text.length;
+      }
+    }
+    if (message.role === "assistant") {
+      for (const toolCall of message.toolCalls ?? []) {
+        characters += toolCall.toolName.length + JSON.stringify(toolCall.input ?? null).length;
+      }
+    }
+  }
+  for (const tool of call.tools) {
+    characters += tool.name.length;
+    if (isModelFunctionTool(tool)) {
+      characters += tool.description.length + JSON.stringify(tool.inputJsonSchema ?? {}).length;
+    }
+  }
+  if (call.output) characters += JSON.stringify(call.output.jsonSchema).length;
+  return characters;
 }
 
 /** Refuses a call that asks the model for something its adapter does not declare. */

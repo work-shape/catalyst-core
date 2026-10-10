@@ -260,15 +260,31 @@ describe("model usage governance", () => {
     expect(serialized).not.toContain("providerCost");
   });
 
-  it("fails closed when a spend budget contains incomplete costs", async () => {
+  it("holds a cost that is not whole at the highest price against a spend budget", async () => {
+    // The recorded call reports no cached tokens: its cost is not whole. It counts as 1,000
+    // input tokens at 5 and 500 output tokens at 30 per million, which is 0.02. A call of 300
+    // characters reserves 100 input and 16,000 output tokens, which is 0.4805.
     const { governance, clientInstanceId } = await createGovernance({
-      dailySpendLimit: 50
+      dailySpendLimit: 0.02 + 0.4805
     });
     await governance.recordModelUsage(usageInput(clientInstanceId));
 
+    await expect(governance.admitModelCall(admission(clientInstanceId))).resolves.toBeDefined();
     await expect(governance.admitModelCall(admission(clientInstanceId))).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Daily customer billable cost is incomplete; spend budget cannot be evaluated safely"
+      message: "Daily model spend budget has been reached"
+    });
+  });
+
+  it("refuses a model without a price while a spend budget is set", async () => {
+    const { governance, clientInstanceId } = await createGovernance({ dailySpendLimit: 50 });
+
+    await expect(
+      governance.admitModelCall({ ...admission(clientInstanceId), model: "gpt-unpriced" })
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message:
+        "The model has no price on the rate card; the spend budget cannot be evaluated safely"
     });
   });
 
@@ -338,7 +354,7 @@ describe("model usage governance", () => {
 
     const events = await store.usage.listModelUsageEvents({ clientInstanceId });
     expect(events.map((event) => [event.totalTokens, event.source]).sort()).toEqual([
-      [0, "estimated"],
+      [0, "not_reported"],
       [1_500, "provider_reported"]
     ]);
     expect(events.find((event) => event.id === settled.id)?.customerBillableCost).toMatchObject({
@@ -388,7 +404,8 @@ function admission(clientInstanceId: ReturnType<typeof asClientInstanceId>) {
     attribution: usageAttribution,
     providerId: "azure-eu",
     model: "gpt-5.6-sol",
-    correlationId: "corr_usage"
+    correlationId: "corr_usage",
+    request: { inputCharacters: 300 }
   };
 }
 

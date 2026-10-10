@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@vivd-catalyst/api-client";
 import { UsageView } from "../packages/chat-ui/src/control-plane/usage-view";
+import { TranslationProvider } from "@vivd-catalyst/chat-ui";
 
 describe("usage spend budget progress", () => {
   it("shows daily and monthly progress against currency-denominated limits", () => {
@@ -40,7 +41,59 @@ describe("usage spend budget progress", () => {
     expect(markup).toContain("Incomplete");
     expect(markup).not.toContain("Billed");
   });
+
+  // Fails without the change: a call in flight and a call that ended without an answer both
+  // showed as a call of zero tokens with the source "estimated".
+  it("says in words that a call is running and that a call reported no usage", () => {
+    const usage = createUsageSummary();
+    usage.recentEvents = [
+      createEvent("usage_running", "pending"),
+      createEvent("usage_failed", "failed"),
+      createEvent("usage_lost", "abandoned")
+    ];
+
+    const english = renderToStaticMarkup(createElement(UsageView, { usage }));
+    const german = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "de",
+        children: createElement(UsageView, { usage })
+      })
+    );
+
+    expect(english.split(">Running<")).toHaveLength(2);
+    expect(english.split(">No usage reported<")).toHaveLength(3);
+    expect(english).toContain("Provider and region");
+    expect(english).not.toContain("not_reported");
+    expect(german.split(">Läuft<")).toHaveLength(2);
+    expect(german.split(">Keine Nutzung gemeldet<")).toHaveLength(3);
+    expect(german).toContain("Anbieter und Region");
+  });
 });
+
+function createEvent(
+  id: string,
+  status: UsageSummary["recentEvents"][number]["status"]
+): UsageSummary["recentEvents"][number] {
+  return {
+    id,
+    status,
+    clientInstanceId: "client",
+    agentName: "agent",
+    providerId: "azure-eu",
+    model: "gpt-main",
+    region: "eu",
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    webSearchCallCount: 0,
+    billedAsFast: false,
+    source: "not_reported",
+    correlationId: "corr",
+    createdAt: "2026-07-12T11:00:00.000Z",
+    cost: { status: "settled", currency: "EUR", complete: true, webSearchCostVisible: false }
+  };
+}
 
 function createUsageSummary(): UsageSummary {
   return {

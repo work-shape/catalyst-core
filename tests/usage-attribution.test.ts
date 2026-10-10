@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  asAgentRunId,
   asUserId,
   type ClientInstanceId,
   type ModelAttribution,
@@ -14,12 +15,12 @@ import {
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { arrangeDeletion } from "./support/deletion-fixture";
 import { ALL_MODEL_CAPABILITIES, silentTestLogger } from "./support/model-gateway";
+import { waitUntilBlocked } from "./support/postgres-concurrency-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { createTestInstance } from "./support/test-instance";
 import { addTestStoreHelpers } from "./support/test-store";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const RECENT_INDEX = "model_usage_events_client_created_idx";
 /** Rows of the fixture a plan is read on, spread over two years. */
 const LARGE_FIXTURE_ROWS = 200_000;
 const LARGE_FIXTURE_DAYS = 730;
@@ -176,8 +177,9 @@ describe("usage attribution", () => {
     );
   });
 
-  // Fails without the change: the summary read every event of the instance into the process.
-  it("sums the recent days in the database through the index on instance and creation time", async () => {
+  // Fails without the change: the summary read every event of the instance, and the newest
+  // events were sorted out of all of them.
+  it("reads the sums of the Usage page from the daily sums and the newest events from the index", async () => {
     const clientInstanceId = db.clientInstance("large");
     await db.sql`
       insert into model_usage_events
@@ -185,53 +187,75 @@ describe("usage attribution", () => {
          input_tokens, output_tokens, total_tokens, source, correlation_id, created_at)
       select 'usage_large_' || n, ${clientInstanceId}, 'run_' || (n % 500), 'agent_' || (n % 3),
         'azure-eu', 'gpt-main', 'eu', 100, 20, 120, 'provider_reported', 'corr_large',
-        now() - make_interval(days => (n % ${LARGE_FIXTURE_DAYS})::int)
+        now() - make_interval(days => (n % ${LARGE_FIXTURE_DAYS})::int, secs => n)
       from generate_series(1, ${LARGE_FIXTURE_ROWS}::int) as n`;
     await db.sql`analyze model_usage_events`;
+    // The events were written without their sums, as by the previous release.
+    await db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "all" });
     const from = new Date(Date.now() - 30 * DAY_MS).toISOString();
     const [expected] = await db.sql<Array<{ calls: number }>>`
       select count(*)::int as calls from model_usage_events
-      where client_instance_id = ${clientInstanceId} and created_at >= ${from}`;
-    const scans = async () => {
-      const [row] = await db.sql<Array<{ sequential: number; indexed: number }>>`
-        select
-          (select seq_scan::int from pg_stat_user_tables where relname = 'model_usage_events')
-            as sequential,
-          (select idx_scan::int from pg_stat_user_indexes where indexrelname = ${RECENT_INDEX})
-            as indexed`;
+      where client_instance_id = ${clientInstanceId}
+        and created_at >= (${from}::timestamptz at time zone 'UTC')::date::timestamp at time zone 'UTC'`;
+    const reads = async () => {
+      const [row] = await db.sql<
+        Array<{ sequential: number; indexed: number; fetched: number; sums: number }>
+      >`
+        select events.seq_scan::int as sequential, events.idx_scan::int as indexed,
+          events.idx_tup_fetch::int as fetched,
+          (sums.seq_scan + coalesce(sums.idx_scan, 0))::int as sums
+        from pg_stat_user_tables events, pg_stat_user_tables sums
+        where events.relname = 'model_usage_events'
+          and sums.relname = 'model_usage_daily_rollups'`;
       if (!row) throw new Error("The database reported no scan counters");
       return row;
     };
-    // The counters of a backend reach the others when it ends, so the statement runs on a
-    // pool of its own. The reads of this test's own connection above are counted before.
+    // The counters of a backend reach the others when it ends, so the statements run on a
+    // pool of its own. The reads of this test's own connections above are counted before.
     await db.sql`select pg_stat_force_next_flush()`;
     await db.sql`select 1`;
-    const before = await scans();
+    const before = await vi.waitFor(
+      async () => {
+        const first = await reads();
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        expect(await reads()).toEqual(first);
+        return first;
+      },
+      { timeout: 30_000, interval: 50 }
+    );
     const reader = await createTestInstance({
       postgres: { applicationName: `${db.first}_reader` }
     });
 
     const recent = await reader.stores.usage.summarizeRecentModelUsage({ clientInstanceId, from });
+    const history = await reader.stores.usage.summarizeModelUsageHistory({ clientInstanceId });
+    const newest = await reader.stores.usage.listModelUsageEvents({ clientInstanceId, limit: 25 });
     await reader.close();
 
     const after = await vi.waitFor(
       async () => {
-        const now = await scans();
-        expect(now.indexed + now.sequential).toBeGreaterThan(before.indexed + before.sequential);
+        const now = await reads();
+        expect(now.sums).toBeGreaterThanOrEqual(before.sums + 2);
         return now;
       },
       { timeout: 30_000, interval: 50 }
     );
+    // The two sums read no event. The newest events are one scan of the index that ends
+    // after the events it returns.
     expect(after.sequential).toBe(before.sequential);
-    expect(after.indexed).toBeGreaterThan(before.indexed);
+    expect(after.indexed - before.indexed).toBe(1);
+    expect(after.fetched - before.fetched).toBeLessThan(100);
+    expect(newest).toHaveLength(25);
+    expect(history.allTime.modelCallCount).toBe(LARGE_FIXTURE_ROWS);
     expect(recent.days.reduce((sum, day) => sum + day.modelCallCount, 0)).toBe(expected?.calls);
     expect(recent.byAttribution.map((entry) => entry.agentName)).toEqual(
       expect.arrayContaining(["agent_0", "agent_1", "agent_2"])
     );
   });
 
-  // Fails without the change: the event kept the id of a user who no longer exists.
-  it("keeps the usage of a deleted account and names no user on it", async () => {
+  // Fails without the change: the event kept the id of a user who no longer exists, and the
+  // conversation, the run and the correlation id that lead back to them.
+  it("keeps the usage of a deleted account and nothing on it that leads back to the person", async () => {
     const t = await arrangeDeletion(db, "account");
     const leaving = await t.createUser("leaving");
     const conversation = await t.createConversation(leaving, "own");
@@ -256,17 +280,100 @@ describe("usage attribution", () => {
       source: "provider_reported",
       correlationId: "corr_usage_account"
     });
+    await governance.recordModelUsage({
+      clientInstanceId: t.clientInstanceId,
+      attribution: {
+        kind: "agent_run",
+        conversationId: conversation.id,
+        runId: asAgentRunId("run_usage_account"),
+        agentName: "test_agent",
+        userId: leaving.id
+      },
+      providerId: "azure-eu",
+      model: "gpt-main",
+      inputTokens: 100,
+      outputTokens: 20,
+      totalTokens: 120,
+      source: "provider_reported",
+      correlationId: "corr_usage_account_run"
+    });
     const personal = await t.personalWorkspaceOf(leaving);
-    await expect(usageRows(t.clientInstanceId)).resolves.toEqual([
-      { user_id: leaving.id, collaboration_workspace_id: personal.id, total_tokens: 120 }
+    const named = {
+      user_id: leaving.id,
+      collaboration_workspace_id: personal.id,
+      total_tokens: 120
+    };
+    await expect(usageRows(t.clientInstanceId)).resolves.toEqual([named, named]);
+    await expect(leadsBack(t.clientInstanceId)).resolves.toEqual([
+      {
+        conversation_id: conversation.id,
+        agent_run_id: null,
+        operation_run_id: null,
+        correlation_id: "corr_usage_account"
+      },
+      {
+        conversation_id: conversation.id,
+        agent_run_id: "run_usage_account",
+        operation_run_id: null,
+        correlation_id: "corr_usage_account_run"
+      }
     ]);
 
     const deleted = await t.api.call("me.delete", {}, leaving.id);
 
     expect(deleted.statusCode).toBe(200);
     await expect(t.userRow(leaving)).resolves.toEqual([]);
+    const anonymous = { user_id: null, collaboration_workspace_id: null, total_tokens: 120 };
+    await expect(usageRows(t.clientInstanceId)).resolves.toEqual([anonymous, anonymous]);
+    const nothing = {
+      conversation_id: null,
+      agent_run_id: null,
+      operation_run_id: null,
+      correlation_id: ""
+    };
+    await expect(leadsBack(t.clientInstanceId)).resolves.toEqual([nothing, nothing]);
+    // The amounts stay in the sums, under the agent and the purpose.
+    const history = await db.store.usage.summarizeModelUsageHistory({
+      clientInstanceId: t.clientInstanceId
+    });
+    expect(history.allTime).toMatchObject({ modelCallCount: 2, totalTokens: 240 });
+  });
+
+  // Fails without the change: the event was written with the workspace its statement had read,
+  // and the database refused it when the workspace was gone by then.
+  it("writes the event of a call whose workspace is deleted while it is admitted", async () => {
+    const t = await arrangeDeletion(db, "race");
+    const owner = await t.createUser("owner");
+    const workspace = await t.createSharedWorkspace(owner, "Going");
+    const governance = new ModelUsageGovernance({
+      store: db.store.usage,
+      budget: {},
+      safeguards: {}
+    });
+    const held = await db.hold(async (tx) => {
+      await tx`delete from collaboration_workspace_memberships where collaboration_workspace_id = ${workspace.id}`;
+      await tx`delete from collaboration_workspaces where id = ${workspace.id}`;
+    });
+
+    const admitted = governance.admitModelCall({
+      clientInstanceId: t.clientInstanceId,
+      attribution: {
+        kind: "system",
+        purpose: "document_extraction",
+        userId: owner.id,
+        workspaceId: workspace.id
+      },
+      providerId: "azure-eu",
+      model: "gpt-main",
+      correlationId: "corr_usage_race",
+      request: { inputCharacters: 30 }
+    });
+    await waitUntilBlocked(db.sql, { waiter: db.first, holder: db.barrier });
+    await held.commit();
+
+    await expect(admitted).resolves.toBeDefined();
     await expect(usageRows(t.clientInstanceId)).resolves.toEqual([
-      { user_id: null, collaboration_workspace_id: null, total_tokens: 120 }
+      { user_id: owner.id, collaboration_workspace_id: null, total_tokens: 0 }
     ]);
   });
 
@@ -373,7 +480,12 @@ describe("usage attribution", () => {
     for (const userId of [closing.id, "usr_never_existed"]) {
       await governance.recordModelUsage({
         clientInstanceId: t.clientInstanceId,
-        attribution: { kind: "system", purpose: "document_extraction", userId },
+        attribution: {
+          kind: "system",
+          purpose: "document_extraction",
+          userId,
+          operationRunId: `operation_of_${userId}`
+        },
         providerId: "azure-eu",
         model: "gpt-main",
         inputTokens: 100,
@@ -388,7 +500,27 @@ describe("usage attribution", () => {
       { user_id: null, collaboration_workspace_id: null, total_tokens: 120 },
       { user_id: null, collaboration_workspace_id: null, total_tokens: 120 }
     ]);
+    // The deletion of the account has been through its events and does not come back.
+    await expect(leadsBack(t.clientInstanceId)).resolves.toMatchObject([
+      { operation_run_id: null, correlation_id: "" },
+      { operation_run_id: "operation_of_usr_never_existed", correlation_id: "corr_usage_closing" }
+    ]);
   });
+
+  async function leadsBack(clientInstanceId: ClientInstanceId) {
+    const rows = await db.sql<
+      Array<{
+        conversation_id: string | null;
+        agent_run_id: string | null;
+        operation_run_id: string | null;
+        correlation_id: string;
+      }>
+    >`
+      select conversation_id, agent_run_id, operation_run_id, correlation_id
+      from model_usage_events
+      where client_instance_id = ${clientInstanceId} order by created_at, id`;
+    return rows.map((row) => ({ ...row }));
+  }
 
   async function usageRows(clientInstanceId: ClientInstanceId) {
     const rows = await db.sql<

@@ -191,7 +191,7 @@ describe("a conversation title through the gateway", () => {
       agentName: "conversation_title",
       conversationId: unanswered.id,
       totalTokens: 0,
-      source: "estimated"
+      source: "not_reported"
     });
     await expect(
       store.conversations.getConversation(clientInstanceId, unanswered.id)
@@ -364,7 +364,7 @@ describe("an approval check through the gateway", () => {
     expectSystemEvent(events[0], {
       agentName: "guardrail_judge",
       totalTokens: 0,
-      source: "estimated"
+      source: "not_reported"
     });
   });
 });

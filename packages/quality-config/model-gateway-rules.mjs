@@ -78,7 +78,7 @@ const usageWriters = [
   "appendModelUsageEvent",
   "admitModelCall",
   "settleModelCall",
-  "reserveModelUsageEvent",
+  "admitModelUsageEvent",
   "settleModelUsageEvent"
 ];
 const usageInsert = /insert\s+into\s+(?:"?\w+"?\.)?"?model_usage_events\b/iu;
@@ -220,7 +220,7 @@ export const modelGatewayRules = ({ root, rule, packageAt, keyName, loadedModule
           path !== `${modelProvider}/src/gateway.ts` &&
           path !== "packages/core/src/usage.ts" &&
           !path.startsWith("packages/usage-governance/src/") &&
-          path !== "packages/postgres-store/src/postgres-audit-usage-operations.ts" &&
+          path !== "packages/postgres-store/src/postgres-usage-ledger.ts" &&
           path !== "packages/postgres-store/src/stores/usage.ts"
         );
       },

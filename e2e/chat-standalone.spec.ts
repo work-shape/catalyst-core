@@ -3466,14 +3466,14 @@ test("the usage panel names the caller, the provider and the region of a call in
     {
       locale: "en",
       panel: "Settings",
-      headers: ["Caller", "Provider", "Region"],
+      headers: ["Caller", "Provider and region"],
       title: "Conversation title",
       noRegion: "Not stated"
     },
     {
       locale: "de",
       panel: "Einstellungen",
-      headers: ["Aufrufer", "Anbieter", "Region"],
+      headers: ["Aufrufer", "Anbieter und Region"],
       title: "Unterhaltungstitel",
       noRegion: "Nicht angegeben"
     }

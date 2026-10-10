@@ -27,3 +27,16 @@ export function usageRegion(region: string | undefined, t: TranslationContextVal
   const label = REGION_LABELS[region];
   return label ? t(label) : region;
 }
+
+/**
+ * Where the amounts of a call come from. A call that has not ended has none yet, and a call
+ * that ended without an answer has none its provider reported: both are said in words.
+ */
+export function usageSource(
+  event: UsageSummary["recentEvents"][number],
+  t: TranslationContextValue["t"]
+): string {
+  if (event.status === "pending") return t("settings.usageStatusRunning");
+  if (event.source === "not_reported") return t("settings.usageStatusNothingReported");
+  return event.source;
+}

@@ -71,8 +71,9 @@ export function createRecordingGovernance(): RecordingGovernance {
       if (governance.refuseAdmission) throw governance.refuseAdmission;
       governance.admitted += 1;
       const id = createPlatformId<"ModelUsageEventId">("usage");
+      const { request: _request, ...admission } = call;
       const record: ModelUsageEventInput = {
-        ...call,
+        ...admission,
         inputTokens: 0,
         outputTokens: 0,
         totalTokens: 0,
@@ -86,13 +87,14 @@ export function createRecordingGovernance(): RecordingGovernance {
         clientInstanceId: call.clientInstanceId,
         providerId: call.providerId,
         model: call.model,
-        fastMode: call.fastMode === true
+        fastMode: call.fastMode === true,
+        reserved: { tokens: 0, costMicros: 0 }
       };
     },
     async settleModelCall(admitted, usage) {
       if (governance.failSettlement) throw governance.failSettlement;
       const record = records.get(admitted.id);
-      if (record) Object.assign(record, usage);
+      if (record && usage) Object.assign(record, usage);
     }
   };
   return governance;

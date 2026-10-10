@@ -24,6 +24,10 @@ import {
   pruneAuditEventsSchedule,
   pruneJobsJob,
   pruneJobsSchedule,
+  reconcileUsageJob,
+  reconcileUsageSchedule,
+  recoverAbandonedModelCallsJob,
+  recoverAbandonedModelCallsSchedule,
   recoverAgentRunsJob,
   recoverAgentRunsSchedule
 } from "./job-kinds";
@@ -31,7 +35,7 @@ import { ConversationRetentionWorkflow } from "./retention";
 import { RunRecoveryWatchdog } from "./run-recovery";
 import { deletionActor } from "./subject-deletion";
 import type { ChatServerOptions, ConversationRetentionOptions, RunRecoveryOptions } from "./types";
-import { createUsageAttributionBackfill } from "./usage-backfill";
+import { createUsageAttributionBackfill, createUsageReconciliation } from "./usage-backfill";
 import { ExecutionWorkspaceCleanupWorkflow } from "./workspace-cleanup";
 import { completeWorkspaceDeletion, recordWorkspaceDeletionStalled } from "./workspace-deletion";
 
@@ -59,7 +63,8 @@ export function createChatServerJobs(
     ...jobOptions.retention
   });
   const runRecovery = new RunRecoveryWatchdog(options, options.logger, jobOptions.runRecovery);
-  const usageAttributionBackfill = createUsageAttributionBackfill(options);
+  const usageAttributionBackfill = createUsageAttributionBackfill(options, now);
+  const usageReconciliation = createUsageReconciliation(options);
   // The runs a process-bound runtime lost are the ones from before this process started.
   const processStartedAt = now();
   let recoveredRunsLostWithProcess = false;
@@ -197,6 +202,25 @@ export function createChatServerJobs(
       kind: backfillUsageAttributionJob,
       slots: 1,
       run: (_job, control) => usageAttributionBackfill.run(control)
+    }),
+    defineJobHandler({
+      kind: recoverAbandonedModelCallsJob,
+      slots: 1,
+      async run(_job, control) {
+        // Each release is one statement that changes a call only while it is still pending,
+        // so a tick that was taken over releases nothing twice.
+        const released = await options.usageGovernance.releaseAbandonedModelCalls({
+          clientInstanceId: options.clientInstanceId,
+          signal: control.signal
+        });
+        if (released > 0)
+          control.logger.warn({ released }, "Released model calls that never ended");
+      }
+    }),
+    defineJobHandler({
+      kind: reconcileUsageJob,
+      slots: 1,
+      run: (_job, control) => usageReconciliation.run(control)
     })
   ];
   const schedules: JobSchedule[] = [
@@ -205,7 +229,9 @@ export function createChatServerJobs(
     pruneAuditEventsSchedule,
     pruneJobsSchedule,
     adoptLegacyJobsSchedule,
-    backfillUsageAttributionSchedule
+    backfillUsageAttributionSchedule,
+    recoverAbandonedModelCallsSchedule,
+    reconcileUsageSchedule
   ];
 
   const cleanup = options.executionWorkspaceCleanup;
