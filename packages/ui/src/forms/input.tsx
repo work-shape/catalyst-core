@@ -9,9 +9,13 @@ import { useFieldControl } from "./field-control";
 
 export type FieldSize = "sm" | "md";
 
-/** The frame shared by Input, Textarea and Select: one line at rest, the focus line in its place. */
+/**
+ * The frame shared by Input, Textarea and Select: one line at rest, the focus line in its place.
+ * A read-only field keeps its text at full strength and takes the quiet line of a border: it is
+ * there to be read.
+ */
 export const fieldFrameClassName =
-  "w-full min-w-0 rounded-md border border-input bg-background text-body text-foreground transition-colors focus-visible:focus-field disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive";
+  "w-full min-w-0 rounded-md border border-input bg-background text-body text-foreground transition-colors focus-visible:focus-field disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive [&[readonly]]:border-border";
 
 export const fieldHeights: Record<FieldSize, string> = {
   sm: "h-control-sm",

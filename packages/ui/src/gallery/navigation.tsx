@@ -29,6 +29,7 @@ import { SkipLink } from "../navigation/skip-link";
 import { SubRail, type SubRailGroup } from "../navigation/sub-rail";
 import { Tabs, TabsContent, TabsLink, TabsList, TabsNav, TabsTrigger } from "../navigation/tabs";
 import { Page } from "../structure/page";
+import { PageHeader } from "../structure/page-header";
 import { Section } from "../structure/section";
 import { Samples, type GalleryGroup } from "./entry";
 import { Avatar } from "../status/avatar";
@@ -372,7 +373,14 @@ function toSettingsRoute(id: string, fallback: SettingsRoute): SettingsRoute {
   return settingsRoutes.find((candidate) => candidate === id) ?? fallback;
 }
 
-function SubRailAnchorsSample({ text }: { text: GalleryText }) {
+function SubRailAnchorsSample({
+  text,
+  underHeader = false
+}: {
+  text: GalleryText;
+  /** The page has a detail head across its width: the rail and the content start under it. */
+  underHeader?: boolean;
+}) {
   // The gallery can show the same sample twice, side by side, so the anchors are made unique.
   const prefix = useId();
   const sections = [
@@ -399,9 +407,32 @@ function SubRailAnchorsSample({ text }: { text: GalleryText }) {
   return (
     <div
       className="h-80 overflow-y-auto rounded-lg border [scrollbar-width:thin]"
-      data-gallery-sample="subrail-anchors"
+      data-gallery-sample={underHeader ? "subrail-anchors-header" : "subrail-anchors"}
     >
-      <Page subRail={<SubRail mode="anchors" label={text.subRailSections} groups={groups} />}>
+      <Page
+        header={
+          underHeader ? (
+            <PageHeader
+              variant="detail"
+              headingLevel={2}
+              title={text.subRailAnchorsHeaderTitle}
+              secondaryActions={
+                <Button variant="outline" size="sm">
+                  {text.sectionHistory}
+                </Button>
+              }
+            />
+          ) : undefined
+        }
+        subRail={
+          <SubRail
+            mode="anchors"
+            belowHeader={underHeader}
+            label={text.subRailSections}
+            groups={groups}
+          />
+        }
+      >
         {sections.map((section) => (
           <Section key={section.id} id={section.id} layout="stacked" title={section.title}>
             <p className="min-h-40 text-body text-muted-foreground">{section.body}</p>
@@ -547,6 +578,11 @@ export const navigationGallery: GalleryGroup = {
           <Samples label={text.subRailAnchors}>
             <div className="w-full">
               <SubRailAnchorsSample text={text} />
+            </div>
+          </Samples>
+          <Samples label={text.subRailAnchorsHeader}>
+            <div className="w-full">
+              <SubRailAnchorsSample text={text} underHeader />
             </div>
           </Samples>
         </>

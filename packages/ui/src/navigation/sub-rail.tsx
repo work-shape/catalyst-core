@@ -94,8 +94,16 @@ export function SubRail(props: SubRailProps) {
       ref={rootRef}
       data-mode={props.mode}
       className={cn(
-        "sticky z-(--layer-sticky-header) grid w-full shrink-0 gap-3 self-start bg-background py-2 @subrail/page:w-(--layout-subrail) @subrail/page:py-0",
-        belowHeader ? "top-(--layout-header)" : "top-0",
+        "grid w-full shrink-0 gap-3 self-start bg-background py-2 @subrail/page:w-(--layout-subrail) @subrail/page:pb-0",
+        // A select that names sections scrolls away with the page: pinned, it would stand in
+        // the way of the page's own sticky head. A select that names routes stays.
+        props.mode === "anchors" ? "@subrail/page:sticky" : "sticky",
+        // Under a head the rail keeps a step of room, at rest and while it is pinned: its first
+        // item would otherwise touch the head's line.
+        // A head with a second line is taller than the offset: the rail then goes under it.
+        belowHeader
+          ? "top-(--layout-header) z-[calc(var(--layer-sticky-header)-1)] @subrail/page:pt-4"
+          : "top-0 z-(--layer-sticky-header) @subrail/page:pt-0",
         className
       )}
     >
@@ -203,8 +211,9 @@ interface AnchorMeasure {
 
 /**
  * `anchors` mode: which section is at the top of the view, and scrolling to one. The line the
- * sections are measured against is the rail's own top edge, or the bottom edge of the select
- * that stands in for the rail, because either one is the sticky thing the content passes.
+ * sections are measured against is the rail's own top edge while it stands beside the content.
+ * The select that stands in for the rail scrolls away with the page, so there the line is the
+ * top of what scrolls, lowered by the sticky head the rail was told of.
  */
 function useAnchorTracking({
   enabled,
@@ -251,7 +260,13 @@ function useAnchorTracking({
       const element = findById(root, id);
       return element ? [{ id, element }] : [];
     });
-    return { line: narrow ? rect.bottom : rect.top, targets };
+    if (!narrow) {
+      return { line: rect.top, targets };
+    }
+    // The rail's `top` is the height of the head it stays below, or nothing.
+    const below = Number.parseFloat(getComputedStyle(root).top);
+    const scrollerTop = scrollParent(root).getBoundingClientRect().top;
+    return { line: Math.max(scrollerTop, 0) + (Number.isFinite(below) ? below : 0), targets };
   }, [idsKey, rootRef, railRef]);
 
   useEffect(() => {

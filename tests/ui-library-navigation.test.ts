@@ -6,6 +6,7 @@ import {
   ListRow,
   NavGroup,
   NavItem,
+  Page,
   PageHeader,
   SaveBar,
   type SaveBarProps,
@@ -414,6 +415,13 @@ describe("navigation, page structure and data components", () => {
     expect(person.indexOf("AV")).toBeGreaterThan(person.indexOf("Row"));
     expect(person.indexOf("AV")).toBeLessThan(person.indexOf("Ada via Agent"));
 
+    // Fails without `descriptionWraps`: a narrow row cut the line that says who and when.
+    const wrapping = render(
+      createElement(ListRow, { title: "Row", description: "WHEN WHO", descriptionWraps: true })
+    );
+    expect(wrapping).toMatch(/<span class="[^"]*sm:truncate[^"]*">WHEN WHO/u);
+    expect(wrapping).not.toMatch(/<span class="truncate[^"]*">WHEN WHO/u);
+
     const unfolding = render(
       createElement(ListRow, { title: "Row", expandable: true, defaultExpanded: true }, "MORE")
     );
@@ -466,5 +474,50 @@ describe("navigation, page structure and data components", () => {
     // The default keeps the bar while clean, and a label without a handler draws no button.
     expect(bar({ dirty: false })).toContain("3 changes");
     expect(bar({ onDiscard: undefined })).not.toContain("Discard");
+  });
+});
+
+describe("a page with a head across its width", () => {
+  it("puts the head above the rail and the content, outside their gutter", () => {
+    // Fails without the `header` slot: the head sat in the content column, inside the page's
+    // gutter and beside the rail, so its ends did not meet the edges of what is under it.
+    const markup = render(
+      createElement(
+        Page,
+        {
+          header: createElement(PageHeader, { variant: "detail", title: "HEAD" }),
+          subRail: createElement(SubRail, {
+            mode: "anchors",
+            belowHeader: true,
+            label: "Sections",
+            groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
+          })
+        },
+        "BODY"
+      )
+    );
+    const head = markup.indexOf("HEAD");
+    const rail = markup.indexOf('data-mode="anchors"');
+    expect(head).toBeGreaterThan(-1);
+    expect(head).toBeLessThan(rail);
+    expect(rail).toBeLessThan(markup.indexOf("BODY"));
+    // The page itself brings no gutter: the head and the row under it each bring their own.
+    expect(markup).toMatch(/^<div[^>]*><div class="@container\/page w-full min-w-0">/u);
+    // The select that names sections is part of the page's flow and pinned only as a rail.
+    expect(markup).toMatch(/data-mode="anchors" class="[^"]*@subrail\/page:sticky/u);
+    expect(markup).not.toMatch(/data-mode="anchors" class="sticky /u);
+  });
+
+  it("keeps the select of a rail that names routes pinned", () => {
+    const markup = render(
+      createElement(SubRail, {
+        mode: "routes",
+        label: "Pages",
+        value: "a",
+        onValueChange: () => undefined,
+        groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
+      })
+    );
+    expect(markup).toMatch(/data-mode="routes" class="[^"]*\bsticky\b/u);
   });
 });

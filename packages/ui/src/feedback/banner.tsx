@@ -76,6 +76,8 @@ export function Banner({
       data-tone={tone}
       className={cn(
         "flex items-start",
+        // A message with an action stacks where the two do not fit beside each other.
+        action === undefined ? undefined : "flex-wrap sm:flex-nowrap",
         line ? undefined : bannerTones[tone],
         bannerLayouts[layout],
         className
@@ -97,7 +99,15 @@ export function Banner({
         {children === undefined ? null : <div>{children}</div>}
       </div>
       {action === undefined ? null : (
-        <div className="-my-1.5 flex shrink-0 items-center">{action}</div>
+        <div
+          className={cn(
+            "flex shrink-0 basis-full items-center sm:-my-1.5 sm:basis-auto",
+            // On its own line the action starts where the text does, after the icon.
+            shownIcon === null ? undefined : line ? "pl-5 sm:pl-0" : "pl-6.5 sm:pl-0"
+          )}
+        >
+          {action}
+        </div>
       )}
       {onDismiss ? (
         <IconButton

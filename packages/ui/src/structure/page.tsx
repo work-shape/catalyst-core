@@ -17,13 +17,45 @@ export interface PageProps extends ComponentProps<"div"> {
    * room in the page it sits above the content.
    */
   subRail?: ReactNode;
+  /**
+   * A detail `PageHeader` across the whole page, above the sub-rail and the content. It brings
+   * the page's gutter itself, so its first and last slot share the edges of what is under it.
+   */
+  header?: ReactNode;
 }
 
 /**
  * The content column of a page: the gutter, the widest it grows, and the column of a
  * `SubRail`. Feature code sets no page padding of its own.
  */
-export function Page({ className, width = "default", subRail, children, ...props }: PageProps) {
+export function Page({
+  className,
+  width = "default",
+  subRail,
+  header,
+  children,
+  ...props
+}: PageProps) {
+  if (header !== undefined) {
+    // The page is the container its sub-rail measures: the room the page has, not the window.
+    return (
+      <div className={cn("@container/page w-full min-w-0", className)} {...props}>
+        {header}
+        {subRail === undefined ? (
+          <div
+            className={cn("mx-auto w-full min-w-0 px-(--layout-gutter) pb-6", contentWidths[width])}
+          >
+            {children}
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) px-(--layout-gutter) pb-6 @subrail/page:flex-row">
+            {subRail}
+            <div className={cn("min-w-0 flex-1", contentWidths[width])}>{children}</div>
+          </div>
+        )}
+      </div>
+    );
+  }
   if (subRail === undefined) {
     return (
       <div

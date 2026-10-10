@@ -18,6 +18,8 @@ export interface ListRowProps extends Omit<HTMLAttributes<HTMLLIElement>, "title
   title: ReactNode;
   /** One line of status under the title. */
   description?: ReactNode;
+  /** In a narrow window the status line takes the lines it needs instead of being cut. */
+  descriptionWraps?: boolean;
   /** A small avatar or icon before the status line, such as the person the line names. */
   descriptionLeading?: ReactNode;
   /** Chips after the title, such as the scope. */
@@ -57,6 +59,7 @@ export function ListRow({
   leading,
   title,
   description,
+  descriptionWraps = false,
   descriptionLeading,
   chips,
   time,
@@ -94,7 +97,14 @@ export function ListRow({
           {chips}
         </span>
         {description === undefined ? null : descriptionLeading === undefined ? (
-          <span className="truncate text-caption text-muted-foreground">{description}</span>
+          <span
+            className={cn(
+              "text-caption text-muted-foreground",
+              descriptionWraps ? "sm:truncate" : "truncate"
+            )}
+          >
+            {description}
+          </span>
         ) : (
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="flex shrink-0 items-center">{descriptionLeading}</span>
