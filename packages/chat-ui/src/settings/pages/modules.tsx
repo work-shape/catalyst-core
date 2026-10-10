@@ -13,23 +13,9 @@ import {
   TableHeader,
   TableRow
 } from "@vivd-catalyst/ui";
-import { useTranslation, type TranslationKey } from "../../i18n";
+import { useTranslation } from "../../i18n";
+import { moduleTexts } from "../../module-texts";
 import { useSettingsPage } from "../settings-page-context";
-
-/** The name and the one line of each module the product knows. A later module adds its pair. */
-const moduleTexts: Partial<Record<string, { name: TranslationKey; description: TranslationKey }>> =
-  {
-    documents: { name: "modules.documents", description: "modules.documentsDescription" },
-    resources: { name: "modules.resources", description: "modules.resourcesDescription" },
-    assetManagement: {
-      name: "modules.assetManagement",
-      description: "modules.assetManagementDescription"
-    },
-    userInvitations: {
-      name: "modules.userInvitations",
-      description: "modules.userInvitationsDescription"
-    }
-  };
 
 /**
  * Instance > Modules: which optional features this instance runs. The switch of a module is

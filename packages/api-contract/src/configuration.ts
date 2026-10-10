@@ -252,7 +252,12 @@ export const configAssetsOverviewSchema = z.object({
     ),
     fastModeModelBindingIds: z.array(z.string()),
     reasoningEfforts: z.array(reasoningEffortSchema),
-    enabledToolNames: z.array(z.string())
+    enabledToolNames: z.array(z.string()),
+    /**
+     * Tools the instance enables whose module is off. No agent can use one. An agent that
+     * still names one shows it as unavailable, so it can be removed.
+     */
+    moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional()
   })
 });
 

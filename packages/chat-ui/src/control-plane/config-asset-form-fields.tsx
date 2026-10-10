@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { Banner, Button, cn, ConfirmDialog, Input } from "@vivd-catalyst/ui";
+import { Banner, Button, Chip, cn, ConfirmDialog, Input } from "@vivd-catalyst/ui";
 import {
   LANGUAGE_CODE_LABELS,
   type AgentFormState,
@@ -59,6 +59,7 @@ export function CheckboxGroup({
   options,
   optionLabel,
   selected,
+  unavailable = [],
   emptyHint,
   hint,
   disabled,
@@ -69,12 +70,18 @@ export function CheckboxGroup({
   /** Human-readable text for options that are ids rather than names. */
   optionLabel?: (option: string) => string;
   selected: string[];
+  /**
+   * Selected entries that are no longer on offer, each with the reason. They are shown as
+   * selected and can only be removed.
+   */
+  unavailable?: readonly { option: string; reason: string }[];
   emptyHint: string;
   hint?: string;
   disabled?: boolean;
   onChange(selected: string[]): void;
 }) {
   const { locale, t } = useTranslation();
+  const stale = unavailable.filter((entry) => selected.includes(entry.option));
 
   return (
     <fieldset className="grid min-w-0 gap-2">
@@ -126,6 +133,33 @@ export function CheckboxGroup({
             })}
           </div>
         )}
+        {stale.length > 0 ? (
+          <ul
+            aria-label={t("configUnavailableSelections")}
+            className="grid gap-2 border-t px-3 py-2.5"
+          >
+            {stale.map((entry) => (
+              <li
+                key={entry.option}
+                data-unavailable-option={entry.option}
+                className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+              >
+                <Chip
+                  size="sm"
+                  className="font-mono"
+                  onRemove={
+                    disabled
+                      ? undefined
+                      : () => onChange(selected.filter((option) => option !== entry.option))
+                  }
+                >
+                  {entry.option}
+                </Chip>
+                <span className="text-caption text-muted-foreground">{entry.reason}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
       {hint ? <Banner tone="warning">{hint}</Banner> : null}
     </fieldset>

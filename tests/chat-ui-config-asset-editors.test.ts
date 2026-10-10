@@ -51,6 +51,48 @@ describe("config asset editors", () => {
     expect(markup).not.toContain("Save changes");
   });
 
+  it("shows a tool of a module that is off as selected, unavailable and removable", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AgentEditor, {
+        initialForm: agentConfigToForm({
+          name: "assistant",
+          displayName: "Assistant",
+          instructions: "Help the user.",
+          modelProviderId: "azure-eu",
+          toolNames: ["read_skill", "documents.read"],
+          skillNames: [],
+          initialPrompts: []
+        }),
+        isNew: false,
+        isDefault: true,
+        references: {
+          modelProviderIds: ["azure-eu"],
+          modelBindingIds: [],
+          modelBindings: [],
+          fastModeModelBindingIds: [],
+          reasoningEfforts: [],
+          enabledToolNames: ["read_skill"],
+          moduleOffTools: [
+            { name: "documents.read", module: "documents" },
+            { name: "documents.search", module: "documents" }
+          ]
+        },
+        editableAgentFields: ["toolNames"],
+        canManageAgentModels: false,
+        skillNames: [],
+        mutating: false,
+        onSave: async () => ({ ok: true }),
+        revisions: null
+      })
+    );
+
+    expect(markup).toContain('data-unavailable-option="documents.read"');
+    expect(markup).toContain("Not available: the module Documents is off. Remove it to save.");
+    expect(markup).toContain('aria-label="Remove"');
+    // A tool of the module that the agent does not name is not shown at all.
+    expect(markup).not.toContain("documents.search");
+  });
+
   it("does not expose a model binding control for a legacy provider-only edit policy", () => {
     const markup = renderToStaticMarkup(
       createElement(AgentEditor, {

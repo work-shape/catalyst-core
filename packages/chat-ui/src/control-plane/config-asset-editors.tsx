@@ -44,6 +44,7 @@ import {
 } from "./config-assets-model";
 import { useTranslation } from "../i18n";
 import { formatModelLabel } from "../model-label";
+import { useModuleName } from "../module-texts";
 import { apiErrorMessage } from "../workspace-utils";
 
 interface MutationOutcome {
@@ -111,6 +112,7 @@ export function AgentEditor({
   const [savedForm, setSavedForm] = useState<typeof form | undefined>(undefined);
   useUnsavedReport(form !== openedForm && form !== savedForm, onUnsavedChange);
   const canEdit = (field: string) => editableAgentFields.includes(field);
+  const moduleName = useModuleName();
   const canEditModel = canManageAgentModels;
   const canEditMaxSteps = canEdit("maxSteps");
   const modelBindings =
@@ -298,6 +300,10 @@ export function AgentEditor({
           label={t("configTools")}
           options={references?.enabledToolNames ?? []}
           selected={form.toolNames}
+          unavailable={(references?.moduleOffTools ?? []).map((tool) => ({
+            option: tool.name,
+            reason: t("configToolModuleOff", { module: moduleName(tool.module) })
+          }))}
           disabled={!canEdit("toolNames")}
           emptyHint={t("configNoTools")}
           onChange={(toolNames) => update({ toolNames })}

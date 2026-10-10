@@ -11545,6 +11545,24 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "moduleOffTools": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "module": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "module"
+                  ]
+                }
               }
             },
             "required": [

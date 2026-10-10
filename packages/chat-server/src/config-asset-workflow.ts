@@ -92,7 +92,12 @@ export class ConfigAssetWorkflow {
         // A tool of a module that is off is not offered for an agent.
         enabledToolNames: refs.enabledToolNames.filter(
           (toolName) => this.options.modules.offModuleOf("tool", toolName) === undefined
-        )
+        ),
+        // An agent that still names one shows it as unavailable and can drop it.
+        moduleOffTools: refs.enabledToolNames.flatMap((name) => {
+          const module = this.options.modules.offModuleOf("tool", name);
+          return module === undefined ? [] : [{ name, module }];
+        })
       }
     };
   }
