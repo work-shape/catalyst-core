@@ -75,7 +75,7 @@ describe("navigation, page structure and data components", () => {
     expect(markup).not.toContain('role="tab"');
   });
 
-  it("keeps both tab rows scrolling sideways without scrollbars or clipped tab lines", () => {
+  it("keeps both tab rows scrolling sideways without scrollbars, the underline on the edge of the row's line", () => {
     const viewTabs = render(
       createElement(
         Tabs,
@@ -111,13 +111,17 @@ describe("navigation, page structure and data components", () => {
           "overflow-y-hidden",
           "[scrollbar-width:none]",
           "[&::-webkit-scrollbar]:hidden",
-          "pb-px"
+          "shadow-[inset_0_-1px_0_var(--color-border)]"
         ])
       );
+      // The row has no border and no padding under the tabs, and no tab is pulled out of
+      // it: the underline of the selected tab ends on the edge the row's line ends on.
+      expect(rowClasses).not.toContain("border-b");
+      expect(rowClasses).not.toContain("pb-px");
+      expect(markup.match(tabPattern)?.[1]?.split(" ")).not.toContain("-mb-px");
       const tabClasses = markup.match(tabPattern)?.[1]?.split(" ");
       expect(tabClasses).toEqual(
         expect.arrayContaining([
-          "-mb-px",
           "border-b-2",
           selectedLine,
           "focus-visible:outline-2",

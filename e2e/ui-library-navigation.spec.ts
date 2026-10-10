@@ -54,6 +54,48 @@ test("tabs and the segmented control follow the keyboard, and route tabs are lin
   await expect(users).toBeChecked();
 });
 
+// Fails with a border under the row: the row clips at its padding edge, so the underline of
+// the selected tab then ended one pixel above the bottom edge of the row's line.
+test("a tab row does not scroll vertically, and the selected tab's underline ends on the edge of the row's line", async ({
+  page
+}) => {
+  const root = await openGallery(page, "Navigation");
+  const tabs = root.locator('[data-gallery-entry="Tabs"]');
+  const rows = [
+    {
+      row: tabs.getByRole("tablist"),
+      selected: tabs.getByRole("tablist").locator('[role="tab"][aria-selected="true"]')
+    },
+    {
+      row: tabs.locator('[data-gallery-sample="tabs-routes"]').getByRole("navigation"),
+      selected: tabs.locator('[data-gallery-sample="tabs-routes"] [aria-current="page"]')
+    }
+  ];
+  for (const { row, selected } of rows) {
+    const rowBox = await row.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return {
+        bottom: box.bottom,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+        offsetHeight: element instanceof HTMLElement ? element.offsetHeight : 0
+      };
+    });
+    const selectedBox = await selected.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        bottom: element.getBoundingClientRect().bottom,
+        underline: style.borderBottomWidth
+      };
+    });
+    expect(rowBox.scrollHeight).toBe(rowBox.clientHeight);
+    // Nothing of the row lies under what it clips: no border the underline cannot reach.
+    expect(rowBox.offsetHeight).toBe(rowBox.clientHeight);
+    expect(selectedBox.underline).toBe("2px");
+    expect(selectedBox.bottom).toBe(rowBox.bottom);
+  }
+});
+
 test("navigation items, list rows, sections and the save bar keep their measures", async ({
   page
 }) => {

@@ -7,12 +7,13 @@ import { CountBadge } from "../status/count-badge";
 // The list scrolls sideways when the tabs do not fit, which would cut a focus line drawn
 // outside a tab. So the line sits inside it.
 const tabClassName =
-  "-mb-px inline-flex h-9 shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-label whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-9 shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-label whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50";
 const selectedTabClassName = "border-primary text-foreground";
-// Bottom padding contains the tabs' negative margin so neither their underline nor their
-// inset focus line is clipped when vertical overflow is hidden.
+// The row's line is drawn inside the row, under the tabs, so the selected tab's underline ends
+// on the same edge as the line and covers it. A border would lie outside what the row clips
+// when vertical overflow is hidden, and the underline would end one pixel above its edge.
 const tabRowClassName =
-  "flex min-w-0 gap-1 overflow-x-auto overflow-y-hidden border-b pb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+  "flex min-w-0 gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-border)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 export interface TabsProps extends Omit<HTMLAttributes<HTMLDivElement>, "defaultValue" | "dir"> {
   value?: string;
