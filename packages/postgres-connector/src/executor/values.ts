@@ -58,17 +58,34 @@ export function postgresValueReader(type: PostgresValueType): PostgresValueReade
   return (raw) => (/^[[{]/u.test(raw) ? readArray(raw, element.delimiter, readElement) : raw);
 }
 
-/** A row as the driver returned it, read column by column. Null stays null. */
+/**
+ * The key of each column in a row. A key stands for one column, so a column whose name an
+ * earlier column has gets the next free number as a suffix: `id`, `id_2`, `id_3`.
+ */
+export function postgresRowKeys(names: readonly string[]): string[] {
+  const taken = new Set<string>();
+  return names.map((name) => {
+    let key = name;
+    for (let number = 2; taken.has(key); number += 1) key = `${name}_${number}`;
+    taken.add(key);
+    return key;
+  });
+}
+
+/**
+ * A row as the driver returned it, one value per column in order, read column by column. Null
+ * stays null. Every key becomes a property of the row's own, `__proto__` included.
+ */
 export function readPostgresRow(
-  row: Record<string, unknown>,
-  columns: readonly { name: string; read: PostgresValueReader }[]
+  values: readonly unknown[],
+  columns: readonly { key: string; read: PostgresValueReader }[]
 ): JsonObject {
-  const read: JsonObject = {};
-  for (const column of columns) {
-    const raw = row[column.name];
-    read[column.name] = typeof raw === "string" ? column.read(raw) : null;
-  }
-  return read;
+  return Object.fromEntries(
+    columns.map((column, index) => {
+      const raw = values[index];
+      return [column.key, typeof raw === "string" ? column.read(raw) : null];
+    })
+  );
 }
 
 /**

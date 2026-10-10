@@ -68,6 +68,7 @@
         "*.config.ts",
         "eslint.config.mjs"
       ],
+      "ignoreBinaries": ["openssl"],
       "vite": false
     }
   },

@@ -5,6 +5,7 @@ import { PostgresExecutorError, toPostgresExecutorError } from "./errors";
 import {
   POSTGRES_CURSOR_BATCH_ROWS,
   POSTGRES_DEADLINE_GRACE_MS,
+  POSTGRES_READ_MARGIN_BYTES,
   resolvePostgresLimits,
   type PostgresLimits,
   type ResolvedPostgresLimits
@@ -24,7 +25,12 @@ import {
 import { readPostgresPrivileges, type PostgresPrivileges } from "./privileges";
 import { screenPostgresQuery } from "./screen";
 import type { PinPostgresAddress, PostgresLocation } from "./socket";
-import { postgresValueReader, readPostgresRow, type PostgresValueReader } from "./values";
+import {
+  postgresRowKeys,
+  postgresValueReader,
+  readPostgresRow,
+  type PostgresValueReader
+} from "./values";
 
 /** Which database a call goes to, under which credential and limits. */
 export interface PostgresTarget {
@@ -42,12 +48,20 @@ export interface PostgresQueryInput extends PostgresTarget {
 }
 
 export interface PostgresQueryResult {
-  /** Present even when no row is. `type` is the database's name of the column type. */
+  /**
+   * The columns in the order of the query, present even when no row is. `name` is the key of
+   * the column in every row. It is the database's name of the column, and where an earlier
+   * column has that name already it carries the next free number: `id`, `id_2`, `id_3`.
+   * `type` is the database's name of the column type.
+   */
   columns: { name: string; type: string }[];
   rows: JsonObject[];
   rowCount: number;
   truncated: boolean;
-  /** Which cap ended the result. */
+  /**
+   * Which cap ended the result. `bytes` with fewer rows than the byte cap holds means that the
+   * next batch of rows passed what a call may read from its socket. Its rows were not read.
+   */
   truncatedBy?: "rows" | "bytes";
 }
 
@@ -114,7 +128,7 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
     );
     const first = await Promise.race([
       interruption.raised,
-      rolledBack(connection, async () => {
+      rolledBack(connection, limits.maxBytes + POSTGRES_READ_MARGIN_BYTES, async () => {
         await applySettings(connection, target.location.schemas, limits.statementTimeoutMs);
         return work(connection, limits);
       })
@@ -126,8 +140,15 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
       throw new PostgresExecutorError(first);
     }
     if (first.clean) pool.release(connection);
-    else pool.discard(connection);
+    else {
+      // The server may still be producing what the executor stopped reading.
+      if (connection.readLimitPassed) {
+        await connection.cancelRunningQuery(POSTGRES_DEADLINE_GRACE_MS);
+      }
+      pool.discard(connection);
+    }
     if (first.outcome.ok) return first.outcome.value;
+    if (connection.readLimitPassed) throw new PostgresExecutorError("failed");
     throw toPostgresExecutorError(first.outcome.error);
   }
 
@@ -139,9 +160,9 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
         const columns = await resultColumns(session, await session.columns(query.sql, parameters));
         const batchRows = Math.min(POSTGRES_CURSOR_BATCH_ROWS, limits.maxRows + 1);
         const batches = session.cursor(query.sql, parameters, batchRows);
-        const read = await readCapped(batches, columns, limits);
+        const read = await readCapped(batches, columns, limits, () => session.readLimitPassed);
         return {
-          columns: columns.map(({ name, type }) => ({ name, type })),
+          columns: columns.map(({ key, type }) => ({ name: key, type })),
           rows: read.rows,
           rowCount: read.rows.length,
           truncated: read.truncatedBy !== undefined,
@@ -172,15 +193,17 @@ type Outcome<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
 /**
  * Runs `work` in a read-only transaction that always ends with a rollback, so nothing a query
- * set on the session outlives it. It never rejects. `clean` says whether the rollback went
- * through, which is what makes the connection fit for the next call.
+ * set on the session outlives it. What a rollback leaves on a session, such as an advisory
+ * lock a query took for the session, is discarded after it. It never rejects. `clean` says
+ * whether both went through, which is what makes the connection fit for the next call.
  */
 async function rolledBack<T>(
   connection: PostgresConnection,
+  readLimitBytes: number,
   work: () => Promise<T>
 ): Promise<{ outcome: Outcome<T>; clean: boolean }> {
   try {
-    await connection.beginReadOnly();
+    await connection.beginReadOnly(readLimitBytes);
   } catch (error) {
     return { outcome: { ok: false, error }, clean: false };
   }
@@ -190,8 +213,11 @@ async function rolledBack<T>(
   } catch (error) {
     outcome = { ok: false, error };
   }
+  // A connection that read too much is closed, and asking it again would open another.
+  if (connection.readLimitPassed) return { outcome, clean: false };
   try {
-    await connection.run("rollback");
+    // Sent together, so that the two cost one round trip.
+    await Promise.all([connection.run("rollback"), connection.run("discard all")]);
     return { outcome, clean: true };
   } catch {
     return { outcome, clean: false };
@@ -259,7 +285,8 @@ const RESULT_TYPES = `
 `;
 
 interface ResultColumn {
-  name: string;
+  /** The key of the column in a row. */
+  key: string;
   type: string;
   read: PostgresValueReader;
 }
@@ -279,14 +306,15 @@ async function resultColumns(
       .parse(await session.run(RESULT_TYPES, [oids]))
       .map((type) => [type.oid, type])
   );
-  return columns.map((column) => {
+  const keys = postgresRowKeys(columns.map((column) => column.name));
+  return columns.map((column, index) => {
     const type = types.get(String(column.typeOid));
     const element =
       type?.element_oid && type.delimiter
         ? { element: { oid: Number(type.element_oid), delimiter: type.delimiter } }
         : {};
     return {
-      name: column.name,
+      key: keys[index] ?? column.name,
       type: type?.name ?? "unknown",
       read: postgresValueReader({ oid: column.typeOid, ...element })
     };
@@ -296,22 +324,32 @@ async function resultColumns(
 /**
  * Reads batches until a cap is reached and then stops reading, which closes the cursor. A row
  * counts with the bytes of its JSON form, and the row that would cross the byte cap is left out.
+ *
+ * The driver holds a batch whole before it hands it on. A batch that passes what the call may
+ * read from its socket therefore never arrives: the connection has been ended, and the result
+ * is the rows of the batches before it, cut by bytes.
  */
 async function readCapped(
   batches: AsyncIterable<PostgresTextRow[]>,
   columns: readonly ResultColumn[],
-  limits: ResolvedPostgresLimits
+  limits: ResolvedPostgresLimits,
+  readLimitPassed: () => boolean
 ): Promise<{ rows: JsonObject[]; truncatedBy?: "rows" | "bytes" }> {
   const rows: JsonObject[] = [];
   let bytes = 0;
-  for await (const batch of batches) {
-    for (const raw of batch) {
-      if (rows.length === limits.maxRows) return { rows, truncatedBy: "rows" };
-      const row = readPostgresRow(raw, columns);
-      bytes += Buffer.byteLength(JSON.stringify(row));
-      if (bytes > limits.maxBytes) return { rows, truncatedBy: "bytes" };
-      rows.push(row);
+  try {
+    for await (const batch of batches) {
+      for (const raw of batch) {
+        if (rows.length === limits.maxRows) return { rows, truncatedBy: "rows" };
+        const row = readPostgresRow(raw, columns);
+        bytes += Buffer.byteLength(JSON.stringify(row));
+        if (bytes > limits.maxBytes) return { rows, truncatedBy: "bytes" };
+        rows.push(row);
+      }
     }
+  } catch (error) {
+    if (!readLimitPassed()) throw error;
+    return { rows, truncatedBy: "bytes" };
   }
   return { rows };
 }

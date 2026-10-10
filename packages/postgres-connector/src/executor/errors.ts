@@ -27,8 +27,10 @@ const FIXED_SENTENCES: Record<FixedSentenceKind, string> = {
 /**
  * The one error of the executor. Its text is a fixed sentence for the kind. Only
  * `query_rejected` carries more: a sentence of the executor's own, or the database's message
- * for SQLSTATE class 42, which names objects of the query and holds no value. No error holds a
- * driver error, a host, a user, a credential, query text or a parameter.
+ * for SQLSTATE class 42. That message is the answer to the caller's own query and can quote a
+ * value the query read, as `(select note from t)::regclass` does. It is for the caller of this
+ * call alone: it must not go to a log or a run record, and the executor writes it nowhere. No
+ * error holds a driver error, a host, a user, a credential, query text or a parameter.
  */
 export class PostgresExecutorError extends Error {
   readonly kind: PostgresExecutorErrorKind;

@@ -65,29 +65,61 @@ export interface PostgresSocketRoute {
 /**
  * Opens one socket to the database: the address check first, then TCP to the pinned address,
  * then TLS when the location asks for it. Nothing of the credential has been sent or resolved
- * when this returns or fails. Aborting the signal destroys the socket at any later time.
+ * when this returns or fails. Aborting the signal ends the address check, the attempt and, at
+ * any later time, the socket.
  */
 export async function openPostgresSocket(
   route: PostgresSocketRoute,
   signal: AbortSignal
 ): Promise<net.Socket> {
-  const address = await pinnedAddress(route);
+  const address = await pinnedAddress(route, signal);
   const plan = planPostgresSocket(route.location, address);
-  const socket = await connect(plan.socket, signal);
+  const { socket, leaveSocket } = await connect(plan.socket, signal);
   if (plan.tls === undefined) return socket;
+  let secured: tls.TLSSocket;
   try {
     await requestTls(socket);
-    return await secure(socket, plan.tls);
+    secured = await secure(socket, plan.tls);
   } catch {
     socket.destroy();
     throw new PostgresExecutorError("tls_failed");
   }
+  // From here the TLS socket is the one to end. Taking the TCP socket away underneath it
+  // would leave it to fail on a write nobody expects.
+  leaveSocket();
+  destroyOnAbort(secured, signal);
+  return secured;
 }
 
-async function pinnedAddress({ location, pinAddress }: PostgresSocketRoute): Promise<string> {
+const ignore = (): void => undefined;
+
+/**
+ * An error of a socket ends the call that waits on it. What must never happen is an error
+ * with no listener, which ends the process. The driver drops every listener of a socket that
+ * closed, so the listener is set again after it.
+ */
+function hearErrors(socket: net.Socket): void {
+  socket.on("error", ignore);
+  socket.once("close", () => process.nextTick(() => socket.on("error", ignore)));
+}
+
+/** Returns how to take the binding away again. */
+function destroyOnAbort(socket: net.Socket, signal: AbortSignal): () => void {
+  const destroy = () => socket.destroy();
+  const leave = () => signal.removeEventListener("abort", destroy);
+  signal.addEventListener("abort", destroy, { once: true });
+  socket.once("close", leave);
+  if (signal.aborted) destroy();
+  return leave;
+}
+
+async function pinnedAddress(
+  { location, pinAddress }: PostgresSocketRoute,
+  signal: AbortSignal
+): Promise<string> {
   let pinned: PinnedPostgresAddress;
   try {
-    pinned = await pinAddress(location.host, location.port);
+    pinned = await untilAborted(pinAddress(location.host, location.port), signal);
   } catch {
     throw new PostgresExecutorError("unavailable");
   }
@@ -98,17 +130,31 @@ async function pinnedAddress({ location, pinAddress }: PostgresSocketRoute): Pro
   return pinned.address;
 }
 
-function connect(target: { host: string; port: number }, signal: AbortSignal): Promise<net.Socket> {
+/** The address check is the platform's, and it may hang. The abort ends the wait for it. */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect({ ...target, signal });
+    const stop = () => reject(new PostgresExecutorError("unavailable"));
+    signal.addEventListener("abort", stop, { once: true });
+    if (signal.aborted) stop();
+    void work.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
+  });
+}
+
+/** The socket, and how to take away the binding that destroys it on abort. */
+function connect(
+  target: { host: string; port: number },
+  signal: AbortSignal
+): Promise<{ socket: net.Socket; leaveSocket: () => void }> {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(target);
     const refuse = () => reject(new PostgresExecutorError("unavailable"));
-    socket.once("error", refuse);
+    hearErrors(socket);
+    socket.once("close", refuse);
     socket.once("connect", () => {
-      socket.off("error", refuse);
-      // An abort after this point destroys the socket with an error nobody else may hear.
-      socket.on("error", () => undefined);
-      resolve(socket);
+      socket.off("close", refuse);
+      resolve({ socket, leaveSocket });
     });
+    const leaveSocket = destroyOnAbort(socket, signal);
   });
 }
 
@@ -140,10 +186,10 @@ function secure(
   return new Promise((resolve, reject) => {
     const secured = tls.connect({ socket, ...options });
     const refuse = () => reject(new Error("The TLS handshake did not complete"));
-    secured.once("error", refuse);
+    secured.once("close", refuse);
+    hearErrors(secured);
     secured.once("close", refuse);
     secured.once("secureConnect", () => {
-      secured.off("error", refuse);
       secured.off("close", refuse);
       resolve(secured);
     });
@@ -172,7 +218,6 @@ export async function requestPostgresCancel(
     const socket = await openPostgresSocket(route, wait.signal);
     await new Promise<void>((resolve) => {
       socket.once("close", () => resolve());
-      socket.on("error", () => undefined);
       socket.write(cancelRequest(key));
     });
   } catch {

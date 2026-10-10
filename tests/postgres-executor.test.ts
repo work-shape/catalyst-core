@@ -19,7 +19,7 @@ import {
   type PostgresTarget
 } from "@vivd-catalyst/postgres-connector";
 import { deferred, required } from "./support/assertions";
-import { useCustomerDatabase } from "./support/customer-database";
+import { executorFailure as failure, useCustomerDatabase } from "./support/customer-database";
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 
 describe("Postgres executor on a customer's database", () => {
@@ -405,7 +405,7 @@ describe("Postgres executor on a customer's database", () => {
       expect(error.sqlState).toBeUndefined();
       expect(performance.now() - started).toBeGreaterThanOrEqual(5000);
       // Left alone, the backend would sleep until the database's timeout at 7.5 seconds.
-      expect(await customer.ended(writer, pid)).toBe(true);
+      await expect.poll(() => customer.ended(writer, pid), { timeout: 1500 }).toBe(true);
       expect(performance.now() - started).toBeLessThan(7000);
     });
 
@@ -785,13 +785,3 @@ describe("Postgres executor on a customer's database", () => {
     expect(error).not.toHaveProperty("cause");
   }
 });
-
-async function failure(call: Promise<unknown>): Promise<PostgresExecutorError> {
-  try {
-    await call;
-  } catch (error) {
-    if (error instanceof PostgresExecutorError) return error;
-    throw error;
-  }
-  throw new Error("Expected the call to fail");
-}

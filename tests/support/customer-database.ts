@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import postgres from "postgres";
 import { afterAll, expect } from "vitest";
+import { PostgresExecutorError } from "@vivd-catalyst/postgres-connector";
 import { required } from "./assertions";
 import { beforeAllWithPostgres as beforeAll } from "./postgres-hooks";
 import { fileTestDatabaseUrl } from "./test-database";
@@ -127,4 +128,15 @@ export function useCustomerDatabase(): CustomerDatabase {
       (await customer.backends(user)).every((backend) => backend.pid !== pid)
   };
   return customer;
+}
+
+/** The executor error a call failed with. Anything else a call threw is thrown on. */
+export async function executorFailure(call: Promise<unknown>): Promise<PostgresExecutorError> {
+  try {
+    await call;
+  } catch (error) {
+    if (error instanceof PostgresExecutorError) return error;
+    throw error;
+  }
+  throw new Error("Expected the call to fail");
 }

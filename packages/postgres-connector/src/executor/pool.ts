@@ -1,8 +1,15 @@
 import type net from "node:net";
+import { setTimeout as delay } from "node:timers/promises";
 import postgres from "postgres";
 import type { JsonObject, ScopedSecretResolver } from "@vivd-catalyst/core";
 import { PostgresExecutorError, type PostgresExecutorErrorKind } from "./errors";
-import { POSTGRES_POOL_ACQUIRE_WAIT_MS, POSTGRES_POOL_IDLE_CLOSE_SECONDS } from "./limits";
+import {
+  POSTGRES_CANCEL_REPEAT_MS,
+  POSTGRES_CONNECT_TIMEOUT_SECONDS,
+  POSTGRES_CONNECTION_MAX_LIFETIME_SECONDS,
+  POSTGRES_POOL_ACQUIRE_WAIT_MS,
+  POSTGRES_POOL_IDLE_CLOSE_SECONDS
+} from "./limits";
 import type { BoundPostgresParameter } from "./parameters";
 import {
   openPostgresSocket,
@@ -10,10 +17,10 @@ import {
   type PostgresBackendKey,
   type PostgresSocketRoute
 } from "./socket";
-import { postgresValueReader, readPostgresRow } from "./values";
+import { postgresRowKeys, postgresValueReader, readPostgresRow } from "./values";
 
-/** A row as the server sent it: each value its text, or null. */
-export type PostgresTextRow = Record<string, unknown>;
+/** A row as the server sent it: the text of each column in order, or null. */
+export type PostgresTextRow = readonly unknown[];
 
 /** What the executor does on one connection. The driver stays behind it. */
 export interface PostgresSession {
@@ -33,6 +40,8 @@ export interface PostgresSession {
     parameters: readonly BoundPostgresParameter[],
     batchRows: number
   ): AsyncIterable<PostgresTextRow[]>;
+  /** True once the call read more from the socket than it may. The connection is closed then. */
+  readonly readLimitPassed: boolean;
 }
 
 export interface PostgresConnectionSource extends PostgresSocketRoute {
@@ -66,13 +75,19 @@ export class PostgresConnection implements PostgresSession {
   private readonly sql: ReturnType<typeof postgres<typeof TEXT_ONLY>>;
   private socket: net.Socket | undefined;
   private backend: PostgresBackendKey | undefined;
+  private readBytes = 0;
+  private readLimitBytes = Number.POSITIVE_INFINITY;
+  private pastReadLimit = false;
 
   constructor(source: PostgresConnectionSource) {
     this.source = source;
     const { location } = source;
     // The driver reads `socket` and opens no socket of its own once it is set. Its types do
-    // not list the option.
-    const options: postgres.Options<typeof TEXT_ONLY> & { socket: () => Promise<net.Socket> } = {
+    // not list the option, nor `max_pipeline`.
+    const options: postgres.Options<typeof TEXT_ONLY> & {
+      socket: () => Promise<net.Socket>;
+      max_pipeline: number;
+    } = {
       socket: () => this.openSocket(),
       // Never dialled, and so not the customer's name: every socket comes from `socket` above.
       host: "pinned-by-the-executor",
@@ -85,6 +100,13 @@ export class PostgresConnection implements PostgresSession {
       // One connection, so that the transaction, the cursor and the rollback share it.
       max: 1,
       idle_timeout: POSTGRES_POOL_IDLE_CLOSE_SECONDS,
+      // The driver fills every setting that is not named here from a `PG...` variable of the
+      // process. These are its own defaults, named so that no such variable applies.
+      connect_timeout: POSTGRES_CONNECT_TIMEOUT_SECONDS,
+      max_lifetime: POSTGRES_CONNECTION_MAX_LIFETIME_SECONDS,
+      max_pipeline: 100,
+      keep_alive: 60,
+      backoff: () => 1,
       // Unnamed statements: nothing prepared stays behind on the customer's server.
       prepare: false,
       // Arrays are read by the executor, which asks the catalog for the types of a result.
@@ -96,10 +118,25 @@ export class PostgresConnection implements PostgresSession {
       types: TEXT_ONLY
     };
     this.sql = postgres(options);
+    // The one setting the driver takes from the process even when it is named here. It makes
+    // the driver drop and reopen connections by the state of the server, so it is refused.
+    if (this.sql.options.target_session_attrs) {
+      this.closed.abort();
+      throw new PostgresExecutorError("failed");
+    }
   }
 
-  /** Opens the read-only transaction and notes which backend runs it. */
-  async beginReadOnly(): Promise<void> {
+  get readLimitPassed(): boolean {
+    return this.pastReadLimit;
+  }
+
+  /**
+   * Opens the read-only transaction and notes which backend runs it. From here the call may
+   * read `readLimitBytes` from the socket. One byte more closes the connection.
+   */
+  async beginReadOnly(readLimitBytes: number): Promise<void> {
+    this.readBytes = 0;
+    this.readLimitBytes = readLimitBytes;
     // The driver may have reconnected since the last call, to another backend.
     this.backend = undefined;
     const begun = await this.sql.unsafe("begin read only");
@@ -110,10 +147,11 @@ export class PostgresConnection implements PostgresSession {
     text: string,
     parameters: readonly BoundPostgresParameter[] = []
   ): Promise<JsonObject[]> {
-    const result = await this.sql.unsafe(text, this.driverParameters(parameters));
+    const result = await this.sql.unsafe(text, this.driverParameters(parameters)).values();
     if (result.length === 0) return [];
-    const columns = result.columns.map((column) => ({
-      name: column.name,
+    const keys = postgresRowKeys(result.columns.map((column) => column.name));
+    const columns = result.columns.map((column, index) => ({
+      key: keys[index] ?? column.name,
       read: postgresValueReader({ oid: column.type })
     }));
     return result.map((row) => readPostgresRow(row, columns));
@@ -132,16 +170,31 @@ export class PostgresConnection implements PostgresSession {
     parameters: readonly BoundPostgresParameter[],
     batchRows: number
   ): AsyncIterable<PostgresTextRow[]> {
-    return this.sql.unsafe(text, this.driverParameters(parameters)).cursor(batchRows);
+    return this.sql.unsafe(text, this.driverParameters(parameters)).values().cursor(batchRows);
   }
 
   /**
-   * Asks the server to cancel what this connection's backend is running, and waits until the
-   * server has taken the request or `waitMs` is over. Destroying the socket alone would leave
-   * the query running on the customer's server.
+   * Ends on the server what this connection's backend is running, within `waitMs`. Destroying
+   * the socket alone would leave a query running on the customer's server.
+   *
+   * The socket is closed for writing first, so nothing more is asked of the backend, and the
+   * backend leaves once it reads that. A cancel request ends only the statement that runs at
+   * the moment it arrives, and one already on its way may start after it. So the request is
+   * repeated until the server has closed the socket, which is the backend saying it is gone.
    */
   async cancelRunningQuery(waitMs: number): Promise<void> {
-    if (this.backend) await requestPostgresCancel(this.source, this.backend, waitMs);
+    const { backend, socket } = this;
+    if (!backend) return;
+    const until = performance.now() + waitMs;
+    let gone = socket === undefined || socket.destroyed;
+    socket?.once("close", () => {
+      gone = true;
+    });
+    socket?.end();
+    for (let left = waitMs; !gone && left > 0; left = until - performance.now()) {
+      await requestPostgresCancel(this.source, backend, left);
+      if (!gone) await delay(Math.min(POSTGRES_CANCEL_REPEAT_MS, left));
+    }
   }
 
   /** Drops the connection at once. Whatever still waits on it fails. */
@@ -162,8 +215,20 @@ export class PostgresConnection implements PostgresSession {
 
   private async openSocket(): Promise<net.Socket> {
     if (this.closed.signal.aborted) throw new PostgresExecutorError("unavailable");
-    this.socket = await openPostgresSocket(this.source, this.closed.signal);
-    return this.socket;
+    const socket = await openPostgresSocket(this.source, this.closed.signal);
+    // The driver holds a whole message before it hands a row on, so only a count on the
+    // socket sees a value that is too large while it still arrives.
+    socket.on("data", (chunk: Buffer) => this.countRead(chunk.length));
+    this.socket = socket;
+    return socket;
+  }
+
+  private countRead(bytes: number): void {
+    this.readBytes += bytes;
+    if (this.readBytes <= this.readLimitBytes || this.pastReadLimit) return;
+    this.pastReadLimit = true;
+    // Ends the socket and keeps the driver from opening another.
+    this.closed.abort();
   }
 
   /**
@@ -251,8 +316,9 @@ export class PostgresPool {
   }
 
   private take(): PostgresConnection {
+    const connection = this.idle.pop() ?? this.open();
     this.inUse += 1;
-    return this.idle.pop() ?? this.open();
+    return connection;
   }
 
   private grantNext(): void {
