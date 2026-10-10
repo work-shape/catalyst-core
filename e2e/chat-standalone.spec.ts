@@ -1011,18 +1011,22 @@ test(
   { tag: "@chat-state" },
   async ({ page }) => {
     await signInViaUi(page, normalUser);
+    // The run has to be going from the first Enter until the test stops it. Its answer is held
+    // back for that time, so the page has no stream to render and the test is as quick on a
+    // slow machine as on a fast one. Without the hold the steps below took about five seconds
+    // on the hosted runner, as long as the run of the 240 words this test used to send, and the
+    // run ended under the click on Stop.
+    const releaseAnswer = await holdAnswer(page);
+    const answeredEventStreams = countResponses(page, "GET", isRunEventsPath);
     await page.goto("/");
 
     const input = page.getByPlaceholder("Message");
     const suffix = Date.now();
-    const longMessage = Array.from(
-      { length: 240 },
-      (_, index) => `active-run-guard-${suffix}-${index}`
-    ).join(" ");
-    await input.fill(longMessage);
+    await input.fill(longRunMessage(`active-run-guard-${suffix}`));
     await input.press("Enter");
     await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
-    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+    const stopButton = page.getByRole("button", { name: "Stop generating" });
+    await expect(stopButton).toBeVisible();
 
     const conversationId = currentConversationId(page);
     const runPath = `/api/v1/conversations/${conversationId}/runs`;
@@ -1042,7 +1046,13 @@ test(
     await expect(input).toHaveValue(followUpDraft);
     await expect(page.getByText("Conversation already has an active agent run")).toHaveCount(0);
 
-    await stopActiveRun(page);
+    // Nothing above depended on how fast the page renders an answer: none has reached it. And
+    // the run is still there to stop, so a run that ended early fails here instead of passing.
+    expect(answeredEventStreams()).toBe(0);
+    await expect(stopButton).toBeVisible();
+    await stopButton.click();
+    releaseAnswer();
+    await expect(page.getByRole("button", { name: "Send message" })).toBeVisible();
     await expect(input).toHaveValue(followUpDraft);
   }
 );
@@ -4200,6 +4210,21 @@ function countRequests(
   let count = 0;
   page.on("request", (request) => {
     if (request.method() === method && matches(new URL(request.url()).pathname)) {
+      count += 1;
+    }
+  });
+  return () => count;
+}
+
+/** Counts the matching requests the server has answered so far; a held request has no answer. */
+function countResponses(
+  page: Page,
+  method: string,
+  matches: (pathname: string) => boolean
+): () => number {
+  let count = 0;
+  page.on("response", (response) => {
+    if (response.request().method() === method && matches(new URL(response.url()).pathname)) {
       count += 1;
     }
   });
