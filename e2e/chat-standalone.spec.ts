@@ -2124,6 +2124,7 @@ for (const text of [
     deletion: /^Will be deleted automatically on [A-Z][a-z]+day, [A-Z][a-z]+ \d+\./u,
     kept: "A new message keeps this conversation.",
     placeholder: "Message",
+    account: / account$/u,
     darkTheme: "Switch to dark theme"
   },
   {
@@ -2131,6 +2132,7 @@ for (const text of [
     deletion: /^Wird am [A-Z][a-z]+, \d+\. [A-Z][a-zä]+ automatisch gelöscht\./u,
     kept: "Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten.",
     placeholder: "Nachricht",
+    account: /^Konto von /u,
     darkTheme: "Zum dunklen Design wechseln"
   }
 ] as const) {
@@ -2175,7 +2177,9 @@ for (const text of [
     expect(light).toMatchObject({ fill: "rgba(0, 0, 0, 0)", border: "0px", sameColour: false });
     expect(light.bottom).toBeLessThanOrEqual((await input.boundingBox())?.y ?? 0);
 
-    await page.getByRole("button", { name: text.darkTheme }).click();
+    // The theme switch sits in the account menu of the rail.
+    await page.getByRole("button", { name: text.account }).click();
+    await page.getByRole("menuitem", { name: text.darkTheme }).click();
     await expect(notice).toBeVisible();
     await expect(notice).toContainText(text.kept);
     expect(await look()).toMatchObject({
