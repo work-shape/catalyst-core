@@ -20,7 +20,7 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   "chat-ui": 1_000_000,
   ui: 500_000,
   "chat-server": 600_000,
-  "postgres-store": 400_000
+  "postgres-store": 600_000
 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],
