@@ -1,0 +1,1080 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`workspace tool definitions > offers the same tools, in the same order, with the same names, descriptions and schemas 1`] = `
+"[
+  {
+    "name": "workspace.exec",
+    "description": "Run a bounded Bash command from /workspace in the conversation execution workspace. Each call starts in /workspace unless cwd is provided for that call; cwd, processes, and files outside /workspace do not persist. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Pass a complete shell command or multiline script. Files created or changed under /workspace persist across calls and stay internal until promoted. For multiline create-and-verify commands, put \`set -e\` on its own line before later commands so helpers do not run after a failed script. Run artifact helpers directly. Do not prefix helpers with \`set -e\`, and do not pass helper flags such as \`--view\`, \`--spec\`, \`--out\`, \`--range\`, \`--page\`, or \`--sheet\` to \`cat\`, \`ls\`, or \`printf\`.",
+    "permission": null,
+    "inputJsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "description": "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. \`pptx_inspect deck.pptx --view summary\`; do not write \`set -e pptx_inspect ...\`. For multiline create-and-verify commands, put \`set -e\` on its own line before later commands. Do not pass helper flags such as \`--view\`, \`--spec\`, \`--out\`, \`--range\`, \`--page\`, or \`--sheet\` to \`cat\`, \`ls\`, or \`printf\`."
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Optional workspace-relative directory for this command only. It does not persist as the next command's cwd."
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedOutputs": {
+          "type": "array",
+          "maxItems": 32,
+          "description": "Optional postconditions for files that should exist in /workspace after the command. Use kind \\"directory\\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "promote": {
+                "type": "boolean",
+                "default": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "description": "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. \`pptx_inspect deck.pptx --view summary\`; do not write \`set -e pptx_inspect ...\`. For multiline create-and-verify commands, put \`set -e\` on its own line before later commands. Do not pass helper flags such as \`--view\`, \`--spec\`, \`--out\`, \`--range\`, \`--page\`, or \`--sheet\` to \`cat\`, \`ls\`, or \`printf\`."
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Optional workspace-relative directory for this command only. It does not persist as the next command's cwd."
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedOutputs": {
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "promote": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Optional postconditions for files that should exist in /workspace after the command. Use kind \\"directory\\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output."
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "cancelling",
+            "completed",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "timeoutSeconds": {
+              "type": "number"
+            },
+            "idleTimeoutSeconds": {
+              "type": "number"
+            },
+            "maxStdoutBytes": {
+              "type": "number"
+            },
+            "maxStderrBytes": {
+              "type": "number"
+            },
+            "maxWorkspaceBytes": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "timeoutSeconds"
+          ],
+          "additionalProperties": false
+        },
+        "exitCode": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stdoutPreview": {
+          "type": "string"
+        },
+        "stderrPreview": {
+          "type": "string"
+        },
+        "durationMs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changedFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "byteSize": {
+                "type": "number"
+              },
+              "checksum": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "artifactId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "byteSize",
+              "checksum"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "promotedArtifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "artifactId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "metadata": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "artifactId",
+              "path",
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "truncated": {
+          "type": "object",
+          "properties": {
+            "stdout": {
+              "type": "boolean"
+            },
+            "stderr": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "stdout",
+            "stderr"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "commandId",
+        "workspaceId",
+        "status",
+        "limits",
+        "exitCode",
+        "stdoutPreview",
+        "stderrPreview",
+        "durationMs",
+        "changedFiles",
+        "promotedArtifacts",
+        "truncated"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "workspace.list_files",
+    "description": "List internal files currently tracked in the conversation execution workspace.",
+    "permission": null,
+    "inputJsonSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "byteSize": {
+                "type": "number"
+              },
+              "checksum": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "lastCommandId": {
+                "type": "string"
+              },
+              "promotedArtifacts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "artifactId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "promotedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "artifactId",
+                    "kind",
+                    "promotedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "path",
+              "byteSize",
+              "checksum",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "workspaceId",
+        "files"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "workspace.import_files",
+    "description": "Copy uploaded managed conversation files into the execution workspace by fileId. The result returns a shell-safe workspace path in importedFiles[].path; use that exact path in workspace.exec and do not invent shortened filenames. This uses managed file access and never exposes object-storage credentials.",
+    "permission": null,
+    "inputJsonSchema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "minItems": 1,
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fileId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "description": "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec."
+              }
+            },
+            "required": [
+              "fileId"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "additionalProperties": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "files": {
+          "minItems": 1,
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fileId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "description": "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec."
+              }
+            },
+            "required": [
+              "fileId"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "importedFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fileId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string"
+              },
+              "byteSize": {
+                "type": "number"
+              },
+              "checksum": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "fileId",
+              "path",
+              "filename",
+              "byteSize",
+              "checksum"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "workspaceId",
+        "importedFiles"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "workspace.read_file",
+    "description": "Read a bounded UTF-8 preview of a text file from the conversation execution workspace.",
+    "permission": null,
+    "inputJsonSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "byteSize": {
+          "type": "number"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "encoding": {
+          "type": "string",
+          "const": "utf-8"
+        },
+        "contentPreview": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "path",
+        "byteSize",
+        "encoding",
+        "contentPreview",
+        "truncated"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "workspace.apply_patch",
+    "description": "Apply a unified diff patch to text files in /workspace. Supports create, update, and delete for workspace paths; rejects path traversal, renames, and binary files. Use workspace.exec for normal shell work and scripts.",
+    "permission": null,
+    "inputJsonSchema": {
+      "type": "object",
+      "properties": {
+        "patch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144,
+          "description": "Unified diff patch for workspace text files. Use paths relative to /workspace, /workspace/path, or git-style a/path and b/path headers. Supports create, update, and delete; binary files and renames are rejected."
+        }
+      },
+      "required": [
+        "patch"
+      ],
+      "additionalProperties": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "patch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144,
+          "description": "Unified diff patch for workspace text files. Use paths relative to /workspace, /workspace/path, or git-style a/path and b/path headers. Supports create, update, and delete; binary files and renames are rejected."
+        }
+      },
+      "required": [
+        "patch"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        },
+        "changedFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "byteSize": {
+                "type": "number"
+              },
+              "checksum": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "artifactId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "byteSize",
+              "checksum"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "deletedFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "workspaceId",
+        "changedFiles",
+        "deletedFiles"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "workspace.promote_artifact",
+    "description": "Promote a final workspace file to a managed artifact. Catalyst automatically displays promoted artifacts as clickable download cards below the assistant response.",
+    "permission": null,
+    "inputJsonSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs."
+        },
+        "kind": {
+          "default": "workspace.file",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "mimeType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs."
+        },
+        "kind": {
+          "default": "workspace.file",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "mimeType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "artifactId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "byteSize": {
+          "type": "number"
+        },
+        "checksum": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "artifactId",
+        "path",
+        "kind",
+        "filename",
+        "mimeType",
+        "byteSize",
+        "checksum"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "workspace.preview_images",
+    "description": "Load bounded rendered preview images into model-visible visual context without promoting preview files to the user. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
+    "permission": null,
+    "inputJsonSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "artifactId"
+          ]
+        },
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "paths"
+          ]
+        }
+      ],
+      "properties": {
+        "artifactId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png."
+        },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "description": "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted."
+        },
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "Optional PDF/DOCX page numbers to load when preview metadata has page numbers."
+        },
+        "slides": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "Optional PPTX slide numbers to load when preview metadata has slide numbers."
+        },
+        "sheets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": "Optional XLSX sheet names to load when preview metadata has sheet labels."
+        },
+        "ranges": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": "Optional XLSX ranges to load. Prefer sheet-qualified ranges like \`Summary!A1:B4\`; unqualified ranges require exactly one \`sheets\` value."
+        },
+        "maxImages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "default": 12,
+          "description": "Maximum preview images to attach to model context."
+        }
+      }
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "artifactId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png."
+        },
+        "paths": {
+          "minItems": 1,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "description": "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted."
+        },
+        "pages": {
+          "minItems": 1,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "description": "Optional PDF/DOCX page numbers to load when preview metadata has page numbers."
+        },
+        "slides": {
+          "minItems": 1,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "description": "Optional PPTX slide numbers to load when preview metadata has slide numbers."
+        },
+        "sheets": {
+          "minItems": 1,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": "Optional XLSX sheet names to load when preview metadata has sheet labels."
+        },
+        "ranges": {
+          "minItems": 1,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": "Optional XLSX ranges to load. Prefer sheet-qualified ranges like \`Summary!A1:B4\`; unqualified ranges require exactly one \`sheets\` value."
+        },
+        "maxImages": {
+          "default": 12,
+          "description": "Maximum preview images to attach to model context.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "artifactId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "pending",
+            "failed",
+            "unsupported"
+          ]
+        },
+        "maxImages": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sourceArtifactId": {
+                "type": "string"
+              },
+              "imageArtifactId": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string",
+                "enum": [
+                  "image/png",
+                  "image/jpeg",
+                  "image/webp",
+                  "image/gif"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "const": "ready"
+              },
+              "pageNumber": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "slideNumber": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sheet": {
+                "type": "string"
+              },
+              "range": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "height": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "sourceArtifactId",
+              "imageArtifactId",
+              "mimeType",
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "pageNumber": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "slideNumber": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sheet": {
+                "type": "string"
+              },
+              "range": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "errorCode": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifactId",
+        "status",
+        "maxImages",
+        "images",
+        "warnings"
+      ],
+      "additionalProperties": false
+    }
+  }
+]"
+`;
