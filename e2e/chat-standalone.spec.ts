@@ -3287,6 +3287,7 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
     "Usage",
     "Audit",
     "Jobs",
+    "Operations",
     "Modules",
     "Infrastructure"
   ]);

@@ -48,6 +48,7 @@ const instance = [
   "instance/usage",
   "instance/audit",
   "instance/jobs",
+  "instance/operations",
   "instance/modules",
   "instance/infrastructure"
 ];
@@ -104,7 +105,7 @@ describe("Settings catalog", () => {
     ["users.manage", ["instance/users", "instance/access", "instance/infrastructure"]],
     ["api_access.manage", ["instance/api-access"]],
     ["usage.view", ["instance/usage"]],
-    ["audit.view", ["instance/audit", "instance/jobs", "instance/modules"]]
+    ["audit.view", ["instance/audit", "instance/jobs", "instance/operations", "instance/modules"]]
   ])("shows the pages behind %s exactly to its holders", (permission, pages) => {
     expect(pageIds(viewer({ permissions: [permission] }))).toEqual([...you, ...pages]);
     for (const other of ["users.manage", "api_access.manage", "usage.view", "audit.view"]) {

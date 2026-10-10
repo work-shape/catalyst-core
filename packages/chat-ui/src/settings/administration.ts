@@ -13,6 +13,7 @@ import { InfrastructurePage } from "./pages/infrastructure";
 import { BuildPage } from "./pages/build";
 import { JobsPage } from "./pages/jobs";
 import { ModulesPage } from "./pages/modules";
+import { OperationsPage } from "./pages/operations";
 import { UsagePage } from "./pages/usage";
 import { UsersPage } from "./pages/users";
 
@@ -69,6 +70,14 @@ export const administration: ChatShellAdministration = {
       width: "wide",
       visible: (viewer) => canViewAudit(viewer.user),
       component: JobsPage
+    },
+    {
+      id: "operations",
+      group: "instance",
+      labelKey: "operations.title",
+      width: "wide",
+      visible: (viewer) => canViewAudit(viewer.user),
+      component: OperationsPage
     },
     {
       id: "modules",
