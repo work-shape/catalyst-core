@@ -22,6 +22,12 @@ export interface NavItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    * `className` then styles the row around the item and the slot.
    */
   trailing?: ReactNode;
+  /**
+   * The trailing slot keeps its room while it is unseen. For a row whose label ends in a mark
+   * that shows at rest: the mark then neither lies under the unseen actions nor moves when they
+   * appear, so the pointer reaches it.
+   */
+  trailingKeepsRoom?: boolean;
   /** Renders the single child, a link element, as the item; what is inside it is the label. */
   asChild?: boolean;
 }
@@ -38,6 +44,7 @@ export function NavItem({
   countTone = "primary",
   shortcut,
   trailing,
+  trailingKeepsRoom = false,
   asChild = false,
   type = "button",
   children,
@@ -100,7 +107,14 @@ export function NavItem({
         )}
       >
         {item}
-        <span className={trailingSlotClassName}>{trailing}</span>
+        <span
+          className={cn(
+            trailingSlotClassName,
+            trailingKeepsRoom ? undefined : trailingSlotOutOfFlowClassName
+          )}
+        >
+          {trailing}
+        </span>
       </div>
     );
   }
@@ -117,14 +131,23 @@ export function NavItem({
   );
 }
 
-// Out of the flow and unseen until the row is hovered, holds the focus, has an open menu or is
-// on a touch screen. What is in it stays in the tab order all the time.
+// Unseen until the row is hovered, holds the focus, has an open menu or is on a touch screen.
+// What is in it stays in the tab order all the time.
 const trailingSlotClassName = cn(
-  "absolute right-0.5 flex shrink-0 items-center gap-0.5 pr-0.5 text-muted-foreground opacity-0",
-  "group-hover/nav-item:static group-hover/nav-item:opacity-100",
-  "group-focus-within/nav-item:static group-focus-within/nav-item:opacity-100",
-  "has-[[aria-expanded=true]]:static has-[[aria-expanded=true]]:opacity-100",
-  "pointer-coarse:static pointer-coarse:opacity-100"
+  "flex shrink-0 items-center gap-0.5 pr-0.5 text-muted-foreground opacity-0",
+  "group-hover/nav-item:opacity-100",
+  "group-focus-within/nav-item:opacity-100",
+  "has-[[aria-expanded=true]]:opacity-100",
+  "pointer-coarse:opacity-100"
+);
+
+// While unseen the slot is also out of the flow, so the label has the whole row.
+const trailingSlotOutOfFlowClassName = cn(
+  "absolute right-0.5",
+  "group-hover/nav-item:static",
+  "group-focus-within/nav-item:static",
+  "has-[[aria-expanded=true]]:static",
+  "pointer-coarse:static"
 );
 
 export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {

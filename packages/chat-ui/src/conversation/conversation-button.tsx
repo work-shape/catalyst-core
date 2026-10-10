@@ -239,6 +239,8 @@ export function ConversationButton({
             selected={selected}
             aria-describedby={expiryLabel ? expiryHintId : undefined}
             trailing={options}
+            // The clock shows at rest at the end of the label, where the row's menu appears.
+            trailingKeepsRoom={Boolean(expiryLabel)}
             onClick={() => {
               onExpiryHintEvent("dismiss");
               onSelect();

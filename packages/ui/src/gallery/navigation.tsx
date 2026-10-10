@@ -225,6 +225,19 @@ function NavItemSamples({ text }: { text: GalleryText }) {
               {title}
             </NavItem>
           ))}
+          <NavItem
+            trailingKeepsRoom
+            trailing={
+              <IconButton size="sm" label={text.navRowMore}>
+                <Ellipsis aria-hidden="true" />
+              </IconButton>
+            }
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="min-w-0 truncate">{text.navConversationOffer}</span>
+              <Clock aria-hidden="true" className="size-3.5 text-warning" />
+            </span>
+          </NavItem>
         </NavGroup>
       </div>
       <div className="grid w-full max-w-(--layout-sidebar) content-start gap-4">

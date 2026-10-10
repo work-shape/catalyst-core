@@ -2051,7 +2051,9 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   page
 }) => {
   await signInViaApi(page, normalUser);
-  const title = `Retention hint ${Date.now()}`;
+  // Longer than the rail is wide in any font: the clock then stands at the end of the row,
+  // where the row's menu appears.
+  const title = `Retention hint for a conversation with a long title ${Date.now()}`;
   const { id } = await createListedConversation(page, title);
   const retainedUntil = await showRetentionDates(page, id, { extendOnActivity: true });
   const sentence = `Will be deleted automatically on ${new Intl.DateTimeFormat("en", {
@@ -2078,6 +2080,17 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   const color = (locator: Locator) =>
     locator.evaluate((element) => getComputedStyle(element).color);
   expect(await color(clock)).not.toBe(await color(row.getByText(title, { exact: true })));
+
+  // The row's menu shows beside the clock, not over it, and the clock stays where it was.
+  const menuButton = row.getByRole("button", {
+    name: `Conversation options for ${title}`,
+    exact: true
+  });
+  const clockAtRest = await clock.boundingBox();
+  await rowButton.hover({ position: { x: 12, y: 12 } });
+  await expect(menuButton).toBeVisible();
+  expect(await clock.boundingBox()).toEqual(clockAtRest);
+  await page.getByPlaceholder("Message").hover();
 
   await clock.hover();
   await expect(hint).toBeVisible();
@@ -2114,7 +2127,7 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   await expect(hint).toHaveCount(0);
 
   // Touch has neither hover nor keyboard focus: the row menu says the same.
-  await row.getByRole("button", { name: `Conversation options for ${title}`, exact: true }).click();
+  await menuButton.click();
   await expect(page.getByTestId("conversation-expiry-menu-hint")).toHaveText(sentence);
 });
 

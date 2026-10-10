@@ -542,6 +542,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 - **Audit:** the audit event for the end of a run (`message.completed`, `message.failed`,
   `message.cancelled`) is written before the run's event stream announces that end. It was
   written beside the stream, so a reader of the audit right after the end could miss it.
+- **Conversation rail:** the retention clock of a conversation with a long title can be reached
+  with the pointer. The clock stood at the end of the row under the row's menu button, unseen
+  until the row is hovered, and moved aside when the button appeared. A row with a clock now
+  keeps the room for its menu button, so the clock stays where it is. `NavItem` takes
+  `trailingKeepsRoom` for this.
 - **Chat:** a conversation opened while another one is answering shows only its own messages.
   Until its thread arrives it is empty, where it used to show the messages and the partial
   answer of the conversation left behind, and the page no longer asks for that conversation's
