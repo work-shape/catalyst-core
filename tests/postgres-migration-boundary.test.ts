@@ -2,7 +2,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import postgres from "postgres";
-import { afterEach, describe, expect, inject, it } from "vitest";
+import { afterEach, describe, expect, inject, it, vi } from "vitest";
 import { createPlatformStore } from "@vivd-catalyst/client-assembly";
 import { migrateDatabase } from "@vivd-catalyst/postgres-store";
 import { PostgresFixtures } from "./support/postgres-fixtures";
@@ -129,9 +129,12 @@ describe("the migration boundary", () => {
     try {
       await holder`select pg_advisory_lock(hashtextextended('vivd-catalyst:postgres-store:migrations', 0))`;
       let settled = false;
-      const migration = migrateDatabase({ databaseUrl }).finally(() => {
-        settled = true;
-      });
+      const lines: string[] = [];
+      const migration = migrateDatabase({ databaseUrl, log: (line) => lines.push(line) }).finally(
+        () => {
+          settled = true;
+        }
+      );
       // The run asks for the lock again every 100 ms and holds no statement open meanwhile: a
       // session blocked in pg_advisory_lock would deadlock with a concurrent index build.
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -140,6 +143,16 @@ describe("the migration boundary", () => {
       ).toHaveLength(0);
       expect(settled).toBe(false);
       expect(await schemaObjects(databaseUrl)).toEqual([]);
+      // It says once that it waits, and again every 30 seconds: here the clock is moved on.
+      expect(lines).toEqual(["Waiting for the migration lock: another migration step holds it."]);
+      const realNow = Date.now.bind(Date);
+      const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + 31_000);
+      try {
+        await vi.waitFor(() => expect(lines).toHaveLength(2));
+      } finally {
+        clock.mockRestore();
+      }
+      expect(lines[1]).toMatch(/^Still waiting for the migration lock after 3[12] s\.$/u);
       await holder`select pg_advisory_unlock(hashtextextended('vivd-catalyst:postgres-store:migrations', 0))`;
       expect(await migration).toEqual(committed);
     } finally {
@@ -214,6 +227,48 @@ describe("the migration boundary", () => {
           sql`select to_regclass('probe')::text as probe, to_regclass('half_applied')::text as half_applied`
       )
     ).toEqual([{ probe: "probe", half_applied: null }]);
+    expect(await applied(databaseUrl)).toEqual([1]);
+  });
+
+  /** Ends the backend that runs `marker` once it shows up, as a failover or an operator would. */
+  async function terminateBackendRunning(databaseUrl: string, marker: string): Promise<void> {
+    await read(databaseUrl, async (sql) => {
+      for (;;) {
+        const ended = await sql<{ ended: boolean }[]>`
+          select pg_terminate_backend(pid) as ended from pg_stat_activity
+          where pid <> pg_backend_pid() and state = 'active' and query like ${`%${marker}%`}
+        `;
+        if (ended.length > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    });
+  }
+
+  // Fails without the guarded cleanup: the rollback and the unlock were sent to the dead session,
+  // the driver threw a TypeError outside every promise, and the run never settled.
+  it.each([
+    ["in its transaction", "select pg_sleep(60) /* cut_in_transaction */;"],
+    [
+      "in a concurrent index build",
+      "create index concurrently if not exists cut_idx on probe (id);--> statement-breakpoint\nselect pg_sleep(60) /* cut_in_build */;"
+    ]
+  ])("names the migration whose connection the server ended %s", async (_where, statement) => {
+    const databaseUrl = await emptyDatabase("connection-cut");
+    const migrationsDirectory = migrations({
+      "0000_table": "create table probe (id text primary key);",
+      "0001_cut": statement
+    });
+    const run = migrateDatabase({ databaseUrl, migrationsDirectory });
+    const outcome = run.then(
+      () => undefined,
+      (error: unknown) => error
+    );
+    await terminateBackendRunning(databaseUrl, "pg_sleep(60) /* cut_in_");
+    const error = await outcome;
+    expect(error).toBeInstanceOf(Error);
+    expect(error instanceof Error ? error.message : "").toMatch(
+      /^Migration 0001_cut failed: the database connection ended \((?:CONNECTION_CLOSED|PostgresError): /u
+    );
     expect(await applied(databaseUrl)).toEqual([1]);
   });
 

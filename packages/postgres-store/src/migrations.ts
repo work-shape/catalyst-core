@@ -32,6 +32,8 @@ export interface MigrateDatabaseInput {
   databaseUrl: string;
   /** Defaults to the migrations committed with this package. */
   migrationsDirectory?: string;
+  /** Takes the lines a run says while it waits. Defaults to the standard error stream. */
+  log?(line: string): void;
 }
 
 /**
@@ -42,12 +44,16 @@ export interface MigrateDatabaseInput {
 export async function migrateDatabase(input: MigrateDatabaseInput): Promise<string[]> {
   const migrations = readCommittedMigrations(input.migrationsDirectory);
   const pool = postgres(input.databaseUrl, { max: 1, onnotice() {} });
+  const log = input.log ?? ((line: string) => void process.stderr.write(`${line}\n`));
+  // A session the server ended takes no further statement and gave the lock back when it ended.
+  // The driver would wait without end for such a connection to close in good order.
+  let sessionEnded = false;
   try {
     // The advisory lock belongs to a session. The pool may replace its connection after the
     // connection's lifetime; a reserved one stays with this run until it is released.
     const session = await pool.reserve();
     try {
-      await takeMigrationLock(session);
+      await takeMigrationLock(session, log);
       try {
         await session.unsafe("create schema if not exists drizzle");
         await session.unsafe(`
@@ -64,29 +70,57 @@ export async function migrateDatabase(input: MigrateDatabaseInput): Promise<stri
           try {
             await applyMigration(session, migration);
           } catch (error) {
-            throw new Error(
-              `Migration ${migration.name} failed: ${error instanceof Error ? error.message : String(error)}`,
-              { cause: error }
-            );
+            sessionEnded = endsSession(error);
+            throw new Error(`Migration ${migration.name} failed: ${describeCause(error)}`, {
+              cause: error
+            });
           }
           applied.push(migration.name);
         }
         return applied;
       } finally {
-        await session.unsafe("select pg_advisory_unlock(hashtextextended($1, 0))", [
-          migrationLockKey
-        ]);
+        if (!sessionEnded)
+          await session.unsafe("select pg_advisory_unlock(hashtextextended($1, 0))", [
+            migrationLockKey
+          ]);
       }
     } finally {
       session.release();
     }
   } finally {
-    await pool.end();
+    await pool.end(sessionEnded ? { timeout: 0 } : undefined);
   }
+}
+
+/**
+ * Whether a failure took the session with it: the server ended the connection (a failover, an
+ * operator, a crash) or the socket broke. Only an ordinary statement error leaves a session that
+ * can roll back and unlock; the driver throws outside every promise when it is given a statement
+ * for a connection that is gone.
+ */
+function endsSession(error: unknown): boolean {
+  if (error instanceof postgres.PostgresError) return error.severity !== "ERROR";
+  // The driver's own failures and socket errors carry a code; the runner's own do not.
+  return error instanceof Error && "code" in error;
+}
+
+/**
+ * The cause with its class: the error's own class, or the code of a driver failure, which is a
+ * plain `Error`. A lost connection says so, so that it does not read like a statement that
+ * failed.
+ */
+function describeCause(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+  const causeClass = error.name === "Error" ? code : error.name;
+  const cause = causeClass === undefined ? error.message : `${causeClass}: ${error.message}`;
+  return endsSession(error) ? `the database connection ended (${cause})` : cause;
 }
 
 /** How long a caller waits before it asks for the migration lock again. */
 const MIGRATION_LOCK_RETRY_MS = 100;
+/** How often a caller that waits for the migration lock says that it still waits. */
+const MIGRATION_LOCK_WAIT_LOG_MS = 30_000;
 
 /**
  * Waits for the advisory lock by asking again instead of blocking in one statement. A session
@@ -94,13 +128,25 @@ const MIGRATION_LOCK_RETRY_MS = 100;
  * build of the run that holds the lock waits for every older snapshot to end: the two would
  * wait for each other and Postgres would stop one with a deadlock.
  */
-async function takeMigrationLock(session: Queries): Promise<void> {
+async function takeMigrationLock(session: Queries, log: (line: string) => void): Promise<void> {
+  const startedAt = Date.now();
+  let nextLogAt = startedAt;
   for (;;) {
     const [row] = await session.unsafe(
       "select pg_try_advisory_lock(hashtextextended($1, 0)) as locked",
       [migrationLockKey]
     );
     if (row?.locked === true) return;
+    const now = Date.now();
+    if (now >= nextLogAt) {
+      const waitedSeconds = Math.round((now - startedAt) / 1000);
+      log(
+        nextLogAt === startedAt
+          ? "Waiting for the migration lock: another migration step holds it."
+          : `Still waiting for the migration lock after ${waitedSeconds} s.`
+      );
+      nextLogAt = now + MIGRATION_LOCK_WAIT_LOG_MS;
+    }
     await new Promise((resolve) => setTimeout(resolve, MIGRATION_LOCK_RETRY_MS));
   }
 }
@@ -166,7 +212,7 @@ async function applyMigration(session: Queries, migration: CommittedMigration): 
       await record();
       await session.unsafe("commit");
     } catch (error) {
-      await session.unsafe("rollback");
+      if (!endsSession(error)) await session.unsafe("rollback");
       throw error;
     }
     return;
