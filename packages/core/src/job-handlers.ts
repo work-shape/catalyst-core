@@ -67,6 +67,7 @@ export interface BoundJob {
 /** A handler as a worker holds it, whatever its payload type. */
 export interface RegisteredJobHandler {
   readonly kind: JobKind;
+  /** Zero for a burial: the worker claims no job of the kind and only buries its dead ones. */
   readonly slots: number;
   /** Validates the stored payload against the kind's schema. Throws when it does not fit. */
   bind(job: Job): BoundJob;
@@ -97,6 +98,34 @@ export function defineJobHandler<Payload extends JsonObject>(
         ...(onHeartbeat
           ? { onHeartbeat: (lease, stores) => onHeartbeat(typed, lease, stores) }
           : {})
+      };
+    }
+  };
+}
+
+/**
+ * Registers the burial of a kind without its execution. The worker of the process claims no
+ * job of the kind; it marks those dead whose lease ran out on their last attempt and runs
+ * `onExhausted` for each, as a worker that executes the kind does. A process that does not
+ * execute a kind registers this so that what the kind's dead jobs left behind is ended while
+ * no executing process is up. Jobs with attempts left wait for a process that executes them.
+ */
+export function defineJobBurial<Payload extends JsonObject>(burial: {
+  kind: JobKind<Payload>;
+  onExhausted(job: Job<Payload>, stores: PlatformStores): Promise<void>;
+}): RegisteredJobHandler {
+  return {
+    kind: burial.kind,
+    slots: 0,
+    bind(job) {
+      const typed: Job<Payload> = {
+        ...job,
+        payload: burial.kind.payloadSchema.parse(job.payload)
+      };
+      return {
+        run: () =>
+          Promise.reject(new AppError("INTERNAL", `'${burial.kind.kind}' is only buried here`)),
+        onExhausted: (stores) => burial.onExhausted(typed, stores)
       };
     }
   };

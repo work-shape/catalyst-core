@@ -351,14 +351,17 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       const kind = handler.kind.kind;
       if (!withWork.has(kind)) continue;
       try {
-        const running = [...active.values()].filter((job) => job.kind === kind).length;
-        const rows = await claimJobs(db, {
-          clientInstanceId,
-          kind: handler.kind,
-          workerId,
-          limit: handler.slots - running
-        });
-        for (const row of rows) started.push(run(handler, row));
+        // A burial has no slots: this process claims nothing of the kind.
+        if (handler.slots > 0) {
+          const running = [...active.values()].filter((job) => job.kind === kind).length;
+          const rows = await claimJobs(db, {
+            clientInstanceId,
+            kind: handler.kind,
+            workerId,
+            limit: handler.slots - running
+          });
+          for (const row of rows) started.push(run(handler, row));
+        }
         await buryExhausted(handler);
       } catch (error) {
         logger.error({ ...describeWithoutMessage(error), kind }, "Job poll failed for a kind");
