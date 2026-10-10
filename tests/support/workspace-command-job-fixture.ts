@@ -94,9 +94,8 @@ export function useWorkspaceCommandJobFixture(
       resultPollIntervalMs: 5,
       now
     });
-    const request = (command: string, target = workspace): CommandRequest => ({
+    const request = (command: string): CommandRequest => ({
       clientInstanceId,
-      workspaceId: target.id,
       ownerUserId,
       command,
       limits: { timeoutSeconds: 60, idleTimeoutSeconds: 60 }
@@ -110,7 +109,8 @@ export function useWorkspaceCommandJobFixture(
       request,
       async enqueue(command, stores = db.store, target = workspace) {
         const queued = await createWorkspaceCommandClient({ stores, now }).enqueue(
-          request(command, target)
+          { kind: "execution_workspace", id: target.id },
+          request(command)
         );
         return queued.command;
       },
@@ -163,7 +163,7 @@ export interface WorkspaceCommandJobFixture {
   commandRootDirectory: string;
   executor: ControlledExecutor;
   client: ReturnType<typeof createWorkspaceCommandClient>;
-  request(command: string, workspace?: ExecutionWorkspace): CommandRequest;
+  request(command: string): CommandRequest;
   enqueue(
     command: string,
     stores?: Pick<PlatformStores, "executionWorkspaces" | "transaction">,
@@ -174,7 +174,7 @@ export interface WorkspaceCommandJobFixture {
   worker(options?: Partial<WorkspaceCommandJobsOptions>, serve?: { schedules: boolean }): JobWorker;
 }
 
-type CommandRequest = Parameters<ReturnType<typeof createWorkspaceCommandClient>["enqueue"]>[0];
+type CommandRequest = Parameters<ReturnType<typeof createWorkspaceCommandClient>["enqueue"]>[1];
 
 interface Execution extends WorkspaceCommandProcessInput {
   complete(result: ProcessResult): void;

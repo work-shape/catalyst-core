@@ -65,7 +65,7 @@ export async function promoteWorkspaceArtifact(
         mimeType,
         metadata: {
           source: "execution_workspace",
-          workspaceId: file.value.workspaceId,
+          workspaceId: file.value.handle.id,
           workspacePath: file.value.file.path,
           byteSize: file.value.file.byteSize,
           checksum: file.value.file.checksum

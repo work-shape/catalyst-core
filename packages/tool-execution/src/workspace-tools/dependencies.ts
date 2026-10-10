@@ -6,7 +6,8 @@ import type {
   ObjectStorage,
   PlatformStores,
   ToolExecutionContext,
-  WorkspaceCommand
+  WorkspaceCommand,
+  WorkspaceHandleResolver
 } from "@vivd-catalyst/core";
 import {
   createWorkspaceCommandClient,
@@ -14,6 +15,7 @@ import {
 } from "../workspace-command-client";
 import type { WorkspaceCommandTelemetry } from "../workspace-command-telemetry";
 import { DEFAULT_LIMITS, type WorkspaceCommandServiceLimits } from "../workspace-tool-schemas";
+import { createExecutionWorkspaceHandleResolver } from "./workspace-handle-resolver";
 
 export type WorkspaceToolStore = Pick<PlatformStores, "files" | "executionWorkspaces">;
 
@@ -59,6 +61,7 @@ export interface WorkspaceCommandServiceOptions {
 export interface WorkspaceToolDependencies {
   readonly store: Pick<PlatformStores, "files" | "executionWorkspaces">;
   readonly commands: WorkspaceCommandClient;
+  readonly workspaces: WorkspaceHandleResolver;
   readonly objectStore?: ObjectStorage;
   readonly fileStore?: ObjectStorage;
   readonly sourceFileReader?: WorkspaceSourceFileReader;
@@ -75,6 +78,10 @@ export function resolveWorkspaceToolDependencies(
   const now = options.now ?? (() => new Date().toISOString());
   return {
     store: options.store,
+    workspaces: createExecutionWorkspaceHandleResolver({
+      store: options.store.executionWorkspaces,
+      now
+    }),
     commands: createWorkspaceCommandClient({
       stores: options.store,
       resultWaitMs: options.execResultWaitMs,

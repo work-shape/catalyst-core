@@ -11,6 +11,7 @@ export {
 export * from "./workspace-paths";
 export * from "./workspace-file-bytes";
 export * from "./workspace-command-client";
+export { createExecutionWorkspaceHandleResolver } from "./workspace-tools/workspace-handle-resolver";
 export * from "./workspace-command-executor";
 export * from "./workspace-command-kind";
 export * from "./workspace-command-runner";

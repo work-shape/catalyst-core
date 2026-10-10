@@ -10,6 +10,7 @@ import type {
 import type { ManagedArtifactImagePagesPreview, SubjectRowClaim } from "./files";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
+import type { ToolExecutionContext } from "./tool-execution";
 
 export type ExecutionWorkspaceStatus = "active" | "deleted";
 
@@ -18,6 +19,19 @@ export type ExecutionWorkspaceStatus = "active" | "deleted";
  * conversation is the only kind today.
  */
 export type WorkspaceHandle = { kind: "execution_workspace"; id: ExecutionWorkspaceId };
+
+/** The workspace record's conversation is attribution and retention, never the address. */
+export interface ResolvedWorkspaceHandle {
+  readonly handle: WorkspaceHandle;
+  readonly conversationId: ConversationId;
+}
+
+export interface WorkspaceHandleResolver {
+  /** Undefined when the call carries no tool request to resolve a workspace from. */
+  resolveWorkspaceHandle(
+    context: ToolExecutionContext
+  ): Promise<ResolvedWorkspaceHandle | undefined>;
+}
 
 export interface ExecutionWorkspace {
   id: ExecutionWorkspaceId;

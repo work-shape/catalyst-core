@@ -3,14 +3,18 @@ import {
   type ISODateString,
   type PlatformStores,
   type WorkspaceCommand,
+  type WorkspaceHandle,
   isAppError
 } from "@vivd-catalyst/core";
 import { runWorkspaceCommandJob, workspaceCommandJobOptions } from "./workspace-command-kind";
 
 const DEFAULT_RESULT_POLL_INTERVAL_MS = 500;
 
-/** A command to queue. The client sets the time it was queued. */
-export type WorkspaceCommandRequest = Omit<EnqueueWorkspaceCommandInput, "queuedAt">;
+/** A command to queue. The client sets its workspace id and the time it was queued. */
+export type WorkspaceCommandRequest = Omit<
+  EnqueueWorkspaceCommandInput,
+  "workspaceId" | "queuedAt"
+>;
 
 /** A queued command as its caller last saw it. */
 export interface WorkspaceCommandHandle {
@@ -42,7 +46,10 @@ export type WorkspaceCommandResult =
  */
 export interface WorkspaceCommandClient {
   /** Queues the command. A workspace that cannot take it rejects with a `CONFLICT` AppError. */
-  enqueue(command: WorkspaceCommandRequest): Promise<WorkspaceCommandHandle>;
+  enqueue(
+    handle: WorkspaceHandle,
+    command: WorkspaceCommandRequest
+  ): Promise<WorkspaceCommandHandle>;
   await(
     handle: WorkspaceCommandHandle,
     wait: WorkspaceCommandWait
@@ -107,10 +114,11 @@ export function createWorkspaceCommandClient(
   }
 
   return {
-    async enqueue(command) {
+    async enqueue(handle, command) {
       return stores.transaction(async (tx) => {
         const queued = await tx.executionWorkspaces.enqueueWorkspaceCommand({
           ...command,
+          workspaceId: handle.id,
           queuedAt: now()
         });
         await tx.jobs.enqueue(

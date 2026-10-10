@@ -1,26 +1,17 @@
-import {
-  type ConversationId,
-  type ExecutionWorkspaceId,
-  type ToolExecutionContext,
-  type WorkspaceHandle,
-  type WorkspaceFile,
-  getRuntimeSubjectUserId
+import type {
+  ResolvedWorkspaceHandle,
+  ToolExecutionContext,
+  WorkspaceHandle,
+  WorkspaceFile
 } from "@vivd-catalyst/core";
 import { failed, failedValidationResult, type ValidationResult } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
-
-/** The handle a tool addresses, with the conversation its workspace record names. */
-interface ResolvedWorkspace {
-  readonly handle: WorkspaceHandle;
-  /** Attribution for the rows and objects a tool writes; never the address. */
-  readonly conversationId: ConversationId;
-}
 
 export async function findWorkspaceFile(
   deps: WorkspaceToolDependencies,
   context: ToolExecutionContext,
   filePath: string
-): Promise<ValidationResult<{ file: WorkspaceFile; workspaceId: ExecutionWorkspaceId }>> {
+): Promise<ValidationResult<{ file: WorkspaceFile; handle: WorkspaceHandle }>> {
   const workspace = await resolveWorkspaceHandle(deps, context);
   if (workspace.status === "failed") {
     return workspace;
@@ -40,31 +31,22 @@ export async function findWorkspaceFile(
     status: "success",
     value: {
       file,
-      workspaceId: workspace.value.handle.id
+      handle: workspace.value.handle
     }
   };
 }
 
-/** Ensures the Execution Workspace of the tool call's conversation and returns its handle. */
+/** Resolves the workspace handle or returns the tool's missing request failure. */
 export async function resolveWorkspaceHandle(
   deps: WorkspaceToolDependencies,
   context: ToolExecutionContext
-): Promise<ValidationResult<ResolvedWorkspace>> {
-  const conversationId = context.toolRequest?.conversationId;
-  if (!conversationId) {
+): Promise<ValidationResult<ResolvedWorkspaceHandle>> {
+  const workspace = await deps.workspaces.resolveWorkspaceHandle(context);
+  if (!workspace) {
     return failedValidationResult("Workspace tools require an active tool request");
   }
-  const workspace = await deps.store.executionWorkspaces.ensureExecutionWorkspace({
-    clientInstanceId: context.clientInstanceId,
-    conversationId,
-    ownerUserId: getRuntimeSubjectUserId(context),
-    now: deps.now()
-  });
   return {
     status: "success",
-    value: {
-      handle: { kind: "execution_workspace", id: workspace.id },
-      conversationId: workspace.conversationId
-    }
+    value: workspace
   };
 }

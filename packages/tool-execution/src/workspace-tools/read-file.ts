@@ -63,7 +63,7 @@ export async function readWorkspaceFile(
   const preview = boundTextByBytes(decoded.value, deps.limits.maxReadPreviewBytes);
   return toolSuccess(
     {
-      workspaceId: file.value.workspaceId,
+      workspaceId: file.value.handle.id,
       path: file.value.file.path,
       byteSize: file.value.file.byteSize,
       mimeType: file.value.file.mimeType,

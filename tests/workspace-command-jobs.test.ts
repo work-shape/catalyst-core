@@ -163,7 +163,10 @@ describe("workspace commands on the job executor", () => {
 
   it("ends the process of a cancelled command and frees the workspace for the next one", async () => {
     const fixture = await createFixture("cancel", { realProcesses: true });
-    const handle = await fixture.client.enqueue(fixture.request("sleep 60"));
+    const handle = await fixture.client.enqueue(
+      { kind: "execution_workspace", id: fixture.workspace.id },
+      fixture.request("sleep 60")
+    );
     const worker = fixture.worker({
       cancellationCheckIntervalMs: WORKSPACE_COMMAND_CANCELLATION_CHECK_INTERVAL_MS
     });
@@ -201,7 +204,10 @@ describe("workspace commands on the job executor", () => {
 
   it("ends the job of a command that was cancelled before it started, without a process", async () => {
     const fixture = await createFixture("cancel_queued");
-    const handle = await fixture.client.enqueue(fixture.request("sleep 60"));
+    const handle = await fixture.client.enqueue(
+      { kind: "execution_workspace", id: fixture.workspace.id },
+      fixture.request("sleep 60")
+    );
     const stopped = new AbortController();
     stopped.abort();
 
@@ -327,7 +333,10 @@ describe("workspace commands on the job executor", () => {
 
   it("records the result of a command that was stopped after its process had ended", async () => {
     const fixture = await createFixture("late_stop");
-    const handle = await fixture.client.enqueue(fixture.request("printf done"));
+    const handle = await fixture.client.enqueue(
+      { kind: "execution_workspace", id: fixture.workspace.id },
+      fixture.request("printf done")
+    );
     // The handler does not look at the row again before the process ends, as when the Stop
     // lands between the end of the process and the write of its result.
     const worker = fixture.worker({ cancellationCheckIntervalMs: 60 * 60 * 1000 });

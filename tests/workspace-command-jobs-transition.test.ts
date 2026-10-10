@@ -19,9 +19,10 @@ describe("workspace command jobs beside an API and a worker of the previous rele
   it("gives a job to a command the previous release queued without one, once", async () => {
     const fixture = await createFixture("adopt");
     // The previous release's API writes the row and knows nothing of jobs.
-    const queued = await db.store.executionWorkspaces.enqueueWorkspaceCommand(
-      fixture.request("printf adopted")
-    );
+    const queued = await db.store.executionWorkspaces.enqueueWorkspaceCommand({
+      ...fixture.request("printf adopted"),
+      workspaceId: fixture.workspace.id
+    });
     const worker = fixture.worker({}, { schedules: true });
 
     await worker.runDue();

@@ -6,6 +6,7 @@ import {
   type ArtifactPreviewLifecyclePageRef,
   type ArtifactPreviewModelImageRef,
   type ClientInstanceId,
+  type ConversationId,
   type JsonObject,
   type ManagedArtifactId,
   type ManagedArtifactRecord,
@@ -42,6 +43,7 @@ type WorkspacePreviewImagesStore = Pick<
 export interface ResolveWorkspacePreviewImagesOptions {
   store: WorkspacePreviewImagesStore;
   maxImages: number;
+  conversationId: ConversationId | undefined;
 }
 
 interface PreviewImageCandidate {
@@ -71,8 +73,7 @@ export async function resolveWorkspacePreviewImages(
   context: ToolExecutionContext,
   options: ResolveWorkspacePreviewImagesOptions
 ): Promise<ToolHandlerResult<WorkspacePreviewImagesOutput>> {
-  const conversationId = context.toolRequest?.conversationId;
-  if (!conversationId) {
+  if (!context.toolRequest) {
     return failed("handler_failed", "workspace.preview_images requires an active tool request");
   }
   if (!input.artifactId) {
@@ -86,7 +87,7 @@ export async function resolveWorkspacePreviewImages(
     clientInstanceId: context.clientInstanceId,
     artifactId: asManagedArtifactId(input.artifactId)
   });
-  if (!source || source.conversationId !== conversationId || source.status !== "available") {
+  if (!source || source.conversationId !== options.conversationId || source.status !== "available") {
     return failed("handler_failed", "Managed artifact is not available in this conversation", {
       artifactId: input.artifactId
     });

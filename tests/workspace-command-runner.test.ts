@@ -1197,20 +1197,22 @@ async function createRunnerHarness(
       const queued = await createWorkspaceCommandClient({
         stores: store,
         now: () => new Date().toISOString()
-      }).enqueue({
-        clientInstanceId,
-        workspaceId: workspace.id,
-        ownerUserId,
-        command,
-        limits: {
-          timeoutSeconds: 5,
-          idleTimeoutSeconds: 5,
-          maxStdoutBytes: 64 * 1024,
-          maxStderrBytes: 64 * 1024,
-          maxWorkspaceBytes: 100 * 1024 * 1024,
-          ...limits
+      }).enqueue(
+        { kind: "execution_workspace", id: workspace.id },
+        {
+          clientInstanceId,
+          ownerUserId,
+          command,
+          limits: {
+            timeoutSeconds: 5,
+            idleTimeoutSeconds: 5,
+            maxStdoutBytes: 64 * 1024,
+            maxStderrBytes: 64 * 1024,
+            maxWorkspaceBytes: 100 * 1024 * 1024,
+            ...limits
+          }
         }
-      });
+      );
       return queued.command;
     },
     async commandExecutionDirectories() {

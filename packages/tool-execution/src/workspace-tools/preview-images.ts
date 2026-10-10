@@ -42,9 +42,13 @@ export async function previewWorkspaceImages(
   if (input.path || input.paths) {
     return previewWorkspaceImagePaths(deps, input, context);
   }
+  const workspace = input.artifactId
+    ? await deps.workspaces.resolveWorkspaceHandle(context)
+    : undefined;
   return resolveWorkspacePreviewImages(input, context, {
     store: deps.store.files,
-    maxImages: deps.limits.maxPreviewImages
+    maxImages: deps.limits.maxPreviewImages,
+    conversationId: workspace?.conversationId
   });
 }
 

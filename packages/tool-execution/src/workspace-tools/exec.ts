@@ -1,13 +1,13 @@
 import type { z } from "zod";
 import {
   type ClientInstanceId,
-  type ExecutionWorkspaceId,
   type JsonObject,
   type ToolExecutionContext,
   type ToolHandlerResult,
   type WorkspaceCommand,
   type WorkspaceCommandLimits,
   type WorkspaceExpectedOutput,
+  type WorkspaceHandle,
   getRuntimeSubjectUserId,
   isAppError
 } from "@vivd-catalyst/core";
@@ -64,7 +64,7 @@ export async function execWorkspaceCommand(
     return workspace.result;
   }
 
-  const queued = await enqueueCommand(deps, context, workspace.value.handle.id, normalized.value);
+  const queued = await enqueueCommand(deps, context, workspace.value.handle, normalized.value);
   if (queued.status === "failed") {
     return queued.result;
   }
@@ -127,7 +127,7 @@ export async function execWorkspaceCommand(
 async function enqueueCommand(
   deps: WorkspaceToolDependencies,
   context: ToolExecutionContext,
-  workspaceId: ExecutionWorkspaceId,
+  handle: WorkspaceHandle,
   command: {
     command: string;
     cwd?: string;
@@ -138,9 +138,8 @@ async function enqueueCommand(
   try {
     return {
       status: "success",
-      value: await deps.commands.enqueue({
+      value: await deps.commands.enqueue(handle, {
         clientInstanceId: context.clientInstanceId,
-        workspaceId,
         ownerUserId: getRuntimeSubjectUserId(context),
         agentRunId: context.toolRequest?.agentRunId,
         toolCallId: context.toolRequest?.toolCallId,
