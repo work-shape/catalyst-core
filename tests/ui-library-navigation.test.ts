@@ -135,6 +135,16 @@ describe("navigation, page structure and data components", () => {
     expect(collapsed).toContain('<span class="sr-only">New chat</span>');
     // An item without an icon has nothing to show in the strip.
     expect(collapsed).not.toContain("No icon");
+
+    // Fails without the count on the collapsed item: it showed a dot that named no number.
+    const counted = render(
+      createElement(
+        Sidebar,
+        { label: "Main navigation", collapsed: true },
+        createElement(NavItem, { icon: createElement("svg"), count: 7 }, "Inbox")
+      )
+    );
+    expect(counted).toMatch(/absolute -top-0\.5 -right-0\.5[^>]*>7<\/span>/u);
   });
 
   it("links past the navigation without changing the address by itself", () => {
@@ -228,6 +238,17 @@ describe("navigation, page structure and data components", () => {
       createElement(ListRow, { title: "Row", selected: true, onClick: () => undefined })
     );
     expect(pressed).toMatch(/<button[^>]*aria-current="true"/u);
+
+    // Fails without `descriptionLeading`: the status line had no place for the person's mark.
+    const person = render(
+      createElement(ListRow, {
+        title: "Row",
+        description: "Ada via Agent",
+        descriptionLeading: "AV"
+      })
+    );
+    expect(person.indexOf("AV")).toBeGreaterThan(person.indexOf("Row"));
+    expect(person.indexOf("AV")).toBeLessThan(person.indexOf("Ada via Agent"));
 
     const unfolding = render(
       createElement(ListRow, { title: "Row", expandable: true, defaultExpanded: true }, "MORE")

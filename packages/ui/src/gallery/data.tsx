@@ -1,4 +1,4 @@
-import { Ellipsis, Search, SearchX } from "lucide-react";
+import { Ellipsis, FileText, Search, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
@@ -93,6 +93,20 @@ function ListRowSamples({ text }: { text: GalleryText }) {
             title={text.rowKnowledge}
             description={text.disabled}
             onClick={() => setSelected("knowledge")}
+          />
+        </List>
+      </Samples>
+      <Samples label={text.rowModeRequest}>
+        <List className="w-full" aria-label={text.rowListLabel}>
+          <ListRow
+            selected
+            leading={<FileText aria-hidden="true" className="size-4 text-muted-foreground" />}
+            title={text.rowRequest}
+            description={text.rowRequestBy}
+            descriptionLeading={<Avatar kind="person" size="xs" name={text.rowPerson} />}
+            chips={<Badge size="sm">{text.rowRequestState}</Badge>}
+            time={text.today}
+            onClick={() => undefined}
           />
         </List>
       </Samples>

@@ -12,6 +12,7 @@ export interface NavItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   /** The item is where the reader is: the selection fill and medium weight. */
   selected?: boolean;
+  /** How many things wait behind the item. A collapsed sidebar shows it on the icon's corner. */
   count?: number;
   countTone?: CountBadgeTone;
   /** The keys that do the same. A collapsed item shows them in its tooltip. */
@@ -72,7 +73,7 @@ export function NavItem({
       {icon}
       <span className="sr-only">{label}</span>
       {count !== undefined && count > 0 ? (
-        <CountBadge dot tone={countTone} className="absolute top-1 right-1" />
+        <CountBadge count={count} tone={countTone} className="absolute -top-0.5 -right-0.5" />
       ) : null}
     </>
   ) : (

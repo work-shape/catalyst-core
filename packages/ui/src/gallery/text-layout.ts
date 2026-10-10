@@ -112,6 +112,10 @@ export interface LayoutGalleryText {
   rowModeLink: string;
   rowModeButton: string;
   rowModeExpandable: string;
+  rowModeRequest: string;
+  rowRequest: string;
+  rowRequestBy: string;
+  rowRequestState: string;
   rowModeCompact: string;
   rowModeDefault: string;
   rowExpandedBody: string;
@@ -256,6 +260,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     rowModeLink: "As a link",
     rowModeButton: "As a button, selectable",
     rowModeExpandable: "Expandable",
+    rowModeRequest: "With a person in the status line",
+    rowRequest: "Add the notice periods to the tenancy rules",
+    rowRequestBy: "Alex Morgan, via Support assistant",
+    rowRequestState: "Waiting",
     rowModeCompact: "Compact, 36 px",
     rowModeDefault: "Default, 44 px",
     rowExpandedBody: "The last run checked 31 invoices and flagged two.",
@@ -399,6 +407,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     rowModeLink: "Als Link",
     rowModeButton: "Als Schaltfläche, auswählbar",
     rowModeExpandable: "Aufklappbar",
+    rowModeRequest: "Mit einer Person in der Statuszeile",
+    rowRequest: "Kündigungsfristen in die Mietregeln aufnehmen",
+    rowRequestBy: "Alex Morgan, über Support-Assistent",
+    rowRequestState: "Wartet",
     rowModeCompact: "Kompakt, 36 px",
     rowModeDefault: "Standard, 44 px",
     rowExpandedBody: "Der letzte Lauf hat 31 Rechnungen geprüft und zwei markiert.",
