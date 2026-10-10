@@ -3,6 +3,7 @@ import type {
   JobSchedule,
   JobWorker,
   Logger,
+  ModuleSnapshot,
   PlatformStores,
   RegisteredJobHandler
 } from "@vivd-catalyst/core";
@@ -15,6 +16,8 @@ export interface CreateJobWorkerInput {
   handlers: readonly RegisteredJobHandler[];
   /** Schedules of kinds this process serves. */
   schedules?: readonly JobSchedule[];
+  /** Which modules are on: a kind of a module that is off is not served. */
+  modules?: ModuleSnapshot;
   logger: Logger;
 }
 

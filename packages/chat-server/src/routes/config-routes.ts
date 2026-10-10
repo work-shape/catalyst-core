@@ -1,6 +1,10 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createClientBranding, createSafeConfigView } from "@vivd-catalyst/config-schema";
-import { allowedLegacyPermissions, readDatabaseReadiness } from "@vivd-catalyst/core";
+import {
+  allowedLegacyPermissions,
+  moduleConfigKey,
+  readDatabaseReadiness
+} from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "../agent-availability";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "../request-context";
@@ -45,4 +49,19 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
       }
     };
   });
+
+  // Instance > Modules: what this instance runs. The switch itself is release config.
+  route(apiOperations["instance.modules.list"], () => ({
+    items: options.modules.modules.map(({ name, enabled, definition }) => ({
+      name,
+      enabled,
+      shipped: definition !== undefined,
+      configKey: moduleConfigKey(name),
+      requires: [...(definition?.requires ?? [])],
+      kinds: [...(definition?.kinds ?? [])],
+      operationCount: definition?.operations?.length ?? 0,
+      jobKinds: [...(definition?.jobKinds ?? [])],
+      toolCount: definition?.tools?.length ?? 0
+    }))
+  }));
 }

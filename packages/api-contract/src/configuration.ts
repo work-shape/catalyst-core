@@ -329,3 +329,23 @@ export type AdministeredCollaborationWorkspace = z.infer<
 export type ConfigAssetBundle = z.infer<typeof configAssetBundleSchema>;
 
 export type UserModelPreference = z.infer<typeof userModelPreferenceSchema>;
+
+/** One module of the product as this instance runs it. It holds no secret and no handle. */
+export const instanceModuleSchema = z.object({
+  name: z.string(),
+  enabled: z.boolean(),
+  /** False when this build ships no code for the module, so it cannot be turned on. */
+  shipped: z.boolean(),
+  /** The release config key that turns the module on or off. */
+  configKey: z.string(),
+  /** Modules that must be on for this one to be on. */
+  requires: z.array(z.string()),
+  /** Asset kinds the module contributes. */
+  kinds: z.array(z.string()),
+  /** How many operations of the API the module owns. */
+  operationCount: z.number().int().min(0),
+  jobKinds: z.array(z.string()),
+  /** How many agent tools the module owns. */
+  toolCount: z.number().int().min(0)
+});
+export type InstanceModule = z.infer<typeof instanceModuleSchema>;

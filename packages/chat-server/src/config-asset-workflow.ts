@@ -73,6 +73,7 @@ export class ConfigAssetWorkflow {
         clientInstanceId: this.options.clientInstanceId
       })
     ]);
+    const refs = this.options.configAssets.validationRefs;
     return {
       version: state.version,
       ...(state.defaultAgentName === undefined ? {} : { defaultAgentName: state.defaultAgentName }),
@@ -86,7 +87,13 @@ export class ConfigAssetWorkflow {
           ? { availability: availability.get(asset.name) }
           : {})
       })),
-      references: this.options.configAssets.validationRefs
+      references: {
+        ...refs,
+        // A tool of a module that is off is not offered for an agent.
+        enabledToolNames: refs.enabledToolNames.filter(
+          (toolName) => this.options.modules.offModuleOf("tool", toolName) === undefined
+        )
+      }
     };
   }
 

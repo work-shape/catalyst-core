@@ -55,8 +55,54 @@ export type ModuleSwitches = Readonly<Record<string, { readonly enabled: boolean
  */
 export interface ModuleSnapshot {
   /** Every known module with its state, in the order of `MODULE_NAMES`. */
-  readonly modules: readonly { readonly name: ModuleName; readonly enabled: boolean }[];
+  readonly modules: readonly ModuleState[];
   isEnabled(name: ModuleName): boolean;
+  /**
+   * The module that owns the named contribution, when that module is off. Nothing for a
+   * contribution of a module that is on and for one no module owns, which is core.
+   */
+  offModuleOf(contribution: ModuleContribution, name: string): ModuleName | undefined;
+}
+
+/** One module as an instance runs it. */
+export interface ModuleState {
+  readonly name: ModuleName;
+  readonly enabled: boolean;
+  /** What the module contributes. Missing when this build ships no code for the module. */
+  readonly definition?: ModuleDefinition;
+}
+
+/** What a module can own that a caller reaches by name. */
+export type ModuleContribution = "operation" | "tool" | "jobKind";
+
+const contributionLists = {
+  operation: "operations",
+  tool: "tools",
+  jobKind: "jobKinds"
+} as const satisfies Record<ModuleContribution, keyof ModuleDefinition>;
+
+/** The release config key that switches a module. */
+export function moduleConfigKey(name: ModuleName): string {
+  return `modules.${name}.enabled`;
+}
+
+/**
+ * The one refusal of everything a module that is off owns. It reads like a missing route,
+ * because for this instance the feature does not exist.
+ */
+export function moduleOffError(module: ModuleName): AppError {
+  return new AppError("NOT_FOUND", `Module '${module}' is off on this instance`, {
+    reason: "module_off",
+    module
+  });
+}
+
+/** Refuses a call of an operation whose module is off. */
+export function requireOperationModuleOn(modules: ModuleSnapshot, operationId: string): void {
+  const module = modules.offModuleOf("operation", operationId);
+  if (module !== undefined) {
+    throw moduleOffError(module);
+  }
 }
 
 /** The modules whose code this build ships. */
@@ -112,11 +158,17 @@ export function createModuleRegistry(definitions: readonly ModuleDefinition[]): 
           );
         }
       }
+      const off = modules.filter((definition) => !enabled.has(definition.name));
       return Object.freeze({
         modules: Object.freeze(
-          MODULE_NAMES.map((name) => Object.freeze({ name, enabled: enabled.has(name) }))
+          MODULE_NAMES.map((name) =>
+            Object.freeze({ name, enabled: enabled.has(name), definition: byName.get(name) })
+          )
         ),
-        isEnabled: (name: ModuleName) => enabled.has(name)
+        isEnabled: (name: ModuleName) => enabled.has(name),
+        offModuleOf: (contribution: ModuleContribution, name: string) =>
+          off.find((definition) => definition[contributionLists[contribution]]?.includes(name))
+            ?.name
       });
     }
   });

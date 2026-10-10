@@ -13,6 +13,7 @@ import {
   type JobSchedule,
   type JobWorker,
   type Logger,
+  type ModuleSnapshot,
   type PlatformStores,
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
@@ -54,6 +55,11 @@ export interface CreatePostgresJobWorkerInput {
   handlers: readonly RegisteredJobHandler[];
   /** Schedules of kinds this process serves. */
   schedules?: readonly JobSchedule[];
+  /**
+   * Which modules are on. A kind of a module that is off is not served: its jobs are not
+   * claimed and stay queued, and its schedule enqueues no tick. Left out, every kind is served.
+   */
+  modules?: ModuleSnapshot;
   logger: Logger;
 }
 
@@ -87,6 +93,14 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
   for (const kind of schedules.keys()) {
     if (!handlers.has(kind))
       throw new AppError("VALIDATION_FAILED", `Schedule of '${kind}' has no handler here`);
+  }
+  // The kind filter: what a module that is off owns leaves the kinds this worker serves.
+  for (const kind of [...handlers.keys()]) {
+    const module = input.modules?.offModuleOf("jobKind", kind);
+    if (module === undefined) continue;
+    handlers.delete(kind);
+    schedules.delete(kind);
+    logger.info({ kind, module }, "Job kind is not served: its module is off");
   }
 
   const active = new Map<JobId, ActiveJob>();

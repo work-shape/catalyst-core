@@ -63,7 +63,8 @@ import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
   assertClientAssemblyValid,
-  findConfigAssetAgentValidationIssues
+  findConfigAssetAgentValidationIssues,
+  findModuleOffToolIssues
 } from "./assembly-validation";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
@@ -191,6 +192,7 @@ export async function createClientInstanceApp(
     stores: store,
     clientInstanceId,
     logger,
+    modules: execution.modules,
     ...createChatServerJobs(serverOptions)
   });
 
@@ -319,10 +321,14 @@ export async function createClientInstanceExecutionAssembly(
     reasoningEfforts: [...REASONING_EFFORTS],
     enabledToolNames: [...getEnabledToolNames(config)]
   };
-  const validateAgents = (agents: AgentConfig[]) =>
-    findConfigAssetAgentValidationIssues(config, agents, (binding) =>
+  // A write is refused for a tool of a module that is off. A stored agent that still names
+  // one starts and runs without it, so turning a module off never stops the instance.
+  const validateAgents = (agents: AgentConfig[]) => [
+    ...findModuleOffToolIssues(modules, agents),
+    ...findConfigAssetAgentValidationIssues(config, agents, (binding) =>
       modelGateway.capabilities(binding)
-    );
+    )
+  ];
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
     store: store.configAssets,
     source: assetSource,
@@ -418,7 +424,11 @@ export async function createClientInstanceExecutionAssembly(
     ]
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers });
-  const toolRegistry = new ToolRegistry({ tools, enabledToolNames: getEnabledToolNames(config) });
+  const toolRegistry = new ToolRegistry({
+    tools,
+    enabledToolNames: getEnabledToolNames(config),
+    modules
+  });
   const toolExecution = new InProcessToolExecution({
     registry: toolRegistry,
     async getAgentToolNames(agentName) {

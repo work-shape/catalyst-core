@@ -1,17 +1,24 @@
-import { AppError, type ToolDescriptor } from "@vivd-catalyst/core";
+import { AppError, type ModuleSnapshot, type ToolDescriptor } from "@vivd-catalyst/core";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 export interface ToolRegistryOptions {
   tools: AnyToolDefinition[];
   enabledToolNames?: Set<string>;
+  /**
+   * Which modules are on. A tool of a module that is off is not in the registry: the model is
+   * not offered it and a call that names it finds nothing, whatever an agent still lists.
+   */
+  modules?: ModuleSnapshot;
 }
 
 export class ToolRegistry {
   private readonly toolsByName = new Map<string, AnyToolDefinition>();
   private readonly enabledToolNames?: Set<string>;
+  private readonly modules?: ModuleSnapshot;
 
   constructor(options: ToolRegistryOptions) {
     this.enabledToolNames = options.enabledToolNames;
+    this.modules = options.modules;
     for (const tool of options.tools) {
       assertValidToolName(tool.name);
       if (this.toolsByName.has(tool.name)) {
@@ -23,6 +30,9 @@ export class ToolRegistry {
 
   get(toolName: string): AnyToolDefinition | undefined {
     if (this.enabledToolNames && !this.enabledToolNames.has(toolName)) {
+      return undefined;
+    }
+    if (this.modules?.offModuleOf("tool", toolName) !== undefined) {
       return undefined;
     }
     return this.toolsByName.get(toolName);

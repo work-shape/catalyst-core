@@ -15,6 +15,7 @@ import {
   isAuthenticatedServicePrincipal,
   normalizeAuthenticatedUser,
   requireAuthScope,
+  requireOperationModuleOn,
   type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
@@ -43,6 +44,7 @@ type RouteServerOptions = Pick<
   | "allowedOrigins"
   | "sessionToken"
   | "config"
+  | "modules"
   | "logger"
   | "rateLimiter"
   | "stores"
@@ -212,6 +214,8 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       method: operation.method,
       url: operation.path,
       handler: async (request, reply) => {
+        // An operation of a module that is off does not exist here, for any caller.
+        requireOperationModuleOn(options.modules, operation.id);
         const { caller, query, body, params, takesCredential } = await admit(
           operation,
           request,
@@ -321,6 +325,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       method: operation.method,
       url: operation.path,
       handler: async (request, reply) => {
+        requireOperationModuleOn(options.modules, operation.id);
         const { correlationId, caller, params } = await admit(operation, request, reply);
         if (!caller.identity) {
           throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);

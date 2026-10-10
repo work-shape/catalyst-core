@@ -110,6 +110,7 @@ describe("the operation catalog", () => {
         "instance.jobs.list  GET /api/v1/instance/jobs",
         "instance.jobs.retry  POST /api/v1/instance/jobs/:jobId/retry",
         "instance.jobs.summary  GET /api/v1/instance/jobs/summary",
+        "instance.modules.list  GET /api/v1/instance/modules",
         "instance.workspaces.list  GET /api/v1/instance/workspaces",
         "me.delete  DELETE /api/v1/me",
         "me.get  GET /api/v1/me",
@@ -318,7 +319,7 @@ describe("a running instance", () => {
     // the job conversation.generate_title now. The reference of the instance was the one
     // addition of that release: it never had an unversioned path. The Operation Runs, grants
     // and Namespaces came after it, then the background jobs, then a person's own Approval
-    // Requests.
+    // Requests, then the list of modules.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -336,7 +337,8 @@ describe("a running instance", () => {
       "instance.jobs.list",
       "instance.jobs.retry",
       "approval_requests.list_mine",
-      "platform.context.get"
+      "platform.context.get",
+      "instance.modules.list"
     ];
     expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });

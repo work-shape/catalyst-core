@@ -1052,7 +1052,11 @@ describe("config asset admin routes", () => {
       "config_agents.set_availability",
       { params: { name: "kai" }, payload: { mode: "all" } }
     );
-    expect(whileDisabled.statusCode).toBe(403);
+    // The asset management module is off: the operation does not exist on this instance.
+    expect(whileDisabled.statusCode).toBe(404);
+    expect(whileDisabled.json()).toMatchObject({
+      error: { details: { reason: "module_off", module: "assetManagement" } }
+    });
   });
 
   it("hides the agents of a push that renames a restricted agent and reports them", async () => {

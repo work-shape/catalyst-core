@@ -1,5 +1,9 @@
 import { findModelToolMaterializationIssues } from "@vivd-catalyst/agent-runtime";
-import { type ApprovalRequestHandlerRegistry, AppError } from "@vivd-catalyst/core";
+import {
+  type ApprovalRequestHandlerRegistry,
+  AppError,
+  type ModuleSnapshot
+} from "@vivd-catalyst/core";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelBindingRef,
@@ -36,6 +40,23 @@ export function assertClientAssemblyValid(input: {
       issues: issues.map((message) => ({ message }))
     });
   }
+}
+
+/** An agent may not name a tool of a module that is off. Each issue names the module. */
+export function findModuleOffToolIssues(
+  modules: ModuleSnapshot,
+  agents: readonly Pick<AgentConfig, "name" | "toolNames">[]
+): string[] {
+  return agents.flatMap((agent) =>
+    agent.toolNames.flatMap((toolName) => {
+      const module = modules.offModuleOf("tool", toolName);
+      return module === undefined
+        ? []
+        : [
+            `Agent '${agent.name}' references tool '${toolName}' of module '${module}', which is off`
+          ];
+    })
+  );
 }
 
 export function findConfigAssetAgentValidationIssues(

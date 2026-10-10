@@ -2,6 +2,8 @@ import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { describe, expect, it } from "vitest";
 import { apiOperations, type ApiOperationName, type Operation } from "@vivd-catalyst/api-contract";
 import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
+import { platformModules } from "@vivd-catalyst/client-assembly";
+import { createModuleRegistry } from "@vivd-catalyst/core";
 import {
   FIRST_PARTY_AUTH_SCOPES,
   PERMISSIONS,
@@ -19,6 +21,11 @@ let instance: TestInstance;
 beforeAll(async () => {
   instance = await createTestInstanceWith((stores) => ({
     authAdapter,
+    // Every module is on: an operation of a module that is off answers 404 before any of the
+    // refusals this file asks for.
+    modules: createModuleRegistry(platformModules).snapshot(
+      Object.fromEntries(platformModules.map((module) => [module.name, { enabled: true }]))
+    ),
     approvalRequests: { store: stores.approvals, handlers: new Map() },
     allowedOrigins: ["https://ui.example.test"],
     mail: {
