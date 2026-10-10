@@ -9,7 +9,7 @@ import {
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
 import { completeAccountDeletion, recordAccountDeletionStalled } from "./account-deletion";
-import { ConversationWorkflow } from "./conversation-workflow";
+import { ConversationWorkflow } from "./conversations/conversation-workflow";
 import {
   adoptLegacyJobsJob,
   adoptLegacyJobsSchedule,

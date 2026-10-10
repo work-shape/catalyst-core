@@ -27,7 +27,7 @@ import {
   isHtmlContentType,
   mintAppContentToken
 } from "../app-content";
-import { ConversationWorkflow } from "../conversation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { Route } from "../http/route";
 import { fileSetEntryPath, readFileSetFile } from "../page-file-sets";
 import { conversationIdParam } from "../request-context";

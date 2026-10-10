@@ -23,7 +23,9 @@ import {
   asToolCallId,
   requireAuthScope
 } from "@vivd-catalyst/core";
-import { ConversationWorkflow } from "../conversation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-workflow";
+import { RunObservationWorkflow } from "../conversations/run-observation-workflow";
+import { RunStartWorkflow } from "../conversations/run-start-workflow";
 import type { Route } from "../http/route";
 import { conversationIdParam, withRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
@@ -34,6 +36,8 @@ export function registerAgentRunRoutes(
   log: FastifyBaseLogger
 ): void {
   const conversations = new ConversationWorkflow(options);
+  const startWorkflow = new RunStartWorkflow(options);
+  const runObservation = new RunObservationWorkflow(options);
   // The monitors of the runs started here, each until it has recorded how its run ended.
   const lifecycleMonitorTasks = new Map<AgentRunId, Promise<void>>();
 
@@ -49,7 +53,7 @@ export function registerAgentRunRoutes(
     async ({ user, context, params, body, request }) => {
       const conversationId = asConversationId(params.conversationId);
       const runId = asAgentRunId(params.runId);
-      const run = await conversations.cancelRun(
+      const run = await runObservation.cancelRun(
         conversationId,
         runId,
         user,
@@ -67,7 +71,7 @@ export function registerAgentRunRoutes(
       requireAuthScope(user, "run:start");
       const conversationId = conversationIdParam(params);
       const localizedContext = withRequestLocale(context, options, request, body.locale);
-      const started = await conversations.startMessageRun(conversationId, user, localizedContext, {
+      const started = await startWorkflow.startMessageRun(conversationId, user, localizedContext, {
         agentName: body.agentName,
         modelBindingId: body.modelBindingId,
         reasoningEffort: body.reasoningEffort,
@@ -96,7 +100,7 @@ export function registerAgentRunRoutes(
     // The descriptor carries one scope; starting a run needs this second one as well.
     requireAuthScope(user, "run:start");
     const localizedContext = withRequestLocale(context, options, request, body.locale);
-    const started = await conversations.createConversationAndStartMessageRun(
+    const started = await startWorkflow.createConversationAndStartMessageRun(
       user,
       localizedContext,
       {
@@ -133,7 +137,7 @@ export function registerAgentRunRoutes(
     async ({ user, context, params, body, request }) => {
       const conversationId = asConversationId(params.conversationId);
       const runId = asAgentRunId(params.runId);
-      const run = await conversations.commandRun(
+      const run = await runObservation.commandRun(
         conversationId,
         runId,
         user,
@@ -152,7 +156,7 @@ export function registerAgentRunRoutes(
       const afterSequence = readAfterSequence(query.after, request.headers["last-event-id"]);
       const localizedContext = withRequestLocale(context, options, request, undefined);
 
-      const run = await conversations.getConversationRunForUser(conversationId, runId, user);
+      const run = await runObservation.getConversationRunForUser(conversationId, runId, user);
       if (!run) {
         throw new AppError("NOT_FOUND", "Agent run is not available");
       }
@@ -171,7 +175,7 @@ export function registerAgentRunRoutes(
       return reply.send(
         Readable.from(
           (async function* streamRunObservations() {
-            for await (const event of conversations.observeRun(runId, localizedContext, {
+            for await (const event of runObservation.observeRun(runId, localizedContext, {
               afterSequence
             })) {
               if (closed) {
@@ -211,12 +215,12 @@ export function registerAgentRunRoutes(
     }
     const task = (async () => {
       let assistantMessageCount = 0;
-      for await (const event of conversations.observeRun(input.runId, input.context)) {
+      for await (const event of runObservation.observeRun(input.runId, input.context)) {
         if (event.type === "message_completed") {
           assistantMessageCount += 1;
         }
         if (event.type === "run_failed") {
-          await conversations.recordRunFailed(
+          await runObservation.recordRunFailed(
             input.conversationId,
             input.user,
             input.context,
@@ -227,7 +231,7 @@ export function registerAgentRunRoutes(
           return;
         }
         if (event.type === "run_cancelled") {
-          await conversations.recordRunCancelled(
+          await runObservation.recordRunCancelled(
             input.conversationId,
             input.user,
             input.context,
@@ -238,7 +242,7 @@ export function registerAgentRunRoutes(
           return;
         }
         if (event.type === "run_completed") {
-          await conversations.recordRunCompleted(
+          await runObservation.recordRunCompleted(
             input.conversationId,
             input.user,
             input.context,
@@ -279,7 +283,7 @@ export function registerAgentRunRoutes(
       conversation,
       userMessage,
       run,
-      thread: await conversations.getThreadSnapshot(conversation.id, user),
+      thread: await runObservation.getThreadSnapshot(conversation.id, user),
       eventsUrl: new URL(eventsUrl, `${request.protocol}://${requestHost}`).toString()
     });
   }

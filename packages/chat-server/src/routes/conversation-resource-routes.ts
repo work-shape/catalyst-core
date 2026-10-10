@@ -1,7 +1,7 @@
 import { apiOperations, type StructuredDataResourceResponse } from "@vivd-catalyst/api-contract";
 import { AppError, asStructuredDataResourceId } from "@vivd-catalyst/core";
 import { listConversationResources } from "../conversation-resources";
-import { ConversationWorkflow } from "../conversation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";

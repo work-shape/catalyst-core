@@ -15,7 +15,7 @@ import {
   type ConversationAttachment,
   type ManagedArtifactRecord
 } from "@vivd-catalyst/core";
-import { ConversationWorkflow } from "../conversation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";

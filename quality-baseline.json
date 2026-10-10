@@ -403,13 +403,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/chat-server/src/conversation-workflow.ts",
-      "count": 1,
-      "owner": "CB-9"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "packages/chat-ui/src/assistant/assistant-message.tsx",
       "count": 1,
       "owner": "G-5c"

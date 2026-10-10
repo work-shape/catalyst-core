@@ -7,7 +7,7 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { AppError, getSubjectUserId, type JsonObject } from "@vivd-catalyst/core";
-import { ConversationWorkflow } from "../conversation-workflow";
+import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
