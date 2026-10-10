@@ -4,6 +4,7 @@ import {
   createClientInstanceApp,
   createJobWorker,
   createLogger,
+  resolveInstanceModules,
   type CreateClientInstanceAppInput
 } from "@vivd-catalyst/client-assembly";
 import {
@@ -62,9 +63,9 @@ export type { TestStore } from "./test-store";
 export type TestPostgresStore = PostgresStores;
 export type TestServerOptions = Omit<
   ChatServerOptions,
-  "configAssets" | "logger" | "modelGateway"
+  "configAssets" | "logger" | "modelGateway" | "modules"
 > &
-  Partial<Pick<ChatServerOptions, "logger">> & {
+  Partial<Pick<ChatServerOptions, "logger" | "modules">> & {
     configAssets?: Omit<ChatServerOptions["configAssets"], "source"> &
       Partial<Pick<ChatServerOptions["configAssets"], "source">>;
     /**
@@ -346,6 +347,7 @@ export function completeServerOptions(
       modelProvider,
       usageGovernance: options.usageGovernance
     }),
+    modules: options.modules ?? resolveInstanceModules(options.config).snapshot,
     stores: options.stores,
     configAssets: options.configAssets
       ? {

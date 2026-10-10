@@ -111,6 +111,9 @@ export const safeConfigSchema = z.object({
   }),
   /** What a generated view may load besides the instance's own view runtime. */
   views: z.object({ allowedScriptSrc: z.array(z.string()) }).default({ allowedScriptSrc: [] }),
+  /** Every module of the product with its state on this instance. */
+  modules: z.record(z.string(), z.object({ enabled: z.boolean() })).default({}),
+  /** Derived from `modules` for one transition release. */
   features: z.object({
     attachments: z.object({
       enabled: z.boolean(),

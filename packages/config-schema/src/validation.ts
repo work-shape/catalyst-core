@@ -1,5 +1,7 @@
 import { AppError } from "@vivd-catalyst/core";
 import { clientInstanceConfigSchema, type AgentConfig, type ClientInstanceConfig } from "./schemas";
+import { isPasswordMailEnabled } from "./branding";
+import { resolveModuleSwitches } from "./module-normalization";
 import { findDuplicates } from "./reference-validation";
 import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
 import { getModelProviderConfigs } from "./infrastructure";
@@ -20,6 +22,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertProductionSafeAuthConfig(parsed.data);
   assertCaptureMailIsDevelopmentOnly(parsed.data);
   assertExecutionWorkspaceInfrastructure(parsed.data);
+  assertModuleSwitches(parsed.data);
   assertConfigReferences(parsed.data);
   assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
@@ -112,6 +115,20 @@ function assertExecutionWorkspaceInfrastructure(config: ClientInstanceConfig): v
   throw new AppError(
     "VALIDATION_FAILED",
     "'infrastructure.sandbox.provider': the local sandbox is only allowed for development client instances"
+  );
+}
+
+/**
+ * The switches agree with their legacy keys, and invitations are on only where one can be sent:
+ * an invitation is an emailed link to set a password, so the module needs both.
+ */
+function assertModuleSwitches(config: ClientInstanceConfig): void {
+  if (!resolveModuleSwitches(config).userInvitations?.enabled || isPasswordMailEnabled(config)) {
+    return;
+  }
+  throw new AppError(
+    "VALIDATION_FAILED",
+    "Module 'userInvitations' is enabled but invitations cannot be sent: it needs a mail sender under 'infrastructure.mail' and 'auth.standalone.enabled'"
   );
 }
 

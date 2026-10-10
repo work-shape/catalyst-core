@@ -719,7 +719,8 @@ export const uiConfigSchema = z
     showAgentName: z.boolean().default(true),
     // When true the agent list shows each agent's description under its name.
     showAgentDescriptions: z.boolean().default(false),
-    resources: z.object({ enabled: z.boolean().default(true) }).default({ enabled: true }),
+    /** Legacy switch of the module `resources`; use `modules.resources.enabled`. */
+    resources: z.object({ enabled: z.boolean().optional() }).default({}),
     accentColor: z.string().min(1).default(defaultLightUiTheme.accentColor),
     theme: lightUiThemeSchema,
     darkTheme: darkUiThemeSchema,
@@ -730,7 +731,7 @@ export const uiConfigSchema = z
     welcomeMessage: "How can I help?",
     showAgentName: true,
     showAgentDescriptions: false,
-    resources: { enabled: true },
+    resources: {},
     accentColor: defaultLightUiTheme.accentColor,
     logoInvertOnDark: false,
     theme: defaultLightUiTheme,
@@ -751,7 +752,8 @@ export const administrationConfigSchema = z
   .object({
     agentConfiguration: z
       .object({
-        enabled: z.boolean().default(false),
+        /** Legacy switch of the module `assetManagement`; use `modules.assetManagement.enabled`. */
+        enabled: z.boolean().optional(),
         editableAgentFields: z.array(z.enum(AGENT_EDITABLE_FIELDS)).default([]),
         allowAgentCreation: z.boolean().default(false),
         allowAgentDeletion: z.boolean().default(false),
@@ -765,7 +767,6 @@ export const administrationConfigSchema = z
           .default({ enabled: false, allowSkillCreation: false })
       })
       .default({
-        enabled: false,
         editableAgentFields: [],
         allowAgentCreation: false,
         allowAgentDeletion: false,
@@ -776,7 +777,6 @@ export const administrationConfigSchema = z
   })
   .default({
     agentConfiguration: {
-      enabled: false,
       editableAgentFields: [],
       allowAgentCreation: false,
       allowAgentDeletion: false,
@@ -785,6 +785,16 @@ export const administrationConfigSchema = z
       agentSkillChanges: { enabled: false, allowSkillCreation: false }
     }
   });
+
+/**
+ * One switch per module, `modules.<name>.enabled`. A module without an entry is off, except
+ * that the four modules that had a switch before this section keep the state their legacy key
+ * gives them for one transition release. `resolveModuleSwitches` reads this section; nothing
+ * else does.
+ */
+export const modulesConfigSchema = z
+  .record(z.string().min(1), z.object({ enabled: z.boolean() }).strict())
+  .default({});
 
 const perMinuteSchema = z.number().int().positive();
 /**
@@ -893,6 +903,7 @@ export const clientInstanceConfigSchema = z.object({
   webAccess: webAccessConfigSchema,
   executionWorkspaces: executionWorkspacesConfigSchema,
   administration: administrationConfigSchema,
+  modules: modulesConfigSchema,
   rateLimits: rateLimitsConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z

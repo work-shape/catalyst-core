@@ -11,7 +11,8 @@ import type {
   ConfigAssetSource,
   ConfigAssetStore,
   ExecutionWorkspaceCleanupStore,
-  ManagedArtifactId
+  ManagedArtifactId,
+  ModuleSnapshot
 } from "@vivd-catalyst/core";
 import type {
   AuditRecorder,
@@ -50,6 +51,8 @@ export interface ChatServerOptions {
   logger: import("@vivd-catalyst/core").Logger;
   approvalRequests?: Pick<ApprovalRequestWorkflowOptions, "store" | "handlers" | "onDecided">;
   config: ClientInstanceConfig;
+  /** Which modules are on, resolved once by the assembly for the API and every worker. */
+  modules: ModuleSnapshot;
   clientInstanceId: ClientInstanceId;
   authAdapter: AuthAdapter;
   stores: PlatformStores;

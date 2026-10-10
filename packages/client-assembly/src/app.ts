@@ -66,6 +66,7 @@ import type {
 import type { ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspaceObjectStore } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
+import { resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
 import { createToolDefinitions } from "./tools";
@@ -136,6 +137,7 @@ export async function createClientInstanceApp(
   const serverOptions: ChatServerOptions = {
     logger,
     config,
+    modules: execution.modules,
     clientInstanceId,
     authAdapter,
     stores: store,
@@ -218,6 +220,7 @@ export async function createClientInstanceExecutionAssembly(
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
   const capabilities = input.capabilities ?? [];
+  const modules = resolveInstanceModules(config, capabilities).snapshot;
   // The resolver comes first: the store, the sign-in code and every provider take from it.
   const infrastructure = await createInstanceInfrastructure({
     config,
@@ -241,6 +244,7 @@ export async function createClientInstanceExecutionAssembly(
   const capabilityContributions = await createCapabilityContributions(capabilities, {
     logger,
     capabilitiesConfig: config.capabilities,
+    modules,
     clientInstanceId,
     dataSources,
     env,
@@ -470,6 +474,7 @@ export async function createClientInstanceExecutionAssembly(
     env,
     infrastructure,
     config,
+    modules,
     clientInstanceId,
     store,
     attachments,

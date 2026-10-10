@@ -2,6 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import {
   createSafeConfigView,
   loadClientInstanceConfigFromFile,
@@ -16,9 +17,9 @@ describe("removed workspace switch", () => {
     const config = parseClientInstanceConfig(baseConfig());
 
     expect(config.ui).not.toHaveProperty("collaborationWorkspaces");
-    expect(createSafeConfigView(config, emptyAssets()).features).not.toHaveProperty(
-      "collaborationWorkspaces"
-    );
+    expect(
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
+    ).not.toHaveProperty("collaborationWorkspaces");
   });
 
   it("loads a legacy config that still turns workspaces on, and drops the key", () => {

@@ -32,6 +32,7 @@ export {
   type SeedStandaloneAuthResult
 } from "./seed-auth";
 export { createJobWorker, type CreateJobWorkerInput } from "./job-worker";
+export { platformModules, resolveInstanceModules, type InstanceModules } from "./modules";
 export { migrateClientInstanceDatabase } from "./migrate";
 export { createPlatformStore } from "./store";
 export {

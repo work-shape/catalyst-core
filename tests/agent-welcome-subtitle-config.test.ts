@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import {
   agentConfigSchema,
   createSafeConfigView,
@@ -15,11 +16,19 @@ describe("agent presentation config", () => {
       welcomeSubtitle: "Welcome!"
     });
 
-    const safeConfig = createSafeConfigView(config, assets, { requestedLocale: "de" });
+    const safeConfig = createSafeConfigView(
+      config,
+      assets,
+      resolveInstanceModules(config).snapshot,
+      { requestedLocale: "de" }
+    );
 
     expect(safeConfig.agents[0]?.description).toBe("Hilfe bei Unterlagen.");
     expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("Welcome!");
-    expect(createSafeConfigView(config, createAssets({})).agents[0]?.description).toBeUndefined();
+    expect(
+      createSafeConfigView(config, createAssets({}), resolveInstanceModules(config).snapshot)
+        .agents[0]?.description
+    ).toBeUndefined();
   });
 
   it("allows an empty subtitle so deployments can hide the empty-state subline", () => {
@@ -29,7 +38,12 @@ describe("agent presentation config", () => {
       welcomeSubtitle: ""
     });
 
-    const safeConfig = createSafeConfigView(config, assets, { requestedLocale: "en" });
+    const safeConfig = createSafeConfigView(
+      config,
+      assets,
+      resolveInstanceModules(config).snapshot,
+      { requestedLocale: "en" }
+    );
 
     expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("");
   });
@@ -51,7 +65,12 @@ describe("agent presentation config", () => {
       }
     });
 
-    const safeConfig = createSafeConfigView(config, assets, { requestedLocale: "de" });
+    const safeConfig = createSafeConfigView(
+      config,
+      assets,
+      resolveInstanceModules(config).snapshot,
+      { requestedLocale: "de" }
+    );
 
     expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("Bereit fuer diese Unterhaltung.");
   });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import {
   createSafeConfigView,
   parseClientInstanceConfig,
@@ -110,6 +111,7 @@ describe("user-selectable model config", () => {
         ],
         skills: []
       },
+      resolveInstanceModules(config).snapshot,
       { reasoningEffortsOfBinding: adapterEfforts(config) }
     );
 
@@ -247,6 +249,7 @@ describe("user-selectable model config", () => {
         ],
         skills: []
       },
+      resolveInstanceModules(config).snapshot,
       { requestedLocale: "de", reasoningEffortsOfBinding: adapterEfforts(config) }
     );
 

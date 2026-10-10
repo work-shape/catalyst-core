@@ -6,11 +6,12 @@ import {
   type LocaleCode,
   type ModelBindingConfig,
   type ModelProviderConfig,
+  type ModuleSnapshot,
   type ReasoningEffortConfig,
   type RuntimeAssetSnapshot
 } from "@vivd-catalyst/core";
 import type { AgentConfig, ClientInstanceConfig } from "./schemas";
-import { createClientBranding, isPasswordMailEnabled } from "./branding";
+import { createClientBranding } from "./branding";
 import { getModelSelectionForAgent, resolveModelBinding } from "./selectors";
 import {
   resolveConfigLocale,
@@ -29,6 +30,7 @@ export interface SafeConfigViewOptions extends ConfigLocaleInput {
 export function createSafeConfigView(
   config: ClientInstanceConfig,
   assets: RuntimeAssetSnapshot,
+  modules: ModuleSnapshot,
   options: SafeConfigViewOptions = {}
 ) {
   const locale = resolveConfigLocale(config.localization, options);
@@ -63,19 +65,24 @@ export function createSafeConfigView(
     views: {
       allowedScriptSrc: config.views.allowedScriptSrc
     },
+    modules: Object.fromEntries(
+      modules.modules.map((module) => [module.name, { enabled: module.enabled }])
+    ),
+    // Derived from the modules for one transition release; the interface moves to `modules`.
     features: {
       attachments: {
         enabled: false,
         accept: ""
       },
       resources: {
-        enabled: config.ui.resources.enabled
+        enabled: modules.isEnabled("resources")
       },
       configAssets: {
-        ...config.administration.agentConfiguration
+        ...config.administration.agentConfiguration,
+        enabled: modules.isEnabled("assetManagement")
       },
       userInvitations: {
-        enabled: isPasswordMailEnabled(config)
+        enabled: modules.isEnabled("userInvitations")
       }
     },
     defaultAgentName: assets.defaultAgentName,

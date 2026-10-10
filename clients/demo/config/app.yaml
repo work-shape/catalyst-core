@@ -40,9 +40,15 @@ retention:
   conversationDays: 30
   auditDays: 365
   allowUserDelete: true
+modules:
+  resources:
+    enabled: true
+  assetManagement:
+    enabled: true
+  userInvitations:
+    enabled: true
 administration:
   agentConfiguration:
-    enabled: true
     editableAgentFields:
       - displayName
       - description

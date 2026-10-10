@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { AppError } from "@vivd-catalyst/core";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import {
   createClientBranding,
   createSafeConfigView,
@@ -148,12 +149,16 @@ describe("config file extends", () => {
     // What the config endpoint hands the chat, and the branding it is built from.
     const settings = async (file: string) => {
       const config = await loadClientInstanceConfigFromFile(join(root, file));
-      const { showAgentName, showAgentDescriptions } = createSafeConfigView(config, {
-        version: 1,
-        defaultAgentName: "none",
-        agents: [],
-        skills: []
-      }).ui;
+      const { showAgentName, showAgentDescriptions } = createSafeConfigView(
+        config,
+        {
+          version: 1,
+          defaultAgentName: "none",
+          agents: [],
+          skills: []
+        },
+        resolveInstanceModules(config).snapshot
+      ).ui;
       const branding = createClientBranding(config);
       expect(branding.showAgentName).toBe(showAgentName);
       expect(branding.showAgentDescriptions).toBe(showAgentDescriptions);

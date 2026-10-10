@@ -15,6 +15,7 @@ export * from "./events";
 export * from "./operation-policy";
 export * from "./operation-registry";
 export * from "./operation-runs";
+export * from "./modules";
 
 export type { Logger } from "./logger";
 export type { HttpListenInput, HttpRuntime } from "./http-runtime";

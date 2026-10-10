@@ -695,7 +695,7 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext
   ): Promise<void> {
     await this.recordAccess(user, context, "governance.config_assets_write_authorized");
-    if (!this.options.config.administration.agentConfiguration.enabled) {
+    if (!this.options.modules.isEnabled("assetManagement")) {
       throw new AppError("FORBIDDEN", "Interactive agent configuration is disabled");
     }
   }

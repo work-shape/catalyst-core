@@ -40,11 +40,16 @@ export function registerCollaborationWorkspaceRoutes(
 
   route(apiOperations["workspaces.agents.list"], async ({ user, params, request, query }) => {
     const assets = await workspaces.getAssetSnapshot(user, collaborationWorkspaceId(params));
-    const { defaultAgentName, agents } = createSafeConfigView(options.config, assets, {
-      requestedLocale: resolveRequestLocale(options, request),
-      reasoningEffortsOfBinding: (bindingId) =>
-        options.modelGateway.capabilities({ bindingId }).reasoningEfforts
-    });
+    const { defaultAgentName, agents } = createSafeConfigView(
+      options.config,
+      assets,
+      options.modules,
+      {
+        requestedLocale: resolveRequestLocale(options, request),
+        reasoningEffortsOfBinding: (bindingId) =>
+          options.modelGateway.capabilities({ bindingId }).reasoningEfforts
+      }
+    );
     return {
       defaultAgentName,
       ...paginate(

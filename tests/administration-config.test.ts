@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import {
+  createSafeConfigView,
+  parseClientInstanceConfig,
+  resolveModuleSwitches
+} from "@vivd-catalyst/config-schema";
 
 describe("administration config", () => {
   it("keeps config asset management disabled by default", () => {
     const config = parseClientInstanceConfig(baseConfig());
 
-    expect(config.administration.agentConfiguration.enabled).toBe(false);
+    expect(resolveModuleSwitches(config).assetManagement).toEqual({ enabled: false });
     expect(config.administration.agentConfiguration.editableAgentFields).toEqual([]);
-    expect(createSafeConfigView(config, emptyAssets()).features.configAssets).toEqual({
+    expect(
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
+        .configAssets
+    ).toEqual({
       enabled: false,
       editableAgentFields: [],
       allowAgentCreation: false,
@@ -31,8 +39,11 @@ describe("administration config", () => {
       })
     );
 
-    expect(config.administration.agentConfiguration.enabled).toBe(true);
-    expect(createSafeConfigView(config, emptyAssets()).features.configAssets).toEqual({
+    expect(resolveModuleSwitches(config).assetManagement).toEqual({ enabled: true });
+    expect(
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
+        .configAssets
+    ).toEqual({
       enabled: true,
       editableAgentFields: ["modelBindingId", "reasoningEffort"],
       allowAgentCreation: true,

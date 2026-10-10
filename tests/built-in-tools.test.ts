@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import {
   clientInstanceConfigSchema,
   createSafeConfigView,
@@ -103,7 +104,9 @@ describe("views config", () => {
     const config = parseClientInstanceConfig(baseConfig());
 
     expect(config.views.allowedScriptSrc).toEqual([]);
-    expect(createSafeConfigView(config, emptyAssets()).views).toEqual({ allowedScriptSrc: [] });
+    expect(
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).views
+    ).toEqual({ allowedScriptSrc: [] });
   });
 
   it("normalizes the named hosts", () => {
@@ -114,10 +117,10 @@ describe("views config", () => {
     );
 
     expect(config.views.allowedScriptSrc).toEqual(["https://cdn.jsdelivr.net", "https:"]);
-    expect(createSafeConfigView(config, emptyAssets()).views.allowedScriptSrc).toEqual([
-      "https://cdn.jsdelivr.net",
-      "https:"
-    ]);
+    expect(
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).views
+        .allowedScriptSrc
+    ).toEqual(["https://cdn.jsdelivr.net", "https:"]);
   });
 
   it("rejects unsafe script sources", () => {

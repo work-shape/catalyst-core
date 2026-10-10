@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import { createSafeConfigView, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createEnvironmentSecretResolver,
@@ -370,22 +371,26 @@ describe("infrastructure section", () => {
       })
     );
     const view = JSON.stringify(
-      createSafeConfigView(parsed, {
-        version: 1,
-        defaultAgentName: "assistant",
-        agents: [
-          {
-            name: "assistant",
-            displayName: "Assistant",
-            instructions: "Answer.",
-            modelProviderId: "main",
-            toolNames: [],
-            skillNames: [],
-            initialPrompts: []
-          }
-        ],
-        skills: []
-      })
+      createSafeConfigView(
+        parsed,
+        {
+          version: 1,
+          defaultAgentName: "assistant",
+          agents: [
+            {
+              name: "assistant",
+              displayName: "Assistant",
+              instructions: "Answer.",
+              modelProviderId: "main",
+              toolNames: [],
+              skillNames: [],
+              initialPrompts: []
+            }
+          ],
+          skills: []
+        },
+        resolveInstanceModules(parsed).snapshot
+      )
     );
     expect(view).toContain('"region":"eu"');
     for (const hidden of [

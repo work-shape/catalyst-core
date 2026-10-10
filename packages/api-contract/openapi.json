@@ -14646,6 +14646,24 @@
               "allowedScriptSrc"
             ]
           },
+          "modules": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "enabled"
+              ]
+            }
+          },
           "features": {
             "type": "object",
             "properties": {
@@ -14989,6 +15007,7 @@
           "retention",
           "usage",
           "views",
+          "modules",
           "features",
           "agents",
           "ui"

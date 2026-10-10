@@ -21,6 +21,8 @@ import {
   type ManagedFileId,
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
+  type ModuleDefinition,
+  type ModuleSnapshot,
   type PlatformFileStore,
   type RegisteredJobHandler,
   type RegisteredProviderDefinition,
@@ -71,6 +73,8 @@ export interface ClientInstanceCapabilityContext {
   logger: Logger;
   clientInstanceId: ClientInstanceId;
   capabilitiesConfig: Record<string, unknown>;
+  /** Which modules are on. A capability asks this, not its own config, whether its module runs. */
+  modules: ModuleSnapshot;
   dataSources: DataSourceRegistry;
   /** Settings only. A capability takes every secret from `secrets`. */
   env: ClientInstanceEnv;
@@ -238,6 +242,8 @@ export interface ClientInstanceManagedObjectReaderContribution extends ClientIns
 export interface ClientInstanceCapability {
   name: string;
   configKey?: string;
+  /** Modules whose code the capability ships. They register beside the platform's own. */
+  modules?: readonly ModuleDefinition[];
   /** Providers the capability brings. They register beside the platform's own at startup. */
   providers?: readonly RegisteredProviderDefinition[];
   create(
