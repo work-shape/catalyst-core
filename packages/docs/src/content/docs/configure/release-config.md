@@ -387,6 +387,50 @@ rather than an arbitrary provider or model name, and an omitted choice keeps the
 agent's configured binding. Put shared reasoning defaults on the provider or
 agent; add one to a binding only when that model needs a different fallback.
 
+### Gemini on Vertex AI
+
+The `google-vertex` provider calls Gemini models through Vertex AI `generateContent`. The
+entry's `region` decides where the call goes: `eu` uses Google's European endpoint
+`aiplatform.eu.rep.googleapis.com` with the location `eu`, and `global` uses
+`aiplatform.googleapis.com` with the location `global`. There is no setting for another endpoint
+or location.
+
+```yaml
+infrastructure:
+  models:
+    vertex:
+      provider: google-vertex
+      region: eu
+      model: gemini-3.1-flash-lite
+      projectId: my-gcp-project
+      credentialSecret: GOOGLE_VERTEX_CREDENTIALS
+modelBindings:
+  - id: document-extraction
+    providerId: vertex
+    model: gemini-3.1-flash-lite
+    agentSelectable: false
+```
+
+`credentialSecret` names the secret that holds the JSON key of a service account with the role
+**Vertex AI User**. With the `environment` secret provider, mount the key file and set
+`GOOGLE_VERTEX_CREDENTIALS_FILE` to its path. Every process that creates the entry needs the
+secret: the API and the agent run worker create every entry of `infrastructure.models`, and the
+document worker creates the entry behind the extraction binding. A key that is not a service
+account key stops startup; the message names the secret and none of its content.
+
+The adapter reads text, images and PDF documents, calls tools, answers in a JSON format and
+streams. It declares no web search, no reasoning efforts, no fast tier and no server-side
+compaction, so a call that asks for one of them is refused before it is sent. In this version
+the adapter serves the product's own calls, such as document extraction. Do not offer a
+`google-vertex` binding to agents yet: tool use over several turns is not verified for it.
+
+Document extraction of the document processing capability, a paid capability, names its model
+binding in `capabilities.documentProcessing.extraction.modelBindingId`. The binding's model must
+read documents and answer in a JSON format, and its entry must state `region: eu` or keep data
+inside the instance; anything else stops startup. Each extraction call is admitted against the
+budget and recorded in the usage ledger with the purpose `document_extraction`, the provider
+entry and its region.
+
 ### What the model picker shows
 
 The composer's model picker appears when the agent offers more than one model, or when its
@@ -574,7 +618,8 @@ infrastructure:
 - `provider` picks the adapter. An unknown provider, an unknown setting or a missing setting
   stops startup, and the message names the field.
 - `region` is `eu` or `global` and says where the provider processes the data it is sent. A
-  provider that sends data outside the instance (`openai-compatible`, `mailjet`, `s3`) must
+  provider that sends data outside the instance (`openai-compatible`, `google-vertex`, `mailjet`,
+  `s3`) must
   state it. A provider that keeps data inside the instance (`deterministic`, `capture`,
   `filesystem`, `docker`, `local`) must not. A `docker` sandbox with an `endpoint` runs on
   another host and must state it too. A vendor's own region name is a separate setting,
@@ -596,6 +641,7 @@ Providers and their settings:
 | Port            | Provider                    | Settings                                                                                                                                                                                                     |
 | --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `models`        | `openai-compatible`         | `model`, `api`, `reasoningEffort`, `contextManagement`, `baseUrl`, `credentialSecret` (default `OPENAI_API_KEY`), `authMode`, `organizationSecret`                                                           |
+| `models`        | `google-vertex`             | `model`, `projectId`, `credentialSecret` (default `GOOGLE_VERTEX_CREDENTIALS`): the JSON key of a service account. Gemini on Vertex AI; `region` decides the endpoint and location.                          |
 | `models`        | `deterministic`             | `model`. Answers without a model; for tests and local runs.                                                                                                                                                  |
 | `mail`          | `mailjet`                   | `appUrl`, `sender`, `apiKeySecret` (default `MAILJET_API_KEY`), `apiSecretSecret` (default `MAILJET_API_SECRET`)                                                                                             |
 | `mail`          | `capture`                   | `appUrl`, `sender`. Development only.                                                                                                                                                                        |

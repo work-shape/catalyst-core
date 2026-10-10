@@ -28,6 +28,24 @@ contain breaking changes; a patch version does not.
   `infrastructure_check_state`, one row per instance with the last check outcome of each
   provider and the time of the last manual check. Every API process reads it, so the page shows
   the same health whichever process answers.
+- **Models:** a second model adapter, `google-vertex`, calls Gemini on Vertex AI through
+  `generateContent`: text, tools, images, PDF documents, answers in a JSON format, streaming and
+  abort. An entry under `infrastructure.models` takes `projectId` and `credentialSecret` (default
+  `GOOGLE_VERTEX_CREDENTIALS`, the JSON key of a service account), and its `region` decides the
+  endpoint and location: `eu` stays on `aiplatform.eu.rep.googleapis.com`. Web search, reasoning
+  efforts, the fast tier and server-side compaction are not declared, so a call that asks for one
+  is refused before it is sent. Do not offer a `google-vertex` binding to agents yet: tool use
+  over several turns is not verified for it. A model message can carry a PDF document; the
+  gateway refuses such a call for a model that does not read documents, and fails a call that
+  asked for a JSON format with `invalid_response` when the answer is not JSON, after settling
+  what the call used. A conformance suite runs the same recorded cases against both adapters.
+- **Capability SDK:** the capability context has `models`, the instance's model gateway for a
+  capability's own calls. `models.complete` takes a model binding, a purpose, text and PDF
+  content and an optional JSON format, and `models.describeBinding` says what the binding's
+  model can do. The call is admitted and recorded like every model call. A worker process of a
+  capability gets the same from `createWorkerCapabilityModels` of
+  `@vivd-catalyst/client-assembly`, which creates only the providers behind the bindings it is
+  given.
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
   `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
   caller who is authenticated; a call without a credential gets `401` as on any route. Its agent tools are not offered to the model and cannot be called,
@@ -195,6 +213,34 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Document extraction (breaking config):** the extraction of the document processing
+  capability calls its model through the model gateway. The block
+  `capabilities.documentProcessing.extraction.provider` is gone, and startup of the API and of
+  the document worker stops with this message:
+  `'capabilities.documentProcessing.extraction.provider' moved: the provider becomes an entry under 'infrastructure.models' with provider 'google-vertex', 'region', 'model', 'projectId' and 'credentialSecret'; a model binding under 'modelBindings' names that entry; and 'capabilities.documentProcessing.extraction.modelBindingId' names the binding`.
+  What to change: add the entry under `infrastructure.models` (`provider: google-vertex`,
+  `region: eu`, `model`, `projectId`, `credentialSecret`), add a model binding with
+  `agentSelectable: false` that names it, and set `extraction.modelBindingId` to that binding.
+  `location` and `endpoint` have no counterpart: `region: eu` selects both.
+  `credentialsFileEnvName` becomes `credentialSecret`; a deployment that set
+  `DOCUMENT_EXTRACTION_GOOGLE_CREDENTIALS_FILE` keeps the variable and names the secret
+  `DOCUMENT_EXTRACTION_GOOGLE_CREDENTIALS`. The API and the agent run worker create every entry
+  of `infrastructure.models` at startup, so they now need the key file and the variable too, not
+  only the document worker. A binding whose model does not read documents or answer in a JSON
+  format, or whose entry states `region: global`, stops startup. Deploy the API and the document
+  worker together: the worker's extraction answer no longer carries `usage` and `providerCalls`.
+  Rollback: the earlier version does not load the new config, so roll the config back with the
+  code. Usage rows written by this version stay valid for the earlier one.
+- **Usage of document extraction:** an extraction is recorded by the gateway when the model
+  answers, as a call of the product with the purpose `document_extraction`, the conversation and
+  the user, and no longer as usage of the agent run after the tool returned. A refused or failed
+  extraction call leaves a row with the status `failed`. The provider id of the row is the id of
+  the entry under `infrastructure.models`, so a rate card entry for the extraction model must
+  name that id. The tool result and the stored extraction no longer carry token counts.
+- **Tools (breaking for tool authors):** `ToolHandlerSuccessResult.modelUsage` and
+  `ToolModelUsageReport` are removed, and `InProcessToolExecution` no longer takes
+  `usageRecorder`. A tool that calls a model does so through the model gateway, which records
+  the usage.
 - **Views:** a view can no longer move its own frame to another host. Every view is framed in
   a shell document the instance serves at `/app-runtime/view-shell/1/shell.html`, with the
   header `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'self'
