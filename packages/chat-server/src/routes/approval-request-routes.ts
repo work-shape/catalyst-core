@@ -18,7 +18,15 @@ export function registerApprovalRequestRoutes(route: Route, options: ChatServerO
     workflow.getRequest(user, access, context, requestId(params))
   );
   route(apiOperations["approval_requests.list"], ({ user, access, context, query, paging }) =>
-    workflow.listRequests(user, access, context, { status: query.status, page: paging })
+    workflow.listRequests(user, access, context, {
+      status: query.status,
+      scope: query.scope,
+      page: paging
+    })
+  );
+  // A person's own requests are theirs to follow, so the list needs no governance scope.
+  route(apiOperations["approval_requests.list_mine"], ({ user, access, context, paging }) =>
+    workflow.listOwnRequests(user, access, context, { page: paging })
   );
   route(apiOperations["approval_requests.count_pending"], ({ user, access }) =>
     workflow.pendingCount(user, access)

@@ -108,6 +108,12 @@ export interface ApprovalRequestStore {
     clientInstanceId: ClientInstanceId;
     kinds: readonly string[];
     status?: ApprovalRequestStatus;
+    /** Every status but this one. */
+    excludeStatus?: ApprovalRequestStatus;
+    /** Only the requests this person made. */
+    requestedById?: string;
+    /** Only the requests changed at or after this instant. */
+    updatedSince?: Date;
     conversationId?: ConversationId;
     page?: StorePage;
   }): Promise<ApprovalRequest[]>;
@@ -115,6 +121,12 @@ export interface ApprovalRequestStore {
     clientInstanceId: ClientInstanceId;
     kinds: readonly string[];
   }): Promise<number>;
+  /** How many requests of these kinds one person made: those still pending, and all of them. */
+  countOwnApprovalRequests(input: {
+    clientInstanceId: ClientInstanceId;
+    kinds: readonly string[];
+    requestedById: string;
+  }): Promise<{ pending: number; total: number }>;
   /** Exclusively lock a pending request before resolve; otherwise throw CONFLICT.
    * A failed resolve leaves it pending. External handler effects must be idempotent
    * by requestId: they cannot be rolled back with this store's transaction.

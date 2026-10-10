@@ -38,6 +38,21 @@ export const approvalRequestOperations = {
     errors: [],
     rateClass: "read"
   }),
+  "approval_requests.list_mine": defineOperation({
+    id: "approval_requests.list_mine",
+    method: "GET",
+    path: "/api/v1/approval-requests/mine",
+    summary: "List the approval requests the caller made",
+    tag: "Approval Requests",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    query: listQuerySchema,
+    response: page(approvalRequestViewSchema, ["createdAt", "id"], true),
+    errors: [],
+    rateClass: "read"
+  }),
   "approval_requests.count_pending": defineOperation({
     id: "approval_requests.count_pending",
     method: "GET",

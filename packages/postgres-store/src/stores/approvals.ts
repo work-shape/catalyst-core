@@ -22,6 +22,11 @@ export function createPostgresApprovalsStore(db: PostgresConnection): ApprovalsS
     ) {
       return approvalRequestOperations.countPendingApprovalRequests(db, input);
     },
+    countOwnApprovalRequests(
+      input: Parameters<ApprovalRequestStore["countOwnApprovalRequests"]>[0]
+    ) {
+      return approvalRequestOperations.countOwnApprovalRequests(db, input);
+    },
     transitionPendingApprovalRequest(
       input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
     ) {

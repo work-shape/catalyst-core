@@ -371,17 +371,97 @@ describe("approval request workflow", () => {
     ).toEqual([visible.id]);
     await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
       count: 1,
-      canReview: true
+      canReview: true,
+      mine: { pending: 0, total: 0 }
     });
     await expect(
       f.workflow.listRequests(requester, accessOf(requester), context)
     ).rejects.toMatchObject({
       code: "FORBIDDEN"
     });
+    // The requester may decide nothing and still counts what they asked for, of every kind.
     await expect(f.workflow.pendingCount(requester, accessOf(requester))).resolves.toEqual({
       count: 0,
-      canReview: false
+      canReview: false,
+      mine: { pending: 2, total: 3 }
     });
+  });
+
+  it("lists a person's own requests of every kind and status without a review permission", async () => {
+    const f = await fixture();
+    const pending = await f.create();
+    const otherKind = await f.create("other");
+    const rejected = await f.create();
+    await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+      requestId: rejected.id,
+      decision: "reject"
+    });
+    const colleague: AuthenticatedUser = {
+      ...requester,
+      id: "colleague",
+      displayLabel: "Colleague"
+    };
+    const foreign = await f.workflow.createRequest(colleague, context, {
+      kind: "fake",
+      summary: "A colleague's change",
+      payload: { value: "theirs" }
+    });
+
+    const own = await f.workflow.listOwnRequests(requester, accessOf(requester), context);
+    expect(own.map((request) => request.id).sort()).toEqual(
+      [pending.id, otherKind.id, rejected.id].sort()
+    );
+    expect(own.every((request) => !request.canDecide)).toBe(true);
+    expect(own.find((request) => request.id === pending.id)).toMatchObject({ canWithdraw: true });
+    expect(
+      (await f.workflow.listOwnRequests(colleague, accessOf(colleague), context)).map(
+        (request) => request.id
+      )
+    ).toEqual([foreign.id]);
+    // A reviewer's own list holds what they asked for, not what they may decide.
+    await expect(
+      f.workflow.listOwnRequests(reviewer, accessOf(reviewer), context)
+    ).resolves.toEqual([]);
+    await expect(
+      f.workflow.listOwnRequests(
+        { ...requester, clientInstanceId: asClientInstanceId("another_instance") },
+        accessOf(requester),
+        context
+      )
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("lists as decided what is no longer pending and changed in the last 30 days", async () => {
+    const f = await fixture();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const decide = async (at: Date) => {
+        vi.setSystemTime(at);
+        const request = await f.create();
+        await f.workflow.decideRequest(reviewer, accessOf(reviewer), context, {
+          requestId: request.id,
+          decision: "reject"
+        });
+        return request;
+      };
+      await decide(new Date("2026-08-01T10:00:00.000Z"));
+      const inside = await decide(new Date("2026-09-10T10:00:00.000Z"));
+      const newest = await decide(new Date("2026-10-01T10:00:00.000Z"));
+      vi.setSystemTime(new Date("2026-10-05T10:00:00.000Z"));
+      await f.create();
+      await f.create("other");
+
+      expect(
+        (
+          await f.workflow.listRequests(reviewer, accessOf(reviewer), context, { scope: "decided" })
+        ).map((request) => request.id)
+      ).toEqual([newest.id, inside.id]);
+      await expect(
+        f.workflow.listRequests(requester, accessOf(requester), context, { scope: "decided" })
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns the newest 200 requests while counting all pending requests", async () => {
@@ -411,13 +491,14 @@ describe("approval request workflow", () => {
       );
       await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
         count: 205,
-        canReview: true
+        canReview: true,
+        mine: { pending: 0, total: 0 }
       });
       await expect(
         f.workflow.pendingCount(
           ...callerOf({ ...reviewer, permissions: ["!agent_skills.approve"] })
         )
-      ).resolves.toEqual({ count: 0, canReview: false });
+      ).resolves.toEqual({ count: 0, canReview: false, mine: { pending: 0, total: 0 } });
     } finally {
       vi.useRealTimers();
     }
@@ -526,13 +607,17 @@ describe("approval request workflow", () => {
     f.handlers.clear();
     await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
       count: 0,
-      canReview: false
+      canReview: false,
+      mine: { pending: 0, total: 0 }
     });
     await expect(
       f.workflow.listRequests(reviewer, accessOf(reviewer), context)
     ).rejects.toMatchObject({
       code: "FORBIDDEN"
     });
+    await expect(
+      f.workflow.listOwnRequests(reviewer, accessOf(reviewer), context)
+    ).resolves.toEqual([]);
     await expect(f.create()).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

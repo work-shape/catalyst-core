@@ -1,5 +1,5 @@
 import { keysetFilter } from "./paging";
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import {
   AppError,
   createPlatformId,
@@ -62,6 +62,13 @@ export async function listApprovalRequests(
         inArray(approvalRequests.kind, [...input.kinds]),
         keysetFilter(input.page, [approvalRequests.createdAt, approvalRequests.id], true),
         input.status === undefined ? undefined : eq(approvalRequests.status, input.status),
+        input.excludeStatus === undefined
+          ? undefined
+          : ne(approvalRequests.status, input.excludeStatus),
+        input.requestedById === undefined ? undefined : requestedBy(input.requestedById),
+        input.updatedSince === undefined
+          ? undefined
+          : gte(approvalRequests.updatedAt, input.updatedSince),
         input.conversationId === undefined
           ? undefined
           : sql`${approvalRequests.origin}->>'conversationId' = ${input.conversationId}`
@@ -88,6 +95,32 @@ export async function countPendingApprovalRequests(
       )
     );
   return row?.count ?? 0;
+}
+
+export async function countOwnApprovalRequests(
+  db: PostgresConnection,
+  input: Parameters<ApprovalRequestStore["countOwnApprovalRequests"]>[0]
+): Promise<{ pending: number; total: number }> {
+  if (input.kinds.length === 0) return { pending: 0, total: 0 };
+  const [row] = await db
+    .select({
+      pending: sql<number>`count(*) filter (where ${approvalRequests.status} = 'pending')::int`,
+      total: count()
+    })
+    .from(approvalRequests)
+    .where(
+      and(
+        eq(approvalRequests.clientInstanceId, input.clientInstanceId),
+        requestedBy(input.requestedById),
+        inArray(approvalRequests.kind, [...input.kinds])
+      )
+    );
+  return { pending: row?.pending ?? 0, total: row?.total ?? 0 };
+}
+
+/** The expression of `approval_requests_client_requester_idx`, so the planner can use it. */
+function requestedBy(userId: string) {
+  return sql`(${approvalRequests.requestedBy}->>'id') = ${userId}`;
 }
 
 export async function transitionPendingApprovalRequest(

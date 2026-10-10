@@ -62,11 +62,19 @@ export const approvalRequestViewSchema = approvalRequestSchema.extend({
 });
 
 export const listApprovalRequestsQuerySchema = z.object({
-  status: approvalRequestStatusSchema.optional()
+  status: approvalRequestStatusSchema.optional(),
+  /** `decided`: the requests that are no longer pending and changed in the last 30 days. */
+  scope: z.enum(["decided"]).optional()
 });
 export const pendingApprovalRequestCountSchema = z.object({
+  /** The pending requests the caller can decide. */
   count: z.number().int().nonnegative(),
-  canReview: z.boolean()
+  canReview: z.boolean(),
+  /** The requests the caller made: those still pending, and all of them. */
+  mine: z.object({
+    pending: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative()
+  })
 });
 export const decideApprovalRequestSchema = z.discriminatedUnion("decision", [
   z.object({ decision: z.literal("approve"), comment: z.string().optional() }),

@@ -151,9 +151,18 @@ describe("approval routes and generated instance client", () => {
       });
       await expect(f.requester.approval_requests.count_pending()).resolves.toEqual({
         count: 0,
-        canReview: false
+        canReview: false,
+        mine: { pending: 1, total: 1 }
       });
       await expect(f.requester.approval_requests.list()).rejects.toMatchObject({ status: 403 });
+      // Without any review permission the requester still reads their own requests, and no
+      // other person reads them through this list.
+      expect((await f.requester.approval_requests.list_mine()).items).toMatchObject([
+        { id: request.id, canDecide: false, canWithdraw: true }
+      ]);
+      await expect(f.stranger.approval_requests.list_mine()).resolves.toEqual({ items: [] });
+      await expect(f.stranger.approval_requests.list()).rejects.toMatchObject({ status: 403 });
+      await expect(f.reviewer.approval_requests.list_mine()).resolves.toEqual({ items: [] });
       await expect(
         f.stranger.approval_requests.get({ params: { requestId: request.id } })
       ).rejects.toMatchObject({
@@ -166,8 +175,12 @@ describe("approval routes and generated instance client", () => {
       });
       await expect(f.reviewer.approval_requests.count_pending()).resolves.toEqual({
         count: 1,
-        canReview: true
+        canReview: true,
+        mine: { pending: 0, total: 0 }
       });
+      await expect(
+        f.reviewer.approval_requests.list({ query: { scope: "decided" } })
+      ).resolves.toEqual({ items: [] });
       expect(
         (await f.reviewer.approval_requests.list({ query: { status: "pending" } })).items
       ).toMatchObject([{ id: request.id, canDecide: true }]);
@@ -202,11 +215,21 @@ describe("approval routes and generated instance client", () => {
       });
       await expect(f.reviewer.approval_requests.count_pending()).resolves.toEqual({
         count: 0,
-        canReview: true
+        canReview: true,
+        mine: { pending: 0, total: 0 }
       });
       await expect(
         f.reviewer.approval_requests.list({ query: { status: "pending" } })
       ).resolves.toEqual({ items: [] });
+      expect(
+        (await f.reviewer.approval_requests.list({ query: { scope: "decided" } })).items
+      ).toMatchObject([{ id: request.id, status: "approved", canRevert: true }]);
+      await expect(f.requester.approval_requests.count_pending()).resolves.toMatchObject({
+        mine: { pending: 0, total: 1 }
+      });
+      expect((await f.requester.approval_requests.list_mine()).items).toMatchObject([
+        { id: request.id, status: "approved", decision: { decidedByLabel: "Reviewer" } }
+      ]);
       await expect(
         f.reviewer.approval_requests.decide({
           params: { requestId: request.id },
@@ -325,6 +348,10 @@ describe("approval routes and generated instance client", () => {
       expect(card.statusCode).toBe(200);
       expect(card.json()).toMatchObject({ canDecide: false, canRevert: false, canWithdraw: true });
       expect((await call("approval_requests.count_pending", {})).statusCode).toBe(200);
+      // A chat session follows its own requests; the review queue stays closed to it.
+      const mine = await call("approval_requests.list_mine", {});
+      expect(mine.statusCode).toBe(200);
+      expect(mine.json()).toMatchObject({ items: [{ id: pending.id, canDecide: false }] });
       const listed = await call("approval_requests.list", {});
       expect(listed.statusCode).toBe(403);
       expect(listed.json()).toMatchObject({
@@ -357,9 +384,11 @@ describe("approval routes and generated instance client", () => {
     try {
       await expect(f.reviewer.approval_requests.count_pending()).resolves.toEqual({
         count: 0,
-        canReview: false
+        canReview: false,
+        mine: { pending: 0, total: 0 }
       });
       await expect(f.reviewer.approval_requests.list()).rejects.toMatchObject({ status: 403 });
+      await expect(f.reviewer.approval_requests.list_mine()).resolves.toEqual({ items: [] });
       await expect(
         f.reviewer.approval_requests.get({ params: { requestId: "missing" } })
       ).rejects.toMatchObject({

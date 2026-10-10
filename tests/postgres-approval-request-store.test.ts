@@ -73,6 +73,7 @@ describe("Postgres approval request store", () => {
       expect(
         await store.approvals.countPendingApprovalRequests({ clientInstanceId, kinds: ["fake"] })
       ).toBe(1);
+      await expectOwnRequestsFromTheIndex(store, sql, clientInstanceId, request.id);
       let applied = 0;
       const transition = () =>
         store.approvals.transitionPendingApprovalRequest({
@@ -212,6 +213,67 @@ describe("Postgres approval request store", () => {
     }
   });
 });
+
+/**
+ * A person's own requests are read by the requester index, not by a walk over the instance's
+ * requests. The plan is asked without sequential scans, because on a table this small the
+ * planner would otherwise prefer one whatever indexes exist.
+ */
+async function expectOwnRequestsFromTheIndex(
+  store: Awaited<ReturnType<typeof createTestInstance>>["stores"],
+  sql: postgres.Sql,
+  clientInstanceId: ReturnType<typeof asClientInstanceId>,
+  ownRequestId: string
+): Promise<void> {
+  const foreign = await store.approvals.createApprovalRequest({
+    clientInstanceId,
+    kind: "fake",
+    summary: "Someone else's",
+    payload: { value: "theirs" },
+    requestedBy: { id: "someone_else", displayLabel: "Someone else" }
+  });
+  const own = { clientInstanceId, kinds: ["fake"], requestedById: "requester" };
+  expect((await store.approvals.listApprovalRequests(own)).map((row) => row.id)).toEqual([
+    ownRequestId
+  ]);
+  expect(await store.approvals.countOwnApprovalRequests(own)).toEqual({ pending: 1, total: 1 });
+  expect(
+    await store.approvals.countOwnApprovalRequests({ ...own, requestedById: "nobody" })
+  ).toEqual({ pending: 0, total: 0 });
+  expect(await store.approvals.countOwnApprovalRequests({ ...own, kinds: [] })).toEqual({
+    pending: 0,
+    total: 0
+  });
+  expect(
+    (
+      await store.approvals.listApprovalRequests({
+        clientInstanceId,
+        kinds: ["fake"],
+        excludeStatus: "pending"
+      })
+    ).length
+  ).toBe(0);
+  expect(
+    await store.approvals.listApprovalRequests({
+      clientInstanceId,
+      kinds: ["fake"],
+      updatedSince: new Date(Date.now() + 60_000)
+    })
+  ).toEqual([]);
+
+  const plan = await sql.begin(async (tx) => {
+    await tx`set local enable_seqscan = off`;
+    return tx<{ "QUERY PLAN": string }[]>`
+      explain select * from approval_requests
+      where client_instance_id = ${clientInstanceId}
+        and (requested_by->>'id') = ${"requester"}
+      order by created_at desc, id desc`;
+  });
+  expect(plan.map((row) => row["QUERY PLAN"]).join("\n")).toContain(
+    "approval_requests_client_requester_idx"
+  );
+  await sql`delete from approval_requests where id = ${foreign.id}`;
+}
 
 let databaseUrl: string;
 beforeAll(async () => {

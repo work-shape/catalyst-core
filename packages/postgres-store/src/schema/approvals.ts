@@ -31,6 +31,12 @@ export const approvalRequests = pgTable(
     index("approval_requests_client_conversation_idx").on(
       table.clientInstanceId,
       sql`(${table.origin}->>'conversationId')`
+    ),
+    // A person's own requests, newest first: the Inbox list "My requests" and its counts.
+    index("approval_requests_client_requester_idx").on(
+      table.clientInstanceId,
+      sql`(${table.requestedBy}->>'id')`,
+      table.createdAt.desc()
     )
   ]
 );

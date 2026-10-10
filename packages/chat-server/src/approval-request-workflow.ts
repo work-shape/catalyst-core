@@ -24,6 +24,9 @@ import type { ApprovalCheckRunner } from "./approval-check-runner";
 const APPROVAL_DECIDE_AUTH_SCOPE = "governance:write";
 const APPROVAL_WITHDRAW_AUTH_SCOPE = "conversation:write";
 
+/** How far back the list of decided requests reaches. Older decisions stay in the audit trail. */
+const DECIDED_LIST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
 type CallContext = Pick<RuntimeCallContext, "correlationId"> &
   Partial<Omit<RuntimeCallContext, "user" | "clientInstanceId" | "correlationId">>;
 
@@ -99,15 +102,38 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     user: AuthenticatedUser,
     access: ActorAccess,
     context: CallContext,
-    filter: { status?: ApprovalRequestStatus; page?: StorePage } = {}
+    filter: { status?: ApprovalRequestStatus; scope?: "decided"; page?: StorePage } = {}
   ): Promise<ApprovalRequestView[]> {
     const kinds = this.reviewableKinds(user, access);
     if (kinds.length === 0) {
       throw new AppError("FORBIDDEN", "Approval review requires a registered kind's permission");
     }
+    const { scope, ...storeFilter } = filter;
     const requests = await this.options.store.listApprovalRequests({
       clientInstanceId: this.options.clientInstanceId,
       kinds,
+      ...storeFilter,
+      excludeStatus: scope === "decided" ? "pending" : undefined,
+      updatedSince: scope === "decided" ? new Date(Date.now() - DECIDED_LIST_WINDOW_MS) : undefined
+    });
+    return Promise.all(requests.map((request) => this.view(user, access, context, request)));
+  }
+
+  /**
+   * The requests the caller made, in any status. It needs no review permission: a request is
+   * always visible to the person who made it.
+   */
+  async listOwnRequests(
+    user: AuthenticatedUser,
+    access: ActorAccess,
+    context: CallContext,
+    filter: { page?: StorePage } = {}
+  ): Promise<ApprovalRequestView[]> {
+    this.assertClientInstance(user);
+    const requests = await this.options.store.listApprovalRequests({
+      clientInstanceId: this.options.clientInstanceId,
+      kinds: this.registeredKinds(),
+      requestedById: user.id,
       ...filter
     });
     return Promise.all(requests.map((request) => this.view(user, access, context, request)));
@@ -116,16 +142,20 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   async pendingCount(
     user: AuthenticatedUser,
     access: ActorAccess
-  ): Promise<{ count: number; canReview: boolean }> {
+  ): Promise<{ count: number; canReview: boolean; mine: { pending: number; total: number } }> {
     const kinds = this.reviewableKinds(user, access);
-    if (kinds.length === 0) return { count: 0, canReview: false };
-    return {
-      canReview: true,
-      count: await this.options.store.countPendingApprovalRequests({
+    const [count, mine] = await Promise.all([
+      this.options.store.countPendingApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
         kinds
+      }),
+      this.options.store.countOwnApprovalRequests({
+        clientInstanceId: this.options.clientInstanceId,
+        kinds: this.registeredKinds(),
+        requestedById: user.id
       })
-    };
+    ]);
+    return { count, canReview: kinds.length > 0, mine };
   }
 
   async decideRequest(
@@ -314,6 +344,11 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       .filter((handler) => access.authorize(handler.requiredPermission).allowed)
       .map((handler) => handler.kind);
     return kinds;
+  }
+
+  /** Every kind with a handler. A request of a kind without one cannot be shown or counted. */
+  private registeredKinds(): string[] {
+    return [...this.options.handlers.keys()];
   }
 
   private handler(kind: string): ApprovalRequestHandler {
