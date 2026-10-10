@@ -1,0 +1,49 @@
+name: Publish docs
+# Publishes the documentation site to https://docs.workshape.ai/catalyst: static files on
+# Cloudflare Pages, project `workshape-docs`, which serves the whole host docs.workshape.ai.
+# The upload replaces the host's files with `packages/docs/dist`: the site under `catalyst/`
+# and the host's root files from `packages/docs/host/`.
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/docs/**
+      # The API reference pages are written from this package's OpenAPI document.
+      - packages/api-contract/**
+      - .github/workflows/publish-docs.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+# One upload at a time, and a running upload is finished before the next one starts.
+concurrency:
+  group: publish-docs
+  cancel-in-progress: false
+jobs:
+  publish:
+    # Runs once the repository variable names the Cloudflare account, so the workflow can land
+    # before the hosting exists.
+    if: github.repository == 'vivd-solutions/vivd-catalyst' && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_ACCOUNT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The docs package and the packages it reads the API reference from.
+      - run: pnpm --filter "@vivd-catalyst/docs..." build
+      # Crawls the built site under its base path. A broken link, asset, anchor, sitemap entry
+      # or search index stops the publish.
+      - run: pnpm --filter @vivd-catalyst/docs check:site
+      # CLOUDFLARE_PAGES_TOKEN is an API token with the single permission
+      # "Account / Cloudflare Pages / Edit". It cannot edit DNS.
+      - name: Upload to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm dlx wrangler@4.149.0 pages deploy packages/docs/dist --project-name workshape-docs --branch main
