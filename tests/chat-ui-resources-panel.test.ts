@@ -290,17 +290,28 @@ describe("Resources panel rendering", () => {
   it("renders localized mixed sections and counts", () => {
     const markup = renderResourcesPanel(resources);
 
-    expect(markup).toMatch(/Kundendaten[\s\S]*?>1</u);
+    expect(markup).toMatch(/>Daten<[\s\S]*?>1</u);
+    expect(markup).not.toContain("Kundendaten");
     expect(markup).toMatch(/Analysen[\s\S]*?>2</u);
     expect(markup).toMatch(/Erstellte Dateien[\s\S]*?>1</u);
     expect(markup).toMatch(/Hochgeladene Dateien[\s\S]*?>1</u);
+  });
+
+  it("heads the structured data with the label the client words for itself", () => {
+    const markup = renderResourcesPanel(resources, {
+      resourcesCustomerData: { en: "Customer data", de: "Kundendaten" }
+    });
+
+    expect(markup).toMatch(/>Kundendaten<[\s\S]*?>1</u);
+    expect(markup).not.toContain(">Daten<");
+    expect(markup).toMatch(/Analysen[\s\S]*?>2</u);
   });
 
   it("renders one compact empty state", () => {
     const markup = renderResourcesPanel([]);
 
     expect(markup).toContain("Diese Unterhaltung enthält noch keine Inhalte.");
-    expect(markup).not.toContain("Kundendaten");
+    expect(markup).not.toContain(">Daten<");
   });
 
   it("renders structured section, field labels, and formatted values", () => {
@@ -408,11 +419,14 @@ describe("Resources panel rendering", () => {
   });
 });
 
-function renderResourcesPanel(items: ConversationResourceListItem[]): string {
+function renderResourcesPanel(
+  items: ConversationResourceListItem[],
+  labelOverrides?: Parameters<typeof TranslationProvider>[0]["labelOverrides"]
+): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { children: null, locale: "de" },
+      { children: null, locale: "de", labelOverrides },
       createElement(
         ToolDisplayPanelProvider,
         null,
