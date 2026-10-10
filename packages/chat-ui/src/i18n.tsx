@@ -4,9 +4,10 @@ import { translations, type TranslationKey } from "./i18n/translations";
 
 export type { TranslationKey };
 
-export type TranslationLabelOverrides = Partial<
-  Record<TranslationKey, Partial<Record<LocaleCode, string>>>
->;
+/** The labels a client words for itself: the heading of the structured data in the resources. */
+export interface ClientLabelOverrides {
+  resourcesCustomerData?: Record<LocaleCode, string>;
+}
 
 type TranslationValues = Record<string, string | number>;
 
@@ -25,7 +26,7 @@ export function TranslationProvider({
   children
 }: {
   locale: LocaleCode;
-  labelOverrides?: TranslationLabelOverrides;
+  labelOverrides?: ClientLabelOverrides;
   children: ReactNode;
 }) {
   const value = useMemo(
@@ -56,15 +57,16 @@ export function readBrowserLocale(): LocaleCode | undefined {
 
 export function createTranslationContext(
   locale: LocaleCode,
-  labelOverrides: TranslationLabelOverrides = {}
+  labelOverrides: ClientLabelOverrides = {}
 ): TranslationContextValue {
   return {
     locale,
     t(key, values) {
-      return interpolate(
-        labelOverrides[key]?.[locale] ?? translations[locale][key] ?? translations.en[key],
-        values
-      );
+      const override =
+        key === "resourcesCustomerData"
+          ? labelOverrides.resourcesCustomerData?.[locale]
+          : undefined;
+      return interpolate(override ?? translations[locale][key] ?? translations.en[key], values);
     },
     localeName(targetLocale) {
       return translations[locale][`locale${targetLocale === "de" ? "De" : "En"}`];

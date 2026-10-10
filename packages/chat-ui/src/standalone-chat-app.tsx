@@ -9,7 +9,7 @@ import {
   useLocation,
   useRouter
 } from "@tanstack/react-router";
-import type { TranslationLabelOverrides } from "./i18n";
+import type { ClientLabelOverrides } from "./i18n";
 import { ChatShell } from "./chat-shell";
 import type { ChatShellAdministration } from "./settings/page-definition";
 import type { ToolDisplayWidgetRegistry } from "./domain-ui-widgets";
@@ -24,7 +24,7 @@ export interface StandaloneChatAppOptions {
   defaultApiPort?: string | number;
   administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
-  labelOverrides?: TranslationLabelOverrides;
+  labelOverrides?: ClientLabelOverrides;
   toolActivityLabels?: ToolActivityLabels;
   rootElement?: HTMLElement | null;
 }
@@ -63,7 +63,7 @@ interface StandaloneChatRouterOptions {
   apiBaseUrl: string;
   administration?: ChatShellAdministration;
   displayWidgets?: ToolDisplayWidgetRegistry;
-  labelOverrides?: TranslationLabelOverrides;
+  labelOverrides?: ClientLabelOverrides;
   toolActivityLabels?: ToolActivityLabels;
 }
 

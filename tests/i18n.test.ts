@@ -16,11 +16,7 @@ describe("interface translations", () => {
       "Client records"
     );
     expect(createTranslationContext("de", labels).t("resourcesCustomerData")).toBe("Datensätze");
-    expect(
-      createTranslationContext("de", { resourcesCustomerData: { en: "Client records" } }).t(
-        "resourcesCustomerData"
-      )
-    ).toBe("Daten");
+    expect(createTranslationContext("de", labels).t("cancel")).toBe("Abbrechen");
   });
 
   it("looks a message up in the chosen locale", () => {

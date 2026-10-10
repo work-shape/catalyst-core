@@ -57,6 +57,8 @@ import client from "./client";
 await client.listen();
 ```
 
+The frontend entry calls `renderStandaloneChatApp` from `@vivd-catalyst/chat-ui/shell`. Its `toolActivityLabels` option names a tool in the activity line, and its `labelOverrides` option takes `resourcesCustomerData: { en, de }` to word the heading of the structured data in the resources, which reads "Data" without it.
+
 Exact APIs may evolve while the platform is still early. The boundary should remain the same: platform packages provide reusable behavior, and the client assembly app provides source-controlled customer choices.
 
 ## Startup Validation
