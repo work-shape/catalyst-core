@@ -272,6 +272,10 @@ describe("the file sets of a Page", () => {
       "",
       "__catalyst/guard-1.js",
       "__Catalyst/guard-1.js",
+      // At every depth: an HTML file in a folder resolves a relative address below that folder.
+      "sub/__catalyst/guard-1.js",
+      "sub/deeper/__CATALYST/relay.js",
+      "sub/__catalyst",
       "assets/a?b.js",
       "assets/a%2fb.js",
       "assets\\main.js"

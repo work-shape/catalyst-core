@@ -57,8 +57,8 @@ export const CONVERSATION_MAX_PAGES = 200;
 export const PAGE_NAME_MAX_CHARS = 120;
 
 /**
- * The first path segment the platform keeps for its own files beside a Page's. No file of a
- * file set may lie below it.
+ * The folder name the platform keeps for its own files beside a Page's. No file of a file set
+ * may lie below a folder of this name, at any depth.
  */
 export const FILE_SET_RESERVED_SEGMENT = "__catalyst";
 
@@ -235,8 +235,9 @@ export function fileSetPathIssue(path: string): string | undefined {
   if (segments.some((segment) => !PATH_SEGMENT.test(segment) || segment.endsWith(" "))) {
     return "a path segment holds letters, digits, spaces and . _ @ ( ) + - only";
   }
-  if (segments[0]?.toLowerCase() === FILE_SET_RESERVED_SEGMENT) {
-    return `'${FILE_SET_RESERVED_SEGMENT}/' is kept for the platform's own files`;
+  // At every depth: a relative address in an HTML file of a folder resolves below that folder.
+  if (segments.some((segment) => segment.toLowerCase() === FILE_SET_RESERVED_SEGMENT)) {
+    return `a folder named '${FILE_SET_RESERVED_SEGMENT}' is kept for the platform's own files, at every depth`;
   }
   return undefined;
 }
