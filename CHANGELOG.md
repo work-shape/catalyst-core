@@ -642,13 +642,16 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     and an unexpired lease, so a worker that lost its lease stores nothing more, whatever it
     still does.
   - When the worker of a run is killed, nobody can tell for up to 90 seconds: the reply stands
-    still and the conversation takes no message. Then the next pass of any Agent Run worker
-    marks the job dead and, in the same transaction, fails the run with the code
+    still and the conversation takes no message. Then the next pass of any job worker of the
+    instance, the one of the API process included, marks the job dead and, in the same
+    transaction, fails the run with the code
     `AGENT_RUN_WORKER_LOST` and the category `runtime_interrupted`, stores the event
     `run_failed` and the audit event `agent_run.recovered`. The interface shows the reply as
     interrupted with what was streamed so far, and the conversation takes the next message.
-    The message is not sent to the model again. Without any Agent Run worker running, nothing
-    notices.
+    The message is not sent to the model again. This needs no second Agent Run worker: the
+    API process buries the jobs of lost workers without executing any. A run that another
+    worker holds under a live lease, one of the previous release during a rolling deploy, is
+    left alone when the job beside it dies.
   - On SIGTERM a worker takes no new run and lets its runs go on for the drain time, as
     before; a run that is still going then fails with `AGENT_RUN_RUNTIME_INTERRUPTED` and is
     not executed again. A second signal ends the drain at once. An API process that serves
@@ -658,19 +661,49 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     with the status `cancelling` for a run that has started, in every topology; the run is
     `cancelled` once the worker has stored what the model wrote so far. A run that was asked
     to cancel ends as cancelled even when its completion arrives first.
-  - A run that stores no event for 30 minutes fails as interrupted. A queued run waits for a
-    worker without a limit; the previous release failed it after 30 minutes.
+  - A run that stores no event for 30 minutes fails as interrupted. A run that no worker took
+    within 10 minutes of its acceptance fails with the code `AGENT_RUN_NOT_STARTED`; the
+    conversation takes the next message and the interface says that the reply could not be
+    started. The previous release failed such a run after 30 minutes. The limit is the
+    constant `AGENT_RUN_MAX_QUEUED_MS`. It must stay above the longest wait of a healthy
+    instance, which grows with the runs queued ahead divided by the slots of all worker
+    processes, times the length of a run. Instance > Jobs marks a kind whose due jobs have
+    waited a minute with none running as "No worker takes these"; for `agent_run.execute` that
+    is the missing Agent Run worker. `/ready` does not change.
+  - The answer of a run and the end of the run are stored in one transaction. A worker that is
+    killed at the end of a run leaves either the answer with a completed run, or a failed run
+    without the answer; the previous state of this release could show the full answer beside
+    a failed run.
+  - An approval request a tool proposes and a provider continuation the runtime drops carry
+    the lease of the run's job into their transaction (`RuntimeCallContext.runFence`), like
+    the events and messages, so a run that lost its lease leaves none of them behind. Usage
+    settlement and audit are not fenced, on purpose: a model call that was made and a tool
+    that ran are recorded whoever holds the run. Workspace commands, artifacts and files are
+    not fenced; the run checks its lease before each tool call.
+  - A stopped reply is named "The reply was stopped." in the interface, in English and
+    German, where it showed the reason code of the request.
   - This release can run beside the previous one with the worker topology and be rolled back
     to it. A job copies its lease onto the lease columns of its run row, so a worker and the
     API of the previous release leave the row alone; a job that finds its run held by a
-    worker of the previous release ends without waiting; and the schedule `agent_run.adopt`
-    gives every run in progress without a live job a job every 15 seconds, which covers runs
-    the previous release's API accepts and runs its workers hold. A run whose
-    previous-release worker died fails as lost when that lease has run out. After a
+    worker of the previous release ends without waiting; and the schedule `agent_run.adopt`,
+    served by the API process and by every Agent Run worker, gives every run in progress that
+    has no live job and that nobody holds under a live lease a job every 15 seconds, which
+    covers runs the previous release's API accepts. A run whose previous-release worker died
+    gets its job, and fails as lost, when that lease has run out. After a
     rollback the previous release's worker claims the queued runs this release accepted, and
     its recovery fails the runs this release's worker held once their lease has run out. An
     API of the previous release that kept runs in its own memory (`agentRuntimeMode:
     "local"`) cannot run beside this release: stop it before the new processes start.
+  - Rollback in the single-process topology: the previous release with `agentRuntimeMode:
+    "local"` executes only runs it accepted itself. A run that was in flight on this release
+    at the rollback stays `running` on the previous release until that release's recovery
+    fails it, up to 30 minutes later, and its conversation answers the next message with 409
+    until then. Let the runs end before a rollback, or expect that wait.
+  - Compose: give an Agent Run worker a `stop_grace_period` of at least its drain timeout plus
+    30 seconds (15 minutes 30 seconds with the default `AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS`),
+    or Docker kills it mid-drain and its runs fail as lost after the lease time instead of
+    ending. The recommended `AGENT_RUN_WORKER_CONCURRENCY` is the default of 8: a worker
+    process with 8 runs in progress was measured at 201 MB.
   - The schedule `agent_run.recover` is gone. The kind stays registered with a handler that
     does nothing, so the tick the previous release left behind ends; it is removed in a later
     release.
@@ -680,9 +713,12 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     `RunRecoveryWatchdog` or the job option `runRecovery`. `AgentRuntime.holdsRun` is removed.
     The run store loses `claimNextAgentRun`, `heartbeatAgentRun`, `recoverExpiredAgentRuns`,
     `listStaleActiveAgentRuns` and `recoverStaleAgentRun` and gains `claimAgentRunForJob`,
-    `renewAgentRunJobLease`, `failLostAgentRun` and `listAgentRunsWithoutJob`; the fenced
+    `renewAgentRunJobLease`, `failLostAgentRun`, `failAgentRunsQueuedTooLong`,
+    `appendClaimedAgentRunEnd` and `listAgentRunsWithoutJob`; the fenced
     writes take `lease: { jobId, leaseToken }`. `UserStore` gains `getUser`.
-    `JobWorker.stop` takes `{ drainMs }`.
+    `JobWorker.stop` takes `{ drainMs }`. `@vivd-catalyst/core` gains `defineJobBurial`, which
+    registers only the burial of a kind's dead jobs in a process that does not execute the
+    kind, and `createAgentRunUpkeepJobs`, which `createChatServerJobs` registers.
 - **Jobs (operator-relevant, breaking for integrators):** workspace commands run on the job
   executor, as the kind `workspace.command` (one attempt, a lease of 2 minutes renewed every 30 seconds, one command
   per workspace at a time, so two commands of a workspace run in the order they were queued).

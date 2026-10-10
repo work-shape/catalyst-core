@@ -56,21 +56,36 @@ Where the worker runs is set in the client assembly with `agentRunWorker`:
   the API process ends its runs as interrupted at once.
 - `"separate"`: only the processes started with `runAgentRunWorker` serve the runs. On SIGTERM
   such a process takes no new run and gives its runs `AGENT_RUN_WORKER_DRAIN_TIMEOUT_MS` to
-  end, 15 minutes unless set. A second signal ends the drain.
+  end, 15 minutes unless set. A second signal ends the drain. In Compose, set the worker's
+  `stop_grace_period` to at least the drain timeout plus 30 seconds; with less, Docker kills
+  the worker mid-drain and its runs fail as lost after the lease time.
 
 One process executes `AGENT_RUN_WORKER_CONCURRENCY` runs at once, 8 unless set. The runs of an
 instance that execute at once are that number times its worker processes; further runs wait
-queued in the order they were accepted. A run is never executed twice:
+queued in the order they were accepted. Keep the default of 8 unless measured otherwise: a
+worker process with 8 runs in progress was measured at 201 MB. A run is never executed twice:
 
-- The worker of a run was killed: after the lease time of 90 seconds the next pass of any
-  Agent Run worker fails the run with `AGENT_RUN_WORKER_LOST`, the reply is shown as
-  interrupted and the conversation takes the next message. Until then the reply stands still.
+- The worker of a run was killed: after the lease time of 90 seconds the next pass of any job
+  worker of the instance, the API's included, fails the run with `AGENT_RUN_WORKER_LOST`, the
+  reply is shown as interrupted and the conversation takes the next message. Until then the
+  reply stands still. No worker has to come back for this.
 - The worker was stopped and the run did not end within the drain time: the run fails with
   `AGENT_RUN_RUNTIME_INTERRUPTED`.
 - A run stored no event for 30 minutes: it fails as interrupted.
-- No Agent Run worker is running: accepted runs wait queued until one starts.
+- No Agent Run worker takes a run within 10 minutes of its acceptance: the run fails with
+  `AGENT_RUN_NOT_STARTED`, the person is told that the reply could not be started, and the
+  conversation takes the next message. The same happens when the backlog is longer than the
+  workers take in that time, so add slots or processes before the wait of a healthy instance
+  comes near it. Instance > Jobs marks `agent_run.execute` with "No worker takes these" when
+  its jobs have been due for a minute and none is running.
 
-A stop request reaches the worker within about a second.
+A stop request reaches the worker within about a second. The answer of a run and the end of the
+run are stored together, so a worker killed at the end of a run leaves no answer beside a
+failed run.
+
+Rolling back to the previous release in the single-process topology leaves the runs that were
+in flight `running` for up to 30 minutes, with their conversations answering 409, until that
+release's own recovery fails them.
 
 ## Deployment Flow
 
