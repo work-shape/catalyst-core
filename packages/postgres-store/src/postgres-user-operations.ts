@@ -19,7 +19,8 @@ import {
   authenticatedUserFromRecord,
   createPlatformId,
   createUserId,
-  requireUsableUser
+  requireUsableUser,
+  userInDeletionError
 } from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
@@ -382,14 +383,40 @@ export async function updateUser(
     .where(
       and(
         eq(productUsers.clientInstanceId, input.clientInstanceId),
-        eq(productUsers.id, input.userId)
+        eq(productUsers.id, input.userId),
+        // In the statement, so a deletion requested since the caller read the user refuses too.
+        isNull(productUsers.deletionRequestedAt)
       )
     )
     .returning();
   if (!row) {
-    throw new AppError("NOT_FOUND", "User is not available");
+    // No row matched: the user is gone, or the deletion was requested.
+    await requireUserRecord(db, input.clientInstanceId, input.userId);
+    throw userInDeletionError();
   }
   return requireUserRecord(db, input.clientInstanceId, row.id);
+}
+
+/**
+ * Holds the user against a deletion request until the transaction ends and refuses when the
+ * deletion was requested already: the statement that marks the user waits for this lock.
+ */
+async function lockUserNotInDeletion(
+  tx: PostgresTransaction,
+  input: { clientInstanceId: ClientInstanceId; userId: string }
+): Promise<void> {
+  const [user] = await tx
+    .select({ deletionRequestedAt: productUsers.deletionRequestedAt })
+    .from(productUsers)
+    .where(
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId)
+      )
+    )
+    .for("share");
+  if (!user) throw new AppError("NOT_FOUND", "User is not available");
+  if (user.deletionRequestedAt !== null) throw userInDeletionError();
 }
 
 export async function markUserDeletionRequested(
@@ -450,14 +477,19 @@ export async function deleteUser(
 }
 
 export async function upsertUserIdentity(
-  db: PostgresConnection,
+  connection: PostgresConnection,
   input: UpsertUserIdentityInput
 ): Promise<UserRecord> {
-  const user = await getUserRecord(db, input.clientInstanceId, input.userId);
-  if (!user) {
-    throw new AppError("NOT_FOUND", "User is not available");
-  }
+  return connection.transaction(async (db) => {
+    await lockUserNotInDeletion(db, input);
+    return upsertLockedUserIdentity(db, input);
+  });
+}
 
+async function upsertLockedUserIdentity(
+  db: PostgresTransaction,
+  input: UpsertUserIdentityInput
+): Promise<UserRecord> {
   const now = new Date();
   await db
     .insert(userIdentities)
@@ -499,14 +531,19 @@ export async function upsertUserIdentity(
 }
 
 export async function deleteUserIdentity(
-  db: PostgresConnection,
+  connection: PostgresConnection,
   input: DeleteUserIdentityInput
 ): Promise<UserRecord> {
-  const user = await getUserRecord(db, input.clientInstanceId, input.userId);
-  if (!user) {
-    throw new AppError("NOT_FOUND", "User is not available");
-  }
+  return connection.transaction(async (db) => {
+    await lockUserNotInDeletion(db, input);
+    return deleteLockedUserIdentity(db, input);
+  });
+}
 
+async function deleteLockedUserIdentity(
+  db: PostgresTransaction,
+  input: DeleteUserIdentityInput
+): Promise<UserRecord> {
   const rows = await db
     .delete(userIdentities)
     .where(

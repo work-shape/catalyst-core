@@ -124,6 +124,7 @@ export interface UserStore {
     excludeSuperadmins?: boolean;
   }): Promise<UserRecord[]>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
+  /** Refuses with `userInDeletionError` when the deletion of the user was requested. */
   updateUser(input: UpdateUserInput): Promise<UserRecord>;
   /**
    * Marks the user as being deleted. From the commit on the user reads `deleting`: every
@@ -189,4 +190,12 @@ export function authenticatedUserFromRecord(input: {
       authSource: authenticatedUser.authSource
     }
   };
+}
+
+/**
+ * The answer to a change of a user whose deletion was requested. The account is closed to
+ * administration too: nothing of it is changed or given back while it is being removed.
+ */
+export function userInDeletionError(): AppError {
+  return new AppError("CONFLICT", "User account is being deleted");
 }

@@ -8,7 +8,12 @@ import {
 } from "@vivd-catalyst/core";
 import { createConversationCleanupFixture } from "./conversation-cleanup-fixture";
 import type { PostgresSuite } from "./postgres-suite";
-import { createTestInstance, getTestJobs, type TestInstance } from "./test-instance";
+import {
+  createTestInstance,
+  getTestJobs,
+  type TestInstance,
+  type TestServerOptions
+} from "./test-instance";
 
 const DELETION_KINDS = ["account.delete", "workspace.delete"];
 
@@ -16,7 +21,12 @@ const DELETION_KINDS = ["account.delete", "workspace.delete"];
  * The cleanup fixture with a server that resolves every request against the stored user, as an
  * instance does: a user who is closed in the database is refused whatever the request carries.
  */
-export async function arrangeDeletion(db: PostgresSuite, label: string) {
+export async function arrangeDeletion(
+  db: PostgresSuite,
+  label: string,
+  /** Server options that differ from the fixture's, such as a feature that is off. */
+  overrides: Partial<TestServerOptions> = {}
+) {
   const fixture = await createConversationCleanupFixture(db, label);
   const known = new Map<string, AuthenticatedUser>();
   const headerAdapter: AuthAdapter = {
@@ -32,6 +42,7 @@ export async function arrangeDeletion(db: PostgresSuite, label: string) {
   const api = await createTestInstance({
     server: {
       ...fixture.options,
+      ...overrides,
       authAdapter: new IdentityResolvingAuthAdapter(headerAdapter, db.store.users)
     }
   });

@@ -93,18 +93,39 @@ export function deletionDedupeKey(job: JobKind, subjectId: string): string {
 /**
  * Retries the cleanup of Conversations that are deleted and still hold data, a workspace's or
  * those a user created, so a deletion does not wait for the retention job to do it.
+ *
+ * It goes on to the next batch only after a batch whose every cleanup completed. A cleanup
+ * that reports done and leaves its Conversation on the list made no progress: the pass throws,
+ * so the attempt counts and the job ends dead instead of repeating the same batch.
  */
 export async function retryPendingCleanup(
   options: ChatServerOptions,
   scope: PendingCleanupScope
 ): Promise<void> {
+  const firstPending = async () => {
+    const [first] = await options.stores.files.listConversationsPendingObjectCleanup({
+      clientInstanceId: options.clientInstanceId,
+      ...scope,
+      limit: 1
+    });
+    return first;
+  };
   for (;;) {
+    // The list is ordered, so its first entry leaves it when the batch removed anything.
+    const before = await firstPending();
+    if (!before) return;
     const pass = await retryPendingConversationCleanup(options, {
       ...scope,
       limit: PENDING_CLEANUP_BATCH_SIZE,
       deletedAt: new Date().toISOString()
     });
-    if (pass.cleanupPendingCount > 0 || pass.completedCount < PENDING_CLEANUP_BATCH_SIZE) return;
+    if (pass.cleanupPendingCount > 0) return;
+    if ((await firstPending()) === before) {
+      throw new AppError("CONFLICT", "The cleanup of deleted conversations made no progress", {
+        conversationId: before
+      });
+    }
+    if (pass.completedCount < PENDING_CLEANUP_BATCH_SIZE) return;
   }
 }
 

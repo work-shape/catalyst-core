@@ -10,6 +10,7 @@ import {
   type RuntimeCallContext,
   type UserId,
   type UserRecord,
+  userInDeletionError,
   type UserRole,
   type UserStatus
 } from "@vivd-catalyst/core";
@@ -567,11 +568,10 @@ export class UserAdministrationWorkflow {
 }
 
 /**
- * A user whose deletion was requested is closed to administration too: nothing of the account
- * is changed or given back while it is being removed. Only the deletion can be asked again.
+ * The early answer for a user whose deletion was requested. The store refuses the same in the
+ * statement that writes, for a deletion requested after this check. Only the deletion can be
+ * asked again.
  */
 function requireNotInDeletion(user: UserRecord): void {
-  if (user.status === "deleting") {
-    throw new AppError("CONFLICT", "User account is being deleted");
-  }
+  if (user.status === "deleting") throw userInDeletionError();
 }

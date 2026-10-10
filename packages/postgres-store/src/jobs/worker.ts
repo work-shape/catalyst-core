@@ -1,3 +1,4 @@
+import { describeWithoutMessage } from "../error-without-message";
 import {
   AppError,
   JobLeaseLostError,
@@ -160,7 +161,10 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         logger.warn({ jobId: lease.jobId }, "Job lease was lost before the attempt ended");
     } catch (error) {
       if (outcome.type !== "exhausted") throw error;
-      logger.error({ err: error, jobId: lease.jobId }, "Job onExhausted failed");
+      logger.error(
+        { ...describeWithoutMessage(error), jobId: lease.jobId },
+        "Job onExhausted failed"
+      );
       await settle(lease, {
         type: "ended",
         ending: {
@@ -196,7 +200,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
           abort.abort(new JobLeaseLostError(row.id));
         })
         .catch((error: unknown) => {
-          jobLogger.warn({ err: error }, "Job heartbeat failed");
+          jobLogger.warn(describeWithoutMessage(error), "Job heartbeat failed");
         });
     }, handler.kind.leaseMs / HEARTBEATS_PER_LEASE);
     const control: JobControl = {
@@ -232,7 +236,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
           outcome = { type: "ended", ending: { status: "released" } };
         } else {
           if (!(error instanceof JobLeaseLostError))
-            jobLogger.error({ err: error }, "Job attempt failed");
+            jobLogger.error(describeWithoutMessage(error), "Job attempt failed");
           outcome = outcomeOfFailure(row, handler, error);
         }
       }
@@ -240,7 +244,10 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       await settleOrBury(lease, outcome, bound);
     })()
       .catch((error: unknown) => {
-        jobLogger.error({ err: error }, "Job attempt could not be ended; its lease will expire");
+        jobLogger.error(
+          describeWithoutMessage(error),
+          "Job attempt could not be ended; its lease will expire"
+        );
       })
       .finally(() => {
         clearInterval(heartbeat);
@@ -279,7 +286,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       try {
         await bury(true);
       } catch (error) {
-        logger.error({ err: error, jobId }, "Job onExhausted failed");
+        logger.error({ ...describeWithoutMessage(error), jobId }, "Job onExhausted failed");
         await bury(false);
       }
     }
@@ -329,7 +336,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         for (const row of rows) started.push(run(handler, row));
         await buryExhausted(handler);
       } catch (error) {
-        logger.error({ err: error, kind }, "Job poll failed for a kind");
+        logger.error({ ...describeWithoutMessage(error), kind }, "Job poll failed for a kind");
       }
     }
     if (stopping) await releaseActive();
@@ -344,7 +351,10 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       try {
         await settle(job.lease, { type: "ended", ending: { status: "released" } });
       } catch (error) {
-        logger.error({ err: error, jobId: job.lease.jobId }, "Job could not be released");
+        logger.error(
+          { ...describeWithoutMessage(error), jobId: job.lease.jobId },
+          "Job could not be released"
+        );
       }
     }
   }
@@ -363,7 +373,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
           try {
             await pass();
           } catch (error) {
-            logger.error({ err: error }, "Job poll failed");
+            logger.error(describeWithoutMessage(error), "Job poll failed");
           }
           if (stopping) return;
           if (passRequested) continue;

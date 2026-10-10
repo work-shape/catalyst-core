@@ -146,9 +146,14 @@ id from config_assets where status = 'deleted')`.
   who delete their accounts at the same moment, the second is refused as the last owner; the
   same holds for a deletion and a role change or removal at the same moment. The first pass
   asks the agent runs of the user or in the workspace to stop, and a run still working stores
-  no further message. The account or the workspace is removed only when these runs have ended
-  and the stored data of every conversation the user created is gone. An administrator who
-  changes a user being deleted gets `409 CONFLICT`. The audit log records
+  no further message: every write into a conversation of a closed account or workspace is
+  refused, whichever runtime the instance uses. The account or the workspace is removed only
+  when these runs have ended and the stored data of every conversation the user created is
+  gone. That includes execution workspace data on an instance that has the feature off: rows
+  without stored objects are cleared, and stored objects that cannot be removed fail the
+  attempt. An attempt that removes nothing fails, so a deletion that cannot go on ends as a
+  dead job with its `deletion_stalled` event. An administrator who changes a user being
+  deleted gets `409 CONFLICT`. The audit log records
   `user.deletion_requested` and `collaboration_workspace.deletion_requested` when a deletion
   is accepted; `user.delete_failed` and `collaboration_workspace.delete_failed` are no longer
   written. A client that calls one of the three delete operations must accept `202`. Upgrade:
@@ -164,6 +169,11 @@ id from config_assets where status = 'deleted')`.
   routes ask the server's authorizer, a new server option `authorizer` whose default is the
   rights evaluator over the instance's access store. `details.reason` is `no_grant`,
   `denied`, `holder_inactive` or `unknown_action`.
+  routes ask the server's authorizer, a new server option `authorizer` whose default decides
+  as before.
+- **Logs:** the log record of a failed job keeps the class and the code of its error with the
+  job id and kind, and no longer the error with its message and stack. The job row keeps the
+  error code and message it kept before.
 - **Logs:** the log record of a failed tool handler or operation keeps of a database error
   its SQLSTATE code, constraint and table and no longer its message, which can quote
   rejected values.

@@ -62,23 +62,23 @@ export async function cleanupExecutionWorkspaceForConversation(
     conversationId: ConversationId;
     deletedAt: string;
   }
-): Promise<ExecutionWorkspaceDeletionSummary | undefined> {
-  const cleanup = options.executionWorkspaceCleanup;
-  if (!cleanup) {
-    return undefined;
-  }
-  const pending = await cleanup.store.listExecutionWorkspaceObjectsForDeletion({
+): Promise<ExecutionWorkspaceDeletionSummary> {
+  // An instance that has the feature off can still hold the rows of a time it was on. They
+  // are read from the store of the instance, so a Conversation without stored workspace
+  // objects is done, and one with objects fails here instead of looking clean.
+  const store = options.executionWorkspaceCleanup?.store ?? options.stores.executionWorkspaces;
+  const objects = options.executionWorkspaceCleanup?.objects;
+  const pending = await store.listExecutionWorkspaceObjectsForDeletion({
     clientInstanceId: options.clientInstanceId,
     conversationId: input.conversationId
   });
-  if (pending.fileObjectKeys.length > 0 && !cleanup.objects) {
+  if (pending.fileObjectKeys.length > 0 && !objects) {
     throw new Error("Execution workspace object deletion is not configured");
   }
-  const objects = cleanup.objects;
   if (objects) {
     await Promise.all(pending.fileObjectKeys.map((objectKey) => objects.deleteObject(objectKey)));
   }
-  const deleted = await cleanup.store.markExecutionWorkspaceDeleted({
+  const deleted = await store.markExecutionWorkspaceDeleted({
     clientInstanceId: options.clientInstanceId,
     conversationId: input.conversationId,
     deletedAt: input.deletedAt

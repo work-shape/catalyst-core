@@ -1,3 +1,4 @@
+import { describeWithoutMessage } from "./error-without-message";
 import type { DatabaseReadiness, Logger } from "@vivd-catalyst/core";
 import { readMigrationState, type Queries } from "./migrations";
 
@@ -57,14 +58,4 @@ async function readReadiness(sql: Queries): Promise<DatabaseReadiness> {
   if (missing.length > 0 || newest === undefined)
     return { status: "not_ready", reason: "database_behind", missing };
   return { status: "ready", migration: newest };
-}
-
-/** The class and the code of an error. Its message can name the host and the account. */
-function describeWithoutMessage(error: unknown): { errorClass: string; code?: string } {
-  const errorClass = error instanceof Error ? error.name : typeof error;
-  const code =
-    typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
-      ? error.code
-      : undefined;
-  return code === undefined ? { errorClass } : { errorClass, code };
 }

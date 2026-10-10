@@ -32,16 +32,19 @@ import {
   type CreateMessageInput,
   type ExpireConversationResult,
   type MoveConversationInput,
+  type UserId,
   createPlatformId
 } from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   agentRuns,
+  collaborationWorkspaces,
   conversationAttachments,
   conversations,
   modelProviderContinuations,
   messages,
+  productUsers,
   structuredDataResources
 } from "./schema";
 
@@ -243,11 +246,80 @@ export async function lockActiveConversation(
 export async function requireActiveConversationLock(
   tx: PostgresTransaction,
   clientInstanceId: ClientInstanceId,
-  conversationId: ConversationId
+  conversationId: ConversationId,
+  /** The user whose run writes. Their deletion closes the Conversation for this write too. */
+  runOwnerUserId?: UserId
 ): Promise<void> {
   if (!(await lockActiveConversation(tx, clientInstanceId, conversationId))) {
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
+  await requireNotInDeletion(tx, clientInstanceId, conversationId, runOwnerUserId);
+}
+
+/**
+ * Refuses a write into a Conversation that a deletion is about to erase: its workspace is
+ * marked, or the user it belongs to is. It belongs to its creator when it is private or in a
+ * personal workspace, and for one write to the user whose run writes.
+ *
+ * The rows that carry the mark are read under a share lock, which the statement that sets the
+ * mark waits for. So the mark is either visible here, or it commits after this transaction and
+ * the deletion sees what was written. The workspace is locked before the users, the order of
+ * the transaction that marks an account.
+ */
+async function requireNotInDeletion(
+  tx: PostgresTransaction,
+  clientInstanceId: ClientInstanceId,
+  conversationId: ConversationId,
+  runOwnerUserId: UserId | undefined
+): Promise<void> {
+  const [place] = await tx
+    .select({
+      deletionRequestedAt: collaborationWorkspaces.deletionRequestedAt,
+      kind: collaborationWorkspaces.kind,
+      visibility: conversations.visibility,
+      createdByUserId: conversations.createdByUserId
+    })
+    .from(conversations)
+    .innerJoin(
+      collaborationWorkspaces,
+      and(
+        eq(collaborationWorkspaces.clientInstanceId, conversations.clientInstanceId),
+        eq(collaborationWorkspaces.id, conversations.collaborationWorkspaceId)
+      )
+    )
+    .where(
+      and(
+        eq(conversations.clientInstanceId, clientInstanceId),
+        eq(conversations.id, conversationId)
+      )
+    )
+    .for("share", { of: collaborationWorkspaces });
+  if (!place) throw new AppError("NOT_FOUND", "Conversation is not available");
+  const ownerUserId =
+    place.visibility === "private" || place.kind === "personal" ? place.createdByUserId : undefined;
+  const userIds = [
+    ...new Set<string>([
+      ...(ownerUserId ? [ownerUserId] : []),
+      ...(runOwnerUserId ? [runOwnerUserId] : [])
+    ])
+  ].sort();
+  const marked =
+    place.deletionRequestedAt !== null ||
+    (userIds.length > 0 &&
+      (
+        await tx
+          .select({ deletionRequestedAt: productUsers.deletionRequestedAt })
+          .from(productUsers)
+          .where(
+            and(
+              eq(productUsers.clientInstanceId, clientInstanceId),
+              inArray(productUsers.id, userIds)
+            )
+          )
+          .orderBy(asc(productUsers.id))
+          .for("share")
+      ).some((user) => user.deletionRequestedAt !== null));
+  if (marked) throw new AppError("CONFLICT", "Conversation no longer accepts messages");
 }
 
 function conversationRunsInProgress(db: PostgresConnection) {

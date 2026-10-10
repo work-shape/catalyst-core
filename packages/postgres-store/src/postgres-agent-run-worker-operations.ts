@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, lt, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type AgentRun,
@@ -16,19 +16,18 @@ import {
   type RunObservation,
   asAgentRunId,
   asConversationId,
+  asUserId,
   createPlatformId
 } from "@vivd-catalyst/core";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
-import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import type { PostgresConnection } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
   agentRuns,
-  collaborationWorkspaces,
   conversations,
   messages,
-  modelProviderContinuations,
-  productUsers
+  modelProviderContinuations
 } from "./schema";
 
 export async function claimNextAgentRun(
@@ -257,44 +256,6 @@ export async function listAgentRunsInProgress(
   return rows.map(mapAgentRun);
 }
 
-/** Whether the user who started the run, or the workspace its Conversation is in, is marked. */
-async function ownerOrWorkspaceInDeletion(
-  tx: PostgresTransaction,
-  run: { clientInstanceId: string; conversationId: string; ownerUserId: string }
-): Promise<boolean> {
-  const [owner] = await tx
-    .select({ id: productUsers.id })
-    .from(productUsers)
-    .where(
-      and(
-        eq(productUsers.clientInstanceId, run.clientInstanceId),
-        eq(productUsers.id, run.ownerUserId),
-        isNotNull(productUsers.deletionRequestedAt)
-      )
-    )
-    .limit(1);
-  if (owner) return true;
-  const [workspace] = await tx
-    .select({ id: collaborationWorkspaces.id })
-    .from(collaborationWorkspaces)
-    .innerJoin(
-      conversations,
-      and(
-        eq(conversations.clientInstanceId, collaborationWorkspaces.clientInstanceId),
-        eq(conversations.collaborationWorkspaceId, collaborationWorkspaces.id)
-      )
-    )
-    .where(
-      and(
-        eq(conversations.clientInstanceId, run.clientInstanceId),
-        eq(conversations.id, run.conversationId),
-        isNotNull(collaborationWorkspaces.deletionRequestedAt)
-      )
-    )
-    .limit(1);
-  return workspace !== undefined;
-}
-
 export async function appendClaimedAgentRunMessage(
   db: PostgresConnection,
   input: AppendClaimedAgentRunMessageInput
@@ -313,11 +274,9 @@ export async function appendClaimedAgentRunMessage(
     await requireActiveConversationLock(
       tx,
       input.clientInstanceId,
-      asConversationId(run.conversationId)
+      asConversationId(run.conversationId),
+      asUserId(run.ownerUserId)
     );
-    if (await ownerOrWorkspaceInDeletion(tx, run)) {
-      throw new AppError("CONFLICT", "Conversation no longer accepts messages");
-    }
     const createdAt = new Date();
     const [row] = await tx
       .insert(messages)
