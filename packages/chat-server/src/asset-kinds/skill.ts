@@ -35,6 +35,7 @@ export function createSkillAssetKind(options: { config: ClientInstanceConfig }):
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,
+    missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: assertEditingAllowed,
     assertInteractiveDeleteAllowed: assertEditingAllowed
   };

@@ -50,6 +50,19 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     current: unknown;
     next: Record<string, unknown>;
   }): Record<string, unknown>;
+  /**
+   * The right an interactive save needs beside the kind's write right and its caller lacks,
+   * where there is one. It is asked of what the caller sent, before the policy is asked about
+   * the call. `assertInteractiveUpsertAllowed` asks the same of the validated definition.
+   */
+  missingUpsertRight(input: {
+    access: ActorAccess;
+    name: string;
+    /** The stored definition, or undefined for a new asset. */
+    current: unknown;
+    next: unknown;
+    namespaces: readonly Namespace[];
+  }): string | undefined;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses this interactive save. */
   assertInteractiveUpsertAllowed(input: {
     access: ActorAccess;

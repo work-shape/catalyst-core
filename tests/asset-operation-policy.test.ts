@@ -15,13 +15,23 @@ async function setup(settings: CentralPolicySetting[]) {
       return Promise.resolve("allow");
     }
   };
+  const approvalRequests: string[] = [];
   const t = await setupNamespaceHolder({
-    operations: { centralPolicySettings: () => settings, events }
+    operations: {
+      centralPolicySettings: () => settings,
+      events,
+      approvals: {
+        request: ({ run }) => {
+          approvalRequests.push(run.id);
+          return Promise.resolve({ approvalRequestId: `apr_${approvalRequests.length}` });
+        }
+      }
+    }
   });
   for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"]) {
     await t.grant(t.lena.id, action, { namespace: "lena-" });
   }
-  return { t, emitted };
+  return { t, emitted, approvalRequests };
 }
 
 const putItem = (kind: "agent" | "skill", name: string) => ({
@@ -105,6 +115,49 @@ describe("the policy of assets.sync", () => {
     expect(await sync(t, t.lena.id, "lena-", [putItem("agent", "lena-intake")])).toEqual({
       status: 200
     });
+  });
+});
+
+describe("the further rights of assets.sync", () => {
+  it("refuses a change of a model setting without its right before the policy is asked", async () => {
+    const settings: CentralPolicySetting[] = [];
+    const { t, emitted, approvalRequests } = await setup(settings);
+    await t.put(t.admin.id, "agent", "kai-intake");
+    // From here on every batch waits for an approval.
+    settings.push({ operation: "assets.sync", value: "approval" });
+    const batch = (overrides: Record<string, unknown>) =>
+      t.call(t.kai.id, "assets.sync", {
+        payload: {
+          namespace: "kai-",
+          items: [
+            {
+              type: "put",
+              kind: "agent",
+              config: agent("kai-intake", overrides),
+              expectedRevision: 1
+            }
+          ]
+        }
+      });
+
+    // Kai may write the agent, so a change of its instructions reaches the policy and waits.
+    expect((await batch({ instructions: "Help well." })).statusCode).toBe(202);
+    expect(approvalRequests).toHaveLength(1);
+    // Its model is not his to choose: he is told so, and nothing was asked about the batch.
+    emitted.length = 0;
+    const refused = await batch({ modelProviderId: undefined, modelBindingId: "plain" });
+    expect(refused.statusCode).toBe(403);
+    const { error } = errorSchema.parse(refused.json());
+    expect(error.code).toBe("FORBIDDEN");
+    expect(error.details).toMatchObject({
+      reason: "sync_refused",
+      items: [
+        { index: 0, status: "refused", error: { code: "FORBIDDEN", action: "agent_models.manage" } }
+      ]
+    });
+    expect(emitted).not.toContain("operation.before_call");
+    expect(approvalRequests).toHaveLength(1);
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 1 });
   });
 });
 

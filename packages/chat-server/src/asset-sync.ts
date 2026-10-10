@@ -140,22 +140,7 @@ export async function syncAssets(
 
   const stored = await loadStoredAssets(options);
   /** The set as the batch would leave it. */
-  const withItems = (set: AssetSet) =>
-    ready().reduce(
-      (left, entry) =>
-        entry.item.type === "delete"
-          ? withoutDefinition(left, entry.kind.kind, entry.name)
-          : withDefinition(
-              left,
-              entry.kind.kind,
-              entry.name,
-              entry.kind.prepareInteractiveUpsert({
-                current: findDefinition(stored.set, entry.kind.kind, entry.name),
-                next: entry.item.config
-              })
-            ),
-      set
-    );
+  const withItems = (set: AssetSet) => leftByItems(stored.set, ready(), set);
   let candidate = withItems(stored.set);
   // The first asset of a kind with an instance default becomes it and the last one takes it
   // away. Either changes the default, which no Namespace or asset grant opens.
@@ -163,11 +148,7 @@ export async function syncAssets(
   if (defaultChange) {
     candidate = withDefaultAgentName(candidate, defaultChange.agentName);
     if (!call.access.authorize(defaultChange.entry.kind.actions.write).allowed) {
-      defaultChange.entry.refusal = {
-        code: "FORBIDDEN",
-        message: `Missing the right '${defaultChange.entry.kind.actions.write}' on the instance, which changing its default needs`,
-        action: defaultChange.entry.kind.actions.write
-      };
+      defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
     }
   }
   stopIfRefused();
@@ -335,7 +316,79 @@ async function authorizeItems(
   if (planned.some((entry) => entry.refusal)) {
     throw refusedBatch(planned);
   }
+  await requireFurtherRights(options, access, planned);
   return planned;
+}
+
+/**
+ * The rights a batch needs beside those on its items: the write right on the instance where
+ * it changes the instance default, and what a kind asks for a put beside its write right. They
+ * are decided on what the caller sent, so they are known before the policy is asked. The
+ * checks of the validated definitions stay where they are and decide again.
+ */
+async function requireFurtherRights(
+  options: ChatServerOptions,
+  access: ActorAccess,
+  planned: PlannedItem[]
+): Promise<void> {
+  const ready = planned.filter(isReady);
+  const [stored, namespaces] = await Promise.all([
+    loadStoredAssets(options),
+    options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId })
+  ]);
+  const defaultChange = planDefaultChange(
+    options.configAssets.kinds.kinds,
+    stored.set,
+    leftByItems(stored.set, ready, stored.set),
+    ready
+  );
+  if (defaultChange && !access.authorize(defaultChange.entry.kind.actions.write).allowed) {
+    defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
+  }
+  for (const entry of ready) {
+    if (entry.item.type !== "put" || entry.refusal) continue;
+    const current = findDefinition(stored.set, entry.kind.kind, entry.name);
+    const action = entry.kind.missingUpsertRight({
+      access,
+      name: entry.name,
+      current,
+      next: entry.kind.prepareInteractiveUpsert({ current, next: entry.item.config }),
+      namespaces
+    });
+    if (action !== undefined) {
+      entry.refusal = { code: "FORBIDDEN", message: `Missing the right '${action}'`, action };
+    }
+  }
+  if (planned.some((entry) => entry.refusal)) {
+    throw refusedBatch(planned);
+  }
+}
+
+function defaultChangeRefusal(kind: WorkflowAssetKind): ItemRefusal {
+  return {
+    code: "FORBIDDEN",
+    message: `Missing the right '${kind.actions.write}' on the instance, which changing its default needs`,
+    action: kind.actions.write
+  };
+}
+
+/** The set as the items would leave it. `stored` is what each put is prepared against. */
+function leftByItems(stored: AssetSet, entries: readonly ReadyItem[], set: AssetSet): AssetSet {
+  return entries.reduce(
+    (left, entry) =>
+      entry.item.type === "delete"
+        ? withoutDefinition(left, entry.kind.kind, entry.name)
+        : withDefinition(
+            left,
+            entry.kind.kind,
+            entry.name,
+            entry.kind.prepareInteractiveUpsert({
+              current: findDefinition(stored, entry.kind.kind, entry.name),
+              next: entry.item.config
+            })
+          ),
+    set
+  );
 }
 
 /**
