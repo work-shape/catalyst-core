@@ -7,8 +7,10 @@ import {
   AppError,
   StoreBackedAuditRecorder,
   asClientInstanceId,
+  createModuleRegistry,
   type AuthenticatedUser
 } from "@vivd-catalyst/core";
+import { platformModules } from "@vivd-catalyst/client-assembly";
 
 import { createClientBranding, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
@@ -512,6 +514,10 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
   const server = await createTestInstance({
     server: {
       config,
+      // Invitations are a module: on where the instance has a mail sender, as config makes it.
+      modules: createModuleRegistry(platformModules).snapshot({
+        userInvitations: { enabled: input.mailEnabled !== false }
+      }),
       rateLimiter,
       clientInstanceId,
       authAdapter: {
