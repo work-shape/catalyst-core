@@ -21,19 +21,23 @@ const APP_CONTENT_SECRET_NAMES = [
 const APP_CONTENT_SECRET_MIN_CHARS = 32;
 
 /**
- * What the server stores and serves Pages with. Present when the `apps` module is on, and then
- * startup stops with the missing piece named when the `files` store or a secret is absent. With
- * the module off nothing is created and no secret is read.
+ * What the server stores and serves Pages with. With the `apps` module on, startup stops with
+ * the missing piece named when the `files` store or a secret is absent. With the module off no
+ * secret is read, and the `files` store, where the instance has one, is still handed on: a
+ * conversation that is deleted takes the Pages of an earlier time with it.
  */
 export async function createInstancePages(input: {
   config: ClientInstanceConfig;
   modules: ModuleSnapshot;
   infrastructure: InstanceInfrastructure;
 }): Promise<ChatServerOptions["pages"]> {
+  const hasFilesStore = input.config.infrastructure.objectStorage.files !== undefined;
   if (!input.modules.isEnabled("apps")) {
-    return undefined;
+    return hasFilesStore
+      ? { objects: await createFilesStore(input.config, input.infrastructure.context) }
+      : undefined;
   }
-  if (!input.config.infrastructure.objectStorage.files) {
+  if (!hasFilesStore) {
     throw new AppError(
       "VALIDATION_FAILED",
       `'modules.apps.enabled' is true, but '${FILES_STORE_PATH}' is not configured. Pages keep their files there. Configure the store, or turn the module off`
