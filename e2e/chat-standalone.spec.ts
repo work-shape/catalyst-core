@@ -2900,13 +2900,14 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(agents.getByRole("link", { name: /Application Assistant/u })).toBeVisible();
   await search.fill("RESEARCH");
   await expect(agents.getByRole("link")).toHaveCount(1);
-  await expect(page.getByText(/^1 of \d+$/u)).toBeVisible();
 
   // A click opens the agent on its own address; back returns to the list as it was left.
   await research.click();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
   await expect(page.getByRole("heading", { name: "Research Assistant", level: 1 })).toBeVisible();
-  await expect(page.locator("form").getByLabel("Instructions", { exact: true })).toBeVisible();
+  await expect(
+    page.locator("form").getByRole("textbox", { name: /^System prompt/u })
+  ).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(search).toHaveValue("RESEARCH");
@@ -2934,9 +2935,11 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(page).toHaveURL(/\/build\/skills$/u);
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "New skill", exact: true }).first().click();
-  await expect(page.getByRole("heading", { name: "New skill", level: 1 })).toBeVisible();
-  await expect(page.locator('input[placeholder="generic_workflow_review"]')).toBeVisible();
-  await page.getByRole("button", { name: "Back to Skills", exact: true }).click();
+  const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
+  await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Workflow review");
+  await expect(newSkill.getByRole("textbox", { name: /^Id/u })).toHaveValue("workflow_review");
+  await newSkill.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(newSkill).toBeHidden();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
 
   // Build without a kind, and the old Config address, open the list last visited.
@@ -2983,7 +2986,7 @@ test("a Build row is a link, the heading takes the focus, and unsaved changes ar
 
   // Unsaved changes: the back button asks, and staying keeps what was typed.
   await research.click();
-  const instructions = page.locator("form").getByLabel("Instructions", { exact: true });
+  const instructions = page.locator("form").getByRole("textbox", { name: /^System prompt/u });
   await instructions.fill("Unsaved instructions.");
   const question = page.getByRole("dialog", { name: "Leave without saving?", exact: true });
   await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
@@ -3040,17 +3043,27 @@ test("superadmin config follows the German locale", async ({ page }) => {
 
   await page
     .getByRole("list", { name: "Agenten" })
-    .getByRole("link", { name: /research_assistant · Alle Arbeitsbereiche/u })
+    .getByRole("link", { name: /research_assistant/u })
     .click();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
 
   const form = page.locator("form");
-  await expect(form.getByText("Identität und Begrüßung", { exact: true })).toBeVisible();
-  await expect(form.getByText("Verhalten", { exact: true })).toBeVisible();
+  for (const section of ["Überblick", "Anweisungen", "Modell", "Skills", "Werkzeuge"]) {
+    await expect(form.getByRole("heading", { name: section, level: 2, exact: true })).toBeVisible();
+  }
   await expect(form.getByText("Denkaufwand", { exact: true })).toBeVisible();
   await expect(form.getByRole("group", { name: "Werkzeuge", exact: true })).toBeVisible();
-  await expect(form.getByRole("group", { name: "Skills", exact: true })).toBeVisible();
-  await expect(form.getByText("Einstiegsvorschläge", { exact: true })).toBeVisible();
+  await expect(
+    form.getByRole("heading", { name: "Einstiegsvorschläge", level: 2, exact: true })
+  ).toBeVisible();
+  // The texts of the page are written in one language at a time: the reader's own to begin with.
+  await expect(form.getByRole("radio", { name: "Deutsch", exact: true })).toBeChecked();
+  // The save bar shows with the first change.
+  await expect(form.getByRole("button", { name: "Änderungen speichern", exact: true })).toHaveCount(
+    0
+  );
+  await form.getByRole("textbox", { name: /^Beschreibung/u }).fill("Nicht gespeichert.");
+  await expect(form.getByText("1 Änderung", { exact: true })).toBeVisible();
   await expect(
     form.getByRole("button", { name: "Änderungen speichern", exact: true })
   ).toBeVisible();
@@ -3103,12 +3116,30 @@ test("superadmin manages config assets with validation and conflict protection",
   };
   const form = () => page.locator("form");
   const fieldset = (name: string) => form().getByRole("group", { name, exact: true });
-  const fieldControl = (label: string) => form().getByLabel(label, { exact: true });
+  const fieldControl = (label: string) =>
+    form().getByRole("textbox", { name: new RegExp(`^${label}`, "u") });
+  /** Chooses the test's skill for the open agent, or takes it away again. */
+  const toggleSkill = async () => {
+    await form()
+      .getByRole("button", { name: /^Skills/u })
+      .click();
+    await page.getByRole("option", { name: /Config E2E skill/u }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+  };
+  /** The delete entry of the asset page's menu. */
+  const askToDelete = async () => {
+    // A dialog of the last round has left the page before the menu is opened again: a click
+    // that lands while it is still leaving only finishes its closing.
+    await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
+    await page.getByRole("button", { name: "More actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  };
   const clickAgent = async () => {
     await openList("Agents");
     await page
       .getByRole("list", { name: "Agents" })
-      .getByRole("link", { name: /research_assistant · All workspaces/u })
+      .getByRole("link", { name: /research_assistant/u })
       .click();
     await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
     await expect(form()).toBeVisible();
@@ -3130,39 +3161,39 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
 
     await clickAgent();
-    await expect
-      .poll(() =>
-        form()
-          .getByRole("button", { name: "Save changes", exact: true })
-          .locator("..")
-          .evaluate((element) => getComputedStyle(element).position)
-      )
-      .toBe("static");
+    // Nothing was changed yet, so there is nothing to save.
+    await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
     await expect(fieldset("Tools").getByLabel("read_skill", { exact: true })).toBeVisible();
     await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
-    const firstPrompt = form().getByText("Prompt 1", { exact: true }).locator("../..");
-    const firstPromptText = firstPrompt.locator("input").nth(2);
-    // The agent's models are one list: each model can be made the default, and a model in use
-    // carries its reasoning effort.
-    const models = fieldset("Models");
-    await expect(models.getByRole("radio")).toHaveCount(2);
+    const firstPromptText = fieldset("Prompt 1").getByRole("textbox", { name: /^Prompt/u });
+    // The agent's models: the one that runs it, with its reasoning effort, and the ones people
+    // may choose instead.
+    const defaultModel = form().getByRole("combobox", { name: /^Default model$/u });
+    await expect(defaultModel).toHaveValue("");
+    await expect(defaultModel.locator("option")).toHaveText([
+      "Instance default (local)",
+      "deterministic-local"
+    ]);
     await expect(
-      models.getByRole("radio", { name: "Instance default (local): Default", exact: true })
-    ).toBeChecked();
-    await expect(
-      models.getByRole("radio", { name: "deterministic-local: Default", exact: true })
-    ).not.toBeChecked();
-    await expect(
-      models
-        .getByRole("combobox", { name: "Instance default (local): Reasoning effort", exact: true })
+      form()
+        .getByRole("combobox", { name: "Default model: Reasoning effort", exact: true })
         .locator("option")
     ).toContainText(["Model default", "none", "low", "medium", "high", "xhigh"]);
+    await expect(
+      fieldset("Models people can choose in chat").getByLabel("deterministic-local", {
+        exact: true
+      })
+    ).not.toBeChecked();
 
     await openList("Skills");
     // An empty list offers the one button twice: in its head and with its sentence.
     await page.getByRole("button", { name: "New skill", exact: true }).first().click();
-    await page.locator('input[placeholder="generic_workflow_review"]').fill("config_e2e_skill");
-    await fieldControl("Title").fill("Config E2E skill");
+    // The dialog takes the name and makes the id from it.
+    const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
+    await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Config E2E skill");
+    await expect(newSkill.getByRole("textbox", { name: /^Id/u })).toHaveValue("config_e2e_skill");
+    await newSkill.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(fieldControl("Title")).toHaveValue("Config E2E skill");
     await fieldControl("Description").fill("Verifies config asset editing");
     await fieldControl("Content").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
@@ -3176,7 +3207,8 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(fieldControl("Content")).toHaveValue("# Verify config assets");
 
     await clickAgent();
-    await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).check();
+    await toggleSkill();
+    await expect(form().getByRole("list", { name: "Skills" })).toContainText("Config E2E skill");
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(
       page.getByText(
@@ -3192,12 +3224,16 @@ test("superadmin manages config assets with validation and conflict protection",
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
     await expectVersion(original.version + 2);
     await expect(firstPromptText).toHaveValue(updatedPrompt);
+    await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
 
     await clickSkill();
-    // The confirmation sits inside the editor's form: closing it must not submit the form.
+    // Closing the confirmation changes nothing.
     const configWrites: string[] = [];
     const recordConfigWrite = (request: { method(): string; url(): string }) => {
-      if (request.method() !== "GET" && request.url().includes("/api/v1/instance/config")) {
+      if (
+        request.method() !== "GET" &&
+        /\/api\/v1\/(?:instance\/config|assets)/u.test(request.url())
+      ) {
         configWrites.push(`${request.method()} ${request.url()}`);
       }
     };
@@ -3206,17 +3242,17 @@ test("superadmin manages config assets with validation and conflict protection",
       name: "Delete skill 'config_e2e_skill'?",
       exact: true
     });
-    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await askToDelete();
     await deleteSkillDialog.getByRole("button", { name: "Close", exact: true }).click();
     await expect(deleteSkillDialog).toBeHidden();
-    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await askToDelete();
     await deleteSkillDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(deleteSkillDialog).toBeHidden();
     expect(configWrites).toEqual([]);
     page.off("request", recordConfigWrite);
     await expectVersion(original.version + 2);
 
-    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await askToDelete();
     await page
       .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
@@ -3229,11 +3265,12 @@ test("superadmin manages config assets with validation and conflict protection",
     await expectVersion(original.version + 2);
 
     await clickAgent();
-    await fieldset("Skills").getByLabel("config_e2e_skill", { exact: true }).uncheck();
+    await toggleSkill();
+    await expect(form().getByText("No skills chosen.", { exact: true })).toBeVisible();
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
     await expectVersion(original.version + 3);
     await clickSkill();
-    await form().getByRole("button", { name: "Delete", exact: true }).click();
+    await askToDelete();
     await page
       .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
@@ -3244,7 +3281,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(page.getByText(/^No skills yet\./u)).toBeVisible();
 
     await clickAgent();
-    const instructions = fieldControl("Instructions");
+    const instructions = form().getByRole("textbox", { name: /^System prompt/u });
     const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
     const researchAgentUrl = `${apiBaseUrl}/api/v1/assets/agent/research_assistant`;
     const serverChange = await requestWithOrigin(page, "put", researchAgentUrl, {
@@ -3254,17 +3291,18 @@ test("superadmin manages config assets with validation and conflict protection",
       }
     });
     expect(serverChange.ok()).toBe(true);
-    await instructions.fill(`${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`);
+    const unsaved = `${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`;
+    await instructions.fill(unsaved);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    const conflict = page.getByRole("dialog", {
-      name: "Configuration changed on the server",
-      exact: true
-    });
-    await expect(conflict).toBeVisible();
-    await conflict.getByRole("button", { name: "Reload latest", exact: true }).click();
-    await expect(conflict).toBeHidden();
+    // The page saves against the revision it loaded: the newer one is not overwritten, and
+    // what was typed stays until the reader asks for the newer version.
+    const conflict = page.locator("[data-build-conflict]");
+    await expect(conflict).toContainText("Somebody saved this while you were editing.");
+    await expect(instructions).toHaveValue(unsaved);
     await expectVersion(original.version + 5);
-    await expect(fieldControl("Instructions")).toHaveValue(serverInstructions);
+    await conflict.getByRole("button", { name: "Load the newer version", exact: true }).click();
+    await expect(conflict).toHaveCount(0);
+    await expect(instructions).toHaveValue(serverInstructions);
   } finally {
     const restored = await requestWithOrigin(
       page,
@@ -3340,7 +3378,11 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await expect(rail).toHaveCount(0);
 });
 
-test("a plain user finds only their own pages in the Settings rail", async ({ page }) => {
+// A grant in a Namespace opens Build for this user: no spec hands one out while this runs.
+test("a plain user finds only their own pages in the Settings rail", async ({
+  page,
+  accessState: _accessState
+}) => {
   await signInViaApi(page, normalUser);
 
   await page.goto("/settings");
@@ -3795,8 +3837,10 @@ test("under 768 px the rail is a drawer that the header opens and a choice close
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
 });
 
+// A grant in a Namespace opens Build for this user: no spec hands one out while this runs.
 test("the command palette opens from the rail and the keyboard, searches titles on the server and opens a conversation", async ({
-  page
+  page,
+  accessState: _accessState
 }) => {
   await signInViaApi(page, normalUser);
   const stamp = Date.now();

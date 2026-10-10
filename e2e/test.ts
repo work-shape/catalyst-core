@@ -1,3 +1,6 @@
+import { mkdir, rmdir, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test as base, type BrowserContext } from "@playwright/test";
 import {
   REPLACED_BUILT_INS_LINK,
@@ -73,6 +76,27 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     matches: new RegExp(`${requestAnswered(422).source}|${requestAnswered(409).source}`, "u"),
     path: /^\/api\/v1\/assets\//u,
     tests: ["superadmin manages config assets with validation and conflict protection"]
+  },
+  {
+    name: "asset-that-is-not-there",
+    reason:
+      "Chromium's own log line: the test opens the address of an agent that does not exist, " +
+      "the instance answers 404 and the page says that there is no such agent.",
+    matches: requestAnswered(404),
+    path: /^\/api\/v1\/assets\/agent\/not_an_agent$/u,
+    tests: ["Build opens on a list, and a list and an asset each have an address"]
+  },
+  {
+    name: "refused-asset-in-build",
+    reason:
+      "Chromium's own log line: the test saves an agent with a tool its Namespace does not " +
+      "allow and one that changed meanwhile, and opens an agent outside the Namespace. It " +
+      "asserts what the page shows for the 403 and the 409.",
+    matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(409).source}`, "u"),
+    path: /^\/api\/v1\/assets\/agent\/(?:kai-helper|research_assistant)$/u,
+    tests: [
+      "a Namespace holder builds an agent in the Namespace, is refused, meets a conflict and restores"
+    ]
   },
   {
     name: "grant-already-there",
@@ -270,6 +294,12 @@ function isAllowed(text: string, address: string, testTitle: string): boolean {
   );
 }
 
+/**
+ * How long a test waits for the instance's Namespaces and grants. Longer than the longest
+ * test that holds them.
+ */
+const ACCESS_STATE_WAIT_MS = 180_000;
+
 export interface PageErrorWatch {
   /** Watches a context a test opened itself, such as a second user's, before it opens a page. */
   watch(context: BrowserContext): Promise<void>;
@@ -279,7 +309,46 @@ export interface PageErrorWatch {
  * The `test` of every browser spec. It fails a test whose pages threw an uncaught JavaScript
  * error or logged one with `console.error`, after the test's own steps have run.
  */
-export const test = base.extend<{ pageErrors: PageErrorWatch }>({
+export const test = base.extend<{ pageErrors: PageErrorWatch; accessState: void }>({
+  /**
+   * Asked for by a test that registers a Namespace or writes a grant, or that asserts there is
+   * none. The specs run side by side against one instance, and such a test would see the
+   * other's rows: with this fixture one runs after the other.
+   */
+  accessState: [
+    async ({ baseURL }, use) => {
+      const lock = join(tmpdir(), `catalyst-e2e-access-${(baseURL ?? "").replace(/\W+/gu, "-")}`);
+      const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS;
+      for (;;) {
+        try {
+          await mkdir(lock);
+          break;
+        } catch {
+          // A run that was killed leaves its lock behind: one older than any test is taken over.
+          const age =
+            Date.now() -
+            (await stat(lock).then(
+              (entry) => entry.mtimeMs,
+              () => 0
+            ));
+          if (age > ACCESS_STATE_WAIT_MS) {
+            await rmdir(lock).catch(() => undefined);
+          } else if (Date.now() > waitUntil) {
+            throw new Error(`The Namespaces and grants of the instance stayed in use: ${lock}`);
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+        }
+      }
+      try {
+        await use();
+      } finally {
+        await rmdir(lock).catch(() => undefined);
+      }
+    },
+    // The wait for another spec is not the test's own time.
+    { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
+  ],
   pageErrors: [
     async ({ context }, use, testInfo) => {
       const reported: string[] = [];

@@ -1,0 +1,345 @@
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
+
+const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
+const superadminUser = {
+  email: "e2e-superadmin@example.test",
+  password: "e2e-superadmin-password"
+};
+const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
+const NARROW = { width: 390, height: 844 };
+const WIDE = { width: 1280, height: 800 };
+const namespacePath = `${apiBaseUrl}/api/v1/instance/access/namespaces`;
+const grantsPath = `${apiBaseUrl}/api/v1/instance/access/grants`;
+const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
+/** The reads Build made before it worked on the asset operations: the whole set of assets. */
+const WHOLE_SET_READ = /\/api\/v1\/instance\/config\/(?:assets|export)(?:\?|$)/u;
+
+async function signInViaApi(page: Page, user: { email: string; password: string }): Promise<void> {
+  const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: { email: user.email, password: user.password, rememberMe: true }
+  });
+  expect(response.ok()).toBe(true);
+}
+
+/** A field of an answer of the instance, read without trusting its shape. */
+function field(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null && key in value
+    ? Object.getOwnPropertyDescriptor(value, key)?.value
+    : undefined;
+}
+
+function textField(value: unknown, key: string): string {
+  const found = field(value, key);
+  if (typeof found !== "string") {
+    throw new Error(`The answer has no text at ${key}`);
+  }
+  return found;
+}
+
+function items(value: unknown): unknown[] {
+  const found = field(value, "items");
+  return Array.isArray(found) ? found : [];
+}
+
+async function expectNoSidewaysScroll(page: Page): Promise<void> {
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )
+  ).toBe(true);
+}
+
+function agentList(page: Page): Locator {
+  return page.getByRole("list", { name: "Agents" });
+}
+
+function instructions(page: Page): Locator {
+  return page.locator("form").getByRole("textbox", { name: /^System prompt/u });
+}
+
+/** Deletes an agent if it is there. What a test leaves behind must not meet the next run. */
+async function deleteAgent(admin: Page, name: string): Promise<void> {
+  const found = await admin.request.get(agentPath(name));
+  if (found.ok()) {
+    await requestWithOrigin(admin, "post", `${agentPath(name)}/delete`, {
+      data: { expectedRevision: await assetRevision(admin, agentPath(name)) }
+    });
+  }
+}
+
+test("a Namespace holder builds an agent in the Namespace, is refused, meets a conflict and restores", async ({
+  page,
+  browser,
+  pageErrors,
+  accessState: _accessState
+}) => {
+  test.setTimeout(120_000);
+  const adminContext = await browser.newContext();
+  await pageErrors.watch(adminContext);
+  const admin = await adminContext.newPage();
+  await signInViaApi(admin, superadminUser);
+
+  // A person of their own, so that no other spec meets the rights this one hands out.
+  const stamp = Date.now();
+  const holder = {
+    displayLabel: `E2E Builder ${stamp}`,
+    email: `e2e-builder-${stamp}@example.test`,
+    password: `e2e-builder-${stamp}`
+  };
+  const createdUser = await requestWithOrigin(
+    admin,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/users`,
+    {
+      data: {
+        displayLabel: holder.displayLabel,
+        email: holder.email,
+        roles: ["user"],
+        passwordSignIn: { password: holder.password }
+      }
+    }
+  );
+  expect(createdUser.ok()).toBe(true);
+  const holderId = textField(await createdUser.json(), "id");
+
+  try {
+    // The Namespace kai- allows one tool. The holder reads, writes and deletes agents in it.
+    const namespace = await requestWithOrigin(admin, "post", namespacePath, {
+      data: { prefix: "kai-", displayName: "Kai", allowedToolNames: ["show_view"] }
+    });
+    expect(namespace.ok()).toBe(true);
+    const context: unknown = await (await admin.request.get(`${apiBaseUrl}/api/v1/context`)).json();
+    const kinds: unknown = field(context, "kinds");
+    const agentKind: unknown = (Array.isArray(kinds) ? kinds : []).find(
+      (kind: unknown) => field(kind, "kind") === "agent"
+    );
+    for (const verb of ["read", "write", "delete"]) {
+      const granted = await requestWithOrigin(admin, "post", grantsPath, {
+        data: {
+          holderKind: "user",
+          holderId,
+          action: textField(field(agentKind, "actions"), verb),
+          scopeKind: "namespace",
+          namespace: "kai-"
+        }
+      });
+      expect(granted.ok()).toBe(true);
+    }
+    const first = await requestWithOrigin(admin, "put", agentPath("kai-first"), {
+      data: {
+        config: {
+          name: "kai-first",
+          displayName: "Kai First",
+          modelProviderId: "local",
+          instructions: "You were here first.",
+          toolNames: []
+        }
+      }
+    });
+    expect(first.ok()).toBe(true);
+
+    // The holder has a Build row and sees the agents of the Namespace, nothing else.
+    const wholeSetReads: string[] = [];
+    page.on("request", (request) => {
+      if (WHOLE_SET_READ.test(request.url())) {
+        wholeSetReads.push(request.url());
+      }
+    });
+    await signInViaApi(page, holder);
+    await page.setViewportSize(WIDE);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Build", exact: true }).click();
+    await expect(page).toHaveURL(/\/build\/agents$/u);
+    await expect(agentList(page).getByRole("link")).toHaveCount(1);
+    await expect(agentList(page).getByRole("link", { name: /Kai First/u })).toContainText("Kai");
+    await expect(page.getByText("Research Assistant")).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Kinds in Build" })).toHaveCount(0);
+
+    // A new agent is named in the Namespace: the dialog says what the id will be.
+    await page.getByRole("button", { name: "New agent", exact: true }).click();
+    const create = page.getByRole("dialog", { name: "New agent", exact: true });
+    await create.getByRole("textbox", { name: /^Display name/u }).fill("Kai Helper");
+    await expect(create.getByText("The full id will be kai-kai_helper.")).toBeVisible();
+    await create.getByRole("textbox", { name: /^Id/u }).fill("helper");
+    await expect(create.getByText("The full id will be kai-helper.")).toBeVisible();
+    await create.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Kai Helper", level: 1 })).toBeVisible();
+    await instructions(page).fill("You help Kai.");
+
+    // A tool outside the Namespace's list is refused, and the refusal stands at the tools.
+    const tools = page.locator("#tools");
+    await tools.getByLabel("demo.weather_forecast", { exact: true }).check();
+    await page.getByRole("button", { name: "Create agent", exact: true }).click();
+    await expect(tools.locator("[data-field-refusal]")).toHaveText(
+      "The tool demo.weather_forecast is not allowed in Namespace kai-."
+    );
+    await expect(instructions(page)).toHaveValue("You help Kai.");
+    await tools.getByLabel("demo.weather_forecast", { exact: true }).uncheck();
+    await tools.getByLabel("show_view", { exact: true }).check();
+    await page.getByRole("button", { name: "Create agent", exact: true }).click();
+    await expect(page).toHaveURL(/\/build\/agents\/kai-helper$/u);
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    // An id that was used before keeps its history, so the revisions are counted from here.
+    const created = await assetRevision(admin, agentPath("kai-helper"));
+
+    // A change shows the save bar with its count, and a save hides it again.
+    await instructions(page).fill("You help Kai every day.");
+    await expect(page.getByText("1 change", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 1);
+
+    // Somebody else saves while the holder types: the holder's save meets the newer revision,
+    // overwrites nothing and keeps the text.
+    await instructions(page).fill("The holder's unsaved text.");
+    await admin.setViewportSize(WIDE);
+    await admin.goto("/build/agents/kai-helper");
+    await instructions(admin).fill("The administrator was faster.");
+    await admin.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(admin.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    const conflict = page.locator("[data-build-conflict]");
+    await expect(conflict).toContainText("Somebody saved this while you were editing.");
+    await expect(instructions(page)).toHaveValue("The holder's unsaved text.");
+    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
+    await conflict.getByRole("button", { name: "Load the newer version", exact: true }).click();
+    await expect(conflict).toHaveCount(0);
+    await expect(instructions(page)).toHaveValue("The administrator was faster.");
+
+    // History lists the revisions beside the editor, and the first one comes back.
+    await page.getByRole("button", { name: "History", exact: true }).click();
+    const history = page.getByRole("dialog", { name: "History", exact: true });
+    for (const revision of [created, created + 1, created + 2]) {
+      await expect(history.locator(`[data-revision="${revision}"]`)).toBeVisible();
+    }
+    await history.getByRole("button", { name: `Restore revision ${created}`, exact: true }).click();
+    await page
+      .getByRole("dialog", { name: `Restore revision ${created}?`, exact: true })
+      .getByRole("button", { name: "Restore", exact: true })
+      .click();
+    // The restored content is the asset now: the drawer closes on the editor that shows it.
+    await expect(history).toBeHidden();
+    await expect(instructions(page)).toHaveValue("You help Kai.");
+    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 3);
+
+    // The list holds both agents now, and the holder deletes the one they made.
+    await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
+    await expect(agentList(page).getByRole("link")).toHaveCount(2);
+    await agentList(page)
+      .getByRole("link", { name: /Kai Helper/u })
+      .click();
+    await page.getByRole("button", { name: "More actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Delete agent 'kai-helper'?", exact: true })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/build\/agents$/u);
+    await expect(agentList(page).getByRole("link")).toHaveCount(1);
+
+    // An agent outside the Namespace is not the holder's: its address says what the instance says.
+    await page.goto("/build/agents/research_assistant");
+    await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Research Assistant" })).toHaveCount(0);
+    await expect(instructions(page)).toHaveCount(0);
+
+    // Nothing on the way read the whole set of assets.
+    expect(wholeSetReads).toEqual([]);
+  } finally {
+    await deleteAgent(admin, "kai-helper");
+    await deleteAgent(admin, "kai-first");
+    const grants: unknown = await (
+      await admin.request.get(`${grantsPath}?holderKind=user&holderId=${holderId}`)
+    ).json();
+    for (const grant of items(grants)) {
+      await requestWithOrigin(admin, "delete", `${grantsPath}/${textField(grant, "id")}`);
+    }
+    await requestWithOrigin(admin, "delete", `${namespacePath}/kai-`);
+    await requestWithOrigin(admin, "delete", `${apiBaseUrl}/api/v1/instance/users/${holderId}`);
+    await adminContext.close();
+  }
+});
+
+test("a user with no right on an agent or a skill has no Build row and is told so at its address", async ({
+  page,
+  accessState: _accessState
+}) => {
+  await signInViaApi(page, normalUser);
+  await page.goto("/");
+  await expect(page.getByPlaceholder("Message")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveCount(0);
+
+  await page.goto("/build");
+  await expect(page.getByRole("region", { name: "Build" })).toContainText(
+    "Build is not available to you."
+  );
+  await expect(page).toHaveURL(/\/build$/u);
+  await page.goto("/build/agents/research_assistant");
+  await expect(page.getByRole("region", { name: "Build" })).toContainText(
+    "Build is not available to you."
+  );
+  await expect(page.getByRole("heading", { name: "Research Assistant" })).toHaveCount(0);
+});
+
+test("the old Config address leads into Build, and the account menu names the instance and its release", async ({
+  page
+}) => {
+  await signInViaApi(page, superadminUser);
+  await page.goto("/admin/config");
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
+
+  await page.getByRole("button", { name: / account$/u }).click();
+  const identity = page.getByRole("menu").locator("[data-platform-identity]");
+  await expect(identity).toContainText("Demo E2E Client Instance");
+  await expect(identity).toContainText(/Version \d+\.\d+/u);
+});
+
+for (const locale of ["en", "de"] as const) {
+  for (const mode of ["light", "dark"] as const) {
+    test(`Build keeps inside the window at both widths (${locale}, ${mode})`, async ({ page }) => {
+      await page.addInitScript((chosen) => {
+        window.localStorage.setItem("vivd-catalyst:locale", chosen);
+      }, locale);
+      await page.emulateMedia({ colorScheme: mode });
+      await signInViaApi(page, superadminUser);
+      const words =
+        locale === "en"
+          ? { agents: "Agents", sections: "Sections of this page", history: "History" }
+          : { agents: "Agenten", sections: "Abschnitte dieser Seite", history: "Verlauf" };
+
+      for (const size of [WIDE, NARROW]) {
+        await page.setViewportSize(size);
+        await page.goto("/build/agents");
+        await expect(page.getByRole("heading", { name: words.agents, level: 1 })).toBeVisible();
+        await expect
+          .poll(() =>
+            page
+              .locator("main")
+              .first()
+              .evaluate((element) => element.classList.contains("dark"))
+          )
+          .toBe(mode === "dark");
+        await expect(
+          page.getByRole("list", { name: words.agents }).getByRole("link").first()
+        ).toBeVisible();
+        await expectNoSidewaysScroll(page);
+
+        await page.goto("/build/agents/research_assistant");
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        // Beside the content while there is room for it, a choice above the content otherwise.
+        await expect(page.locator(`[aria-label="${words.sections}"]:visible`)).toHaveCount(1);
+        await expectNoSidewaysScroll(page);
+
+        await page.getByRole("button", { name: words.history, exact: true }).click();
+        const history = page.getByRole("dialog", { name: words.history, exact: true });
+        await expect(history.locator("[data-revision]").first()).toBeVisible();
+        await expectNoSidewaysScroll(page);
+        await page.keyboard.press("Escape");
+        await expect(history).toBeHidden();
+      }
+    });
+  }
+}

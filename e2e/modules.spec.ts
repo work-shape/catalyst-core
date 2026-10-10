@@ -129,21 +129,16 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
   expect(stored.ok(), await stored.text()).toBe(true);
   try {
     await page.route(
-      ({ pathname }) => pathname === "/api/v1/instance/config/assets",
+      ({ pathname }) => pathname === "/api/v1/context/references",
       async (route) => {
         const response = await route.fetch();
-        const body: { references: { enabledToolNames: string[] } } = await response.json();
+        const body: { enabledToolNames: string[] } = await response.json();
         await route.fulfill({
           response,
           json: {
             ...body,
-            references: {
-              ...body.references,
-              enabledToolNames: body.references.enabledToolNames.filter(
-                (name) => name !== staleTool
-              ),
-              moduleOffTools: [{ name: staleTool, module: "documents" }]
-            }
+            enabledToolNames: body.enabledToolNames.filter((name) => name !== staleTool),
+            moduleOffTools: [{ name: staleTool, module: "documents" }]
           }
         });
       }
@@ -160,11 +155,14 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     await expect(stale).toContainText(
       "Not available: the module Documents is off. Remove it to save."
     );
-    await expect(tools).toContainText("1 selected");
+    const toolCount = page.locator('select[aria-label="Sections of this page"] option', {
+      hasText: "Tools"
+    });
+    await expect(toolCount).toHaveText("Tools (1)");
 
     await stale.getByRole("button", { name: "Remove" }).click();
     await expect(stale).toHaveCount(0);
-    await expect(tools).toContainText("0 selected");
+    await expect(toolCount).toHaveText("Tools (0)");
     // The removal is an unsaved change: leaving the page asks first, and staying keeps it.
     const question = page.getByRole("dialog", { name: "Leave without saving?", exact: true });
     await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
@@ -172,13 +170,13 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     await question.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(question).toBeHidden();
     await expect(stale).toHaveCount(0);
-    // A write of another file between the load and the save is a conflict: the editor loads
-    // the latest, and the reference is removed and saved again.
-    const conflict = page.getByRole("dialog", { name: "Configuration changed on the server" });
+    // A write of this agent between the load and the save is a conflict: the page offers the
+    // newer version, and the reference is removed and saved again.
+    const conflict = page.locator("[data-build-conflict]");
     await expect(async () => {
       if (await conflict.isVisible()) {
-        await conflict.getByRole("button", { name: "Reload latest", exact: true }).click();
-        await expect(conflict).toBeHidden();
+        await conflict.getByRole("button", { name: "Load the newer version", exact: true }).click();
+        await expect(conflict).toHaveCount(0);
       }
       if (await stale.isVisible()) await stale.getByRole("button", { name: "Remove" }).click();
       await form.getByRole("button", { name: "Save changes", exact: true }).click();
