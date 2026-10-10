@@ -216,6 +216,54 @@ describe("composer send during a block", () => {
     ]);
   });
 
+  // A conversation switched to is "loading" until its thread arrives, then "ready" or "error".
+  function threadBlock(snapshotStatus: "loading" | "ready" | "error"): SendBlock | undefined {
+    return resolveSendBlock({
+      sending: false,
+      conversationRunning: false,
+      workspaceBlock: undefined,
+      snapshotStatus,
+      noAgentsMessage: undefined,
+      t: createTranslationContext("en").t
+    });
+  }
+
+  it("sends a message written while the conversation's thread loads once, when it arrives", () => {
+    const settle = createQueuedSendSettler();
+    const loadingThread = waiting({ block: threadBlock("loading") });
+    const arrived = { ...loadingThread, block: threadBlock("ready") };
+
+    expect(
+      shouldQueueSend({ sendBlock: loadingThread.block, sendQueued: false, text: "Hello" })
+    ).toBe(true);
+    expect([
+      settle(loadingThread),
+      settle(loadingThread),
+      settle({ ...arrived, runtimeReady: false }),
+      settle(arrived),
+      settle(arrived),
+      settle(loadingThread),
+      settle(arrived)
+    ]).toEqual(["wait", "wait", "wait", "send", "wait", "wait", "wait"]);
+  });
+
+  it("does not send a waiting message when the thread fails to load, nor on a later reload", () => {
+    const settle = createQueuedSendSettler();
+    const loadingThread = waiting({ block: threadBlock("loading") });
+    const failed = { ...loadingThread, block: threadBlock("error") };
+
+    expect(failed.block).toEqual({
+      reason: "The conversation could not be loaded.",
+      loading: false
+    });
+    // The send is forgotten, the text stays in the composer under the reason shown.
+    expect([settle(loadingThread), settle(failed)]).toEqual(["wait", "drop"]);
+    expect(settle({ ...loadingThread, block: threadBlock("ready") })).toBe("wait");
+    expect(shouldQueueSend({ sendBlock: failed.block, sendQueued: false, text: "Hello" })).toBe(
+      false
+    );
+  });
+
   it("waits for the thread runtime to take up the lifted block", () => {
     const settle = createQueuedSendSettler();
     const state = waiting({ block: undefined, runtimeReady: false });

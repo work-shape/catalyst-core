@@ -1932,8 +1932,7 @@ test(
   "a conversation switched to during a run shows only its own messages",
   { tag: "@chat-state" },
   async ({ page }) => {
-    // The run lasts about ten seconds: the fixture model echoes one word every 20 ms.
-    test.setTimeout(60_000);
+    test.setTimeout(LONG_RUN_TEST_TIMEOUT_MS);
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const targetTitle = `Stale stream target ${suffix}`;
@@ -1953,27 +1952,12 @@ test(
     });
     // The event streams are held back, so the page keeps the state it had when the user
     // switched for as long as the test looks at it.
-    let releaseAnswer = () => {};
-    const answerHeld = new Promise<void>((resolve) => {
-      releaseAnswer = resolve;
-    });
-    await page.route(
-      (url) => url.origin === new URL(apiBaseUrl).origin && isRunEventsPath(url.pathname),
-      async (route) => {
-        if (route.request().method() === "GET") {
-          await answerHeld;
-        }
-        await route.continue();
-      }
-    );
-
+    const releaseAnswer = await holdAnswer(page);
     await page.goto("/");
     const chatRegion = page.getByRole("region", { name: "Chat" });
     const sendButton = page.getByRole("button", { name: "Send message" });
     const messageToken = `stale-stream-token-${suffix}`;
-    await page
-      .getByPlaceholder("Message")
-      .fill([messageToken, ...Array.from({ length: 499 }, (_, index) => `w${index}`)].join(" "));
+    await page.getByPlaceholder("Message").fill(longRunMessage(messageToken));
     await expect(sendButton).toBeEnabled();
     await sendButton.click();
     await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
@@ -1997,7 +1981,7 @@ test(
 
     releaseAnswer();
     await expect(newConversation.getByTestId("conversation-running-indicator")).toHaveCount(0, {
-      timeout: 30_000
+      timeout: LONG_RUN_END_TIMEOUT_MS
     });
     await expect(targetConversation).toHaveAttribute("data-selected", "true");
     await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
