@@ -453,6 +453,8 @@ export interface AppendClaimedAgentRunMessageInput {
 export interface FailLostAgentRunInput {
   clientInstanceId: ClientInstanceId;
   runId: AgentRunId;
+  /** The job whose worker is gone. A live lease of anyone else on the run is left alone. */
+  jobId: JobId;
   error: AgentRunError;
 }
 
@@ -555,7 +557,9 @@ export interface AgentRunStore {
   /**
    * Ends a run that was started and whose worker is gone: failed with `error` and a
    * `run_failed` event. A queued run was never started and is left for a new job; an ended
-   * run is left alone. Resolves with the run when it was failed here.
+   * run is left alone, and so is a run that someone other than the job of `jobId` holds
+   * under a live lease, a worker of the previous release for one. Resolves with the run when
+   * it was failed here.
    */
   failLostAgentRun(input: FailLostAgentRunInput): Promise<AgentRun | undefined>;
   /**

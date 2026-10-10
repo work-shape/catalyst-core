@@ -21,6 +21,7 @@ import {
   type ClientInstanceId,
   type ConversationHistoryStore,
   type JobControl,
+  type JobId,
   type JobSchedule,
   type PlatformStores,
   type RegisteredJobHandler,
@@ -107,7 +108,8 @@ export function createAgentRunJobs(options: AgentRunJobsOptions): AgentRunJobs {
             });
             // Someone started this run and is gone. It called models and tools already, so it
             // is ended here and never executed again.
-            if (claimed.status === "started") await failLostRun(txStores, clientInstanceId, runId);
+            if (claimed.status === "started")
+              await failLostRun(txStores, clientInstanceId, runId, job.id);
             return claimed;
           });
           if (claim.status !== "claimed") {
@@ -131,10 +133,10 @@ export function createAgentRunJobs(options: AgentRunJobsOptions): AgentRunJobs {
             leaseMs: executeAgentRunJob.leaseMs
           });
         },
-        // The worker of the run was killed or lost its lease: the run ends in the transaction
-        // that marks its job dead.
+        // The worker of the job was killed or lost its lease: the run ends in the transaction
+        // that marks its job dead, unless someone else holds the run.
         async onExhausted(job, txStores) {
-          await failLostRun(txStores, clientInstanceId, asAgentRunId(job.payload.runId));
+          await failLostRun(txStores, clientInstanceId, asAgentRunId(job.payload.runId), job.id);
         }
       }),
       defineJobHandler({
@@ -165,11 +167,13 @@ export function createAgentRunJobs(options: AgentRunJobsOptions): AgentRunJobs {
 async function failLostRun(
   stores: PlatformStores,
   clientInstanceId: ClientInstanceId,
-  runId: AgentRunId
+  runId: AgentRunId,
+  jobId: JobId
 ): Promise<void> {
   const failed = await stores.agentRuns.failLostAgentRun({
     clientInstanceId,
     runId,
+    jobId,
     error: AGENT_RUN_WORKER_LOST_ERROR
   });
   if (!failed) return;

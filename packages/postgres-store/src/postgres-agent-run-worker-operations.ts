@@ -67,11 +67,7 @@ export async function claimAgentRunForJob(
   const [current] = await db
     .select({
       status: agentRuns.status,
-      heldByAnother: drizzleSql<boolean>`(
-        ${agentRuns.leaseExpiresAt} is not null
-        and ${agentRuns.leaseExpiresAt} > now()
-        and ${agentRuns.leaseOwner} is distinct from ${leaseOwnerId}
-      )`
+      heldByAnother: heldByAnother(leaseOwnerId)
     })
     .from(agentRuns)
     .where(ofRow)
@@ -395,7 +391,10 @@ export async function failLostAgentRun(
         and(
           eq(agentRuns.clientInstanceId, input.clientInstanceId),
           eq(agentRuns.id, input.runId),
-          inArray(agentRuns.status, STARTED_STATUSES)
+          inArray(agentRuns.status, STARTED_STATUSES),
+          // The job that is gone may never have held the run: in a rolling deploy a worker of
+          // the previous release can execute it under a lease of its own. That run is alive.
+          drizzleSql`not ${heldByAnother(subjectRowLeaseOwnerId(input.jobId))}`
         )
       )
       .returning();
@@ -465,6 +464,15 @@ async function requireJobLease(tx: PostgresConnection, lease: AgentRunJobLease):
     )
     .for("share");
   if (!held) throw new JobLeaseLostError(lease.jobId);
+}
+
+/** Someone other than `leaseOwnerId` holds the run under a lease that has not run out. */
+function heldByAnother(leaseOwnerId: string) {
+  return drizzleSql<boolean>`(
+    ${agentRuns.leaseExpiresAt} is not null
+    and ${agentRuns.leaseExpiresAt} > now()
+    and ${agentRuns.leaseOwner} is distinct from ${leaseOwnerId}
+  )`;
 }
 
 /** The run is this attempt's and has not ended. A cancelling run still takes its last writes. */

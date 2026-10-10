@@ -69,6 +69,31 @@ describe("agent run jobs beside an API and a worker of the previous release", ()
     expect(await fixture.jobs()).toEqual(whileHeld);
   });
 
+  it("leaves a run alive that the previous release's worker holds when the job's worker dies", async () => {
+    const fixture = await createFixture("two_owners");
+    const run = await fixture.accept();
+    // The old worker's queue query took the run. A worker of this release claimed the job
+    // beside it and was killed before the job looked at the run: its lease ran out.
+    await expect(legacyClaim(fixture, "legacy-lease")).resolves.toBe(run.id);
+    await db.sql`
+      update platform_jobs
+      set status = 'running', attempts = 1, started_at = now(), lease_owner = 'killed-worker',
+        lease_token = 'killed-lease', lease_expires_at = now() - interval '1 second'
+      where client_instance_id = ${fixture.clientInstanceId} and kind = 'agent_run.execute'`;
+
+    // The surviving worker buries the dead job. The run is not the job's, so it goes on.
+    await fixture.worker().runDue();
+
+    expect(await fixture.jobs()).toMatchObject([{ status: "dead", error_code: "LEASE_EXPIRED" }]);
+    expect(await fixture.run(run)).toMatchObject({ status: "running", leaseToken: "legacy-lease" });
+    expect(await fixture.eventTypes(run)).toEqual([]);
+    await expect(legacyAppend(fixture, run, "legacy-lease", 1, "run_completed")).resolves.toBe(
+      true
+    );
+    expect(await fixture.run(run)).toMatchObject({ status: "completed" });
+    expect(fixture.executor.calls).toHaveLength(0);
+  });
+
   it("fails a run whose previous-release worker was killed, without executing it again", async () => {
     const fixture = await createFixture("old_worker_killed");
     const run = await fixture.accept();
