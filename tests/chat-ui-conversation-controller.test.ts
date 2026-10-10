@@ -4,7 +4,9 @@ import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-ada
 import {
   applyRunObservationToControllerState,
   completeRunObservationStreamInControllerState,
-  createControllerStateFromSnapshot
+  controllerStateForConversation,
+  createControllerStateFromSnapshot,
+  resolveRunConnectionTarget
 } from "../packages/chat-ui/src/conversation/conversation-controller-state";
 
 describe("chat UI conversation controller", () => {
@@ -581,6 +583,61 @@ describe("chat UI conversation controller", () => {
     expect(refreshed.connectionStatus).toBe("idle");
     expect(refreshed.activeRun).toBeUndefined();
     expect(refreshed.error).toBeUndefined();
+  });
+
+  it("shows nothing of the conversation left behind while the selected one loads", () => {
+    const left = createControllerStateFromSnapshot(
+      createSnapshot({
+        lastSequence: 28,
+        text: "partial answer",
+        messages: [
+          {
+            id: "msg_user",
+            clientInstanceId: "client_1",
+            conversationId: "conv_1",
+            role: "user",
+            text: "first message",
+            createdAt: "2026-06-26T10:00:00.000Z"
+          }
+        ]
+      })
+    );
+
+    expect(controllerStateForConversation(left, "conv_1")).toBe(left);
+
+    const selected = controllerStateForConversation(left, "conv_2");
+    expect(selected).toEqual({ snapshotStatus: "loading", connectionStatus: "idle", messages: [] });
+    expect(toUiMessages(selected.messages, selected.activeRun)).toEqual([]);
+  });
+
+  it("opens a run connection only for the selected conversation's own run", () => {
+    const snapshot = createSnapshot({ lastSequence: 28, text: "partial answer" });
+    const state = createControllerStateFromSnapshot(snapshot);
+
+    expect(
+      resolveRunConnectionTarget({ conversationId: "conv_1", enabled: true, snapshot, state })
+    ).toEqual({ conversationId: "conv_1", runId: "run_1", afterSequence: 28 });
+
+    // The thread of the conversation switched to has not arrived: the state is still the other's.
+    expect(
+      resolveRunConnectionTarget({
+        conversationId: "conv_2",
+        enabled: true,
+        snapshot: undefined,
+        state
+      })
+    ).toBeUndefined();
+    expect(
+      resolveRunConnectionTarget({
+        conversationId: "conv_2",
+        enabled: true,
+        snapshot,
+        state: controllerStateForConversation(state, "conv_2")
+      })
+    ).toBeUndefined();
+    expect(
+      resolveRunConnectionTarget({ conversationId: "conv_1", enabled: false, snapshot, state })
+    ).toBeUndefined();
   });
 });
 

@@ -1,11 +1,5 @@
 import type { ApiClient, RunObservation } from "@vivd-catalyst/api-client";
-import { isTerminalObservation } from "./conversation-controller-state";
-
-export interface RunConnectionTarget {
-  conversationId: string;
-  runId: string;
-  afterSequence: number;
-}
+import { isTerminalObservation, type RunConnectionTarget } from "./conversation-controller-state";
 
 export interface RunConnectionCompletion {
   sawObservation: boolean;

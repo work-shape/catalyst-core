@@ -7,16 +7,14 @@ import type {
 import {
   applyRunObservationToControllerState,
   completeRunObservationStreamInControllerState,
+  controllerStateForConversation,
   createControllerStateFromSnapshot,
   createInitialControllerState,
-  isLiveRunStatus,
-  type ConversationControllerState
-} from "./conversation-controller-state";
-import {
-  rememberRunCursor,
-  startRunConnectionManager,
+  resolveRunConnectionTarget,
+  type ConversationControllerState,
   type RunConnectionTarget
-} from "./run-connection-manager";
+} from "./conversation-controller-state";
+import { rememberRunCursor, startRunConnectionManager } from "./run-connection-manager";
 
 export interface UseConversationControllerInput {
   client: ApiClient;
@@ -41,8 +39,14 @@ export function useConversationController({
   onTerminalObservation,
   onToolCallCompleted
 }: UseConversationControllerInput): ConversationControllerState {
-  const [state, setState] = useState<ConversationControllerState>(() =>
+  const [storedState, setState] = useState<ConversationControllerState>(() =>
     createInitialControllerState()
+  );
+  // The stored state changes one effect after the selection does. What a render shows and
+  // connects to is the selected conversation's own state, from the first render on.
+  const state = useMemo(
+    () => controllerStateForConversation(storedState, conversationId),
+    [conversationId, storedState]
   );
   const snapshotRunKey = snapshot?.activeRun
     ? `${snapshot.activeRun.run.id}:${snapshot.activeRun.projection.lastSequence}:${snapshot.activeRun.run.status}`
@@ -54,10 +58,13 @@ export function useConversationController({
       return;
     }
     if (snapshotLoading) {
-      setState((current) => ({
-        ...current,
-        snapshotStatus: current.snapshotStatus === "ready" ? "ready" : "loading"
-      }));
+      setState((current) => {
+        const own = controllerStateForConversation(current, conversationId);
+        return {
+          ...own,
+          snapshotStatus: own.snapshotStatus === "ready" ? "ready" : "loading"
+        };
+      });
       return;
     }
     if (snapshotError) {
@@ -80,37 +87,19 @@ export function useConversationController({
           snapshot.activeRun.projection.lastSequence
         );
       }
-      setState((current) => createControllerStateFromSnapshot(snapshot, current));
+      setState((current) =>
+        createControllerStateFromSnapshot(
+          snapshot,
+          controllerStateForConversation(current, conversationId)
+        )
+      );
     }
   }, [conversationId, enabled, snapshot, snapshotError, snapshotLoading, snapshotRunKey]);
 
-  const activeRunConnection = useMemo<RunConnectionTarget | undefined>(() => {
-    const snapshotActiveRun = snapshot?.activeRun;
-    const stateActiveRun = state.activeRun;
-    const liveActiveRun =
-      snapshotActiveRun &&
-      stateActiveRun?.run.id === snapshotActiveRun.run.id &&
-      stateActiveRun.lastAppliedSequence >= snapshotActiveRun.projection.lastSequence
-        ? stateActiveRun
-        : (snapshotActiveRun ?? stateActiveRun);
-    if (!enabled || !conversationId || !liveActiveRun) {
-      return undefined;
-    }
-    if (!isLiveRunStatus(liveActiveRun.run.status)) {
-      return undefined;
-    }
-    return {
-      conversationId,
-      runId: liveActiveRun.run.id,
-      afterSequence: liveActiveRun.projection.lastSequence
-    };
-  }, [
-    conversationId,
-    enabled,
-    snapshotRunKey,
-    state.activeRun?.run.id,
-    state.activeRun?.run.status
-  ]);
+  const activeRunConnection = useMemo<RunConnectionTarget | undefined>(
+    () => resolveRunConnectionTarget({ conversationId, enabled, snapshot, state }),
+    [conversationId, enabled, snapshotRunKey, state.activeRun?.run.id, state.activeRun?.run.status]
+  );
 
   useEffect(() => {
     if (!activeRunConnection) {

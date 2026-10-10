@@ -41,6 +41,12 @@ export interface ConversationControllerState {
   };
 }
 
+export interface RunConnectionTarget {
+  conversationId: string;
+  runId: string;
+  afterSequence: number;
+}
+
 export interface ConversationControllerApplyResult {
   state: ConversationControllerState;
   applied: boolean;
@@ -52,6 +58,59 @@ export function createInitialControllerState(): ConversationControllerState {
     snapshotStatus: "ready",
     connectionStatus: "idle",
     messages: []
+  };
+}
+
+/**
+ * The state the controller shows for `conversationId`. State gathered for another conversation
+ * never counts: until the thread of the selected conversation arrives, it has no messages and
+ * no run.
+ */
+export function controllerStateForConversation(
+  state: ConversationControllerState,
+  conversationId: string | undefined
+): ConversationControllerState {
+  if (!state.conversation || state.conversation.id === conversationId) {
+    return state;
+  }
+  return {
+    ...createInitialControllerState(),
+    snapshotStatus: "loading"
+  };
+}
+
+/** The run event stream to hold open: the live run of the selected conversation, if it has one. */
+export function resolveRunConnectionTarget(input: {
+  conversationId: string | undefined;
+  enabled: boolean;
+  snapshot: ConversationThreadSnapshot | undefined;
+  state: ConversationControllerState;
+}): RunConnectionTarget | undefined {
+  const { conversationId } = input;
+  if (!input.enabled || !conversationId) {
+    return undefined;
+  }
+  // A run counts only under the conversation it belongs to. Right after a switch the state, and
+  // a thread still on its way out, are those of the conversation left behind.
+  const snapshotActiveRun =
+    input.snapshot?.conversation.id === conversationId ? input.snapshot.activeRun : undefined;
+  const stateActiveRun =
+    input.state.activeRun?.run.conversationId === conversationId
+      ? input.state.activeRun
+      : undefined;
+  const liveActiveRun =
+    snapshotActiveRun &&
+    stateActiveRun?.run.id === snapshotActiveRun.run.id &&
+    stateActiveRun.lastAppliedSequence >= snapshotActiveRun.projection.lastSequence
+      ? stateActiveRun
+      : (snapshotActiveRun ?? stateActiveRun);
+  if (!liveActiveRun || !isLiveRunStatus(liveActiveRun.run.status)) {
+    return undefined;
+  }
+  return {
+    conversationId,
+    runId: liveActiveRun.run.id,
+    afterSequence: liveActiveRun.projection.lastSequence
   };
 }
 

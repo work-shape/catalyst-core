@@ -515,6 +515,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Chat:** a conversation opened while another one is answering shows only its own messages.
+  Until its thread arrives it is empty, where it used to show the messages and the partial
+  answer of the conversation left behind, and the page no longer asks for that conversation's
+  run under the address of the one opened.
 - **Chat:** an instance configuration that does not load no longer leaves "Loading
   configuration" standing. A request without an answer or with a 5xx is tried three more times;
   after that, or at once for an answer of a shape the interface cannot read, a panel offers "Try

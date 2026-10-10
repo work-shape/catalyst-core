@@ -1929,6 +1929,86 @@ test(
 );
 
 test(
+  "a conversation switched to during a run shows only its own messages",
+  { tag: "@chat-state" },
+  async ({ page }) => {
+    // The run lasts about ten seconds: the fixture model echoes one word every 20 ms.
+    test.setTimeout(60_000);
+    await signInViaUi(page, normalUser);
+    const suffix = Date.now();
+    const targetTitle = `Stale stream target ${suffix}`;
+    await createListedConversation(page, targetTitle);
+
+    const eventRequests: Array<{ conversationId: string; runId: string }> = [];
+    page.on("request", (request) => {
+      const match = /^\/api\/v1\/conversations\/([^/]+)\/runs\/([^/]+)\/events$/u.exec(
+        new URL(request.url()).pathname
+      );
+      if (request.method() === "GET" && match?.[1] && match[2]) {
+        eventRequests.push({
+          conversationId: decodeURIComponent(match[1]),
+          runId: decodeURIComponent(match[2])
+        });
+      }
+    });
+    // The event streams are held back, so the page keeps the state it had when the user
+    // switched for as long as the test looks at it.
+    let releaseAnswer = () => {};
+    const answerHeld = new Promise<void>((resolve) => {
+      releaseAnswer = resolve;
+    });
+    await page.route(
+      (url) => url.origin === new URL(apiBaseUrl).origin && isRunEventsPath(url.pathname),
+      async (route) => {
+        if (route.request().method() === "GET") {
+          await answerHeld;
+        }
+        await route.continue();
+      }
+    );
+
+    await page.goto("/");
+    const chatRegion = page.getByRole("region", { name: "Chat" });
+    const sendButton = page.getByRole("button", { name: "Send message" });
+    const messageToken = `stale-stream-token-${suffix}`;
+    await page
+      .getByPlaceholder("Message")
+      .fill([messageToken, ...Array.from({ length: 499 }, (_, index) => `w${index}`)].join(" "));
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
+    await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+    const newConversationId = currentConversationId(page);
+    const newConversation = page
+      .getByTestId("conversation-row")
+      .filter({ has: page.getByTitle(new RegExp(escapeRegExp(messageToken), "iu")) });
+    await expect(newConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+
+    const targetConversation = page
+      .getByTestId("conversation-row")
+      .filter({ hasText: targetTitle });
+    await targetConversation.getByRole("button").first().click();
+    await expect(targetConversation).toHaveAttribute("data-selected", "true");
+    await expect(
+      chatRegion.locator('[data-role="user"]').filter({ hasText: targetTitle })
+    ).toHaveCount(1);
+    await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
+    await expect(chatRegion.locator('[data-role="assistant"]')).toHaveCount(1);
+    await expect(page.getByTestId("run-activity")).toHaveCount(0);
+
+    releaseAnswer();
+    await expect(newConversation.getByTestId("conversation-running-indicator")).toHaveCount(0, {
+      timeout: 30_000
+    });
+    await expect(targetConversation).toHaveAttribute("data-selected", "true");
+    await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
+    expect(eventRequests.length).toBeGreaterThan(0);
+    expect(eventRequests.filter((request) => request.conversationId !== newConversationId)).toEqual(
+      []
+    );
+  }
+);
+
+test(
   "completed background turns are marked unread until viewed",
   { tag: "@chat-state" },
   async ({ page }) => {
