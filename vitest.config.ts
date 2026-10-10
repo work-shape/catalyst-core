@@ -9,6 +9,7 @@ const sourceAlias = {
   "@vivd-catalyst/auth": "packages/auth/src/index.ts",
   "@vivd-catalyst/core": "packages/core/src/index.ts",
   "@vivd-catalyst/chat-server": "packages/chat-server/src/index.ts",
+  "@vivd-catalyst/chat-ui/access": "packages/chat-ui/src/access/index.ts",
   "@vivd-catalyst/chat-ui/shell": "packages/chat-ui/src/shell.tsx",
   "@vivd-catalyst/chat-ui/admin": "packages/chat-ui/src/admin.tsx",
   "@vivd-catalyst/chat-ui/vite": "packages/chat-ui/src/vite.js",

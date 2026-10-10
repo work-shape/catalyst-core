@@ -43,6 +43,7 @@ const you = ["you/profile", "you/language-appearance", "you/security"];
 const workspace = ["workspace/general", "workspace/members"];
 const instance = [
   "instance/users",
+  "instance/access",
   "instance/api-access",
   "instance/usage",
   "instance/audit",
@@ -98,7 +99,7 @@ describe("Settings catalog", () => {
   });
 
   it.each<[key: string, pages: string[]]>([
-    ["users.manage", ["instance/users"]],
+    ["users.manage", ["instance/users", "instance/access"]],
     ["api_access.manage", ["instance/api-access"]],
     ["usage.view", ["instance/usage"]],
     ["audit.view", ["instance/audit", "instance/jobs"]]

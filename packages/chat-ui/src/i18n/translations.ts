@@ -1,3 +1,4 @@
+import { access } from "./access";
 import { administration } from "./administration";
 import { apiAccess } from "./api-access";
 import { approvals } from "./approvals";
@@ -19,6 +20,7 @@ import { combineTranslations } from "./translation-area";
  * the only way into the dictionary.
  */
 export const translations = combineTranslations(common)
+  .and(access)
   .and(administration)
   .and(apiAccess)
   .and(approvals)

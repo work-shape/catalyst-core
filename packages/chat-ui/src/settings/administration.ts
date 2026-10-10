@@ -6,6 +6,7 @@ import {
   canViewUsageGovernance
 } from "../control-plane/governance";
 import type { ChatShellAdministration } from "./page-definition";
+import { AccessPage } from "./pages/access";
 import { ApiAccessPage } from "./pages/api-access";
 import { AuditPage } from "./pages/audit";
 import { BuildPage } from "./pages/build";
@@ -26,6 +27,15 @@ export const administration: ChatShellAdministration = {
       labelKey: "settings.users",
       visible: (viewer) => canManageUsers(viewer.user),
       component: UsersPage
+    },
+    {
+      id: "access",
+      group: "instance",
+      labelKey: "settings.access",
+      visible: (viewer) => canManageUsers(viewer.user),
+      // The grant list has six columns.
+      width: "wide",
+      component: AccessPage
     },
     {
       id: "api-access",

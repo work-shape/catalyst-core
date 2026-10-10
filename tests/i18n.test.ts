@@ -39,6 +39,14 @@ describe("interface translations", () => {
     expect(de.localeName("en")).toBe("English");
   });
 
+  it("reads the Access page in both languages", () => {
+    expect(en.t("settings.access")).toBe("Access");
+    expect(de.t("settings.access")).toBe("Zugriff");
+    expect(en.t("access.scopeAssetGone")).toBe("Asset no longer exists");
+    expect(de.t("access.scopeAssetGone")).toBe("Asset existiert nicht mehr");
+    expect(de.t("access.grantUserBeingDeleted")).not.toBe(en.t("access.grantUserBeingDeleted"));
+  });
+
   it("reads the settings pages in both languages", () => {
     expect(en.t("settings.auditEmpty")).toBe("No audit events in this range.");
     expect(de.t("settings.auditEmpty")).toBe("Keine Audit-Ereignisse in diesem Zeitraum.");
