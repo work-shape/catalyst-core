@@ -10,8 +10,9 @@ import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme
 const { Dialog, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, UiRoot } = library;
 const { Tooltip, TooltipContent, TooltipTrigger, uiLabelsDe, uiLabelsEn } = library;
 const { Avatar, Banner, Checkbox, Chip, ConfirmDialog, Field, Input, RadioGroup } = library;
-const { DropdownMenu, DropdownMenuContent, Picker, Popover, PopoverContent, SkeletonList } =
+const { DropdownMenu, DropdownMenuContent, Picker, PickerButton, Popover, PopoverContent } =
   library;
+const { SkeletonList } = library;
 
 describe("UiRoot", () => {
   it("carries the theme on its own element and holds the overlay container as its last child", () => {
@@ -181,6 +182,27 @@ describe("form components", () => {
     expect(markup).not.toContain('aria-invalid="');
     expect(markup).toContain(`<span class="sr-only">${uiLabelsDe.required}</span>`);
     expect(markup).toContain(`<p id="${hintId}" class="text-caption text-muted-foreground">`);
+  });
+
+  it("names a picker's button with its label and what is chosen, and takes the field's error", () => {
+    const button = (value: string | undefined, error?: string) =>
+      render(
+        createElement(Field, {
+          label: "Role",
+          error,
+          children: createElement(PickerButton, {
+            label: "Role",
+            placeholder: "Choose a role",
+            value
+          })
+        })
+      );
+
+    expect(attribute(button(undefined), "button", "aria-label")).toBe("Role: Choose a role");
+    expect(attribute(button("Member"), "button", "aria-label")).toBe("Role: Member");
+    expect(button("Member")).toMatch(/<button[^>]*type="button"/u);
+    expect(button("Member")).not.toContain('aria-invalid="');
+    expect(button("Member", "Choose another role")).toMatch(/<button[^>]*aria-invalid="true"/u);
   });
 
   it("shows a field's error in the hint's place, announces it and marks the control invalid", () => {

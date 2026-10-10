@@ -1,11 +1,13 @@
 import { Command } from "cmdk";
-import { Check, Plus, Search } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import {
+  forwardRef,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
+  type ButtonHTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -13,6 +15,8 @@ import {
   type RefObject
 } from "react";
 import { cn } from "../cn";
+import { useFieldControl } from "../forms/field-control";
+import { fieldFrameClassName, fieldHeights, type FieldSize } from "../forms/input";
 import { useScrollEdgeFade } from "../scroll-edge-fade";
 import { useOverlayContainer, useUiLabels } from "../ui-root";
 import { menuGroupHeadingClassName, menuRowClassName } from "./dropdown-menu";
@@ -526,6 +530,72 @@ function typeAheadMatch(
 function isDisabled(option: PickerOption): boolean {
   return option.disabled ?? option.disabledReason !== undefined;
 }
+
+export interface PickerButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "children" | "aria-label" | "value"
+> {
+  /** What is chosen, the same words as the label of the Field around it. */
+  label: string;
+  /** The name of what is chosen. Without one the placeholder shows: nothing chosen is a state. */
+  value?: string;
+  /** What to do while nothing is chosen: "Choose a person". */
+  placeholder: string;
+  /** An avatar or an icon before the value. */
+  leading?: ReactNode;
+  size?: FieldSize;
+  invalid?: boolean;
+}
+
+/**
+ * The trigger of a Picker that is a form control: it has the frame of an Input, shows what is
+ * chosen or a placeholder, and inside a Field takes the field's hint, error and invalid state.
+ * It is named with its label and its value, so the choice is read out with the control.
+ */
+export const PickerButton = forwardRef<HTMLButtonElement, PickerButtonProps>(function PickerButton(
+  {
+    label,
+    value,
+    placeholder,
+    leading,
+    size = "md",
+    invalid,
+    id,
+    className,
+    "aria-describedby": describedBy,
+    ...props
+  },
+  ref
+) {
+  const { required: _required, ...control } = useFieldControl({
+    id,
+    invalid,
+    "aria-describedby": describedBy
+  });
+  return (
+    <button
+      ref={ref}
+      type="button"
+      {...control}
+      aria-label={`${label}: ${value ?? placeholder}`}
+      className={cn(
+        "flex items-center gap-2 px-3 text-left [&_svg]:size-4 [&_svg]:shrink-0",
+        fieldFrameClassName,
+        fieldHeights[size],
+        className
+      )}
+      {...props}
+    >
+      {leading}
+      <span
+        className={cn("min-w-0 flex-1 truncate", value === undefined && "text-muted-foreground")}
+      >
+        {value ?? placeholder}
+      </span>
+      <ChevronsUpDown aria-hidden="true" className="text-muted-foreground" />
+    </button>
+  );
+});
 
 function isGroup(entry: PickerOption | PickerOptionGroup): entry is PickerOptionGroup {
   return "options" in entry;

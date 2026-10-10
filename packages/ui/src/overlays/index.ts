@@ -32,6 +32,8 @@ export {
 } from "./hover-card";
 export {
   Picker,
+  PickerButton,
+  type PickerButtonProps,
   type PickerCreateRow,
   type PickerMultipleProps,
   type PickerOption,

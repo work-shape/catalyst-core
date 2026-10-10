@@ -30,7 +30,12 @@ import {
   DropdownMenuTrigger
 } from "../overlays/dropdown-menu";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../overlays/hover-card";
-import { Picker, type PickerOption, type PickerOptionGroup } from "../overlays/picker";
+import {
+  Picker,
+  PickerButton,
+  type PickerOption,
+  type PickerOptionGroup
+} from "../overlays/picker";
 import { Popover, PopoverContent, PopoverTrigger, type PopoverSize } from "../overlays/popover";
 import { Avatar } from "../status/avatar";
 import { Badge } from "../status/badge";
@@ -379,6 +384,7 @@ function ManyAgentsPicker({ text }: { text: GalleryText }) {
 function PickerSamples({ text }: { text: GalleryText }) {
   const [workspaces, setWorkspaces] = useState<readonly string[]>([text.workspaceMarketing]);
   const [role, setRole] = useState<string | undefined>(undefined);
+  const [fieldRole, setFieldRole] = useState<string | undefined>(undefined);
   const [dialogOpen, setDialogOpen] = useState(false);
   return (
     <Samples>
@@ -410,6 +416,29 @@ function PickerSamples({ text }: { text: GalleryText }) {
           <ChevronDown aria-hidden="true" />
         </Button>
       </Picker>
+      {/* As a form control: the field's label names it, and nothing chosen is a state. */}
+      <Field label={text.role} hint={text.pickRole} className="w-56">
+        <Picker
+          options={[
+            { value: "member", label: text.roleMember },
+            { value: "admin", label: text.roleAdmin }
+          ]}
+          value={fieldRole}
+          onValueChange={setFieldRole}
+        >
+          <PickerButton
+            label={text.role}
+            placeholder={text.pickRole}
+            value={
+              fieldRole === undefined
+                ? undefined
+                : fieldRole === "admin"
+                  ? text.roleAdmin
+                  : text.roleMember
+            }
+          />
+        </Picker>
+      </Field>
       <Button variant="outline" onClick={() => setDialogOpen(true)}>
         {text.pickerInDialog}
       </Button>
@@ -497,7 +526,7 @@ export const overlaysGallery: GalleryGroup = {
     },
     {
       name: "Picker",
-      components: ["Picker"],
+      components: ["Picker", "PickerButton"],
       render: (text) => <PickerSamples text={text} />
     },
     {
