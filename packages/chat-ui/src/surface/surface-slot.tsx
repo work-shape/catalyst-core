@@ -180,9 +180,18 @@ export function SurfaceSlot({
       window.addEventListener("resize", measure);
       return () => window.removeEventListener("resize", measure);
     }
-    const observer = new ResizeObserver(measure);
+    // Measured a frame later: a width set while the browser still delivers resizes changes
+    // what other observers watch, which it reports as a resize observer loop.
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(measure);
+    });
     observer.observe(main);
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
 
   useEffect(() => {
