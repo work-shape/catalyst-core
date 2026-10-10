@@ -5,6 +5,7 @@ import {
   Copy,
   Ellipsis,
   Link,
+  Lock,
   Pencil,
   Play,
   Search,
@@ -243,6 +244,13 @@ function DropdownMenuSamples({ text }: { text: GalleryText }) {
           </DropdownMenuItem>
           <DropdownMenuItem icon={<Archive aria-hidden="true" />} disabled>
             {text.menuArchive}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            icon={<Lock aria-hidden="true" />}
+            disabledReason={text.menuLockReason}
+            reasonPlacement="line"
+          >
+            {text.menuLock}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem icon={<Trash2 aria-hidden="true" />} tone="danger">

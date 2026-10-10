@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useId, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
 import { useOverlayContainer } from "../ui-root";
 import { ANCHORED_COLLISION_PADDING, anchoredPanelClassName } from "./popover";
@@ -96,6 +96,11 @@ export interface DropdownMenuItemProps {
    * the reason as its tooltip, and it does nothing when chosen.
    */
   disabledReason?: ReactNode;
+  /**
+   * Where the reason shows. `line` puts it under the item's text, where it is read without a
+   * pointer: use it when the reader has to act on the reason. `tooltip` is the default.
+   */
+  reasonPlacement?: "tooltip" | "line";
   onSelect?(): void;
   className?: string;
 }
@@ -107,9 +112,11 @@ export function DropdownMenuItem({
   tone = "default",
   disabled = false,
   disabledReason,
+  reasonPlacement = "tooltip",
   onSelect,
   className
 }: DropdownMenuItemProps) {
+  const reasonId = useId();
   const content = (
     <>
       {icon}
@@ -128,6 +135,29 @@ export function DropdownMenuItem({
     return (
       <DropdownMenuPrimitive.Item className={classes} disabled={disabled} onSelect={onSelect}>
         {content}
+      </DropdownMenuPrimitive.Item>
+    );
+  }
+  if (reasonPlacement === "line") {
+    return (
+      <DropdownMenuPrimitive.Item
+        aria-disabled="true"
+        // The item is named by its text and described by the reason, not named by both.
+        aria-labelledby={`${reasonId}-text`}
+        aria-describedby={reasonId}
+        className={cn(classes, "max-w-72 items-start")}
+        // Choosing it keeps the menu open and runs nothing.
+        onSelect={(event) => event.preventDefault()}
+      >
+        {icon === undefined ? null : <span className="flex h-5 items-center">{icon}</span>}
+        <span className="grid min-w-0 flex-1 gap-0.5">
+          <span id={`${reasonId}-text`} className="truncate">
+            {children}
+          </span>
+          <span id={reasonId} className="text-caption whitespace-normal text-muted-foreground">
+            {disabledReason}
+          </span>
+        </span>
       </DropdownMenuPrimitive.Item>
     );
   }

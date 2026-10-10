@@ -88,6 +88,8 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   menuCopyLink: string;
   menuRunNow: string;
   menuRunNowReason: string;
+  menuLock: string;
+  menuLockReason: string;
   menuArchive: string;
   menuView: string;
   menuShowDrafts: string;
@@ -265,6 +267,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuCopyLink: "Copy link",
     menuRunNow: "Run now",
     menuRunNowReason: "A run is still in progress.",
+    menuLock: "Lock",
+    menuLockReason: "2 people are editing. Ask them to close it first.",
     menuArchive: "Archive",
     menuView: "View",
     menuShowDrafts: "Show drafts",
@@ -471,6 +475,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     menuCopyLink: "Link kopieren",
     menuRunNow: "Jetzt ausführen",
     menuRunNowReason: "Ein Lauf ist noch nicht abgeschlossen.",
+    menuLock: "Sperren",
+    menuLockReason: "2 Personen bearbeiten es gerade. Bitte sie, es zuerst zu schließen.",
     menuArchive: "Archivieren",
     menuView: "Ansicht",
     menuShowDrafts: "Entwürfe anzeigen",

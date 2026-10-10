@@ -191,7 +191,18 @@ test("anchored overlays sit on the raised surface and answer the keyboard", asyn
   ).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(menu).toBeVisible();
-  // The plainly disabled item is skipped.
+  // The plainly disabled item is skipped. The next one cannot be used either and says why in
+  // a line of its own, which needs no pointer; the reason describes the item, it does not name it.
+  await page.keyboard.press("ArrowDown");
+  const lock = menu.getByRole("menuitem", { name: "Lock", exact: true });
+  await expect(lock).toBeFocused();
+  await expect(lock).toHaveAttribute("aria-disabled", "true");
+  await expect(lock.getByText("2 people are editing. Ask them to close it first.")).toBeVisible();
+  await expect(lock).toHaveAccessibleDescription(
+    "2 people are editing. Ask them to close it first."
+  );
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeVisible();
   await page.keyboard.press("ArrowDown");
   await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeFocused();
   await expect(menu.getByRole("menuitem").last()).toHaveText("Delete");
