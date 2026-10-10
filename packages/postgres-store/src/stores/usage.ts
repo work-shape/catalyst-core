@@ -10,13 +10,15 @@ import {
   admitModelUsageEvent,
   appendModelUsageEvent,
   listPendingModelUsageEvents,
-  readModelUsageMaintenance,
   reconcileModelUsage,
   settleModelUsageEvent,
   summarizeModelUsageHistory,
-  summarizeRecentModelUsage,
-  writeModelUsageMaintenance
+  summarizeRecentModelUsage
 } from "../postgres-usage-ledger";
+import {
+  readModelUsageMaintenance,
+  writeModelUsageMaintenance
+} from "../postgres-usage-maintenance";
 
 export function createPostgresUsageStore(db: PostgresConnection): ModelUsageEventStore {
   return {
