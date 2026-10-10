@@ -100,14 +100,20 @@ An instance with `modules.apps.enabled: true` needs:
 
 - `executionWorkspaces.enabled: true` and, outside development, `infrastructure.sandbox.provider: docker`. The instance does not start otherwise and names the setting.
 - A running workspace command worker. It needs `infrastructure.objectStorage.files` and its credentials in addition to the workspace store. A worker that does not serve `page.bundle` does not start.
-- A runner image of the same release. An older image has no `catalyst-page-build`; every save then fails with a message that says the runner image must be rolled out. The Infrastructure page does not show this.
+- A runner image of the same release. Both runner images carry the command: the platform's `workspace-command-runner` target and the runner image of the capabilities repository. Each runs `catalyst-page-build --check` when it is built, which builds a small Page, so an image without a working command does not come out of its build. An older image has no `catalyst-page-build`; every save then fails with a message that says the runner image must be rolled out. The Infrastructure page does not show this.
+
+A save does not wait for a worker that is not there. When a build has been due for 30 seconds and no build of the instance is running, the save fails and says that no workspace command worker takes Page builds. A worker that is busy has a build running, so its queue is waited for.
+
+A build that is published is published once. The revision and the result of the build are written in one transaction while the worker holds the job; a job that is delivered again after a worker stopped finds the result and stores nothing, and a save that gave up gets no revision.
+
+A worker that is killed can leave a build's directory under `WORKSPACE_COMMAND_TEMP_ROOT` and, with the Docker sandbox, its container. Every worker removes directories named `catalyst-page-build-*` and containers named `catalyst-workspace-command-page-build-*` that are older than 15 minutes when it starts and every 10 minutes while it builds.
 
 | Setting                  | Default | Meaning                                                                         |
 | ------------------------ | ------- | ------------------------------------------------------------------------------- |
 | `PAGE_BUILD_CONCURRENCY` | 2       | Builds one worker process runs at once. One conversation never has two at once. |
 | `PAGE_BUILD_TIMEOUT_MS`  | 60000   | A build that runs longer is stopped, its container removed, and the save fails. |
 
-A build takes at most 500 files, 2 MiB per file and 25 MiB in all, and may leave 500 files of 50 MiB in all. Memory, CPU and process count are those of the sandbox (4 GiB, 1 CPU and 128 processes by default); there is no disk quota on the build's directory beyond the timeout. A save waits five minutes for its build; when no worker takes it in that time the save fails and a worker that comes later stores nothing.
+A build takes at most 500 files, 2 MiB per file and 25 MiB in all, and may leave 500 files of 50 MiB in all, in at most 2,000 files and folders nested 32 deep. Memory, CPU and process count are those of the sandbox (4 GiB, 1 CPU and 128 processes by default); there is no disk quota on the build's directory beyond the timeout. A save waits five minutes for its build; when no worker takes it in that time the save fails and a worker that comes later stores nothing.
 
 ## Deployment Flow
 

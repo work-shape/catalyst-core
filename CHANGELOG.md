@@ -59,8 +59,13 @@ contain breaking changes; a patch version does not.
   workspace command worker that can reach the `files` object store, and a runner image of this
   release; outside development the sandbox must be `docker`. An instance that lacks one of
   these does not start and names it, and a runner image without the command fails each save
-  with a message that says so. The kit files themselves are not served yet, so a saved React
-  Page does not render until they are.
+  with a message that says so. Both runner images carry the command, the platform's
+  `workspace-command-runner` target and the capabilities runner image, and each builds a small
+  Page with it when the image is built. A save fails after 30 seconds, with the reason, when no
+  worker takes builds. A revision is published in one transaction with the result of its build,
+  so a job delivered twice or a save that gave up leaves no second or unwanted revision. A
+  worker removes the directories and containers a killed worker left of its builds. The kit
+  files themselves are not served yet, so a saved React Page does not render until they are.
 - **Database:** migration `0052_page_builds` adds the table `page_builds`, the row a save and
   its build meet on. A row lives for the length of one save.
 
