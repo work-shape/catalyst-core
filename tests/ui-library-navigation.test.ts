@@ -223,7 +223,19 @@ describe("navigation, page structure and data components", () => {
       "-mt-2",
       "h-9",
       "bg-sidebar",
-      "pt-2"
+      "pt-2",
+      // The fade under it, in the sidebar's colour, shown only on the label marked as pinned
+      // over items.
+      "after:absolute",
+      "after:inset-x-0",
+      "after:top-full",
+      "after:h-3",
+      "after:bg-linear-to-b",
+      "after:from-sidebar",
+      "after:to-transparent",
+      "after:pointer-events-none",
+      "after:opacity-0",
+      "data-pinned-fade:after:opacity-100"
     ];
     const labelClasses = (markup: string) =>
       Array.from(markup.matchAll(/data-nav-group-label="" class="([^"]*)"/gu), (match) =>
@@ -235,6 +247,8 @@ describe("navigation, page structure and data components", () => {
     );
     const sidebarLabels = labelClasses(inSidebar);
     expect(sidebarLabels).toHaveLength(2);
+    // At rest no label is marked: the fade would lie over the first item.
+    expect(inSidebar).not.toContain("data-pinned-fade=");
     for (const classes of sidebarLabels) {
       expect(classes).toEqual(expect.arrayContaining(pinned));
       // The label's own height gives way to the one that holds the room above it.

@@ -172,8 +172,10 @@ const groupLabelClassName =
 // In the scrolling body of a sidebar the label stays at the top while its group is in view.
 // It takes the room above it along, as padding on the sidebar's surface, so no item shows
 // between the label and what stands above the body. Where it rests it stands as without.
+// While items lie under it, it carries the fade they pass through: the sidebar marks the label
+// that is pinned with `data-pinned-fade`, so the top of the list ends as softly as its bottom.
 const pinnedGroupLabelClassName =
-  "sticky top-0 z-(--layer-sticky-header) -mt-2 h-9 bg-sidebar pt-2";
+  "sticky top-0 z-(--layer-sticky-header) -mt-2 h-9 bg-sidebar pt-2 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-3 after:bg-linear-to-b after:from-sidebar after:to-transparent after:opacity-0 data-pinned-fade:after:opacity-100";
 
 /**
  * A run of navigation items under an optional label. Groups are set apart by space, not by a

@@ -182,6 +182,9 @@ test("a group's label stays at the top of a sidebar's body while its items scrol
         labelHeight: labelBox?.height,
         labelAtTopEdge: at(top + 1) === pinned,
         labelAboveItems: at((labelBox?.bottom ?? 0) - 1) === pinned,
+        fade: pinned ? getComputedStyle(pinned, "::after").opacity : undefined,
+        fadeHeight: pinned ? getComputedStyle(pinned, "::after").height : undefined,
+        fadeImage: pinned ? getComputedStyle(pinned, "::after").backgroundImage : undefined,
         mask: getComputedStyle(element).maskImage
       };
     });
@@ -189,7 +192,13 @@ test("a group's label stays at the top of a sidebar's body while its items scrol
   await expect(label).toHaveText("Label that stays while its items scroll");
   await sample.scrollIntoViewIfNeeded();
   const resting = await measure();
-  expect(resting).toMatchObject({ labelTop: 0, labelHeight: 36, labelAtTopEdge: true });
+  // At rest the label fades nothing: its fade would lie over the first item.
+  expect(resting).toMatchObject({
+    labelTop: 0,
+    labelHeight: 36,
+    labelAtTopEdge: true,
+    fade: "0"
+  });
   expect(await style(label, "padding-top")).toBe("8px");
   expect(await style(label, "position")).toBe("sticky");
   expect(await style(label, "background-color")).toBe(
@@ -209,6 +218,15 @@ test("a group's label stays at the top of a sidebar's body while its items scrol
   });
   // The body fades its end and not its start: a fade there would take the label with it.
   expect(scrolled.mask).not.toContain("transparent 0");
+  // The label carries the fade of the start instead: 12 px of the sidebar's colour under it.
+  expect(scrolled).toMatchObject({ fade: "1", fadeHeight: "12px" });
+  expect(scrolled.fadeImage).toContain("linear-gradient");
+
+  // Back at the start the label is still at the top, and its fade is gone again.
+  await body.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await expect.poll(async () => (await measure()).fade).toBe("0");
   await expect(label).toBeInViewport();
 });
 

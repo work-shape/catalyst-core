@@ -55,17 +55,25 @@ export function Sidebar({
   const iconsOnly = collapsed && !drawer;
   const body = useScrollEdgeFade<HTMLDivElement>([iconsOnly, drawer]);
   // A group label pinned at the top of the body covers what scrolls under it, so the body
-  // fades nothing there: the fade would take the label with it.
+  // fades nothing there: the fade would take the label with it. The label carries the fade
+  // instead, while items lie under it. Only the label that is pinned does, so the mark is set
+  // on that element as the body scrolls.
   const [labelPinned, setLabelPinned] = useState(false);
   const onBodyScroll = () => {
     body.onScroll();
     const node = body.ref.current;
-    const top = node?.getBoundingClientRect().top;
-    setLabelPinned(
-      Array.from(node?.querySelectorAll("[data-nav-group-label]") ?? []).some(
-        (label) => Math.abs(label.getBoundingClientRect().top - (top ?? 0)) < 1
-      )
-    );
+    if (!node) {
+      return;
+    }
+    const top = node.getBoundingClientRect().top;
+    const above = node.scrollTop > 1;
+    let pinned = false;
+    for (const label of node.querySelectorAll("[data-nav-group-label]")) {
+      const atTop = Math.abs(label.getBoundingClientRect().top - top) < 1;
+      label.toggleAttribute("data-pinned-fade", atTop && above);
+      pinned ||= atTop;
+    }
+    setLabelPinned(pinned);
   };
 
   const frame = (
