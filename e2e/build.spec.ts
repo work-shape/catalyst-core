@@ -199,7 +199,8 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await admin.goto("/build/agents/kai-helper");
     await instructions(admin).fill("The administrator was faster.");
     await admin.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(admin.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    // The button loses its name while it saves, so the revision says when the save is there.
+    await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
     await expect(conflict).toContainText("Somebody saved this while you were editing.");
@@ -313,18 +314,36 @@ test("the old Config address leads into Build, and the account menu names the in
   await expect(identity).toContainText(/Version \d+\.\d+/u);
 });
 
-/** An agent of this spec's own, written by the administrator. */
-async function putAgent(admin: Page, name: string, text: string): Promise<void> {
-  const found = await admin.request.get(agentPath(name));
-  const answer = await requestWithOrigin(admin, "put", agentPath(name), {
+/**
+ * The probes below are skills, not agents: an agent of the instance would show in the chat's
+ * agent picker for as long as it lives, under the tests of other files that count its options.
+ */
+const skillPath = (name: string) => `${apiBaseUrl}/api/v1/assets/skill/${name}`;
+
+function content(page: Page): Locator {
+  return page.locator("form").getByRole("textbox", { name: /^Content/u });
+}
+
+async function deleteSkill(admin: Page, name: string): Promise<void> {
+  const found = await admin.request.get(skillPath(name));
+  if (found.ok()) {
+    await requestWithOrigin(admin, "post", `${skillPath(name)}/delete`, {
+      data: { expectedRevision: await assetRevision(admin, skillPath(name)) }
+    });
+  }
+}
+
+/** A skill of this spec's own, written by the administrator. */
+async function putSkill(admin: Page, name: string, text: string): Promise<void> {
+  const found = await admin.request.get(skillPath(name));
+  const answer = await requestWithOrigin(admin, "put", skillPath(name), {
     data: {
-      ...(found.ok() ? { expectedRevision: await assetRevision(admin, agentPath(name)) } : {}),
+      ...(found.ok() ? { expectedRevision: await assetRevision(admin, skillPath(name)) } : {}),
       config: {
         name,
-        displayName: "Reload Probe",
-        modelProviderId: "local",
-        instructions: text,
-        toolNames: []
+        title: "Reload Probe",
+        description: "A probe of the Build tests.",
+        content: text
       }
     }
   });
@@ -336,20 +355,20 @@ test("a newer version that cannot be loaded leaves the page as it is and says so
 }) => {
   const name = "e2e_reload_probe";
   await signInViaApi(page, superadminUser);
-  await deleteAgent(page, name);
-  await putAgent(page, name, "The first text.");
+  await deleteSkill(page, name);
+  await putSkill(page, name, "The first text.");
   try {
     await page.setViewportSize(WIDE);
-    await page.goto(`/build/agents/${name}`);
-    await instructions(page).fill("My unsaved text.");
-    await putAgent(page, name, "Somebody else was faster.");
+    await page.goto(`/build/skills/${name}`);
+    await content(page).fill("My unsaved text.");
+    await putSkill(page, name, "Somebody else was faster.");
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
     await expect(conflict).toContainText("Somebody saved this while you were editing.");
 
     // The read behind "Load the newer version" fails: the notice stays, the text stays, and
     // the page says that the load failed. It does not show the old version as the new one.
-    const assetRead = (url: URL) => url.pathname === `/api/v1/assets/agent/${name}`;
+    const assetRead = (url: URL) => url.pathname === `/api/v1/assets/skill/${name}`;
     await page.route(assetRead, (route) =>
       route.request().method() === "GET" ? route.abort("failed") : route.fallback()
     );
@@ -358,16 +377,16 @@ test("a newer version that cannot be loaded leaves the page as it is and says so
       "The newer version could not be loaded. Your text is still here. Try again in a moment."
     );
     await expect(conflict).toBeVisible();
-    await expect(instructions(page)).toHaveValue("My unsaved text.");
+    await expect(content(page)).toHaveValue("My unsaved text.");
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
 
     // With the instance back, the same button loads the newer version.
     await page.unroute(assetRead);
     await loadNewerVersion(page);
     await expect(conflict).toHaveCount(0);
-    await expect(instructions(page)).toHaveValue("Somebody else was faster.");
+    await expect(content(page)).toHaveValue("Somebody else was faster.");
   } finally {
-    await deleteAgent(page, name);
+    await deleteSkill(page, name);
   }
 });
 
@@ -376,20 +395,20 @@ test("an asset that was deleted meanwhile says so, keeps the text and offers the
 }) => {
   const name = "e2e_deleted_probe";
   await signInViaApi(page, superadminUser);
-  await deleteAgent(page, name);
-  await putAgent(page, name, "The first text.");
+  await deleteSkill(page, name);
+  await putSkill(page, name, "The first text.");
   try {
     await page.setViewportSize(WIDE);
 
     // Deleted before the save: the notice names the delete, not a save.
-    await page.goto(`/build/agents/${name}`);
-    await instructions(page).fill("My unsaved text.");
-    await deleteAgent(page, name);
+    await page.goto(`/build/skills/${name}`);
+    await content(page).fill("My unsaved text.");
+    await deleteSkill(page, name);
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     const deleted = page.locator('[data-build-conflict="deleted"]');
     await expect(deleted).toContainText("Somebody deleted this while you were editing.");
     await expect(page.getByText("Somebody saved this", { exact: false })).toHaveCount(0);
-    await expect(instructions(page)).toHaveValue("My unsaved text.");
+    await expect(content(page)).toHaveValue("My unsaved text.");
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
     await expect(
       deleted.getByRole("button", { name: "Load the newer version", exact: true })
@@ -404,45 +423,45 @@ test("an asset that was deleted meanwhile says so, keeps the text and offers the
     await expect(history).toBeHidden();
 
     // The way out leads to the list without another question.
-    await deleted.getByRole("button", { name: "Back to Agents", exact: true }).click();
-    await expect(page).toHaveURL(/\/build\/agents$/u);
+    await deleted.getByRole("button", { name: "Back to Skills", exact: true }).click();
+    await expect(page).toHaveURL(/\/build\/skills$/u);
 
     // Saved first and deleted after: the page learns of the delete when it asks for the
-    // newer version, and does not show the deleted agent as if it were there.
-    await putAgent(page, name, "The second life.");
-    await page.goto(`/build/agents/${name}`);
-    await instructions(page).fill("My other unsaved text.");
-    await putAgent(page, name, "Somebody else was faster.");
+    // newer version, and does not show the deleted skill as if it were there.
+    await putSkill(page, name, "The second life.");
+    await page.goto(`/build/skills/${name}`);
+    await content(page).fill("My other unsaved text.");
+    await putSkill(page, name, "Somebody else was faster.");
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(page.locator('[data-build-conflict="saved"]')).toBeVisible();
-    await deleteAgent(page, name);
+    await deleteSkill(page, name);
     await loadNewerVersion(page);
     await expect(deleted).toContainText("Somebody deleted this while you were editing.");
     await expect(page.locator('[data-build-conflict="saved"]')).toHaveCount(0);
-    await expect(instructions(page)).toHaveValue("My other unsaved text.");
+    await expect(content(page)).toHaveValue("My other unsaved text.");
   } finally {
-    await deleteAgent(page, name);
+    await deleteSkill(page, name);
   }
 });
 
 test("a long history comes a page at a time", async ({ page }) => {
   const name = "e2e_history_probe";
   await signInViaApi(page, superadminUser);
-  await deleteAgent(page, name);
+  await deleteSkill(page, name);
   // Two revisions more than one page holds.
   for (let index = 1; index <= 52; index += 1) {
-    await putAgent(page, name, `Text ${index}.`);
+    await putSkill(page, name, `Text ${index}.`);
   }
   try {
     await page.setViewportSize(WIDE);
     const reads: URLSearchParams[] = [];
     page.on("request", (request) => {
       const url = new URL(request.url());
-      if (url.pathname === `/api/v1/assets/agent/${name}/revisions`) {
+      if (url.pathname === `/api/v1/assets/skill/${name}/revisions`) {
         reads.push(url.searchParams);
       }
     });
-    await page.goto(`/build/agents/${name}`);
+    await page.goto(`/build/skills/${name}`);
     await page.getByRole("button", { name: "History", exact: true }).click();
     const history = page.getByRole("dialog", { name: "History", exact: true });
     const rows = history.locator("[data-revision]");
@@ -461,7 +480,7 @@ test("a long history comes a page at a time", async ({ page }) => {
     // Still one current revision, the newest.
     await expect(history.getByText("Current", { exact: true })).toHaveCount(1);
   } finally {
-    await deleteAgent(page, name);
+    await deleteSkill(page, name);
   }
 });
 

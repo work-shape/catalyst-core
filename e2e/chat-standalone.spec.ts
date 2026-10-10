@@ -369,7 +369,8 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect(agentPicker).toHaveAttribute("aria-expanded", "false");
   await agentPicker.click();
   await expect(agentListbox).toHaveAccessibleName("Select agent");
-  await expect(agentOptions).toHaveCount(2);
+  // Not a count of the options: an agent another spec file holds at this moment shows here too.
+  await expect(agentOptions.filter({ hasText: "Research Assistant" })).toHaveCount(1);
   await expect(agentOptions.filter({ hasText: "Application Assistant" })).toContainText(
     "Help with application and document review."
   );
