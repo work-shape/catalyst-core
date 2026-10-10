@@ -7,6 +7,10 @@ import type {
   ToolExecutionContext,
   WorkspaceCommand
 } from "@vivd-catalyst/core";
+import {
+  createWorkspaceCommandClient,
+  type WorkspaceCommandClient
+} from "../workspace-command-client";
 import type { WorkspaceCommandTelemetry } from "../workspace-command-telemetry";
 import type { WorkspaceFileByteStore, WorkspaceObjectStore } from "../workspace-file-bytes";
 import { DEFAULT_LIMITS, type WorkspaceCommandServiceLimits } from "../workspace-tool-schemas";
@@ -51,6 +55,7 @@ export interface WorkspaceCommandServiceOptions {
 /** What every workspace tool works with: the service options with their defaults filled in. */
 export interface WorkspaceToolDependencies {
   readonly store: Pick<PlatformStores, "files" | "executionWorkspaces">;
+  readonly commands: WorkspaceCommandClient;
   readonly objectStore?: WorkspaceObjectStore;
   readonly fileStore?: WorkspaceFileByteStore;
   readonly sourceFileReader?: WorkspaceSourceFileReader;
@@ -58,16 +63,21 @@ export interface WorkspaceToolDependencies {
   readonly auditRecorder?: AuditRecorder;
   readonly telemetry?: WorkspaceCommandTelemetry;
   readonly limits: WorkspaceCommandServiceLimits;
-  readonly execResultWaitMs?: number;
-  readonly execResultPollIntervalMs: number;
   readonly now: () => string;
 }
 
 export function resolveWorkspaceToolDependencies(
   options: WorkspaceCommandServiceOptions
 ): WorkspaceToolDependencies {
+  const now = options.now ?? (() => new Date().toISOString());
   return {
     store: options.store,
+    commands: createWorkspaceCommandClient({
+      store: options.store.executionWorkspaces,
+      resultWaitMs: options.execResultWaitMs,
+      resultPollIntervalMs: options.execResultPollIntervalMs,
+      now
+    }),
     fileStore: options.fileStore,
     objectStore: options.objectStore ?? options.fileStore,
     sourceFileReader: options.sourceFileReader,
@@ -78,8 +88,6 @@ export function resolveWorkspaceToolDependencies(
       ...DEFAULT_LIMITS,
       ...options.limits
     },
-    execResultWaitMs: options.execResultWaitMs,
-    execResultPollIntervalMs: options.execResultPollIntervalMs ?? 500,
-    now: options.now ?? (() => new Date().toISOString())
+    now
   };
 }

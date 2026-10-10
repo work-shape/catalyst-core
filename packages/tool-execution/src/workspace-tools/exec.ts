@@ -1,11 +1,18 @@
 import type { z } from "zod";
-import type {
-  ClientInstanceId,
-  ToolExecutionContext,
-  ToolHandlerResult,
-  WorkspaceCommand
+import {
+  type ClientInstanceId,
+  type ExecutionWorkspaceId,
+  type JsonObject,
+  type ToolExecutionContext,
+  type ToolHandlerResult,
+  type WorkspaceCommand,
+  type WorkspaceCommandLimits,
+  type WorkspaceExpectedOutput,
+  getRuntimeSubjectUserId,
+  isAppError
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import type { WorkspaceCommandHandle, WorkspaceCommandResult } from "../workspace-command-client";
 import {
   emitWorkspaceCommandTelemetry,
   recordWorkspaceCommandLifecycleAudit,
@@ -21,9 +28,10 @@ import {
   commandArtifacts,
   commandToExecOutput,
   failed,
-  validateExpectedOutputResult
+  failedValidationResult,
+  validateExpectedOutputResult,
+  type ValidationResult
 } from "../workspace-tool-results";
-import { enqueueCommand, resolveCommandResult } from "./command-queue";
 import type { WorkspaceToolDependencies, WorkspaceToolStore } from "./dependencies";
 import { normalizeExecInput } from "./exec-input";
 import { ensureWorkspace } from "./workspace";
@@ -56,22 +64,24 @@ export async function execWorkspaceCommand(
     return workspace.result;
   }
 
-  const command = await enqueueCommand(deps, context, workspace.value.id, normalized.value);
-  if (command.status === "failed") {
-    return command.result;
+  const queued = await enqueueCommand(deps, context, workspace.value.id, normalized.value);
+  if (queued.status === "failed") {
+    return queued.result;
   }
-  await recordQueuedCommand(deps, context, command.value);
+  await recordQueuedCommand(deps, context, queued.value.command);
   const resolvedBySource = await deps.commandResults?.resolveWorkspaceCommand({
-    command: command.value,
+    command: queued.value.command,
     context
   });
-  if (resolvedBySource && resolvedBySource.id !== command.value.id) {
+  if (resolvedBySource && resolvedBySource.id !== queued.value.command.id) {
     return failed("handler_failed", "Workspace command result source returned the wrong command");
   }
-  const resultCommand = await resolveCommandResult(
-    deps,
-    resolvedBySource ?? command.value,
-    context
+  const resultCommand = commandResultToToolResult(
+    queued.value.command,
+    await deps.commands.await(resolvedBySource ? { command: resolvedBySource } : queued.value, {
+      signal: context.signal,
+      deadline: context.deadline
+    })
   );
   if (resultCommand.status === "failed") {
     return resultCommand.result;
@@ -112,6 +122,79 @@ export async function execWorkspaceCommand(
       }
     }
   });
+}
+
+async function enqueueCommand(
+  deps: WorkspaceToolDependencies,
+  context: ToolExecutionContext,
+  workspaceId: ExecutionWorkspaceId,
+  command: {
+    command: string;
+    cwd?: string;
+    limits: WorkspaceCommandLimits;
+    expectedOutputs: WorkspaceExpectedOutput[];
+  }
+): Promise<ValidationResult<WorkspaceCommandHandle>> {
+  try {
+    return {
+      status: "success",
+      value: await deps.commands.enqueue({
+        clientInstanceId: context.clientInstanceId,
+        workspaceId,
+        ownerUserId: getRuntimeSubjectUserId(context),
+        agentRunId: context.toolRequest?.agentRunId,
+        toolCallId: context.toolRequest?.toolCallId,
+        command: command.command,
+        cwd: command.cwd,
+        limits: command.limits,
+        expectedOutputs: command.expectedOutputs
+      })
+    };
+  } catch (error) {
+    if (isAppError(error) && error.code === "CONFLICT") {
+      return {
+        status: "failed",
+        result: failed("handler_failed", error.message, error.details as JsonObject | undefined)
+      };
+    }
+    throw error;
+  }
+}
+
+function commandResultToToolResult(
+  queued: WorkspaceCommand,
+  result: WorkspaceCommandResult
+): ValidationResult<WorkspaceCommand> {
+  switch (result.status) {
+    case "settled":
+      return { status: "success", value: result.command };
+    case "missing":
+      return failedValidationResult("Workspace command is no longer available", {
+        commandId: queued.id
+      });
+    case "cancelled":
+    case "timed_out":
+      return {
+        status: "failed",
+        result: {
+          status: result.status,
+          error: {
+            code: result.status,
+            message: result.reason,
+            details: {
+              commandId: queued.id,
+              status: result.command.status
+            }
+          }
+        }
+      };
+    case "wait_limit":
+      return failedValidationResult(result.reason, {
+        commandId: queued.id,
+        status: result.command.status,
+        ...(result.waitMs !== undefined ? { waitMs: result.waitMs } : {})
+      });
+  }
 }
 
 async function recordQueuedCommand(

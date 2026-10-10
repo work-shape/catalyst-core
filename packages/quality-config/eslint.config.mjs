@@ -649,6 +649,36 @@ const plugin = {
         };
       }
     ),
+    "workspace-command-boundary": rule(
+      "A workspace command is queued, read and cancelled only through tool-execution/src/workspace-command-client.ts",
+      (filename) => {
+        const file = relative(root, filename).replaceAll("\\", "/");
+        return (
+          isServerSource(filename) &&
+          !file.startsWith("packages/postgres-store/") &&
+          // The client, and the worker at the other end of the queue.
+          file !== "packages/tool-execution/src/workspace-command-client.ts" &&
+          file !== "packages/tool-execution/src/workspace-command-worker.ts"
+        );
+      },
+      (_context, report) => {
+        const queueMethod =
+          /^(?:enqueueWorkspaceCommand|getWorkspaceCommand|requestWorkspaceCommandCancellation)$/;
+        return {
+          MemberExpression: (node) => {
+            if (queueMethod.test(keyName(node.property, node.computed) ?? "")) report(node);
+          },
+          /** @param {AnyNode} node */
+          "ObjectPattern > Property": (node) => {
+            if (
+              node.type === "Property" &&
+              queueMethod.test(keyName(node.key, node.computed) ?? "")
+            )
+              report(node);
+          }
+        };
+      }
+    ),
     "memory-store": rule(
       "Postgres is the only platform store; STORE=memory and InMemoryPlatformStore stay removed",
       () => true,

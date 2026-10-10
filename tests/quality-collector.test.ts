@@ -296,6 +296,17 @@ export function recoverStaleArtifactPreviewJobs() {
   }
 }
 `,
+  // The command queue outside its client: a tool that queues, and one that reads the row. The
+  // client itself is where both belong.
+  "packages/tool-execution/src/workspace-tools/queue-member.ts": `declare const store: { enqueueWorkspaceCommand(): void };
+export const queued = store.enqueueWorkspaceCommand();
+`,
+  "packages/tool-execution/src/workspace-tools/queue-destructured.ts": `declare const store: { getWorkspaceCommand(): void };
+export const { getWorkspaceCommand } = store;
+`,
+  "packages/tool-execution/src/workspace-command-client.ts": `declare const store: { requestWorkspaceCommandCancellation(): void };
+export const cancelled = store.requestWorkspaceCommandCancellation();
+`,
 
   // Size, retired stores and database skips
   [`${source}/large.ts`]: `export const large = 1;\n${"//\n".repeat(800)}`,
@@ -562,6 +573,8 @@ describe("quality collector", { timeout: 180_000 }, () => {
         "catalyst/job-executor-boundary packages/tool-execution/src/artifact-preview-worker.ts",
         "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
         "catalyst/job-executor-boundary packages/tool-execution/src/workspace-command-worker.ts",
+        "catalyst/workspace-command-boundary packages/tool-execution/src/workspace-tools/queue-member.ts",
+        "catalyst/workspace-command-boundary packages/tool-execution/src/workspace-tools/queue-destructured.ts",
         `catalyst/memory-store ${source}/memory-store.ts`,
         "catalyst/test-api-path tests/api-path.test.ts",
         "catalyst/test-api-path tests/api-template.test.ts",
