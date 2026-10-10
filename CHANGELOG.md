@@ -112,20 +112,37 @@ contain breaking changes; a patch version does not.
   request of the kind `operation_call` appears in the **Inbox** of everyone who holds the new
   right `operations.approve` (admins hold it by default, and the legacy permission
   `agent_skills.approve` includes it), and the agent is told that its call has not run. The
-  request shows the operation, who called it, through which agent, and the input. Approving runs
-  the call once, as the person who made it and with their rights of that moment; the caller may
-  approve their own call when they hold the right. A second or late decision is refused with
-  `409`. Declining or withdrawing ends the run as `denied` with the reason `DECLINED`. A call
-  whose caller lost the right, whose policy became `deny` or whose target changed is not run: its
-  request ends as superseded. A held call expires after seven days. One person may have 25 calls
-  waiting and an instance 2,000; a held input may be 256 KiB; one more is refused and says so.
+  request shows the operation, who called it, through which agent, and the input: the first 50
+  fields of 2,000 characters each as rows, a sentence that counts what the rows leave out, and
+  the whole input in a full view. Approving records the decision and answers at once; the call
+  then runs once in a job (`operation_call.execute`, four at a time, on the API's job worker),
+  as the person who made it and with their rights of that moment, and ends after its
+  operation's timeout at the latest. The caller may approve their own call when they hold the
+  right. A second or late decision is refused with `409`, and so is a decision of a request
+  that somebody else is deciding at that moment. Declining or withdrawing ends the run as
+  `denied` with the reason `DECLINED`. When the job runs the call it asks again: the caller's
+  account is open, they are still a member of the workspace, they still hold the right, the
+  agent still lists the tool, and the policy and the guardrails still let the call through.
+  Otherwise the call does not run and its request ends as superseded with the reason, shown
+  as "Not executed". A request says what became of its call: approved and executed, approved
+  and failed (also when the target changed while it waited, for example an asset write whose
+  expected revision no longer matches), approved and interrupted, not executed, or expired;
+  the thread is told the same and reads "active" only for a call that succeeded. A held call
+  expires after seven days, and a decision that comes after that is recorded as expired, with
+  nobody named as having decided it. One person may have 25 calls waiting and an instance
+  2,000, counted and filed under one lock; a held input may be 256 KiB; one more is refused and
+  says so. The input of a held call is removed from its request when the request ends: after
+  the call ran, on a rejection, a withdrawal or an expiry, and when the conversation or the
+  account of the caller is deleted. The request keeps which run, operation, actor and origin it
+  was. The job `operation_call.remove_ended_input` (every six hours and at start, 2,500
+  requests a tick) removes the input from requests that ended before this release.
   The page **Instance > Operations** in the settings lists the runs with filters for operation,
   status, origin and workspace and shows one run with its decision and correlation id, without
   input or output; it needs `audit.view`. Two scheduled job kinds keep runs from staying open:
   `operation_runs.expire` every five minutes and `operation_runs.recover` every minute, which
   fails a run whose process is gone as `interrupted`. Deleting a conversation deletes the runs
   its agents caused, and the audit retention also removes ended runs no conversation caused.
-  Migration `0050_operation_run_list_indexes` adds four indexes, created concurrently.
+  Migration `0050_operation_run_list_indexes` adds five indexes, created concurrently.
 
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
   `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
@@ -345,6 +362,11 @@ id from config_assets where status = 'deleted')`.
   written, and rows already stored keep their labels. `InProcessToolExecution`,
   `ToolAuthorizationDecision` and the `toolExecution` option of the local agent runtime are
   removed; an assembly built on `createClientInstanceApp` needs no change beyond `effect`.
+- **Startup:** a tool that declares no `effect` stops the start, and the message names the
+  tool. A tool that declares no `permission.mode` takes the instance default of its effect
+  (`policy.defaults`) and no longer runs as `allow`: with the default `confirm` for changing
+  calls, an enabled changing tool without a mode stops the start and the message names it.
+  Declare `permission: { mode: "allow" }` on such a tool to keep what it did before.
 - **Startup:** an enabled tool with the mode `approval_required` still stops the start until an
   agent's run can be paused, and the message names that. A tool that declares `reading` together
   with `approval_required` is refused too, because an approval cannot hold a read.
