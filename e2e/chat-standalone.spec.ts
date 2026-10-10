@@ -2623,7 +2623,12 @@ async function showRetentionDates(
         await route.fulfill({ response });
         return;
       }
-      await route.fulfill({ response, json: shown(await response.json()) });
+      // Nor has one whose answer arrived as the test ended: its body is gone by then.
+      const body: unknown = await response.json().catch(() => undefined);
+      if (body === undefined) {
+        return;
+      }
+      await route.fulfill({ response, json: shown(body) });
     }
   );
   return near;

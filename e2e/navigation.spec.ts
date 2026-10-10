@@ -369,9 +369,7 @@ test("the application's favicon is the Catalyst mark", async ({ page }) => {
  * What the rail has asked the conversation list for so far. The palette asks with a search
  * text; everything else on that path is the rail.
  */
-function railListRequests(
-  page: Page
-): () => {
+function railListRequests(page: Page): () => {
   collaborationWorkspaceId: string | null;
   limit: string | null;
   cursor: string | null;
