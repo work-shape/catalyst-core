@@ -48,12 +48,12 @@ test("an operator reads what the instance runs on and how its last check went, i
       .getByRole("button", { name: "Infrastructure" })
   ).toBeVisible();
   // The database and every configured provider have a row, grouped by what they are.
-  await expect(page.locator("[data-provider]")).toHaveCount(3);
+  await expect(page.locator("[data-provider]")).toHaveCount(4);
   expect(
     await page
       .locator("[data-provider]")
       .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-provider")))
-  ).toEqual(["database", "models.local", "secrets"]);
+  ).toEqual(["database", "models.local", "objectStorage.files", "secrets"]);
   const database = providerRow(page, "database");
   await expect(database).toContainText("postgres");
   await expect(database).toContainText("DATABASE_URL");
@@ -165,7 +165,7 @@ test.describe("with a provider that does not answer", () => {
     );
     await page.goto("/settings/instance/infrastructure");
     const main = page.getByRole("region", { name: "Settings" });
-    await expect(page.locator("[data-provider]")).toHaveCount(4);
+    await expect(page.locator("[data-provider]")).toHaveCount(5);
 
     const broken = providerRow(page, "models.broken");
     // What may be shown of its config: the host, the region and the name of its secret.
