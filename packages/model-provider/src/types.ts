@@ -3,6 +3,8 @@ import type {
   MessageCitation,
   ModelProviderConfig,
   ModelTokenUsage,
+  ProviderCheckContext,
+  ProviderCheckResult,
   ReasoningEffortConfig,
   SupportedImageMimeType,
   WebSource
@@ -237,7 +239,13 @@ export function modelContentImages(
  * What a model adapter hands back once its secrets are resolved: it builds the adapter for one
  * entry from the fields of the models port.
  */
-export type ModelAdapterFactory = (provider: ModelProviderConfig) => ModelAdapter;
+export type ModelAdapterFactory = ((provider: ModelProviderConfig) => ModelAdapter) & {
+  /**
+   * Asks the endpoint whether it answers this credential, without a generation. Absent on a
+   * provider that answers inside the process.
+   */
+  check?: (context: ProviderCheckContext) => Promise<ProviderCheckResult>;
+};
 
 declare module "@vivd-catalyst/core" {
   /** What the `models` port creates. */

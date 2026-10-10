@@ -13,6 +13,10 @@ export const captureMailProvider = defineProvider({
     const transport = new CaptureMailTransport();
     return { transport, listCaptured: () => transport.list() };
   },
+  // It keeps mails in the process: there is nothing to reach.
+  async check() {
+    return { ok: true };
+  },
   describe() {
     return {};
   }

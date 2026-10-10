@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 import {
+  checkObjectStorage,
   defineProvider,
   guardObjectStorage,
   OBJECT_LIST_PAGE_SIZE,
@@ -27,6 +28,7 @@ export const filesystemObjectStorageProvider = defineProvider({
   create(config, { entryPath }): ObjectStorage {
     return guardObjectStorage(new FilesystemObjectStorage(config.root), { entryPath });
   },
+  check: checkObjectStorage,
   describe(config) {
     return { root: config.root };
   }

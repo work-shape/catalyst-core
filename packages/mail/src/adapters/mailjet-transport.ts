@@ -1,6 +1,13 @@
+import {
+  providerCheckResultOfStatus,
+  type ProviderCheckContext,
+  type ProviderCheckResult
+} from "@vivd-catalyst/core";
 import type { MailSendResult, MailSenderIdentity, MailTransport, RenderedMail } from "../types";
 
 const MAILJET_SEND_URL = "https://api.mailjet.com/v3.1/send";
+// The account behind the key pair: authenticated, read-only, and it sends nothing.
+const MAILJET_CHECK_URL = "https://api.mailjet.com/v3/REST/user";
 // Protects the sender from a mail provider that never answers. Past it the send fails as
 // "provider_unreachable" and the mail is not delivered.
 const MAILJET_SEND_TIMEOUT_MS = 30_000;
@@ -59,6 +66,21 @@ export class MailjetTransport implements MailTransport {
     return readMessageStatus(payload) === "success"
       ? { ok: true }
       : { ok: false, reason: "provider_rejected" };
+  }
+
+  /** Whether Mailjet answers this key pair. No mail is sent and the answer's body is not read. */
+  async check({ signal }: ProviderCheckContext): Promise<ProviderCheckResult> {
+    let response: Response;
+    try {
+      response = await this.fetch(MAILJET_CHECK_URL, {
+        headers: { authorization: this.authorization },
+        signal
+      });
+    } catch {
+      return { ok: false, errorClass: "unreachable" };
+    }
+    await response.body?.cancel().catch(() => undefined);
+    return providerCheckResultOfStatus(response.status);
   }
 }
 

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { defineProvider, secretRef } from "@vivd-catalyst/core";
-import type { MailProviderInstance } from "../types";
 import { MailjetTransport } from "./mailjet-transport";
 
 const mailjetConfigSchema = z.object({
@@ -13,7 +12,7 @@ export const mailjetMailProvider = defineProvider({
   type: "mailjet",
   configSchema: mailjetConfigSchema,
   external: true,
-  async create(config, { secrets }): Promise<MailProviderInstance> {
+  async create(config, { secrets }) {
     return {
       transport: new MailjetTransport({
         apiKey: await secrets.resolve(config.apiKeySecret),
@@ -21,6 +20,7 @@ export const mailjetMailProvider = defineProvider({
       })
     };
   },
+  check: ({ transport }, context) => transport.check(context),
   describe() {
     return { endpointHost: "api.mailjet.com" };
   }

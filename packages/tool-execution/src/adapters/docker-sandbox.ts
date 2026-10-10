@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { defineProvider } from "@vivd-catalyst/core";
 import { DockerWorkspaceCommandProcessExecutor } from "../docker-workspace-command-runner";
-import type { WorkspaceCommandProcessExecutor } from "../workspace-command-executor";
 
 const dockerSandboxConfigSchema = z.object({
   image: z.string().min(1),
@@ -34,7 +33,7 @@ export const dockerSandboxProvider = defineProvider({
   // The Docker client's own default is the engine on this host. An endpoint names another
   // host, which then receives the workspace files and must state its region.
   external: (config) => config.endpoint !== undefined,
-  create(config): WorkspaceCommandProcessExecutor {
+  create(config) {
     return new DockerWorkspaceCommandProcessExecutor({
       image: config.image,
       endpoint: config.endpoint,
@@ -44,6 +43,11 @@ export const dockerSandboxProvider = defineProvider({
       memoryBytes: config.memoryBytes,
       pidsLimit: config.pidsLimit
     });
+  },
+  async check(executor, { signal }) {
+    return (await executor.engineAnswers(signal))
+      ? { ok: true }
+      : { ok: false, errorClass: "unreachable" };
   },
   describe(config) {
     return {

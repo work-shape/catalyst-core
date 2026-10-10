@@ -331,6 +331,7 @@ describe("provider registry", () => {
       bucket: config.bucket,
       key: await secrets.resolve(config.keySecret)
     }),
+    check: async () => ({ ok: true }),
     describe: (config) => ({ bucket: config.bucket })
   });
   const entry = {
@@ -384,6 +385,7 @@ describe("provider registry", () => {
             }
           });
       },
+      check: async () => ({ ok: true }),
       describe: () => ({})
     });
     const registry = new ProviderRegistry([...modelProviderDefinitions, capabilityModel]);

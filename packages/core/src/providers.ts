@@ -53,7 +53,78 @@ export interface ProviderFactoryContext extends ProviderCreateContext {
 /** Display fields of a configured provider. Never a secret value. */
 export type ProviderDescription = Record<string, string | number | boolean>;
 
-export type ProviderCheckResult = { ok: true } | { ok: false; errorClass: string };
+/**
+ * Protects whoever asks from a provider that never answers. Past it the check ends as
+ * `timeout` and its signal is aborted; the caller reads a failed check, never an open request.
+ */
+export const PROVIDER_CHECK_TIMEOUT_MS = 5_000;
+
+/**
+ * Why a check failed. Product-owned and closed: it is all of a failure that reaches a log, the
+ * API or a page, so a provider's own error text, which can repeat a key or an address, cannot.
+ */
+export const PROVIDER_CHECK_ERROR_CLASSES = [
+  "unreachable",
+  "timeout",
+  "access_denied",
+  "not_found",
+  "rejected",
+  "failed"
+] as const;
+export type ProviderCheckErrorClass = (typeof PROVIDER_CHECK_ERROR_CLASSES)[number];
+
+export type ProviderCheckResult = { ok: true } | { ok: false; errorClass: ProviderCheckErrorClass };
+
+export interface ProviderCheckContext {
+  /** Aborted when the check's time is up. An adapter passes it to the request it makes. */
+  signal: AbortSignal;
+}
+
+/** The result of a check that asked over HTTP and got an answer with this status. */
+export function providerCheckResultOfStatus(status: number): ProviderCheckResult {
+  if (status >= 200 && status < 300) {
+    return { ok: true };
+  }
+  if (status === 401 || status === 403) {
+    return { ok: false, errorClass: "access_denied" };
+  }
+  return { ok: false, errorClass: status === 404 ? "not_found" : "rejected" };
+}
+
+/**
+ * Runs one check so that it always ends: within the timeout, with a result, without throwing.
+ * Whatever the check throws becomes the class `failed`; the thrown message goes nowhere.
+ */
+export async function runProviderCheck(
+  check: (context: ProviderCheckContext) => Promise<ProviderCheckResult>,
+  timeoutMs: number = PROVIDER_CHECK_TIMEOUT_MS
+): Promise<ProviderCheckResult> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<ProviderCheckResult>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve({ ok: false, errorClass: "timeout" });
+    }, timeoutMs);
+  });
+  const checked = (async (): Promise<ProviderCheckResult> => {
+    try {
+      const result = await check({ signal: controller.signal });
+      if (result.ok) {
+        return { ok: true };
+      }
+      const known = PROVIDER_CHECK_ERROR_CLASSES.find((known) => known === result.errorClass);
+      return { ok: false, errorClass: known ?? "failed" };
+    } catch {
+      return { ok: false, errorClass: "failed" };
+    }
+  })();
+  try {
+    return await Promise.race([checked, timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface ProviderDefinitionInput<
   Port extends ProviderPort,
@@ -71,8 +142,12 @@ export interface ProviderDefinitionInput<
    */
   external: boolean | ((config: z.output<Schema>) => boolean);
   create(config: z.output<Schema>, context: ProviderFactoryContext): Instance | Promise<Instance>;
-  /** Never a prompt, a mail or a user-visible write. */
-  check?(instance: Instance): Promise<ProviderCheckResult>;
+  /**
+   * Asks the provider whether it answers, with the cheapest authenticated call it has. Never a
+   * prompt, a mail or a user-visible write. It may throw and may take long: the definition
+   * bounds it with `runProviderCheck`.
+   */
+  check(instance: Instance, context: ProviderCheckContext): Promise<ProviderCheckResult>;
   describe(config: z.output<Schema>): ProviderDescription;
 }
 
@@ -101,10 +176,11 @@ export interface ProviderDefinition<Port extends ProviderPort = ProviderPort, In
   /** Validates, resolves every secret the entry names, then creates the provider. */
   create(entry: ProviderEntry, context: ProviderCreateContext): Promise<Instance>;
   /**
-   * Optional until provider checks ship. Declared as a method so a definition for one instance
-   * type is also a definition of an unknown one, which is how the registry holds it.
+   * Whether the provider answers. It ends within `PROVIDER_CHECK_TIMEOUT_MS` and never throws.
+   * Declared as a method so a definition for one instance type is also a definition of an
+   * unknown one, which is how the registry holds it.
    */
-  check?(instance: Instance): Promise<ProviderCheckResult>;
+  check(instance: Instance): Promise<ProviderCheckResult>;
 }
 
 const providerRegionSchema = z.enum(PROVIDER_REGIONS);
@@ -167,7 +243,9 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
     port: input.port,
     type: input.type,
     configSchema: input.configSchema,
-    ...(input.check ? { check: input.check } : {}),
+    check(instance) {
+      return runProviderCheck((context) => input.check(instance, context));
+    },
     validate(entry) {
       return parse(entry).validated;
     },

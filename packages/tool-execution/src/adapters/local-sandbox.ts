@@ -14,6 +14,10 @@ export const localSandboxProvider = defineProvider({
   create(): WorkspaceCommandProcessExecutor {
     return new LocalWorkspaceCommandProcessExecutor();
   },
+  // Commands run as processes of the worker itself: there is nothing to reach.
+  async check() {
+    return { ok: true };
+  },
   describe() {
     return {};
   }

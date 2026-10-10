@@ -9,6 +9,9 @@ import {
 } from "./workspace-command-executor";
 
 const SANDBOX_ENV_KEYS = new Set(["HOME", "PATH", "TMPDIR", "WORKSPACE_DIR"]);
+// Ends the version call of a check whose caller never aborts it. A provider check aborts it
+// earlier, after `PROVIDER_CHECK_TIMEOUT_MS`.
+const ENGINE_CHECK_TIMEOUT_SECONDS = 10;
 const DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
 
 export interface DockerWorkspaceCommandProcessExecutorOptions {
@@ -29,6 +32,8 @@ export interface DockerWorkspaceCommandProcessExecutorOptions {
 export interface DockerCommandClient {
   run(input: DockerCommandRunInput): Promise<ProcessResult>;
   removeContainer?(name: string): Promise<void>;
+  /** Whether the engine answers. A client without it is taken to answer. */
+  engineAnswers?(signal: AbortSignal): Promise<boolean>;
 }
 
 export interface DockerCommandRunInput {
@@ -94,6 +99,11 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
       await this.options.commandClient.removeContainer?.(invocation.containerName);
     }
     return result;
+  }
+
+  /** Whether the Docker engine answers. It asks for the engine's version and starts nothing. */
+  async engineAnswers(signal: AbortSignal): Promise<boolean> {
+    return (await this.options.commandClient.engineAnswers?.(signal)) ?? true;
   }
 }
 
@@ -198,6 +208,18 @@ class DockerCliCommandClient implements DockerCommandClient {
       signal: input.signal,
       onTerminate: () => this.removeContainer(input.containerName)
     });
+  }
+
+  async engineAnswers(signal: AbortSignal): Promise<boolean> {
+    const result = await runSpawnedProcess({
+      executable: this.options.dockerPath,
+      args: [...this.endpointArgs, "version", "--format", "{{.Server.Version}}"],
+      timeoutSeconds: ENGINE_CHECK_TIMEOUT_SECONDS,
+      maxStdoutBytes: 1024,
+      maxStderrBytes: 1024,
+      signal
+    });
+    return result.exitCode === 0 && !result.spawnError && !result.cancelled && !result.timeoutKind;
   }
 
   async removeContainer(name: string): Promise<void> {

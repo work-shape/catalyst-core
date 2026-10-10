@@ -12,6 +12,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from "node:stream";
 import { z } from "zod";
 import {
+  checkObjectStorage,
   defineProvider,
   guardObjectStorage,
   OBJECT_LIST_PAGE_SIZE,
@@ -57,6 +58,7 @@ export const s3ObjectStorageProvider = defineProvider({
       { entryPath }
     );
   },
+  check: checkObjectStorage,
   describe(config) {
     return {
       bucket: config.bucket,

@@ -1,4 +1,5 @@
 import { AppError } from "./errors";
+import type { ProviderCheckResult } from "./providers";
 
 /**
  * The longest a signed read address may stay valid. A caller that asks for longer is refused,
@@ -312,4 +313,35 @@ export async function readObjectBytes(storage: ObjectStorage, key: string): Prom
     offset += chunk.byteLength;
   }
   return bytes;
+}
+
+/** The key a check asks for. No object is ever stored under it. */
+export const OBJECT_STORAGE_CHECK_KEY = "provider-check/marker";
+
+/**
+ * Whether a store answers: the `head` of the marker key. "No such object" is the answer of a
+ * store that works, so it is the healthy result. Nothing is written.
+ */
+export async function checkObjectStorage(storage: ObjectStorage): Promise<ProviderCheckResult> {
+  try {
+    await storage.head(OBJECT_STORAGE_CHECK_KEY);
+    return { ok: true };
+  } catch (error: unknown) {
+    if (error instanceof ObjectNotFound) {
+      return { ok: true };
+    }
+    if (!(error instanceof ObjectStorageUnavailable)) {
+      return { ok: false, errorClass: "failed" };
+    }
+    switch (error.failure) {
+      case "store_missing":
+        return { ok: false, errorClass: "not_found" };
+      case "access_denied":
+        return { ok: false, errorClass: "access_denied" };
+      case "unreachable":
+        return { ok: false, errorClass: "unreachable" };
+      default:
+        return { ok: false, errorClass: "failed" };
+    }
+  }
 }

@@ -25,6 +25,10 @@ export const deterministicModelProvider = defineProvider({
       };
     };
   },
+  // It answers inside the process: there is nothing to reach.
+  async check() {
+    return { ok: true };
+  },
   describe() {
     return {};
   }

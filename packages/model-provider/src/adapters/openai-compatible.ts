@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { defineProvider, secretRef } from "@vivd-catalyst/core";
+import {
+  defineProvider,
+  providerCheckResultOfStatus,
+  secretRef,
+  type ProviderCheckContext,
+  type ProviderCheckResult
+} from "@vivd-catalyst/core";
 import {
   OpenAiCompatibleChatProvider,
   openAiCompatibleCapabilities
@@ -13,6 +19,37 @@ const openAiCompatibleConfigSchema = z.object({
   organizationSecret: secretRef().optional()
 });
 
+/**
+ * The check of an endpoint: its list of models, which is authenticated, generates nothing and
+ * costs nothing. The answer's body is not read.
+ */
+async function listModels(
+  endpoint: {
+    baseUrl: string;
+    apiKey: string;
+    authMode: "bearer" | "api-key";
+    organization: string | undefined;
+  },
+  { signal }: ProviderCheckContext
+): Promise<ProviderCheckResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${endpoint.baseUrl.replace(/\/$/u, "")}/models`, {
+      headers: {
+        ...(endpoint.authMode === "api-key"
+          ? { "api-key": endpoint.apiKey }
+          : { authorization: `Bearer ${endpoint.apiKey}` }),
+        ...(endpoint.organization ? { "openai-organization": endpoint.organization } : {})
+      },
+      signal
+    });
+  } catch {
+    return { ok: false, errorClass: "unreachable" };
+  }
+  await response.body?.cancel().catch(() => undefined);
+  return providerCheckResultOfStatus(response.status);
+}
+
 /** Any endpoint that speaks the OpenAI chat completions or responses wire format. */
 export const openAiCompatibleModelProvider = defineProvider({
   port: "models",
@@ -24,7 +61,7 @@ export const openAiCompatibleModelProvider = defineProvider({
     const organization = config.organizationSecret
       ? await secrets.resolve(config.organizationSecret)
       : undefined;
-    return (entry) => {
+    const build: ModelAdapterFactory = (entry) => {
       const provider = new OpenAiCompatibleChatProvider({
         id: entry.id,
         api: entry.api,
@@ -52,6 +89,11 @@ export const openAiCompatibleModelProvider = defineProvider({
         stream: (request) => provider.stream(toRequest(request), request)
       };
     };
+    build.check = (context) => listModels({ ...config, apiKey, organization }, context);
+    return build;
+  },
+  async check(build, context) {
+    return (await build.check?.(context)) ?? { ok: true };
   },
   describe(config) {
     return { endpointHost: new URL(config.baseUrl).host, authMode: config.authMode };
