@@ -57,7 +57,7 @@ export async function loadStoredAssets(options: ChatServerOptions): Promise<Stor
 }
 
 /** What a refused change is told of an asset its caller may not read: that there is one. */
-export const UNREAD_ASSET_ISSUE = "The change would break an asset the caller may not read";
+const UNREAD_ASSET_ISSUE = "The change would break an asset the caller may not read";
 
 /** The stored assets as one caller's change is checked against them. */
 interface ReferableAssets {
