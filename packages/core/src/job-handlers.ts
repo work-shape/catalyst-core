@@ -120,8 +120,17 @@ export interface JobWorker {
    * Stops claiming, aborts every running handler's signal, waits up to 20 seconds for them to
    * return and releases what is left: such a job is queued again, due at once, with the attempt
    * given back.
+   *
+   * With `drainMs` the running jobs first get that long to end on their own, their leases
+   * renewed as before; only then are the handlers that are left aborted. A second call ends
+   * the drain at once.
    */
-  stop(): Promise<void>;
+  stop(options?: JobWorkerStopOptions): Promise<void>;
+}
+
+export interface JobWorkerStopOptions {
+  /** How long running jobs may go on before their handlers are aborted. Missing means not at all. */
+  drainMs?: number;
 }
 
 /** The owner a job writes onto the lease columns of its subject row. */

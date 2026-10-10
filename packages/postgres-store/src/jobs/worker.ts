@@ -105,6 +105,11 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
 
   const active = new Map<JobId, ActiveJob>();
   let stopping = false;
+  /** True while a stopping worker lets its jobs end on their own: their failures still count. */
+  let draining = false;
+  let endDrain: (() => void) | undefined;
+  let drainCut = false;
+  let stopped: Promise<void> | undefined;
   let loop: Promise<void> | undefined;
   let wake: (() => void) | undefined;
   /** A job was enqueued in this process since the last pass began. */
@@ -251,7 +256,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         await bound.run(control);
         outcome = { type: "ended", ending: { status: "succeeded" } };
       } catch (error) {
-        if (stopping) {
+        if (stopping && !draining) {
           // The worker asked the handler to stop; that is no failure of the job.
           outcome = { type: "ended", ending: { status: "released" } };
         } else {
@@ -359,7 +364,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         logger.error({ ...describeWithoutMessage(error), kind }, "Job poll failed for a kind");
       }
     }
-    if (stopping) await releaseActive();
+    if (stopping && !draining) await releaseActive();
     return { started };
   }
 
@@ -377,6 +382,41 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         );
       }
     }
+  }
+
+  const allEnded = () => Promise.all([...active.values()].map((job) => job.ended));
+
+  async function shutDown(drainMs: number): Promise<void> {
+    draining = drainMs > 0;
+    stopping = true;
+    stopListening?.();
+    wake?.();
+    await loop;
+    await passing;
+    if (draining && !drainCut && active.size > 0) {
+      let drainTimer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        allEnded(),
+        new Promise<void>((resolve) => {
+          endDrain = resolve;
+          drainTimer = setTimeout(resolve, drainMs);
+        })
+      ]);
+      clearTimeout(drainTimer);
+    }
+    draining = false;
+    for (const job of active.values())
+      job.abort.abort(new AppError("CONFLICT", "The job worker is stopping"));
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      allEnded(),
+      new Promise<void>((resolve) => {
+        graceTimer = setTimeout(resolve, STOP_GRACE_MS);
+      })
+    ]);
+    clearTimeout(graceTimer);
+    await releaseActive();
+    noteIdle();
   }
 
   return {
@@ -422,24 +462,12 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         idleWaiters.push(resolve);
       });
     },
-    async stop() {
-      stopping = true;
-      stopListening?.();
-      wake?.();
-      await loop;
-      await passing;
-      for (const job of active.values())
-        job.abort.abort(new AppError("CONFLICT", "The job worker is stopping"));
-      let graceTimer: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([
-        Promise.all([...active.values()].map((job) => job.ended)),
-        new Promise<void>((resolve) => {
-          graceTimer = setTimeout(resolve, STOP_GRACE_MS);
-        })
-      ]);
-      clearTimeout(graceTimer);
-      await releaseActive();
-      noteIdle();
+    stop(options = {}) {
+      // A second call ends the drain of the first and waits for the same shutdown.
+      if (stopped) drainCut = true;
+      endDrain?.();
+      stopped ??= shutDown(options.drainMs ?? 0);
+      return stopped;
     }
   };
 }
