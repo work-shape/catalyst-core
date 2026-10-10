@@ -120,6 +120,7 @@ export function AssetEditorShell({
 }) {
   const { locale, t } = useTranslation();
   const { page, back, actions, notice, canWrite, asset, start, onUnsavedChange } = frame;
+  const { readOnlyReason, saveBlocked = false } = frame;
   const [language, setLanguage] = useState<AssetLanguage>(locale === "de" ? "de" : "en");
   const isNew = asset === undefined;
   usePageShown(page, "asset");
@@ -153,6 +154,28 @@ export function AssetEditorShell({
   return (
     <Page
       ref={page.ref}
+      header={
+        <PageHeader
+          variant="detail"
+          back={back}
+          title={title}
+          state={badges}
+          description={
+            <span className="flex min-w-0 items-center gap-2">
+              <span>{kindLabel}</span>
+              <code className="min-w-0 truncate text-code" title={identifier}>
+                {identifier}
+              </code>
+            </span>
+          }
+          secondaryActions={
+            <>
+              {headActions}
+              {actions}
+            </>
+          }
+        />
+      }
       subRail={
         sections.length > 1 ? (
           <SubRail
@@ -176,37 +199,18 @@ export function AssetEditorShell({
       {page.above}
       <form
         ref={formRef}
-        className="grid min-w-0 content-start"
+        // The first line of the content starts where the first item of the index does.
+        className="grid min-w-0 content-start pt-5"
         noValidate={!canWrite}
         onSubmit={submit}
       >
-        <PageHeader
-          variant="detail"
-          back={back}
-          title={title}
-          state={badges}
-          description={
-            <span className="flex min-w-0 items-center gap-2">
-              <span>{kindLabel}</span>
-              <code className="min-w-0 truncate text-code" title={identifier}>
-                {identifier}
-              </code>
-            </span>
-          }
-          secondaryActions={
-            <>
-              {headActions}
-              {actions}
-            </>
-          }
-        />
         {canWrite ? null : (
-          <Banner tone="info" className="mt-4">
-            {t("build.readOnly")}
+          <Banner tone="info" className="mb-3" data-build-read-only="">
+            {readOnlyReason ?? t("build.readOnly")}
           </Banner>
         )}
         {missingTranslations ? (
-          <div className="flex flex-wrap items-center justify-end gap-2 pt-4">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <span className="text-label text-muted-foreground">{t("build.textsIn")}</span>
             <SegmentedControl
               size="sm"
@@ -256,7 +260,7 @@ export function AssetEditorShell({
           ))}
         </AssetLanguageProvider>
         {notice || general.length > 0 || (canWrite && (dirty || saving)) ? (
-          <div className="sticky bottom-0 z-(--layer-sticky-header) grid gap-2 bg-background py-3">
+          <div className="sticky bottom-0 z-(--layer-sticky-header) grid gap-2 border-t bg-background py-3">
             {notice}
             {general.map((message) => (
               <FormNotice key={message} tone="error">
@@ -267,6 +271,7 @@ export function AssetEditorShell({
               <SaveBar
                 label={saveLabel}
                 saving={saving}
+                disabled={saveBlocked}
                 dirty={dirty}
                 whenClean="hidden"
                 changes={

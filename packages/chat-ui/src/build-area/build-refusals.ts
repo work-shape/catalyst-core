@@ -64,6 +64,14 @@ function readRefusalDetails(error: unknown): RefusalDetails {
   };
 }
 
+/**
+ * What the instance said about a call it refused or could not serve. A call that never got an
+ * answer has no such sentence: the page then says in the reader's language what did not work.
+ */
+export function instanceSentence(error: unknown): string | undefined {
+  return apiErrorCode(error) === undefined ? undefined : apiErrorMessage(error, undefined);
+}
+
 /** The fields of a definition whose refusal belongs to one field of the page. */
 const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
   ["toolNames", "tools"],

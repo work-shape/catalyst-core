@@ -62,17 +62,21 @@ export function SkillEditor({
       description: t("configSkillDetailsDescription"),
       body: (
         <>
-          <Field label={t("configTitle")} hint={t("configSkillTitleHint")} required>
+          <Field label={t("configTitle")} hint={t("configSkillTitleHint")} required={editable}>
             <Input
               value={form.title}
-              disabled={!editable}
+              readOnly={!editable}
               onChange={(event) => update({ title: event.target.value })}
             />
           </Field>
-          <Field label={t("configDescription")} hint={t("configSkillDescriptionHint")} required>
+          <Field
+            label={t("configDescription")}
+            hint={t("configSkillDescriptionHint")}
+            required={editable}
+          >
             <Input
               value={form.description}
-              disabled={!editable}
+              readOnly={!editable}
               onChange={(event) => update({ description: event.target.value })}
             />
           </Field>
@@ -121,7 +125,11 @@ export function SkillEditor({
             </div>
           ) : null}
           {resource === undefined || selectedResource === "root" ? (
-            <Field label={t("configContent")} hint={t("configSkillContentHint")} required>
+            <Field
+              label={t("configContent")}
+              hint={t("configSkillContentHint")}
+              required={editable}
+            >
               <Textarea
                 variant="code"
                 className="min-h-96"
@@ -190,7 +198,7 @@ function SkillResourceEditor({
         <Field label={t("configResourcePath")} required={editable}>
           <Input
             value={resource.path}
-            disabled={!editable}
+            readOnly={!editable}
             onChange={(event) => onChange({ ...resource, path: event.target.value })}
           />
         </Field>

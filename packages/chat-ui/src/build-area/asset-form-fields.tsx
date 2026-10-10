@@ -27,13 +27,14 @@ export const AssetLanguageProvider = AssetLanguageContext.Provider;
 export function LocalizedField({
   label,
   required,
-  disabled,
+  readOnly,
   value,
   onChange
 }: {
   label: string;
   required?: boolean;
-  disabled?: boolean;
+  /** The text is shown to be read: the field keeps its full strength and asks for nothing. */
+  readOnly?: boolean;
   value: LocalizedPair;
   onChange(value: LocalizedPair): void;
 }) {
@@ -45,7 +46,7 @@ export function LocalizedField({
   return (
     <Field
       label={label}
-      required={required && !fallback}
+      required={required && !fallback && !readOnly}
       hint={
         fallback ? t(other === "en" ? "build.fallbackEnglish" : "build.fallbackGerman") : undefined
       }
@@ -54,7 +55,7 @@ export function LocalizedField({
         lang={language}
         value={value[language]}
         placeholder={fallback}
-        disabled={disabled}
+        readOnly={readOnly}
         onChange={(event) => onChange({ ...value, [language]: event.target.value })}
       />
     </Field>
@@ -193,13 +194,13 @@ export function InitialPromptsEditor({
           <LocalizedField
             label={t("configTitle")}
             value={prompt.title}
-            disabled={disabled}
+            readOnly={disabled}
             onChange={(title) => replace(index, { title })}
           />
           <LocalizedField
             label={t("configPrompt")}
             value={prompt.prompt}
-            disabled={disabled}
+            readOnly={disabled}
             onChange={(value) => replace(index, { prompt: value })}
           />
         </PromptCard>

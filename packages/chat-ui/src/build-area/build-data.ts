@@ -1,18 +1,14 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import {
-  listAll,
-  type ConfigAssetRevision,
-  type OperationOutcome
-} from "@vivd-catalyst/api-client";
+import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { createAssetWrites } from "../api/asset-writes";
 import { usePlatformContextQuery } from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation } from "../i18n";
 import { useSettingsPage } from "../settings/settings-page-context";
-import { apiErrorCode, apiErrorMessage } from "../workspace-utils";
+import { apiErrorCode } from "../workspace-utils";
 import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
-import { PendingApprovalError } from "./build-refusals";
+import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import { resolveBuildRights, type BuildRights } from "./build-rights";
 
 /**
@@ -20,6 +16,9 @@ import { resolveBuildRights, type BuildRights } from "./build-rights";
  * list, so the browser holds the pages the reader asked for and never the whole kind.
  */
 const BUILD_LIST_PAGE_SIZE = 50;
+
+/** How many revisions one read of an asset's history asks for. */
+const BUILD_HISTORY_PAGE_SIZE = 50;
 
 /** How long the reader may pause typing before the search asks the instance. */
 export const BUILD_SEARCH_DELAY_MS = 250;
@@ -44,21 +43,36 @@ export interface BuildList {
   retry(): void;
 }
 
+/**
+ * How reading an asset again went. `loaded` hands the page the newer asset; after the other
+ * two the page still holds what it held.
+ */
+export type BuildAssetReload = "loaded" | "missing" | "failed";
+
 /** One asset as its page asked for it. */
 export type BuildAssetRead =
   | { status: "loading" }
   /** No asset has this id, or none the reader may know of. */
   | { status: "missing" }
-  /** The instance refused or the read failed. The sentence is the instance's own. */
+  /** The reader may not read this asset. Asking again changes nothing. */
+  | { status: "refused" }
+  /** The read failed. The sentence is the instance's own. */
   | { status: "failed"; message: string; retry(): void }
   | {
       status: "ready";
       asset: BuildAsset;
       /** Changes with every read, so a page can tell a newer answer from the one it holds. */
       loadedAt: number;
-      /** Reads the asset again, as after a conflict. */
-      reload(): Promise<unknown>;
+      /** Reads the asset again, as after a conflict. A failed read leaves this one as it is. */
+      reload(): Promise<BuildAssetReload>;
     };
+
+/** One page of an asset's history, the newest revision first. */
+export interface BuildRevisionPage {
+  items: ConfigAssetRevision[];
+  /** Hands the next call the older revisions. Absent after the oldest one. */
+  nextCursor?: string;
+}
 
 /** What the instance says about one kind for this reader. */
 export interface BuildKindState {
@@ -86,7 +100,8 @@ interface BuildWrites {
     revision: number;
     expectedRevision: number;
   }): Promise<{ revision: number }>;
-  revisions(input: { kind: string; name: string }): Promise<ConfigAssetRevision[]>;
+  /** One page of the history, the newest first. `cursor` continues after an earlier page. */
+  revisions(input: { kind: string; name: string; cursor?: string }): Promise<BuildRevisionPage>;
 }
 
 /**
@@ -105,6 +120,11 @@ export interface BuildSource {
   useList(kind: string, filter: BuildListFilter): BuildList;
   /** A hook: one asset, read when its page opens and again only when the page asks. */
   useAsset(kind: string, name: string): BuildAssetRead;
+  /**
+   * Whether the asset is there now, asked without touching what its page holds. Undefined when
+   * the instance could not say.
+   */
+  exists(kind: string, name: string): Promise<boolean | undefined>;
   writes: BuildWrites;
 }
 
@@ -152,7 +172,7 @@ export function useBuildSource(): BuildSource {
     rights,
     loading: contextQuery.isLoading,
     error: contextQuery.error
-      ? apiErrorMessage(contextQuery.error, t("build.loadFailed"))
+      ? (instanceSentence(contextQuery.error) ?? t("build.loadFailed"))
       : undefined,
     reload: () => contextQuery.refetch(),
     useList(kind, filter) {
@@ -175,7 +195,7 @@ export function useBuildSource(): BuildSource {
       });
       return {
         rows: query.data?.pages.flatMap((page) => page.items),
-        error: query.error ? apiErrorMessage(query.error, t("build.loadFailed")) : undefined,
+        error: query.error ? (instanceSentence(query.error) ?? t("build.loadFailed")) : undefined,
         hasMore: query.hasNextPage,
         loadingMore: query.isFetchingNextPage,
         // A failed page shows through `error`, so there is nothing to catch here.
@@ -196,31 +216,52 @@ export function useBuildSource(): BuildSource {
         refetchOnReconnect: false,
         retry: false
       });
-      if (query.data && !query.isFetching) {
+      // What was read stays the page's asset while it is read again and after a read that
+      // failed: only a newer answer replaces it. The page would otherwise lose what was typed.
+      if (query.data) {
         return {
           status: "ready",
           asset: query.data,
           loadedAt: query.dataUpdatedAt,
-          reload: () => query.refetch()
+          reload: async () => {
+            const answer = await query.refetch();
+            if (!answer.error) {
+              return "loaded";
+            }
+            return apiErrorCode(answer.error) === "NOT_FOUND" ? "missing" : "failed";
+          }
         };
       }
       if (query.error && !query.isFetching) {
-        return apiErrorCode(query.error) === "NOT_FOUND"
-          ? { status: "missing" }
-          : {
-              status: "failed",
-              message: apiErrorMessage(query.error, undefined) ?? t("build.loadFailed"),
-              retry: () => void query.refetch().catch(() => undefined)
-            };
+        const code = apiErrorCode(query.error);
+        if (code === "NOT_FOUND") {
+          return { status: "missing" };
+        }
+        if (code === "FORBIDDEN") {
+          return { status: "refused" };
+        }
+        return {
+          status: "failed",
+          message: instanceSentence(query.error) ?? t("build.loadFailed"),
+          retry: () => void query.refetch().catch(() => undefined)
+        };
       }
       return { status: "loading" };
     },
+    exists: (kind, name) =>
+      client.assets.get({ params: { kind, name } }).then(
+        () => true,
+        (error: unknown) => (apiErrorCode(error) === "NOT_FOUND" ? false : undefined)
+      ),
     writes: {
       put: (input) => made(writes.put(input)).finally(changed),
       delete: (input) => made(writes.delete(input)).finally(changed),
       revert: (input) => made(writes.revert(input)).finally(changed),
-      revisions: ({ kind, name }) =>
-        listAll((paging) => client.assets.revisions.list({ params: { kind, name }, query: paging }))
+      revisions: ({ kind, name, cursor }) =>
+        client.assets.revisions.list({
+          params: { kind, name },
+          query: { limit: BUILD_HISTORY_PAGE_SIZE, ...(cursor ? { cursor } : {}) }
+        })
     }
   };
 }

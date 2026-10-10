@@ -128,25 +128,25 @@ export function AgentEditor({
           <LocalizedField
             label={t("configDisplayName")}
             required
-            disabled={!canEdit("displayName")}
+            readOnly={!canEdit("displayName")}
             value={form.displayName}
             onChange={(displayName) => update({ displayName })}
           />
           <LocalizedField
             label={t("configDescription")}
-            disabled={!canEdit("description")}
+            readOnly={!canEdit("description")}
             value={form.description}
             onChange={(description) => update({ description })}
           />
           <LocalizedField
             label={t("configWelcomeMessage")}
-            disabled={!canEdit("welcomeMessage")}
+            readOnly={!canEdit("welcomeMessage")}
             value={form.welcomeMessage}
             onChange={(welcomeMessage) => update({ welcomeMessage })}
           />
           <LocalizedField
             label={t("configWelcomeSubtitle")}
-            disabled={!canEdit("welcomeSubtitle")}
+            readOnly={!canEdit("welcomeSubtitle")}
             value={form.welcomeSubtitle}
             onChange={(welcomeSubtitle) => update({ welcomeSubtitle })}
           />
@@ -158,7 +158,11 @@ export function AgentEditor({
       label: t("configInstructions"),
       body: (
         <>
-          <Field label={t("configSystemPrompt")} hint={t("configSystemPromptHint")} required>
+          <Field
+            label={t("configSystemPrompt")}
+            hint={t("configSystemPromptHint")}
+            required={canEdit("instructions")}
+          >
             <Textarea
               variant="code"
               className="min-h-72"
@@ -173,7 +177,7 @@ export function AgentEditor({
                 type="number"
                 min={1}
                 value={form.maxSteps}
-                disabled={!canEditMaxSteps}
+                readOnly={!canEditMaxSteps}
                 onChange={(event) => update({ maxSteps: event.target.value })}
               />
             </Field>

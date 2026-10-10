@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ConfigAssetRevision } from "@vivd-catalyst/api-client";
 import {
   Badge,
+  Banner,
   Button,
   ConfirmDialog,
   Drawer,
@@ -13,8 +14,8 @@ import {
 } from "@vivd-catalyst/ui";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { apiErrorMessage } from "../workspace-utils";
-import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
+import type { BuildRevisionPage } from "./build-data";
+import { instanceSentence, refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 
 const OPERATION_LABELS: Record<ConfigAssetRevision["operation"], TranslationKey> = {
   create: "configRevisionCreate",
@@ -24,14 +25,14 @@ const OPERATION_LABELS: Record<ConfigAssetRevision["operation"], TranslationKey>
 };
 
 /**
- * The history of one asset, beside its page: every revision with who made it and when, the
- * newest first, and the way to make an earlier one the content again. A restore is a new
- * revision, so nothing of the history is lost by it.
+ * The history of one asset, beside its page: its revisions with who made each and when, the
+ * newest first and page by page, and the way to make an earlier one the content again. A
+ * restore is a new revision, so nothing of the history is lost by it.
  */
 export function BuildHistory({
   open,
   title,
-  currentRevision,
+  heldRevision,
   load,
   onRestore,
   onClose
@@ -39,18 +40,26 @@ export function BuildHistory({
   open: boolean;
   /** The asset's name, for the drawer's description. */
   title: string;
-  /** The revision the page holds. It is the one that cannot be restored. */
-  currentRevision: number;
-  load(): Promise<ConfigAssetRevision[]>;
+  /**
+   * The revision the page holds. While the instance has a newer one, nothing is restored from
+   * here: the page loads the newer version first.
+   */
+  heldRevision: number;
+  /** One page of the history, the newest first. `cursor` continues after an earlier page. */
+  load(cursor: string | undefined): Promise<BuildRevisionPage>;
   /** Absent for a reader who may not change the asset. */
   onRestore?: (revision: number) => Promise<BuildWriteOutcome>;
   onClose(): void;
 }) {
   const { locale, t } = useTranslation();
   const [revisions, setRevisions] = useState<ConfigAssetRevision[]>();
+  const [nextCursor, setNextCursor] = useState<string>();
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string>();
   const [asked, setAsked] = useState<number>();
   const [restoring, setRestoring] = useState(false);
+  // Counts the reader's asks to read the history again after a read that failed.
+  const [attempt, setAttempt] = useState(0);
 
   // `load` is a new function with every render of the page; the opening is what reads.
   const loadRef = useRef(load);
@@ -64,23 +73,43 @@ export function BuildHistory({
     }
     let current = true;
     setRevisions(undefined);
+    setNextCursor(undefined);
     setError(undefined);
-    loadRef.current().then(
-      (loaded) => {
+    loadRef.current(undefined).then(
+      (page) => {
         if (current) {
-          setRevisions([...loaded].sort((left, right) => right.revision - left.revision));
+          setRevisions(page.items);
+          setNextCursor(page.nextCursor);
         }
       },
       (loadError: unknown) => {
         if (current) {
-          setError(apiErrorMessage(loadError, undefined) ?? t("configRevisionLoadFailed"));
+          setError(instanceSentence(loadError) ?? t("configRevisionLoadFailed"));
         }
       }
     );
     return () => {
       current = false;
     };
-  }, [open]);
+  }, [open, attempt]);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const page = await loadRef.current(nextCursor);
+      setRevisions((known) => [...(known ?? []), ...page.items]);
+      setNextCursor(page.nextCursor);
+      setError(undefined);
+    } catch (loadError) {
+      setError(instanceSentence(loadError) ?? t("configRevisionLoadFailed"));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // The newest revision is the asset's content now, whatever the page holds.
+  const newest = revisions?.[0]?.revision;
+  const stale = newest !== undefined && newest !== heldRevision;
 
   const restore = async (revision: number) => {
     if (!onRestore) {
@@ -107,7 +136,21 @@ export function BuildHistory({
       onClose={onClose}
     >
       <div className="grid gap-3">
-        {error ? <InlineError>{error}</InlineError> : null}
+        {error ? (
+          <InlineError className="flex flex-wrap items-center justify-between gap-2">
+            <span>{error}</span>
+            {revisions === undefined ? (
+              <Button variant="outline" size="sm" onClick={() => setAttempt((count) => count + 1)}>
+                {t("tryAgain")}
+              </Button>
+            ) : null}
+          </InlineError>
+        ) : null}
+        {stale ? (
+          <Banner tone="warning" data-history-stale="">
+            {t("build.historyStale")}
+          </Banner>
+        ) : null}
         {revisions === undefined ? (
           error ? null : (
             <SkeletonList rows={4} />
@@ -115,9 +158,10 @@ export function BuildHistory({
         ) : revisions.length === 0 ? (
           <EmptyState layout="inline">{t("configNoRevisions")}</EmptyState>
         ) : (
-          <List aria-label={t("build.history")}>
+          // The rows bring their own inset: pulled out by it, their text shares the title's edge.
+          <List aria-label={t("build.history")} className="-mx-2">
             {revisions.map((revision) => {
-              const isCurrent = revision.revision === currentRevision;
+              const isCurrent = revision.revision === newest;
               return (
                 <ListRow
                   key={revision.revision}
@@ -133,11 +177,12 @@ export function BuildHistory({
                     formatDateTime(revision.createdAt, locale),
                     ...(revision.actor ? [revision.actor.displayLabel] : [])
                   ].join(" · ")}
+                  descriptionWraps
                   actionsVisible
                   actions={
-                    !isCurrent && onRestore && revision.config !== null ? (
+                    !isCurrent && !stale && onRestore && revision.config !== null ? (
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         aria-label={t("build.restoreRevision", { number: revision.revision })}
                         onClick={() => setAsked(revision.revision)}
@@ -150,6 +195,19 @@ export function BuildHistory({
               );
             })}
           </List>
+        )}
+        {nextCursor === undefined ? null : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="justify-self-start"
+            loading={loadingMore}
+            onClick={() => {
+              loadMore().catch(() => undefined);
+            }}
+          >
+            {t("build.showMore")}
+          </Button>
         )}
       </div>
       <ConfirmDialog

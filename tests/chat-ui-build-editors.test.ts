@@ -153,7 +153,10 @@ describe("agent page", () => {
     expect(writer).not.toContain("You can read this but not change it.");
     expect(inputOf(writer, "Display name")).not.toContain('disabled=""');
     expect(reader).toContain("You can read this but not change it.");
-    expect(inputOf(reader, "Display name")).toContain('disabled=""');
+    // A field that is only read is read-only, not disabled, and asks for nothing.
+    expect(inputOf(reader, "Display name")).toContain('readOnly=""');
+    expect(inputOf(reader, "Display name")).not.toContain('disabled=""');
+    expect(inputOf(reader, "Display name")).not.toContain('required=""');
     // A new agent the reader may not write has nothing to create either.
     expect(
       agentPage({
@@ -673,7 +676,8 @@ describe("skill page", () => {
       expect(markup).toContain("references/checks.md");
       expect(markup).toContain("lucide-file-text");
       expect(markup).toMatch(/<textarea[^>]*readOnly=""[^>]*># Review<\/textarea>/u);
-      expect(inputOf(markup, "Title")).toContain('disabled=""');
+      expect(inputOf(markup, "Title")).toContain('readOnly=""');
+      expect(inputOf(markup, "Title")).not.toContain('required=""');
       expect(markup).toContain("You can read this but not change it.");
       expect(markup).not.toContain("Add reference");
       expect(markup).not.toContain("Save changes");

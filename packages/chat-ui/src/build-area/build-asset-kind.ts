@@ -37,6 +37,10 @@ export interface BuildAssetEditorProps {
   start: BuildAssetStart | undefined;
   /** The reader may change the asset. Without it the page is read-only. */
   canWrite: boolean;
+  /** Why the reader may not change the asset, for the notice of a read-only page. */
+  readOnlyReason?: string;
+  /** Saving waits for the reader's answer to a notice, such as a conflict. */
+  saveBlocked?: boolean;
   /** The reader may change what belongs to the instance: its default and where an agent shows. */
   instanceWrite: boolean;
   /** The way back to the kind's list, for the start of the page head. */

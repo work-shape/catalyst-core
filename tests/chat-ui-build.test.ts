@@ -113,18 +113,19 @@ function source(input: SourceInput = {}): BuildSource {
       ...input.lists?.[kind]
     }),
     useAsset: (kind, name) => input.assets?.[`${kind}/${name}`] ?? { status: "missing" },
+    exists: async () => true,
     writes: {
       put: async () => ({ revision: 1 }),
       delete: async () => undefined,
       revert: async () => ({ revision: 1 }),
-      revisions: async () => []
+      revisions: async () => ({ items: [] })
     },
     ...input.overrides
   };
 }
 
 function ready(loaded: BuildAsset): BuildAssetRead {
-  return { status: "ready", asset: loaded, loadedAt: 1, reload: async () => undefined };
+  return { status: "ready", asset: loaded, loadedAt: 1, reload: async () => "loaded" };
 }
 
 function render(
@@ -437,9 +438,15 @@ describe("Build asset page", () => {
   it("opens an asset the reader may not write read-only, with no way to save or delete", () => {
     const markup = page(source({ permissions: [], namespaces: [taxNamespace], assets: read }));
 
-    expect(markup).toContain("You can read this but not change it.");
+    // The notice names whose asset it is and what editing needs.
+    expect(markup).toMatch(
+      /data-build-read-only=""[^>]*>.*Asset of Namespace Tax\. Editing needs/u
+    );
     expect(markup).toContain('value="Tax review"');
-    expect(markup).toMatch(/<input[^>]*disabled=""[^>]*value="Tax review"/u);
+    // A field that is only read stays readable: read-only, not disabled, and not required.
+    expect(markup).toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
+    expect(markup).not.toMatch(/<input[^>]*disabled=""[^>]*value="Tax review"/u);
+    expect(markup).not.toMatch(/<input[^>]*required=""[^>]*value="Tax review"/u);
     expect(markup).not.toContain("Add reference");
     expect(markup).not.toContain("Save changes");
     expect(markup).not.toContain('type="submit"');
@@ -451,8 +458,8 @@ describe("Build asset page", () => {
   it("opens an asset of a Namespace the reader writes for editing", () => {
     const markup = page(source({ permissions: [], namespaces: [skillWriter], assets: read }));
 
-    expect(markup).not.toContain("You can read this but not change it.");
-    expect(markup).not.toMatch(/<input[^>]*disabled=""[^>]*value="Tax review"/u);
+    expect(markup).not.toContain("data-build-read-only");
+    expect(markup).not.toMatch(/<input[^>]*readOnly=""[^>]*value="Tax review"/u);
     expect(markup).toContain("Add reference");
     expect(markup).toContain('aria-label="More actions"');
     // Nothing is changed yet, so there is nothing to save.
@@ -472,7 +479,19 @@ describe("Build asset page", () => {
       })
     );
 
-    expect(markup).toContain("You can read this but not change it.");
+    expect(markup).toContain("Asset of Namespace Legal. Editing needs Builder in this Namespace.");
+  });
+
+  it("says of an instance asset that editing needs the right on the instance", () => {
+    const instanceSkill = asset("skill", "tax-review", { config: taxSkill.config });
+    const markup = page(
+      source({
+        permissions: ["config_assets.read"],
+        assets: { "skill/tax-review": ready(instanceSkill) }
+      })
+    );
+
+    expect(markup).toContain("Instance asset. Editing needs Builder on the instance.");
   });
 
   it("leaves the delete out where the instance does not let people delete the kind", () => {
@@ -482,7 +501,7 @@ describe("Build asset page", () => {
       kinds: base.kinds.map((kind) => ({ ...kind, canDelete: false }))
     });
 
-    expect(markup).not.toContain("You can read this but not change it.");
+    expect(markup).not.toContain("data-build-read-only");
     expect(markup).not.toContain('aria-label="More actions"');
   });
 
@@ -499,6 +518,15 @@ describe("Build asset page", () => {
     expect(markup).toContain("Try again");
     expect(markup).toContain('aria-label="Back to Skills"');
     expect(markup).not.toContain("There is no skill");
+  });
+
+  it("tells a reader who may not read the asset so in their language, with nothing to try again", () => {
+    const markup = page(source({ assets: { "skill/tax-review": { status: "refused" } } }));
+
+    expect(markup).toContain("You may not read this asset.");
+    expect(markup).not.toContain("Try again");
+    expect(markup).not.toContain("Missing the right");
+    expect(markup).toContain('aria-label="Back to Skills"');
   });
 });
 

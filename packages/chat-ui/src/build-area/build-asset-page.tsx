@@ -1,4 +1,4 @@
-import { History, MoreHorizontal, SearchX, Trash2 } from "lucide-react";
+import { History, Lock, MoreHorizontal, SearchX, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
   Banner,
@@ -24,7 +24,7 @@ import type {
   BuildAssetStart,
   BuildPageSlot
 } from "./build-asset-kind";
-import type { BuildSource } from "./build-data";
+import type { BuildAssetReload, BuildSource } from "./build-data";
 import { BuildHistory } from "./build-history";
 import type { VisibleBuildKind } from "./build-model";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
@@ -101,6 +101,8 @@ export function ExistingAssetPage({
   const { t } = useTranslation();
   const { entry } = kind;
   const read = page.source.useAsset(entry.kind, name);
+  // The page starts again after a restore, so what it says of the restore is kept here.
+  const [restored, setRestored] = useState<number>();
   usePageShown(page.page, read.status);
 
   if (read.status === "ready") {
@@ -112,6 +114,8 @@ export function ExistingAssetPage({
         kind={kind}
         loaded={read.asset}
         reload={read.reload}
+        restored={restored}
+        onRestored={setRestored}
         onDeleted={onDeleted}
       />
     );
@@ -128,6 +132,8 @@ export function ExistingAssetPage({
             <EmptyState icon={<SearchX aria-hidden="true" />}>
               {t(entry.missingText, { name })}
             </EmptyState>
+          ) : read.status === "refused" ? (
+            <EmptyState icon={<Lock aria-hidden="true" />}>{t("build.assetRefused")}</EmptyState>
           ) : (
             <InlineError className="flex flex-wrap items-center justify-between gap-2">
               <span>{read.message}</span>
@@ -155,23 +161,40 @@ function LoadedAssetPage({
   kind,
   loaded,
   reload,
+  restored,
+  onRestored,
   onDeleted
 }: AssetPageProps & {
   kind: VisibleBuildKind;
   loaded: BuildAsset;
-  reload(): Promise<unknown>;
+  reload(): Promise<BuildAssetReload>;
+  /** The revision a restore just made the content again. */
+  restored: number | undefined;
+  onRestored(revision: number | undefined): void;
   onDeleted(): void;
 }) {
   const { t } = useTranslation();
   const { entry, state } = kind;
   const [stored, setStored] = useState(loaded);
-  const [conflict, setConflict] = useState(false);
+  // What stands between this page and the instance: somebody saved a newer revision, or
+  // somebody deleted the asset. Either way the page keeps what was typed.
+  const [conflict, setConflict] = useState<"saved" | "deleted">();
+  const [reloadFailed, setReloadFailed] = useState(false);
+  const [reloading, setReloading] = useState(false);
+  const [loadAsked, setLoadAsked] = useState(false);
   const [failure, setFailure] = useState<string>();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const address = { kind: entry.kind, name: stored.name };
   const canWrite = source.rights.may("write", stored);
+  const namespace = source.rights.namespaces.find(
+    (candidate) => candidate.prefix === stored.namespace
+  );
+  const readOnlyReason =
+    stored.namespace === undefined
+      ? t("build.readOnlyInstance")
+      : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
   const canDelete = state.canDelete && source.rights.may("delete", stored);
   const Editor = entry.Editor;
 
@@ -179,12 +202,33 @@ function LoadedAssetPage({
   const refusalOf = (error: unknown): BuildWriteOutcome => {
     const outcome = readBuildRefusal(error, t);
     if (!outcome.ok && outcome.conflict) {
-      setConflict(true);
+      setConflict((known) => known ?? "saved");
+      setReloadFailed(false);
+      // A conflict does not say whether the asset was saved or deleted. The notice says
+      // which, so the instance is asked.
+      source.exists(address.kind, address.name).then(
+        (exists) => {
+          if (exists === false) {
+            setConflict("deleted");
+          }
+        },
+        () => undefined
+      );
     }
     return outcome;
   };
-  const loadNewer = () => {
-    reload().catch(() => undefined);
+  const loadNewer = async () => {
+    setReloading(true);
+    // A newer asset starts this page again. After any other answer it stays as it is.
+    const answer = await reload().catch((): BuildAssetReload => "failed");
+    setReloading(false);
+    setLoadAsked(false);
+    if (answer === "missing") {
+      setConflict("deleted");
+      setReloadFailed(false);
+    } else if (answer === "failed") {
+      setReloadFailed(true);
+    }
   };
   const remove = async () => {
     setDeleting(true);
@@ -212,6 +256,8 @@ function LoadedAssetPage({
         asset={stored}
         start={undefined}
         canWrite={canWrite}
+        readOnlyReason={canWrite ? undefined : readOnlyReason}
+        saveBlocked={conflict !== undefined}
         instanceWrite={source.rights.instanceWrite}
         onUnsavedChange={onUnsavedChange}
         actions={
@@ -220,7 +266,7 @@ function LoadedAssetPage({
               <History aria-hidden="true" />
               {t("build.history")}
             </Button>
-            {canDelete ? (
+            {canDelete && conflict !== "deleted" ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <IconButton label={t("build.assetActions")} variant="outline" size="sm">
@@ -240,20 +286,47 @@ function LoadedAssetPage({
           </>
         }
         notice={
-          conflict ? (
+          conflict === "deleted" ? (
             <Banner
-              tone="danger"
-              data-build-conflict=""
+              tone="warning"
+              data-build-conflict="deleted"
               action={
-                <Button variant="outline" size="sm" onClick={loadNewer}>
-                  {t("build.loadNewer")}
+                <Button variant="outline" size="sm" onClick={onDeleted}>
+                  {t("build.backToList", { kind: t(entry.label) })}
                 </Button>
               }
             >
-              {t("build.conflict")}
+              {t("build.conflictDeleted")}
             </Banner>
+          ) : conflict === "saved" ? (
+            <>
+              <Banner
+                tone="warning"
+                data-build-conflict="saved"
+                action={
+                  <Button variant="outline" size="sm" onClick={() => setLoadAsked(true)}>
+                    {t("build.loadNewer")}
+                  </Button>
+                }
+              >
+                {t("build.conflict")}
+              </Banner>
+              {reloadFailed ? (
+                <FormNotice tone="error" data-build-reload-failed="">
+                  {t("build.loadNewerFailed")}
+                </FormNotice>
+              ) : null}
+            </>
           ) : failure ? (
             <FormNotice tone="error">{failure}</FormNotice>
+          ) : restored !== undefined ? (
+            <Banner
+              tone="success"
+              data-build-restored={restored}
+              onDismiss={() => onRestored(undefined)}
+            >
+              {t("build.restored", { number: restored })}
+            </Banner>
           ) : null
         }
         save={async (config) => {
@@ -264,8 +337,8 @@ function LoadedAssetPage({
               expectedRevision: stored.revision
             });
             setStored({ ...stored, config, revision });
-            setConflict(false);
             setFailure(undefined);
+            onRestored(undefined);
             return { ok: true };
           } catch (error) {
             return refusalOf(error);
@@ -275,11 +348,11 @@ function LoadedAssetPage({
       <BuildHistory
         open={historyOpen}
         title={stored.name}
-        currentRevision={stored.revision}
-        load={() => source.writes.revisions(address)}
+        heldRevision={stored.revision}
+        load={(cursor) => source.writes.revisions({ ...address, cursor })}
         onClose={() => setHistoryOpen(false)}
         onRestore={
-          canWrite
+          canWrite && conflict === undefined
             ? async (revision) => {
                 try {
                   await source.writes.revert({
@@ -297,6 +370,7 @@ function LoadedAssetPage({
                 // The restored content is the asset now: the drawer closes and the page starts
                 // again from it.
                 setHistoryOpen(false);
+                onRestored(revision);
                 await reload().catch(() => undefined);
                 return { ok: true };
               }
@@ -314,6 +388,19 @@ function LoadedAssetPage({
         onClose={() => setDeleteOpen(false)}
       >
         {t(entry.deleteDescription)}
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={loadAsked}
+        tone="primary"
+        title={t("build.loadNewerTitle")}
+        confirmLabel={t("build.loadNewer")}
+        loading={reloading}
+        onConfirm={() => {
+          loadNewer().catch(() => undefined);
+        }}
+        onClose={() => setLoadAsked(false)}
+      >
+        {t("build.loadNewerDescription")}
       </ConfirmDialog>
     </>
   );

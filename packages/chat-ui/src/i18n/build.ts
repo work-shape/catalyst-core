@@ -8,6 +8,9 @@ export const build = defineTranslations({
     "build.chooseSkills": "Choose skills",
     "build.conflict":
       "Somebody saved this while you were editing. Your text is still here and nothing was overwritten.",
+    "build.assetRefused": "You may not read this asset.",
+    "build.conflictDeleted":
+      "Somebody deleted this while you were editing. Your text is still here, but it can no longer be saved.",
     "build.createContinue": "Continue",
     "build.createId": "Id",
     "build.createIdHint":
@@ -22,7 +25,13 @@ export const build = defineTranslations({
     "build.fallbackGerman": "Empty in this language. People read the German text.",
     "build.history": "History",
     "build.historyDescription": "Every saved revision of {name}, the newest first.",
+    "build.historyStale":
+      "This page holds an older version. Load the newer version before you restore one.",
     "build.loadNewer": "Load the newer version",
+    "build.loadNewerDescription": "Changes on this page that are not saved are lost.",
+    "build.loadNewerFailed":
+      "The newer version could not be loaded. Your text is still here. Try again in a moment.",
+    "build.loadNewerTitle": "Load the newer version?",
     "build.nameTaken": "The id {name} is taken. Go back and choose another one.",
     "build.namespaceAll": "All Namespaces",
     "build.namespaceFilter": "Namespace",
@@ -33,6 +42,10 @@ export const build = defineTranslations({
     "build.pendingApproval":
       "This change waits for an approval. Nothing was changed yet and your text is still here.",
     "build.readOnly": "You can read this but not change it.",
+    "build.readOnlyInstance": "Instance asset. Editing needs Builder on the instance.",
+    "build.readOnlyNamespace":
+      "Asset of Namespace {namespace}. Editing needs Builder in this Namespace.",
+    "build.restored": "Revision {number} restored.",
     "build.refusedModel": "The model {model} is not allowed in Namespace {namespace}.",
     "build.refusedModelRequired":
       "An agent in Namespace {namespace} needs a default model the Namespace allows.",
@@ -87,6 +100,9 @@ export const build = defineTranslations({
     "build.chooseSkills": "Skills auswählen",
     "build.conflict":
       "Jemand hat dies gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben.",
+    "build.assetRefused": "Sie dürfen dieses Asset nicht lesen.",
+    "build.conflictDeleted":
+      "Jemand hat dies gelöscht, während Sie es bearbeitet haben. Ihr Text steht noch hier, lässt sich aber nicht mehr speichern.",
     "build.createContinue": "Weiter",
     "build.createId": "Kennung",
     "build.createIdHint":
@@ -102,7 +118,13 @@ export const build = defineTranslations({
     "build.fallbackGerman": "In dieser Sprache leer. Es wird der deutsche Text gezeigt.",
     "build.history": "Verlauf",
     "build.historyDescription": "Jede gespeicherte Version von {name}, die neueste zuerst.",
+    "build.historyStale":
+      "Diese Seite zeigt eine ältere Version. Laden Sie die neuere Version, bevor Sie eine wiederherstellen.",
     "build.loadNewer": "Neuere Version laden",
+    "build.loadNewerDescription": "Ungespeicherte Änderungen auf dieser Seite gehen verloren.",
+    "build.loadNewerFailed":
+      "Die neuere Version konnte nicht geladen werden. Ihr Text steht noch hier. Versuchen Sie es gleich noch einmal.",
+    "build.loadNewerTitle": "Neuere Version laden?",
     "build.nameTaken":
       "Die Kennung {name} ist vergeben. Gehen Sie zurück und wählen Sie eine andere.",
     "build.namespaceAll": "Alle Namespaces",
@@ -114,6 +136,10 @@ export const build = defineTranslations({
     "build.pendingApproval":
       "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und Ihr Text ist noch da.",
     "build.readOnly": "Sie können dies lesen, aber nicht ändern.",
+    "build.readOnlyInstance": "Instanz-Asset. Zum Bearbeiten braucht es Builder auf Instanzebene.",
+    "build.readOnlyNamespace":
+      "Asset des Namespace {namespace}. Zum Bearbeiten braucht es Builder in diesem Namespace.",
+    "build.restored": "Version {number} wiederhergestellt.",
     "build.refusedModel": "Das Modell {model} ist im Namespace {namespace} nicht erlaubt.",
     "build.refusedModelRequired":
       "Ein Agent im Namespace {namespace} braucht ein Standardmodell, das der Namespace erlaubt.",
