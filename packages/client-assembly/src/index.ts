@@ -47,6 +47,8 @@ export {
   PLATFORM_SECRET_NAMES,
   type InstanceInfrastructure
 } from "./infrastructure";
+// For a worker of a capability that calls a model, such as the document worker.
+export { createWorkerCapabilityModels } from "./capability-models";
 export { createToolDefinitions } from "./tools";
 export {
   applyWorkspaceRunnerImageEnvOverride,

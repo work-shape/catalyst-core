@@ -43,10 +43,6 @@ import {
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
-import {
-  createInstanceModelGateway,
-  unbilledModelProviderIds
-} from "@vivd-catalyst/model-provider";
 import { createDataSourceTools, createDataSourceRegistry } from "@vivd-catalyst/data-source";
 import { createWebFetchToolDefinitions } from "@vivd-catalyst/web-access";
 import {
@@ -60,12 +56,12 @@ import {
   ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
-import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
   assertClientAssemblyValid,
   findConfigAssetAgentValidationIssues,
   findModuleOffToolIssues
 } from "./assembly-validation";
+import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createClientInstanceAuth } from "./auth";
 import { createClientInstanceMail } from "./mail";
@@ -257,6 +253,10 @@ export async function createClientInstanceExecutionAssembly(
     ? await createWorkspacesStore(config, infrastructure.context)
     : undefined;
   const modelProviders = getModelProviderConfigs(config);
+  // Before the capabilities: one of them may call a model, and asks at startup what the model
+  // of its binding can do.
+  const models = await createInstanceModels({ config, clientInstanceId, infrastructure, store });
+  const { governance: usageGovernance, gateway: modelGateway } = models;
   const capabilityContributions = await createCapabilityContributions(capabilities, {
     logger,
     capabilitiesConfig: config.capabilities,
@@ -269,6 +269,7 @@ export async function createClientInstanceExecutionAssembly(
     files: store.files,
     jobs: store.jobs,
     transaction: (fn) => store.transaction((tx) => fn({ files: tx.files, jobs: tx.jobs })),
+    models: models.capabilityModels,
     managedObjectAccess: {
       createAccess(accessInput) {
         return createManagedObjectAccess({
@@ -364,21 +365,6 @@ export async function createClientInstanceExecutionAssembly(
     const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
     approvalRequestHandlers.set(handler.kind, handler);
   }
-  const usageGovernance = new ModelUsageGovernance({
-    store: store.usage,
-    budget: config.usage.budget,
-    safeguards: config.usage.safeguards,
-    costs: config.usage.costs,
-    freeProviderIds: unbilledModelProviderIds(modelProviders)
-  });
-  const modelGateway = await createInstanceModelGateway({
-    registry: infrastructure.registry,
-    providers: modelProviders,
-    entries: config.infrastructure.models,
-    context: infrastructure.context,
-    bindings: config.modelBindings,
-    governance: usageGovernance
-  });
   const approvalRequestCreator = new ApprovalRequestWorkflow({
     clientInstanceId,
     store: store.approvals,
@@ -451,7 +437,6 @@ export async function createClientInstanceExecutionAssembly(
       return assets.agents.find((candidate) => candidate.name === agentName)?.toolNames ?? [];
     },
     auditRecorder,
-    usageRecorder: usageGovernance,
     logger,
     authorizer: createAuthorizer(store.access)
   });

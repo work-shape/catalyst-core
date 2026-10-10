@@ -21,9 +21,11 @@ import {
   type ManagedFileId,
   type ManagedFileRecord,
   type ManagedObjectDeletionResult,
+  type ModelSystemPurpose,
   type ModuleDefinition,
   type ModuleSnapshot,
   type PlatformFileStore,
+  type ProviderRegion,
   type RegisteredJobHandler,
   type RegisteredProviderDefinition,
   type RetriedJob,
@@ -98,6 +100,59 @@ export interface ClientInstanceCapabilityContext {
     fn: (stores: ClientInstanceCapabilityStores) => Promise<Result>
   ): Promise<Result>;
   managedObjectAccess: ManagedObjectAccessFactory;
+  /** The instance's models. Every call a capability makes to a model goes through here. */
+  models: ClientInstanceCapabilityModels;
+}
+
+/** What a capability calls a model for. It names the call on its usage record. */
+export type CapabilityModelPurpose = Extract<ModelSystemPurpose, "document_extraction">;
+
+/** What a capability hands a model to read. */
+export type CapabilityModelContentPart =
+  | { type: "text"; text: string }
+  | { type: "document"; mimeType: "application/pdf"; data: Uint8Array };
+
+/** One call of a capability to a model of the instance. */
+export interface CapabilityModelCall {
+  /** The model binding of the instance config the call goes to. */
+  bindingId: string;
+  purpose: CapabilityModelPurpose;
+  /** What the model reads, as one turn of a user. */
+  content: CapabilityModelContentPart[];
+  /** Asks for an answer in JSON of this schema. The answer is then JSON; its shape is not checked. */
+  output?: { jsonSchema: JsonObject };
+  /** The user and the conversation the call is made for, for its usage record. */
+  userId?: string;
+  conversationId?: ConversationId;
+  /** Ties the usage record to the request that caused the call. */
+  correlationId: string;
+  signal?: AbortSignal;
+  /** The call fails as timed out when it has not ended by then. */
+  deadline?: Date;
+}
+
+export interface CapabilityModelAnswer {
+  text: string;
+}
+
+/** What a capability may know of a model binding before it relies on it. */
+export interface CapabilityModelBinding {
+  providerId: string;
+  model: string;
+  /** Where the provider processes a call. Absent for a provider inside the instance. */
+  region?: ProviderRegion;
+  documentInput: boolean;
+  structuredOutput: boolean;
+}
+
+export interface ClientInstanceCapabilityModels {
+  /**
+   * Sends the call through the instance's model gateway. The gateway admits it against the
+   * usage limits, retries it and records what it used; a failure carries no text of the provider.
+   */
+  complete(call: CapabilityModelCall): Promise<CapabilityModelAnswer>;
+  /** Throws when the instance config defines no binding of that id. */
+  describeBinding(bindingId: string): CapabilityModelBinding;
 }
 
 export type ClientInstanceCapabilityJobs = Pick<JobsStore, "enqueue">;
