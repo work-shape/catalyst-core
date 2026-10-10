@@ -5,7 +5,8 @@ import type {
   ConversationId,
   ManagedArtifactId,
   ManagedFileId,
-  MessageId
+  MessageId,
+  UserId
 } from "./ids";
 import type {
   ArtifactPreviewImagePageRef,
@@ -723,6 +724,8 @@ export interface ConversationAttachmentStore {
     clientInstanceId: ClientInstanceId;
     /** Only this workspace's, and then also those whose execution workspace holds data. */
     collaborationWorkspaceId?: CollaborationWorkspaceId;
+    /** Only those this user created, with the same addition. */
+    createdByUserId?: UserId;
     limit: number;
   }): Promise<ConversationId[]>;
 }

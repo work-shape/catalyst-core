@@ -514,6 +514,7 @@ export {
   claimNextAgentRun,
   heartbeatAgentRun,
   recoverExpiredAgentRuns,
+  listAgentRunsInProgress,
   requestAgentRunCancellation
 } from "./postgres-agent-run-worker-operations";
 

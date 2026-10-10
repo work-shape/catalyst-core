@@ -143,11 +143,21 @@ id from config_assets where status = 'deleted')`.
   workspace stays closed, and deleting it again starts a new job. The dead job is kept until
   the account or workspace is gone, also past the 30 days other dead jobs are kept. A closed
   account leaves its Shared Workspaces and access requests with the first pass. Of two owners
-  who delete their accounts at the same moment, the second is refused as the last owner. The audit log records
+  who delete their accounts at the same moment, the second is refused as the last owner; the
+  same holds for a deletion and a role change or removal at the same moment. The first pass
+  asks the agent runs of the user or in the workspace to stop, and a run still working stores
+  no further message. The account or the workspace is removed only when these runs have ended
+  and the stored data of every conversation the user created is gone. An administrator who
+  changes a user being deleted gets `409 CONFLICT`. The audit log records
   `user.deletion_requested` and `collaboration_workspace.deletion_requested` when a deletion
   is accepted; `user.delete_failed` and `collaboration_workspace.delete_failed` are no longer
   written. A client that calls one of the three delete operations must accept `202`. Upgrade:
-  migration `0034_deletion_requested` adds a nullable column to two tables.
+  migration `0034_deletion_requested` adds a nullable column to two tables. Rollback: the
+  previous release does not know the mark, so a closed account could sign in again and a
+  closed workspace would be listed again. Let the deletion jobs finish before rolling back.
+  These two queries list what is still closed, and both must return nothing:
+  `select id from product_users where deletion_requested_at is not null` and
+  `select id from collaboration_workspaces where deletion_requested_at is not null`.
 - **API:** a call refused for a missing right answers `403 FORBIDDEN` with the message
   `Missing the right '<action>'` and `details.action` and `details.reason`, on every route.
   The message was `Missing permission '<permission>'` and named the legacy permission. The

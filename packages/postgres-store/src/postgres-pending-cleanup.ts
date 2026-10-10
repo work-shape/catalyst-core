@@ -3,7 +3,8 @@ import {
   pendingConversationCleanupError,
   type ClientInstanceId,
   type CollaborationWorkspace,
-  type CollaborationWorkspaceId
+  type CollaborationWorkspaceId,
+  type UserId
 } from "@vivd-catalyst/core";
 import type { PostgresTransaction } from "./postgres-database";
 
@@ -25,11 +26,21 @@ import type { PostgresTransaction } from "./postgres-database";
 export function conversationsPendingCleanup(input: {
   clientInstanceId: ClientInstanceId;
   collaborationWorkspaceId?: CollaborationWorkspaceId;
+  createdByUserId?: UserId;
   executionWorkspaces?: boolean;
 }): SQL {
-  const notActive = input.collaborationWorkspaceId
-    ? drizzleSql`c.status <> 'active' and c.collaboration_workspace_id = ${input.collaborationWorkspaceId}`
-    : drizzleSql`c.status <> 'active'`;
+  const notActive = drizzleSql.join(
+    [
+      drizzleSql`c.status <> 'active'`,
+      ...(input.collaborationWorkspaceId
+        ? [drizzleSql`c.collaboration_workspace_id = ${input.collaborationWorkspaceId}`]
+        : []),
+      ...(input.createdByUserId
+        ? [drizzleSql`c.created_by_user_id = ${input.createdByUserId}`]
+        : [])
+    ],
+    drizzleSql` and `
+  );
   // The condition of `listExecutionWorkspaceCleanupTargets` without its command rows: a command
   // row holds no object key, and its cleanup keeps a cancelled command for one more pass.
   const executionWorkspaces = input.executionWorkspaces

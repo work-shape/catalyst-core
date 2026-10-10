@@ -108,11 +108,9 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
     ): Promise<void> {
       return deletePostgresModelProviderContinuation(db, input);
     },
-    async deleteConversation(input: {
-      clientInstanceId: ClientInstanceId;
-      conversationId: ConversationId;
-      deletedAt: string;
-    }): Promise<Conversation> {
+    async deleteConversation(
+      input: Parameters<ConversationStore["deleteConversation"]>[0]
+    ): Promise<Conversation> {
       return deletePostgresConversation(db, input);
     },
     async expireConversation(

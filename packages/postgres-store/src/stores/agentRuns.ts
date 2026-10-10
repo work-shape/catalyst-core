@@ -41,6 +41,7 @@ import {
   releaseRunStartCommand as releasePostgresRunStartCommand,
   recoverStaleAgentRun as recoverPostgresStaleAgentRun,
   recoverExpiredAgentRuns as recoverPostgresExpiredAgentRuns,
+  listAgentRunsInProgress as listPostgresAgentRunsInProgress,
   requestAgentRunCancellation as requestPostgresAgentRunCancellation,
   updateAgentRunStatus as updatePostgresAgentRunStatus
 } from "../postgres-agent-run-operations";
@@ -111,6 +112,11 @@ export function createPostgresAgentRunsStore(db: PostgresConnection): AgentRunsS
     },
     async requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun> {
       return requestPostgresAgentRunCancellation(db, input);
+    },
+    async listAgentRunsInProgress(
+      input: Parameters<AgentRunsStore["listAgentRunsInProgress"]>[0]
+    ): Promise<AgentRun[]> {
+      return listPostgresAgentRunsInProgress(db, input);
     },
     async appendClaimedRunObservation(
       input: AppendClaimedRunObservationInput

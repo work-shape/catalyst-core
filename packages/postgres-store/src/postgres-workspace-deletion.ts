@@ -43,20 +43,26 @@ export async function markWorkspaceDeletionRequested(
   return false;
 }
 
-export async function lockOwnedSharedWorkspaces(
+export async function lockWorkspacesForOwnerChange(
   db: PostgresConnection,
-  input: Parameters<CollaborationWorkspaceStore["lockOwnedSharedWorkspaces"]>[0]
+  input: Parameters<CollaborationWorkspaceStore["lockWorkspacesForOwnerChange"]>[0]
 ): Promise<void> {
-  const owned = db
-    .select({ id: collaborationWorkspaceMemberships.collaborationWorkspaceId })
-    .from(collaborationWorkspaceMemberships)
-    .where(
-      and(
-        eq(collaborationWorkspaceMemberships.clientInstanceId, input.clientInstanceId),
-        eq(collaborationWorkspaceMemberships.userId, input.userId),
-        eq(collaborationWorkspaceMemberships.role, "owner")
-      )
-    );
+  const which =
+    "collaborationWorkspaceId" in input
+      ? eq(collaborationWorkspaces.id, input.collaborationWorkspaceId)
+      : inArray(
+          collaborationWorkspaces.id,
+          db
+            .select({ id: collaborationWorkspaceMemberships.collaborationWorkspaceId })
+            .from(collaborationWorkspaceMemberships)
+            .where(
+              and(
+                eq(collaborationWorkspaceMemberships.clientInstanceId, input.clientInstanceId),
+                eq(collaborationWorkspaceMemberships.userId, input.ownedByUserId),
+                eq(collaborationWorkspaceMemberships.role, "owner")
+              )
+            )
+        );
   // In the order of the ids, so two transactions never wait for each other.
   await db
     .select({ id: collaborationWorkspaces.id })
@@ -65,7 +71,7 @@ export async function lockOwnedSharedWorkspaces(
       and(
         eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
         eq(collaborationWorkspaces.kind, "shared"),
-        inArray(collaborationWorkspaces.id, owned)
+        which
       )
     )
     .orderBy(asc(collaborationWorkspaces.id))

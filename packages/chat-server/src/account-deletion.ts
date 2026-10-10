@@ -1,6 +1,7 @@
 import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   NonRetryableJobError,
+  pendingConversationCleanupError,
   type AuditActor,
   type PlatformStores,
   type UserId,
@@ -9,9 +10,11 @@ import {
 import { deleteAccountJob } from "./job-kinds";
 import {
   acceptDeletion,
+  cancelRunsInProgress,
   countPendingCleanup,
   deletionDedupeKey,
-  retryWorkspaceCleanup,
+  requireRunsEnded,
+  retryPendingCleanup,
   type DeletionOutcome,
   type DeletionTransaction
 } from "./subject-deletion";
@@ -74,8 +77,9 @@ export async function requestAccountDeletion(
 /**
  * One pass of the deletion of an account whose deletion was requested. It removes the
  * password sign-in first, so the credentials are gone whatever the stored data does, then
- * the user's own data, then the user. It throws while data of deleted Conversations is still
- * being removed; the next pass goes on from there. Resolves undefined when the user is gone.
+ * the user's own data, then the user. It asks the user's runs to stop, and throws while one
+ * has not ended or data of a Conversation the user created is still being removed; the next
+ * pass goes on from there. Resolves undefined when the user is gone.
  */
 export async function completeAccountDeletion(
   options: ChatServerOptions,
@@ -87,15 +91,27 @@ export async function completeAccountDeletion(
   if (user.status !== "deleting") {
     throw new NonRetryableJobError("The deletion of this user was not requested");
   }
+  await cancelRunsInProgress(options, { ownerUserId: user.id });
   await deleteStandalonePasswordSignIns(options, user);
   const personalWorkspaceId = await personalWorkspaceIdOf(options.stores, options, user.id);
-  if (personalWorkspaceId) await retryWorkspaceCleanup(options, personalWorkspaceId);
+  if (personalWorkspaceId) {
+    await retryPendingCleanup(options, { collaborationWorkspaceId: personalWorkspaceId });
+  }
+  await retryPendingCleanup(options, { createdByUserId: user.id });
   const totals = await cleanupProductUserData({
     options,
     actor: input.actor,
     correlationId: input.correlationId,
     userId: user.id
   });
+  // The row of the user goes last and only after everything of theirs is gone: no run of
+  // theirs that could still write, and no stored data of a Conversation they created.
+  await requireRunsEnded(options, { ownerUserId: user.id });
+  const pendingCleanupCount = await countPendingCleanup(options.stores, options, {
+    createdByUserId: user.id
+  });
+  if (pendingCleanupCount > 0)
+    throw pendingConversationCleanupError("personal", pendingCleanupCount);
   return transaction(async (stores) => {
     const deleted = await stores.users.deleteUser({
       clientInstanceId: options.clientInstanceId,
@@ -142,11 +158,9 @@ export async function recordAccountDeletionStalled(
     correlationId: input.correlationId,
     metadata: {
       requestedBy: input.requestedBy,
-      pendingCleanupCount: await countPendingCleanup(
-        stores,
-        options,
-        await personalWorkspaceIdOf(stores, options, input.userId)
-      )
+      pendingCleanupCount: await countPendingCleanup(stores, options, {
+        createdByUserId: input.userId
+      })
     }
   });
 }

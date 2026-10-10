@@ -128,6 +128,7 @@ export class UserAdministrationWorkflow {
     await this.recordAccess(actor, context, "governance.user_update_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
+    requireNotInDeletion(existing);
     this.requireAssignableRoles(actor, command.roles);
     this.requireAssignablePermissions(actor, command.permissions, existing.permissions);
     const updated = await this.options.stores.users.updateUser({
@@ -177,6 +178,7 @@ export class UserAdministrationWorkflow {
     await this.recordAccess(actor, context, "governance.user_identity_upsert_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
+    requireNotInDeletion(existing);
     const updated = await this.options.stores.users.upsertUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -209,6 +211,7 @@ export class UserAdministrationWorkflow {
     await this.recordAccess(actor, context, "governance.user_identity_delete_authorized");
     const existing = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, existing);
+    requireNotInDeletion(existing);
     const updated = await this.options.stores.users.deleteUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -244,6 +247,7 @@ export class UserAdministrationWorkflow {
     }
     const user = await this.getUserOrThrow(command.userId);
     this.requireManageableUser(actor, user);
+    requireNotInDeletion(user);
     const identity = user.identities.find(
       (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
     );
@@ -559,5 +563,15 @@ export class UserAdministrationWorkflow {
         permissions: user.permissions
       }
     });
+  }
+}
+
+/**
+ * A user whose deletion was requested is closed to administration too: nothing of the account
+ * is changed or given back while it is being removed. Only the deletion can be asked again.
+ */
+function requireNotInDeletion(user: UserRecord): void {
+  if (user.status === "deleting") {
+    throw new AppError("CONFLICT", "User account is being deleted");
   }
 }

@@ -2,7 +2,8 @@ import {
   createPlatformId,
   isAppError,
   type CollaborationWorkspaceId,
-  type ConversationId
+  type ConversationId,
+  type UserId
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
 import { cleanupExecutionWorkspaceForConversation } from "./workspace-cleanup";
@@ -86,19 +87,26 @@ export interface ConversationCleanupRetrySummary {
   cleanupPendingCount: number;
 }
 
+/** Which pending cleanups are meant: all, one workspace's, or those of one user's Conversations. */
+export interface PendingCleanupScope {
+  collaborationWorkspaceId?: CollaborationWorkspaceId;
+  createdByUserId?: UserId;
+}
+
 /**
  * One pass over the Conversations that are deleted or expired and still hold data, at most
- * `limit` of them: of the instance, or of one workspace. Each cleanup that completes is
+ * `limit` of them: of the instance, of one workspace, or those one user created. Each cleanup that completes is
  * audited. Safe to repeat.
  */
 export async function retryPendingConversationCleanup(
   options: ChatServerOptions,
-  input: { collaborationWorkspaceId?: CollaborationWorkspaceId; limit: number; deletedAt: string }
+  input: PendingCleanupScope & { limit: number; deletedAt: string }
 ): Promise<ConversationCleanupRetrySummary> {
   const summary: ConversationCleanupRetrySummary = { completedCount: 0, cleanupPendingCount: 0 };
   const pending = await options.stores.files.listConversationsPendingObjectCleanup({
     clientInstanceId: options.clientInstanceId,
     collaborationWorkspaceId: input.collaborationWorkspaceId,
+    createdByUserId: input.createdByUserId,
     limit: input.limit
   });
   for (const conversationId of pending) {

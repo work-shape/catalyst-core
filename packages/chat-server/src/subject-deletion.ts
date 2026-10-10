@@ -1,4 +1,6 @@
 import {
+  AppError,
+  isAppError,
   subjectDedupeKey,
   type AuditActor,
   type CollaborationWorkspaceId,
@@ -7,7 +9,7 @@ import {
   type PlatformStores,
   type UserId
 } from "@vivd-catalyst/core";
-import { retryPendingConversationCleanup } from "./conversation-cleanup";
+import { retryPendingConversationCleanup, type PendingCleanupScope } from "./conversation-cleanup";
 import { DELETION_BACKOFF_BASE_MS } from "./job-kinds";
 import type { ChatServerOptions } from "./types";
 
@@ -26,8 +28,9 @@ export type DeletionTransaction = <Result>(
 // Conversations one pass of a deletion retries the cleanup of. A pass goes on to the next batch
 // only while every cleanup of the last one completed.
 const PENDING_CLEANUP_BATCH_SIZE = 100;
-// The most pending Conversations a stalled deletion counts for its audit event.
+// The most pending Conversations a deletion counts, for its refusal and its stalled event.
 const STALLED_PENDING_COUNT_LIMIT = 1000;
+const RUN_CANCELLED_BY_DELETION = "The account or workspace of this run is being deleted";
 
 /**
  * Accepts a deletion. In one transaction the subject is marked, which closes it, and its job
@@ -69,8 +72,14 @@ export async function acceptDeletion<Payload extends JsonObject, Result>(
     const result = await input.complete();
     if (result !== undefined) return { status: "deleted", result };
   } catch (error) {
+    // Class and code only: the message of a database error can carry values of the statement.
     options.logger.warn(
-      { err: error, kind: input.job.kind, subject: input.subjectId },
+      {
+        errorClass: error instanceof Error ? error.name : typeof error,
+        ...(isAppError(error) ? { errorCode: error.code } : {}),
+        kind: input.job.kind,
+        subject: input.subjectId
+      },
       "Deletion continues as a job"
     );
   }
@@ -82,16 +91,16 @@ export function deletionDedupeKey(job: JobKind, subjectId: string): string {
 }
 
 /**
- * Retries the cleanup of the workspace's Conversations that are deleted and still hold data,
- * so a deletion does not wait for the retention job to do it.
+ * Retries the cleanup of Conversations that are deleted and still hold data, a workspace's or
+ * those a user created, so a deletion does not wait for the retention job to do it.
  */
-export async function retryWorkspaceCleanup(
+export async function retryPendingCleanup(
   options: ChatServerOptions,
-  collaborationWorkspaceId: CollaborationWorkspaceId
+  scope: PendingCleanupScope
 ): Promise<void> {
   for (;;) {
     const pass = await retryPendingConversationCleanup(options, {
-      collaborationWorkspaceId,
+      ...scope,
       limit: PENDING_CLEANUP_BATCH_SIZE,
       deletedAt: new Date().toISOString()
     });
@@ -99,19 +108,68 @@ export async function retryWorkspaceCleanup(
   }
 }
 
-/** How many Conversations of the workspace still hold data, for the event of a stalled job. */
+/** How many Conversations in the scope still hold data, counted up to a limit. */
 export async function countPendingCleanup(
   stores: PlatformStores,
   options: Pick<ChatServerOptions, "clientInstanceId">,
-  collaborationWorkspaceId: CollaborationWorkspaceId | undefined
+  scope: PendingCleanupScope
 ): Promise<number> {
-  if (!collaborationWorkspaceId) return 0;
   const pending = await stores.files.listConversationsPendingObjectCleanup({
     clientInstanceId: options.clientInstanceId,
-    collaborationWorkspaceId,
+    ...scope,
     limit: STALLED_PENDING_COUNT_LIMIT
   });
   return pending.length;
+}
+
+/** The runs of a subject in deletion: those its user started, or those in its workspace. */
+export type RunsOfSubject =
+  { ownerUserId: UserId } | { collaborationWorkspaceId: CollaborationWorkspaceId };
+
+/**
+ * Asks every run of the subject that has not ended to stop. A queued run ends at once; a
+ * running one ends when its worker reads the request.
+ */
+export async function cancelRunsInProgress(
+  options: ChatServerOptions,
+  subject: RunsOfSubject
+): Promise<void> {
+  const runs = await options.stores.agentRuns.listAgentRunsInProgress({
+    clientInstanceId: options.clientInstanceId,
+    ...subject
+  });
+  for (const run of runs) {
+    if (run.status === "cancelling") continue;
+    try {
+      await options.stores.agentRuns.requestAgentRunCancellation({
+        clientInstanceId: options.clientInstanceId,
+        runId: run.id,
+        requestedAt: new Date().toISOString(),
+        reason: RUN_CANCELLED_BY_DELETION
+      });
+    } catch (error) {
+      // A run that ended meanwhile needs no request.
+      if (!isAppError(error) || (error.code !== "CONFLICT" && error.code !== "NOT_FOUND")) {
+        throw error;
+      }
+    }
+  }
+}
+
+/** Throws while a run of the subject has not ended. The next pass of the deletion asks again. */
+export async function requireRunsEnded(
+  options: ChatServerOptions,
+  subject: RunsOfSubject
+): Promise<void> {
+  const runs = await options.stores.agentRuns.listAgentRunsInProgress({
+    clientInstanceId: options.clientInstanceId,
+    ...subject
+  });
+  if (runs.length > 0) {
+    throw new AppError("CONFLICT", "Agent runs of the deleted subject are still ending", {
+      activeRunCount: runs.length
+    });
+  }
 }
 
 /**

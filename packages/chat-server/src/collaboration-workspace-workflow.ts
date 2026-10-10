@@ -11,6 +11,7 @@ import {
   type CollaborationWorkspaceId,
   type CollaborationWorkspaceWithRole,
   type ConversationVisibility,
+  type PlatformStores,
   type RuntimeAssetSnapshot,
   type RuntimeCallContext,
   type UserRecord,
@@ -449,15 +450,14 @@ export class CollaborationWorkspaceWorkflow {
       }
     }
     if (target.role === role) throw new AppError("CONFLICT", "Workspace role is unchanged");
-    if (target.role === "owner" && role !== "owner") {
-      await this.requireAnotherActiveOwner(collaborationWorkspaceId, target.userId);
-    }
-    const updated = await this.options.stores.workspaces.updateMembershipRole({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId: targetUserId,
-      role
-    });
+    const updated = await this.underOwnerLock(collaborationWorkspaceId, target, (stores) =>
+      stores.workspaces.updateMembershipRole({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId,
+        userId: targetUserId,
+        role
+      })
+    );
     await this.record(
       context,
       user,
@@ -483,14 +483,13 @@ export class CollaborationWorkspaceWorkflow {
     if (actor.role === "admin" && target.role !== "member") {
       throw new AppError("FORBIDDEN", "Workspace Admins may remove regular Members only");
     }
-    if (target.role === "owner") {
-      await this.requireAnotherActiveOwner(collaborationWorkspaceId, target.userId);
-    }
-    const removed = await this.options.stores.workspaces.removeMembership({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId: targetUserId
-    });
+    const removed = await this.underOwnerLock(collaborationWorkspaceId, target, (stores) =>
+      stores.workspaces.removeMembership({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId,
+        userId: targetUserId
+      })
+    );
     await this.record(
       context,
       user,
@@ -511,14 +510,16 @@ export class CollaborationWorkspaceWorkflow {
     if (!access.membershipRole) {
       throw new AppError("CONFLICT", "User is not a workspace member");
     }
-    if (access.membershipRole === "owner") {
-      await this.requireAnotherActiveOwner(collaborationWorkspaceId, access.userId);
-    }
-    const removed = await this.options.stores.workspaces.removeMembership({
-      clientInstanceId: this.options.clientInstanceId,
+    const removed = await this.underOwnerLock(
       collaborationWorkspaceId,
-      userId: access.userId
-    });
+      { userId: access.userId },
+      (stores) =>
+        stores.workspaces.removeMembership({
+          clientInstanceId: this.options.clientInstanceId,
+          collaborationWorkspaceId,
+          userId: access.userId
+        })
+    );
     await this.record(
       context,
       user,
@@ -762,30 +763,40 @@ export class CollaborationWorkspaceWorkflow {
     return membership;
   }
 
-  private async requireAnotherActiveOwner(
+  /**
+   * Changes or removes a membership under the lock every change of owners takes, and refuses
+   * to take the last active owner from the workspace. The role is read again under the lock:
+   * the deletion of another owner's account, or a second change, may have come first.
+   */
+  private underOwnerLock<Result>(
     collaborationWorkspaceId: CollaborationWorkspaceId,
-    excludedUserId: UserRecord["id"]
-  ): Promise<void> {
-    const [memberships, users] = await Promise.all([
-      this.options.stores.workspaces.listMemberships({
-        clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId
-      }),
-      this.options.stores.users.listUsers({ clientInstanceId: this.options.clientInstanceId })
-    ]);
-    const activeUserIds = new Set(
-      users.filter((candidate) => candidate.status === "active").map((candidate) => candidate.id)
-    );
-    if (
-      !memberships.some(
-        (membership) =>
-          membership.role === "owner" &&
-          membership.userId !== excludedUserId &&
-          activeUserIds.has(membership.userId)
-      )
-    ) {
-      throw new AppError("CONFLICT", LAST_OWNER_MESSAGE);
-    }
+    target: Pick<WorkspaceMembership, "userId">,
+    change: (stores: PlatformStores) => Promise<Result>
+  ): Promise<Result> {
+    const scope = { clientInstanceId: this.options.clientInstanceId, collaborationWorkspaceId };
+    return this.options.stores.transaction(async (stores) => {
+      await stores.workspaces.lockWorkspacesForOwnerChange(scope);
+      const current = await stores.workspaces.getMembership({ ...scope, userId: target.userId });
+      if (current?.role === "owner") {
+        const [memberships, users] = await Promise.all([
+          stores.workspaces.listMemberships(scope),
+          stores.users.listUsers({ clientInstanceId: this.options.clientInstanceId })
+        ]);
+        const activeUserIds = new Set(
+          users
+            .filter((candidate) => candidate.status === "active")
+            .map((candidate) => candidate.id)
+        );
+        const anotherActiveOwner = memberships.some(
+          (membership) =>
+            membership.role === "owner" &&
+            membership.userId !== target.userId &&
+            activeUserIds.has(membership.userId)
+        );
+        if (!anotherActiveOwner) throw new AppError("CONFLICT", LAST_OWNER_MESSAGE);
+      }
+      return change(stores);
+    });
   }
 
   private async record(

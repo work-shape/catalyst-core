@@ -1,4 +1,5 @@
 import {
+  isAppError,
   type AuditActor,
   type CollaborationWorkspaceId,
   type PlatformStores,
@@ -10,7 +11,8 @@ import {
   acceptDeletion,
   countPendingCleanup,
   deletionDedupeKey,
-  retryWorkspaceCleanup,
+  cancelRunsInProgress,
+  retryPendingCleanup,
   type DeletionOutcome,
   type DeletionTransaction
 } from "./subject-deletion";
@@ -72,7 +74,8 @@ export async function requestWorkspaceDeletion(
 /**
  * One pass of the deletion of a Shared Workspace whose deletion was requested: its
  * Conversations with their stored data, then its access requests, memberships and the
- * workspace itself. It throws while a Conversation still has background work in progress or
+ * workspace itself. It asks the runs in the workspace to stop first, and throws while a
+ * Conversation still has background work in progress or
  * data of deleted Conversations is still being removed; the next pass goes on from there.
  * Resolves undefined when the workspace is gone, or was never marked.
  */
@@ -85,7 +88,8 @@ export async function completeWorkspaceDeletion(
   const scope = { clientInstanceId: options.clientInstanceId, collaborationWorkspaceId };
   const inDeletion = await options.stores.workspaces.getWorkspaceInDeletion(scope);
   if (!inDeletion) return undefined;
-  await retryWorkspaceCleanup(options, collaborationWorkspaceId);
+  await cancelRunsInProgress(options, { collaborationWorkspaceId });
+  await retryPendingCleanup(options, { collaborationWorkspaceId });
 
   const conversations = await options.stores.conversations.listConversationsForWorkspace({
     ...scope,
@@ -101,11 +105,18 @@ export async function completeWorkspaceDeletion(
     // A Conversation that was moved away meanwhile is no longer this workspace's to delete.
     if (!current || current.collaborationWorkspaceId !== collaborationWorkspaceId) continue;
     await assertConversationIdle(options, conversation.id);
+    // The delete names the workspace and decides under the Conversation row lock, so a move
+    // between the read above and here leaves the Conversation to its new workspace.
     const deletion = await deleteConversationAggregate(
       options,
       conversation.id,
-      new Date().toISOString()
-    );
+      new Date().toISOString(),
+      collaborationWorkspaceId
+    ).catch((error: unknown) => {
+      if (isAppError(error) && error.code === "NOT_FOUND") return undefined;
+      throw error;
+    });
+    if (!deletion) continue;
     conversationCount += 1;
     if (deletion.cleanup === "complete") {
       fileCount += deletion.fileCount + deletion.artifactCount + deletion.workspaceFileCount;
@@ -167,11 +178,9 @@ export async function recordWorkspaceDeletionStalled(
     subject: input.collaborationWorkspaceId,
     correlationId: input.correlationId,
     metadata: {
-      pendingCleanupCount: await countPendingCleanup(
-        stores,
-        options,
-        input.collaborationWorkspaceId
-      )
+      pendingCleanupCount: await countPendingCleanup(stores, options, {
+        collaborationWorkspaceId: input.collaborationWorkspaceId
+      })
     }
   });
 }

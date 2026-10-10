@@ -1,8 +1,9 @@
-import { and, eq, gt, lt, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, lt, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type AgentRun,
   type AgentRunId,
+  type AgentRunStore,
   type AgentRuntimeEvent,
   type AppendClaimedAgentRunMessageInput,
   type AppendClaimedRunObservationInput,
@@ -14,16 +15,20 @@ import {
   type RequestAgentRunCancellationInput,
   type RunObservation,
   asAgentRunId,
+  asConversationId,
   createPlatformId
 } from "@vivd-catalyst/core";
-import type { PostgresConnection } from "./postgres-database";
+import { requireActiveConversationLock } from "./postgres-conversation-operations";
+import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
   agentRunObservations,
   agentRuns,
+  collaborationWorkspaces,
   conversations,
   messages,
-  modelProviderContinuations
+  modelProviderContinuations,
+  productUsers
 } from "./schema";
 
 export async function claimNextAgentRun(
@@ -213,6 +218,83 @@ export async function assertClaimedAgentRun(
   return mapAgentRun(row);
 }
 
+const RUN_IN_PROGRESS_STATUSES: AgentRun["status"][] = [
+  "queued",
+  "running",
+  "waiting_for_permission",
+  "cancelling"
+];
+
+export async function listAgentRunsInProgress(
+  db: PostgresConnection,
+  input: Parameters<AgentRunStore["listAgentRunsInProgress"]>[0]
+): Promise<AgentRun[]> {
+  const subject =
+    "ownerUserId" in input
+      ? eq(agentRuns.ownerUserId, input.ownerUserId)
+      : inArray(
+          agentRuns.conversationId,
+          db
+            .select({ id: conversations.id })
+            .from(conversations)
+            .where(
+              and(
+                eq(conversations.clientInstanceId, input.clientInstanceId),
+                eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId)
+              )
+            )
+        );
+  const rows = await db
+    .select()
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, input.clientInstanceId),
+        inArray(agentRuns.status, RUN_IN_PROGRESS_STATUSES),
+        subject
+      )
+    );
+  return rows.map(mapAgentRun);
+}
+
+/** Whether the user who started the run, or the workspace its Conversation is in, is marked. */
+async function ownerOrWorkspaceInDeletion(
+  tx: PostgresTransaction,
+  run: { clientInstanceId: string; conversationId: string; ownerUserId: string }
+): Promise<boolean> {
+  const [owner] = await tx
+    .select({ id: productUsers.id })
+    .from(productUsers)
+    .where(
+      and(
+        eq(productUsers.clientInstanceId, run.clientInstanceId),
+        eq(productUsers.id, run.ownerUserId),
+        isNotNull(productUsers.deletionRequestedAt)
+      )
+    )
+    .limit(1);
+  if (owner) return true;
+  const [workspace] = await tx
+    .select({ id: collaborationWorkspaces.id })
+    .from(collaborationWorkspaces)
+    .innerJoin(
+      conversations,
+      and(
+        eq(conversations.clientInstanceId, collaborationWorkspaces.clientInstanceId),
+        eq(conversations.collaborationWorkspaceId, collaborationWorkspaces.id)
+      )
+    )
+    .where(
+      and(
+        eq(conversations.clientInstanceId, run.clientInstanceId),
+        eq(conversations.id, run.conversationId),
+        isNotNull(collaborationWorkspaces.deletionRequestedAt)
+      )
+    )
+    .limit(1);
+  return workspace !== undefined;
+}
+
 export async function appendClaimedAgentRunMessage(
   db: PostgresConnection,
   input: AppendClaimedAgentRunMessageInput
@@ -227,6 +309,14 @@ export async function appendClaimedAgentRunMessage(
     if (!run) throw new AppError("CONFLICT", "Agent run lease is no longer active");
     if (input.message.conversationId !== run.conversationId) {
       throw new AppError("CONFLICT", "Agent run message belongs to another conversation");
+    }
+    await requireActiveConversationLock(
+      tx,
+      input.clientInstanceId,
+      asConversationId(run.conversationId)
+    );
+    if (await ownerOrWorkspaceInDeletion(tx, run)) {
+      throw new AppError("CONFLICT", "Conversation no longer accepts messages");
     }
     const createdAt = new Date();
     const [row] = await tx

@@ -141,13 +141,16 @@ export interface CollaborationWorkspaceStore {
     collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<boolean>;
   /**
-   * Locks the Shared Workspaces the user owns to the end of the transaction it is called in,
-   * so two owners who leave at the same moment are judged one after the other.
+   * Locks Shared Workspaces to the end of the transaction it is called in: the one named, or
+   * all the user owns. Whatever can take the last active owner from a workspace (a role
+   * change, a removal, a leave, the deletion of an account) decides under this lock, so two of
+   * them at the same moment are judged one after the other.
    */
-  lockOwnedSharedWorkspaces(input: {
-    clientInstanceId: ClientInstanceId;
-    userId: UserId;
-  }): Promise<void>;
+  lockWorkspacesForOwnerChange(
+    input: { clientInstanceId: ClientInstanceId } & (
+      { collaborationWorkspaceId: CollaborationWorkspaceId } | { ownedByUserId: UserId }
+    )
+  ): Promise<void>;
   /** The workspace whose deletion was requested, with its memberships, or undefined. */
   getWorkspaceInDeletion(input: {
     clientInstanceId: ClientInstanceId;

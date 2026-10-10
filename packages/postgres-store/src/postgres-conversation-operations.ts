@@ -24,6 +24,7 @@ import {
   type AppendAssistantMessageInput,
   type ChatMessage,
   type ClientInstanceId,
+  type CollaborationWorkspaceId,
   type Conversation,
   type ConversationId,
   type ConversationListScope,
@@ -206,12 +207,15 @@ export async function moveConversation(
 /**
  * Takes the Conversation row lock. Every write that decides whether a Conversation may expire
  * holds it: run acceptance, attachment creation and restore, deletion and expiry. Returns false
- * when the Conversation is not active.
+ * when the Conversation is not active, or is not in the workspace the caller names. The
+ * workspace is a column of the locked row, so it is read again after a wait for the lock: a
+ * Conversation that was moved away meanwhile is not locked.
  */
 export async function lockActiveConversation(
   tx: PostgresTransaction,
   clientInstanceId: ClientInstanceId,
-  conversationId: ConversationId
+  conversationId: ConversationId,
+  inCollaborationWorkspaceId?: CollaborationWorkspaceId
 ): Promise<boolean> {
   const [locked] = await tx
     .select({ id: conversations.id })
@@ -220,7 +224,10 @@ export async function lockActiveConversation(
       and(
         eq(conversations.clientInstanceId, clientInstanceId),
         eq(conversations.id, conversationId),
-        eq(conversations.status, "active")
+        eq(conversations.status, "active"),
+        inCollaborationWorkspaceId === undefined
+          ? undefined
+          : eq(conversations.collaborationWorkspaceId, inCollaborationWorkspaceId)
       )
     )
     .for("update")
@@ -536,12 +543,17 @@ export async function deleteConversation(
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     deletedAt: string;
+    inCollaborationWorkspaceId?: CollaborationWorkspaceId;
   }
 ): Promise<Conversation> {
   return db.transaction(async (tx) => {
-    if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
-      throw new AppError("NOT_FOUND", "Conversation is not available");
-    }
+    const locked = await lockActiveConversation(
+      tx,
+      input.clientInstanceId,
+      input.conversationId,
+      input.inCollaborationWorkspaceId
+    );
+    if (!locked) throw new AppError("NOT_FOUND", "Conversation is not available");
     return markLockedConversationDeleted(tx, { ...input, status: "deleted" });
   });
 }

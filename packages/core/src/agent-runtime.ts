@@ -1,4 +1,11 @@
-import type { AgentRunId, ClientInstanceId, ConversationId, MessageId, ToolCallId } from "./ids";
+import type {
+  AgentRunId,
+  ClientInstanceId,
+  CollaborationWorkspaceId,
+  ConversationId,
+  MessageId,
+  ToolCallId
+} from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
 import type { ManagedFileRef } from "./files";
@@ -524,8 +531,22 @@ export interface AgentRunStore {
   claimNextAgentRun(input: ClaimAgentRunInput): Promise<AgentRun | undefined>;
   heartbeatAgentRun(input: HeartbeatAgentRunInput): Promise<AgentRun>;
   requestAgentRunCancellation(input: RequestAgentRunCancellationInput): Promise<AgentRun>;
+  /**
+   * The runs that have not ended, a cancelling one included: those a user started, or those
+   * in the Conversations of a workspace.
+   */
+  listAgentRunsInProgress(
+    input: { clientInstanceId: ClientInstanceId } & (
+      { ownerUserId: string } | { collaborationWorkspaceId: CollaborationWorkspaceId }
+    )
+  ): Promise<AgentRun[]>;
   appendClaimedRunObservation(input: AppendClaimedRunObservationInput): Promise<RunObservation>;
   assertClaimedAgentRun(input: AssertClaimedAgentRunInput): Promise<AgentRun>;
+  /**
+   * Stores a message of the run under the Conversation row lock. Refused when the Conversation
+   * is no longer active, or when the user who started the run or the workspace of the
+   * Conversation is being deleted: nothing is written back after an erasure began.
+   */
   appendClaimedAgentRunMessage(input: AppendClaimedAgentRunMessageInput): Promise<ChatMessage>;
   recoverExpiredAgentRuns(input: RecoverExpiredAgentRunsInput): Promise<AgentRun[]>;
 }

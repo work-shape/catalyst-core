@@ -157,10 +157,15 @@ export interface ConversationStore extends ConversationHistoryStore {
    * statement. False when it carries another title or is not active.
    */
   replaceConversationTitle(input: ReplaceConversationTitleInput): Promise<boolean>;
+  /**
+   * Deletes an active Conversation. With `inCollaborationWorkspaceId` only while it is in
+   * that workspace: one that was moved away meanwhile is answered as not available.
+   */
   deleteConversation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     deletedAt: ISODateString;
+    inCollaborationWorkspaceId?: CollaborationWorkspaceId;
   }): Promise<Conversation>;
 }
 

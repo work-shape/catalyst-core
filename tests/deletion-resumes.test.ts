@@ -4,78 +4,21 @@ import {
   HmacSessionTokenAuthAdapter,
   HmacSessionTokenIssuer,
   IdentityResolvingAuthAdapter,
-  createStandaloneAuthRuntime,
-  type AuthAdapter
+  createStandaloneAuthRuntime
 } from "@vivd-catalyst/auth";
 import { DELETION_MAX_ATTEMPTS } from "@vivd-catalyst/chat-server";
-import { asUserId, type AuthenticatedUser, type UserRole } from "@vivd-catalyst/core";
+import { asUserId } from "@vivd-catalyst/core";
 import { createConversationCleanupFixture } from "./support/conversation-cleanup-fixture";
-import { usePostgresSuite, type PostgresSuite } from "./support/postgres-suite";
-import { createTestInstance, getTestJobs } from "./support/test-instance";
-
-const DELETION_KINDS = ["account.delete", "workspace.delete"];
-
-/**
- * The cleanup fixture with a server that resolves every request against the stored user, as an
- * instance does: a user who is closed in the database is refused whatever the request carries.
- */
-async function arrange(db: PostgresSuite, label: string) {
-  const fixture = await createConversationCleanupFixture(db, label);
-  const known = new Map<string, AuthenticatedUser>();
-  const headerAdapter: AuthAdapter = {
-    id: "test-header",
-    credentialMode: "ambient",
-    async authenticate(request) {
-      const header = request.headers["x-dev-user-id"];
-      const user = known.get((Array.isArray(header) ? header[0] : header) ?? "");
-      if (!user) throw new Error("The request names no known test user");
-      return { ...user, scopes: ["*"] };
-    }
-  };
-  const api = await createTestInstance({
-    server: {
-      ...fixture.options,
-      authAdapter: new IdentityResolvingAuthAdapter(headerAdapter, db.store.users)
-    }
-  });
-  const jobs = () =>
-    db.sql<Array<{ kind: string; status: string; attempts: number }>>`
-      select kind, status, attempts from platform_jobs
-      where client_instance_id = ${fixture.clientInstanceId} and kind = any(${DELETION_KINDS})
-      order by created_at, id`.then((rows) => rows.map((row) => ({ ...row })));
-  return {
-    ...fixture,
-    api,
-    jobs,
-    async createUser(name: string, roles: UserRole[] = ["user"]) {
-      const user = await fixture.createUser(name, roles);
-      known.set(user.id, user);
-      return user;
-    },
-    /** One attempt of every queued deletion job, without waiting for its backoff. */
-    async runDeletionJobs() {
-      await db.sql`
-        update platform_jobs set run_after = now()
-        where client_instance_id = ${fixture.clientInstanceId}
-          and kind = any(${DELETION_KINDS}) and status = 'queued'`;
-      await getTestJobs(api).runDue();
-    },
-    async userRow(user: AuthenticatedUser) {
-      const rows = await db.sql<Array<{ marked: boolean }>>`
-        select deletion_requested_at is not null as marked from product_users
-        where id = ${user.id}`;
-      return rows.map((row) => ({ ...row }));
-    },
-    signedIn: (user: AuthenticatedUser) => api.call("me.get", {}, user.id)
-  };
-}
+import { arrangeDeletion } from "./support/deletion-fixture";
+import { usePostgresSuite } from "./support/postgres-suite";
+import { createTestInstance } from "./support/test-instance";
 
 describe("a deletion that finishes by itself", () => {
   const db = usePostgresSuite("deletionresumes");
 
   // Fails without the change: the request answered 409 and nothing took the deletion up.
   it("closes an account at once and removes it in its job when the object store fails", async () => {
-    const t = await arrange(db, "account");
+    const t = await arrangeDeletion(db, "account");
     const superadmin = await t.createUser("superadmin", ["user", "admin", "superadmin"]);
     const leaving = await t.createUser("leaving");
     const joined = await t.createSharedWorkspace(superadmin, "Joined");
@@ -152,7 +95,7 @@ describe("a deletion that finishes by itself", () => {
 
   // Fails without the change: the request answered 409 and the workspace stayed open.
   it("closes a workspace at once and removes it in its job when the object store fails", async () => {
-    const t = await arrange(db, "workspace");
+    const t = await arrangeDeletion(db, "workspace");
     const owner = await t.createUser("owner");
     const workspace = await t.createSharedWorkspace(owner, "Shared");
     const other = await t.createSharedWorkspace(owner, "Other");
@@ -228,7 +171,7 @@ describe("a deletion that finishes by itself", () => {
 
   // Fails without the change: no request and deleted event pair, and no check for a job row.
   it("completes in the request and leaves no job when nothing is pending", async () => {
-    const t = await arrange(db, "immediate");
+    const t = await arrangeDeletion(db, "immediate");
     const owner = await t.createUser("owner");
     const leaving = await t.createUser("leaving");
     const workspace = await t.createSharedWorkspace(owner, "Shared");
@@ -264,7 +207,7 @@ describe("a deletion that finishes by itself", () => {
 
   // Fails without the change: the repeated request answered 409 and there was no job.
   it("answers a repeated request the same way and enqueues nothing", async () => {
-    const t = await arrange(db, "repeat");
+    const t = await arrangeDeletion(db, "repeat");
     const superadmin = await t.createUser("superadmin", ["user", "admin", "superadmin"]);
     const removed = await t.createUser("removed");
     const workspace = await t.createSharedWorkspace(superadmin, "Shared");
@@ -300,7 +243,7 @@ describe("a deletion that finishes by itself", () => {
 
   // Fails without the change: there was no job to end, no stalled event and no closed user.
   it("ends dead after the last attempt, records it once and keeps the user closed", async () => {
-    const t = await arrange(db, "stalled");
+    const t = await arrangeDeletion(db, "stalled");
     const superadmin = await t.createUser("superadmin", ["user", "admin", "superadmin"]);
     const removed = await t.createUser("removed");
     const conversation = await t.createConversation(removed, "own");
@@ -349,7 +292,7 @@ describe("a deletion that finishes by itself", () => {
 
   // Fails without the change: no request waited for the workspace, and both were accepted.
   it("accepts one of two owners who delete their accounts at the same moment", async () => {
-    const t = await arrange(db, "two_owners");
+    const t = await arrangeDeletion(db, "two_owners");
     const first = await t.createUser("first-owner");
     const second = await t.createUser("second-owner");
     const workspace = await t.createSharedWorkspace(first, "Shared");
@@ -364,16 +307,7 @@ describe("a deletion that finishes by itself", () => {
       (tx) => tx`select id from collaboration_workspaces where id = ${workspace.id} for update`
     );
     const requests = [first, second].map((owner) => t.api.call("me.delete", {}, owner.id));
-    const deadline = Date.now() + 15_000;
-    for (;;) {
-      const [row] = await db.sql<Array<{ waiting: number }>>`
-        select count(*)::int as waiting from pg_locks blocked
-        join pg_stat_activity waiter on waiter.pid = blocked.pid
-        where not blocked.granted and waiter.application_name = ${db.first}`;
-      if ((row?.waiting ?? 0) >= 2) break;
-      if (Date.now() > deadline) throw new Error("The two requests never waited for the workspace");
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await t.untilWaitingForLock(2);
     await held.commit();
 
     const answers = await Promise.all(requests);
@@ -392,7 +326,7 @@ describe("a deletion that finishes by itself", () => {
 
   // Fails without the change: the dead job was removed with the others of its age.
   it("keeps the dead job of a stalled deletion until its subject is gone", async () => {
-    const t = await arrange(db, "prune");
+    const t = await arrangeDeletion(db, "prune");
     const superadmin = await t.createUser("superadmin", ["user", "admin", "superadmin"]);
     const removed = await t.createUser("removed");
     await t.createData(await t.createConversation(removed, "own"));

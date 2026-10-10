@@ -26,6 +26,7 @@ import {
   type ClaimArtifactPreviewJobInput,
   type ClientInstanceId,
   type CollaborationWorkspaceId,
+  type UserId,
   type CompleteClaimedArtifactPreviewJobInput,
   type ConversationAttachment,
   type ConversationAttachmentId,
@@ -1104,6 +1105,7 @@ class PostgresPlatformFileStore implements PlatformFileStore {
   async listConversationsPendingObjectCleanup(input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId?: CollaborationWorkspaceId;
+    createdByUserId?: UserId;
     limit: number;
   }): Promise<ConversationId[]> {
     if (input.limit <= 0) {
@@ -1115,7 +1117,9 @@ class PostgresPlatformFileStore implements PlatformFileStore {
         drizzleSql`(${conversationsPendingCleanup({
           clientInstanceId: input.clientInstanceId,
           collaborationWorkspaceId: input.collaborationWorkspaceId,
-          executionWorkspaces: input.collaborationWorkspaceId !== undefined
+          createdByUserId: input.createdByUserId,
+          executionWorkspaces:
+            input.collaborationWorkspaceId !== undefined || input.createdByUserId !== undefined
         })}) pending`
       )
       .orderBy(drizzleSql`pending.deleted_at asc`, drizzleSql`pending.id asc`)

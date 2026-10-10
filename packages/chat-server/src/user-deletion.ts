@@ -1,6 +1,7 @@
 import {
   AppError,
   type AuditActor,
+  type CollaborationWorkspaceId,
   type ConversationId,
   type PlatformStores,
   type UserId
@@ -30,9 +31,9 @@ export async function requireNoSoleOwnedSharedWorkspace(
   options: Pick<ChatServerOptions, "clientInstanceId">,
   userId: UserId
 ): Promise<void> {
-  await stores.workspaces.lockOwnedSharedWorkspaces({
+  await stores.workspaces.lockWorkspacesForOwnerChange({
     clientInstanceId: options.clientInstanceId,
-    userId
+    ownedByUserId: userId
   });
   const workspaces = await stores.workspaces.listWorkspacesForUser({
     clientInstanceId: options.clientInstanceId,
@@ -135,7 +136,7 @@ export async function cleanupProductUserData(input: {
     const deletedAt = new Date().toISOString();
     const deletion = await deleteConversationAggregate(options, conversation.id, deletedAt);
     totals.conversationCount += 1;
-    // A cleanup that is still pending is finished and audited by the retention job.
+    // A cleanup that is still pending is retried by the next pass and by the retention job.
     if (deletion.cleanup === "complete") {
       totals.attachmentCount += deletion.attachmentCount;
       totals.fileCount += deletion.fileCount;
@@ -177,12 +178,14 @@ export async function cleanupProductUserData(input: {
 export async function deleteConversationAggregate(
   options: ChatServerOptions,
   conversationId: ConversationId,
-  deletedAt: string
+  deletedAt: string,
+  inCollaborationWorkspaceId?: CollaborationWorkspaceId
 ): Promise<ConversationDataCleanupOutcome> {
   await options.stores.conversations.deleteConversation({
     clientInstanceId: options.clientInstanceId,
     conversationId,
-    deletedAt
+    deletedAt,
+    inCollaborationWorkspaceId
   });
   return attemptConversationDataCleanup(options, conversationId, deletedAt);
 }
