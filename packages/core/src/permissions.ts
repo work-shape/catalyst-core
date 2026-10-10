@@ -311,19 +311,42 @@ function entryCovers(entry: AccessEntry, resource: AccessResource | undefined): 
   }
 }
 
+/** What one action on one resource comes to, with the entry that decided it. */
+export interface AccessExplanation {
+  decision: AccessDecision;
+  /** The covering deny that refuses, or the first covering allow. Absent when nothing covers. */
+  entry?: AccessEntry;
+}
+
+/**
+ * Decides one registered action over a holder's entries: any covering deny refuses, any
+ * covering allow permits, otherwise nothing grants it. The evaluator decides with this, and so
+ * does a screen that explains a decision from the entries of `permissions.effective`.
+ */
+export function explainAccessEntries(
+  entries: readonly AccessEntry[],
+  action: string,
+  resource: AccessResource | undefined
+): AccessExplanation {
+  const covering = entries.filter(
+    (entry) => entry.action === action && entryCovers(entry, resource)
+  );
+  const deny = covering.find((entry) => entry.effect === "deny");
+  if (deny) {
+    return { decision: { allowed: false, reason: "denied" }, entry: deny };
+  }
+  const allow = covering.find((entry) => entry.effect === "allow");
+  return allow
+    ? { decision: { allowed: true, source: allow.source }, entry: allow }
+    : { decision: { allowed: false, reason: "no_grant" } };
+}
+
 function evaluateRegisteredAction(
   entries: readonly AccessEntry[],
   action: string,
   resource: AccessResource | undefined
 ): AccessDecision {
-  const covering = entries.filter(
-    (entry) => entry.action === action && entryCovers(entry, resource)
-  );
-  if (covering.some((entry) => entry.effect === "deny")) {
-    return { allowed: false, reason: "denied" };
-  }
-  const allow = covering.find((entry) => entry.effect === "allow");
-  return allow ? { allowed: true, source: allow.source } : { allowed: false, reason: "no_grant" };
+  return explainAccessEntries(entries, action, resource).decision;
 }
 
 /**
@@ -417,6 +440,15 @@ export interface NamespaceUsage extends Namespace {
   assetCount: number;
 }
 
+/** The asset an asset-scoped grant row names. */
+export interface GrantScopeAsset {
+  id: string;
+  kind: string;
+  name: string;
+  /** False once the asset was deleted. Its deny rows stay and apply when the name returns. */
+  active: boolean;
+}
+
 /** The store behind grants and Namespaces: the evaluator's port plus the administration writes. */
 export interface AccessAdministrationStore extends AccessStore {
   /**
@@ -463,6 +495,14 @@ export interface AccessAdministrationStore extends AccessStore {
     clientInstanceId: ClientInstanceId;
     assetId: string;
   }): Promise<{ id: string; kind: string; name: string } | undefined>;
+  /**
+   * The agents and skills behind asset scope ids, deleted ones included: a deny outlives the
+   * asset it names, and whoever lists it has to say which name it still refuses.
+   */
+  listGrantScopeAssets(input: {
+    clientInstanceId: ClientInstanceId;
+    assetIds: readonly string[];
+  }): Promise<GrantScopeAsset[]>;
 }
 
 export function resolveEffectivePermissions(

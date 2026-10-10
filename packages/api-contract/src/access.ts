@@ -22,6 +22,11 @@ export const permissionGrantSchema = z.object({
   scopeId: z.string().optional(),
   /** The registered prefix, for Namespace scope. */
   namespace: z.string().optional(),
+  /**
+   * The asset behind `scopeId`, for asset scope. A deny stays when its asset is deleted and
+   * applies again when the name is created again; `active` is false in between.
+   */
+  scopeAsset: z.object({ kind: z.string(), name: z.string(), active: z.boolean() }).optional(),
   /** Left out when the user who wrote the row is hidden from the caller. */
   grantedBy: z.string().optional(),
   createdAt: timestampSchema
@@ -120,3 +125,10 @@ export const updateNamespaceRequestSchema = z.object({
   allowedToolNames: namespaceAllowlistSchema.optional(),
   allowedModelBindingIds: namespaceAllowlistSchema.optional()
 });
+
+export type PermissionGrantRow = z.infer<typeof permissionGrantSchema>;
+export type CreatePermissionGrantRequest = z.input<typeof createPermissionGrantRequestSchema>;
+export type EffectivePermissions = z.infer<typeof effectivePermissionsSchema>;
+export type NamespaceWithUsage = z.infer<typeof namespaceUsageSchema>;
+export type CreateNamespaceRequest = z.input<typeof createNamespaceRequestSchema>;
+export type UpdateNamespaceRequest = z.input<typeof updateNamespaceRequestSchema>;

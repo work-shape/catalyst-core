@@ -443,6 +443,52 @@ describe("who may write a grant, and what a grant may say", () => {
   });
 });
 
+describe("what a grant row says about the asset it names", () => {
+  it("names the asset of an asset row, and says when a deny outlived it", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    await t.expectOk(t.admin.id, "config_assets.put", {
+      params: { kind: "skill", name: "kai-secret" },
+      payload: { config: skill("kai-secret") }
+    });
+    const assetId = await t.assetId("skill", "kai-secret");
+    const granted = await t.expectOk(t.admin.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: "skill.read",
+        scopeKind: "asset",
+        scopeId: assetId,
+        effect: "deny"
+      }
+    });
+    const scopeAsset = z.object({
+      id: z.string(),
+      scopeAsset: z.object({ kind: z.string(), name: z.string(), active: z.boolean() }).optional()
+    });
+    expect(scopeAsset.parse(granted.json()).scopeAsset).toEqual({
+      kind: "skill",
+      name: "kai-secret",
+      active: true
+    });
+    await t.grant(t.kai.id, "skill.write", { namespace: "kai-" });
+
+    await t.expectOk(t.admin.id, "config_assets.delete", {
+      params: { kind: "skill", name: "kai-secret" },
+      payload: {}
+    });
+
+    const listed = z
+      .object({ items: z.array(scopeAsset) })
+      .parse((await t.expectOk(t.admin.id, "permissions.list")).json());
+    // The deny is still listed and says which name it refuses; the Namespace row names no asset.
+    expect(listed.items.map((row) => row.scopeAsset)).toEqual(
+      expect.arrayContaining([{ kind: "skill", name: "kai-secret", active: false }, undefined])
+    );
+    expect(listed.items).toHaveLength(2);
+  });
+});
+
 describe("tenant and holder boundaries of the access store", () => {
   it("loads no row and no Namespace of another client instance", async () => {
     const t = await setup();

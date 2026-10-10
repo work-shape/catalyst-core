@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   AppError,
   asClientInstanceId,
@@ -320,6 +320,32 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
         )
         .limit(1);
       return row;
+    },
+
+    async listGrantScopeAssets(input) {
+      if (input.assetIds.length === 0) {
+        return [];
+      }
+      const rows = await db
+        .select({
+          id: configAssets.id,
+          kind: configAssets.kind,
+          name: configAssets.name,
+          status: configAssets.status
+        })
+        .from(configAssets)
+        .where(
+          and(
+            eq(configAssets.clientInstanceId, input.clientInstanceId),
+            inArray(configAssets.id, [...new Set(input.assetIds)])
+          )
+        );
+      return rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        name: row.name,
+        active: row.status === "active"
+      }));
     }
   };
 }

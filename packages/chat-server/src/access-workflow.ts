@@ -11,6 +11,7 @@ import {
   type AccessHolder,
   type ActorAccess,
   type AuthenticatedUser,
+  type GrantScopeAsset,
   type JsonObject,
   type Namespace,
   type NamespaceUsage,
@@ -22,6 +23,11 @@ import {
 import type { ChatServerOptions } from "./types";
 
 type AccessCallContext = Pick<RuntimeCallContext, "correlationId">;
+
+export interface GrantViewContext {
+  hiddenUserIds: ReadonlySet<string>;
+  scopeAssets: ReadonlyMap<string, GrantScopeAsset>;
+}
 
 interface GrantCommand {
   holderKind: PermissionGrant["holderKind"];
@@ -340,6 +346,27 @@ export class AccessWorkflow {
       clientInstanceId: this.options.clientInstanceId
     });
     return new Set(users.filter((user) => isSuperadmin(user)).map((user) => String(user.id)));
+  }
+
+  /**
+   * What grant rows are shown with: the users the caller is not shown, and the assets behind
+   * the asset scopes of these rows.
+   */
+  async grantViewContext(
+    actor: AuthenticatedUser,
+    grants: readonly PermissionGrant[]
+  ): Promise<GrantViewContext> {
+    const assetIds = grants
+      .filter((grant) => grant.scopeKind === "asset" && grant.scopeId !== undefined)
+      .map((grant) => grant.scopeId ?? "");
+    const [hiddenUserIds, assets] = await Promise.all([
+      this.hiddenUserIds(actor),
+      this.options.stores.access.listGrantScopeAssets({
+        clientInstanceId: this.options.clientInstanceId,
+        assetIds
+      })
+    ]);
+    return { hiddenUserIds, scopeAssets: new Map(assets.map((asset) => [asset.id, asset])) };
   }
 
   private async findUser(userId: string): Promise<UserRecord | undefined> {

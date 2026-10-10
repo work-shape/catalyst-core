@@ -1,6 +1,6 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import type { Namespace, PermissionGrant } from "@vivd-catalyst/core";
-import { AccessWorkflow } from "../access-workflow";
+import { AccessWorkflow, type GrantViewContext } from "../access-workflow";
 import type { Route } from "../http/route";
 import { requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
@@ -9,19 +9,21 @@ import type { ChatServerOptions } from "../types";
 export function registerAccessRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AccessWorkflow(options);
 
-  route(apiOperations["permissions.grant"], async ({ user, context, body }) =>
-    grantView(await workflow.grant(user, context, body), await workflow.hiddenUserIds(user))
-  );
+  route(apiOperations["permissions.grant"], async ({ user, context, body }) => {
+    const grant = await workflow.grant(user, context, body);
+    return grantView(grant, await workflow.grantViewContext(user, [grant]));
+  });
 
-  route(apiOperations["permissions.revoke"], async ({ user, context, params }) =>
-    grantView(
-      await workflow.revoke(user, context, requirePathParam(params.grantId, "Missing grant id")),
-      await workflow.hiddenUserIds(user)
-    )
-  );
+  route(apiOperations["permissions.revoke"], async ({ user, context, params }) => {
+    const grant = await workflow.revoke(
+      user,
+      context,
+      requirePathParam(params.grantId, "Missing grant id")
+    );
+    return grantView(grant, await workflow.grantViewContext(user, [grant]));
+  });
 
   route(apiOperations["permissions.list"], async ({ user, query, paging }) => {
-    const hidden = await workflow.hiddenUserIds(user);
     const grants = await workflow.listGrants(user, {
       holderKind: query.holderKind,
       holderId: query.holderId,
@@ -29,7 +31,8 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
       scopeKind: query.scopeKind,
       page: paging
     });
-    return grants.map((grant) => grantView(grant, hidden));
+    const view = await workflow.grantViewContext(user, grants);
+    return grants.map((grant) => grantView(grant, view));
   });
 
   route(apiOperations["permissions.effective"], ({ user, access, query }) =>
@@ -71,10 +74,19 @@ function prefixParam(params: { prefix: string }): string {
   return requirePathParam(params.prefix, "Missing Namespace prefix");
 }
 
-/** `grantedBy` is left out when the caller is not shown the user who wrote the row. */
-function grantView(grant: PermissionGrant, hidden: ReadonlySet<string>) {
+/**
+ * `grantedBy` is left out when the caller is not shown the user who wrote the row. An asset
+ * scope carries the asset it names, also after that asset was deleted.
+ */
+function grantView(grant: PermissionGrant, context: GrantViewContext) {
   const { clientInstanceId: _clientInstanceId, grantedBy, ...view } = grant;
-  return hidden.has(grantedBy) ? view : { ...view, grantedBy };
+  const asset =
+    grant.scopeKind === "asset" ? context.scopeAssets.get(grant.scopeId ?? "") : undefined;
+  return {
+    ...view,
+    ...(asset ? { scopeAsset: { kind: asset.kind, name: asset.name, active: asset.active } } : {}),
+    ...(context.hiddenUserIds.has(grantedBy) ? {} : { grantedBy })
+  };
 }
 
 /**

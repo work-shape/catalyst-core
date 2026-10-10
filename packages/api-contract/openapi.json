@@ -14176,6 +14176,25 @@
           "namespace": {
             "type": "string"
           },
+          "scopeAsset": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "active"
+            ]
+          },
           "grantedBy": {
             "type": "string"
           },
