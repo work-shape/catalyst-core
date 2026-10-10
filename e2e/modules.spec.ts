@@ -98,31 +98,29 @@ test("an operator reads the modules of the instance, in English and in German", 
 // and everything else is the product: the stored agent, the editor, the save, the job row.
 // tests/module-off.test.ts holds the server's side with a module that owns both.
 
-const exportSchema = z.object({
-  version: z.number(),
-  defaultAgentName: z.string().optional(),
-  agents: z.array(z.record(z.string(), z.unknown())),
-  skills: z.array(z.record(z.string(), z.unknown()))
-});
+const exportSchema = z.object({ agents: z.array(z.record(z.string(), z.unknown())) });
 const storedAgentSchema = z.object({ config: z.object({ toolNames: z.array(z.string()) }) });
 
 test("an admin removes a tool of a module that is off from an agent and saves", async ({
   page
 }) => {
+  test.setTimeout(60_000);
   const staleTool = "demo.weather_forecast";
-  const agentUrl = `${apiBaseUrl}/api/v1/instance/config/assets/agent/research_assistant`;
+  // An agent of this test alone: other files write agents and skills while this one runs.
+  const agentName = "modules_e2e_agent";
+  const agentUrl = `${apiBaseUrl}/api/v1/instance/config/assets/agent/${agentName}`;
   await signIn(page);
-  const original = exportSchema.parse(
+  const exported = exportSchema.parse(
     await (await page.request.get(`${apiBaseUrl}/api/v1/instance/config/export`)).json()
   );
-  const agent = original.agents.find((candidate) => candidate.name === "research_assistant");
-  expect(agent).toBeDefined();
+  const template = exported.agents.find((candidate) => candidate.name === "research_assistant");
+  expect(template).toBeDefined();
+  // The agent names the tool, as it did before the module was turned off.
+  const stored = await requestWithOrigin(page, "put", agentUrl, {
+    data: { config: { ...template, name: agentName, toolNames: [staleTool] } }
+  });
+  expect(stored.ok(), await stored.text()).toBe(true);
   try {
-    // The agent names the tool, as it did before the module was turned off.
-    const stored = await requestWithOrigin(page, "put", agentUrl, {
-      data: { baseVersion: original.version, config: { ...agent, toolNames: [staleTool] } }
-    });
-    expect(stored.ok(), await stored.text()).toBe(true);
     await page.route(
       ({ pathname }) => pathname === "/api/v1/instance/config/assets",
       async (route) => {
@@ -147,9 +145,10 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     await page.goto("/admin/config");
     await page
       .getByRole("region", { name: "Agents", exact: true })
-      .getByRole("button", { name: "research_assistant All workspaces", exact: true })
+      .getByRole("button", { name: `${agentName} All workspaces`, exact: true })
       .click();
-    const tools = page.locator("form").getByRole("group", { name: "Tools", exact: true });
+    const form = page.locator("form");
+    const tools = form.getByRole("group", { name: "Tools", exact: true });
     // The tool is not on offer, and the agent's reference to it is there to see and to remove.
     await expect(tools.getByLabel(staleTool, { exact: true })).toHaveCount(0);
     const stale = tools.locator(`[data-unavailable-option="${staleTool}"]`);
@@ -162,28 +161,28 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     await stale.getByRole("button", { name: "Remove" }).click();
     await expect(stale).toHaveCount(0);
     await expect(tools).toContainText("0 selected");
-    await page.locator("form").getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect
-      .poll(
-        async () =>
-          storedAgentSchema.parse(await (await page.request.get(agentUrl)).json()).config.toolNames
-      )
-      .toEqual([]);
-  } finally {
-    const restored = await requestWithOrigin(
-      page,
-      "post",
-      `${apiBaseUrl}/api/v1/instance/config/import`,
-      {
-        data: {
-          baseVersion: null,
-          defaultAgentName: original.defaultAgentName,
-          agents: original.agents,
-          skills: original.skills
-        }
+    // A write of another file between the load and the save is a conflict: the editor loads
+    // the latest, and the reference is removed and saved again.
+    const conflict = page.getByRole("dialog", { name: "Configuration changed on the server" });
+    await expect(async () => {
+      if (await conflict.isVisible()) {
+        await conflict.getByRole("button", { name: "Reload latest", exact: true }).click();
+        await expect(conflict).toBeHidden();
       }
-    );
-    expect(restored.ok()).toBe(true);
+      if (await stale.isVisible()) await stale.getByRole("button", { name: "Remove" }).click();
+      await form.getByRole("button", { name: "Save changes", exact: true }).click();
+      await expect
+        .poll(
+          async () =>
+            storedAgentSchema.parse(await (await page.request.get(agentUrl)).json()).config
+              .toolNames,
+          { timeout: 3_000 }
+        )
+        .toEqual([]);
+    }).toPass({ timeout: 30_000 });
+  } finally {
+    const deleted = await requestWithOrigin(page, "post", `${agentUrl}/delete`, { data: {} });
+    expect(deleted.ok(), await deleted.text()).toBe(true);
   }
 });
 
