@@ -7,15 +7,17 @@ import { scanProductSource } from "./support/source-scan";
 describe("names and paths in product source", () => {
   const scanned = scanProductSource(resolve(import.meta.dirname, ".."));
 
-  it("scans scripts, docs and its own test while allowing the demo client", async () => {
+  it("scans scripts, docs, the deployment kit and its own test while allowing the demo client", async () => {
     const root = await mkdtemp(join(tmpdir(), "source-names-"));
-    const customerNames = ["muster" + "bau", "example" + "tax"];
+    const customerNames = ["muster" + "bau", "example" + "tax", "muster" + "finanz"];
     const demoTool = '"' + "demo" + '.example"';
     const home = ["", "Users", "example", "file"].join("/");
     const windowsHome = ["C:", "Users", "example", "file"].join("\\");
     const files = {
       "packages/example/scripts/fixture.mjs": `${customerNames[0]?.toUpperCase()} ${demoTool} ${home} ${windowsHome} ${windowsHome.replaceAll("\\", "\\\\")}`,
-      "packages/docs/src/content/guide.md": customerNames[1] ?? "",
+      "packages/docs/src/content/guide.md": `${customerNames[1] ?? ""} \`${"demo"}.yaml\``,
+      "packages/deployment-kit/bin/deploy": `${customerNames[2] ?? ""} ${home}`,
+      "packages/deployment-kit/host/unit.service": demoTool,
       "packages/example/src/routes.ts": '"/api/users/example"',
       "clients/demo/src/main.ts": demoTool,
       "tests/source-names.test.ts": customerNames[1] ?? ""
@@ -26,9 +28,12 @@ describe("names and paths in product source", () => {
         await writeFile(join(root, path), text);
       }
       const result = await scanProductSource(root);
-      expect(result.customerNames).toHaveLength(3);
-      expect(result.demoToolNames).toEqual([`packages/example/scripts/fixture.mjs ${demoTool.slice(0, -1)}`]);
-      expect(result.personalPaths).toHaveLength(3);
+      expect(result.customerNames).toHaveLength(4);
+      expect(result.demoToolNames).toEqual([
+        `packages/deployment-kit/host/unit.service ${demoTool.slice(0, -1)}`,
+        `packages/example/scripts/fixture.mjs ${demoTool.slice(0, -1)}`
+      ]);
+      expect(result.personalPaths).toHaveLength(4);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

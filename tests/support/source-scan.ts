@@ -4,8 +4,13 @@ import { join, relative } from "node:path";
 const SOURCE_FILE = /\.(?:ts|tsx|mts|js|mjs)$/u;
 const PRODUCT_TEXT_FILE = /\.(?:ts|tsx|mts|js|mjs|md|mdx|yaml|yml|json|py|sh)$/u;
 // Split customer names so the guard can scan its own test without an exemption.
-const CUSTOMER_NAMES = ["muster" + "bau", "example" + "tax"];
-const DEMO_TOOL_NAME = /["'`]demo\.[A-Za-z0-9_]+/gu;
+const CUSTOMER_NAMES = ["muster" + "bau", "muster" + "finanz", "example" + "tax"];
+/** A quoted name that starts with `demo.`, unless it is a file name such as a config file. */
+const DEMO_TOOL_NAME = /["'`]demo\.(?!(?:ya?ml|json|md|ts|tsx|js|mjs|sh)\b)[A-Za-z0-9_]+/gu;
+/** The deployment kit keeps its source outside `src`, partly in files without an extension. */
+const DEPLOYMENT_KIT = "packages/deployment-kit";
+const DEPLOYMENT_KIT_FOLDERS = ["lib", "host", "verify", "bin", "dev"];
+const ANY_FILE = /(?:)/u;
 const DEMO_PERMISSION = /["'`]demo-tools["'`]/gu;
 const PERSONAL_PATH = /\/Users\/|[A-Z]:\\{1,2}Users\\{1,2}/gu;
 const GENERATED_FILE = /\.gen\.ts$/u;
@@ -58,7 +63,7 @@ export interface SourceScan {
 /**
  * Reads the product source of a repository: `src` and `tools` of every package and client.
  * Name and personal-path guards also read package scripts and documentation, client widgets,
- * and the name guard itself. Customer names are assembled from parts, not exempted.
+ * the deployment kit and the name guard itself. Customer names are assembled from parts, not exempted.
  * A provider's address belongs in its adapter and a secret is read by the resolver, so both
  * are searched for everywhere else.
  */
@@ -118,6 +123,13 @@ export async function scanProductSource(repositoryRoot: string): Promise<SourceS
         ])
       )
     ).flat(),
+    ...(
+      await Promise.all(
+        DEPLOYMENT_KIT_FOLDERS.map((folder) =>
+          sourceFiles(join(repositoryRoot, DEPLOYMENT_KIT, folder), ANY_FILE)
+        )
+      )
+    ).flat(),
     ...(await sourceFiles(
       join(repositoryRoot, "tests"),
       /^(?:source-names\.test|source-scan)\.ts$/u
@@ -137,7 +149,10 @@ export async function scanProductSource(repositoryRoot: string): Promise<SourceS
         scan.demoToolNames.push(`${path} ${match[0]}`);
       }
     }
-    if (/^packages\/[^/]+\/(?:src|scripts)\//u.test(path)) {
+    if (
+      /^packages\/[^/]+\/(?:src|scripts)\//u.test(path) ||
+      DEPLOYMENT_KIT_FOLDERS.some((folder) => path.startsWith(`${DEPLOYMENT_KIT}/${folder}/`))
+    ) {
       for (const match of text.matchAll(PERSONAL_PATH)) {
         scan.personalPaths.push(`${path} ${match[0]}`);
       }
