@@ -2,9 +2,16 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const compose = readFileSync(resolve(root, "clients/demo/docker-compose.yml"), "utf8");
+const packageManifestSchema = z.object({
+  name: z.string(),
+  dependencies: z.record(z.string(), z.string()).optional(),
+  peerDependencies: z.record(z.string(), z.string()).optional(),
+  optionalDependencies: z.record(z.string(), z.string()).optional()
+});
 
 function serviceBlock(service: string): string {
   const block = compose.split(`\n  ${service}:\n`)[1]?.split(/\n  [\w-]+:|\n\S/u)[0];
@@ -15,17 +22,16 @@ function serviceBlock(service: string): string {
 describe("demo Compose watch", () => {
   it("syncs every workspace package in the frontend dependency closure", () => {
     const packages = new Map(
-      readdirSync(resolve(root, "packages")).map((directory) => {
-        const manifest = JSON.parse(
-          readFileSync(resolve(root, "packages", directory, "package.json"), "utf8")
-        ) as {
-          name: string;
-          dependencies?: Record<string, string>;
-          peerDependencies?: Record<string, string>;
-          optionalDependencies?: Record<string, string>;
-        };
-        return [manifest.name, { directory, manifest }] as const;
-      })
+      readdirSync(resolve(root, "packages")).map(
+        (
+          directory
+        ): [string, { directory: string; manifest: z.infer<typeof packageManifestSchema> }] => {
+          const manifest = packageManifestSchema.parse(
+            JSON.parse(readFileSync(resolve(root, "packages", directory, "package.json"), "utf8"))
+          );
+          return [manifest.name, { directory, manifest }];
+        }
+      )
     );
     // Demo's browser entry, widgets and Vite plugin use chat-ui and ui;
     // api-client is also an explicit root for the shared frontend stack.
