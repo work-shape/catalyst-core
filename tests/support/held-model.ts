@@ -50,6 +50,8 @@ export function createHeldModel(): { capability: ClientInstanceCapability; relea
         }
       });
     },
+    // It runs in the test's own process: there is nothing to reach.
+    check: async () => ({ ok: true }),
     describe() {
       return {};
     }
