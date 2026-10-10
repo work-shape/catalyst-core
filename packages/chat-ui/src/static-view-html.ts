@@ -106,8 +106,14 @@ function isInertCss(value: string): boolean {
   );
 }
 
+/**
+ * Whether an image source is a raster image held in the address itself. An SVG image is
+ * refused, as is every other `data:` type: shown as an image it loads nothing, but opened in a
+ * tab of its own from the context menu it is a document, and its links work there, outside the
+ * shell. `blob:` is refused as well, since a view that runs no script cannot make one.
+ */
 function isEmbeddedImage(address: string): boolean {
-  return /^\s*(?:data|blob):/iu.test(address);
+  return /^\s*data:image\/(?:png|jpeg|gif|webp)(?:;base64)?,/iu.test(address);
 }
 
 function escapeText(text: string): string {

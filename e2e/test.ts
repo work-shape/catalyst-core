@@ -119,6 +119,8 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/u,
     tests: [
       "and no script of another host that borrows the hash of an inline script (private_hydrated_view)",
+      "it keeps an image only when it is a raster image held in its address",
+      "it writes nothing that reads differently the second time",
       "a view with private rows reaches no other host through a click on a link",
       "a view with private rows reaches no other host through a click on a download link",
       "a view with private rows reaches no other host through a Control or Meta click on a link",

