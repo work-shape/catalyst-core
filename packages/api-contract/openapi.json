@@ -17533,7 +17533,6 @@
           }
         },
         "required": [
-          "namespace",
           "items"
         ]
       },

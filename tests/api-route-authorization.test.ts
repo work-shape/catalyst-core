@@ -147,7 +147,11 @@ describe("every operation of the catalog", () => {
     async (entry) => {
       const { name } = entry;
       const { scope } = entry.operation;
-      const scopes = FIRST_PARTY_AUTH_SCOPES.filter((other) => other !== "*" && other !== scope);
+      // A key for release sync passes the scope of `assets.sync`, and of that operation alone.
+      const further = name === "assets.sync" ? ["config_assets:release"] : [];
+      const scopes = FIRST_PARTY_AUTH_SCOPES.filter(
+        (other) => other !== "*" && other !== scope && !further.includes(other)
+      );
       const response = await call(name, asCaller({ ...everyRight, scopes }));
       expect(response.statusCode).toBe(403);
       expect(response.json()).toEqual({

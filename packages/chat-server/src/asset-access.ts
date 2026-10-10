@@ -5,7 +5,8 @@ import {
   type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
-  type OperationAuthorization
+  type OperationAuthorization,
+  type OperationOrigin
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
@@ -15,6 +16,8 @@ import type { AssetSetIssue } from "./asset-set";
 export interface AssetCall {
   actor: AuthenticatedIdentity;
   access: ActorAccess;
+  /** Where the call comes from, as the operation layer read it. */
+  origin: OperationOrigin;
   /** Writes audit rows that carry the run's id. */
   audit: AuditRecorder;
   correlationId: string;

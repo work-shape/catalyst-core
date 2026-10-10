@@ -3,17 +3,23 @@ import {
   assetScopesEqual,
   findNamespaceOfAssetName,
   isJsonObject,
+  moduleOffError,
   unknownToJsonValue,
+  type AccessResource,
   type ActorAccess,
   type AgentConfig,
   type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
+  type ConfigAssetMutation,
   type ConfigAssetRecord,
   type ConfigAssetState,
+  type InitialAgentAvailability,
   type JsonObject,
   type Namespace,
+  type OperationAuthorization,
+  type OperationOrigin,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 import {
@@ -26,7 +32,7 @@ import {
   readDefinitionName,
   type WorkflowAssetKind
 } from "./asset-kinds/shared";
-import { accessResource } from "./asset-access";
+import { accessResource, decide, deleteDecision } from "./asset-access";
 import {
   INVALID_ASSET_SET_MESSAGE,
   assetSetOf,
@@ -177,13 +183,94 @@ export function findIssuesOfChange(
   return untold ? [...told, { message: UNREAD_ASSET_ISSUE }] : told;
 }
 
+/** The operation a write of an asset arrives through. */
+export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
+
+/** The module whose switch turns changing assets in the interface on and off. */
+const ASSET_MANAGEMENT_MODULE = "assetManagement";
+
+/** The right of the release sync. Only a service principal holds it, on the instance. */
+const RELEASE_ACTION = "assets.release";
+
+/**
+ * The exemptions of the release holder, all of them, decided here and nowhere else.
+ *
+ * A caller who holds `assets.release` on the instance and writes through `assets.sync` pushes
+ * a release: the batch is what the operator's working copy says the instance holds. Inside
+ * that call, and in no other, the holder is exempt from four things:
+ *
+ * 1. The item right. `assets.release` stands for the kind's write and delete right on each
+ *    item. An explicit deny on the asset still refuses the item. (`itemWriteDecision`)
+ * 2. The instance's editing limits: the module `assetManagement` being off,
+ *    `allowAgentCreation`, `allowAgentDeletion`, `editableAgentFields` and
+ *    `allowSkillEditing`. (`requireAssetManagementOn`, `authorizeInteractiveWrite`,
+ *    `assertUpsertWithinLimits`, `assertDeleteWithinLimits`)
+ * 3. The model settings right. `agent_models.manage` is not asked for the model settings a
+ *    pushed agent carries. (`missingUpsertRightOf`, `assertUpsertWithinLimits`)
+ * 4. The default agent. The first agent of the instance becomes its default and the last one
+ *    takes it away without the kind's write right on the instance.
+ *    (`mayChangeInstanceDefault`)
+ *
+ * Everything else binds the release holder as it binds everyone: the validation of the
+ * definitions and of the set, the lists of a Namespace, the expected revisions, the policy and
+ * the guardrails. On `put`, `delete` and `revert` the same holder is bound like any caller.
+ * Every other caller is bound on every surface, whatever else that caller holds.
+ */
+export function isReleaseSync(access: ActorAccess, surface: AssetWriteSurface): boolean {
+  // Asked without a resource, so only an entry at instance scope answers.
+  return surface === "sync" && access.authorize(RELEASE_ACTION).allowed;
+}
+
+/**
+ * The caller's right to write or delete one asset: the kind's own right on it, or the release
+ * holder's inside a sync. A deny on the asset refuses the release holder too.
+ */
+export function itemWriteDecision(
+  access: ActorAccess,
+  surface: AssetWriteSurface,
+  target: { kind: WorkflowAssetKind; resource: AccessResource },
+  type: "put" | "delete"
+): OperationAuthorization {
+  const { actions } = target.kind;
+  const right =
+    type === "delete"
+      ? deleteDecision(access, target)
+      : decide(access, actions.write, target.resource);
+  if (right.allowed || !isReleaseSync(access, surface)) {
+    return right;
+  }
+  // What the delete right may not get around, the release right may not either.
+  const deniable =
+    type === "delete" ? [actions.delete, actions.read, actions.write] : [actions.write];
+  for (const action of deniable) {
+    const decision = access.authorize(action, target.resource);
+    if (!decision.allowed && decision.reason === "denied") {
+      return { allowed: false, action, reason: "denied" };
+    }
+  }
+  return { allowed: true };
+}
+
+/** Refuses a write where changing assets is off, as a call of an operation of the module. */
+export function requireAssetManagementOn(
+  options: Pick<ChatServerOptions, "modules">,
+  access: ActorAccess,
+  surface: AssetWriteSurface
+): void {
+  if (!options.modules.isEnabled(ASSET_MANAGEMENT_MODULE) && !isReleaseSync(access, surface)) {
+    throw moduleOffError(ASSET_MANAGEMENT_MODULE);
+  }
+}
+
 /** Records the write and refuses it where the instance has interactive editing off. */
 export async function authorizeInteractiveWrite(
   options: ChatServerOptions,
   user: AuthenticatedIdentity,
   context: Pick<RuntimeCallContext, "correlationId">,
   /** The recorder of the Operation Run, where the write is one. */
-  audit: AuditRecorder = options.auditRecorder
+  audit: AuditRecorder = options.auditRecorder,
+  /** The answer of `isReleaseSync`. A caller that passes none is bound. */
+  releaseSync = false
 ): Promise<void> {
   await recordGovernanceAccess({
     options: { auditRecorder: audit },
@@ -191,21 +278,80 @@ export async function authorizeInteractiveWrite(
     context,
     auditType: "governance.config_assets_write_authorized"
   });
-  if (!options.modules.isEnabled("assetManagement")) {
+  if (!releaseSync && !options.modules.isEnabled(ASSET_MANAGEMENT_MODULE)) {
     throw new AppError("FORBIDDEN", "Interactive agent configuration is disabled");
   }
 }
 
+/** The kind's editing policy for a save, asked of the validated definition. */
+export function assertUpsertWithinLimits(
+  access: ActorAccess,
+  surface: AssetWriteSurface,
+  kind: WorkflowAssetKind,
+  input: Omit<Parameters<WorkflowAssetKind["assertInteractiveUpsertAllowed"]>[0], "access">
+): void {
+  if (!isReleaseSync(access, surface)) {
+    kind.assertInteractiveUpsertAllowed({ access, ...input });
+  }
+}
+
+/** The kind's editing policy for a delete. */
+export function assertDeleteWithinLimits(
+  access: ActorAccess,
+  surface: AssetWriteSurface,
+  kind: WorkflowAssetKind
+): void {
+  if (!isReleaseSync(access, surface)) {
+    kind.assertInteractiveDeleteAllowed();
+  }
+}
+
+/** The right a save needs beside the kind's write right and its caller lacks. */
+export function missingUpsertRightOf(
+  access: ActorAccess,
+  surface: AssetWriteSurface,
+  kind: WorkflowAssetKind,
+  input: Omit<Parameters<WorkflowAssetKind["missingUpsertRight"]>[0], "access">
+): string | undefined {
+  return isReleaseSync(access, surface) ? undefined : kind.missingUpsertRight({ access, ...input });
+}
+
 // The first asset of a kind with an instance default becomes it and the last one takes it
 // away. Either changes the default, which no Namespace or asset grant opens.
+export function mayChangeInstanceDefault(
+  access: ActorAccess,
+  surface: AssetWriteSurface,
+  kind: WorkflowAssetKind
+): boolean {
+  return isReleaseSync(access, surface) || access.authorize(kind.actions.write).allowed;
+}
+
 export function requireInstanceDefaultChange(
   access: ActorAccess,
+  surface: AssetWriteSurface,
   kind: WorkflowAssetKind,
   changesDefault: boolean
 ): void {
-  if (changesDefault) {
+  if (changesDefault && !mayChangeInstanceDefault(access, surface, kind)) {
     access.require(kind.actions.write);
   }
+}
+
+/**
+ * Where an agent a write creates starts. One that arrives from the CLI starts hidden in every
+ * workspace until someone sets its availability: a push must not put an agent in front of
+ * every user. One created in the interface starts as the store's default says. So does a
+ * write that makes one of its agents the instance default, which is the first agent of an
+ * instance: the default must be available everywhere, and the store refuses a hidden one.
+ */
+export function initialAvailabilityOf(
+  origin: OperationOrigin,
+  mutations: readonly ConfigAssetMutation[]
+): { initialAgentAvailability?: InitialAgentAvailability } {
+  const setsDefault = mutations.some(
+    (mutation) => mutation.type === "setDefaultAgent" && mutation.agentName !== undefined
+  );
+  return origin.kind === "cli" && !setsDefault ? { initialAgentAvailability: "selected" } : {};
 }
 
 export function setsInitialDefault(set: AssetSet, kind: WorkflowAssetKind): boolean {

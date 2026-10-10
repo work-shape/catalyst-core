@@ -25,37 +25,46 @@ import {
 export const clientInstanceId = asClientInstanceId("demo-local");
 export const otherClientInstanceId = asClientInstanceId("another-instance");
 
-const config = parseClientInstanceConfig({
-  version: 1,
-  clientInstance: { id: clientInstanceId, displayName: "Access test", environment: "development" },
-  auth: {},
-  administration: {
-    agentConfiguration: {
-      enabled: true,
-      editableAgentFields: [
-        "displayName",
-        "instructions",
-        "modelBindingId",
-        "toolNames",
-        "skillNames",
-        "initialPrompts"
-      ],
-      allowAgentCreation: true,
-      allowAgentDeletion: true,
-      allowDefaultAgentChange: true,
-      allowSkillEditing: true
-    }
-  },
-  infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
-  modelBindings: [
-    { id: "plain", providerId: "local" },
-    { id: "other", providerId: "local" }
-  ],
-  tools: [
-    { name: "known.tool", enabled: true },
-    { name: "second.tool", enabled: true }
-  ]
-});
+/** The editing limits of the instance. Each test instance may set its own. */
+type EditingLimits = Record<string, boolean | string[]>;
+
+const configWith = (editingLimits: EditingLimits) =>
+  parseClientInstanceConfig({
+    version: 1,
+    clientInstance: {
+      id: clientInstanceId,
+      displayName: "Access test",
+      environment: "development"
+    },
+    auth: {},
+    administration: {
+      agentConfiguration: {
+        enabled: true,
+        editableAgentFields: [
+          "displayName",
+          "instructions",
+          "modelBindingId",
+          "toolNames",
+          "skillNames",
+          "initialPrompts"
+        ],
+        allowAgentCreation: true,
+        allowAgentDeletion: true,
+        allowDefaultAgentChange: true,
+        allowSkillEditing: true,
+        ...editingLimits
+      }
+    },
+    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
+    modelBindings: [
+      { id: "plain", providerId: "local" },
+      { id: "other", providerId: "local" }
+    ],
+    tools: [
+      { name: "known.tool", enabled: true },
+      { name: "second.tool", enabled: true }
+    ]
+  });
 
 const USER_HEADER = "x-test-user";
 export const SERVICE_HEADER = "x-test-service";
@@ -188,14 +197,16 @@ export interface AccessInstanceOptions {
   operations?: TestServerOptions["operations"];
   /** Tools an agent may name beside the two of the config, such as `read_skill`. */
   furtherToolNames?: string[];
+  /** Fields of `administration.agentConfiguration` that differ from the open default. */
+  editingLimits?: EditingLimits;
 }
 
 export async function setupAccessInstance(
   options: AccessInstanceOptions = {}
 ): Promise<AccessInstance> {
-  const { operations, furtherToolNames = [] } = options;
+  const { operations, furtherToolNames = [], editingLimits = {} } = options;
   const instance = await createTestInstanceWith((stores) => ({
-    config,
+    config: configWith(editingLimits),
     ...(operations ? { operations } : {}),
     // A call the policy holds is filed and decided as on an assembled instance.
     approvalRequests: { store: stores.approvals, handlers: new Map() },

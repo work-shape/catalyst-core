@@ -28,7 +28,8 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     authorize: (input, { access }) => workflow.authorizeSync(access, input),
     policyTargets: (input) => workflow.syncPolicyTargets(input),
     changeClass: "reversible",
-    module: ASSET_WRITE_MODULE,
+    // No module: a release is pushed through this operation also where changing assets in
+    // the interface is off. The workflow asks the switch of everyone but the release holder.
     execute: (input, context) => workflow.sync(context, input)
   });
 

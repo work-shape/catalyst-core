@@ -47,11 +47,15 @@ import {
 } from "./asset-sync";
 import {
   assertChangedAgentsAllowed,
+  assertDeleteWithinLimits,
+  assertUpsertWithinLimits,
   assetKey,
   authorizeInteractiveWrite,
   clearsLastDefault,
   findChangedAgentRefusals,
   findIssuesOfChange,
+  initialAvailabilityOf,
+  isReleaseSync,
   loadReferableAssets,
   loadStoredAssets,
   type StoredAssets,
@@ -271,7 +275,7 @@ export class AssetWorkflow {
     const target = await this.target(input);
     const { kind } = target;
     call.access.require(kind.actions.write, target.resource);
-    await authorizeInteractiveWrite(this.options, call.actor, call, call.audit);
+    await this.authorizeEditing(call, "put");
     requireMatchingConfigName(input.config, input.name);
     requireOwnScope(target);
     requireExpectedRevision(target, input.expectedRevision ?? null);
@@ -288,7 +292,7 @@ export class AssetWorkflow {
   ) {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
-    await authorizeInteractiveWrite(this.options, call.actor, call, call.audit);
+    await this.authorizeEditing(call, "revert");
     requireOwnScope(target);
     if (!target.asset) {
       throw notFound(target);
@@ -323,15 +327,15 @@ export class AssetWorkflow {
     if (!right.allowed) {
       call.access.require(right.action, target.resource);
     }
-    await authorizeInteractiveWrite(this.options, call.actor, call, call.audit);
-    kind.assertInteractiveDeleteAllowed();
+    await this.authorizeEditing(call, "delete");
+    assertDeleteWithinLimits(call.access, "delete", kind);
     const asset = requireActive(target);
     if (asset.revision !== input.expectedRevision) {
       throw conflict(kind.kind, name, asset.revision);
     }
     const stored = await loadStoredAssets(this.options);
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
-    requireInstanceDefaultChange(call.access, kind, clearsDefault);
+    requireInstanceDefaultChange(call.access, "delete", kind, clearsDefault);
     /** The set as the delete would leave it. */
     const deleted = (set: AssetSet) => {
       const removed = withoutDefinition(set, kind.kind, name);
@@ -441,11 +445,12 @@ export class AssetWorkflow {
     }
   ) {
     const { kind, name } = target;
+    const surface = write.operation === "revert" ? "revert" : "put";
     const kinds = this.options.configAssets.kinds.kinds;
     const stored = await loadStoredAssets(this.options);
     const current = findDefinition(stored.set, kind.kind, name);
     const setsDefault = setsInitialDefault(stored.set, kind);
-    requireInstanceDefaultChange(call.access, kind, setsDefault);
+    requireInstanceDefaultChange(call.access, surface, kind, setsDefault);
     // A revert restores what was stored: nothing is adjusted on the way.
     const definition =
       write.operation === "revert"
@@ -471,7 +476,7 @@ export class AssetWorkflow {
         `Validated config ${kind.kind} '${name}' was not found`
       );
     }
-    kind.assertInteractiveUpsertAllowed({ access: call.access, name, current, next, namespaces });
+    assertUpsertWithinLimits(call.access, surface, kind, { name, current, next, namespaces });
     const mutations: ConfigAssetMutation[] = [
       {
         type: "upsert",
@@ -533,12 +538,19 @@ export class AssetWorkflow {
     }
   }
 
+  /** The editing switch of the instance, asked for the surface the write arrives through. */
+  private authorizeEditing(call: AssetCall, surface: "put" | "delete" | "revert") {
+    const releaseSync = isReleaseSync(call.access, surface);
+    return authorizeInteractiveWrite(this.options, call.actor, call, call.audit, releaseSync);
+  }
+
   /** Applies a batch. The store checks the expected revisions once more under its lock. */
   private async apply(call: AssetCall, batch: MutationBatch): Promise<{ version: number }> {
     try {
       return await applyValidatedConfigAssetMutations(this.options, {
         clientInstanceId: this.options.clientInstanceId,
         actor: auditActorFromIdentity(call.actor),
+        ...initialAvailabilityOf(call.origin, batch.mutations),
         ...batch
       });
     } catch (error) {

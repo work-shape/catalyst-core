@@ -14,14 +14,16 @@ const resourcesModule = defineModule({
   ui: ["conversation.resources"]
 });
 
-/** Changing agents and skills in the interface. Running an agent and a config push are core. */
+/**
+ * Changing agents and skills in the interface. Running an agent and a config push are core:
+ * `assets.sync` carries a push, so it is no operation of the module and asks the switch itself.
+ */
 const assetManagementModule = defineModule({
   name: "assetManagement",
   operations: [
     "assets.put",
     "assets.delete",
     "assets.revert",
-    "assets.sync",
     "config_agents.set_default",
     "config_agents.set_availability"
   ],

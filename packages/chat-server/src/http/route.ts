@@ -11,6 +11,7 @@ import {
   AppError,
   authContextFromUser,
   createPlatformId,
+  hasAuthScope,
   isAppError,
   isAuthenticatedServicePrincipal,
   normalizeAuthenticatedUser,
@@ -24,6 +25,7 @@ import {
   type OperationAuthorizeContext,
   type OperationOrigin,
   type OperationResource,
+  type OperationScope,
   type PolicyTarget,
   type StorePage,
   type RuntimeCallContext
@@ -305,7 +307,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
     }
     if (caller.identity && operation.scope) {
-      requireAuthScope(caller.identity, operation.scope);
+      requireOperationScope(caller.identity, operation.id, operation.scope);
     }
     const query = parseInput(operation.query, request.query, "Request query is invalid");
     const body = parseInput(operation.body, request.body ?? {}, "Request body is invalid");
@@ -352,6 +354,26 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
     });
   }
   return Object.assign(route, { registered, operation: registerOperation });
+}
+
+/**
+ * The scopes that pass an operation's check beside its own. A release is written through
+ * `assets.sync`, which asks for the scope of writing assets, so a key issued for release sync
+ * passes there and on no other operation of that scope.
+ */
+const FURTHER_SCOPES_OF_OPERATION: Partial<Record<string, readonly OperationScope[]>> = {
+  "assets.sync": ["config_assets:release"]
+};
+
+function requireOperationScope(
+  identity: AuthenticatedIdentity,
+  operationId: string,
+  scope: OperationScope
+): void {
+  const further = FURTHER_SCOPES_OF_OPERATION[operationId] ?? [];
+  if (!further.some((accepted) => hasAuthScope(identity, accepted))) {
+    requireAuthScope(identity, scope);
+  }
 }
 
 /**

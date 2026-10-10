@@ -136,8 +136,11 @@ export const assetSyncItemSchema = z.discriminatedUnion("type", [
 ]);
 
 export const syncAssetsRequestSchema = z.object({
-  /** The prefix of the one Namespace the batch belongs to. No item may name an asset outside it. */
-  namespace: nameText(z.string().min(1)),
+  /**
+   * The prefix of the one Namespace the batch belongs to. No item may name an asset outside it.
+   * Left out, the batch may name any asset of the instance its caller may write.
+   */
+  namespace: nameText(z.string().min(1)).optional(),
   items: z.array(assetSyncItemSchema).min(1).max(ASSET_SYNC_MAX_ITEMS)
 });
 

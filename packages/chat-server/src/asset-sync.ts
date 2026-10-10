@@ -21,20 +21,22 @@ import {
   type AssetSet,
   type AssetSetIssue
 } from "./asset-set";
+import { accessResource, errorIssues, type AssetCall } from "./asset-access";
 import {
-  accessResource,
-  decide,
-  deleteDecision,
-  errorIssues,
-  type AssetCall
-} from "./asset-access";
-import {
+  assertDeleteWithinLimits,
+  assertUpsertWithinLimits,
   assetKey,
   authorizeInteractiveWrite,
   findChangedAgentRefusals,
   findIssuesOfChange,
+  initialAvailabilityOf,
+  isReleaseSync,
+  itemWriteDecision,
   loadReferableAssets,
   loadStoredAssets,
+  mayChangeInstanceDefault,
+  missingUpsertRightOf,
+  requireAssetManagementOn,
   toJsonObject
 } from "./asset-write-rules";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
@@ -45,8 +47,11 @@ type AssetSyncItem =
   | { type: "delete"; kind: string; name: string; expectedRevision: number };
 
 export interface AssetSyncInput {
-  /** The prefix of the one Namespace the batch belongs to. */
-  namespace: string;
+  /**
+   * The prefix of the one Namespace the batch belongs to. Without one the batch may name any
+   * asset of the instance, each still decided by the caller's right on it.
+   */
+  namespace?: string;
   items: AssetSyncItem[];
 }
 
@@ -83,11 +88,13 @@ const conflictsSchema = z.object({
 });
 
 /**
- * Applies puts and deletes in one Namespace, all of them or none. Every item is checked as
- * the single operation would check it: the right on its asset, the revision it was made
- * against, the definition and the instance's rules. The first kind of check that refuses any
- * item stops the batch, and the error names every item with what it was refused for. An item
- * outside the named prefix is refused before anything is read.
+ * Applies puts and deletes, all of them or none: in one Namespace where the batch names one,
+ * anywhere among the instance's own assets where it names none. Every item is checked as the
+ * single operation would check it: the right on its asset, the revision it was made against,
+ * the definition and the instance's rules. The first kind of check that refuses any item stops
+ * the batch, and the error names every item with what it was refused for. An item outside a
+ * named prefix is refused before anything is read. What a holder of the release right is
+ * exempt from in this call is listed at `isReleaseSync`.
  */
 export async function syncAssets(
   options: ChatServerOptions,
@@ -108,15 +115,19 @@ export async function syncAssets(
   const namespaces = await options.stores.access.listNamespaceRecords({
     clientInstanceId: options.clientInstanceId
   });
-  if (!namespaces.some((namespace) => namespace.prefix === input.namespace)) {
+  if (
+    input.namespace !== undefined &&
+    !namespaces.some((namespace) => namespace.prefix === input.namespace)
+  ) {
     throw new AppError("VALIDATION_FAILED", `Namespace '${input.namespace}' is not registered`);
   }
-  await authorizeInteractiveWrite(options, call.actor, call, call.audit);
+  const releaseSync = isReleaseSync(call.access, "sync");
+  await authorizeInteractiveWrite(options, call.actor, call, call.audit, releaseSync);
   for (const entry of ready()) {
     const current = entry.asset?.status === "active" ? entry.asset.revision : null;
     if (entry.item.type === "delete") {
       entry.refusal =
-        refusalOf(() => entry.kind.assertInteractiveDeleteAllowed()) ??
+        refusalOf(() => assertDeleteWithinLimits(call.access, "sync", entry.kind)) ??
         (current === null
           ? {
               code: "NOT_FOUND",
@@ -147,7 +158,7 @@ export async function syncAssets(
   const defaultChange = planDefaultChange(kinds.kinds, stored.set, candidate, ready());
   if (defaultChange) {
     candidate = withDefaultAgentName(candidate, defaultChange.agentName);
-    if (!call.access.authorize(defaultChange.entry.kind.actions.write).allowed) {
+    if (!mayChangeInstanceDefault(call.access, "sync", defaultChange.entry.kind)) {
       defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
     }
   }
@@ -189,8 +200,7 @@ export async function syncAssets(
   for (const entry of ready()) {
     if (entry.item.type !== "put" || entry.refusal) continue;
     entry.refusal = refusalOf(() =>
-      entry.kind.assertInteractiveUpsertAllowed({
-        access: call.access,
+      assertUpsertWithinLimits(call.access, "sync", entry.kind, {
         name: entry.name,
         current: findDefinition(stored.set, entry.kind.kind, entry.name),
         next: findDefinition(found.accepted, entry.kind.kind, entry.name),
@@ -224,6 +234,7 @@ export async function syncAssets(
       ])
     ),
     ...(defaultChange ? { baseDefaultAgentName: stored.state.defaultAgentName ?? null } : {}),
+    ...initialAvailabilityOf(call.origin, mutations),
     mutations
   }).catch((error: unknown) => {
     // Another write got between the check above and the store's lock.
@@ -275,14 +286,18 @@ export async function syncAssets(
 
 /**
  * What each item is by its own input, and the caller's right on every item that names an
- * asset: the write or the delete right at the asset's scope. Throws the refusal of the batch
- * where an item is refused by either, so a caller without the rights learns nothing else.
+ * asset: the write or the delete right at the asset's scope, or the release right in their
+ * place. Throws the refusal of the batch where an item is refused by either, so a caller
+ * without the rights learns nothing else.
  */
 async function authorizeItems(
   options: ChatServerOptions,
   access: ActorAccess,
   input: AssetSyncInput
 ): Promise<PlannedItem[]> {
+  // The module's switch is asked here because the release holder passes it: the operation
+  // itself belongs to no module, so the route does not refuse it before the caller is known.
+  requireAssetManagementOn(options, access, "sync");
   const planned = planItems(options, input);
   for (const entry of planned.filter(isReady)) {
     const row = await options.configAssets.store.getConfigAsset({
@@ -292,11 +307,12 @@ async function authorizeItems(
     });
     const own = row?.scope.kind === "instance" ? row : undefined;
     const resource = accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, own?.id);
-    const { actions } = entry.kind;
-    const right =
-      entry.item.type === "delete"
-        ? deleteDecision(access, { kind: entry.kind, resource })
-        : decide(access, actions.write, resource);
+    const right = itemWriteDecision(
+      access,
+      "sync",
+      { kind: entry.kind, resource },
+      entry.item.type
+    );
     if (!right.allowed) {
       entry.refusal = {
         code: "FORBIDDEN",
@@ -342,14 +358,13 @@ async function requireFurtherRights(
     leftByItems(stored.set, ready, stored.set),
     ready
   );
-  if (defaultChange && !access.authorize(defaultChange.entry.kind.actions.write).allowed) {
+  if (defaultChange && !mayChangeInstanceDefault(access, "sync", defaultChange.entry.kind)) {
     defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
   }
   for (const entry of ready) {
     if (entry.item.type !== "put" || entry.refusal) continue;
     const current = findDefinition(stored.set, entry.kind.kind, entry.name);
-    const action = entry.kind.missingUpsertRight({
-      access,
+    const action = missingUpsertRightOf(access, "sync", entry.kind, {
       name: entry.name,
       current,
       next: entry.kind.prepareInteractiveUpsert({ current, next: entry.item.config }),
@@ -432,7 +447,7 @@ function isReady(entry: PlannedItem): entry is ReadyItem {
   return entry.kind !== undefined && entry.name !== undefined && entry.refusal === undefined;
 }
 
-/** What each item is by its own input: a registered kind, a name, inside the prefix, once. */
+/** What each item is by its own input: a registered kind, a name, inside a named prefix, once. */
 function planItems(options: ChatServerOptions, input: AssetSyncInput): PlannedItem[] {
   const seen = new Set<string>();
   return input.items.map((item, index): PlannedItem => {
@@ -450,7 +465,7 @@ function planItems(options: ChatServerOptions, input: AssetSyncInput): PlannedIt
     if (name === undefined) {
       return refuse("Config asset must have a name");
     }
-    if (!name.startsWith(input.namespace)) {
+    if (input.namespace !== undefined && !name.startsWith(input.namespace)) {
       return refuse(`Config ${kind.kind} '${name}' is outside Namespace '${input.namespace}'`);
     }
     const key = assetKey(kind.kind, name);
