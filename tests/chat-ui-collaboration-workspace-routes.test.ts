@@ -12,7 +12,10 @@ import {
   PERSONAL_DEFAULT_CONVERSATION_LIST,
   conversationListCacheKey,
   listCollaborationWorkspacesWithPersonal,
-  workspaceConversationsQueryOptions
+  workspaceConversationsQueryOptions,
+  cacheStartedRunThread,
+  createWorkspaceQueryClient,
+  readThreadAgain
 } from "../packages/chat-ui/src/api/workspace-queries";
 import { workspaceQueryKeys } from "../packages/chat-ui/src/api/workspace-query-keys";
 
@@ -322,5 +325,55 @@ describe("collaboration workspace error copy", () => {
     expect(collaborationWorkspaceErrorKey("create", new Error("offline"))).toBe(
       "collaborationWorkspaceErrorUnexpected"
     );
+  });
+});
+
+interface Thread {
+  run: string;
+}
+
+/** A read of the thread whose answer the test sends when it chooses to. */
+function slowRead(): { read(): Promise<Thread>; answer(thread: Thread): void } {
+  let answer: (thread: Thread) => void = () => undefined;
+  const pending = new Promise<Thread>((resolve) => {
+    answer = resolve;
+  });
+  return { read: () => pending, answer: (thread) => answer(thread) };
+}
+
+describe("the cached thread of a conversation", () => {
+  const threadKey = workspaceQueryKeys.thread("http://api.test", "user", "conversation-1");
+  const beforeTheRun: Thread = { run: "first, as the instance last reported it" };
+  const ofTheNewRun: Thread = { run: "second, just started" };
+
+  it("keeps the thread of a run that started while a re-read was on its way", async () => {
+    const queryClient = createWorkspaceQueryClient();
+    const instance = slowRead();
+
+    const reread = readThreadAgain(queryClient, threadKey, instance.read);
+    cacheStartedRunThread(queryClient, threadKey, ofTheNewRun);
+    instance.answer(beforeTheRun);
+
+    // The overtaken re-read answers with the run's thread and leaves the cache alone.
+    await expect(reread).resolves.toEqual(ofTheNewRun);
+    expect(queryClient.getQueryData(threadKey)).toEqual(ofTheNewRun);
+  });
+
+  it("takes the answer of a re-read that nothing overtook, and passes its failure on", async () => {
+    const queryClient = createWorkspaceQueryClient();
+    cacheStartedRunThread(queryClient, threadKey, ofTheNewRun);
+
+    const later: Thread = { run: "second, ended" };
+    await expect(readThreadAgain(queryClient, threadKey, async () => later)).resolves.toEqual(
+      later
+    );
+    expect(queryClient.getQueryData(threadKey)).toEqual(later);
+
+    const refused = new Error("refused");
+    await expect(
+      readThreadAgain(queryClient, threadKey, async () => {
+        throw refused;
+      })
+    ).rejects.toBe(refused);
   });
 });

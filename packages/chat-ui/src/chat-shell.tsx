@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import type { ThemeMode } from "@vivd-catalyst/ui/theme";
 import type { ClientLabelOverrides } from "./i18n";
 import { ChatWorkspace } from "./chat-workspace";
+import { createWorkspaceQueryClient } from "./api/workspace-queries";
 import {
   ToolDisplayActionsProvider,
   ToolDisplayWidgetProvider,
@@ -43,7 +44,7 @@ export function ChatShell({
   onRouteChange,
   ...workspaceProps
 }: ChatShellProps) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(createWorkspaceQueryClient);
   const [localRoute, setLocalRoute] = useState<WorkspaceRoute>(() => defaultWorkspaceRoute());
   const resolvedRoute = route ?? localRoute;
   const resolvedRouteChange = onRouteChange ?? setLocalRoute;

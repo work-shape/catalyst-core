@@ -1,5 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  isCancelledError,
+  QueryClient,
+  useQuery,
+  useQueryClient,
+  type QueryKey
+} from "@tanstack/react-query";
 import {
   ApiError,
   ApiResponseShapeError,
@@ -484,6 +490,47 @@ export function useConfigAssetsExportQuery(
  * routed one: a stale `/w/:other/c/:id` link must not splice the conversation
  * into a list it does not belong to.
  */
+/** The cache of everything the interface has read from the instance. */
+export function createWorkspaceQueryClient(): QueryClient {
+  return new QueryClient();
+}
+
+/** Reads a thread from the instance again, whatever the cache holds. */
+export async function readThreadAgain<Thread>(
+  queryClient: QueryClient,
+  threadKey: QueryKey,
+  read: () => Promise<Thread>
+): Promise<Thread> {
+  try {
+    return await queryClient.fetchQuery({ queryKey: threadKey, queryFn: read, staleTime: 0 });
+  } catch (error) {
+    // A run that started meanwhile has put its own, newer thread in the cache.
+    const overtaking = isCancelledError(error)
+      ? queryClient.getQueryData<Thread>(threadKey)
+      : undefined;
+    if (overtaking === undefined) {
+      throw error;
+    }
+    return overtaking;
+  }
+}
+
+/**
+ * Puts the thread a run start answered with in the cache. A read of the thread still on its way
+ * was asked before the run existed, so its answer is dropped instead of overwriting the run.
+ */
+export function cacheStartedRunThread<Thread>(
+  queryClient: QueryClient,
+  threadKey: QueryKey,
+  thread: Thread
+): void {
+  // The read is dropped at once; the promise only tells when, and it never fails.
+  queryClient
+    .cancelQueries({ queryKey: threadKey, exact: true }, { silent: true })
+    .catch(() => undefined);
+  queryClient.setQueryData(threadKey, thread);
+}
+
 export function conversationListCacheKey(
   apiBaseUrl: string,
   authScope: string,
@@ -594,11 +641,11 @@ export function useWorkspaceCacheActions(
 
   const refreshThreadSnapshot = useCallback(
     (conversationId: string) =>
-      queryClient.fetchQuery({
-        queryKey: workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId),
-        queryFn: () => client.conversations.thread.get({ params: { conversationId } }),
-        staleTime: 0
-      }),
+      readThreadAgain(
+        queryClient,
+        workspaceQueryKeys.thread(apiBaseUrl, authScope, conversationId),
+        () => client.conversations.thread.get({ params: { conversationId } })
+      ),
     [apiBaseUrl, authScope, client, queryClient]
   );
 
@@ -658,7 +705,8 @@ export function useWorkspaceCacheActions(
 
   const cacheRunStarted = useCallback(
     (response: StartConversationRunResponse) => {
-      queryClient.setQueryData(
+      cacheStartedRunThread(
+        queryClient,
         workspaceQueryKeys.thread(apiBaseUrl, authScope, response.conversation.id),
         response.thread
       );
