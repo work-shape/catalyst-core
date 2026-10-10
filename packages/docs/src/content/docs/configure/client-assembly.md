@@ -68,7 +68,7 @@ The assembly should fail before listening when:
 - an agent references a tool that is not registered
 - a configured tool is enabled but has no implementation
 - a disabled tool appears in an agent allowlist
-- an approval-required tool is enabled before runtime resume is implemented
+- an enabled tool has the permission mode `approval_required`, which this release cannot run, see [Permission Policy](/extend/custom-tools/#permission-policy)
 - required auth, model provider, retention, or database settings are missing
 
 Validation is part of the product model. A broken instance should not start and surprise users at runtime.

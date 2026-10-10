@@ -137,7 +137,7 @@ Every model binding with `supportsFastMode: true` needs these rates; startup val
 
 ## Approval checks
 
-`approvalChecks` defines model-evaluated rules for proposed approval requests. It defaults to an empty list. Each check needs a unique id, a registered request kind, and an existing model binding. Instructions may be written in any language.
+`approvalChecks` defines model-evaluated rules for proposed approval requests. It defaults to an empty list. Each check needs a unique id, a registered request kind, and an existing model binding. `skill_change` is the only request kind in this release. Instructions may be written in any language.
 
 ```yaml
 approvalChecks:
@@ -203,7 +203,7 @@ Startup validation fails when:
 - an enabled tool has no registered implementation
 - a configured tool's `config` does not match its schema
 - an agent references a disabled or missing tool
-- an enabled tool requires approval before approval resume is implemented
+- an enabled tool has the permission mode `approval_required`, which this release cannot run
 
 ## Web Access
 
@@ -517,8 +517,11 @@ policy:
 - `reading`: `allow` runs a reading operation, `deny` refuses it with 403 and the code
   `POLICY_DENIED`.
 - `changing`: `allow` runs a changing operation. `confirm` asks the caller to confirm, and a
-  person's or a service's own call through the API or the CLI is that confirmation. `approval`
-  holds the call for another person. `deny` refuses it.
+  person's or a service's own call through the API or the CLI is that confirmation. `deny`
+  refuses it. `approval` is meant to hold the call until another person decided. This release
+  has nothing that files and decides such an approval, so a changing call under `approval` is
+  refused with 403 and the code `POLICY_DENIED`, like `deny`. The answers the API reference
+  lists for a held call (`202` with the run, `DECLINED`, `OPERATION_EXPIRED`) do not occur yet.
 
 ## Infrastructure
 

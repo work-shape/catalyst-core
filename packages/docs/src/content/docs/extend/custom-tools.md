@@ -197,4 +197,6 @@ Every tool should have an explicit permission expectation:
 - external communication
 - destructive action
 
-For v1, avoid enabling approval-required tools until runtime resume is implemented end to end. Write the policy now, but do not deploy a configuration that can only pause and fail.
+A tool declares `permission.mode` as `allow`, `deny` or `approval_required`. This release runs the first two. It cannot pause an agent run for a person's decision and continue it afterwards, so an instance with an enabled `approval_required` tool does not start: startup validation names the tool. The API reference lists the operation `conversations.runs.command` for continuing a waiting run; in this release it answers `CONFLICT`.
+
+What a person can approve today is a skill change. An agent with the tool `propose_skill_change` files an approval request and its run goes on without waiting; the change applies when a reviewer approves it, see [Agent skill changes](/configure/config-assets/#agent-skill-changes). `skill_change` is the only kind of approval request in this release.
