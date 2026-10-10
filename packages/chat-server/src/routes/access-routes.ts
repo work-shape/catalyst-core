@@ -1,5 +1,10 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import type { ActorAccess, Namespace, PermissionGrant } from "@vivd-catalyst/core";
+import type {
+  ActorAccess,
+  AssetKindRegistry,
+  Namespace,
+  PermissionGrant
+} from "@vivd-catalyst/core";
 import { AccessWorkflow, type GrantViewContext } from "../access-workflow";
 import type { Route } from "../http/route";
 import { requirePathParam } from "../request-context";
@@ -8,10 +13,11 @@ import type { ChatServerOptions } from "../types";
 /** Governance records, registered like user administration. */
 export function registerAccessRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AccessWorkflow(options);
+  const { kinds } = options.configAssets;
 
   route(apiOperations["permissions.grant"], async ({ user, access, context, body }) => {
     const grant = await workflow.grant(user, context, body);
-    return grantView(grant, await workflow.grantViewContext(user, [grant]), access);
+    return grantView(grant, await workflow.grantViewContext(user, [grant]), access, kinds);
   });
 
   route(apiOperations["permissions.revoke"], async ({ user, access, context, params }) => {
@@ -20,7 +26,7 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
       context,
       requirePathParam(params.grantId, "Missing grant id")
     );
-    return grantView(grant, await workflow.grantViewContext(user, [grant]), access);
+    return grantView(grant, await workflow.grantViewContext(user, [grant]), access, kinds);
   });
 
   route(apiOperations["permissions.list"], async ({ user, access, query, paging }) => {
@@ -32,7 +38,7 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
       page: paging
     });
     const view = await workflow.grantViewContext(user, grants);
-    return grants.map((grant) => grantView(grant, view, access));
+    return grants.map((grant) => grantView(grant, view, access, kinds));
   });
 
   route(apiOperations["permissions.effective"], ({ user, access, query }) =>
@@ -80,13 +86,18 @@ function prefixParam(params: { prefix: string }): string {
  * left out for a caller who may not read every asset of that kind: managing users does not
  * open the names of agents and skills.
  */
-function grantView(grant: PermissionGrant, context: GrantViewContext, access: ActorAccess) {
+function grantView(
+  grant: PermissionGrant,
+  context: GrantViewContext,
+  access: ActorAccess,
+  kinds: AssetKindRegistry
+) {
   const { clientInstanceId: _clientInstanceId, grantedBy, ...view } = grant;
   const asset =
     grant.scopeKind === "asset" ? context.scopeAssets.get(grant.scopeId ?? "") : undefined;
+  const readAction = asset && kinds.get(asset.kind)?.actions.read;
   const named =
-    asset !== undefined &&
-    access.authorize(asset.kind === "skill" ? "skill.read" : "agent.read").allowed;
+    asset !== undefined && readAction !== undefined && access.authorize(readAction).allowed;
   return {
     ...view,
     ...(asset

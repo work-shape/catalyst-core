@@ -1,30 +1,34 @@
 import type { StorePage } from "@vivd-catalyst/core";
 import {
-  AGENT_EDITABLE_FIELDS,
-  AGENT_MODEL_SETTING_FIELDS,
   AppError,
   asCollaborationWorkspaceId,
   assertConfigAssetBases,
   type AgentAvailability,
   type ConfigAssetRevisionRecord,
   auditActorFromIdentity,
+  findNamespaceOfAssetName,
   isJsonObject,
   unknownToJsonValue,
   type ActorAccess,
   type AgentConfig,
-  type AgentEditableField,
-  type AgentModelSettingField,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
   type ConfigAssetMutation,
   type ConfigAssetRecord,
   type JsonObject,
   type Namespace,
-  type PlatformAction,
   type RuntimeCallContext,
   type SkillConfig
 } from "@vivd-catalyst/core";
 import { findAgentUserSelectableModelIssues } from "@vivd-catalyst/config-schema";
+import { agentModelSettingValue } from "./asset-kinds/agent";
+import {
+  configValuesEqual,
+  findNamedDefinition,
+  readDefinitionName,
+  type ConfigAssetBundle,
+  type WorkflowAssetKind
+} from "./asset-kinds/shared";
 import {
   validateConfigAssetCandidate,
   applyValidatedConfigAssetMutations
@@ -32,11 +36,7 @@ import {
 import { recordGovernanceAccess } from "./governance-actions";
 import type { ChatServerOptions } from "./types";
 
-interface ConfigAssetBundleInput {
-  defaultAgentName?: string;
-  agents: unknown[];
-  skills: unknown[];
-}
+type ConfigAssetBundleInput = ConfigAssetBundle;
 
 type ConfigAssetCallContext = Pick<RuntimeCallContext, "correlationId">;
 
@@ -82,7 +82,7 @@ export class ConfigAssetWorkflow {
         name: asset.name,
         revision: asset.revision,
         updatedAt: asset.updatedAt,
-        ...(asset.kind === "agent" && availability.has(asset.name)
+        ...(this.kind(asset.kind).hasWorkspaceAvailability && availability.has(asset.name)
           ? { availability: availability.get(asset.name) }
           : {})
       })),
@@ -91,7 +91,7 @@ export class ConfigAssetWorkflow {
   }
 
   async getAsset(access: ActorAccess, input: { kind: ConfigAssetKind; name: string }) {
-    await this.requireAssetAccess(access, `${input.kind}.read`, input);
+    await this.requireAssetAccess(access, "read", input);
     const asset = await this.getActiveAssetOrThrow(input);
     return projectConfigAsset(asset);
   }
@@ -102,21 +102,17 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: PutConfigAssetCommand
   ) {
-    await this.requireAssetAccess(access, `${command.kind}.write`, command);
+    const kind = this.kind(command.kind);
+    await this.requireAssetAccess(access, "write", command);
     await this.authorizeInteractiveWrite(user, context);
     requireMatchingConfigName(command.config, command.name);
     const current = await this.loadCurrentBundle();
-    const setInitialDefault = shouldSetInitialDefault(current, command.kind);
-    this.requireDefaultAgentChange(access, setInitialDefault);
-    const replaced = replaceBundleAsset(current, {
-      ...command,
-      config:
-        command.kind === "agent"
-          ? this.clearFastModeOnBindingSwitch(
-              findBundleConfig(current, "agent", command.name),
-              command.config
-            )
-          : command.config
+    const currentConfig = findNamedDefinition(kind.definitions(current), command.name);
+    const setInitialDefault = shouldSetInitialDefault(current, kind);
+    this.requireInstanceDefaultChange(access, kind, setInitialDefault);
+    const replaced = replaceBundleAsset(current, kind, {
+      name: command.name,
+      config: kind.prepareInteractiveUpsert({ current: currentConfig, next: command.config })
     });
     const candidate = setInitialDefault
       ? { ...replaced, defaultAgentName: command.name }
@@ -124,14 +120,13 @@ export class ConfigAssetWorkflow {
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
     const namespaces = await this.assertNamespaceAllowlists(access, current, validated.agents);
-    const config = findValidatedConfig(validated, command.kind, command.name);
-    this.assertInteractiveAssetUpsertAllowed({
+    const config = findValidatedConfig(validated, kind, command.name);
+    kind.assertInteractiveUpsertAllowed({
       access,
-      bindingListed: hasModelBindingList(namespaces, command.name),
-      kind: command.kind,
       name: command.name,
-      currentConfig: findBundleConfig(current, command.kind, command.name),
-      nextConfig: config
+      current: currentConfig,
+      next: config,
+      namespaces
     });
     const mutations: ConfigAssetMutation[] = [
       {
@@ -166,23 +161,24 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: AssetMutationCommand
   ) {
+    const kind = this.kind(command.kind);
     const resource = await this.assetResource(command);
-    access.require(`${command.kind}.delete`, resource);
+    access.require(kind.actions.delete, resource);
     // A holder who is denied anything on the asset does not delete it: the delete right is no
     // way around a deny on reading or writing.
-    for (const verb of ["read", "write"] as const) {
-      const decision = access.authorize(`${command.kind}.${verb}`, resource);
+    for (const action of [kind.actions.read, kind.actions.write]) {
+      const decision = access.authorize(action, resource);
       if (!decision.allowed && decision.reason === "denied") {
-        access.require(`${command.kind}.${verb}`, resource);
+        access.require(action, resource);
       }
     }
     await this.authorizeInteractiveWrite(user, context);
-    this.assertInteractiveDeleteAllowed(command.kind);
+    kind.assertInteractiveDeleteAllowed();
     const existing = await this.getActiveAssetOrThrow(command);
     const current = await this.loadCurrentBundle();
-    const clearLastDefault = shouldClearLastDefault(current, command);
-    this.requireDefaultAgentChange(access, clearLastDefault);
-    const removed = removeBundleAsset(current, command);
+    const clearLastDefault = shouldClearLastDefault(current, kind, command.name);
+    this.requireInstanceDefaultChange(access, kind, clearLastDefault);
+    const removed = removeBundleAsset(current, kind, command.name);
     const candidate = clearLastDefault
       ? { agents: removed.agents, skills: removed.skills }
       : removed;
@@ -298,7 +294,7 @@ export class ConfigAssetWorkflow {
     access: ActorAccess,
     input: { kind: ConfigAssetKind; name: string; page?: StorePage }
   ) {
-    await this.requireAssetAccess(access, `${input.kind}.read`, input);
+    await this.requireAssetAccess(access, "read", input);
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,
       ...input
@@ -320,7 +316,8 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: AssetMutationCommand & { revision: number }
   ) {
-    await this.requireAssetAccess(access, `${command.kind}.write`, command);
+    const kind = this.kind(command.kind);
+    await this.requireAssetAccess(access, "write", command);
     await this.authorizeInteractiveWrite(user, context);
     const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
       clientInstanceId: this.options.clientInstanceId,
@@ -336,10 +333,9 @@ export class ConfigAssetWorkflow {
     }
     requireMatchingConfigName(target.config, command.name);
     const current = await this.loadCurrentBundle();
-    const setInitialDefault = shouldSetInitialDefault(current, command.kind);
-    this.requireDefaultAgentChange(access, setInitialDefault);
-    const replaced = replaceBundleAsset(current, {
-      kind: command.kind,
+    const setInitialDefault = shouldSetInitialDefault(current, kind);
+    this.requireInstanceDefaultChange(access, kind, setInitialDefault);
+    const replaced = replaceBundleAsset(current, kind, {
       name: command.name,
       config: target.config
     });
@@ -349,14 +345,13 @@ export class ConfigAssetWorkflow {
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
     const namespaces = await this.assertNamespaceAllowlists(access, current, validated.agents);
-    const config = findValidatedConfig(validated, command.kind, command.name);
-    this.assertInteractiveAssetUpsertAllowed({
+    const config = findValidatedConfig(validated, kind, command.name);
+    kind.assertInteractiveUpsertAllowed({
       access,
-      bindingListed: hasModelBindingList(namespaces, command.name),
-      kind: command.kind,
       name: command.name,
-      currentConfig: findBundleConfig(current, command.kind, command.name),
-      nextConfig: config
+      current: findNamedDefinition(kind.definitions(current), command.name),
+      next: config,
+      namespaces
     });
     const mutations: ConfigAssetMutation[] = [
       {
@@ -402,9 +397,7 @@ export class ConfigAssetWorkflow {
       revisions: Object.fromEntries(
         assets.map((asset) => [assetKey(asset.kind, asset.name), asset.revision])
       ),
-      ...(state.defaultAgentName === undefined ? {} : { defaultAgentName: state.defaultAgentName }),
-      agents: assetConfigs(assets, "agent"),
-      skills: assetConfigs(assets, "skill")
+      ...this.assetBundle(assets, state.defaultAgentName)
     };
   }
 
@@ -430,35 +423,35 @@ export class ConfigAssetWorkflow {
       })
     ]);
     const merge = command.mode === "merge";
-    let candidate = merge
-      ? mergeBundle(assetBundle(currentAssets, currentState.defaultAgentName), command)
+    const kinds = this.options.configAssets.kinds.kinds;
+    const currentBundle = this.assetBundle(currentAssets, currentState.defaultAgentName);
+    let candidate: ConfigAssetBundleInput = merge
+      ? mergeBundle(kinds, currentBundle, command)
       : command;
     for (const asset of command.deleteAssets ?? []) {
-      candidate = removeBundleAsset(candidate, asset);
+      candidate = removeBundleAsset(candidate, this.kind(asset.kind), asset.name);
     }
+    const provided = kinds.map((kind) => ({
+      kind,
+      names: new Set(kind.definitions(command).map(readDefinitionName))
+    }));
     if (command.baseDefaultAgentName !== undefined) {
       candidate = { ...candidate, defaultAgentName: command.defaultAgentName };
     }
     if (command.baseRevisions !== undefined) {
       const touched = [
-        ...command.agents.map((config) => ({
-          kind: "agent" as const,
-          name: requireConfigName(config)
-        })),
-        ...command.skills.map((config) => ({
-          kind: "skill" as const,
-          name: requireConfigName(config)
-        })),
+        ...kinds.flatMap((kind) =>
+          kind.definitions(command).map((config) => ({
+            kind: kind.kind,
+            name: requireConfigName(config)
+          }))
+        ),
         ...(command.deleteAssets ?? []),
         ...(!merge
           ? currentAssets.filter(
               (asset) =>
-                !candidate.agents.some(
-                  (config) => asset.kind === "agent" && readConfigName(config) === asset.name
-                ) &&
-                !candidate.skills.some(
-                  (config) => asset.kind === "skill" && readConfigName(config) === asset.name
-                )
+                findNamedDefinition(this.kind(asset.kind).definitions(candidate), asset.name) ===
+                undefined
             )
           : [])
       ];
@@ -506,15 +499,22 @@ export class ConfigAssetWorkflow {
       );
     }
     const validated = this.validateBundle(candidate);
-    const currentBundle = assetBundle(currentAssets, currentState.defaultAgentName);
     this.assertChangedUserSelectableModelsEligible(currentBundle, validated.agents);
     await this.assertNamespaceAllowlists(access, currentBundle, validated.agents);
-    const providedAgentNames = new Set(command.agents.map(readConfigName));
-    const providedSkillNames = new Set(command.skills.map(readConfigName));
-    const desiredKeys = new Set([
-      ...validated.agents.map((agent) => assetKey("agent", agent.name)),
-      ...validated.skills.map((skill) => assetKey("skill", skill.name))
-    ]);
+    const validatedBundle: ConfigAssetBundleInput = validated;
+    /** What the caller sent of one kind, as validated. */
+    const providedDefinitions = ({ kind, names }: (typeof provided)[number]) =>
+      kind.definitions(validatedBundle).flatMap((config) => {
+        const name = readDefinitionName(config);
+        return name !== undefined && names.has(name) ? [{ name, config }] : [];
+      });
+    const desiredKeys = new Set(
+      kinds.flatMap((kind) =>
+        kind
+          .definitions(validatedBundle)
+          .map((config) => assetKey(kind.kind, requireConfigName(config)))
+      )
+    );
     const mutations: ConfigAssetMutation[] = merge
       ? []
       : currentAssets
@@ -527,22 +527,14 @@ export class ConfigAssetWorkflow {
       }))
     );
     mutations.push(
-      ...validated.agents
-        .filter((agent) => providedAgentNames.has(agent.name))
-        .map((agent) => ({
+      ...provided.flatMap((entry) =>
+        providedDefinitions(entry).map(({ name, config }) => ({
           type: "upsert" as const,
-          kind: "agent" as const,
-          name: agent.name,
-          config: toJsonObject(agent)
-        })),
-      ...validated.skills
-        .filter((skill) => providedSkillNames.has(skill.name))
-        .map((skill) => ({
-          type: "upsert" as const,
-          kind: "skill" as const,
-          name: skill.name,
-          config: toJsonObject(skill)
+          kind: entry.kind.kind,
+          name,
+          config: toJsonObject(config)
         }))
+      )
     );
     if (
       !merge ||
@@ -566,9 +558,9 @@ export class ConfigAssetWorkflow {
     const availability = await this.options.configAssets.store.listAgentAvailability({
       clientInstanceId: this.options.clientInstanceId
     });
-    const hiddenAgentNames = validated.agents
-      .filter((agent) => providedAgentNames.has(agent.name))
-      .map((agent) => agent.name)
+    const hiddenAgentNames = provided
+      .filter((entry) => entry.kind.hasWorkspaceAvailability)
+      .flatMap((entry) => providedDefinitions(entry).map(({ name }) => name))
       .filter((name) => isHiddenEverywhere(availability.get(name)));
     return { ...result, ...(hiddenAgentNames.length > 0 ? { hiddenAgentNames } : {}) };
   }
@@ -593,10 +585,18 @@ export class ConfigAssetWorkflow {
   // whether or not the asset exists.
   private async requireAssetAccess(
     access: ActorAccess,
-    action: Extract<PlatformAction, `${ConfigAssetKind}.${"read" | "write" | "delete"}`>,
+    verb: "read" | "write",
     input: { kind: ConfigAssetKind; name: string }
   ): Promise<void> {
-    access.require(action, await this.assetResource(input));
+    access.require(this.kind(input.kind).actions[verb], await this.assetResource(input));
+  }
+
+  private kind(kind: string): WorkflowAssetKind {
+    return this.options.configAssets.kinds.require(kind);
+  }
+
+  private assetBundle(assets: ConfigAssetRecord[], defaultAgentName?: string) {
+    return assetBundle(this.options.configAssets.kinds.kinds, assets, defaultAgentName);
   }
 
   private async assetResource(input: { kind: ConfigAssetKind; name: string }) {
@@ -610,11 +610,15 @@ export class ConfigAssetWorkflow {
     return { kind: input.kind, name: input.name, ...(asset ? { assetId: asset.id } : {}) };
   }
 
-  // The first agent becomes the default and the last one takes the default with it. Either is
-  // a default-agent change, which no Namespace or asset grant opens.
-  private requireDefaultAgentChange(access: ActorAccess, changesDefault: boolean): void {
+  // The first asset of a kind with an instance default becomes it and the last one takes it
+  // away. Either changes the default, which no Namespace or asset grant opens.
+  private requireInstanceDefaultChange(
+    access: ActorAccess,
+    kind: WorkflowAssetKind,
+    changesDefault: boolean
+  ): void {
     if (changesDefault) {
-      access.require("agent.write");
+      access.require(kind.actions.write);
     }
   }
 
@@ -634,10 +638,10 @@ export class ConfigAssetWorkflow {
       clientInstanceId: this.options.clientInstanceId
     });
     for (const agent of nextAgents) {
-      const namespace = namespaces.find((candidate) => agent.name.startsWith(candidate.prefix));
+      const namespace = findNamespaceOfAssetName(namespaces, agent.name);
       if (
         !namespace ||
-        configValuesEqual(findBundleConfig(current, "agent", agent.name), toJsonObject(agent))
+        configValuesEqual(findNamedDefinition(current.agents, agent.name), toJsonObject(agent))
       ) {
         continue;
       }
@@ -700,35 +704,6 @@ export class ConfigAssetWorkflow {
     }
   }
 
-  private assertInteractiveDeleteAllowed(kind: ConfigAssetKind): void {
-    const policy = this.options.config.administration.agentConfiguration;
-    if (kind === "skill" && !policy.allowSkillEditing) {
-      throw new AppError("FORBIDDEN", "Interactive skill editing is disabled");
-    }
-    if (kind === "agent" && !policy.allowAgentDeletion) {
-      throw new AppError("FORBIDDEN", "Interactive agent deletion is disabled");
-    }
-  }
-
-  /** Switching to a binding without fast-mode support clears the flag instead of failing the save. */
-  private clearFastModeOnBindingSwitch(
-    currentConfig: AgentConfig | SkillConfig | undefined,
-    nextConfig: Record<string, unknown>
-  ): Record<string, unknown> {
-    const currentBindingId = (currentConfig as AgentConfig | undefined)?.modelBindingId;
-    const nextBindingId = nextConfig.modelBindingId;
-    if (
-      nextConfig.fastMode !== true ||
-      nextBindingId === currentBindingId ||
-      (typeof nextBindingId === "string" &&
-        this.options.configAssets.validationRefs.fastModeModelBindingIds.includes(nextBindingId))
-    ) {
-      return nextConfig;
-    }
-    const { fastMode: _fastMode, ...withoutFastMode } = nextConfig;
-    return withoutFastMode;
-  }
-
   /**
    * An agent's list of user-selectable models must name eligible bindings whenever it is written.
    * Unchanged lists are not re-checked, so a binding that later disappears or stops being
@@ -743,11 +718,11 @@ export class ConfigAssetWorkflow {
       .filter(
         (agent) =>
           !configValuesEqual(
-            modelSettingValue(
-              findBundleConfig(current, "agent", agent.name) as AgentConfig | undefined,
+            agentModelSettingValue(
+              findNamedDefinition(current.agents, agent.name),
               "userSelectableModelBindingIds"
             ),
-            modelSettingValue(agent, "userSelectableModelBindingIds")
+            agentModelSettingValue(agent, "userSelectableModelBindingIds")
           )
       )
       .flatMap((agent) => findAgentUserSelectableModelIssues(agent, eligibleIds));
@@ -755,60 +730,6 @@ export class ConfigAssetWorkflow {
       throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", {
         issues: issues.map((message) => ({ message }))
       });
-    }
-  }
-
-  private assertInteractiveAssetUpsertAllowed(input: {
-    access: ActorAccess;
-    /** The agent is in a Namespace that lists model bindings; the list was checked before. */
-    bindingListed: boolean;
-    kind: ConfigAssetKind;
-    name: string;
-    currentConfig: AgentConfig | SkillConfig | undefined;
-    nextConfig: AgentConfig | SkillConfig;
-  }): void {
-    const policy = this.options.config.administration.agentConfiguration;
-    if (input.kind === "skill") {
-      if (!policy.allowSkillEditing) {
-        throw new AppError("FORBIDDEN", "Interactive skill editing is disabled");
-      }
-      return;
-    }
-    if (!input.currentConfig && !policy.allowAgentCreation) {
-      throw new AppError("FORBIDDEN", "Interactive agent creation is disabled");
-    }
-
-    const currentAgent = input.currentConfig as AgentConfig | undefined;
-    const nextAgent = input.nextConfig as AgentConfig;
-    const editableFields = new Set<AgentEditableField>(policy.editableAgentFields);
-    const changedFields = AGENT_EDITABLE_FIELDS.filter(
-      (field) => !configValuesEqual(currentAgent?.[field], nextAgent[field])
-    );
-    // Model settings are governed by a permission, not by the editable-field policy. The one
-    // exception is the binding of an agent in a Namespace that lists bindings: the list is the
-    // operator's choice of models for that Namespace, so its writer picks among them.
-    const changedModelSettings = AGENT_MODEL_SETTING_FIELDS.filter(
-      (field) =>
-        !(field === "modelBindingId" && input.bindingListed) &&
-        !configValuesEqual(
-          modelSettingValue(currentAgent, field),
-          modelSettingValue(nextAgent, field)
-        )
-    );
-    if (changedModelSettings.length > 0 && !input.access.authorize("agent_models.manage").allowed) {
-      throw new AppError(
-        "FORBIDDEN",
-        `Changing agent model settings (${changedModelSettings.join(", ")}) requires 'agent_models.manage' permission`
-      );
-    }
-    const protectedFields = changedFields.filter(
-      (field) => !editableFields.has(field) && !isAgentModelSettingField(field)
-    );
-    if (protectedFields.length > 0) {
-      throw new AppError(
-        "FORBIDDEN",
-        `Interactive changes are not allowed for agent field${protectedFields.length === 1 ? "" : "s"}: ${protectedFields.join(", ")}`
-      );
     }
   }
 
@@ -828,11 +749,7 @@ export class ConfigAssetWorkflow {
         clientInstanceId: this.options.clientInstanceId
       })
     ]);
-    return {
-      ...(state.defaultAgentName === undefined ? {} : { defaultAgentName: state.defaultAgentName }),
-      agents: assetConfigs(assets, "agent"),
-      skills: assetConfigs(assets, "skill")
-    };
+    return this.assetBundle(assets, state.defaultAgentName);
   }
 
   private async getActiveAssetOrThrow(input: {
@@ -865,30 +782,6 @@ export class ConfigAssetWorkflow {
   }
 }
 
-function isAgentModelSettingField(field: string): field is AgentModelSettingField {
-  return (AGENT_MODEL_SETTING_FIELDS as readonly string[]).includes(field);
-}
-
-function hasModelBindingList(namespaces: Namespace[], agentName: string): boolean {
-  return namespaces.some(
-    (namespace) =>
-      agentName.startsWith(namespace.prefix) && namespace.allowedModelBindingIds !== undefined
-  );
-}
-
-function modelSettingValue(agent: AgentConfig | undefined, field: AgentModelSettingField) {
-  if (field === "fastMode") {
-    return agent?.fastMode ?? false;
-  }
-  if (field === "userSelectableModelBindingIds") {
-    return agent?.userSelectableModelBindingIds ?? [];
-  }
-  if (field === "modelReasoningEfforts") {
-    return agent?.modelReasoningEfforts ?? {};
-  }
-  return agent?.[field];
-}
-
 function isHiddenEverywhere(availability: AgentAvailability | undefined): boolean {
   return (
     !availability ||
@@ -911,145 +804,93 @@ function projectConfigAsset(asset: ConfigAssetRecord) {
   };
 }
 
-function assetConfigs(assets: ConfigAssetRecord[], kind: ConfigAssetKind): JsonObject[] {
-  return assets.flatMap((asset) =>
-    asset.kind === kind && asset.config !== null ? [asset.config] : []
+function assetBundle(
+  kinds: readonly WorkflowAssetKind[],
+  assets: ConfigAssetRecord[],
+  defaultAgentName?: string
+): ConfigAssetBundle<JsonObject> {
+  return kinds.reduce<ConfigAssetBundle<JsonObject>>(
+    (bundle, kind) =>
+      kind.withDefinitions(
+        bundle,
+        assets.flatMap((asset) =>
+          asset.kind === kind.kind && asset.config !== null ? [asset.config] : []
+        )
+      ),
+    { ...(defaultAgentName === undefined ? {} : { defaultAgentName }), agents: [], skills: [] }
   );
 }
 
-function assetBundle(
-  assets: ConfigAssetRecord[],
-  defaultAgentName?: string
-): ConfigAssetBundleInput {
-  return {
-    ...(defaultAgentName === undefined ? {} : { defaultAgentName }),
-    agents: assetConfigs(assets, "agent"),
-    skills: assetConfigs(assets, "skill")
-  };
-}
-
 function mergeBundle(
+  kinds: readonly WorkflowAssetKind[],
   current: ConfigAssetBundleInput,
   incoming: ConfigAssetBundleInput
 ): ConfigAssetBundleInput {
-  const incomingAgentNames = new Set(incoming.agents.map(readConfigName));
-  const incomingSkillNames = new Set(incoming.skills.map(readConfigName));
-  return {
-    ...(incoming.defaultAgentName === undefined
-      ? current.defaultAgentName === undefined
-        ? {}
-        : { defaultAgentName: current.defaultAgentName }
-      : { defaultAgentName: incoming.defaultAgentName }),
-    agents: [
-      ...current.agents.filter((config) => !incomingAgentNames.has(readConfigName(config))),
-      ...incoming.agents
-    ],
-    skills: [
-      ...current.skills.filter((config) => !incomingSkillNames.has(readConfigName(config))),
-      ...incoming.skills
-    ]
-  };
+  const defaultAgentName = incoming.defaultAgentName ?? current.defaultAgentName;
+  return kinds.reduce<ConfigAssetBundleInput>(
+    (bundle, kind) => {
+      const incomingNames = new Set(kind.definitions(incoming).map(readDefinitionName));
+      return kind.withDefinitions(bundle, [
+        ...kind
+          .definitions(current)
+          .filter((config) => !incomingNames.has(readDefinitionName(config))),
+        ...kind.definitions(incoming)
+      ]);
+    },
+    { ...(defaultAgentName === undefined ? {} : { defaultAgentName }), agents: [], skills: [] }
+  );
 }
 
 function replaceBundleAsset(
   bundle: ConfigAssetBundleInput,
-  input: {
-    kind: ConfigAssetKind;
-    name: string;
-    config: Record<string, unknown>;
-  }
+  kind: WorkflowAssetKind,
+  input: { name: string; config: Record<string, unknown> }
 ): ConfigAssetBundleInput {
-  return {
-    ...bundle,
-    agents:
-      input.kind === "agent"
-        ? [...withoutNamedConfig(bundle.agents, input.name), input.config]
-        : bundle.agents,
-    skills:
-      input.kind === "skill"
-        ? [...withoutNamedConfig(bundle.skills, input.name), input.config]
-        : bundle.skills
-  };
+  return kind.withDefinitions(bundle, [
+    ...withoutNamedConfig(kind.definitions(bundle), input.name),
+    input.config
+  ]);
 }
 
 function removeBundleAsset(
   bundle: ConfigAssetBundleInput,
-  input: { kind: ConfigAssetKind; name: string }
+  kind: WorkflowAssetKind,
+  name: string
 ): ConfigAssetBundleInput {
-  return {
-    ...bundle,
-    agents: input.kind === "agent" ? withoutNamedConfig(bundle.agents, input.name) : bundle.agents,
-    skills: input.kind === "skill" ? withoutNamedConfig(bundle.skills, input.name) : bundle.skills
-  };
+  return kind.withDefinitions(bundle, withoutNamedConfig(kind.definitions(bundle), name));
 }
 
 function withoutNamedConfig(configs: unknown[], name: string): unknown[] {
-  return configs.filter((config) => readConfigName(config) !== name);
+  return configs.filter((config) => readDefinitionName(config) !== name);
 }
 
 function requireMatchingConfigName(config: unknown, expectedName: string): void {
-  if (readConfigName(config) !== expectedName) {
+  if (readDefinitionName(config) !== expectedName) {
     throw new AppError("VALIDATION_FAILED", "Config asset name must match the request path");
   }
 }
 
 function requireConfigName(config: unknown): string {
-  const name = readConfigName(config);
+  const name = readDefinitionName(config);
   if (name === undefined) {
     throw new AppError("VALIDATION_FAILED", "Config asset must have a name");
   }
   return name;
 }
 
-function readConfigName(config: unknown): string | undefined {
-  if (typeof config !== "object" || config === null || !("name" in config)) {
-    return undefined;
-  }
-  const name = (config as { name?: unknown }).name;
-  return typeof name === "string" ? name : undefined;
-}
-
 function findValidatedConfig(
-  bundle: { agents: AgentConfig[]; skills: SkillConfig[] },
-  kind: ConfigAssetKind,
+  bundle: ConfigAssetBundleInput,
+  kind: WorkflowAssetKind,
   name: string
-): AgentConfig | SkillConfig {
-  const config = (kind === "agent" ? bundle.agents : bundle.skills).find(
-    (candidate) => candidate.name === name
-  );
-  if (!config) {
-    throw new AppError("VALIDATION_FAILED", `Validated config ${kind} '${name}' was not found`);
+): unknown {
+  const config = findNamedDefinition(kind.definitions(bundle), name);
+  if (config === undefined) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Validated config ${kind.kind} '${name}' was not found`
+    );
   }
   return config;
-}
-
-function findBundleConfig(
-  bundle: ConfigAssetBundleInput,
-  kind: ConfigAssetKind,
-  name: string
-): AgentConfig | SkillConfig | undefined {
-  return (kind === "agent" ? bundle.agents : bundle.skills).find(
-    (candidate) => readConfigName(candidate) === name
-  ) as AgentConfig | SkillConfig | undefined;
-}
-
-/** Object key order carries no meaning: a JSON store may return keys in another order. */
-function configValuesEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(withSortedKeys(left)) === JSON.stringify(withSortedKeys(right));
-}
-
-function withSortedKeys(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(withSortedKeys);
-  }
-  if (typeof value !== "object" || value === null) {
-    return value;
-  }
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([key, entry]) => [key, withSortedKeys(entry)])
-  );
 }
 
 function toJsonObject(value: unknown): JsonObject {
@@ -1064,15 +905,22 @@ function assetKey(kind: ConfigAssetKind, name: string): string {
   return `${kind}:${name}`;
 }
 
-function shouldSetInitialDefault(bundle: ConfigAssetBundleInput, kind: ConfigAssetKind): boolean {
-  return kind === "agent" && bundle.agents.length === 0 && bundle.defaultAgentName === undefined;
+function shouldSetInitialDefault(bundle: ConfigAssetBundleInput, kind: WorkflowAssetKind): boolean {
+  return (
+    kind.holdsInstanceDefault &&
+    kind.definitions(bundle).length === 0 &&
+    bundle.defaultAgentName === undefined
+  );
 }
 
 function shouldClearLastDefault(
   bundle: ConfigAssetBundleInput,
-  input: { kind: ConfigAssetKind; name: string }
+  kind: WorkflowAssetKind,
+  name: string
 ): boolean {
   return (
-    input.kind === "agent" && bundle.agents.length === 1 && bundle.defaultAgentName === input.name
+    kind.holdsInstanceDefault &&
+    kind.definitions(bundle).length === 1 &&
+    bundle.defaultAgentName === name
   );
 }

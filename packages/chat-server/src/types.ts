@@ -7,6 +7,7 @@ import type {
 import type {
   AgentConfig,
   AgentRuntime,
+  AssetKindRegistry,
   ClientInstanceId,
   ConfigAssetSource,
   ConfigAssetStore,
@@ -26,6 +27,7 @@ import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";
 import type { ChatAttachmentService } from "./attachments";
 import type { SystemModelGateway } from "./system-model-call";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
@@ -61,14 +63,9 @@ export interface ChatServerOptions {
   configAssets: {
     store: ConfigAssetStore;
     source: ConfigAssetSource;
-    validationRefs: {
-      modelProviderIds: string[];
-      modelBindingIds: string[];
-      modelBindings: Array<{ id: string; model: string }>;
-      fastModeModelBindingIds: string[];
-      reasoningEfforts: string[];
-      enabledToolNames: string[];
-    };
+    /** The registered asset kinds, assembled once with the instance. */
+    kinds: AssetKindRegistry<WorkflowAssetKind>;
+    validationRefs: ConfigAssetValidationRefs;
     validateAgents?(agents: AgentConfig[]): string[];
   };
   agentRuntime: AgentRuntime;

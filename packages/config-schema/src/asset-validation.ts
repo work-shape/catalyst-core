@@ -39,34 +39,50 @@ export function validateConfigAssetBundle(input: {
       agentNames: agents.map((agent) => agent.name),
       defaultAgentName: input.defaultAgentName
     }).map(toValidationIssue),
-    ...findAgentModelReferenceIssues({
+    ...findAgentReferenceIssues({
       agents,
-      modelProviderIds: input.refs.modelProviderIds,
-      modelBindingIds: input.refs.modelBindingIds,
-      fastModeModelBindingIds: input.refs.fastModeModelBindingIds
-    }).map(toValidationIssue),
-    ...findMissingAgentSkillReferences(
-      agents,
-      skills.map((skill) => skill.name)
-    ).map((issue) => ({
-      message: `Agent '${issue.agentName}' references missing skill '${issue.referenceName}'`
-    })),
-    ...findMissingAgentToolReferences(agents, input.refs.enabledToolNames).map((issue) => ({
-      message: `Agent '${issue.agentName}' references unavailable tool '${issue.referenceName}'`
-    }))
+      skillNames: skills.map((skill) => skill.name),
+      refs: input.refs
+    }).map(toValidationIssue)
   );
-  for (const agent of agents) {
-    if (agent.skillNames.length > 0 && !agent.toolNames.includes("read_skill")) {
-      issues.push({
-        message: `Agent '${agent.name}' references skills but does not allow 'read_skill'`
-      });
-    }
-  }
 
   if (issues.length > 0) {
     throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", { issues });
   }
   return { agents, skills };
+}
+
+/**
+ * What an agent refers to and this instance does not offer: a model provider or binding, a
+ * skill, a tool, or skills without the tool that reads them.
+ */
+export function findAgentReferenceIssues(input: {
+  agents: readonly AgentConfig[];
+  skillNames: readonly string[];
+  refs: {
+    modelProviderIds: readonly string[];
+    modelBindingIds: readonly string[];
+    fastModeModelBindingIds: readonly string[];
+    enabledToolNames: readonly string[];
+  };
+}): string[] {
+  return [
+    ...findAgentModelReferenceIssues({
+      agents: input.agents,
+      modelProviderIds: input.refs.modelProviderIds,
+      modelBindingIds: input.refs.modelBindingIds,
+      fastModeModelBindingIds: input.refs.fastModeModelBindingIds
+    }),
+    ...findMissingAgentSkillReferences(input.agents, input.skillNames).map(
+      (issue) => `Agent '${issue.agentName}' references missing skill '${issue.referenceName}'`
+    ),
+    ...findMissingAgentToolReferences(input.agents, input.refs.enabledToolNames).map(
+      (issue) => `Agent '${issue.agentName}' references unavailable tool '${issue.referenceName}'`
+    ),
+    ...input.agents
+      .filter((agent) => agent.skillNames.length > 0 && !agent.toolNames.includes("read_skill"))
+      .map((agent) => `Agent '${agent.name}' references skills but does not allow 'read_skill'`)
+  ];
 }
 
 interface ConfigAssetValidationIssue {

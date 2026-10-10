@@ -1,6 +1,10 @@
 import { builtInModelCapabilities } from "./support/model-gateway";
 import { accessOf } from "./support/access";
-import { createTestInstance, getTestExecution } from "./support/test-instance";
+import {
+  createTestAssetKinds,
+  createTestInstance,
+  getTestExecution
+} from "./support/test-instance";
 import { describe, expect, it, vi } from "vitest";
 import {
   asAgentRunId,
@@ -100,20 +104,22 @@ async function fixture() {
     ]
   });
   const source = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
+  const validationRefs = {
+    modelProviderIds: getModelProviderConfigs(config).map((provider) => provider.id),
+    modelBindingIds: [],
+    modelBindings: [],
+    fastModeModelBindingIds: [],
+    reasoningEfforts: [],
+    enabledToolNames: ["read_skill", "propose_skill_change"]
+  };
   const handler = createSkillChangeApprovalHandler({
     config,
     clientInstanceId,
     configAssets: {
       store: store.configAssets,
       source,
-      validationRefs: {
-        modelProviderIds: getModelProviderConfigs(config).map((provider) => provider.id),
-        modelBindingIds: [],
-        modelBindings: [],
-        fastModeModelBindingIds: [],
-        reasoningEfforts: [],
-        enabledToolNames: ["read_skill", "propose_skill_change"]
-      }
+      kinds: createTestAssetKinds({ config, validationRefs }),
+      validationRefs
     }
   });
   const onDecided = vi.fn();

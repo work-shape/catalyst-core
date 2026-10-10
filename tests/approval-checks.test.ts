@@ -1,5 +1,5 @@
 import { accessOf, callerOf } from "./support/access";
-import { createTestInstance } from "./support/test-instance";
+import { createTestAssetKinds, createTestInstance } from "./support/test-instance";
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-clock";
 import {
@@ -456,20 +456,22 @@ async function skillFixture() {
     ]
   });
   const source = createConfigAssetSource({ store: f.store.configAssets, clientInstanceId });
+  const validationRefs = {
+    modelProviderIds: ["local"],
+    modelBindingIds: ["guardrailCheck"],
+    modelBindings: [{ id: "guardrailCheck", model: "cheap-check" }],
+    fastModeModelBindingIds: [],
+    reasoningEfforts: ["low"],
+    enabledToolNames: ["propose_skill_change"]
+  };
   const skillHandler = createSkillChangeApprovalHandler({
     config: f.config,
     clientInstanceId,
     configAssets: {
       store: f.store.configAssets,
       source,
-      validationRefs: {
-        modelProviderIds: ["local"],
-        modelBindingIds: ["guardrailCheck"],
-        modelBindings: [{ id: "guardrailCheck", model: "cheap-check" }],
-        fastModeModelBindingIds: [],
-        reasoningEfforts: ["low"],
-        enabledToolNames: ["propose_skill_change"]
-      }
+      kinds: createTestAssetKinds({ config: f.config, validationRefs }),
+      validationRefs
     }
   });
   const workflow = new ApprovalRequestWorkflow({

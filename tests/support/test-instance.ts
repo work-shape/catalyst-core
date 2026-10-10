@@ -9,7 +9,9 @@ import {
 } from "@vivd-catalyst/client-assembly";
 import {
   createChatServer,
+  createAgentAssetKind,
   createChatServerJobs,
+  createSkillAssetKind,
   type ChatServerJobOptions,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
@@ -17,6 +19,7 @@ import { frameworkBehind } from "../../packages/chat-server/src/http/framework";
 import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contract";
 import {
   asClientInstanceId,
+  createAssetKindRegistry,
   NoopAuditRecorder,
   SecretNotResolvedError,
   type HttpRuntime,
@@ -66,8 +69,9 @@ export type TestServerOptions = Omit<
   "configAssets" | "logger" | "modelGateway" | "modules"
 > &
   Partial<Pick<ChatServerOptions, "logger" | "modules">> & {
-    configAssets?: Omit<ChatServerOptions["configAssets"], "source"> &
-      Partial<Pick<ChatServerOptions["configAssets"], "source">>;
+    /** Left out, `kinds` is the registry of the platform's own kinds, agent and skill. */
+    configAssets?: Omit<ChatServerOptions["configAssets"], "source" | "kinds"> &
+      Partial<Pick<ChatServerOptions["configAssets"], "source" | "kinds">>;
     /**
      * What answers the server's own model calls, such as a conversation title. It stands
      * behind the gateway for every model entry of the config. Left out, such a call fails.
@@ -334,11 +338,32 @@ const providerOfNoAnswers: ScriptedModelProvider = {
   }
 };
 
+/** The registry an assembled instance holds: the platform's own kinds, agent and skill. */
+export function createTestAssetKinds(
+  input: Parameters<typeof createAgentAssetKind>[0]
+): ChatServerOptions["configAssets"]["kinds"] {
+  return createAssetKindRegistry([
+    createAgentAssetKind(input),
+    createSkillAssetKind({ config: input.config })
+  ]);
+}
+
 export function completeServerOptions(
   options: TestServerOptions,
   stores: PlatformStores
 ): ChatServerOptions {
   const { modelProvider = providerOfNoAnswers, ...serverOptions } = options;
+  const configAssets: NonNullable<TestServerOptions["configAssets"]> = options.configAssets ?? {
+    store: stores.configAssets,
+    validationRefs: {
+      modelProviderIds: [],
+      modelBindingIds: [],
+      modelBindings: [],
+      fastModeModelBindingIds: [],
+      reasoningEfforts: [],
+      enabledToolNames: []
+    }
+  };
   return {
     ...serverOptions,
     logger: options.logger ?? createLogger(),
@@ -349,23 +374,17 @@ export function completeServerOptions(
     }),
     modules: options.modules ?? resolveInstanceModules(options.config).snapshot,
     stores: options.stores,
-    configAssets: options.configAssets
-      ? {
-          ...options.configAssets,
-          source: options.configAssets.source ?? createStaticConfigAssetSource({})
-        }
-      : {
-          store: stores.configAssets,
-          source: createStaticConfigAssetSource({}),
-          validationRefs: {
-            modelProviderIds: [],
-            modelBindingIds: [],
-            modelBindings: [],
-            fastModeModelBindingIds: [],
-            reasoningEfforts: [],
-            enabledToolNames: []
-          }
-        }
+    configAssets: {
+      ...configAssets,
+      source: configAssets.source ?? createStaticConfigAssetSource({}),
+      kinds:
+        configAssets.kinds ??
+        createTestAssetKinds({
+          config: options.config,
+          validationRefs: configAssets.validationRefs,
+          validateAgents: configAssets.validateAgents
+        })
+    }
   };
 }
 

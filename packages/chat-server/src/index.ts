@@ -149,6 +149,16 @@ export type {
 } from "./approval-request-workflow";
 
 export * from "./skill-change-approval-handler";
+export { applyValidatedConfigAssetMutations } from "./config-asset-writer";
+export type { ConfigAssetWriterOptions } from "./config-asset-writer";
+export { createAgentAssetKind } from "./asset-kinds/agent";
+export type { AgentAssetKindOptions } from "./asset-kinds/agent";
+export { createSkillAssetKind } from "./asset-kinds/skill";
+export type {
+  ConfigAssetBundle,
+  ConfigAssetValidationRefs,
+  WorkflowAssetKind
+} from "./asset-kinds/shared";
 
 function adaptLogger(logger: Logger): FastifyInstance["log"] {
   return {

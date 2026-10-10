@@ -3,6 +3,7 @@ import {
   assertSpendBudgetPricingCoverage,
   validateConfigAssetBundle
 } from "@vivd-catalyst/config-schema";
+import type { ConfigAssetBundle } from "./asset-kinds/shared";
 import type { ChatServerOptions } from "./types";
 
 export type ConfigAssetWriterOptions = Pick<
@@ -11,7 +12,7 @@ export type ConfigAssetWriterOptions = Pick<
 >;
 export function validateConfigAssetCandidate(
   options: ConfigAssetWriterOptions,
-  input: { agents: unknown[]; skills: unknown[]; defaultAgentName?: string }
+  input: ConfigAssetBundle
 ) {
   const validated = validateConfigAssetBundle({
     ...input,
@@ -32,17 +33,34 @@ export async function applyValidatedConfigAssetMutations(
   options: ConfigAssetWriterOptions,
   input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
 ) {
+  const { kinds } = options.configAssets;
+  for (const mutation of input.mutations) {
+    if (mutation.type === "setDefaultAgent") {
+      continue;
+    }
+    kinds.require(mutation.kind);
+    // No registered kind is owned by a workspace yet. The first one that is lifts this.
+    if (mutation.type === "upsert" && mutation.scope?.kind === "workspace") {
+      throw new AppError("VALIDATION_FAILED", `A ${mutation.kind} cannot be owned by a workspace`, {
+        reason: "invalid_scope"
+      });
+    }
+  }
   const [state, assets] = await Promise.all([
     options.configAssets.store.getConfigAssetState({ clientInstanceId: options.clientInstanceId }),
     options.configAssets.store.listActiveConfigAssets({
       clientInstanceId: options.clientInstanceId
     })
   ]);
-  const agents = new Map<string, unknown>(
-    assets.filter((asset) => asset.kind === "agent").map((asset) => [asset.name, asset.config])
-  );
-  const skills = new Map<string, unknown>(
-    assets.filter((asset) => asset.kind === "skill").map((asset) => [asset.name, asset.config])
+  const definitions = new Map(
+    kinds.kinds.map((kind) => [
+      kind.kind,
+      new Map<string, unknown>(
+        assets
+          .filter((asset) => asset.kind === kind.kind)
+          .map((asset) => [asset.name, asset.config])
+      )
+    ])
   );
   let defaultAgentName = state.defaultAgentName;
   for (const mutation of input.mutations) {
@@ -50,17 +68,20 @@ export async function applyValidatedConfigAssetMutations(
       defaultAgentName = mutation.agentName;
       continue;
     }
-    const assets = mutation.kind === "agent" ? agents : skills;
+    const ofKind = definitions.get(mutation.kind);
     if (mutation.type === "delete") {
-      assets.delete(mutation.name);
+      ofKind?.delete(mutation.name);
     } else {
-      assets.set(mutation.name, mutation.config);
+      ofKind?.set(mutation.name, mutation.config);
     }
   }
-  validateConfigAssetCandidate(options, {
-    agents: [...agents.values()],
-    skills: [...skills.values()],
-    defaultAgentName
-  });
+  validateConfigAssetCandidate(
+    options,
+    kinds.kinds.reduce<ConfigAssetBundle>(
+      (bundle, kind) =>
+        kind.withDefinitions(bundle, [...(definitions.get(kind.kind)?.values() ?? [])]),
+      { agents: [], skills: [], defaultAgentName }
+    )
+  );
   return options.configAssets.store.applyConfigAssetMutations(input);
 }

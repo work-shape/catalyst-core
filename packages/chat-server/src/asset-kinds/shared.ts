@@ -1,0 +1,92 @@
+import type {
+  ActorAccess,
+  ConfigAssetKind,
+  Namespace,
+  RegisteredAssetKind
+} from "@vivd-catalyst/core";
+
+/** The agents and skills of an instance as the export and the release sync carry them. */
+export interface ConfigAssetBundle<Definition = unknown> {
+  defaultAgentName?: string;
+  agents: Definition[];
+  skills: Definition[];
+}
+
+/** What an agent or skill definition may refer to on this instance. */
+export interface ConfigAssetValidationRefs {
+  modelProviderIds: string[];
+  modelBindingIds: string[];
+  modelBindings: Array<{ id: string; model: string }>;
+  fastModeModelBindingIds: string[];
+  reasoningEfforts: string[];
+  enabledToolNames: string[];
+}
+
+/**
+ * A registered kind with what the config asset workflow asks of it. Everything the workflow
+ * does differently for one kind is answered here, by that kind's registration.
+ */
+export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> {
+  /** This kind's definitions in a bundle. */
+  definitions<Definition>(bundle: ConfigAssetBundle<Definition>): Definition[];
+  withDefinitions<Definition>(
+    bundle: ConfigAssetBundle<Definition>,
+    definitions: Definition[]
+  ): ConfigAssetBundle<Definition>;
+  /** The instance keeps one asset of this kind as its default: the first one, until changed. */
+  readonly holdsInstanceDefault: boolean;
+  /** An asset of this kind is usable only in the workspaces its availability names. */
+  readonly hasWorkspaceAvailability: boolean;
+  /** Adjusts what an interactive save sends before it is validated. */
+  prepareInteractiveUpsert(input: {
+    current: unknown;
+    next: Record<string, unknown>;
+  }): Record<string, unknown>;
+  /** Throws `FORBIDDEN` when the instance's editing policy refuses this interactive save. */
+  assertInteractiveUpsertAllowed(input: {
+    access: ActorAccess;
+    name: string;
+    /** The stored definition, or undefined for a new asset. */
+    current: unknown;
+    /** The validated definition. */
+    next: unknown;
+    namespaces: readonly Namespace[];
+  }): void;
+  /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
+  assertInteractiveDeleteAllowed(): void;
+}
+
+export function readDefinitionField(definition: unknown, field: string): unknown {
+  if (typeof definition !== "object" || definition === null || !(field in definition)) {
+    return undefined;
+  }
+  return Object.entries(definition).find(([key]) => key === field)?.[1];
+}
+
+export function readDefinitionName(definition: unknown): string | undefined {
+  const name = readDefinitionField(definition, "name");
+  return typeof name === "string" ? name : undefined;
+}
+
+export function findNamedDefinition(definitions: readonly unknown[], name: string): unknown {
+  return definitions.find((candidate) => readDefinitionName(candidate) === name);
+}
+
+/** Object key order carries no meaning: a JSON store may return keys in another order. */
+export function configValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(withSortedKeys(left)) === JSON.stringify(withSortedKeys(right));
+}
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(withSortedKeys);
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, entry]) => [key, withSortedKeys(entry)])
+  );
+}

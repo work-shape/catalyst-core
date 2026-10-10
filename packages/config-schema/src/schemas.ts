@@ -183,13 +183,14 @@ const dataSourceConfigSchema = z.object({
     .optional()
 });
 
+export const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
+export const SKILL_NAME_RULE =
+  "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens";
+
 export const skillNameSchema = z
   .string()
   .min(1)
-  .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/u, {
-    message:
-      "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens"
-  });
+  .regex(SKILL_NAME_PATTERN, { message: SKILL_NAME_RULE });
 
 export const skillResourcePathSchema = z
   .string()

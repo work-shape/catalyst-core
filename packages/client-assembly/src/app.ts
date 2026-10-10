@@ -7,6 +7,8 @@ import {
 import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
+  createAssetKindRegistry,
+  type AgentConfig,
   type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
@@ -14,10 +16,16 @@ import {
   ApprovalCheckRunner,
   ApprovalRequestWorkflow,
   createSkillChangeApprovalHandler,
+  createAgentAssetKind,
   createChatServer,
-  createChatServerJobs
+  createChatServerJobs,
+  createSkillAssetKind
 } from "@vivd-catalyst/chat-server";
-import type { ChatAttachmentService, ChatServerOptions } from "@vivd-catalyst/chat-server";
+import type {
+  ChatAttachmentService,
+  ChatServerOptions,
+  ConfigAssetValidationRefs
+} from "@vivd-catalyst/chat-server";
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
@@ -290,31 +298,38 @@ export async function createClientInstanceExecutionAssembly(
     (contribution) => contribution.jobRetries ?? []
   );
   const assetSource = createConfigAssetSource({ store: store.configAssets, clientInstanceId });
+  const validationRefs: ConfigAssetValidationRefs = {
+    modelProviderIds: modelProviders.map((provider) => provider.id),
+    modelBindingIds: config.modelBindings
+      .filter((binding) => binding.agentSelectable !== false)
+      .map((binding) => binding.id),
+    modelBindings: config.modelBindings
+      .filter((binding) => binding.agentSelectable !== false)
+      .map((binding) => {
+        const model =
+          binding.model ??
+          modelProviders.find((provider) => provider.id === binding.providerId)?.model;
+        if (model === undefined) throw new Error(`Model binding ${binding.id} has no model`);
+        return { id: binding.id, model };
+      }),
+    fastModeModelBindingIds: fastModeModelBindingIds(config),
+    reasoningEfforts: [...REASONING_EFFORTS],
+    enabledToolNames: [...getEnabledToolNames(config)]
+  };
+  const validateAgents = (agents: AgentConfig[]) =>
+    findConfigAssetAgentValidationIssues(config, agents, (binding) =>
+      modelGateway.capabilities(binding)
+    );
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
     store: store.configAssets,
     source: assetSource,
-    validationRefs: {
-      modelProviderIds: modelProviders.map((provider) => provider.id),
-      modelBindingIds: config.modelBindings
-        .filter((binding) => binding.agentSelectable !== false)
-        .map((binding) => binding.id),
-      modelBindings: config.modelBindings
-        .filter((binding) => binding.agentSelectable !== false)
-        .map((binding) => {
-          const model =
-            binding.model ??
-            modelProviders.find((provider) => provider.id === binding.providerId)?.model;
-          if (model === undefined) throw new Error(`Model binding ${binding.id} has no model`);
-          return { id: binding.id, model };
-        }),
-      fastModeModelBindingIds: fastModeModelBindingIds(config),
-      reasoningEfforts: [...REASONING_EFFORTS],
-      enabledToolNames: [...getEnabledToolNames(config)]
-    },
-    validateAgents: (agents) =>
-      findConfigAssetAgentValidationIssues(config, agents, (binding) =>
-        modelGateway.capabilities(binding)
-      )
+    // Every asset kind of this build. A later kind is one more registration in this list.
+    kinds: createAssetKindRegistry([
+      createAgentAssetKind({ config, validationRefs, validateAgents }),
+      createSkillAssetKind({ config })
+    ]),
+    validationRefs,
+    validateAgents
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
   const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;

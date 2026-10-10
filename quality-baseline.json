@@ -124,7 +124,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "packages/chat-server",
-      "count": 10,
+      "count": 5,
       "owner": "CB-4d"
     },
     {
