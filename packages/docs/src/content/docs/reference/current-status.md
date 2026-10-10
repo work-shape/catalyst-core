@@ -1,50 +1,34 @@
 ---
 title: Current Status
-description: What exists now and what is still a target shape.
+description: What the current release contains and what it does not contain yet.
 ---
 
-Workshape Catalyst is early. These docs describe the intended product model and the current repository shape, not a finished commercial platform.
+Workshape Catalyst is an early product: configuration keys and package APIs can still change between releases.
 
-## Implemented Or In Progress
+## In The Current Release
 
-The repository currently contains:
+The open platform contains:
 
-- reusable platform packages under `packages/`
-- a demo client assembly app under `clients/demo/`
-- schema-owned API contract and API client packages
-- chat server package
-- standalone chat UI package
-- shared chat UI package
-- tool SDK and tool execution packages
-- config schema package
-- capability SDK package with capability authoring contracts and Managed Object Access
-- auth package
-- Postgres store package
-- datasource registry package with guarded Postgres query access
-- usage governance package
+- the chat API under `/api/v1` with streamed agent runs, described by an OpenAPI document, see the [API reference](/reference/api/)
+- the standalone chat interface and an embeddable chat widget, with session tokens issued by a host backend
+- agents and skills as config assets in the database, edited in the interface or synchronized with the `catalyst` CLI
+- custom code tools through the tool SDK, and capabilities through the capability SDK
+- data sources with guarded, read-only Postgres query tools
+- generated views, web search and web fetch
+- standalone sign-in, service principals with API keys, roles, individual rights, Namespaces and grants
+- retention for conversations and audit events, minimized audit events, usage records with budgets and a customer rate card, and rate limits
+- modules, mail for invitations and password reset, and the background jobs page
+- execution workspaces with a sandboxed command runner, off unless an instance enables them
+- approval requests for skill changes that an agent proposes, with optional model-evaluated approval checks
+- Docker images, Compose files, an explicit migration step, and the `/health` and `/ready` probes
 
-Workspace-level planning docs and ADRs live outside the OSS platform repo while
-the product is still being split into platform, capability, and deployment
-repositories.
+Document processing, the artifact helper commands for execution workspaces and the private data view are paid capabilities. They are not in the open repository.
 
-The current implementation includes a local vertical slice for the demo client.
+## Not In The Current Release
 
-## Still Stabilizing
+- OpenAPI API tools. [OpenAPI API Tools](/extend/openapi-tools/) describes the intended shape; the tool adapter is not built.
+- Tools with the permission mode `approval_required`. An agent run cannot pause for a person's decision and continue afterwards, so startup refuses such a tool.
+- The operation policy value `approval`. Nothing files and decides the approval yet, so a call under it is refused, see [Operation policy](/configure/release-config/#operation-policy).
+- Editing a sent message and exporting a conversation.
 
-Expect changes around:
-
-- exact client assembly API shape
-- release config schema details
-- production deployment scripts
-- generated API client flow
-- OpenAPI tool adapter implementation
-- file acquisition and restricted document processing packages
-- approval-required tool resume flow
-- deeper worker isolation
-- self-hosted production runbooks
-
-## How To Use These Docs Today
-
-Use them as the operator and integrator documentation skeleton.
-
-When implementation details change, update these pages so the docs stay aligned with the actual package boundaries and deployment contract.
+Each page of these docs describes the current release unless it says otherwise.
