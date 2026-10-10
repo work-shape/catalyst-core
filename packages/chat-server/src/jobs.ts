@@ -64,7 +64,7 @@ export function createChatServerJobs(
   });
   const runRecovery = new RunRecoveryWatchdog(options, options.logger, jobOptions.runRecovery);
   const usageAttributionBackfill = createUsageAttributionBackfill(options, now);
-  const usageReconciliation = createUsageReconciliation(options);
+  const usageReconciliation = createUsageReconciliation(options, now);
   // The runs a process-bound runtime lost are the ones from before this process started.
   const processStartedAt = now();
   let recoveredRunsLostWithProcess = false;

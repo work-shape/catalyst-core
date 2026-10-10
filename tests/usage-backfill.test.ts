@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatServerJobs } from "@vivd-catalyst/chat-server";
 import { createJobWorker } from "@vivd-catalyst/client-assembly";
-import type { ClientInstanceId, ModelUsageBackfillPosition } from "@vivd-catalyst/core";
+import type { ClientInstanceId, Logger, ModelUsageBackfillPosition } from "@vivd-catalyst/core";
+import { waitUntil } from "./support/assertions";
 import { createFailingTestLogger } from "./support/fixtures";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { createRetentionOptions } from "./support/retention-harness";
@@ -17,11 +18,15 @@ describe("the usage attribution backfill", () => {
   const db = usePostgresSuite("usagebackfill");
 
   /** The due jobs as a freshly started process runs them: the backfill among them. */
-  async function runBackfill(clientInstanceId: ClientInstanceId, now?: () => Date) {
+  async function runBackfill(
+    clientInstanceId: ClientInstanceId,
+    now?: () => Date,
+    logger: Logger = createFailingTestLogger("The backfill failed")
+  ) {
     const worker = createJobWorker({
       stores: db.store,
       clientInstanceId,
-      logger: createFailingTestLogger("The backfill failed"),
+      logger,
       ...createChatServerJobs(
         createRetentionOptions({
           clientInstanceId,
@@ -308,6 +313,129 @@ describe("the usage attribution backfill", () => {
       { purpose: "document_extraction", totalTokens: 3 }
     ]);
     expect(recent.byAttribution).toHaveLength(1);
+  });
+
+  /** What the Usage page sums for the instance, and what its usage events hold. */
+  async function sumsAndEvents(clientInstanceId: ClientInstanceId) {
+    const history = await db.store.usage.summarizeModelUsageHistory({ clientInstanceId });
+    const [events] = await db.sql<Array<{ calls: number; tokens: number }>>`
+      select count(*)::int as calls, coalesce(sum(total_tokens), 0)::int as tokens
+      from model_usage_events where client_instance_id = ${clientInstanceId}`;
+    return {
+      sums: { calls: history.allTime.modelCallCount, tokens: history.allTime.totalTokens },
+      events: { ...events },
+      months: history.months.map((month) => month.month)
+    };
+  }
+
+  const monthsAgo = (months: number): Date => {
+    const today = new Date();
+    return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - months, 15));
+  };
+
+  // Fails without the change: the comparison of the sums with the events was owed by the
+  // memory of the process alone. The pass after the kill changed nothing and made none, and
+  // the daily comparison reads the current month only, so the sums of the older months
+  // stayed without these events.
+  it("makes the comparison a killed process owed after its pass", async () => {
+    const clientInstanceId = db.clientInstance("killed");
+    const quiet: Logger = {
+      debug() {},
+      info() {},
+      warn() {},
+      error() {},
+      child: () => quiet
+    };
+    // The upgrade is through: the sums are built and a pass without a change is recorded.
+    const start = new Date(Date.now() - 2 * DAY_MS);
+    await runBackfill(clientInstanceId, () => start);
+    // A process of the previous release wrote these, three months back.
+    for (const n of [1, 2, 3]) {
+      await oldEvent(clientInstanceId, `usage_killed_${n}`, {
+        agentRunId: null,
+        conversationId: null,
+        agentName: "document_extraction",
+        totalTokens: 10 * n,
+        createdAt: new Date(monthsAgo(3).getTime() + n * 1000).toISOString()
+      });
+    }
+
+    // Nothing may write a daily sum: the pass commits, and its comparison waits.
+    const noSums = await db.hold(
+      (tx) => tx`lock table model_usage_daily_rollups in exclusive mode`
+    );
+    const aDayLater = new Date(start.getTime() + DAY_MS + 1);
+    const running = runBackfill(clientInstanceId, () => aDayLater, quiet);
+    const waiting = async () =>
+      await db.sql<Array<{ pid: number }>>`
+        select pid from pg_stat_activity
+        where application_name = ${db.first} and wait_event_type = 'Lock'`;
+    await waitUntil(async () => {
+      const state = await db.store.usage.readModelUsageMaintenance({
+        clientInstanceId,
+        task: "attribution_backfill"
+      });
+      // The comparison of the backfill and the daily one: one waits for the sums, one for it.
+      return state?.repairNeeded === true && (await waiting()).length === 2;
+    }, "the pass is committed and its comparison waits");
+    // The process goes away: what it waits to write is never written.
+    let ended = false;
+    const gone = running.finally(() => {
+      ended = true;
+    });
+    await waitUntil(async () => {
+      for (const { pid } of await waiting()) await db.sql`select pg_cancel_backend(${pid})`;
+      return ended;
+    }, "the jobs of the process have ended");
+    await gone;
+    await noSums.rollback();
+    const filled = await rows(clientInstanceId);
+    expect(filled.map((row) => row.purpose)).toEqual(
+      Array.from({ length: 3 }, () => "document_extraction")
+    );
+    await expect(sumsAndEvents(clientInstanceId)).resolves.toMatchObject({
+      sums: { calls: 0, tokens: 0 }
+    });
+
+    // The next start. Its pass changes nothing, and the comparison is still owed.
+    await runBackfill(clientInstanceId, () => new Date(aDayLater.getTime() + DAY_MS / 24));
+    const repaired = await sumsAndEvents(clientInstanceId);
+    expect(repaired.sums).toEqual({ calls: 3, tokens: 60 });
+    expect(repaired.sums).toEqual(repaired.events);
+    await expect(
+      db.store.usage.readModelUsageMaintenance({ clientInstanceId, task: "attribution_backfill" })
+    ).resolves.not.toHaveProperty("repairNeeded");
+  });
+
+  // Fails without the change: once the sums were built, the comparison read the current month
+  // only. What the previous release wrote during a rollback in the months before stayed out
+  // of the sums.
+  it("reads the months of a rollback when the release comes back", async () => {
+    const clientInstanceId = db.clientInstance("rollback");
+    // The release ran three months ago and built the sums. Then it was rolled back.
+    await runBackfill(clientInstanceId, () => monthsAgo(3));
+    // The previous release wrote these meanwhile. The backfill has nothing to fill on them:
+    // their provider is no longer configured, and they come from no title or check.
+    for (const months of [2, 1, 0]) {
+      await oldEvent(clientInstanceId, `usage_rollback_${months}`, {
+        agentRunId: null,
+        conversationId: null,
+        agentName: "test_agent",
+        providerId: "gone",
+        totalTokens: 100,
+        createdAt: new Date(monthsAgo(months).getTime() - 14 * DAY_MS).toISOString()
+      });
+    }
+
+    await runBackfill(clientInstanceId);
+
+    const after = await sumsAndEvents(clientInstanceId);
+    expect(after.sums).toEqual({ calls: 3, tokens: 300 });
+    expect(after.sums).toEqual(after.events);
+    expect(after.months).toHaveLength(3);
+    await expect(rows(clientInstanceId)).resolves.toMatchObject(
+      Array.from({ length: 3 }, () => ({ purpose: null, region: null }))
+    );
   });
 
   // Fails without the change: there was no backfill. It also fails when the batch is taken in
