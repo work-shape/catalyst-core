@@ -45,6 +45,12 @@ export interface ProcessResult {
 
 export interface WorkspaceCommandProcessExecutor {
   execute(input: WorkspaceCommandProcessInput): Promise<ProcessResult>;
+  /**
+   * Removes what commands left running whose id starts with `idPrefix` and that were started
+   * longer ago than `olderThanMs`: a worker that was killed could not end them. Answers how
+   * many it removed. A sandbox whose commands end with the worker has nothing to remove.
+   */
+  removeLeftovers?(input: { idPrefix: string; olderThanMs: number }): Promise<number>;
 }
 
 export class LocalWorkspaceCommandProcessExecutor implements WorkspaceCommandProcessExecutor {

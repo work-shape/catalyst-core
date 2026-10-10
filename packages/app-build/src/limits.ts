@@ -24,6 +24,12 @@ export const PAGE_BUILD_MAX_OUTPUT_FILES = 500;
 export const PAGE_BUILD_MAX_RESULT_BYTES = 256 * 1024;
 /** How deep the built files may be nested. A path has at most 512 characters. */
 export const PAGE_BUILD_MAX_OUTPUT_DEPTH = 32;
+/**
+ * How many names the worker looks at in a build's output, files and directories together.
+ * Directories hold no bytes, so the limit on files alone would let a build make the worker
+ * walk any number of them.
+ */
+export const PAGE_BUILD_MAX_OUTPUT_ENTRIES = 2000;
 /** How many errors one build reports. */
 export const PAGE_BUILD_MAX_ERRORS = 50;
 /** How long one reported error message may be. */

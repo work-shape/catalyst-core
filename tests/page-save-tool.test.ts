@@ -9,7 +9,9 @@ import type { PageBuildLimits } from "@vivd-catalyst/app-build";
 import {
   createPageBuildClient,
   createPageBundleJobs,
-  createSandboxPageBuild
+  createSandboxPageBuild,
+  PAGE_BUILD_NO_WORKER_MESSAGE,
+  pageBundleJob
 } from "@vivd-catalyst/chat-server";
 import {
   assertCommandWorkerServesModuleJobKinds,
@@ -18,11 +20,13 @@ import {
 } from "@vivd-catalyst/client-assembly";
 import {
   createModuleRegistry,
+  createPageBuildId,
   FILE_SET_MAX_FILE_BYTES,
   readObjectBytes,
   type JobWorker,
   type Logger,
-  type PageBuildClient
+  type PageBuildClient,
+  type PageBuildId
 } from "@vivd-catalyst/core";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
@@ -96,11 +100,16 @@ async function createSaveHarness(
     limits?: Partial<PageBuildLimits>;
     builds?: (client: PageBuildClient) => PageBuildClient;
     waitMs?: number;
+    /** After how long without a claim a save concludes that no worker takes builds. */
+    unclaimedMs?: number;
+    /** Runs before each object of a built Page is stored. */
+    beforeStore?: () => Promise<void>;
   } = {}
 ) {
   const harness = await createWorkspaceHarness();
   const { store, clientInstanceId, conversation, objectStore } = harness;
-  const files = new MemoryObjectStorage();
+  const files = new HookedObjectStorage(options.beforeStore);
+  let buildsRun = 0;
   const service = new WorkspaceCommandService({
     store,
     objectStore,
@@ -110,7 +119,10 @@ async function createSaveHarness(
   const client = createPageBuildClient({
     stores: store,
     pollIntervalMs: 20,
-    ...(options.waitMs === undefined ? {} : { waitMs: options.waitMs })
+    ...(options.waitMs === undefined ? {} : { waitMs: options.waitMs }),
+    ...(options.unclaimedMs === undefined
+      ? {}
+      : { unclaimedMs: options.unclaimedMs, workerCheckIntervalMs: 20 })
   });
   const tool = createPageSaveTool({
     workspace: service.dependencies,
@@ -120,23 +132,28 @@ async function createSaveHarness(
     registry: new ToolRegistry({ tools: [tool] }),
     getAgentToolNames: () => [tool.name]
   });
+  const sandboxBuild = createSandboxPageBuild({
+    sandbox: new LocalWorkspaceCommandProcessExecutor(),
+    tempRoot: join(scratch, "builds"),
+    command: options.command ?? buildCommand
+  });
+  const { handlers } = createPageBundleJobs({
+    clientInstanceId,
+    stores: store,
+    pages: { objects: files },
+    workspaceObjects: objectStore,
+    logger: silent,
+    ...(options.limits ? { limits: options.limits } : {}),
+    build: (input) => {
+      buildsRun += 1;
+      return sandboxBuild(input);
+    }
+  });
   const worker = createPostgresJobWorker({
     stores: store,
     clientInstanceId,
     logger: silent,
-    handlers: createPageBundleJobs({
-      clientInstanceId,
-      stores: store,
-      pages: { objects: files },
-      workspaceObjects: objectStore,
-      logger: silent,
-      ...(options.limits ? { limits: options.limits } : {}),
-      build: createSandboxPageBuild({
-        sandbox: new LocalWorkspaceCommandProcessExecutor(),
-        tempRoot: join(scratch, "builds"),
-        command: options.command ?? buildCommand
-      })
-    }).handlers
+    handlers
   });
   workers.push(worker);
   if (options.worker !== false) {
@@ -198,11 +215,92 @@ async function createSaveHarness(
       );
       return sets.flat();
     },
+    buildsRun: () => buildsRun,
+    /**
+     * A build client that queues the build as a save does and then delivers its job by hand,
+     * as often as the test says, in place of a worker. It answers what the row holds after.
+     */
+    deliveredByHand(
+      deliver: (
+        run: (control?: { stopBeforeCommit: boolean }) => Promise<void>,
+        buildId: PageBuildId
+      ) => Promise<void>,
+      job: { subject?: string; concurrencyKey?: string } = {}
+    ): PageBuildClient {
+      return {
+        async build(input) {
+          const buildId = createPageBuildId();
+          await store.pages.createPageBuild({
+            clientInstanceId,
+            id: buildId,
+            conversationId: input.conversationId,
+            request: input.request,
+            createdAt: new Date().toISOString()
+          });
+          const queued = await store.jobs.enqueue(
+            pageBundleJob,
+            { buildId },
+            {
+              clientInstanceId,
+              subject: job.subject ?? buildId,
+              concurrencyKey: job.concurrencyKey ?? input.conversationId
+            }
+          );
+          const [handler] = handlers;
+          if (!handler) throw new Error("No handler serves page.bundle");
+          const run = (control?: { stopBeforeCommit: boolean }) =>
+            handler.bind(queued).run({
+              leaseToken: "by-hand",
+              signal: new AbortController().signal,
+              attempt: 1,
+              logger: silent,
+              transaction: (fn) =>
+                store.transaction(async (stores) => {
+                  const result = await fn(stores);
+                  if (control?.stopBeforeCommit) throw new Error("the worker was stopped");
+                  return result;
+                })
+            });
+          await deliver(run, buildId);
+          const row = await store.pages.getPageBuild({ clientInstanceId, buildId });
+          return row?.result ?? { status: "failed", message: "The build has no result." };
+        }
+      };
+    },
+    async pages() {
+      return store.pages.listPages({ clientInstanceId, conversationId: conversation.id });
+    },
     async queuedBuilds() {
       const summary = await store.jobs.summarizeByKind({ clientInstanceId });
       return summary.find((kind) => kind.kind === "page.bundle")?.queued ?? 0;
     }
   };
+}
+
+type SaveHarness = Awaited<ReturnType<typeof createSaveHarness>>;
+
+/** The harness's own build client, for a harness that is being made when it is asked for. */
+function later(harness: () => SaveHarness): Pick<SaveHarness, "deliveredByHand"> {
+  return {
+    deliveredByHand: (...args) => ({
+      build: (input) =>
+        harness()
+          .deliveredByHand(...args)
+          .build(input)
+    })
+  };
+}
+
+/** An object store whose writes a test can interrupt or precede with something. */
+class HookedObjectStorage extends MemoryObjectStorage {
+  constructor(private readonly beforePut?: () => Promise<void>) {
+    super();
+  }
+
+  override async put(...args: Parameters<MemoryObjectStorage["put"]>): Promise<void> {
+    await this.beforePut?.();
+    await super.put(...args);
+  }
 }
 
 const reactPage = (routes: Record<string, string>) => ({
@@ -447,6 +545,144 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
     await harness.worker.runDue();
     expect(await harness.fileSets()).toEqual([]);
     expect(await harness.queuedBuilds()).toBe(0);
+  });
+});
+
+describe("one save and its one revision", () => {
+  const page = { "app.yaml": htmlManifest, "index.html": "<p>x</p>" };
+
+  it("publishes one revision when the worker stops as it publishes and the job is delivered again, and again", async () => {
+    const harness = await createSaveHarness({
+      worker: false,
+      builds: () =>
+        later(() => harness).deliveredByHand(async (run) => {
+          // The files are stored and the write of the revision is under way when it ends.
+          await expect(run({ stopBeforeCommit: true })).rejects.toThrow("the worker was stopped");
+          expect(await harness.fileSets()).toEqual([]);
+          await run();
+          // Delivered once more after it was published: the result is there, nothing is built.
+          await run();
+        })
+    });
+    await harness.write("once", page);
+
+    const saved = await harness.save("Once", "once");
+
+    expect(saved.output).toMatchObject({ number: 1 });
+    expect((await harness.fileSets()).map((set) => set.number)).toEqual([1]);
+    expect(harness.buildsRun()).toBe(2);
+  });
+
+  it("leaves nothing behind when the worker stops while it stores, and the next delivery publishes one revision", async () => {
+    let stores = 0;
+    const harness = await createSaveHarness({
+      worker: false,
+      // The second object of the first delivery is never written.
+      beforeStore: async () => {
+        stores += 1;
+        if (stores === 2) throw new Error("the worker was stopped");
+      },
+      builds: () =>
+        later(() => harness).deliveredByHand(async (run, buildId) => {
+          await expect(run()).rejects.toThrow("the worker was stopped");
+          expect(await harness.fileSets()).toEqual([]);
+          expect(await harness.pages()).toEqual([]);
+          expect((await harness.files.list("")).objects).toEqual([]);
+          const row = await harness.store.pages.getPageBuild({
+            clientInstanceId: harness.clientInstanceId,
+            buildId
+          });
+          expect(row?.result).toBeUndefined();
+          await run();
+        })
+    });
+    await harness.write("stopped", page);
+
+    const saved = await harness.save("Stopped", "stopped");
+
+    expect(saved.output).toMatchObject({ number: 1 });
+    expect((await harness.fileSets()).map((set) => set.number)).toEqual([1]);
+  });
+
+  it("publishes no revision for a save that gave up while the built files were stored", async () => {
+    let gaveUp: (() => Promise<boolean>) | undefined;
+    const harness = await createSaveHarness({
+      worker: false,
+      // The handler has looked at the row already when the first object is written.
+      beforeStore: async () => {
+        await gaveUp?.();
+        gaveUp = undefined;
+      },
+      builds: () =>
+        later(() => harness).deliveredByHand(async (run, buildId) => {
+          gaveUp = () =>
+            harness.store.pages.finishPageBuild({
+              clientInstanceId: harness.clientInstanceId,
+              buildId,
+              result: { status: "failed", message: "The save gave up." },
+              finishedAt: new Date().toISOString()
+            });
+          await run();
+        })
+    });
+    await harness.write("late", page);
+
+    expect(await harness.save("Late", "late")).toMatchObject({
+      status: "failed",
+      error: { message: expect.stringContaining("The save gave up.") }
+    });
+    expect(await harness.fileSets()).toEqual([]);
+    expect(await harness.pages()).toEqual([]);
+    expect((await harness.files.list("")).objects).toEqual([]);
+  });
+
+  it("does nothing for a job whose subject or key is not that of the build it names", async () => {
+    for (const forged of [
+      { subject: "pbuild_of-another-save" },
+      { concurrencyKey: "conv_other" }
+    ]) {
+      const harness = await createSaveHarness({
+        worker: false,
+        builds: () => later(() => harness).deliveredByHand((run) => run(), forged)
+      });
+      await harness.write("forged", page);
+
+      expect(await harness.save("Forged", "forged")).toMatchObject({
+        status: "failed",
+        error: { message: expect.stringContaining("The build has no result.") }
+      });
+      expect(harness.buildsRun()).toBe(0);
+      expect(await harness.fileSets()).toEqual([]);
+    }
+  });
+});
+
+describe("a save on an instance where no worker takes builds", () => {
+  it("fails with the reason as soon as the build has waited unclaimed, long before the wait is over", async () => {
+    const harness = await createSaveHarness({ worker: false, unclaimedMs: 200 });
+    await harness.write("unserved", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
+    const started = Date.now();
+
+    const result = await harness.save("Unserved", "unserved");
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { message: PAGE_BUILD_NO_WORKER_MESSAGE }
+    });
+    expect(Date.now() - started).toBeLessThan(10_000);
+    await harness.worker.runDue();
+    expect(await harness.fileSets()).toEqual([]);
+  });
+
+  it("waits for a build that a worker is running, however long it has been queued", async () => {
+    const harness = await createSaveHarness({ command: "sleep 2 #", unclaimedMs: 200 });
+    await harness.write("slow", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
+
+    const result = await harness.save("Slow", "slow");
+
+    // The build ran to its end, which here is a command that wrote nothing.
+    expect(result.error?.message).not.toBe(PAGE_BUILD_NO_WORKER_MESSAGE);
+    expect(result).toMatchObject({ status: "failed" });
   });
 });
 

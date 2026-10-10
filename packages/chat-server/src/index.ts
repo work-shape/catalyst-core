@@ -104,8 +104,11 @@ export { storePageFileSet } from "./page-file-sets";
 export {
   createPageBuildClient,
   createPageBundleJobs,
+  PAGE_BUILD_NO_WORKER_MESSAGE,
   PAGE_BUILD_POLL_INTERVAL_MS,
+  PAGE_BUILD_UNCLAIMED_MS,
   PAGE_BUILD_WAIT_MS,
+  PAGE_BUILD_WORKER_CHECK_INTERVAL_MS,
   PAGE_BUNDLE_DEFAULT_SLOTS,
   PAGE_BUNDLE_HEARTBEAT_MS,
   PAGE_BUNDLE_LEASE_MS,
@@ -115,6 +118,9 @@ export {
 } from "./page-jobs";
 export {
   createSandboxPageBuild,
+  PAGE_BUILD_STALE_MS,
+  PAGE_BUILD_SWEEP_INTERVAL_MS,
+  removeStalePageBuilds,
   type PageBuildRunner,
   type SandboxPageBuildInput,
   type SandboxPageBuildOptions

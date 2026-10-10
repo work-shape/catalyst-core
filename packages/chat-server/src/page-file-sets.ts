@@ -15,6 +15,7 @@ import {
   type FileSetFile,
   type JsonObject,
   type Page,
+  type PlatformStores,
   type UserId
 } from "@vivd-catalyst/core";
 import { isHtmlContentType } from "./app-content";
@@ -44,7 +45,19 @@ export interface StorePageFileSetInput {
   sourceFiles: readonly PageFileInput[];
   builtFiles: readonly PageFileInput[];
   createdByUserId?: UserId;
+  /** Stops the upload between two files. Nothing is stored then. */
+  signal?: AbortSignal;
 }
+
+/**
+ * Stores the row of the file set whose bytes are in the object store. A caller that must write
+ * something else with the row, or not at all, hands in a function that runs `create` inside a
+ * transaction of its own; when that function throws, no row exists and the bytes are removed.
+ */
+export type CommitPageFileSet = (
+  create: (stores: Pick<PlatformStores, "pages">) => Promise<FileSet>,
+  page: Page
+) => Promise<FileSet>;
 
 function requirePages(options: PagesContext): NonNullable<ChatServerOptions["pages"]> {
   if (!options.pages) {
@@ -60,7 +73,8 @@ function requirePages(options: PagesContext): NonNullable<ChatServerOptions["pag
  */
 export async function storePageFileSet(
   options: PagesContext,
-  input: StorePageFileSetInput
+  input: StorePageFileSetInput,
+  commit: CommitPageFileSet = (create) => create(options.stores)
 ): Promise<{ page: Page; fileSet: FileSet }> {
   const { objects } = requirePages(options);
   const name = normalizePageName(input.pageName);
@@ -104,6 +118,7 @@ export async function storePageFileSet(
     await Promise.all(
       Array.from({ length: FILE_SET_WRITE_CONCURRENCY }, async () => {
         for (let next = pending.shift(); next; next = pending.shift()) {
+          input.signal?.throwIfAborted();
           await objects.put(
             pageFileObjectKey(page.id, fileSetId, next.part, next.file.path),
             next.file.bytes,
@@ -112,25 +127,42 @@ export async function storePageFileSet(
         }
       })
     );
-    const fileSet = await options.stores.pages.createPageFileSet({
-      clientInstanceId: options.clientInstanceId,
-      pageId: page.id,
-      fileSet: {
-        id: fileSetId,
-        kitVersion: input.kitVersion,
-        manifest: input.manifest,
-        sourceFiles: input.sourceFiles.map(indexEntry),
-        builtFiles: input.builtFiles.map(indexEntry),
-        ...(input.createdByUserId ? { createdByUserId: input.createdByUserId } : {}),
-        createdAt
-      }
-    });
+    input.signal?.throwIfAborted();
+    const fileSet = await commit(
+      (stores) =>
+        stores.pages.createPageFileSet({
+          clientInstanceId: options.clientInstanceId,
+          pageId: page.id,
+          fileSet: {
+            id: fileSetId,
+            kitVersion: input.kitVersion,
+            manifest: input.manifest,
+            sourceFiles: input.sourceFiles.map(indexEntry),
+            builtFiles: input.builtFiles.map(indexEntry),
+            ...(input.createdByUserId ? { createdByUserId: input.createdByUserId } : {}),
+            createdAt
+          }
+        }),
+      page
+    );
     return { page, fileSet };
   } catch (error) {
     // No row names these objects. A failure to remove them leaves bytes nothing reads, below
     // the Page's prefix, which the conversation's cleanup removes.
     await objects.deletePrefix(prefix).catch(() => undefined);
+    // A Page this call made has no revision now, and a Page without one is none.
+    if (Date.parse(page.createdAt) === Date.parse(createdAt)) {
+      await removePageWithoutFileSets(options, page).catch(() => undefined);
+    }
     throw error;
+  }
+}
+
+async function removePageWithoutFileSets(options: PagesContext, page: Page): Promise<void> {
+  const address = { clientInstanceId: options.clientInstanceId, pageId: page.id };
+  const fileSets = await options.stores.pages.listPageFileSets(address);
+  if (fileSets.length === 0) {
+    await options.stores.pages.deletePage(address);
   }
 }
 

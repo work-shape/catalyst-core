@@ -18,6 +18,7 @@ import {
   createDockerRunInvocation,
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandRunner,
+  parseDockerContainerListing,
   WorkspaceCommandService,
   type DockerCommandClient,
   type DockerCommandRunInput,
@@ -33,6 +34,58 @@ afterEach(async () => {
     cleanupDirectories.map((directory) => rm(directory, { recursive: true, force: true }))
   );
   cleanupDirectories.length = 0;
+});
+
+describe("containers a killed worker left", () => {
+  it("are read from the engine's list with the time they were made", () => {
+    expect(
+      parseDockerContainerListing(
+        "catalyst-workspace-command-page-build-a\t2026-10-10 23:54:47 +0200 CEST\n" +
+          "catalyst-workspace-command-page-build-b\tsome day\n\n"
+      )
+    ).toEqual([
+      {
+        name: "catalyst-workspace-command-page-build-a",
+        createdAtMs: Date.parse("2026-10-10T21:54:47Z")
+      },
+      { name: "catalyst-workspace-command-page-build-b" }
+    ]);
+  });
+
+  it("are removed by name when they are old enough, and only those of the asked commands", async () => {
+    const minutesAgo = (minutes: number) => Date.now() - minutes * 60 * 1000;
+    const removed: string[] = [];
+    const asked: string[] = [];
+    const executor = new DockerWorkspaceCommandProcessExecutor({
+      image: "runner:test",
+      commandClient: {
+        run: () => Promise.reject(new Error("no command runs here")),
+        removeContainer: async (name) => {
+          removed.push(name);
+        },
+        listContainers: async (prefix) => {
+          asked.push(prefix);
+          return [
+            { name: "catalyst-workspace-command-page-build-old", createdAtMs: minutesAgo(60) },
+            // Another worker's build that still runs.
+            { name: "catalyst-workspace-command-page-build-young", createdAtMs: minutesAgo(1) },
+            // An engine that answered with something else is not trusted with a removal.
+            { name: "catalyst-workspace-command-page-build-undated" },
+            { name: "catalyst-workspace-command-wcmd_1", createdAtMs: minutesAgo(60) }
+          ];
+        }
+      }
+    });
+
+    const count = await executor.removeLeftovers({
+      idPrefix: "page-build-",
+      olderThanMs: 15 * 60 * 1000
+    });
+
+    expect(asked).toEqual(["catalyst-workspace-command-page-build-"]);
+    expect(removed).toEqual(["catalyst-workspace-command-page-build-old"]);
+    expect(count).toBe(1);
+  });
 });
 
 describe("docker workspace command runner", () => {

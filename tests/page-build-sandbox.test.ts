@@ -1,14 +1,17 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { link, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  PAGE_BUILD_MAX_OUTPUT_DEPTH,
+  PAGE_BUILD_MAX_OUTPUT_ENTRIES,
   PAGE_BUILD_MAX_RESULT_BYTES,
   readPageBuildOutput,
   type PageBuildOutcome
 } from "@vivd-catalyst/app-build";
-import { createSandboxPageBuild } from "@vivd-catalyst/chat-server";
+import { createSandboxPageBuild, removeStalePageBuilds } from "@vivd-catalyst/chat-server";
 import {
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor
@@ -190,6 +193,67 @@ describe("a Page build in the sandbox", () => {
   });
 });
 
+describe("what a killed worker left of its builds", () => {
+  it("is removed when it is older than any running build, and nothing else is", async () => {
+    const root = join(scratch, "sweep");
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    const stale = join(root, "catalyst-page-build-stale");
+    const running = join(root, "catalyst-page-build-running");
+    const fresh = join(root, "catalyst-page-build-fresh");
+    const other = join(root, "catalyst-workspace-other");
+    for (const directory of [stale, running, fresh, other]) {
+      await mkdir(join(directory, "build/out"), { recursive: true });
+      await writeFile(join(directory, "build/out/result.json"), "{}");
+    }
+    for (const directory of [stale, running, other]) {
+      await utimes(directory, old, old);
+    }
+    const asked: { idPrefix: string; olderThanMs: number }[] = [];
+    const sandbox = Object.assign(new LocalWorkspaceCommandProcessExecutor(), {
+      removeLeftovers: async (input: { idPrefix: string; olderThanMs: number }) => {
+        asked.push(input);
+        return 2;
+      }
+    });
+
+    const removed = await removeStalePageBuilds({
+      sandbox,
+      tempRoot: root,
+      active: new Set([running])
+    });
+
+    expect(removed).toEqual({ directories: 1, containers: 2 });
+    expect((await readdir(root)).sort()).toEqual([
+      "catalyst-page-build-fresh",
+      "catalyst-page-build-running",
+      "catalyst-workspace-other"
+    ]);
+    // The containers of builds are asked for by the prefix of their command's id.
+    expect(asked).toEqual([{ idPrefix: "page-build-", olderThanMs: 15 * 60 * 1000 }]);
+  });
+
+  it("is removed by the first build of a worker", async () => {
+    const root = join(scratch, "sweep-on-build");
+    const stale = join(root, "catalyst-page-build-left");
+    await mkdir(stale, { recursive: true });
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    await utimes(stale, old, old);
+    const build = createSandboxPageBuild({
+      sandbox: new LocalWorkspaceCommandProcessExecutor(),
+      tempRoot: root,
+      command: "true #"
+    });
+
+    await build({
+      id: "sweeps",
+      signal: new AbortController().signal,
+      files: pageFiles({ "app.yaml": htmlManifest, "index.html": "<!doctype html><p>x</p>" })
+    });
+
+    await expect.poll(() => readdir(root)).toEqual([]);
+  });
+});
+
 describe("what a build left in its output directory", () => {
   const result = JSON.stringify({
     status: "built",
@@ -265,6 +329,78 @@ describe("what a build left in its output directory", () => {
     expect(failure(await readPageBuildOutput(linked.out))).toMatchObject({
       reason: "output_refused",
       message: "'result.json' in the build's output is missing or is not a regular file."
+    });
+  });
+
+  it("is refused when the output directory or its folder of files is a link to a directory", async () => {
+    // A real directory with a valid result and a file: what a link would lead the reader to.
+    const real = await output();
+
+    const linkedOut = join(scratch, "out-linked");
+    await symlink(real.out, linkedOut);
+    expect(failure(await readPageBuildOutput(linkedOut))).toEqual({
+      reason: "output_refused",
+      message: "The build left no output directory."
+    });
+    expect(failure(await readPageBuildOutput(join(scratch, "out-missing")))).toMatchObject({
+      reason: "output_refused"
+    });
+
+    const linkedFiles = await output();
+    await rm(linkedFiles.files, { recursive: true });
+    await symlink(real.files, linkedFiles.files);
+    expect(failure(await readPageBuildOutput(linkedFiles.out))).toEqual({
+      reason: "output_refused",
+      message: "The build wrote no directory of built files."
+    });
+
+    const noFiles = await output();
+    await rm(noFiles.files, { recursive: true });
+    expect(failure(await readPageBuildOutput(noFiles.out))).toEqual({
+      reason: "output_refused",
+      message: "The build wrote no directory of built files."
+    });
+  });
+
+  it("is refused, without waiting, when the result or a built file is a pipe", async () => {
+    const piped = await output();
+    await rm(join(piped.out, "result.json"));
+    execFileSync("mkfifo", [join(piped.out, "result.json")]);
+    // Opening a pipe to read waits for a writer. Nobody writes: the answer must come anyway.
+    expect(failure(await readPageBuildOutput(piped.out))).toEqual({
+      reason: "output_refused",
+      message: "'result.json' in the build's output is missing or is not a regular file."
+    });
+
+    const file = await output();
+    execFileSync("mkfifo", [join(file.files, "pipe.js")]);
+    expect(failure(await readPageBuildOutput(file.out))).toEqual({
+      reason: "output_refused",
+      message: "'pipe.js' in the build's output is not a regular file."
+    });
+  }, 5000);
+
+  it("is refused at the entry that takes it over the count of names or the depth", async () => {
+    // Folders hold no bytes and are no files: only the count of names stops them.
+    const wide = await output();
+    await Promise.all(
+      Array.from({ length: PAGE_BUILD_MAX_OUTPUT_ENTRIES + 1 }, (_, index) =>
+        mkdir(join(wide.files, `d${index}`))
+      )
+    );
+    expect(failure(await readPageBuildOutput(wide.out))).toEqual({
+      reason: "output_refused",
+      message: "The build wrote more files and folders than a Page may have."
+    });
+
+    const deep = await output();
+    await mkdir(
+      join(deep.files, ...Array.from({ length: PAGE_BUILD_MAX_OUTPUT_DEPTH + 1 }, () => "d")),
+      { recursive: true }
+    );
+    expect(failure(await readPageBuildOutput(deep.out))).toEqual({
+      reason: "output_refused",
+      message: "The built files are nested too deep."
     });
   });
 

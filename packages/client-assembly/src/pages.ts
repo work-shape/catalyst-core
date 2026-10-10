@@ -2,6 +2,8 @@ import { pageBuildCommandFile } from "@vivd-catalyst/app-build";
 import {
   createPageBuildClient,
   createPageBundleJobs,
+  PAGE_BUILD_STALE_MS,
+  removeStalePageBuilds,
   createSandboxPageBuild,
   deriveAppContentKey,
   type ChatServerOptions
@@ -125,6 +127,19 @@ export async function createInstancePageBuildJobs(input: {
   }
   requireFilesStore(input.config);
   const timeoutMs = readPositiveInteger("PAGE_BUILD_TIMEOUT_MS", input.env.PAGE_BUILD_TIMEOUT_MS);
+  // What a worker that was killed left of its builds is removed when a worker starts; the
+  // builds themselves repeat the sweep. The start does not wait for it.
+  removeStalePageBuilds({
+    sandbox: input.sandbox,
+    tempRoot: input.tempRoot,
+    olderThanMs: Math.max(PAGE_BUILD_STALE_MS, 2 * (timeoutMs ?? 0))
+  })
+    .then((removed) => {
+      if (removed.directories > 0 || removed.containers > 0) {
+        input.logger.info(removed, "Removed what a stopped worker left of its Page builds");
+      }
+    })
+    .catch(() => undefined);
   return createPageBundleJobs({
     clientInstanceId: input.clientInstanceId,
     stores: input.stores,

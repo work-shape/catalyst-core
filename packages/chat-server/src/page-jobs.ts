@@ -59,6 +59,20 @@ export const PAGE_BUILD_POLL_INTERVAL_MS = 250;
  * told to store nothing.
  */
 export const PAGE_BUILD_WAIT_MS = 5 * 60 * 1000;
+/**
+ * How long a build may be due without any build of the instance running before the save
+ * concludes that no worker takes builds. A worker that is alive claims a due job within a
+ * second when none of its slots is taken, so this only has to cover a worker that restarts.
+ */
+export const PAGE_BUILD_UNCLAIMED_MS = 30 * 1000;
+/** How often a save that still waits asks the queue whether a worker takes builds. */
+export const PAGE_BUILD_WORKER_CHECK_INTERVAL_MS = 5 * 1000;
+/** What a save is told when no worker takes builds. */
+export const PAGE_BUILD_NO_WORKER_MESSAGE =
+  "No workspace command worker takes Page builds on this instance: the build was not started. An operator has to start that worker. Nothing was saved.";
+
+/** Ends the transaction that would publish a revision for a save that has its answer already. */
+class BuildAlreadyAnswered extends Error {}
 
 /**
  * Builds one Page. One attempt: a build that failed half way is reported to the agent, which
@@ -122,9 +136,21 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
         slots: options.slots ?? PAGE_BUNDLE_DEFAULT_SLOTS,
         async run(job, control) {
           const { buildId } = job.payload;
-          const row = isPageBuildId(buildId) ? await unfinished(buildId) : undefined;
-          if (!row || !isPageBuildId(buildId)) {
-            // The save gave up, or the conversation is gone.
+          // The job names its build three times: in the payload, as its subject and, through
+          // the conversation, as its concurrency key. A job whose three do not agree was not
+          // enqueued by a save, and nothing is done for it.
+          if (!isPageBuildId(buildId) || job.subject !== buildId) {
+            control.logger.warn({ jobId: job.id }, "A Page build job does not name its subject");
+            return;
+          }
+          // A build with a result is finished: this is a job delivered again after the worker
+          // that published stopped, or a save that gave up. Neither builds or stores anything.
+          const row = await unfinished(buildId);
+          if (!row) {
+            return;
+          }
+          if (job.concurrencyKey !== row.conversationId) {
+            control.logger.warn({ jobId: job.id }, "A Page build job is queued for another key");
             return;
           }
           const snapshot = await readSnapshot(
@@ -159,24 +185,48 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
             return;
           }
           try {
-            const { page, fileSet } = await storePageFileSet(options, {
-              conversationId: row.conversationId,
-              pageName: row.request.pageName,
-              kitVersion: outcome.kitVersion,
-              manifest,
-              sourceFiles: snapshot.files,
-              builtFiles: outcome.files,
-              ...(row.request.requestedByUserId
-                ? { createdByUserId: row.request.requestedByUserId }
-                : {})
-            });
-            await finish(control, buildId, {
-              status: "saved",
-              pageId: page.id,
-              fileSetId: fileSet.id,
-              number: fileSet.number
-            });
+            await storePageFileSet(
+              options,
+              {
+                conversationId: row.conversationId,
+                pageName: row.request.pageName,
+                kitVersion: outcome.kitVersion,
+                manifest,
+                sourceFiles: snapshot.files,
+                builtFiles: outcome.files,
+                signal: control.signal,
+                ...(row.request.requestedByUserId
+                  ? { createdByUserId: row.request.requestedByUserId }
+                  : {})
+              },
+              // The revision and the result of the build are one write. It happens while this
+              // attempt holds the job, and only when the build has no result yet: a save that
+              // gave up meanwhile gets no revision, and a second delivery of the job finds the
+              // result and publishes nothing.
+              (create, page) =>
+                control.transaction(async (stores) => {
+                  const fileSet = await create(stores);
+                  const written = await stores.pages.finishPageBuild({
+                    clientInstanceId: options.clientInstanceId,
+                    buildId,
+                    result: {
+                      status: "saved",
+                      pageId: page.id,
+                      fileSetId: fileSet.id,
+                      number: fileSet.number
+                    },
+                    finishedAt: new Date().toISOString()
+                  });
+                  if (!written) {
+                    throw new BuildAlreadyAnswered();
+                  }
+                  return fileSet;
+                })
+            );
           } catch (error) {
+            if (error instanceof BuildAlreadyAnswered) {
+              return;
+            }
             const refusal = storeRefusal(error);
             if (!refusal) {
               throw error;
@@ -297,8 +347,12 @@ function storeRefusal(error: unknown): PageSaveOutcome | undefined {
 }
 
 export interface PageBuildClientOptions {
-  stores: Pick<PlatformStores, "pages" | "transaction">;
+  stores: Pick<PlatformStores, "pages" | "jobs" | "transaction">;
   waitMs?: number;
+  /** Replaces `PAGE_BUILD_UNCLAIMED_MS`. For tests. */
+  unclaimedMs?: number;
+  /** Replaces `PAGE_BUILD_WORKER_CHECK_INTERVAL_MS`. For tests. */
+  workerCheckIntervalMs?: number;
   pollIntervalMs?: number;
   now?: () => Date;
 }
@@ -311,6 +365,24 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
   const waitMs = options.waitMs ?? PAGE_BUILD_WAIT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? PAGE_BUILD_POLL_INTERVAL_MS;
   const now = options.now ?? (() => new Date());
+  const unclaimedMs = options.unclaimedMs ?? PAGE_BUILD_UNCLAIMED_MS;
+  const workerCheckIntervalMs =
+    options.workerCheckIntervalMs ?? PAGE_BUILD_WORKER_CHECK_INTERVAL_MS;
+  /**
+   * Whether no worker takes builds: a build has been due for `unclaimedMs` and none of the
+   * instance is running. A worker with a build running has none of its slots free for certain
+   * only then, so one running build is taken as a worker that is alive.
+   */
+  const noWorkerTakesBuilds = async (clientInstanceId: ClientInstanceId): Promise<boolean> => {
+    const kinds = await options.stores.jobs.summarizeByKind({ clientInstanceId });
+    const builds = kinds.find((kind) => kind.kind === pageBundleJob.kind);
+    return (
+      builds !== undefined &&
+      builds.running === 0 &&
+      builds.waitingSince !== undefined &&
+      Date.now() - Date.parse(builds.waitingSince) >= unclaimedMs
+    );
+  };
   return {
     async build(input) {
       const buildId = createPageBuildId();
@@ -338,6 +410,7 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
         Date.now() + waitMs,
         input.deadline?.getTime() ?? Number.POSITIVE_INFINITY
       );
+      let nextWorkerCheck = Date.now() + unclaimedMs;
       try {
         for (;;) {
           const row = await options.stores.pages.getPageBuild(address);
@@ -347,12 +420,19 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
           if (row.result) {
             return row.result;
           }
-          if (input.signal?.aborted || Date.now() >= deadline) {
+          let noWorker = false;
+          if (Date.now() >= nextWorkerCheck) {
+            nextWorkerCheck = Date.now() + workerCheckIntervalMs;
+            noWorker = await noWorkerTakesBuilds(input.clientInstanceId).catch(() => false);
+          }
+          if (noWorker || input.signal?.aborted || Date.now() >= deadline) {
             const gaveUp: PageSaveOutcome = {
               status: "failed",
               message: input.signal?.aborted
                 ? "The save was stopped before the Page was built."
-                : "The Page was not built in time. No worker took the build, or it is still queued behind others. Save the Page again."
+                : noWorker
+                  ? PAGE_BUILD_NO_WORKER_MESSAGE
+                  : "The Page was not built in time. It is still queued behind others, or its build did not end. Save the Page again."
             };
             // The build finds a result on its row and stores nothing. When it was faster, its
             // result is the answer.

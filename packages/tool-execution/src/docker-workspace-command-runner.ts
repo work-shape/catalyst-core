@@ -32,8 +32,16 @@ export interface DockerWorkspaceCommandProcessExecutorOptions {
 export interface DockerCommandClient {
   run(input: DockerCommandRunInput): Promise<ProcessResult>;
   removeContainer?(name: string): Promise<void>;
+  /** The containers, running or not, whose name starts with `namePrefix`. */
+  listContainers?(namePrefix: string): Promise<DockerContainerListing[]>;
   /** Whether the engine answers. A client without it is taken to answer. */
   engineAnswers?(signal: AbortSignal): Promise<boolean>;
+}
+
+export interface DockerContainerListing {
+  name: string;
+  /** Missing when the engine's answer could not be read as a time. */
+  createdAtMs?: number;
 }
 
 export interface DockerCommandRunInput {
@@ -104,6 +112,32 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
   /** Whether the Docker engine answers. It asks for the engine's version and starts nothing. */
   async engineAnswers(signal: AbortSignal): Promise<boolean> {
     return (await this.options.commandClient.engineAnswers?.(signal)) ?? true;
+  }
+
+  /**
+   * A container outlives a worker that was killed: nothing is left to end it at its timeout.
+   * Only containers older than `olderThanMs` are removed, so the commands of another worker on
+   * the same engine, which are younger than their own timeout, stay.
+   */
+  async removeLeftovers(input: { idPrefix: string; olderThanMs: number }): Promise<number> {
+    const { commandClient, containerNamePrefix } = this.options;
+    if (!commandClient.listContainers || !commandClient.removeContainer) {
+      return 0;
+    }
+    const prefix = sanitizeDockerName(`${containerNamePrefix}-${input.idPrefix}`);
+    const cutoff = Date.now() - input.olderThanMs;
+    let removed = 0;
+    for (const container of await commandClient.listContainers(prefix)) {
+      if (
+        container.name.startsWith(prefix) &&
+        container.createdAtMs !== undefined &&
+        container.createdAtMs <= cutoff
+      ) {
+        await commandClient.removeContainer(container.name);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 }
 
@@ -222,6 +256,28 @@ class DockerCliCommandClient implements DockerCommandClient {
     return result.exitCode === 0 && !result.spawnError && !result.cancelled && !result.timeoutKind;
   }
 
+  async listContainers(namePrefix: string): Promise<DockerContainerListing[]> {
+    const result = await runSpawnedProcess({
+      executable: this.options.dockerPath,
+      args: [
+        ...this.endpointArgs,
+        "ps",
+        "--all",
+        "--filter",
+        `name=^${namePrefix}`,
+        "--format",
+        "{{.Names}}\t{{.CreatedAt}}"
+      ],
+      timeoutSeconds: CONTAINER_LIST_TIMEOUT_SECONDS,
+      maxStdoutBytes: CONTAINER_LIST_MAX_BYTES,
+      maxStderrBytes: 1024
+    });
+    if (result.exitCode !== 0 || result.spawnError || result.timeoutKind) {
+      return [];
+    }
+    return parseDockerContainerListing(result.stdoutPreview);
+  }
+
   async removeContainer(name: string): Promise<void> {
     await runSpawnedProcess({
       executable: this.options.dockerPath,
@@ -231,6 +287,30 @@ class DockerCliCommandClient implements DockerCommandClient {
       maxStderrBytes: 1024
     });
   }
+}
+
+/** How long the engine may take to list containers. */
+const CONTAINER_LIST_TIMEOUT_SECONDS = 10;
+/** How much of the list is read: some thousand names. */
+const CONTAINER_LIST_MAX_BYTES = 256 * 1024;
+
+/**
+ * Reads lines of `<name>\t<created>` as `docker ps` prints them, the time as
+ * `2026-10-10 23:54:47 +0200 CEST`.
+ */
+export function parseDockerContainerListing(output: string): DockerContainerListing[] {
+  return output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .map((line) => {
+      const [name = "", created = ""] = line.split("\t");
+      const match = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})/u.exec(created);
+      const createdAtMs = match
+        ? Date.parse(`${match[1]}T${match[2]}${match[3]}:${match[4]}`)
+        : Number.NaN;
+      return { name, ...(Number.isNaN(createdAtMs) ? {} : { createdAtMs }) };
+    });
 }
 
 function containerWorkspaceCwd(workspaceCwd: string): string {
