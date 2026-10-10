@@ -158,9 +158,18 @@ A view that asks for a script from another host is shown without that script. Th
 only the model's HTML with any CSP tag stripped; the interface composes the content policy
 when it shows the view, and `connect-src` and external image loading remain blocked.
 
+Every view is framed in a shell document the instance serves under
+`/app-runtime/view-shell/<version>/`. Its policy keeps a view from moving its own frame to
+another address, so a link, a refresh tag or `location` in a view leads nowhere: do not put
+links into a view. [What A View Can Reach](/configure/release-config/#what-a-view-can-reach)
+states the guarantee and its limits.
+
 Private hydrated views get no library and no script host, whatever `views.allowedScriptSrc`
-says. Network, image, form, and navigation targets are blocked; templates use inline CSS, SVG,
-or canvas so private values cannot be sent through a request to another host.
+says, and they run no script at all: a script can send packets to another host over WebRTC,
+and no browser lets a document forbid that. Network, image, form, and navigation targets are
+blocked. A template must show its rows with HTML, inline CSS and inline SVG alone. A template
+that fills itself from `{{ROWS_JSON}}` or `{{DATA_JSON}}` with a script shows no rows, and the
+frame of such a view has a fixed height and scrolls inside.
 
 When `display` needs a polished visual treatment, register a client-owned widget for the
 returned `display.kind`. Concrete widgets belong in `clients/*/widgets` for reference

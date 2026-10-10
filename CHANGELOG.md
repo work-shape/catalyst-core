@@ -155,6 +155,21 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Views:** a view can no longer move its own frame to another host. Every view is framed in
+  a shell document the instance serves at `/app-runtime/view-shell/1/shell.html`, with the
+  header `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'self'
+  'unsafe-inline' 'unsafe-eval' <views.allowedScriptSrc>; style-src 'unsafe-inline'; img-src
+  data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none';
+  form-action 'none'`. Under `frame-src 'none'` the browser refuses `location`, a refresh tag, a
+  clicked link and a download link in a view before it sends a request, to the instance's own
+  addresses as well. The shell answers a frame only: another `Sec-Fetch-Dest` gets `403`. A
+  reverse proxy must route `/app-runtime/*` to the API, as it already must for the view
+  runtime. The view's own policy no longer names `navigate-to`, which no browser enforced.
+- **Views:** a view that holds private rows (`private_hydrated_view`) runs no script. WebRTC
+  lets a script send packets to any host and no browser lets a document forbid it. Such a view
+  shows its HTML and CSS: a template that draws its rows with a script shows none of them, and
+  its frame has a fixed height and scrolls inside. Views that run scripts have
+  `RTCPeerConnection` removed from their window, which is hardening and not a boundary.
 - **Config assets:** the overview lists the `id` of each agent and skill.
 - **Rights:** every rights check of the API and of tool calls is answered by one evaluator,
   `evaluateAccess` in `@vivd-catalyst/core`. `InProcessToolExecution` takes an optional

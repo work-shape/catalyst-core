@@ -245,6 +245,24 @@ views:
 
 The default is an empty list, and `"*"` allows every HTTPS host. The setting applies when a view is shown, so it also governs views saved before a change. Earlier releases read script settings from the `show_view` tool's own `config`. That tool takes no config now, and any key left there fails validation with a message that names `views.allowedScriptSrc`.
 
+### What A View Can Reach
+
+A view cannot load from, navigate to or send HTTP or WebSocket requests to a host the instance has not allowed.
+
+Two things hold this. The content policy of the view, which the interface composes each time it shows the view, refuses every load and every connection except scripts from the instance's view runtime and from the hosts in `views.allowedScriptSrc`. The shell holds the rest: every view is framed in a small document the instance serves under `/app-runtime/view-shell/<version>/`, and that document's `Content-Security-Policy` header carries `frame-src 'none'`. A view that sets `location`, carries a refresh tag, or has a link or a download link clicked would move its own frame to another address, and no policy of the view itself can forbid that. The browser checks the move against the policy of the framing document and refuses it before it sends a request. Because the policy is a header of the instance, it also holds when another site embeds the chat widget.
+
+The limits:
+
+- **WebRTC.** A view that runs scripts can send UDP packets to a host its script names. No content policy and no sandbox flag of current browsers forbids WebRTC. The view's bootstrap removes `RTCPeerConnection` and its prefixed variants from the view's window. That is hardening and not a boundary: a script can get the constructor back from a frame it writes itself.
+- **Views with private rows run no script.** Because of the WebRTC limit, a view of kind `private_hydrated_view` is shown in a frame without `allow-scripts`. It shows its HTML and CSS. A template that draws its rows with a script, a chart on a canvas for example, shows none of them, and the frame keeps a fixed height and scrolls inside, since nothing in it can report its height.
+- **DNS.** Whether a view can cause a DNS lookup for a host of its choosing has not been tested.
+- **Allowed script hosts are data destinations.** A host named in `views.allowedScriptSrc` receives the requests a view makes for its scripts, and a view chooses the address, so data can leave in it. Name only hosts you would send the data to.
+- **A view navigates nowhere.** `frame-src 'none'` names no address, so a view cannot move its frame to an address of the instance either. A link in a view does not open. The frame shows the browser's own notice for a refused address.
+- **Sites that embed the widget.** The shell is a frame from the instance. A site that embeds the chat widget under a content policy of its own must allow the instance's origin in `frame-src`, or no view is shown there.
+- **Browsers.** The refusal is tested in Chromium. It relies on the browser applying `frame-src` of the framing document to a navigation of the frame, and on a `srcdoc` frame taking over the policies of the document that holds it.
+
+The shell answers only requests a browser makes for a frame: a request whose `Sec-Fetch-Dest` header names anything else gets `403`. A reverse proxy in front of the instance must route `/app-runtime/*` to the API. When it does not, views stay on "Loading view…".
+
 ## Agent And Skill Configuration Assets
 
 Agents and client skills remain source-controlled YAML and Markdown, but runtime reads them from the versioned configuration-asset store. A `catalyst.yaml` manifest selects the working-copy files and target instances:
