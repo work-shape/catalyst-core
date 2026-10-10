@@ -1939,32 +1939,62 @@ test("stop generating cancels the active stream instead of only hiding the butto
   page
 }) => {
   await signInViaUi(page, normalUser);
+  // Keep the answer off the page until Stop has acted, as in the active-run guard test.
+  const releaseAnswer = await holdAnswer(page);
+  const answeredEventStreams = countResponses(page, "GET", isRunEventsPath);
 
   await page.goto("/");
   const suffix = Date.now();
   const input = page.getByPlaceholder("Message");
-  const messageTokens = Array.from({ length: 240 }, (_, index) => `stop-token-${suffix}-${index}`);
-  const lateToken = messageTokens.at(-1) ?? "";
-  const messageText = messageTokens.join(" ");
-  expect(lateToken).not.toBe("");
+  const lateToken = `stop-late-token-${suffix}`;
+  const messageText = `${longRunMessage(`stop-token-${suffix}`)} ${lateToken}`;
   await input.fill(messageText);
   await input.press("Enter");
   await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
 
   const stopButton = page.getByRole("button", { name: "Stop generating" });
-  await expect(stopButton).toBeVisible();
-  await expect(stopButton).toBeEnabled();
-  await stopButton.click({ timeout: 5_000 });
+  const cancellationResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /^\/api\/v1\/conversations\/[^/]+\/runs\/[^/]+\/cancel$/u.test(
+        new URL(response.url()).pathname
+      )
+  );
+  try {
+    await expect(stopButton).toBeVisible();
+    await expect(stopButton).toBeEnabled();
+    expect(answeredEventStreams()).toBe(0);
+    await stopButton.click({ timeout: 5_000 });
+  } finally {
+    releaseAnswer();
+  }
+  const cancelled = await cancellationResponse;
+  expect(cancelled.ok()).toBe(true);
+  const { run } = apiOperations["conversations.runs.cancel"].response.schema.parse(
+    await cancelled.json()
+  );
 
   await expect(page.getByRole("button", { name: "Send message" })).toBeVisible({ timeout: 10_000 });
   await expect(stopButton).toHaveCount(0);
-  await page.waitForTimeout(6_000);
+  const conversationId = currentConversationId(page);
+  // Wait for persisted cancellation, rather than sleeping for the old short run's duration.
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `${apiBaseUrl}/api/v1/conversations/${conversationId}/thread`
+      );
+      expect(response.ok()).toBe(true);
+      const thread = apiOperations["conversations.thread.get"].response.schema.parse(
+        await response.json()
+      );
+      return thread.activeRun?.run.id === run.id ? thread.activeRun.run.status : undefined;
+    })
+    .toBe("cancelled");
 
   await expect(page.locator('[data-role="assistant"]').filter({ hasText: lateToken })).toHaveCount(
     0
   );
 
-  const conversationId = currentConversationId(page);
   const persistedMessages = await readPagedList(
     page,
     `/api/v1/conversations/${conversationId}/messages`,
@@ -2012,22 +2042,11 @@ test(
     await createListedConversation(page, sourceTitle);
     await createListedConversation(page, targetTitle);
 
-    // The server accepts the run; what stays pending is its event stream, the request that
-    // carries the answer to the page.
-    let streamRequestStarted = false;
-    let releaseStream: () => void = () => {};
-    const streamGate = new Promise<void>((resolve) => {
-      releaseStream = resolve;
-    });
-    const runEventsRoute = new RegExp(
-      `${escapeRegExp(apiBaseUrl)}/api/v1/conversations/[^/]+/runs/[^/]+/events(?:\\?.*)?$`,
-      "u"
-    );
-    await page.route(runEventsRoute, async (route) => {
-      streamRequestStarted = true;
-      await streamGate;
-      await route.abort("aborted").catch(() => undefined);
-    });
+    // Hold every event stream through the switches and Stop. Releasing before Stop lets a
+    // completed run remove the button between stopActiveRun's count check and its click.
+    const releaseAnswer = await holdAnswer(page);
+    const eventRequests = countRequests(page, "GET", isRunEventsPath);
+    const answeredEventStreams = countResponses(page, "GET", isRunEventsPath);
 
     try {
       await page.goto("/");
@@ -2045,15 +2064,12 @@ test(
       await sourceConversation.getByRole("button").first().click();
       const sendButton = page.getByRole("button", { name: "Send message" });
       await expect(sendButton).toBeEnabled();
-      // Long enough that the run is still going while the test switches back and forth.
       const messageToken = `session-isolation-${suffix}`;
-      await input.fill(
-        Array.from({ length: 240 }, (_, index) => `${messageToken}-${index}`).join(" ")
-      );
+      await input.fill(longRunMessage(messageToken));
       await sendButton.click();
       await expect(chatRegion.getByText(messageToken, { exact: false }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
-      await expect.poll(() => streamRequestStarted).toBe(true);
+      await expect.poll(() => eventRequests()).toBeGreaterThan(0);
       await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
       await targetConversation.getByRole("button").first().click();
@@ -2065,13 +2081,15 @@ test(
       // instead of sending.
       await sourceConversation.getByRole("button").first().click();
       await expect(page.getByTestId("run-activity")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+      const stopButton = page.getByRole("button", { name: "Stop generating" });
+      await expect(stopButton).toBeVisible();
       await expect(page.getByRole("button", { name: "Send message" })).toHaveCount(0);
+      expect(answeredEventStreams()).toBe(0);
+      await stopButton.click();
     } finally {
-      releaseStream();
-      await page.unroute(runEventsRoute);
+      releaseAnswer();
     }
-    await stopActiveRun(page);
+    await expect(page.getByRole("button", { name: "Send message" })).toBeVisible();
   }
 );
 
