@@ -186,19 +186,19 @@ test("Show all appears past the rail's cap and opens the full list, whose search
   await page.keyboard.press("Enter");
   await expect(renameDialog).toBeHidden();
   await expect(rows.first()).toContainText(renamedTitle);
-  // The closing rename dialog hands the focus back to the menu button, which closes a menu
-  // opened in the same instant; a person is slower than that, the test asks again.
+  // A menu opened in the instant the rename dialog leaves the page closes again (measured:
+  // within about 130 ms of the dialog closing; from 150 ms on it stays). A person is slower
+  // than that, the test asks again.
   const deleteItem = page.getByRole("menuitem", { name: "Delete conversation" });
   await expect(async () => {
     if (!(await deleteItem.isVisible())) {
       await rows
         .first()
         .getByRole("button", { name: `Conversation options for ${renamedTitle}` })
-        .click();
+        .click({ timeout: 2_000 });
     }
-    await expect(deleteItem).toBeVisible({ timeout: 1_000 });
+    await deleteItem.click({ timeout: 1_000 });
   }).toPass();
-  await deleteItem.click();
   const deleteDialog = page.getByRole("dialog", { name: "Delete conversation?" });
   await expect(deleteDialog).toContainText(renamedTitle);
   await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();

@@ -84,6 +84,19 @@ test("a member's proposal waits in the reviewer's Inbox, is rejected there and c
   const reviewerPage = await reviewerContext.newPage();
   await signIn(reviewerPage, reviewer);
   const reviewerRail = reviewerPage.getByRole("navigation", { name: "Main navigation" });
+  // The Inbox row follows the one chat entry, and keeps its count in the collapsed strip.
+  const reviewerEntries = reviewerRail.getByRole("button", {
+    name: /^(New chat|Chat|Inbox, 1 to decide)$/u
+  });
+  await expect(reviewerEntries).toHaveCount(2);
+  await expect(reviewerEntries.nth(0)).toHaveAccessibleName("New chat");
+  await expect(reviewerEntries.nth(1)).toHaveAccessibleName("Inbox, 1 to decide");
+  await expect(reviewerEntries.nth(1)).toContainText("1");
+  await reviewerPage.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(
+    reviewerRail.getByRole("button", { name: "Inbox, 1 to decide", exact: true })
+  ).toBeVisible();
+  await reviewerPage.getByRole("button", { name: "Expand sidebar" }).click();
   await reviewerRail.getByRole("button", { name: "Inbox, 1 to decide", exact: true }).click();
   const inbox = reviewerPage.getByRole("region", { name: "Inbox", exact: true });
   await expect(inbox.getByRole("tab")).toHaveText(["To decide1", "My requests", "Decided"]);
