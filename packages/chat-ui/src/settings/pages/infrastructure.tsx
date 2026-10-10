@@ -200,7 +200,7 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
         {provider.name ?? provider.type}
         {provider.name === undefined ? null : <TableCellDetail>{provider.type}</TableCellDetail>}
       </TableCell>
-      <TableCell className="whitespace-nowrap">
+      <TableCell>
         {provider.region === undefined ? (
           <span className="text-muted-foreground">{t("infrastructure.regionInside")}</span>
         ) : (
@@ -209,11 +209,11 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
       </TableCell>
       <TableCell>
         {provider.endpointHost === undefined && provider.bucket === undefined ? (
-          <span className="text-muted-foreground">{t("infrastructure.noDestination")}</span>
+          <span className="text-muted-foreground">—</span>
         ) : (
           <>
             {provider.endpointHost === undefined ? null : (
-              <span className="font-mono wrap-anywhere">{provider.endpointHost}</span>
+              <span className="font-mono whitespace-nowrap">{provider.endpointHost}</span>
             )}
             {provider.bucket === undefined ? null : (
               <TableCellDetail>
@@ -230,7 +230,7 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
           <ul className="grid gap-1">
             {provider.secrets.map((secret) => (
               <li key={secret.name} className="flex flex-wrap items-center gap-2">
-                <span className="font-mono wrap-anywhere">{secret.name}</span>
+                <span className="font-mono whitespace-nowrap">{secret.name}</span>
                 <Badge tone={secret.state === "set" ? "neutral" : "danger"} size="sm">
                   {t(
                     secret.state === "set"
