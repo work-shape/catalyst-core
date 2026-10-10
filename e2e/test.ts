@@ -62,7 +62,7 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "Chromium's own log line: the test saves an asset that does not validate and one that " +
       "changed meanwhile, and asserts what the page shows for the 422 and the 409.",
     matches: new RegExp(`${requestAnswered(422).source}|${requestAnswered(409).source}`, "u"),
-    path: /^\/api\/v1\/instance\/config\/assets\//u,
+    path: /^\/api\/v1\/assets\//u,
     tests: ["superadmin manages config assets with validation and conflict protection"]
   },
   {
