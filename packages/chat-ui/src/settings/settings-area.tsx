@@ -2,6 +2,7 @@ import { ChevronsUpDown, Lock } from "lucide-react";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import type { CollaborationWorkspaceWithRole } from "@vivd-catalyst/api-client";
 import { Button, EmptyState, Page, Picker, SubRail, type SubRailGroup } from "@vivd-catalyst/ui";
+import { BuildNavigationProvider } from "../build-area/build-route";
 import { CollaborationWorkspaceAvatar } from "../collaboration-workspace/collaboration-workspace-avatar";
 import type { BuildAreaModel, SettingsAreaModel } from "../control-plane/control-plane-model";
 import { useTranslation } from "../i18n";
@@ -82,7 +83,7 @@ export function SettingsArea({ settings }: { settings: SettingsAreaModel }) {
   );
 }
 
-/** Build: the host's Config page as a full page of its own. */
+/** Build: the host's Build page as an area of its own. The page lays itself out. */
 export function BuildArea({ build }: { build: BuildAreaModel }) {
   const { t } = useTranslation();
   const areaRef = useAreaTitleFocus(true);
@@ -91,9 +92,9 @@ export function BuildArea({ build }: { build: BuildAreaModel }) {
   return (
     <AreaFrame ref={areaRef} label={t(build.page.labelKey)}>
       <SettingsPageProvider value={build.context}>
-        <Page width="wide">
+        <BuildNavigationProvider value={build.navigation}>
           <BuildPage />
-        </Page>
+        </BuildNavigationProvider>
       </SettingsPageProvider>
     </AreaFrame>
   );

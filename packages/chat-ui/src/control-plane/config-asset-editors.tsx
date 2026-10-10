@@ -52,6 +52,7 @@ interface MutationOutcome {
 }
 
 export function AgentEditor({
+  back,
   initialForm,
   isNew,
   isDefault,
@@ -66,6 +67,8 @@ export function AgentEditor({
   availability,
   revisions
 }: {
+  /** The way back to the list. With it the editor is a page of its own and its name the page's heading. */
+  back?: React.ReactNode;
   initialForm: AgentFormState;
   isNew: boolean;
   isDefault: boolean;
@@ -82,7 +85,7 @@ export function AgentEditor({
   availability?: React.ReactNode;
   revisions: React.ReactNode;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | undefined>(undefined);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -114,11 +117,14 @@ export function AgentEditor({
   return (
     <form className="grid min-w-0 content-start" onSubmit={submit}>
       <EditorHeader
+        back={back}
         eyebrow={t("configAgent")}
         title={
           isNew
             ? t("configNewAgent")
-            : form.displayName.en.trim() || form.displayName.de.trim() || form.name
+            : form.displayName[locale].trim() ||
+              form.displayName[locale === "de" ? "en" : "de"].trim() ||
+              form.name
         }
         identifier={isNew ? undefined : form.name}
         badges={isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
@@ -598,6 +604,7 @@ function modelBindingLabel(
 }
 
 export function SkillEditor({
+  back,
   initialForm,
   isNew,
   editable,
@@ -606,6 +613,8 @@ export function SkillEditor({
   onDelete,
   revisions
 }: {
+  /** The way back to the list. With it the editor is a page of its own and its name the page's heading. */
+  back?: React.ReactNode;
   initialForm: SkillFormState;
   isNew: boolean;
   editable: boolean;
@@ -634,6 +643,7 @@ export function SkillEditor({
   return (
     <form className="grid min-w-0 content-start" onSubmit={submit}>
       <EditorHeader
+        back={back}
         eyebrow={t("configSkill")}
         title={isNew ? t("configNewSkill") : form.title.trim() || form.name}
         identifier={isNew ? undefined : form.name}
@@ -1027,12 +1037,14 @@ export function configRevisionAction(
 
 /** The editor's head: the library's detail header, in place because the editor is one pane of the page. */
 function EditorHeader({
+  back,
   eyebrow,
   title,
   identifier,
   badges,
   actions
 }: {
+  back?: React.ReactNode;
   eyebrow: string;
   title: string;
   identifier?: string;
@@ -1042,7 +1054,8 @@ function EditorHeader({
   return (
     <PageHeader
       variant="detail"
-      headingLevel={2}
+      back={back}
+      headingLevel={back === undefined ? 2 : 1}
       className="static px-5 py-4"
       title={title}
       state={badges}

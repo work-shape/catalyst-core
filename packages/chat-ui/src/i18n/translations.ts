@@ -3,6 +3,7 @@ import { administration } from "./administration";
 import { apiAccess } from "./api-access";
 import { approvals } from "./approvals";
 import { assistant } from "./assistant";
+import { build } from "./build";
 import { collaborationWorkspace } from "./collaboration-workspace";
 import { common } from "./common";
 import { configAssets } from "./config-assets";
@@ -26,6 +27,7 @@ export const translations = combineTranslations(common)
   .and(apiAccess)
   .and(approvals)
   .and(assistant)
+  .and(build)
   .and(collaborationWorkspace)
   .and(configAssets)
   .and(conversation)

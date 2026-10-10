@@ -7,6 +7,11 @@ import type {
   SafeConfig
 } from "@vivd-catalyst/api-client";
 import {
+  buildLocationOfRoute,
+  buildRouteOfLocation,
+  type BuildNavigation
+} from "../build-area/build-route";
+import {
   firstAdministrationRoute,
   managedWorkspaces,
   resolveSettingsRoute,
@@ -92,6 +97,8 @@ export interface SettingsAreaModel {
 export interface BuildAreaModel {
   page: PageDefinition;
   context: SettingsPageContextValue;
+  /** The open place in Build and the way to another one. */
+  navigation: BuildNavigation;
 }
 
 export function useControlPlaneModel({
@@ -181,6 +188,21 @@ export function useControlPlaneModel({
         }
       : undefined;
 
+  const buildLocation = buildLocationOfRoute(route);
+  const buildKindPath = buildLocation?.kindPath;
+  const buildAssetName = buildLocation?.name;
+  const inBuild = buildLocation !== undefined;
+  const buildNavigation = useMemo<BuildNavigation | undefined>(
+    () =>
+      inBuild
+        ? {
+            location: { kindPath: buildKindPath, name: buildAssetName },
+            open: (location, options) => showRoute(buildRouteOfLocation(location), options)
+          }
+        : undefined,
+    [buildAssetName, buildKindPath, inBuild, showRoute]
+  );
+
   return {
     canViewAdministration: firstAdministrationRoute(catalog, build, viewer) !== undefined,
     canViewBuild: Boolean(build.enabled && build.page?.visible(viewer)),
@@ -198,6 +220,9 @@ export function useControlPlaneModel({
             context
           }
         : undefined,
-    build: context && resolution?.kind === "build" ? { page: resolution.page, context } : undefined
+    build:
+      context && buildNavigation && resolution?.kind === "build"
+        ? { page: resolution.page, context, navigation: buildNavigation }
+        : undefined
   };
 }
