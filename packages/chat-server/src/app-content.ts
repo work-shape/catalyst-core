@@ -1,9 +1,5 @@
-import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
-import {
-  FILE_SET_RESERVED_SEGMENT,
-  type ClientInstanceId,
-  type FileSetId
-} from "@vivd-catalyst/core";
+import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
+import type { ClientInstanceId, FileSetId } from "@vivd-catalyst/core";
 import { z } from "zod";
 
 // Serving a Page: the files of one file set, to the frame that shows it and to nobody else.
@@ -17,19 +13,22 @@ import { z } from "zod";
 // document that holds it and resolves relative addresses against that document's address. The
 // Page therefore runs under the header below, loads its files from below the address of the
 // shell, and can navigate nowhere.
+//
+// The address holds a token. The token is a bearer capability: it is minted after the check
+// that a viewer may read the Page, it is valid for `APP_CONTENT_TOKEN_TTL_SECONDS`, and until
+// then it serves the built files of its one file set to whoever holds the address. It is not
+// bound to the viewer's session, and signing out or losing access does not end it early.
 
-/** How long an address a frame was given stays valid. A frame that outlives it asks for a new one. */
+/**
+ * How long an address a frame was given stays valid, for anyone who holds it. A frame that
+ * outlives it asks for a new one.
+ */
 export const APP_CONTENT_TOKEN_TTL_SECONDS = 3600;
 /** The purpose of the key. Another value here is another key from the same secret. */
 const APP_CONTENT_KEY_LABEL = "app-content/v1";
 const APP_CONTENT_KEY_BYTES = 32;
 /** Longer than any token this file mints. A longer one is refused before it is read. */
 const APP_CONTENT_TOKEN_MAX_CHARS = 512;
-
-/** The version of the shell document and the guard script. A change to either is a new one. */
-const PAGE_SHELL_VERSION = "1";
-/** Where the platform's own script of a Page frame is, below the address of every file set. */
-export const PAGE_GUARD_PATH = `${FILE_SET_RESERVED_SEGMENT}/guard-${PAGE_SHELL_VERSION}.js`;
 
 /** The key that signs content tokens, derived from a secret the instance already holds. */
 export function deriveAppContentKey(secret: string): Uint8Array {
@@ -40,7 +39,10 @@ export function deriveAppContentKey(secret: string): Uint8Array {
 
 export interface AppContentClaims {
   fileSetId: FileSetId;
-  /** The user the address was made for, after the check that this user may read the Page. */
+  /**
+   * The user the address was minted for, after the check that this user may read the Page. A
+   * record of who asked, not a condition: no request is compared with it.
+   */
   viewerId: string;
   /** One mount of the frame. */
   pageSessionId: string;
@@ -133,16 +135,42 @@ function readJson(text: string): unknown {
   }
 }
 
-const APP_CONTENT_PREFIX = "/app-content/";
+const APP_CONTENT_SEGMENT = "app-content";
+const APP_CONTENT_PREFIX = `/${APP_CONTENT_SEGMENT}/`;
+
+/**
+ * Whether a request may hold a token in its address: the router matched the content route, or
+ * the address reads as one below its prefix. The framework's own request lines are not written
+ * for such a request. The router's match is what decides for a request that is served; the
+ * reading of the address covers the requests no route takes.
+ */
+export function holdsAppContentToken(request: {
+  url?: string;
+  routeOptions?: { url?: string };
+}): boolean {
+  return request.routeOptions?.url === APP_CONTENT_ROUTE || isAppContentAddress(request.url);
+}
 
 /** The path a frame loads a file set from. It ends with a slash and answers the entry file. */
 export function appContentPath(fileSetId: FileSetId, token: string): string {
   return `${APP_CONTENT_PREFIX}${fileSetId}/${token}/`;
 }
 
-/** Whether a request address is one of the content route, and so holds a token. */
+/** The route every address below the prefix reaches, as the router names it. */
+const APP_CONTENT_ROUTE = `${APP_CONTENT_PREFIX}*`;
+
+/**
+ * Whether a request address is below the prefix of the content route, and so may hold a token.
+ * It is read the way a router reads it and more loosely: escaped characters are unescaped,
+ * case and repeated slashes do not count. An address the router turns away is matched too,
+ * a malformed one included, so that it is kept out of logs and error bodies all the same.
+ */
 export function isAppContentAddress(url: string | undefined): boolean {
-  return url?.startsWith(APP_CONTENT_PREFIX) ?? false;
+  const first = /^\/+([^/?#]*)/u.exec(url ?? "")?.[1] ?? "";
+  const unescaped = first.replaceAll(/%([0-9A-Fa-f]{2})/gu, (_escape, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16))
+  );
+  return unescaped.toLowerCase() === APP_CONTENT_SEGMENT;
 }
 
 /**
@@ -152,7 +180,7 @@ export function isAppContentAddress(url: string | undefined): boolean {
  * `frameAncestors` are the origins the interface runs on. The shell is framed by the interface
  * and by no other site.
  */
-function appContentPolicy(frameAncestors: readonly string[]): string {
+function appContentPolicy(frameAncestors: readonly string[], pageScriptHash?: string): string {
   return [
     // No origin: the Page cannot read the instance's cookies or storage. Scripts run. Forms,
     // popups, downloads, top navigation and same-origin are not allowed, each of them is a way
@@ -160,8 +188,9 @@ function appContentPolicy(frameAncestors: readonly string[]): string {
     "sandbox allow-scripts",
     "default-src 'none'",
     // 'self' is the instance. It takes no path; see `view-shell.ts` for why none is named.
-    // No inline script and no eval: the build moves inline scripts into files.
-    "script-src 'self'",
+    // No inline script and no eval: the build moves inline scripts into files. The one hash is
+    // that of the platform's own script of this answer, which holds the Page.
+    pageScriptHash ? `script-src 'self' 'sha256-${pageScriptHash}'` : "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     // No host at all. A manifest's `externalHosts` are reviewed when an App is published; a
@@ -186,10 +215,16 @@ function isPolicySource(origin: string): boolean {
   return URL.canParse(origin) && !new URL(origin).hostname.startsWith("[");
 }
 
-/** What every answer of the content route carries, an error included. */
-export function appContentHeaders(frameAncestors: readonly string[]): Record<string, string> {
+/**
+ * What every answer below the prefix of the content route carries, an error included.
+ * `pageScriptHash` is given with a shell document and names the one inline script it may run.
+ */
+export function appContentHeaders(
+  frameAncestors: readonly string[],
+  pageScriptHash?: string
+): Record<string, string> {
   return {
-    "content-security-policy": appContentPolicy(frameAncestors),
+    "content-security-policy": appContentPolicy(frameAncestors, pageScriptHash),
     "x-content-type-options": "nosniff",
     // The address holds the token. No request the Page causes names it to anyone.
     "referrer-policy": "no-referrer",
@@ -213,21 +248,28 @@ export function appContentCacheControl(remainingSeconds: number): string {
  * file is a frame's and nothing else's: opened in a tab it would be a page an agent wrote under
  * the instance's own address. Every other file is refused to a navigation of any kind, because
  * an SVG file opened as a document is such a page too. A client that does not say what its
- * request is for is answered, and gets nothing from it that a frame would not.
+ * request is for gets an HTML file as the shell, which holds it wherever it is shown, and no
+ * other file a browser would show as a document: such a file has no shell around it.
  */
 export function appContentDestinationAllowed(
   fetchDestination: string | string[] | undefined,
-  isDocument: boolean
+  contentType: string
 ): boolean {
+  const isHtml = isHtmlContentType(contentType);
   if (fetchDestination === undefined) {
-    return true;
+    return isHtml || !rendersAsDocument(contentType);
   }
   if (typeof fetchDestination !== "string") {
     return false;
   }
-  return isDocument
-    ? fetchDestination === "iframe"
-    : !NAVIGATION_DESTINATIONS.has(fetchDestination);
+  return isHtml ? fetchDestination === "iframe" : !NAVIGATION_DESTINATIONS.has(fetchDestination);
+}
+
+/** Whether a browser that is handed a file of this type as a page runs or lays out its markup. */
+function rendersAsDocument(contentType: string): boolean {
+  return /^(?:text\/html|image\/svg\+xml|(?:application|text)\/(?:[a-z0-9.+-]+\+)?xml)\s*(?:;|$)/iu.test(
+    contentType
+  );
 }
 
 const NAVIGATION_DESTINATIONS = new Set([
@@ -243,7 +285,11 @@ export function isHtmlContentType(contentType: string): boolean {
   return /^(?:text\/html|application\/xhtml\+xml)\s*(?:;|$)/iu.test(contentType);
 }
 
-// The platform's own script of a Page frame. It runs before the first byte of the Page.
+// The platform's own script of a Page frame. It is the only thing in the document the frame is
+// given, and the stored HTML is a text in it: the script writes the HTML into the document as
+// its last step. So there is no Page before the guard is in place. A script that does not run,
+// because the policy does not name its hash or because it throws, leaves an empty document, and
+// there is no second request that could fail between the guard and the Page.
 //
 // What the header cannot do is done here. A link in a Page leads nowhere, because the shell
 // refuses the address. But a click with a modifier key or the middle button opens the address
@@ -266,7 +312,7 @@ export function isHtmlContentType(contentType: string): boolean {
 // the header: it takes what it needs from the built-in objects before a script of the Page can
 // change them, and it closes the ways around it that are known. `e2e/view-exits.spec.ts` holds
 // one test per way.
-const PAGE_GUARD_SCRIPT = `(function () {
+const PAGE_GUARD_SOURCE = `(function (page) {
   "use strict";
   try {
     guard();
@@ -278,6 +324,7 @@ const PAGE_GUARD_SCRIPT = `(function () {
   }
   function guard() {
   var apply = Reflect.apply;
+  var write = Document.prototype.write;
   var describe = Object.getOwnPropertyDescriptor;
   var define = Object.defineProperty;
   function getter(prototype, name) {
@@ -477,40 +524,52 @@ const PAGE_GUARD_SCRIPT = `(function () {
   for (var kind = 0; kind < events.length; kind += 1) {
     listen(window, events[kind], cancel, true);
   }
+
+  // The Page, now that everything above holds. The parser reads it from here on.
+  apply(write, document, [page]);
   }
-})();
-`;
+})`;
 
-export const PAGE_GUARD_FILE = {
-  body: PAGE_GUARD_SCRIPT,
-  contentType: "text/javascript; charset=utf-8"
-} as const;
+/**
+ * The script of one Page document: the guard, called with the stored HTML as a text. No `<` of
+ * the HTML is in the script as such, so nothing in it ends the script element early.
+ */
+function composePageScript(storedHtml: string): string {
+  return `${PAGE_GUARD_SOURCE}(${JSON.stringify(storedHtml).replaceAll("<", "\\u003c")});`;
+}
 
-// The head of the Page document comes first, before any byte of the stored HTML, and the
-// stored HTML is never searched for a place to put it: a tag name in a comment or an attribute
-// would be found too. A later `<html>`, `<head>` or `<body>` of the stored HTML is merged by
-// the parser. The guard is a classic script without `async`, so it has run before the parser
-// reads the first byte of the Page.
-const PAGE_DOCUMENT_HEAD = [
-  "<!doctype html><html><head>",
-  '<meta charset="utf-8">',
-  '<meta http-equiv="x-dns-prefetch-control" content="off">',
-  `<script src="${PAGE_GUARD_PATH}"></script>`,
-  "</head>"
-].join("");
+// The document the frame is given holds the platform's script and nothing else. The stored
+// HTML is never searched for a place to put anything: a tag name in a comment or an attribute
+// would be found too. What the script writes follows it in the head, and the parser merges a
+// later `<html>`, `<head>` or `<body>` of the stored HTML.
+function composePageDocument(pageScript: string): string {
+  return [
+    "<!doctype html><html><head>",
+    '<meta charset="utf-8">',
+    '<meta http-equiv="x-dns-prefetch-control" content="off">',
+    `<script>${pageScript}</script>`
+  ].join("");
+}
 
 const SHELL_STYLE =
   "html, body { height: 100%; margin: 0; overflow: hidden; } iframe { display: block; width: 100%; height: 100%; border: 0; }";
 
+export interface PageShell {
+  document: string;
+  /** The SHA-256 of the one inline script of the Page document, as a policy names it. */
+  pageScriptHash: string;
+}
+
 /**
  * The shell document for one HTML file of a file set. The Page's frame is written here, by the
- * server, with the sandbox it always has: scripts and nothing else. The stored HTML is the
+ * server, with the sandbox it always has: scripts and nothing else. The Page document is the
  * value of an attribute, so only the two characters that end or change an attribute value are
- * escaped; the frame's parser reads the HTML exactly as it was stored.
+ * escaped. The answer that carries the shell names `pageScriptHash` in its policy.
  */
-export function composePageShellDocument(storedHtml: string): string {
-  const pageDocument = `${PAGE_DOCUMENT_HEAD}\n${storedHtml}`;
-  return [
+export function composePageShell(storedHtml: string): PageShell {
+  const pageScript = composePageScript(storedHtml);
+  const pageDocument = composePageDocument(pageScript);
+  const document = [
     "<!doctype html>",
     '<html><head><meta charset="utf-8"><title>Page</title>',
     `<style>${SHELL_STYLE}</style>`,
@@ -519,6 +578,7 @@ export function composePageShellDocument(storedHtml: string): string {
     "</body></html>",
     ""
   ].join("\n");
+  return { document, pageScriptHash: createHash("sha256").update(pageScript).digest("base64") };
 }
 
 function escapeAttribute(value: string): string {

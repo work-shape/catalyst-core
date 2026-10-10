@@ -23,7 +23,11 @@ import { registerConfigRoutes } from "./routes/config-routes";
 import { registerPlatformRoutes } from "./routes/platform-routes";
 import { registerViewRuntimeRoutes } from "./routes/view-runtime-routes";
 import { registerViewShellRoutes } from "./routes/view-shell-routes";
-import { registerPageRoutes } from "./routes/page-routes";
+import {
+  createFrameworkErrorHandler,
+  installAppContentBoundary,
+  registerPageRoutes
+} from "./routes/page-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
 import { registerAssetRoutes } from "./routes/asset-routes";
 import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
@@ -78,7 +82,7 @@ export type {
   ExecutionWorkspaceCleanupJobOptions
 } from "./types";
 export { loadViewRuntimeFiles } from "./view-runtime";
-import { isAppContentAddress } from "./app-content";
+import { holdsAppContentToken } from "./app-content";
 export { APP_CONTENT_TOKEN_TTL_SECONDS, deriveAppContentKey } from "./app-content";
 export { storePageFileSet } from "./page-file-sets";
 export type { PageFileInput, StorePageFileSetInput } from "./page-file-sets";
@@ -102,8 +106,12 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
     trustProxy: ["loopback", "uniquelocal"],
     // The address of a Page file holds the token that authorizes the request, and the
     // framework's request lines hold the address. So these requests are not logged.
-    disableRequestLogging: (request) => isAppContentAddress(request.url)
+    disableRequestLogging: holdsAppContentToken,
+    // An address the framework cannot read is answered without repeating it.
+    frameworkErrors: createFrameworkErrorHandler(allowedOrigins)
   });
+  // Before every other hook, so that an answer one of them gives carries the header set too.
+  installAppContentBoundary(app, allowedOrigins);
 
   await app.register(cors, {
     origin: allowedOrigins,

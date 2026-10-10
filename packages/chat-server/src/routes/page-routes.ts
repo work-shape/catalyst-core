@@ -6,23 +6,24 @@ import {
   isFileSetId,
   isPageId,
   normalizeAllowedOrigins,
+  toErrorEnvelope,
   type FileSet,
   type FileSetId,
   type FileSetSummary,
   type Page,
   type PageId
 } from "@vivd-catalyst/core";
-import type { FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   APP_CONTENT_TOKEN_TTL_SECONDS,
-  PAGE_GUARD_FILE,
-  PAGE_GUARD_PATH,
   appContentCacheControl,
   appContentDestinationAllowed,
   appContentHeaders,
   appContentPath,
   checkAppContentToken,
-  composePageShellDocument,
+  composePageShell,
+  holdsAppContentToken,
+  isAppContentAddress,
   isHtmlContentType,
   mintAppContentToken
 } from "../app-content";
@@ -45,11 +46,11 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
   const conversations = new ConversationWorkflow(options);
   const frameAncestors = normalizeAllowedOrigins(options.allowedOrigins);
 
-  function pagesOptions(): NonNullable<ResolvedChatServerOptions["pages"]> {
-    if (!options.pages) {
+  function contentKey(): Uint8Array {
+    if (!options.pages?.contentKey) {
       throw new AppError("INTERNAL", "Pages are not configured on this instance");
     }
-    return options.pages;
+    return options.pages.contentKey;
   }
 
   /** The Page of a conversation the caller may read. Every route below starts here. */
@@ -131,13 +132,13 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
 
   // The one place a caller's right to a Page is checked. The address it answers is then the
   // whole authorization of every file request until it expires: a frame without an origin has
-  // no session to send.
+  // no session to send. Whoever holds the address is served, so it is a secret for that long.
   route(apiOperations["pages.preview"], async ({ user, params, body, reply }) => {
     const page = await requirePage(params, user);
     const fileSet = await requireFileSet(page.id, body.fileSetId);
     const expiresAt = Math.floor(Date.now() / 1000) + APP_CONTENT_TOKEN_TTL_SECONDS;
     const pageSessionId = randomUUID();
-    const token = mintAppContentToken(pagesOptions().contentKey, options.clientInstanceId, {
+    const token = mintAppContentToken(contentKey(), options.clientInstanceId, {
       fileSetId: fileSet.id,
       viewerId: getSubjectUserId(user),
       pageSessionId,
@@ -154,14 +155,12 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
   });
 
   route(apiOperations["app_content.files.get"], async ({ request, reply }) => {
-    // Set first, so a refusal carries them too. A refusal is never kept by a browser.
-    void reply.headers({ ...appContentHeaders(frameAncestors), "cache-control": "no-store" });
     const nowSeconds = Math.floor(Date.now() / 1000);
     const address = parseContentAddress(wildcardOf(request.params));
     if (!address) {
       throw contentRefusal("token_invalid");
     }
-    const checked = checkAppContentToken(pagesOptions().contentKey, options.clientInstanceId, {
+    const checked = checkAppContentToken(contentKey(), options.clientInstanceId, {
       token: address.token,
       fileSetId: address.fileSetId,
       nowSeconds
@@ -178,38 +177,72 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     }
     const requested = address.path;
     const cacheControl = appContentCacheControl(checked.claims.expiresAt - nowSeconds);
-    const fetchDestination = request.headers["sec-fetch-dest"];
-    if (requested === PAGE_GUARD_PATH) {
-      requireDestination(fetchDestination, false);
-      return send(reply, PAGE_GUARD_FILE.contentType, cacheControl, PAGE_GUARD_FILE.body);
-    }
     const path = requested === "" ? fileSetEntryPath(fileSet) : requested;
     const file = fileSet.builtFiles.find((candidate) => candidate.path === path);
     if (!file) {
       throw contentRefusal("file_unknown");
     }
-    const isDocument = isHtmlContentType(file.contentType);
-    requireDestination(fetchDestination, isDocument);
+    if (!appContentDestinationAllowed(request.headers["sec-fetch-dest"], file.contentType)) {
+      throw new AppError("FORBIDDEN", "A file of a Page is served to its frame only");
+    }
     const bytes = await readFileSetFile(options, fileSet, "dist", file);
-    // An HTML file is answered as the shell that holds it, never as it is stored.
-    return isDocument
-      ? send(
-          reply,
-          file.contentType,
-          cacheControl,
-          composePageShellDocument(new TextDecoder().decode(bytes))
-        )
-      : send(reply, file.contentType, cacheControl, Buffer.from(bytes));
+    if (!isHtmlContentType(file.contentType)) {
+      return send(reply, file.contentType, cacheControl, Buffer.from(bytes));
+    }
+    // An HTML file is answered as the shell that holds it, never as it is stored. The policy
+    // of this answer names the one script of the shell's frame.
+    const shell = composePageShell(new TextDecoder().decode(bytes));
+    void reply.headers(appContentHeaders(frameAncestors, shell.pageScriptHash));
+    return send(reply, file.contentType, cacheControl, shell.document);
   });
 }
 
-function requireDestination(
-  fetchDestination: string | string[] | undefined,
-  isDocument: boolean
+/**
+ * What holds for every request below the prefix of the content route, whatever answers it: the
+ * operation, a refusal before the operation is reached (a module that is off, a rate limit),
+ * another method, or no route at all. Each answer carries the header set and is never kept,
+ * and none names the address, which may hold a token.
+ */
+export function installAppContentBoundary(
+  app: FastifyInstance,
+  allowedOrigins: ResolvedChatServerOptions["allowedOrigins"]
 ): void {
-  if (!appContentDestinationAllowed(fetchDestination, isDocument)) {
-    throw new AppError("FORBIDDEN", "A file of a Page is served to its frame only");
-  }
+  const headers = {
+    ...appContentHeaders(normalizeAllowedOrigins(allowedOrigins)),
+    "cache-control": "no-store"
+  };
+  app.addHook("onRequest", async (request, reply) => {
+    if (holdsAppContentToken(request)) {
+      void reply.headers(headers);
+    }
+  });
+}
+
+/**
+ * Answers a request the framework itself turned away, which is an address it cannot read. The
+ * framework's own answer repeats the address; this one says a fixed sentence, and below the
+ * prefix of the content route it carries the header set like every other answer there.
+ */
+export function createFrameworkErrorHandler(
+  allowedOrigins: ResolvedChatServerOptions["allowedOrigins"]
+): (error: Error, request: FastifyRequest, reply: FastifyReply) => void {
+  const headers = {
+    ...appContentHeaders(normalizeAllowedOrigins(allowedOrigins)),
+    "cache-control": "no-store"
+  };
+  return (_error, request, reply) => {
+    if (isAppContentAddress(request.url)) {
+      void reply.headers(headers);
+    }
+    const envelope = toErrorEnvelope(
+      new AppError("VALIDATION_FAILED", "The address of the request cannot be read"),
+      request.id
+    );
+    void reply
+      .status(envelope.statusCode)
+      .type("application/json; charset=utf-8")
+      .send({ error: envelope.error });
+  };
 }
 
 function send(

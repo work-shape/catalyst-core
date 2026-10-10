@@ -192,8 +192,9 @@ export function fileSetEntryPath(fileSet: FileSet): string {
 /**
  * Removes the Pages of a conversation that is deleted or expired: the stored objects of each
  * Page first, then its rows, so a failure leaves the rows that lead to what is left. Safe to
- * repeat. An instance that runs without Pages can still hold the rows of a time it ran with
- * them; then this fails instead of looking clean, and the retention job tries again.
+ * repeat. It does not ask whether the module `apps` is on. An instance without the `files`
+ * store can still hold the rows of a time it had one; then this fails instead of looking
+ * clean, and the retention job tries again.
  */
 export async function deleteConversationPages(
   options: PagesContext,

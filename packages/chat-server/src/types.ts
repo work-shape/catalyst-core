@@ -93,13 +93,17 @@ export interface ChatServerOptions {
   };
   /**
    * What Pages are stored in and served with. Present where the instance has the `files`
-   * object store and a secret to derive the key from; the module `apps` needs both.
+   * object store, whether the module `apps` is on or off: the Pages of a conversation are
+   * removed with it either way.
    */
   pages?: {
     /** The `files` object store. File sets live below `pages/`. */
     objects: ObjectStorage;
-    /** Signs the token in the address a frame loads a Page from. See `deriveAppContentKey`. */
-    contentKey: Uint8Array;
+    /**
+     * Signs the token in the address a frame loads a Page from. See `deriveAppContentKey`.
+     * Present when the module `apps` is on, which needs it.
+     */
+    contentKey?: Uint8Array;
   };
   /** What the server's own model calls go through, and what tells it what a model can do. */
   modelGateway: SystemModelGateway;

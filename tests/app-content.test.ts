@@ -1,5 +1,5 @@
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { runInNewContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   APP_CONTENT_TOKEN_TTL_SECONDS,
@@ -16,22 +16,22 @@ import {
 } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
-import { callTestPath, createTestInstance, createTestInstanceWith } from "./support/test-instance";
+import { callTestPath, createTestInstanceWith } from "./support/test-instance";
 
 // A Page revision is served to the frame that shows it and to nobody else. The address a member
 // is given holds a token for one file set; every answer under it carries the same header set,
 // and that header set is what keeps the Page in its frame.
 
 const text = (value: string) => new TextEncoder().encode(value);
-/** Where the filesystem store of an assembled test instance would keep its files. */
-const filesRoot = join(tmpdir(), "catalyst-app-content-test-files");
 
 const INDEX_HTML = `<!doctype html><html><head><link rel="stylesheet" href="./assets/style.css"></head><body><h1 title="a &amp; b">Offer "A"</h1><script type="module" src="./assets/main.js"></script></body></html>`;
 const MAIN_JS = `document.body.dataset.ready = "true";\n`;
 const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg"><script>parent.postMessage("x","*")</script></svg>`;
 
+const NESTED_HTML = `<!doctype html><title>Nested</title><p>below a folder</p>\r\n<script src="../assets/main.js"></script>`;
 const builtFiles = [
   { path: "index.html", bytes: text(INDEX_HTML) },
+  { path: "sub/deeper/page.html", bytes: text(NESTED_HTML) },
   { path: "assets/main.js", bytes: text(MAIN_JS) },
   { path: "assets/style.css", bytes: text("h1 { color: rgb(1, 2, 3); }") },
   { path: "assets/icon.svg", bytes: text(ICON_SVG) }
@@ -102,11 +102,16 @@ async function startInstance(appsEnabled = true) {
   const objects = new MemoryObjectStorage();
   const pages = { objects, contentKey: deriveAppContentKey("content-secret-".repeat(4)) };
   const { logger, lines } = collectingLogger();
+  // Set by a test to have every call from then on refused as one too many.
+  const limit = { reached: false };
   const instance = await createTestInstanceWith(() => ({
     config,
     modules: resolveInstanceModules(config).snapshot,
     pages,
     logger,
+    rateLimiter: {
+      consume: () => Promise.resolve({ allowed: !limit.reached, retryAfterMs: 1000 })
+    },
     // A policy cannot name an address in brackets, so the header set leaves the second one out.
     allowedOrigins: ["https://ui.example.test", "http://[::1]:5173"]
   }));
@@ -115,7 +120,48 @@ async function startInstance(appsEnabled = true) {
     stores: instance.stores,
     pages
   };
-  return { instance, objects, context, lines };
+  return { instance, objects, context, lines, limit };
+}
+
+/** The Page document a shell holds in its frame, and the one script of that document. */
+function heldBy(shellBody: string) {
+  const frame = /<iframe sandbox="([^"]*)" title="Page" srcdoc="([^"]*)"><\/iframe>/u.exec(
+    shellBody
+  );
+  const pageDocument = (frame?.[2] ?? "").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
+  const script =
+    /^<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><script>(.*)<\/script>$/su.exec(
+      pageDocument
+    );
+  return { sandbox: frame?.[1], pageDocument, script: script?.[1] };
+}
+
+/**
+ * Runs the script of a Page document outside a browser, with a document that records what is
+ * written into it. `builtIns` are the objects of a browser the guard takes its methods from.
+ */
+function runPageScript(script: string, builtIns: Record<string, unknown> = {}) {
+  const written: string[] = [];
+  const state = { stopped: false, removed: false };
+  const context = {
+    Document: {
+      prototype: {
+        write(markup: string) {
+          written.push(markup);
+        }
+      }
+    },
+    window: { stop: () => (state.stopped = true) },
+    document: { documentElement: { remove: () => (state.removed = true) } },
+    ...builtIns
+  };
+  let thrown: unknown;
+  try {
+    runInNewContext(script, context);
+  } catch (error) {
+    thrown = error;
+  }
+  return { written, state, thrown };
 }
 
 type Started = Awaited<ReturnType<typeof startInstance>>;
@@ -186,12 +232,6 @@ describe("the content route of a Page", () => {
     expect(style.statusCode).toBe(200);
     expect(style.headers["content-type"]).toBe("text/css; charset=utf-8");
     expect(style.headers).toMatchObject(HEADER_SET);
-
-    // The platform's own script of the frame, below every file set.
-    const guard = await callTestPath(instance, "GET", `${url}__catalyst/guard-1.js`, asScript);
-    expect(guard.statusCode).toBe(200);
-    expect(guard.body).toContain("RTCPeerConnection");
-    expect(guard.headers).toMatchObject(HEADER_SET);
   });
 
   it("answers an HTML file as the shell that holds it in a sandboxed frame, never as stored", async () => {
@@ -199,25 +239,112 @@ describe("the content route of a Page", () => {
     const { instance } = started;
     const { url } = (await preview(instance, await withPage(started))).json<Preview>();
 
-    for (const address of [url, `${url}index.html`]) {
+    for (const [address, stored] of [
+      [url, INDEX_HTML],
+      [`${url}index.html`, INDEX_HTML],
+      // An HTML file in a folder is held the same way: nothing in its document is an address
+      // that would resolve below that folder.
+      [`${url}sub/deeper/page.html`, NESTED_HTML]
+    ] as const) {
       const shell = await callTestPath(instance, "GET", address, asFrame);
       expect(shell.statusCode).toBe(200);
-      expect(shell.headers).toMatchObject(HEADER_SET);
       expect(shell.headers["content-type"]).toBe("text/html; charset=utf-8");
       // The frame the server writes allows scripts and nothing else.
-      const frame = /<iframe sandbox="([^"]*)" title="Page" srcdoc="([^"]*)"><\/iframe>/u.exec(
-        shell.body
-      );
-      expect(frame?.[1]).toBe("allow-scripts");
-      // The stored HTML is the value of an attribute and of nothing else in the shell.
+      const held = heldBy(shell.body);
+      expect(held.sandbox).toBe("allow-scripts");
       expect(shell.body.split("<iframe").length).toBe(2);
-      expect(shell.body).not.toContain(INDEX_HTML);
-      const held = (frame?.[2] ?? "").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
-      // The guard is in the document before the first byte of the Page.
-      expect(held).toBe(
-        `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><script src="__catalyst/guard-1.js"></script></head>\n${INDEX_HTML}`
+      // The Page document is one script and nothing after it. The stored HTML is a text in
+      // that script: no element of it is in the document before the script has run.
+      expect(held.script).toBeDefined();
+      const script = held.script ?? "";
+      expect(shell.body).not.toContain(stored);
+      expect(held.pageDocument).not.toContain("<h1");
+      expect(held.pageDocument).not.toContain("<p>");
+      expect(held.pageDocument.split("<script").length).toBe(2);
+      // Around the script there is no address, so none that resolves below a folder.
+      expect(held.pageDocument.replace(script, "")).toBe(
+        '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="x-dns-prefetch-control" content="off"><script></script>'
       );
+      expect(held.pageDocument).not.toContain("__catalyst");
+      expect(script).not.toMatch(/<\/script|<!--|\r/iu);
+      // The policy of this answer names that one script by its hash, beside the header set.
+      const hash = createHash("sha256").update(script).digest("base64");
+      expect(shell.headers).toMatchObject({
+        ...HEADER_SET,
+        "content-security-policy": HEADER_SET["content-security-policy"].replace(
+          "script-src 'self';",
+          `script-src 'self' 'sha256-${hash}';`
+        )
+      });
     }
+  });
+
+  it("puts the Page into its document only after the guard is in place", async () => {
+    const started = await startInstance();
+    const { instance } = started;
+    const { url } = (await preview(instance, await withPage(started))).json<Preview>();
+    const shell = await callTestPath(instance, "GET", `${url}sub/deeper/page.html`, asFrame);
+    const script = heldBy(shell.body).script ?? "";
+
+    // Where the guard cannot take what it needs, here because there is no browser around it,
+    // it throws, clears the document and writes nothing of the Page.
+    const failed = runPageScript(script);
+    expect(String(failed.thrown)).toMatch(/^ReferenceError: \w+ is not defined$/u);
+    expect(failed.written).toEqual([]);
+    expect(failed.state).toEqual({ stopped: true, removed: true });
+
+    // With the objects of a browser in reach it sets itself up and then writes the stored
+    // HTML, byte for byte, as its last step.
+    const order: string[] = [];
+    const prototypeOf = (names: string[]) =>
+      Object.defineProperties(
+        {},
+        Object.fromEntries(
+          names.map((name) => [name, { get: () => undefined, configurable: true }])
+        )
+      );
+    const methods = () => new Proxy({}, { get: () => () => undefined, has: () => false });
+    class Observer {
+      observe() {
+        order.push("observed");
+      }
+    }
+    const succeeded = runPageScript(script, {
+      Node: { prototype: prototypeOf(["nodeType"]) },
+      Element: {
+        prototype: Object.assign(prototypeOf(["localName", "attributes"]), {
+          removeAttributeNode: () => undefined,
+          remove: () => undefined,
+          querySelectorAll: () => ({}),
+          attachShadow: () => undefined
+        })
+      },
+      NodeList: { prototype: Object.assign(prototypeOf(["length"]), { item: () => undefined }) },
+      NamedNodeMap: {
+        prototype: Object.assign(prototypeOf(["length"]), { item: () => undefined })
+      },
+      Attr: { prototype: prototypeOf(["localName"]) },
+      DocumentFragment: { prototype: { querySelectorAll: () => ({}) } },
+      MutationRecord: { prototype: prototypeOf(["type", "target", "addedNodes"]) },
+      MutationObserver: Observer,
+      Event: { prototype: methods() },
+      MouseEvent: {
+        prototype: prototypeOf(["button", "ctrlKey", "metaKey", "shiftKey", "altKey"])
+      },
+      EventTarget: { prototype: { addEventListener: () => order.push("listening") } },
+      ShadowRoot: { prototype: {} },
+      Document: {
+        prototype: {
+          querySelectorAll: () => ({}),
+          write: (markup: string) => order.push(`wrote ${markup}`)
+        }
+      }
+    });
+    expect(succeeded.thrown).toBeUndefined();
+    expect(order.at(-1)).toBe(`wrote ${NESTED_HTML}`);
+    expect(order.filter((step) => step.startsWith("wrote"))).toHaveLength(1);
+    expect(order.indexOf("observed")).toBeGreaterThanOrEqual(0);
+    expect(order.filter((step) => step === "listening")).toHaveLength(3);
   });
 
   it("answers a token on another file set, an expired token and an altered token with 404", async () => {
@@ -287,7 +414,14 @@ describe("the content route of a Page", () => {
     const { instance } = started;
     const { url } = (await preview(instance, await withPage(started))).json<Preview>();
 
-    for (const path of ["assets/none.js", "src/main.ts", "../index.html", "__catalyst/other.js"]) {
+    for (const path of [
+      "assets/none.js",
+      "src/main.ts",
+      "../index.html",
+      // The platform keeps this folder and has no file in it: none is served at any depth.
+      "__catalyst/guard-1.js",
+      "sub/deeper/__catalyst/guard-1.js"
+    ]) {
       const response = await callTestPath(instance, "GET", `${url}${path}`, asScript);
       expect(response.statusCode, path).toBe(404);
       expect(response.headers).toMatchObject(HEADER_SET);
@@ -318,6 +452,16 @@ describe("the content route of a Page", () => {
       "sec-fetch-dest": "document"
     });
     expect(refused.headers).toMatchObject({ ...HEADER_SET, "cache-control": "no-store" });
+
+    // A client that does not say what its request is for gets an HTML file as the shell, a
+    // script as it is, and no file a browser would show as a document without a shell.
+    const unnamed = async (path: string) => callTestPath(instance, "GET", `${url}${path}`);
+    expect(heldBy((await unnamed("")).body).sandbox).toBe("allow-scripts");
+    expect((await unnamed("assets/main.js")).statusCode).toBe(200);
+    const svg = await unnamed("assets/icon.svg");
+    expect(svg.statusCode).toBe(403);
+    expect(svg.body).not.toContain("<svg");
+    expect(svg.headers).toMatchObject({ ...HEADER_SET, "cache-control": "no-store" });
   });
 
   it("does not hand out a stored file that is not the one its file set names", async () => {
@@ -354,6 +498,72 @@ describe("the content route of a Page", () => {
     expect(lines.some((line) => line.includes("/health"))).toBe(true);
     expect(lines.filter((line) => line.includes("/app-content/"))).toEqual([]);
     expect(lines.filter((line) => line.includes(payload) || line.includes(signature))).toEqual([]);
+  });
+
+  it("keeps the token out of logs and answers for an address spelled another way, a malformed one and another method", async () => {
+    const started = await startInstance();
+    const { instance, lines } = started;
+    const page = await withPage(started);
+    const { url } = (await preview(instance, page)).json<Preview>();
+    const token = url.split("/")[3] ?? "";
+    const [payload = "", signature = ""] = token.split(".");
+    const withoutToken = (response: { body: string; headers: Record<string, unknown> }) => {
+      expect(response.body).not.toContain(payload);
+      expect(response.body).not.toContain(signature);
+      expect(response.body).not.toContain("content");
+      expect(response.headers).toMatchObject(HEADER_SET);
+    };
+
+    // The router reads an escaped character as the character, so this address is served.
+    const escaped = await callTestPath(
+      instance,
+      "GET",
+      `${url.replace("/app-content/", "/app%2dcontent/")}assets/main.js`,
+      asScript
+    );
+    expect(escaped.statusCode).toBe(200);
+    expect(escaped.body).toBe(MAIN_JS);
+    expect(escaped.headers).toMatchObject(HEADER_SET);
+
+    // An address the framework cannot read is answered with a fixed sentence.
+    for (const address of [`${url}%zz`, `${url.replace("/app-content/", "/app%2Dcontent/")}%`]) {
+      const malformed = await callTestPath(instance, "GET", address);
+      expect(malformed.statusCode).toBe(422);
+      expect(malformed.json<ErrorBody>().error).toMatchObject({
+        code: "VALIDATION_FAILED",
+        message: "The address of the request cannot be read"
+      });
+      withoutToken(malformed);
+    }
+
+    // Another method reaches no operation. Its answer is held like the others.
+    for (const method of ["POST", "PUT", "DELETE", "PATCH"] as const) {
+      const other = await callTestPath(instance, method, `${url}assets/main.js`);
+      expect(other.statusCode, method).toBe(404);
+      withoutToken(other);
+      expect(other.headers["cache-control"]).toBe("no-store");
+    }
+    // An address below the prefix that names no file set is no operation either.
+    const short = await callTestPath(instance, "GET", "/app-content");
+    expect(short.statusCode).toBe(404);
+    expect(short.headers).toMatchObject(HEADER_SET);
+
+    expect(lines.some((line) => line.includes("/health"))).toBe(true);
+    expect(lines.filter((line) => /app.{1,3}content/iu.test(line))).toEqual([]);
+    expect(lines.filter((line) => line.includes(payload) || line.includes(signature))).toEqual([]);
+  });
+
+  it("answers a call over the rate limit with the header set and without its address", async () => {
+    const started = await startInstance();
+    const { instance, limit } = started;
+    const { url } = (await preview(instance, await withPage(started))).json<Preview>();
+    limit.reached = true;
+
+    const limited = await callTestPath(instance, "GET", `${url}assets/main.js`, asScript);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.headers).toMatchObject({ ...HEADER_SET, "cache-control": "no-store" });
+    expect(limited.body).not.toContain(url.split("/")[3] ?? "");
+    expect(limited.body).not.toContain("app-content");
   });
 });
 
@@ -443,7 +653,7 @@ describe("pages.preview", () => {
     ]);
     const detail = await instance.call("pages.get", { params }, "user-1");
     expect(detail.json<{ fileSets: object[] }>().fileSets).toMatchObject([
-      { id: page.fileSet.id, number: 1, sourceFileCount: 2, builtFileCount: 4 }
+      { id: page.fileSet.id, number: 1, sourceFileCount: 2, builtFileCount: 5 }
     ]);
     const file = await instance.call(
       "pages.files.get",
@@ -514,6 +724,9 @@ describe("with the apps module off", () => {
     const content = await callTestPath(off.instance, "GET", `${url}assets/main.js`, asScript);
     expect(content.statusCode).toBe(404);
     expect(content.json<ErrorBody>().error.details).toEqual(moduleOff);
+    // The refusal is given before the operation is reached and is held like its answers.
+    expect(content.headers).toMatchObject({ ...HEADER_SET, "cache-control": "no-store" });
+    expect(content.body).not.toContain("app-content");
 
     const params = {
       conversationId: page.conversationId,
@@ -535,50 +748,5 @@ describe("with the apps module off", () => {
       expect(answer.statusCode).toBe(404);
       expect(answer.json<ErrorBody>().error.details).toEqual(moduleOff);
     }
-  });
-});
-
-describe("an assembled instance with the apps module on", () => {
-  const config = (files: boolean) =>
-    parseClientInstanceConfig({
-      ...createTestConfig(),
-      modules: { apps: { enabled: true } },
-      infrastructure: {
-        ...createTestConfig().infrastructure,
-        ...(files ? { objectStorage: { files: { provider: "filesystem", root: filesRoot } } } : {})
-      }
-    });
-  const secret = "a-secret-of-the-instance-with-enough-characters";
-
-  it("does not start without the store its Pages keep their files in", async () => {
-    await expect(
-      createTestInstance({ config: config(false), env: { BETTER_AUTH_SECRET: secret }, tools: [] })
-    ).rejects.toThrow(
-      "'modules.apps.enabled' is true, but 'infrastructure.objectStorage.files' is not configured"
-    );
-  });
-
-  it("does not start without a secret to derive the key of its content tokens from", async () => {
-    await expect(createTestInstance({ config: config(true), env: {}, tools: [] })).rejects.toThrow(
-      /neither of the secrets 'CHAT_SESSION_TOKEN_SECRET' and 'BETTER_AUTH_SECRET'/u
-    );
-    // A secret too short to sign with is no secret.
-    await expect(
-      createTestInstance({ config: config(true), env: { BETTER_AUTH_SECRET: "short" }, tools: [] })
-    ).rejects.toThrow(/at least 32 characters/u);
-  });
-
-  it("starts with both and answers the Pages of a conversation", async () => {
-    const instance = await createTestInstance({
-      config: config(true),
-      env: { BETTER_AUTH_SECRET: secret },
-      tools: []
-    });
-    const created = await instance.call("conversations.create", { payload: { title: "Pages" } });
-    const listed = await instance.call("pages.list", {
-      params: { conversationId: created.json<{ id: string }>().id }
-    });
-    expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toMatchObject({ items: [] });
   });
 });
