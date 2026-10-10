@@ -11,5 +11,6 @@ export * from "./identity";
 export * from "./jobs";
 export * from "./openapi-document";
 export * from "./operation-runs";
+export * from "./platform";
 export * from "./shared";
 export * from "./system";

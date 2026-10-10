@@ -19,7 +19,9 @@ import {
 } from "./operations/define-operation";
 import * as contractSchemas from "./schemas";
 
-const releaseVersion = packageManifest.version;
+/** The release this build is part of: every platform package carries the same version. */
+export const RELEASE_VERSION = packageManifest.version;
+const releaseVersion = RELEASE_VERSION;
 
 export type ApiOperationCatalog = Record<string, Operation>;
 

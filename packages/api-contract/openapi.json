@@ -52,6 +52,9 @@
       "name": "Operations"
     },
     {
+      "name": "Platform"
+    },
+    {
       "name": "Reference"
     },
     {
@@ -644,6 +647,60 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "auth"
+      }
+    },
+    "/api/v1/context": {
+      "get": {
+        "operationId": "platform.context.get",
+        "summary": "Read the instance, its release, the asset kinds and the caller's Namespaces",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "me:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "me:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformContext"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/conversations": {
@@ -14329,6 +14386,112 @@
           "effect",
           "scopeKind",
           "createdAt"
+        ]
+      },
+      "PlatformAssetKind": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "plural": {
+            "type": "string"
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "string"
+              },
+              "write": {
+                "type": "string"
+              },
+              "delete": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "read",
+              "write",
+              "delete"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "plural",
+          "actions"
+        ]
+      },
+      "PlatformContext": {
+        "type": "object",
+        "properties": {
+          "instance": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "release": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version"
+            ]
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformAssetKind"
+            }
+          },
+          "namespaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformContextNamespace"
+            }
+          }
+        },
+        "required": [
+          "instance",
+          "release",
+          "kinds",
+          "namespaces"
+        ]
+      },
+      "PlatformContextNamespace": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "prefix",
+          "displayName",
+          "actions"
         ]
       },
       "PutConfigAssetRequest": {

@@ -11,6 +11,7 @@ import { governanceOperations } from "./governance";
 import { instanceOperations } from "./instance";
 import { jobOperations } from "./jobs";
 import { operationRunOperations } from "./operations";
+import { platformOperations } from "./platform";
 import { referenceOperations } from "./reference";
 import { systemOperations } from "./system";
 import { userOperations } from "./users";
@@ -31,6 +32,7 @@ export const apiOperations = {
   ...apiAccessOperations,
   ...accessOperations,
   ...credentialOperations,
+  ...platformOperations,
   ...referenceOperations,
   ...systemOperations
 } as const;

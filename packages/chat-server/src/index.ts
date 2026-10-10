@@ -19,6 +19,7 @@ import { registerApiReferenceRoutes } from "./routes/api-reference-routes";
 import { registerBetterAuthRoutes } from "./routes/better-auth-routes";
 import { registerDevMailRoutes } from "./routes/dev-mail-routes";
 import { registerConfigRoutes } from "./routes/config-routes";
+import { registerPlatformRoutes } from "./routes/platform-routes";
 import { registerViewRuntimeRoutes } from "./routes/view-runtime-routes";
 import { registerViewShellRoutes } from "./routes/view-shell-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
@@ -116,6 +117,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerServiceAccessTokenRoutes(route, options);
   registerAgentRunRoutes(route, options, app.log);
   registerConfigRoutes(route, options);
+  registerPlatformRoutes(route, options);
   registerViewRuntimeRoutes(route);
   registerViewShellRoutes(route, options);
   registerCollaborationWorkspaceRoutes(route, options);
