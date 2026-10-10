@@ -142,7 +142,7 @@ contain breaking changes; a patch version does not.
   `operation_runs.expire` every five minutes and `operation_runs.recover` every minute, which
   fails a run whose process is gone as `interrupted`. Deleting a conversation deletes the runs
   its agents caused, and the audit retention also removes ended runs no conversation caused.
-  Migration `0050_operation_run_list_indexes` adds five indexes, created concurrently.
+  Migration `0052_operation_run_list_indexes` adds five indexes, created concurrently.
 
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
   `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
