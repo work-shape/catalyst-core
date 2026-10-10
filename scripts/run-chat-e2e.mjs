@@ -84,6 +84,7 @@ try {
   await startPostgres();
   await migrateDatabase();
   startApiServer();
+  startWorkspaceCommandWorker();
   startUiServer();
   await withServerMonitoring(
     Promise.all([
@@ -253,6 +254,22 @@ function startApiServer() {
       CHAT_SESSION_TOKEN_SECRET: e2eSessionTokenSecret,
       CHAT_SERVER_CREDENTIAL: e2eServerCredential,
       SERVICE_ACCESS_TOKEN_SECRET: e2eServiceAccessTokenSecret
+    }
+  });
+}
+
+// The suite's instance has the `apps` module on, and the build of a saved Page is a job of
+// this worker. It needs the database and the config, and none of the API's secrets.
+function startWorkspaceCommandWorker() {
+  return spawnManaged(process.execPath, ["clients/demo/dist/workspace-command-worker.js"], {
+    cwd: repoRoot,
+    label: "workspace command worker",
+    env: {
+      ...process.env,
+      CLIENT_CONFIG_PATH: e2eConfigPath,
+      DATABASE_URL: e2eDatabaseUrl,
+      WORKSPACE_COMMAND_TEMP_ROOT: resolve(repoRoot, ".tmp/e2e/workspace-commands"),
+      WORKSPACE_COMMAND_WORKER_ID: "e2e-workspace-command-worker"
     }
   });
 }

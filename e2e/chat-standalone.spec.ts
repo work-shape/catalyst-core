@@ -1335,7 +1335,8 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   await expect(page.getByRole("button", { name: "Select agent" })).toHaveAccessibleName(
     "Select agent: Application Assistant"
   );
-  await expect(page.getByRole("button", { name: "Add attachment" })).toHaveCount(0);
+  // The suite's instance runs Execution Workspaces, which Pages need, so a draft takes files.
+  await expect(page.getByRole("button", { name: "Add attachment" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Find review risks" })).toBeVisible();
 
   const input = page.getByPlaceholder("Message");
