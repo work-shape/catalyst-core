@@ -19,6 +19,7 @@ export * from "./job-handlers";
 export * from "./artifact-preview-jobs";
 export * from "./platform-store";
 export * from "./config";
+export * from "./asset-kinds";
 export * from "./config-assets";
 export * from "./approval-requests";
 export * from "./web-source";

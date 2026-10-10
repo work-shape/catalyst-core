@@ -1,3 +1,4 @@
+import type { AssetScope } from "./asset-kinds";
 import type { StorePage } from "./paging";
 import type { AuditActor } from "./audit";
 import type { AgentConfig, SkillConfig } from "./config";
@@ -69,6 +70,8 @@ export interface ConfigAssetRecord {
   clientInstanceId: ClientInstanceId;
   kind: ConfigAssetKind;
   name: string;
+  /** The owner. The Namespace is not part of the record: it is derived from the name. */
+  scope: AssetScope;
   status: "active" | "deleted";
   activeRevisionId: string;
   revision: number;
@@ -102,6 +105,11 @@ export type ConfigAssetMutation =
       name: string;
       config: JsonObject;
       operation?: "revert";
+      /**
+       * The owner of a new asset; the instance when left out. An existing asset keeps its
+       * scope: naming another one is refused with `invalid_scope`.
+       */
+      scope?: AssetScope;
     }
   | { type: "delete"; kind: ConfigAssetKind; name: string }
   | { type: "setDefaultAgent"; agentName: string | undefined };
@@ -111,6 +119,8 @@ export interface ConfigAssetStore {
   listActiveConfigAssets(input: {
     clientInstanceId: ClientInstanceId;
     kind?: ConfigAssetKind;
+    /** Only assets whose name starts with this text, such as a Namespace prefix. */
+    namePrefix?: string;
   }): Promise<ConfigAssetRecord[]>;
   getConfigAsset(input: {
     clientInstanceId: ClientInstanceId;
