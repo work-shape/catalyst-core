@@ -21,6 +21,7 @@ import {
   executeAgentRunJob,
   type AgentAvailability
 } from "@vivd-catalyst/core";
+import { waitUntil } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { createHeldModel, HELD_MODEL_PROVIDER } from "./support/held-model";
 import {
@@ -955,9 +956,19 @@ describe("client instance app vertical slice", () => {
       expect(chunks.some((chunk) => chunk.type === "run_cancelled")).toBe(true);
       expect(chunks.map((chunk) => chunk.payload?.delta ?? "").join("")).not.toContain(lateToken);
 
-      await new Promise((resolve) => {
-        setTimeout(resolve, 6_000);
-      });
+      // The run's job has ended, so nothing of the run is still executing that could write the
+      // rest of the answer. Without the cancel the job ends with the whole answer stored.
+      await waitUntil(
+        async () => {
+          const jobs = await withSql(
+            (sql) => sql<{ status: string }[]>`
+              select status from platform_jobs where subject = ${runId}`
+          );
+          return jobs.length === 1 && jobs[0]?.status !== "queued" && jobs[0]?.status !== "running";
+        },
+        "the cancelled run's job has ended",
+        10_000
+      );
 
       const messages = await fetchTestOperation(baseUrl, "conversations.messages.list", {
         params: { conversationId: conversation.id }
