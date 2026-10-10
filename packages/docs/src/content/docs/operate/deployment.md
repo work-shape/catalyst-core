@@ -89,20 +89,25 @@ release's own recovery fails them.
 
 ## Page Builds
 
-With the module `apps` on, the tool `page.save` stores a folder of a conversation's Execution Workspace as a revision of a Page. The build is the job kind `page.bundle`, and the Agent Run worker serves it:
+With the module `apps` on, the tool `page.save` stores a folder of a conversation's Execution Workspace as a revision of a Page. The build is the job kind `page.bundle`, and the workspace command worker serves it:
 
-- The worker reads the files by the index the save recorded, checks size and checksum of each, and hands them to a child process. That process transforms them from memory. It never imports or runs a file of the Page, loads no plugin and gets no environment variable of the worker.
-- The child gets a temporary directory of its own, which is removed when it ends. Only route files are written there, for the route generator.
-- With `agentRunWorker: "separate"` no file of a Page is parsed in the API process. With `"in_process"` the build process is a child of the API process. Use `"separate"` in production.
-- The child is not placed in a network namespace or a container by the platform. It opens no socket by itself and refuses the Node network modules, but the boundary against a flaw in the bundler is the worker's own container. Give the worker container no more network than Agent Runs need.
+- The worker reads the files by the index the save recorded, checks size and checksum of each, and writes a copy into a temporary directory of its own under `WORKSPACE_COMMAND_TEMP_ROOT`. The directory is removed when the build ends.
+- The build is the fixed command `catalyst-page-build` of the runner image, run in the sandbox like a workspace command: no network, read-only root file system, no capabilities, and the CPU, memory and process limits of `infrastructure.sandbox`. Only that directory is mounted. The command gets no environment variable of the worker.
+- The worker treats what the command left behind as untrusted data. It reads regular files only, follows no link, refuses a path that leaves the directory or has a `__catalyst` segment, and stops at the file and byte limits instead of reading past them.
+- No file of a Page is parsed or run in the API process or in a worker process.
 
-| Setting                  | Default | Meaning                                                                                          |
-| ------------------------ | ------- | ------------------------------------------------------------------------------------------------ |
-| `PAGE_BUILD_CONCURRENCY` | 2       | Builds one worker process runs at once. One conversation never has two at once.                  |
-| `PAGE_BUILD_TIMEOUT_MS`  | 60000   | A build that runs longer is killed with its process group and the save fails.                    |
-| `PAGE_BUILD_MAX_HEAP_MB` | 1024    | Heap of the build's Node process. The bundler's own process is bounded by the input limits only. |
+An instance with `modules.apps.enabled: true` needs:
 
-A build takes at most 500 files, 2 MiB per file and 25 MiB in all, and may write 50 MiB. A save waits five minutes for its build; when no worker takes it in that time the save fails and a worker that comes later stores nothing. The assembly refuses to start with `modules.apps.enabled: true` when its Agent Run worker does not serve `page.bundle`.
+- `executionWorkspaces.enabled: true` and, outside development, `infrastructure.sandbox.provider: docker`. The instance does not start otherwise and names the setting.
+- A running workspace command worker. It needs `infrastructure.objectStorage.files` and its credentials in addition to the workspace store. A worker that does not serve `page.bundle` does not start.
+- A runner image of the same release. An older image has no `catalyst-page-build`; every save then fails with a message that says the runner image must be rolled out. The Infrastructure page does not show this.
+
+| Setting                  | Default | Meaning                                                                         |
+| ------------------------ | ------- | ------------------------------------------------------------------------------- |
+| `PAGE_BUILD_CONCURRENCY` | 2       | Builds one worker process runs at once. One conversation never has two at once. |
+| `PAGE_BUILD_TIMEOUT_MS`  | 60000   | A build that runs longer is stopped, its container removed, and the save fails. |
+
+A build takes at most 500 files, 2 MiB per file and 25 MiB in all, and may leave 500 files of 50 MiB in all. Memory, CPU and process count are those of the sandbox (4 GiB, 1 CPU and 128 processes by default); there is no disk quota on the build's directory beyond the timeout. A save waits five minutes for its build; when no worker takes it in that time the save fails and a worker that comes later stores nothing.
 
 ## Deployment Flow
 

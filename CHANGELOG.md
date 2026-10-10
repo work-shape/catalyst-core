@@ -42,16 +42,24 @@ contain breaking changes; a patch version does not.
   the module `apps` on and Execution Workspaces enabled, and like every tool it must be listed in
   `tools` and on an agent. The folder needs a manifest `app.yaml` (`id`, `name`, `kit`, optional
   `description`, `icon`, `entry`, `connections`, `actions`, `externalHosts`; unknown keys are
-  refused). The build is the job kind `page.bundle`. **It runs in the Agent Run worker, in a
-  child process of its own, and never executes a file of the Page**: the files are transformed
-  from memory, kit imports are rewritten to `/app-runtime/kit/<kit version>/<file>`, and inline
-  scripts and styles of an HTML Page are moved to files. An inline event handler such as
-  `onclick` fails the save with the file, element and attribute. With the Agent Run worker
-  placement `separate` no Page file is parsed in the API process; with `in_process` the build
-  process is a child of the API process. A build is killed after 60 seconds
-  (`PAGE_BUILD_TIMEOUT_MS`), when its Node heap passes 1024 MB (`PAGE_BUILD_MAX_HEAP_MB`) or
-  when it writes more than 50 MiB; a worker process runs 2 builds at once
-  (`PAGE_BUILD_CONCURRENCY`). The kit files themselves are not served yet, so a saved React
+  refused). The build is the job kind `page.bundle`. **It runs in the sandbox of Execution
+  Workspaces, as the fixed command `catalyst-page-build` of the runner image, and the workspace
+  command worker serves it.** With the Docker sandbox that is a container without network, with
+  a read-only root file system, no capabilities and the sandbox's CPU, memory and process
+  limits; it sees one directory holding a copy of the Page's files and nothing else. The worker
+  reads what the command left behind as untrusted data. No file of a Page is parsed or run in
+  the API process or in a worker process. Kit imports are rewritten to
+  `/app-runtime/kit/<kit version>/<file>`, and inline scripts and styles of an HTML Page are
+  moved to files. An inline event handler such as `onclick` fails the save with the file,
+  element and attribute; a file whose name ends in `__virtual.js` (or `.ts`, `.mjs`, `.cjs`,
+  `.mts`, `.cts`) is refused, because the route generator would execute it. A build is stopped
+  after 60 seconds (`PAGE_BUILD_TIMEOUT_MS`) or when it leaves more than 50 MiB or 500 files; a
+  worker process runs 2 builds at once (`PAGE_BUILD_CONCURRENCY`). **Operators:**
+  `modules.apps.enabled: true` now requires `executionWorkspaces.enabled: true`, a running
+  workspace command worker that can reach the `files` object store, and a runner image of this
+  release; outside development the sandbox must be `docker`. An instance that lacks one of
+  these does not start and names it, and a runner image without the command fails each save
+  with a message that says so. The kit files themselves are not served yet, so a saved React
   Page does not render until they are.
 - **Database:** migration `0052_page_builds` adds the table `page_builds`, the row a save and
   its build meet on. A row lives for the length of one save.

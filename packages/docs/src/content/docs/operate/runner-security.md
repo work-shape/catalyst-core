@@ -35,6 +35,10 @@ The Docker runner should use:
 
 The runner image should contain approved runtimes and artifact helpers at build time. Agents should not install packages dynamically in production.
 
+## Page Builds
+
+With the module `apps` on, the same sandbox builds saved Pages. The build is the fixed command `catalyst-page-build` of the runner image, with a temporary directory of its own instead of a workspace. The files of a Page are written by an agent or a person and are not trusted, and the build tools that read them are third-party code. The sandbox is therefore the boundary: nothing of a Page is parsed or run outside it, and what the command writes is read back as untrusted data. See [Page Builds](/operate/deployment/#page-builds).
+
 ## Data Handling
 
 Workspace file contents live in managed object storage and are referenced by manifest rows. Command audit events and operator telemetry must record minimized metadata only. Bounded stdout/stderr previews are command result data, not audit data, and should not be projected to users as final content.
