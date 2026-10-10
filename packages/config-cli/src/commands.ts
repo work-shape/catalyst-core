@@ -1,3 +1,4 @@
+import { CONFIG_CLI_ENV_NAMES, readConfigCliEnv } from "./env";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -757,11 +758,11 @@ function formatPushPlan(plan: PushPlan, prune: boolean): string {
 }
 
 function commandEnv(options: ConfigCommandOptions) {
-  return options.env ?? process.env;
+  return readConfigCliEnv(options.env);
 }
 
 async function connectApi(url: string, options: ConfigCommandOptions) {
-  const apiKey = commandEnv(options).CATALYST_API_KEY;
+  const apiKey = commandEnv(options)[CONFIG_CLI_ENV_NAMES.CATALYST_API_KEY];
   if (!apiKey) {
     throw new Error(
       "Missing CLI credentials. Set CATALYST_API_KEY to a key created under Administration, API Access. For a local development instance, 'catalyst config local-key' creates one."

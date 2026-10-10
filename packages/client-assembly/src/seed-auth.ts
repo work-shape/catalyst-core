@@ -5,7 +5,7 @@ import {
 } from "@vivd-catalyst/config-schema";
 import { AppError, type SecretResolver } from "@vivd-catalyst/core";
 import { createStandaloneAuthRuntimeForClientInstance, resolveTrustedOrigins } from "./auth";
-import type { ClientInstanceEnv } from "./env";
+import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createEnvironmentSecrets } from "./infrastructure";
 import { createPlatformStore } from "./store";
 
@@ -25,7 +25,7 @@ export interface SeedStandaloneAuthResult {
 export async function seedStandaloneAuth(
   input: SeedStandaloneAuthInput
 ): Promise<SeedStandaloneAuthResult> {
-  const env = input.env ?? process.env;
+  const env = readClientInstanceEnv(input.env);
   const config = input.config ?? (await loadConfig(input.configPath));
   if (!config.auth.standalone?.enabled) {
     throw new AppError(

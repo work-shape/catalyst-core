@@ -70,6 +70,11 @@
       ],
       "ignoreBinaries": ["openssl"],
       "vite": false
+    },
+    "packages/chat-ui": {
+      "entry": ["src/index.tsx", "src/shell.tsx", "src/admin.tsx", "src/vite.js", "src/env.ts"],
+      "project": ["src/**/*.{ts,tsx,mts,cts,js}"],
+      "vite": false
     }
   },
   "vite": false

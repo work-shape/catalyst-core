@@ -39,9 +39,15 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   resolve: {
-    alias: Object.fromEntries(
-      Object.entries(sourceAlias).map(([name, path]) => [name, resolve(rootDir, path)])
-    )
+    alias: {
+      [resolve(rootDir, "packages/chat-ui/dist/env.js")]: resolve(
+        rootDir,
+        "packages/chat-ui/src/env.ts"
+      ),
+      ...Object.fromEntries(
+        Object.entries(sourceAlias).map(([name, path]) => [name, resolve(rootDir, path)])
+      )
+    }
   },
   test: {
     globalSetup: ["tests/support/postgres-global-setup.ts"],

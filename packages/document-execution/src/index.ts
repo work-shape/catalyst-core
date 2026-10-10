@@ -1,3 +1,4 @@
+import { DOCUMENT_EXECUTION_ENV_NAMES, readDocumentExecutionEnv } from "./env";
 import { spawn, type ChildProcess } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
@@ -44,7 +45,7 @@ export async function runNativeProcess(
     try {
       child = spawn(input.command, [...input.args], {
         detached,
-        env: input.env,
+        env: readDocumentExecutionEnv(input.env),
         stdio: ["ignore", "pipe", "pipe"]
       });
     } catch (error) {
@@ -285,8 +286,7 @@ function kill(child: ChildProcess, signal: NodeJS.Signals): void {
 
 function officeEnvironment(profile: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    HOME: profile,
+    [DOCUMENT_EXECUTION_ENV_NAMES.HOME]: profile,
     XDG_CONFIG_HOME: join(profile, "xdg_config"),
     XDG_CACHE_HOME: join(profile, "xdg_cache")
   };

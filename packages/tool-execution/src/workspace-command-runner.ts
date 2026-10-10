@@ -1,3 +1,4 @@
+import { WORKSPACE_COMMAND_PATH_ENV_NAME, readToolExecutionEnv } from "./env";
 import { createHash, randomUUID } from "node:crypto";
 import {
   lstat,
@@ -35,7 +36,6 @@ import {
   resolveWorkspaceFilesystemPath
 } from "./workspace-paths";
 import {
-  DEFAULT_WORKSPACE_COMMAND_PATH,
   LocalWorkspaceCommandProcessExecutor,
   type ProcessResult,
   type WorkspaceCommandProcessExecutor
@@ -487,7 +487,7 @@ export class LocalWorkspaceCommandRunner {
       tempDirectory,
       env: {
         HOME: workspaceDirectory,
-        PATH: process.env.PATH ?? DEFAULT_WORKSPACE_COMMAND_PATH,
+        [WORKSPACE_COMMAND_PATH_ENV_NAME]: readToolExecutionEnv().path,
         TMPDIR: tempDirectory,
         WORKSPACE_DIR: workspaceDirectory
       },

@@ -63,7 +63,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.tsx src/shell.tsx src/admin.tsx --format esm --dts --external react --external react-dom",
+    "build": "tsup src/index.tsx src/shell.tsx src/admin.tsx src/env.ts --format esm --dts --external react --external react-dom",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

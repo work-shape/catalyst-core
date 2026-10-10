@@ -206,48 +206,6 @@
     },
     {
       "target": "lint",
-      "rule": "catalyst/env-boundary",
-      "scope": "packages/chat-ui",
-      "count": 2,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/env-boundary",
-      "scope": "packages/client-assembly",
-      "count": 7,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/env-boundary",
-      "scope": "packages/config-cli",
-      "count": 1,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/env-boundary",
-      "scope": "packages/deployment-kit",
-      "count": 3,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/env-boundary",
-      "scope": "packages/document-execution",
-      "count": 1,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
-      "rule": "catalyst/env-boundary",
-      "scope": "packages/tool-execution",
-      "count": 1,
-      "owner": "CB-8c"
-    },
-    {
-      "target": "lint",
       "rule": "catalyst/fetch-boundary",
       "scope": "packages/config-cli",
       "count": 5,

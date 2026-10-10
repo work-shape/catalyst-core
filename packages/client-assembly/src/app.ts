@@ -63,7 +63,7 @@ import type {
   ClientInstanceCapability,
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
-import type { ClientInstanceEnv } from "./env";
+import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspaceObjectStore } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
@@ -216,7 +216,7 @@ export async function createClientInstanceExecutionAssembly(
   input: Omit<CreateClientInstanceAppInput, "agentRuntimeMode" | "allowedOrigins">
 ) {
   const logger = createLogger();
-  const env = input.env ?? process.env;
+  const env = readClientInstanceEnv(input.env);
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
   const capabilities = input.capabilities ?? [];

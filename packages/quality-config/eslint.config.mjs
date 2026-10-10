@@ -383,7 +383,16 @@ const plugin = {
     ),
     "env-boundary": rule(
       "Environment reads belong in the package's src/env.ts",
-      (filename) => packageAt(filename) !== undefined && !isPackageFile(filename, "src/env.ts"),
+      (filename) => {
+        const path = relative(root, filename).replaceAll("\\", "/");
+        return (
+          /^(?:(?:packages|clients)\/[^/]+\/)?src\//u.test(path) &&
+          !path.startsWith("packages/config-schema/src/") &&
+          !/(?:^|\/)src\/env\.ts$/u.test(path) &&
+          !/(?:^|\/)scripts\//u.test(path) &&
+          path !== "packages/artifact-helpers/src/lib/env.ts"
+        );
+      },
       (context, report) => {
         /** @param {AnyNode} node */
         const check = (node) => {
@@ -400,6 +409,22 @@ const plugin = {
               ),
               ...hostMemberUses(context, ["process"])
             ].forEach(report),
+          // Vite injects these values into four explicitly named frontend entry files.
+          MetaProperty: (node) => {
+            if (node.meta.name !== "import" || node.property.name !== "meta") return;
+            const frontendEntries = [
+              "/packages/chat-standalone/src/main.tsx",
+              "/clients/demo/src/chat-main.tsx",
+              "/deployment.musterbau/src/chat-main.tsx",
+              "/deployment.catalyst/src/chat-main.tsx"
+            ];
+            const filename = context.filename.replaceAll("\\", "/");
+            if (
+              !frontendEntries.some((entry) => filename.endsWith(entry)) &&
+              (staticReads(node)?.includes("env") ?? true)
+            )
+              report(node);
+          },
           // The global `process` keeps environment reads visible to this rule.
           ImportDeclaration: check,
           ImportExpression: check,

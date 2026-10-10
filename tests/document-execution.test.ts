@@ -1,7 +1,8 @@
+import { spawn } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   convertOfficeDocument,
   boundedPdfPageResolution,
@@ -13,15 +14,56 @@ import {
   runNativeProcess
 } from "@vivd-catalyst/document-execution";
 
+vi.mock("node:child_process", { spy: true });
+
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
+  vi.clearAllMocks();
   await Promise.all(
     tempDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true }))
   );
 });
 
 describe("native document execution", () => {
+  it("passes only allowed parent variables and explicit caller values to native children", async () => {
+    for (const name of ["PATH", "HOME", "TMPDIR", "LANG"]) {
+      vi.stubEnv(name, "parent-fixture");
+    }
+    vi.stubEnv("CATALYST_PARENT_ONLY_MARKER", "parent-fixture");
+    const args = ["-e", "process.stdout.write(JSON.stringify(Object.keys(process.env).sort()))"];
+    const inherited = await runNativeProcess({
+      command: process.execPath,
+      args,
+      timeoutMs: 15_000
+    });
+    const inheritedEnv = vi.mocked(spawn).mock.calls.at(-1)?.[2]?.env;
+    expect(Object.keys(inheritedEnv ?? {}).sort()).toEqual(["HOME", "LANG", "PATH", "TMPDIR"]);
+    // macOS adds __CF_USER_TEXT_ENCODING after exec, independently of the supplied map.
+    expect(JSON.parse(inherited.stdout)).not.toContain("CATALYST_PARENT_ONLY_MARKER");
+
+    const explicit = await runNativeProcess({
+      command: process.execPath,
+      args: [
+        "-e",
+        "process.stdout.write(JSON.stringify({ markerLeaked: 'CATALYST_PARENT_ONLY_MARKER' in process.env, overrideApplied: process.env.HOME === 'caller-fixture' }))"
+      ],
+      env: { HOME: "caller-fixture", LANG: undefined, CALLER_ONLY_MARKER: "caller-fixture" },
+      timeoutMs: 15_000
+    });
+    const explicitEnv = vi.mocked(spawn).mock.calls.at(-1)?.[2]?.env;
+    expect(
+      Object.keys(explicitEnv ?? {})
+        .filter((name) => explicitEnv?.[name] !== undefined)
+        .sort()
+    ).toEqual(["CALLER_ONLY_MARKER", "HOME", "PATH", "TMPDIR"]);
+    expect(JSON.parse(explicit.stdout)).toEqual({
+      markerLeaked: false,
+      overrideApplied: true
+    });
+  });
+
   it("bounds process output and reports failed processes without shell interpolation", async () => {
     const result = await runNativeProcess({
       command: process.execPath,

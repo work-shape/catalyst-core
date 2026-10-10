@@ -10,7 +10,7 @@ import {
   type CreateClientInstanceAppInput
 } from "./app";
 import type { ClientInstanceCapability } from "./capabilities";
-import type { ClientInstanceEnv } from "./env";
+import { CLIENT_INSTANCE_ENV_NAMES, readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createClientInstanceAgentRunWorker,
   runClientInstanceAgentRunWorker,
@@ -85,7 +85,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   const capabilities = input.capabilities ?? [];
 
   function loadEnvironment(loadInput: { env?: ClientInstanceEnv } = {}): ClientInstanceEnv {
-    const env = loadInput.env ?? process.env;
+    const env = readClientInstanceEnv(loadInput.env);
     if (!loadInput.env && input.loadEnv !== false) {
       const explicitEnvironment = snapshotEnvironment(env);
       loadDotenv({ path: resolve(workspaceRoot, ".env"), quiet: true });
@@ -101,9 +101,12 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
       configPath?: string;
     } = {}
   ): string {
-    const env = resolveInput.env ?? process.env;
+    const env = readClientInstanceEnv(resolveInput.env);
     const configuredPath =
-      resolveInput.configPath ?? env.CLIENT_CONFIG_PATH ?? input.configFile ?? "config/app.yaml";
+      resolveInput.configPath ??
+      env[CLIENT_INSTANCE_ENV_NAMES.CLIENT_CONFIG_PATH] ??
+      input.configFile ??
+      "config/app.yaml";
     if (isAbsolute(configuredPath)) {
       return configuredPath;
     }

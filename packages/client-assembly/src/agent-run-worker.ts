@@ -15,7 +15,7 @@ import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { createClientInstanceExecutionAssembly } from "./app";
 import type { ClientInstanceCapability } from "./capabilities";
-import type { ClientInstanceEnv } from "./env";
+import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 
 export interface CreateClientInstanceAgentRunWorkerInput {
   config?: ClientInstanceConfig;
@@ -62,7 +62,7 @@ export async function runClientInstanceAgentRunWorker(
   input: CreateClientInstanceAgentRunWorkerInput
 ): Promise<void> {
   const service = await createClientInstanceAgentRunWorker(input);
-  const drainTimeoutMs = readAgentRunWorkerDrainTimeoutMs(input.env ?? process.env);
+  const drainTimeoutMs = readAgentRunWorkerDrainTimeoutMs(readClientInstanceEnv(input.env));
   let signals = 0;
   // First signal drains active runs up to the timeout; a second one interrupts them now.
   const stop = (signal: NodeJS.Signals) => {

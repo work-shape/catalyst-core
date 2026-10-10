@@ -566,6 +566,44 @@ describe("quality collector", { timeout: 180_000 }, () => {
     );
   });
 
+  it("limits environment exemptions and checks import.meta.env outside named frontend entries", () => {
+    const fixtures = {
+      "packages/config-schema/package.json": JSON.stringify({ name: "@fixture/config-schema" }),
+      "packages/config-schema/src/reader.ts": "export const mode = process.env.MODE;\n",
+      "packages/artifact-helpers/package.json": JSON.stringify({
+        name: "@fixture/artifact-helpers"
+      }),
+      "packages/artifact-helpers/src/lib/env.ts": "export const read = () => process.env;\n",
+      "packages/chat-standalone/package.json": JSON.stringify({ name: "@fixture/chat-standalone" }),
+      "packages/chat-standalone/src/main.tsx": "export const mode = import.meta.env.MODE;\n",
+      "scripts/env-script.mjs": "export const mode = process.env.MODE;\n",
+      [`${source}/import-meta-env.mts`]: "export const mode = import.meta.env.MODE;\n",
+      [`${source}/import-meta-computed.mts`]: 'export const mode = import.meta["env"].MODE;\n',
+      [`${source}/import-meta-alias.mts`]:
+        "const meta = import.meta; export const mode = meta.env.MODE;\n"
+    };
+    try {
+      write(fixtures);
+      const findings = measure("lint").filter((finding) =>
+        finding.startsWith("catalyst/env-boundary ")
+      );
+      expect(findings.filter((finding) => finding.includes("/import-meta-"))).toEqual([
+        `catalyst/env-boundary ${source}/import-meta-alias.mts`,
+        `catalyst/env-boundary ${source}/import-meta-computed.mts`,
+        `catalyst/env-boundary ${source}/import-meta-env.mts`
+      ]);
+      for (const file of Object.keys(fixtures).filter((file) => !file.includes("/import-meta-"))) {
+        expect(findings).not.toContain(`catalyst/env-boundary ${file}`);
+      }
+      write({ "packages/chat-standalone/src/main.tsx": "export const mode = process.env.MODE;\n" });
+      expect(measure("lint")).toContain(
+        "catalyst/env-boundary packages/chat-standalone/src/main.tsx"
+      );
+    } finally {
+      for (const file of Object.keys(fixtures)) rmSync(join(directory, file), { force: true });
+    }
+  });
+
   it("reports every lint rule once per violating file, including the bypasses", () => {
     const findings = measure("lint");
     expect(findings.filter((finding) => !finding.startsWith("knip/"))).toEqual(

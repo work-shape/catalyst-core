@@ -1,3 +1,4 @@
+import { readChatUiEnv } from "../dist/env.js";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,9 +86,10 @@ export function vivdCatalystChatUiPlugin(options = {}) {
 }
 
 async function createBrandingBootstrap(config, options) {
+  const env = readChatUiEnv();
   const configPathInput =
-    options.clientConfigPath ?? process.env.CLIENT_CONFIG_PATH ?? DEFAULT_CLIENT_CONFIG_PATH;
-  const explicitConfigPath = Boolean(options.clientConfigPath ?? process.env.CLIENT_CONFIG_PATH);
+    options.clientConfigPath ?? env.clientConfigPath ?? DEFAULT_CLIENT_CONFIG_PATH;
+  const explicitConfigPath = Boolean(options.clientConfigPath ?? env.clientConfigPath);
   const configPath = resolveConfigPath(config.root, configPathInput);
 
   if (!existsSync(configPath)) {

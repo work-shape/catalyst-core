@@ -11,7 +11,7 @@ import {
   LocalWorkspaceCommandRunner,
   WorkspaceCommandWorker
 } from "@vivd-catalyst/tool-execution";
-import type { ClientInstanceEnv } from "./env";
+import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
   createSandbox,
@@ -41,7 +41,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
   input: CreateClientInstanceWorkspaceCommandWorkerInput = {}
 ): Promise<ClientInstanceWorkspaceCommandWorker> {
   const logger = createLogger();
-  const env = input.env ?? process.env;
+  const env = readClientInstanceEnv(input.env);
   const config = applyWorkspaceRunnerImageEnvOverride(
     input.config ?? (await loadWorkspaceWorkerConfig(input.configPath, env)),
     env

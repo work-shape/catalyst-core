@@ -16,7 +16,7 @@ import {
   LibreOfficeArtifactPreviewRenderer
 } from "@vivd-catalyst/tool-execution";
 import type { ArtifactPreviewSourceReader } from "@vivd-catalyst/tool-execution";
-import type { ClientInstanceEnv } from "./env";
+import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
   createWorkspaceObjectStore,
@@ -57,7 +57,7 @@ export async function createClientInstanceArtifactPreviewWorker(
   input: CreateClientInstanceArtifactPreviewWorkerInput = {}
 ): Promise<ClientInstanceArtifactPreviewWorker> {
   const logger = createLogger();
-  const env = input.env ?? process.env;
+  const env = readClientInstanceEnv(input.env);
   const config = input.config ?? (await loadArtifactPreviewWorkerConfig(input.configPath, env));
   const infrastructure = await createInstanceInfrastructure({
     config,
