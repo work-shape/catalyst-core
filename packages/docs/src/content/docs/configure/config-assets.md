@@ -8,7 +8,7 @@ Agents, skills, and the default agent are **config assets**: they live in the cl
 This gives config assets a different lifecycle than release config:
 
 - **Release config** (`app.yaml`) ships with a deployment and owns infrastructure: auth, model providers and bindings, usage budgets, tool enablement, workspaces.
-- **Config assets** change at runtime — through the admin UI's Config tab or a `catalyst config push` — and apply to new conversations immediately, without a deployment. A running conversation keeps the agent snapshot it started with.
+- **Config assets** change at runtime — in [Build](/configure/build/) or with a `catalyst config push` — and apply to new conversations immediately, without a deployment. A running conversation keeps the agent snapshot it started with.
 
 Skill content is read on demand by the `read_skill` tool, so edits are visible to reads after the edit even within an already-running conversation; the agent's system prompt, model selection, and tool list remain on the run's snapshot. A skill is one atomic package: its required `SKILL.md` root may include selectively readable UTF-8 text resources. The root read returns a compact resource manifest, and a second `read_skill` call can load one exact listed path.
 
@@ -97,7 +97,7 @@ selector when the pointer is on it. `ui.showAgentDescriptions` is `false` by
 default; with `true` the selector lists each description, and otherwise, or
 without a description, only the display name.
 
-Admins with the `config_assets.write` permission edit assets in the admin panel's Config tab. The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
+People with the `config_assets.write` permission, or with a grant in a Namespace, edit assets in [Build](/configure/build/). The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
 
 ```yaml
 modules:
@@ -136,12 +136,12 @@ modelReasoningEfforts:
 ```
 
 - Every id must be a binding agents may use (`agentSelectable` not `false` in release config); anything else is a validation error when the list is saved or pushed. The binding-level `userSelectable` key has no effect. The agent's own `modelBindingId` is always available and need not be listed.
-- The admin panel shows one model list per agent: a "Default" radio picks `modelBindingId`, a "Selectable by users" checkbox per model fills this list. The default's row is ticked and locked. Changing the default leaves the other ticks as they are, so tick the previous default to keep offering it.
+- Build shows the models in the agent's **Model** section: **Default model** picks `modelBindingId`, and a tick per model under **Models people can choose in chat** fills this list. The default is always offered and has no tick of its own. Changing the default leaves the other ticks as they are, so tick the previous default to keep offering it.
 - The composer shows a model picker with the agent's own model first, followed by the list. With an empty list there is no model to choose; the picker then appears only if the agent's own model offers a choice of reasoning effort, see [what the model picker shows](/configure/release-config/#what-the-model-picker-shows). Switching the agent updates the options and falls back to the new agent's own model when it does not offer the current pick.
 - The server rejects a run that requests a model the resolved agent does not offer.
 - An id whose binding is later removed or set to `agentSelectable: false` is ignored instead of failing the agent. It stays in the stored config until the list is next changed.
 - Reasoning effort is set per model. `reasoningEffort` is the effort of the agent's own model. `modelReasoningEfforts` maps a listed binding id to the effort for runs where a user picked that model; without an entry the binding's own default applies. The agent's `reasoningEffort` is never applied to a model the user picked instead. Every key must be in `userSelectableModelBindingIds`; anything else is a validation error.
-- In the admin panel each model in use (the default and the ticked ones) has its own reasoning-effort select in the list. When the default changes, each effort stays with its model.
+- In Build each model in use (the default and the ticked ones) has its own reasoning-effort select. When the default changes, each effort stays with its model.
 - The CLI omits both keys from the agent YAML when they are empty.
 
 Set `enabled: true`, leave `editableAgentFields` empty, and set all interactive mutation flags (including `allowSkillEditing`) to `false` for a readable, release-controlled Config tab. Agents, complete skill packages, and revision history remain inspectable while create, save, delete, default-change, and restore controls are hidden. Enabling skill editing later exposes the same atomic package through a root/reference editor; no storage migration is required.

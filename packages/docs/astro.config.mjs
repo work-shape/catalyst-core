@@ -79,6 +79,7 @@ export default defineConfig({
             "configure/release-config",
             "configure/modules",
             "configure/config-assets",
+            "configure/build",
             "configure/chat-experience"
           ]
         },
