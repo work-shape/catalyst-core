@@ -355,6 +355,35 @@ describe("form components", () => {
   });
 });
 
+describe("Picker", () => {
+  it("shows only its button while closed and reports no search the reader did not type", () => {
+    const searches: string[] = [];
+    const markup = renderToStaticMarkup(
+      createElement(
+        UiRoot,
+        { mode: "light", labels: uiLabelsEn },
+        createElement(Picker, {
+          search: true,
+          onSearchChange: (search) => searches.push(search),
+          options: [{ value: "alpha", label: "Alpha" }],
+          value: undefined,
+          onValueChange: () => undefined,
+          children: createElement(PickerButton, {
+            label: "Skill",
+            placeholder: "Choose a skill",
+            value: undefined
+          })
+        })
+      )
+    );
+
+    expect(markup).toContain('aria-label="Skill: Choose a skill"');
+    expect(markup).not.toContain("Alpha");
+    // Typing, and the empty search a closing picker reports, need a browser.
+    expect(searches).toEqual([]);
+  });
+});
+
 describe("Banner", () => {
   const inRoot = (banner: ReactNode) =>
     renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, banner));

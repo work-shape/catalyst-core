@@ -453,6 +453,39 @@ function ManyAgentsPicker({ text }: { text: GalleryText }) {
   );
 }
 
+/** How many agents the sample's source hands over per search, as a server would. */
+const ASKED_AGENTS_PAGE_SIZE = 5;
+
+/**
+ * Too many agents to hand over at once: the picker reports what is typed, and the caller
+ * passes the matching ones. Here the source is a list; in an application it is a request.
+ */
+function AskedAgentsPicker({ text }: { text: GalleryText }) {
+  const [search, setSearch] = useState("");
+  const [agents, setAgents] = useState<readonly string[]>([]);
+  const options: PickerOption[] = text.manyAgents
+    .filter((label) => label.toLowerCase().includes(search.trim().toLowerCase()))
+    .slice(0, ASKED_AGENTS_PAGE_SIZE)
+    .map((label) => ({ value: label, label }));
+  return (
+    <Picker
+      multiple
+      search
+      label={text.pickerAsked}
+      options={options}
+      value={agents}
+      onSearchChange={setSearch}
+      onValueChange={setAgents}
+    >
+      <Button variant="outline">
+        {text.pickerAsked}
+        <Badge size="sm">{agents.length}</Badge>
+        <ChevronDown aria-hidden="true" />
+      </Button>
+    </Picker>
+  );
+}
+
 function PickerSamples({ text }: { text: GalleryText }) {
   const [workspaces, setWorkspaces] = useState<readonly string[]>([text.workspaceMarketing]);
   const [role, setRole] = useState<string | undefined>(undefined);
@@ -463,6 +496,7 @@ function PickerSamples({ text }: { text: GalleryText }) {
       <AgentPicker text={text} />
       <PointedAgentPicker text={text} />
       <ManyAgentsPicker text={text} />
+      <AskedAgentsPicker text={text} />
       <Picker
         multiple
         options={workspaceOptions(text)}

@@ -59,6 +59,12 @@ interface PickerBaseProps {
    * it, typing moves to the first option whose name starts with what was typed.
    */
   search?: boolean;
+  /**
+   * Hears what the search field holds, and that it is empty again once the picker closes. A
+   * caller whose objects are too many to hand over at once asks for the matching ones with it
+   * and passes them as `options`. The picker still narrows what it is given.
+   */
+  onSearchChange?(search: string): void;
   /** Names the list for assistive technology: "Select agent". */
   label?: string;
   /** Shows each description in full over several lines instead of cutting it to one. */
@@ -124,6 +130,7 @@ export function Picker(props: PickerProps) {
     children,
     options,
     search = false,
+    onSearchChange,
     label,
     wrapDescriptions = false,
     openOnHover = false,
@@ -138,7 +145,13 @@ export function Picker(props: PickerProps) {
   const labels = useUiLabels("Picker");
   const container = useOverlayContainer("Picker");
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
-  const [query, setQuery] = useState("");
+  const [query, setQueryState] = useState("");
+  const setQuery = (next: string) => {
+    setQueryState(next);
+    if (next !== query) {
+      onSearchChange?.(next);
+    }
+  };
   // The row the arrow keys are on, once the keyboard, the pointer or the search has moved it.
   const [activeValue, setActiveValue] = useState<string>();
   const contentRef = useRef<HTMLDivElement>(null);

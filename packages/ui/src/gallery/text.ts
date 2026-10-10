@@ -107,6 +107,7 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   pickWorkspaces: string;
   pickRole: string;
   pickerInDialog: string;
+  pickerAsked: string;
   pickerGroupWorkspace: string;
   pickerGroupInstance: string;
   agentSupportHint: string;
@@ -292,6 +293,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     pickWorkspaces: "Workspaces",
     pickRole: "Choose role",
     pickerInDialog: "Picker in a dialog",
+    pickerAsked: "Agents asked for while typing",
     pickerGroupWorkspace: "This workspace",
     pickerGroupInstance: "Instance",
     agentSupportHint: "Answers questions from the handbook",
@@ -506,6 +508,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     pickWorkspaces: "Workspaces",
     pickRole: "Rolle wählen",
     pickerInDialog: "Auswahl in einem Dialog",
+    pickerAsked: "Agenten, beim Tippen abgefragt",
     pickerGroupWorkspace: "Dieser Workspace",
     pickerGroupInstance: "Instanz",
     agentSupportHint: "Beantwortet Fragen aus dem Handbuch",
