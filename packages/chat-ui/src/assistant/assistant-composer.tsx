@@ -9,7 +9,7 @@ import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
 import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../i18n";
-import type { SendBlock } from "./send-block";
+import { shouldQueueSend, type SendBlock } from "./send-block";
 import { isComposerBlockedByActiveRun, shouldShowCancelAction } from "./thread-activity";
 
 export interface LocalUploadingAttachment {
@@ -77,6 +77,11 @@ export function AssistantComposer({
 }) {
   const { t } = useTranslation();
   const currentText = useComposer((state) => state.text);
+  const composerCanSend = useComposer((state) => state.canSend);
+  const threadRunning = useAuiState((state) => state.thread.isRunning);
+  // An open conversation sends through the thread runtime, which takes up a lifted block one
+  // render after the composer does. An Enter in between would be ignored, so it waits.
+  const runtimeReady = Boolean(onSubmitMessage) || composerCanSend || threadRunning;
   const composerShellRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentActionRef = useRef<HTMLButtonElement | null>(null);
@@ -88,10 +93,10 @@ export function AssistantComposer({
   const submitBlocked = Boolean(sendBlock);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const queueSend = useCallback(() => {
-    if (shouldQueueSend({ sendBlock, sendQueued, text: currentText })) {
+    if (shouldQueueSend({ sendBlock, sendQueued, text: currentText, runtimeReady })) {
       onQueueSend(currentText);
     }
-  }, [currentText, onQueueSend, sendBlock, sendQueued]);
+  }, [currentText, onQueueSend, runtimeReady, sendBlock, sendQueued]);
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       if (submitBlocked) {
@@ -119,7 +124,7 @@ export function AssistantComposer({
         return;
       }
 
-      if (submitBlocked) {
+      if (submitBlocked || !runtimeReady) {
         event.preventDefault();
         queueSend();
         return;
@@ -131,7 +136,7 @@ export function AssistantComposer({
       event.preventDefault();
       onSubmitMessage(currentText);
     },
-    [currentText, onSubmitMessage, queueSend, submitBlocked]
+    [currentText, onSubmitMessage, queueSend, runtimeReady, submitBlocked]
   );
 
   useLayoutEffect(() => {
@@ -590,15 +595,6 @@ function attachmentStatusLabel(
     default:
       return t("attachmentStatusReady");
   }
-}
-
-/** A send waits only for a loading block, needs text, and is remembered once. */
-export function shouldQueueSend(input: {
-  sendBlock: SendBlock | undefined;
-  sendQueued: boolean;
-  text: string;
-}): boolean {
-  return Boolean(input.sendBlock?.loading) && !input.sendQueued && input.text.trim().length > 0;
 }
 
 function ComposerAction({

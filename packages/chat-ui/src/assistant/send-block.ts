@@ -43,6 +43,21 @@ export function resolveSendBlock(input: {
     : { reason: input.noAgentsMessage, loading: false };
 }
 
+/**
+ * A send waits only for what passes by itself: a loading block, or the thread runtime taking up
+ * a block that has just lifted. It needs text and is remembered once.
+ */
+export function shouldQueueSend(input: {
+  sendBlock: SendBlock | undefined;
+  sendQueued: boolean;
+  text: string;
+  /** False while an open conversation's thread runtime would still ignore a send. */
+  runtimeReady: boolean;
+}): boolean {
+  const passes = input.sendBlock ? input.sendBlock.loading : !input.runtimeReady;
+  return passes && !input.sendQueued && input.text.trim().length > 0;
+}
+
 /** A send the user asked for while a loading block held it back. */
 export interface QueuedSend {
   text: string;

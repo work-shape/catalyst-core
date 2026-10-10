@@ -1,19 +1,16 @@
 import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
 import { createElement, type ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SafeConfig } from "@vivd-catalyst/api-client";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import { safeConfigSchema } from "@vivd-catalyst/api-contract";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
-import {
-  shouldExpandComposer,
-  shouldQueueSend
-} from "../packages/chat-ui/src/assistant/assistant-composer";
+import { shouldExpandComposer } from "../packages/chat-ui/src/assistant/assistant-composer";
 import {
   createQueuedSendSettler,
   draftAttachmentsKey,
   resolveSendBlock,
+  shouldQueueSend,
   type QueuedSendState,
   type SendBlock
 } from "../packages/chat-ui/src/assistant/send-block";
@@ -21,10 +18,7 @@ import {
   AssistantThread,
   ThreadWelcomeHeading
 } from "../packages/chat-ui/src/assistant/assistant-thread";
-import {
-  renderToStaticMarkup as renderInUiRoot,
-  TranslationProvider
-} from "./chat-ui-render-harness";
+import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { createTestConfig } from "./support/fixtures";
 
 const agents = [
@@ -176,18 +170,35 @@ describe("composer send during a block", () => {
     { reason: "Wait for file upload to finish before sending.", loading: false }
   ];
 
+  const ask = { sendQueued: false, text: "Hello", runtimeReady: true };
+
   it("remembers an Enter or a click on Send while the app loads", () => {
-    expect(shouldQueueSend({ sendBlock: loading, sendQueued: false, text: "Hello" })).toBe(true);
+    expect(shouldQueueSend({ ...ask, sendBlock: loading })).toBe(true);
+  });
+
+  it("remembers an Enter that falls between the thread's arrival and its runtime taking it up", () => {
+    // The block has lifted, the runtime would still ignore the send: right after a switch.
+    const inBetween = { ...ask, sendBlock: undefined, runtimeReady: false };
+    expect(shouldQueueSend(inBetween)).toBe(true);
+    expect(shouldQueueSend({ ...inBetween, text: " " })).toBe(false);
+    expect(shouldQueueSend({ ...inBetween, sendQueued: true })).toBe(false);
+    // Once the runtime is ready the send goes out by itself, as the settler decides.
+    const settle = createQueuedSendSettler();
+    expect([
+      settle(waiting({ block: undefined, runtimeReady: false })),
+      settle(waiting({ block: undefined, runtimeReady: true }))
+    ]).toEqual(["wait", "send"]);
   });
 
   it("remembers nothing without text, without a block or when a send already waits", () => {
-    expect(shouldQueueSend({ sendBlock: loading, sendQueued: false, text: "  \n" })).toBe(false);
-    expect(shouldQueueSend({ sendBlock: undefined, sendQueued: false, text: "Hello" })).toBe(false);
-    expect(shouldQueueSend({ sendBlock: loading, sendQueued: true, text: "Hello" })).toBe(false);
+    expect(shouldQueueSend({ ...ask, sendBlock: loading, text: "  \n" })).toBe(false);
+    expect(shouldQueueSend({ ...ask, sendBlock: undefined })).toBe(false);
+    expect(shouldQueueSend({ ...ask, sendBlock: loading, sendQueued: true })).toBe(false);
   });
 
   it.each(refusals)("does not remember a send refused with: $reason", (sendBlock) => {
-    expect(shouldQueueSend({ sendBlock, sendQueued: false, text: "Hello" })).toBe(false);
+    expect(shouldQueueSend({ ...ask, sendBlock })).toBe(false);
+    expect(shouldQueueSend({ ...ask, sendBlock, runtimeReady: false })).toBe(false);
   });
 
   function waiting(overrides: Partial<QueuedSendState> = {}): QueuedSendState {
@@ -233,9 +244,7 @@ describe("composer send during a block", () => {
     const loadingThread = waiting({ block: threadBlock("loading") });
     const arrived = { ...loadingThread, block: threadBlock("ready") };
 
-    expect(
-      shouldQueueSend({ sendBlock: loadingThread.block, sendQueued: false, text: "Hello" })
-    ).toBe(true);
+    expect(shouldQueueSend({ ...ask, sendBlock: loadingThread.block })).toBe(true);
     expect([
       settle(loadingThread),
       settle(loadingThread),
@@ -259,9 +268,7 @@ describe("composer send during a block", () => {
     // The send is forgotten, the text stays in the composer under the reason shown.
     expect([settle(loadingThread), settle(failed)]).toEqual(["wait", "drop"]);
     expect(settle({ ...loadingThread, block: threadBlock("ready") })).toBe("wait");
-    expect(shouldQueueSend({ sendBlock: failed.block, sendQueued: false, text: "Hello" })).toBe(
-      false
-    );
+    expect(shouldQueueSend({ ...ask, sendBlock: failed.block })).toBe(false);
   });
 
   it("waits for the thread runtime to take up the lifted block", () => {
@@ -390,7 +397,7 @@ describe("the retention line above the composer", () => {
 
   /** The text of the line, or nothing when the thread shows none. */
   function lineOf(input: { retention: Retention; daysLeft: number }): string | undefined {
-    const markup = renderInUiRoot(
+    const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
         { children: null, locale: "en" as const },
