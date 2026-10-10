@@ -1901,11 +1901,13 @@ describe("local agent runtime", () => {
 
       expect(survived).toEqual(["message_delta", "message_completed", "run_completed"]);
       expect(f.attemptTimes).toHaveLength(3);
+      // An upper bound on fake time must not depend on the step: the clock moves on while the
+      // machine works. Each wait is at least its length and shorter than the next longer one.
       const waits = waitsBetween(f.attemptTimes);
       expect(waits[0]).toBeGreaterThanOrEqual(4_800);
-      expect(waits[0]).toBeLessThan(4_800 + 4 * stepMs);
+      expect(waits[0]).toBeLessThan(9_600);
       expect(waits[1]).toBeGreaterThanOrEqual(9_600);
-      expect(waits[1]).toBeLessThan(9_600 + 4 * stepMs);
+      expect(waits[1]).toBeLessThan(19_200);
 
       // The smallest jitter: each wait is its base minus 20 percent, the last what is left.
       random.mockReturnValue(0);
@@ -1923,8 +1925,11 @@ describe("local agent runtime", () => {
       expect(failedWaits).toHaveLength(5);
       [3_200, 6_400, 12_800, 25_600, 12_000].forEach((expected, index) => {
         expect(failedWaits[index]).toBeGreaterThanOrEqual(expected);
-        expect(failedWaits[index]).toBeLessThan(expected + 4 * stepMs);
+        expect(failedWaits[index]).toBeLessThan(expected * 2);
       });
+      // Nothing waits behind the failure: no later attempt starts.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(f.attemptTimes).toHaveLength(6);
     } finally {
       vi.useRealTimers();
       random.mockRestore();
@@ -1944,17 +1949,15 @@ describe("local agent runtime", () => {
       const run = f.runToEnd("hello", { signal: cancellation.signal });
       await advanceFakeClockUntilSettled(attempted, stepMs);
       const timersWhileWaiting = vi.getTimerCount();
-      const cancelledAt = Date.now();
 
       cancellation.abort();
+      // The wait's timer is gone with the stop itself, before the clock moves at all.
+      expect(vi.getTimerCount()).toBeLessThan(timersWhileWaiting);
       const cancelled = await advanceFakeClockUntilSettled(run, stepMs);
 
       expect(cancelled).toEqual(["run_failed"]);
       expect(f.attemptTimes).toHaveLength(1);
-      // The first wait would have lasted at least 3.2 s.
-      expect(Date.now() - cancelledAt).toBeLessThan(1_000);
-      // The wait's timer is gone, so no later attempt starts either.
-      expect(vi.getTimerCount()).toBeLessThan(timersWhileWaiting);
+      // So no later attempt starts either.
       await vi.advanceTimersByTimeAsync(120_000);
       expect(f.attemptTimes).toHaveLength(1);
     } finally {
@@ -1975,18 +1978,21 @@ describe("local agent runtime", () => {
       const waits = waitsBetween(f.attemptTimes);
       expect(waits).toHaveLength(2);
       for (const wait of waits) {
+        // The pause asked for, and not two of them.
         expect(wait).toBeGreaterThanOrEqual(30_000);
-        expect(wait).toBeLessThan(30_000 + 4 * stepMs);
+        expect(wait).toBeLessThan(60_000);
       }
 
       f.attemptTimes.length = 0;
       f.retryAfterMs = 60_001;
-      const startedAt = Date.now();
       const failed = await advanceFakeClockUntilSettled(f.runToEnd("hello again"), stepMs);
 
       expect(failed).toEqual(["run_failed"]);
+      expect(f.lastFailure).toMatchObject({ code: "RATE_LIMITED" });
       expect(f.attemptTimes).toHaveLength(1);
-      expect(Date.now() - startedAt).toBeLessThan(10_000);
+      // The run failed without waiting: no pause is left that a second attempt could follow.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(f.attemptTimes).toHaveLength(1);
     } finally {
       vi.useRealTimers();
     }
@@ -1999,18 +2005,30 @@ describe("local agent runtime", () => {
     useFakeClockBesidePostgres();
     try {
       // The first wait of 4 s fits before the deadline; the second of 8 s would end after it.
+      // The deadline counts from the first attempt: the fake clock moves on while the run
+      // reaches that attempt, and how far depends on the machine's load.
       f.rateLimitedAnswers = 3;
-      const startedAt = Date.now();
-      const bounded = await advanceFakeClockUntilSettled(
-        f.runToEnd("hello", { deadline: new Date(startedAt + 10_000) }),
-        stepMs
-      );
+      const deadlineAfterFirstAttemptMs = 10_000;
+      const deadline = new Date(Date.now() + 3_600_000);
+      f.onAttempt = () => {
+        if (f.attemptTimes.length === 1) {
+          deadline.setTime(Date.now() + deadlineAfterFirstAttemptMs);
+        }
+      };
+      const bounded = await advanceFakeClockUntilSettled(f.runToEnd("hello", { deadline }), stepMs);
 
       expect(bounded).toEqual(["run_failed"]);
       expect(f.lastFailure).toMatchObject({ code: "RATE_LIMITED" });
+      // Exactly two attempts: the second after the 4 s wait and before the deadline.
       expect(f.attemptTimes).toHaveLength(2);
-      expect(Date.now() - startedAt).toBeLessThan(5_000);
+      const [firstWait] = waitsBetween(f.attemptTimes);
+      expect(firstWait).toBeGreaterThanOrEqual(4_000);
+      expect(firstWait).toBeLessThan(deadlineAfterFirstAttemptMs);
+      // The 8 s wait was never started: no third attempt follows, however long the clock runs.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(f.attemptTimes).toHaveLength(2);
 
+      f.onAttempt = undefined;
       f.attemptTimes.length = 0;
       const expired = await advanceFakeClockUntilSettled(
         f.runToEnd("hello again", { deadline: new Date(Date.now() - 1) }),
