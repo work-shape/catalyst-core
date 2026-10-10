@@ -179,11 +179,12 @@ export async function syncAssets(
   });
   if (!view.complete) {
     const written = new Set(ready().map((entry) => assetKey(entry.kind.kind, entry.name)));
-    const left = defaultChange
-      ? withDefaultAgentName(withItems(view.set), defaultChange.agentName)
-      : withItems(view.set);
-    const unread = findIssuesOfChange(kinds.kinds, view.set, left, written);
-    stopIfRefused(placeIssues(unread, ready()));
+    const left = (set: AssetSet) =>
+      defaultChange
+        ? withDefaultAgentName(withItems(set), defaultChange.agentName)
+        : withItems(set);
+    const tellable = findIssuesOfChange(kinds.kinds, stored.set, view, left, written);
+    stopIfRefused(placeIssues(tellable, ready()));
   }
 
   const found = findAssetSetIssues(kinds.kinds, candidate);

@@ -332,12 +332,13 @@ export class AssetWorkflow {
     const stored = await loadStoredAssets(this.options);
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
     requireInstanceDefaultChange(call.access, kind, clearsDefault);
-    const removed = withoutDefinition(stored.set, kind.kind, name);
-    validateAssetSet(
-      this.options.configAssets.kinds.kinds,
-      clearsDefault ? withDefaultAgentName(removed, undefined) : removed,
-      stored.set
-    );
+    /** The set as the delete would leave it. */
+    const deleted = (set: AssetSet) => {
+      const removed = withoutDefinition(set, kind.kind, name);
+      return clearsDefault ? withDefaultAgentName(removed, undefined) : removed;
+    };
+    await this.requireTellableChange(call, target, stored, deleted);
+    validateAssetSet(this.options.configAssets.kinds.kinds, deleted(stored.set), stored.set);
     const result = await this.apply(call, {
       baseRevisions: { [assetKey(kind.kind, name)]: input.expectedRevision },
       ...(clearsDefault ? { baseDefaultAgentName: name } : {}),
@@ -379,11 +380,17 @@ export class AssetWorkflow {
     });
     const current = name === undefined ? undefined : findDefinition(view.set, kind.kind, name);
     const prepared = kind.prepareInteractiveUpsert({ current, next: input.config });
-    const candidate = withDefinition(view.set, kind.kind, name ?? "", prepared);
-    const found = findAssetSetIssues(kinds, candidate);
+    const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
+    const found = findAssetSetIssues(kinds, drafted(view.set));
     const ofDefinition = view.complete
       ? found.issues
-      : findIssuesOfChange(kinds, view.set, candidate, new Set([assetKey(kind.kind, name ?? "")]));
+      : findIssuesOfChange(
+          kinds,
+          stored.set,
+          view,
+          drafted,
+          new Set([assetKey(kind.kind, name ?? "")])
+        );
     const issues =
       ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found);
     return {
@@ -449,7 +456,7 @@ export class AssetWorkflow {
       const replaced = withDefinition(set, kind.kind, name, definition);
       return setsDefault ? withDefaultAgentName(replaced, name) : replaced;
     };
-    await this.requireReadableReferences(call, target, stored, written);
+    await this.requireTellableChange(call, target, stored, written);
     const validated = validateAssetSet(kinds, written(stored.set), stored.set);
     const namespaces = await assertChangedAgentsAllowed(
       this.options,
@@ -501,10 +508,11 @@ export class AssetWorkflow {
   }
 
   /**
-   * Refuses a definition for what it refers to and its caller may not read, in the words of a
-   * reference to nothing. The whole set is checked after it, as for every write.
+   * Refuses a change for what its caller may be told: a reference to an asset the caller may
+   * not read in the words of a reference to nothing, and an issue of such an asset without
+   * its name. A caller who reads everything is left to the check of the whole set after it.
    */
-  private async requireReadableReferences(
+  private async requireTellableChange(
     call: AssetCall,
     target: AssetTarget,
     stored: StoredAssets,
@@ -515,8 +523,9 @@ export class AssetWorkflow {
     if (view.complete) return;
     const issues = findIssuesOfChange(
       this.options.configAssets.kinds.kinds,
-      view.set,
-      written(view.set),
+      stored.set,
+      view,
+      written,
       new Set([assetKey(kind.kind, name)])
     );
     if (issues.length > 0) {

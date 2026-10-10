@@ -56,13 +56,28 @@ export async function loadStoredAssets(options: ChatServerOptions): Promise<Stor
   return { state, assets, set: assetSetOf(assets, state.defaultAgentName) };
 }
 
+/** What a refused change is told of an asset its caller may not read: that there is one. */
+export const UNREAD_ASSET_ISSUE = "The change would break an asset the caller may not read";
+
+/** The stored assets as one caller's change is checked against them. */
+interface ReferableAssets {
+  /**
+   * What a definition of the caller is resolved against: the assets the caller may read, the
+   * unread ones beside the written asset in its Namespace, and the instance's default.
+   */
+  set: AssetSet;
+  /** The assets the caller may read, and no other. */
+  readable: AssetSet;
+  /** Nothing was left out of `set`: it is the stored set itself. */
+  complete: boolean;
+}
+
 /**
  * What a caller's definition is resolved against: the stored assets the caller may read, and
- * those beside the written asset, of its owner and its Namespace, which it may refer to
- * whoever writes it. Every other asset is left out, so a reference to it reads as a reference
- * to nothing. The instance's default stays in, because the rule that an instance with agents
- * has one is about the set and not about the change. `complete` says nothing was left out: the
- * set is then the stored one itself.
+ * those beside the written asset in its Namespace, which it may refer to whoever writes it.
+ * A name outside every Namespace has no such neighbours. Every other asset is left out, so a
+ * reference to it reads as a reference to nothing. The instance's default stays in, because
+ * the rule that an instance with agents has one is about the set and not about the change.
  */
 export async function loadReferableAssets(
   options: ChatServerOptions,
@@ -70,8 +85,8 @@ export async function loadReferableAssets(
   stored: StoredAssets,
   /** The owner of what is written, and a name of it, or the prefix of its Namespace. */
   written: { scope: AssetScope; name: string | undefined }
-): Promise<{ set: AssetSet; complete: boolean }> {
-  const readable = (asset: ConfigAssetRecord) => {
+): Promise<ReferableAssets> {
+  const isReadable = (asset: ConfigAssetRecord) => {
     const kind = options.configAssets.kinds.get(asset.kind);
     return (
       // No registered kind reads the definition, so no check resolves anything against it.
@@ -82,9 +97,9 @@ export async function loadReferableAssets(
       ).allowed
     );
   };
-  const unread = stored.assets.filter((asset) => !readable(asset));
-  if (unread.length === 0) {
-    return { set: stored.set, complete: true };
+  const unread = new Set(stored.assets.filter((asset) => !isReadable(asset)));
+  if (unread.size === 0) {
+    return { set: stored.set, readable: stored.set, complete: true };
   }
   const namespaces =
     written.scope.kind === "instance"
@@ -92,49 +107,57 @@ export async function loadReferableAssets(
           clientInstanceId: options.clientInstanceId
         })
       : [];
-  const namespaceOf = (name: string | undefined) =>
-    name === undefined ? undefined : findNamespaceOfAssetName(namespaces, name)?.prefix;
-  const namespace = namespaceOf(written.name);
+  const namespaceOf = (name: string) => findNamespaceOfAssetName(namespaces, name)?.prefix;
+  const namespace = written.name === undefined ? undefined : namespaceOf(written.name);
+  const isNeighbour = (asset: ConfigAssetRecord) =>
+    namespace !== undefined &&
+    assetScopesEqual(asset.scope, written.scope) &&
+    namespaceOf(asset.name) === namespace;
   const isInstanceDefault = (asset: ConfigAssetRecord) =>
     asset.name === stored.state.defaultAgentName &&
     options.configAssets.kinds.get(asset.kind)?.holdsInstanceDefault === true;
-  const hidden = new Set(
-    unread.filter(
-      (asset) =>
-        !isInstanceDefault(asset) &&
-        (!assetScopesEqual(asset.scope, written.scope) || namespaceOf(asset.name) !== namespace)
-    )
-  );
-  return hidden.size === 0
-    ? { set: stored.set, complete: true }
-    : {
-        set: assetSetOf(
-          stored.assets.filter((asset) => !hidden.has(asset)),
-          stored.state.defaultAgentName
-        ),
-        complete: false
-      };
+  const { defaultAgentName } = stored.state;
+  return {
+    set: assetSetOf(
+      stored.assets.filter(
+        (asset) => !unread.has(asset) || isNeighbour(asset) || isInstanceDefault(asset)
+      ),
+      defaultAgentName
+    ),
+    readable: assetSetOf(
+      stored.assets.filter((asset) => !unread.has(asset)),
+      defaultAgentName
+    ),
+    complete: false
+  };
 }
 
 /**
- * What the kinds refuse of a change, read against a set that leaves assets out. Such a set
- * has issues of its own, because what it keeps may refer to what it leaves out: those are not
- * the change's and are not told. A reference the changed definition carried already is among
- * them, so a write is never refused for a reference it only keeps.
+ * What a change is refused for, as its caller may be told. `change` makes of a set what the
+ * change would leave of it.
+ *
+ * The change is read against the view, which leaves assets out. The view has issues of its
+ * own, because what it keeps may refer to what it leaves out: those are not the change's and
+ * are not told, and a reference the changed definition carried already is among them, so a
+ * write is never refused for a reference it only keeps. An issue that arises only because of
+ * an asset the caller may not read, in the view or in the stored set as a whole, is told as
+ * one sentence that names nothing.
  */
 export function findIssuesOfChange(
   kinds: readonly WorkflowAssetKind[],
-  view: AssetSet,
-  candidate: AssetSet,
+  stored: AssetSet,
+  view: ReferableAssets,
+  change: (set: AssetSet) => AssetSet,
   /** The keys of the definitions the change writes. */
   changed: ReadonlySet<string>
 ): AssetSetIssue[] {
   const key = (issue: AssetSetIssue) => JSON.stringify([issue.message, issue.path?.map(String)]);
+  const keysOf = (issues: readonly AssetSetIssue[]) => new Set(issues.map(key));
   const before = new Map<string, number>();
-  for (const issue of findAssetSetIssues(kinds, view).issues) {
+  for (const issue of findAssetSetIssues(kinds, view.set).issues) {
     before.set(key(issue), (before.get(key(issue)) ?? 0) + 1);
   }
-  return findAssetSetIssues(kinds, candidate).issues.filter((issue) => {
+  const ofChange = findAssetSetIssues(kinds, change(view.set)).issues.filter((issue) => {
     if (issue.assetKind !== undefined && issue.assetName !== undefined) {
       // An issue of one definition is the change's when the change writes that definition.
       return changed.has(assetKey(issue.assetKind, issue.assetName));
@@ -143,6 +166,15 @@ export function findIssuesOfChange(
     before.set(key(issue), count - 1);
     return count <= 0;
   });
+  // What the change is refused for with nothing but readable assets around it is the
+  // caller's to hear. Every other issue is there because of an asset the caller may not read.
+  const amongReadable = keysOf(findAssetSetIssues(kinds, change(view.readable)).issues);
+  const told = ofChange.filter((issue) => amongReadable.has(key(issue)));
+  const toldKeys = keysOf(told);
+  const untold =
+    told.length < ofChange.length ||
+    findAssetSetIssues(kinds, change(stored)).issues.some((issue) => !toldKeys.has(key(issue)));
+  return untold ? [...told, { message: UNREAD_ASSET_ISSUE }] : told;
 }
 
 /** Records the write and refuses it where the instance has interactive editing off. */

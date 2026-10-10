@@ -166,6 +166,104 @@ describe("a reference to an asset the caller may not read", () => {
   });
 });
 
+describe("an asset outside every Namespace", () => {
+  it("has no neighbours: a skill beside it is a reference only for a caller who may read it", async () => {
+    const { t } = await setup();
+    await t.put(t.admin.id, "agent", "plain");
+    // Lena reads and writes the one agent, and is denied the one skill.
+    for (const action of ["agent.read", "agent.write"]) {
+      await t.grant(t.lena.id, action, { assetId: await t.assetId("agent", "plain") });
+    }
+    await t.grant(
+      t.lena.id,
+      "skill.read",
+      { assetId: await t.assetId("skill", "handbook") },
+      "deny"
+    );
+    const outcome = async (userId: string, skillName: string) => {
+      const config = reader("plain", [skillName]);
+      const put = await t.call(userId, "assets.put", {
+        params: { kind: "agent", name: "plain" },
+        payload: { config, expectedRevision: 1 }
+      });
+      return { validation: await validate(t, userId, config), put: put.statusCode };
+    };
+
+    // The skill that exists and the one that does not are answered alike, and neither is attached.
+    for (const skillName of ["handbook", "nowhere"]) {
+      expect(await outcome(t.lena.id, skillName), skillName).toEqual({
+        validation: { valid: false, issues: [missing("plain", skillName)] },
+        put: 422
+      });
+    }
+    expect(await t.stored("agent", "plain")).toMatchObject({ revision: 1 });
+    expect(await outcome(t.admin.id, "handbook")).toEqual({
+      validation: { valid: true, issues: [] },
+      put: 200
+    });
+  });
+});
+
+describe("an issue of an asset the caller may not read", () => {
+  it("is told without the asset's name, to a draft, a put, a delete and a batch", async () => {
+    const { t } = await setup();
+    await t.grant(t.kai.id, "skill.delete", { namespace: "kai-" });
+    // The instance default and an agent of another Namespace read Kai's skill. Kai reads neither.
+    for (const name of ["assistant", "lena-helper"]) {
+      const wired = await t.call(t.admin.id, "assets.put", {
+        params: { kind: "agent", name },
+        payload: { config: reader(name, ["kai-guide"]) }
+      });
+      expect(wired.statusCode, wired.body).toBe(200);
+    }
+    const unread = "The change would break an asset the caller may not read";
+    const untitled = { ...skill("kai-guide"), title: "" };
+    const address = { params: { kind: "skill", name: "kai-guide" } };
+    const withoutNames = (body: string) => {
+      expect(body).not.toContain("assistant");
+      expect(body).not.toContain("lena-helper");
+      expect(body).toContain(unread);
+    };
+
+    const draft = await t.expectOk(t.kai.id, "assets.validate", {
+      params: { kind: "skill" },
+      payload: { config: untitled }
+    });
+    const { valid, issues } = validationSchema.parse(draft.json());
+    expect(valid).toBe(false);
+    // The draft's own issue is told as it is, and the rest as one sentence.
+    expect(issues.length).toBe(2);
+    expect(issues.at(-1)?.message).toBe(unread);
+    withoutNames(draft.body);
+
+    const calls = [
+      await t.call(t.kai.id, "assets.put", { ...address, payload: { config: untitled } }),
+      await t.call(t.kai.id, "assets.delete", { ...address, payload: { expectedRevision: 1 } }),
+      await t.call(t.kai.id, "assets.sync", {
+        payload: {
+          namespace: "kai-",
+          items: [{ type: "delete", kind: "skill", name: "kai-guide", expectedRevision: 1 }]
+        }
+      })
+    ];
+    for (const refused of calls) {
+      expect(refused.statusCode, refused.body).toBe(422);
+      withoutNames(refused.body);
+    }
+    expect(await t.stored("skill", "kai-guide")).toMatchObject({ status: "active", revision: 1 });
+
+    // The administrator reads both agents and is told which ones.
+    const named = await t.call(t.admin.id, "assets.delete", {
+      ...address,
+      payload: { expectedRevision: 1 }
+    });
+    expect(named.statusCode).toBe(422);
+    expect(named.body).toContain("Agent 'assistant' references missing skill 'kai-guide'");
+    expect(named.body).toContain("Agent 'lena-helper' references missing skill 'kai-guide'");
+    expect(named.body).not.toContain(unread);
+  });
+});
+
 describe("a name another owner holds", () => {
   it("is refused for a workspace as a free name is, whoever holds it", async () => {
     const { t, workspaceId } = await setup();
