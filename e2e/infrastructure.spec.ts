@@ -35,7 +35,7 @@ async function signIn(page: Page, api = apiBaseUrl): Promise<void> {
 const providerRow = (page: Page, id: string) => page.locator(`[data-provider="${id}"]`);
 const health = (page: Page, id: string) => providerRow(page, id).locator("[data-check]");
 
-test("an operator reads what the instance runs on and checks it now, in English and in German", async ({
+test("an operator reads what the instance runs on and how its last check went, in English and in German", async ({
   page
 }) => {
   await signIn(page);
@@ -74,23 +74,14 @@ test("an operator reads what the instance runs on and checks it now, in English 
   await expect(main.getByRole("textbox")).toHaveCount(0);
   await expect(main.getByRole("table").getByRole("button")).toHaveCount(0);
 
-  // "Check now" asks every provider and the time of the check moves.
-  const before = await health(page, "database").getAttribute("data-checked-at");
-  await main.getByRole("button", { name: "Check now" }).click();
-  await expect
-    .poll(async () => {
-      const checkedAt = await health(page, "database").getAttribute("data-checked-at");
-      return checkedAt !== null && checkedAt !== before;
-    })
-    .toBe(true);
+  // The instance checked its providers by itself when it started. This test starts no check:
+  // the minute of "Check now" belongs to the instance, and the test below uses it.
   for (const id of ["database", "models.local", "secrets"]) {
     await expect(health(page, id)).toHaveAttribute("data-check", "ok");
     await expect(health(page, id)).toContainText("Answers");
     await expect(health(page, id)).toContainText("Checked ");
   }
-  // The instance runs it once a minute: the page says from when, and the button waits.
-  await expect(main.locator("[data-check-wait]")).toContainText("The next check can start at");
-  await expect(main.getByRole("button", { name: "Check now" })).toBeDisabled();
+  await expect(main.getByRole("button", { name: "Check now" })).toBeVisible();
 
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
   await page.reload();
@@ -103,7 +94,7 @@ test("an operator reads what the instance runs on and checks it now, in English 
   await expect(page.locator("[data-operator-managed]")).toContainText(
     "Der Betreiber dieser Instanz legt das in der Release-Konfiguration fest."
   );
-  await expect(page.getByRole("button", { name: "Jetzt prüfen" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Jetzt prüfen" })).toBeVisible();
 });
 
 test.describe("with a provider that does not answer", () => {
@@ -184,7 +175,18 @@ test.describe("with a provider that does not answer", () => {
     await expect(broken).toContainText("E2E_BROKEN_MODEL_KEY");
     await expect(broken).toContainText("Set");
 
+    // "Check now" asks every provider of this API and the time of the check moves.
+    const before = await health(page, "database").getAttribute("data-checked-at");
     await main.getByRole("button", { name: "Check now" }).click();
+    await expect
+      .poll(async () => {
+        const checkedAt = await health(page, "database").getAttribute("data-checked-at");
+        return checkedAt !== null && checkedAt !== before;
+      })
+      .toBe(true);
+    // The instance runs it once a minute: the page says from when, and the button waits.
+    await expect(main.locator("[data-check-wait]")).toContainText("The next check can start at");
+    await expect(main.getByRole("button", { name: "Check now" })).toBeDisabled();
     await expect(health(page, "models.broken")).toHaveAttribute("data-check", "failed");
     await expect(health(page, "models.broken")).toContainText("Does not answer");
     // A class and a sentence of the product, not what the connection reported.
@@ -213,5 +215,6 @@ test.describe("with a provider that does not answer", () => {
     await expect(health(page, "models.broken")).toContainText("Antwortet nicht");
     await expect(health(page, "models.broken")).toContainText("Der Anbieter war nicht erreichbar.");
     await expect(health(page, "models.local")).toContainText("Antwortet");
+    await expect(page.getByRole("button", { name: "Jetzt prüfen" })).toBeDisabled();
   });
 });
