@@ -8,9 +8,16 @@ import {
 import { createTestConfig, personalConversationListInput } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
 
-const sent = vi.hoisted((): string[] => []);
+// The statements of one request. The instance also sends statements of its own on the same
+// pool, such as the job worker's read of the kinds with work once a second, and a count of
+// everything the pool sends is one more whenever such a read falls into the request.
+const counted = await vi.hoisted(async () => {
+  const { AsyncLocalStorage } = await import("node:async_hooks");
+  return new AsyncLocalStorage<string[]>();
+});
 
-// Every statement a connection of this file sends to Postgres, as the driver reports it.
+// Every statement sent to Postgres from inside a counted request, as the driver reports it. The
+// driver sends a statement in the asynchronous context of the code that awaits it.
 vi.mock("postgres", async (importOriginal) => {
   type Connect = (url: string, options?: postgres.Options<Record<string, never>>) => postgres.Sql;
   const actual = await importOriginal<{ default: Connect }>();
@@ -18,7 +25,7 @@ vi.mock("postgres", async (importOriginal) => {
     actual.default(url, {
       ...options,
       debug: (_connection, statement) => {
-        sent.push(statement);
+        counted.getStore()?.push(statement);
       }
     });
   return { ...actual, default: Object.assign(connect, actual.default) };
@@ -56,8 +63,10 @@ describe("conversation list statements", () => {
 
     /** What the request sent, without the type lookup of a connection the pool just opened. */
     const statementsOf = async (query: NonNullable<typeof list.query>) => {
-      sent.length = 0;
-      const response = await app.call("conversations.list", { ...list, query });
+      const sent: string[] = [];
+      const response = await counted.run(sent, () =>
+        app.call("conversations.list", { ...list, query })
+      );
       return {
         response,
         count: sent.filter((statement) => !statement.includes("pg_catalog.pg_type")).length
