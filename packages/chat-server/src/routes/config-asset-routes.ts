@@ -1,5 +1,4 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, type ConfigAssetKind } from "@vivd-catalyst/core";
 import { ConfigAssetWorkflow } from "../config-asset-workflow";
 import type { Route } from "../http/route";
 import { requirePathParam } from "../request-context";
@@ -10,18 +9,6 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
 
   route(apiOperations["config_assets.get_overview"], ({ identity, context }) =>
     workflow.getOverview(identity, context)
-  );
-
-  route(apiOperations["config_assets.get"], ({ access, params }) =>
-    workflow.getAsset(access, assetParams(params))
-  );
-
-  route(apiOperations["config_assets.put"], ({ identity, access, context, params, body }) =>
-    workflow.putAsset(identity, access, context, { ...assetParams(params), ...body })
-  );
-
-  route(apiOperations["config_assets.delete"], ({ identity, access, context, params, body }) =>
-    workflow.deleteAsset(identity, access, context, { ...assetParams(params), ...body })
   );
 
   route(apiOperations["config_agents.set_default"], ({ identity, context, body }) =>
@@ -37,14 +24,6 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
 
   route(apiOperations["instance.workspaces.list"], () => workflow.listAdministeredWorkspaces());
 
-  route(apiOperations["config_assets.revisions.list"], ({ access, params, paging }) =>
-    workflow.listRevisions(access, { ...assetParams(params), page: paging })
-  );
-
-  route(apiOperations["config_assets.revert"], ({ identity, access, context, params, body }) =>
-    workflow.revertAsset(identity, access, context, { ...assetParams(params), ...body })
-  );
-
   route(apiOperations["config_assets.export"], ({ identity, context }) =>
     workflow.exportAssets(identity, context)
   );
@@ -56,17 +35,4 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
   route(apiOperations["config_assets.validate"], ({ identity, access, context, body }) =>
     workflow.validateAssets(identity, access, context, body)
   );
-}
-
-function assetParams(params: { kind: string; name: string }): {
-  kind: ConfigAssetKind;
-  name: string;
-} {
-  if (params.kind !== "agent" && params.kind !== "skill") {
-    throw new AppError("VALIDATION_FAILED", "Config asset kind must be 'agent' or 'skill'");
-  }
-  return {
-    kind: params.kind,
-    name: requirePathParam(params.name, "Missing config asset name")
-  };
 }

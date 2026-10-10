@@ -9,7 +9,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import { createStandaloneAuthRuntime, type StandaloneAuthRuntime } from "@vivd-catalyst/auth";
 import { asClientInstanceId } from "@vivd-catalyst/core";
-import { retiredApiPaths } from "./support/retired-api-paths";
+import { removedAssetPaths, retiredApiPaths } from "./support/retired-api-paths";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import {
   callTestPath,
@@ -64,6 +64,14 @@ describe("the operation catalog", () => {
         "approval_requests.list_mine  GET /api/v1/approval-requests/mine",
         "approval_requests.revert  POST /api/v1/approval-requests/:requestId/revert",
         "approval_requests.withdraw  POST /api/v1/approval-requests/:requestId/withdraw",
+        "assets.delete  POST /api/v1/assets/:kind/:name/delete",
+        "assets.get  GET /api/v1/assets/:kind/:name",
+        "assets.list  GET /api/v1/assets/:kind",
+        "assets.put  PUT /api/v1/assets/:kind/:name",
+        "assets.revert  POST /api/v1/assets/:kind/:name/revert",
+        "assets.revisions.list  GET /api/v1/assets/:kind/:name/revisions",
+        "assets.sync  POST /api/v1/assets/sync",
+        "assets.validate  POST /api/v1/assets/:kind/validate",
         "audit_activities.list  GET /api/v1/instance/audit-activities",
         "audit_events.list  GET /api/v1/instance/audit-events",
         "branding.get  GET /api/v1/instance/branding",
@@ -71,14 +79,9 @@ describe("the operation catalog", () => {
         "config.get  GET /api/v1/instance/config",
         "config_agents.set_availability  PUT /api/v1/instance/config/agents/:name/availability",
         "config_agents.set_default  PUT /api/v1/instance/config/default-agent",
-        "config_assets.delete  POST /api/v1/instance/config/assets/:kind/:name/delete",
         "config_assets.export  GET /api/v1/instance/config/export",
-        "config_assets.get  GET /api/v1/instance/config/assets/:kind/:name",
         "config_assets.get_overview  GET /api/v1/instance/config/assets",
-        "config_assets.put  PUT /api/v1/instance/config/assets/:kind/:name",
         "config_assets.replace  POST /api/v1/instance/config/import",
-        "config_assets.revert  POST /api/v1/instance/config/assets/:kind/:name/revert",
-        "config_assets.revisions.list  GET /api/v1/instance/config/assets/:kind/:name/revisions",
         "config_assets.validate  POST /api/v1/instance/config/validate",
         "conversations.artifacts.get_content  GET /api/v1/conversations/:conversationId/artifacts/:artifactId/content",
         "conversations.artifacts.get_preview  GET /api/v1/conversations/:conversationId/artifacts/:artifactId/preview",
@@ -202,6 +205,7 @@ describe("the operation catalog", () => {
     const scopes = new Set(versioned.map((name) => descriptor(name).path.split("/")[3]));
     expect([...scopes].sort()).toEqual([
       "approval-requests",
+      "assets",
       "auth",
       "context",
       "conversations",
@@ -312,6 +316,22 @@ describe("a running instance", () => {
     expect(response.statusCode).toBe(404);
   });
 
+  // The asset addresses under `/instance/config/assets` are gone without an alias: the same
+  // calls are made at `/api/v1/assets`.
+  it.each(removedAssetPaths)(
+    "answers 404 at the removed asset address %s %s",
+    async (method, path) => {
+      const response = await callTestPath(development, method, path, {
+        "x-dev-user-id": "superadmin",
+        "x-server-credential": "server-credential"
+      });
+      expect(response.statusCode).toBe(404);
+      for (const name of names) {
+        expect(name).not.toMatch(/^config_assets\.(?:get|put|delete|revert|revisions\.list)$/u);
+      }
+    }
+  );
+
   it("retired every path the previous release answered", () => {
     const current = new Set(names.map(routeOf));
     for (const [method, path] of retiredApiPaths) {
@@ -321,7 +341,9 @@ describe("a running instance", () => {
     // the job conversation.generate_title now. The reference of the instance was the one
     // addition of that release: it never had an unversioned path. The Operation Runs, grants
     // and Namespaces came after it, then the background jobs, then a person's own Approval
-    // Requests, then the list of modules, then the infrastructure and its check.
+    // Requests, then the list of modules, then the infrastructure and its check. The five
+    // asset addresses moved once more, to `/api/v1/assets`, and the list, the check and the
+    // sync of assets came with them.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -342,7 +364,10 @@ describe("a running instance", () => {
       "platform.context.get",
       "instance.modules.list",
       "instance.infrastructure.get",
-      "instance.infrastructure.check"
+      "instance.infrastructure.check",
+      "assets.list",
+      "assets.validate",
+      "assets.sync"
     ];
     expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });

@@ -79,6 +79,8 @@ const sharedResource: AccessResource = {
   assetId: "asset-1",
   workspaceId: "workspace-1"
 };
+/** The same asset as the instance owns it: what a Namespace row covers. */
+const instanceResource: AccessResource = { kind: "agent", name: "kai-helper", assetId: "asset-1" };
 const scopes = {
   instance: { scopeKind: "instance" },
   namespace: { scopeKind: "namespace", namespace: "kai-" },
@@ -186,13 +188,31 @@ describe("access evaluator: whose rows apply", () => {
 describe("access evaluator: deny wins", () => {
   for (const denyScope of scopeKinds) {
     for (const allowScope of scopeKinds) {
-      it(`refuses when a ${denyScope} deny meets a ${allowScope} allow`, () => {
+      it(`lets a ${denyScope} deny win over a ${allowScope} allow where both cover the resource`, () => {
         const allow = grant(scopes[allowScope]);
         const deny = grant({ ...scopes[denyScope], effect: "deny" });
 
-        expect(decide({ grants: [allow], resource: sharedResource })).toEqual(allowedByGrant);
-        expect(decide({ grants: [allow, deny], resource: sharedResource })).toEqual(denied);
-        expect(decide({ grants: [deny, allow], resource: sharedResource })).toEqual(denied);
+        // A Namespace covers the instance's own assets only, so a pair with a Namespace row meets
+        // on an asset no workspace owns. A workspace row covers no such asset, and the two
+        // never meet.
+        const pair = [allowScope, denyScope];
+        const resource = pair.includes("namespace") ? instanceResource : sharedResource;
+        if (pair.includes("namespace") && pair.includes("workspace")) {
+          const namespaceRow = allowScope === "namespace" ? allow : deny;
+          const workspaceRow = allowScope === "workspace" ? allow : deny;
+          for (const [row, covered, missed] of [
+            [namespaceRow, instanceResource, sharedResource],
+            [workspaceRow, sharedResource, instanceResource]
+          ] as const) {
+            const covers = row === allow ? allowedByGrant : denied;
+            expect(decide({ grants: [row], resource: covered })).toEqual(covers);
+            expect(decide({ grants: [row], resource: missed })).toEqual(noGrant);
+          }
+          return;
+        }
+        expect(decide({ grants: [allow], resource })).toEqual(allowedByGrant);
+        expect(decide({ grants: [allow, deny], resource })).toEqual(denied);
+        expect(decide({ grants: [deny, allow], resource })).toEqual(denied);
       });
     }
   }

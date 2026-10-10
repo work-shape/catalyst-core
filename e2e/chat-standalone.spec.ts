@@ -1,6 +1,6 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { randomUUID } from "node:crypto";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { z } from "zod";
@@ -3221,17 +3221,13 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     const instructions = fieldControl("Instructions");
     const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
-    const serverChange = await requestWithOrigin(
-      page,
-      "put",
-      `${apiBaseUrl}/api/v1/instance/config/assets/agent/research_assistant`,
-      {
-        data: {
-          baseVersion: original.version + 4,
-          config: { ...originalResearchAgent, instructions: serverInstructions }
-        }
+    const researchAgentUrl = `${apiBaseUrl}/api/v1/assets/agent/research_assistant`;
+    const serverChange = await requestWithOrigin(page, "put", researchAgentUrl, {
+      data: {
+        expectedRevision: await assetRevision(page, researchAgentUrl),
+        config: { ...originalResearchAgent, instructions: serverInstructions }
       }
-    );
+    });
     expect(serverChange.ok()).toBe(true);
     await instructions.fill(`${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();

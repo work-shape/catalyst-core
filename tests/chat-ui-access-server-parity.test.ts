@@ -49,9 +49,9 @@ async function expectVerdictsHold(t: AccessInstance, holderId: string, name: str
   const said = await verdicts(t, holderId, name);
   const params = { kind: "agent", name };
   const calls = {
-    read: () => t.call(holderId, "config_assets.get", { params }),
+    read: () => t.call(holderId, "assets.get", { params }),
     write: () => t.putAgent(holderId, name, { instructions: `Changed for ${holderId}.` }),
-    delete: () => t.call(holderId, "config_assets.delete", { params, payload: {} })
+    delete: () => t.call(holderId, "assets.delete", { params, payload: {} })
   };
   const compared: string[] = [];
   for (const verdict of said) {
@@ -136,7 +136,7 @@ describe("the Check tab against real asset calls", () => {
       { assetId: await t.assetId("agent", "kai-old") },
       "deny"
     );
-    await t.expectOk(t.admin.id, "config_assets.delete", {
+    await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "agent", name: "kai-old" },
       payload: {}
     });

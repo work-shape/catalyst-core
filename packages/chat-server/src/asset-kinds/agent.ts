@@ -1,5 +1,6 @@
 import {
   agentConfigSchema,
+  assertSpendBudgetPricingCoverage,
   findAgentReferenceIssues,
   resolveLocalizedString,
   type ClientInstanceConfig
@@ -26,8 +27,11 @@ import {
 export interface AgentAssetKindOptions {
   config: ClientInstanceConfig;
   validationRefs: ConfigAssetValidationRefs;
-  /** Checks only the assembly can make, such as what a model binding supports. */
-  validateAgents?(agents: AgentConfig[]): string[];
+  /**
+   * Checks only the assembly can make, such as what a model binding supports. `changed` are the
+   * agents the write adds or changes; a rule that tolerates what is stored reads only them.
+   */
+  validateAgents?(agents: AgentConfig[], changed: AgentConfig[]): string[];
 }
 
 /** The agent kind: instructions with a model, tools and skills, usable where it is available. */
@@ -42,17 +46,23 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       // What the schema accepts today: any name that is not empty.
       nameRule: { pattern: /^[\s\S]+$/u, description: "Agent name must not be empty" },
       actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
-      validate: (context, agent) =>
-        [
-          ...findAgentReferenceIssues({
-            agents: [agent],
-            skillNames: context
-              .definitions("skill")
-              .flatMap((skill) => readDefinitionName(skill) ?? []),
-            refs: options.validationRefs
-          }),
-          ...(options.validateAgents?.([agent]) ?? [])
-        ].map((message) => ({ message })),
+      validate: (context, agents) =>
+        findAgentReferenceIssues({
+          agents,
+          skillNames: context
+            .definitions("skill")
+            .flatMap((skill) => readDefinitionName(skill) ?? []),
+          refs: options.validationRefs
+        }).map((message) => ({ message })),
+      validateWrite(context, agents) {
+        assertSpendBudgetPricingCoverage(options.config, [...agents]);
+        return (
+          options.validateAgents?.(
+            [...agents],
+            agents.filter((agent) => context.changes("agent", agent.name))
+          ) ?? []
+        ).map((message) => ({ message }));
+      },
       summarize: (agent) => {
         const description = resolveLocalizedString(agent.description, locale, locale);
         return {
@@ -62,8 +72,10 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         };
       }
     }),
-    definitions: (bundle) => bundle.agents,
-    withDefinitions: (bundle, agents) => ({ ...bundle, agents }),
+    bundle: {
+      definitions: (bundle) => bundle.agents,
+      withDefinitions: (bundle, agents) => ({ ...bundle, agents })
+    },
     holdsInstanceDefault: true,
     hasWorkspaceAvailability: true,
 

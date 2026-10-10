@@ -53,6 +53,24 @@ contain breaking changes; a patch version does not.
   capability gets the same from `createWorkerCapabilityModels` of
   `@vivd-catalyst/client-assembly`, which creates only the providers behind the bindings it is
   given.
+- **Assets:** agents and skills are read and written at `/api/v1/assets/{kind}/...` through nine
+  operations: `assets.list`, `assets.get`, `assets.put`, `assets.delete`, `assets.revisions.list`,
+  `assets.revert`, `assets.validate`, `assets.sync` and `platform.context.get`. Each call is one
+  Operation Run and is decided by the right on the one asset (`<kind>.read`, `.write`, `.delete`),
+  so a holder of rights in a Namespace lists, reads and writes the assets of that Namespace.
+  `assets.list` answers summaries in pages, filtered by name prefix and text. A write names the
+  revision it was made against in `expectedRevision` and answers `409 CONFLICT` with
+  `details.currentRevision` when the asset stands at another one; a put without it creates the
+  asset and is refused when the name is taken. `assets.sync` applies up to 200 puts and deletes
+  for one Namespace completely or not at all, reports each item and reaches no asset outside the
+  prefix. `platform.context.get` now also answers a service principal and names only the actions
+  the credential's scopes allow. **Breaking:** the five old asset addresses are gone. Scripts that
+  called them use `/api/v1/assets/...`; the CLI is unaffected. The operations
+  `config_assets.get`, `put`, `delete`, `revert` and `revisions.list` under
+  `/api/v1/instance/config/assets/{kind}/{name}` answer `404`, and the instance-wide `baseVersion`
+  of these writes is replaced by the asset's `expectedRevision`. Three migrations (0046 to 0048)
+  tie an asset a workspace owns to that workspace: deleting the workspace deletes its assets and
+  the grants on them.
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
   `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
   caller who is authenticated; a call without a credential gets `401` as on any route. Its agent tools are not offered to the model and cannot be called,

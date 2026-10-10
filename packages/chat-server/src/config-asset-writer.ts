@@ -1,42 +1,12 @@
 import { AppError, type ConfigAssetStore } from "@vivd-catalyst/core";
-import {
-  assertSpendBudgetPricingCoverage,
-  validateConfigAssetBundle
-} from "@vivd-catalyst/config-schema";
-import {
-  configValuesEqual,
-  readDefinitionName,
-  type ConfigAssetBundle
-} from "./asset-kinds/shared";
+import { assetSetOf, validateAssetSet, withDefaultAgentName, type AssetSet } from "./asset-set";
+import { readDefinitionName } from "./asset-kinds/shared";
 import type { ChatServerOptions } from "./types";
 
 export type ConfigAssetWriterOptions = Pick<
   ChatServerOptions,
   "config" | "configAssets" | "clientInstanceId"
 >;
-export function validateConfigAssetCandidate(
-  options: ConfigAssetWriterOptions,
-  input: ConfigAssetBundle,
-  /** The agents as they are stored now. Without them every agent counts as changed. */
-  storedAgents: readonly unknown[] = []
-) {
-  const validated = validateConfigAssetBundle({
-    ...input,
-    refs: options.configAssets.validationRefs
-  });
-  assertSpendBudgetPricingCoverage(options.config, validated.agents);
-  const stored = new Map(storedAgents.map((config) => [readDefinitionName(config), config]));
-  const changed = validated.agents.filter(
-    (agent) => !configValuesEqual(stored.get(agent.name), agent)
-  );
-  const issues = options.configAssets.validateAgents?.(validated.agents, changed) ?? [];
-  if (issues.length) {
-    throw new AppError("VALIDATION_FAILED", "Config asset bundle is invalid", {
-      issues: issues.map((message) => ({ message }))
-    });
-  }
-  return validated;
-}
 
 /** Shared write path. Callers own authorization; all writes validate the resulting bundle. */
 export async function applyValidatedConfigAssetMutations(
@@ -62,14 +32,11 @@ export async function applyValidatedConfigAssetMutations(
       clientInstanceId: options.clientInstanceId
     })
   ]);
+  const stored = assetSetOf(assets, state.defaultAgentName);
   const definitions = new Map(
-    kinds.kinds.map((kind) => [
-      kind.kind,
-      new Map<string, unknown>(
-        assets
-          .filter((asset) => asset.kind === kind.kind)
-          .map((asset) => [asset.name, asset.config])
-      )
+    [...stored.definitions].map(([kind, ofKind]) => [
+      kind,
+      new Map(ofKind.map((config) => [readDefinitionName(config), config]))
     ])
   );
   let defaultAgentName = state.defaultAgentName;
@@ -78,21 +45,20 @@ export async function applyValidatedConfigAssetMutations(
       defaultAgentName = mutation.agentName;
       continue;
     }
-    const ofKind = definitions.get(mutation.kind);
+    const ofKind = definitions.get(mutation.kind) ?? new Map<string | undefined, unknown>();
+    definitions.set(mutation.kind, ofKind);
     if (mutation.type === "delete") {
-      ofKind?.delete(mutation.name);
+      ofKind.delete(mutation.name);
     } else {
-      ofKind?.set(mutation.name, mutation.config);
+      ofKind.set(mutation.name, mutation.config);
     }
   }
-  validateConfigAssetCandidate(
-    options,
-    kinds.kinds.reduce<ConfigAssetBundle>(
-      (bundle, kind) =>
-        kind.withDefinitions(bundle, [...(definitions.get(kind.kind)?.values() ?? [])]),
-      { agents: [], skills: [], defaultAgentName }
-    ),
-    assets.filter((asset) => asset.kind === "agent").map((asset) => asset.config)
+  const candidate: AssetSet = withDefaultAgentName(
+    {
+      definitions: new Map([...definitions].map(([kind, ofKind]) => [kind, [...ofKind.values()]]))
+    },
+    defaultAgentName
   );
+  validateAssetSet(kinds.kinds, candidate, stored);
   return options.configAssets.store.applyConfigAssetMutations(input);
 }

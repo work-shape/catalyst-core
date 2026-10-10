@@ -5,7 +5,10 @@ import type {
   RegisteredAssetKind
 } from "@vivd-catalyst/core";
 
-/** The agents and skills of an instance as the export and the release sync carry them. */
+/**
+ * The agents and skills of an instance as the export and the release sync carry them. It is
+ * the format of those two and of nothing else: every other path holds definitions by kind id.
+ */
 export interface ConfigAssetBundle<Definition = unknown> {
   defaultAgentName?: string;
   agents: Definition[];
@@ -27,12 +30,17 @@ export interface ConfigAssetValidationRefs {
  * does differently for one kind is answered here, by that kind's registration.
  */
 export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> {
-  /** This kind's definitions in a bundle. */
-  definitions<Definition>(bundle: ConfigAssetBundle<Definition>): Definition[];
-  withDefinitions<Definition>(
-    bundle: ConfigAssetBundle<Definition>,
-    definitions: Definition[]
-  ): ConfigAssetBundle<Definition>;
+  /**
+   * Where the release sync's bundle carries this kind. A kind without a slot is not part of
+   * that bundle: it is read and written through the asset operations alone.
+   */
+  readonly bundle?: {
+    definitions<Definition>(bundle: ConfigAssetBundle<Definition>): Definition[];
+    withDefinitions<Definition>(
+      bundle: ConfigAssetBundle<Definition>,
+      definitions: Definition[]
+    ): ConfigAssetBundle<Definition>;
+  };
   /** The instance keeps one asset of this kind as its default: the first one, until changed. */
   readonly holdsInstanceDefault: boolean;
   /** An asset of this kind is usable only in the workspaces its availability names. */
@@ -66,10 +74,6 @@ export function readDefinitionField(definition: unknown, field: string): unknown
 export function readDefinitionName(definition: unknown): string | undefined {
   const name = readDefinitionField(definition, "name");
   return typeof name === "string" ? name : undefined;
-}
-
-export function findNamedDefinition(definitions: readonly unknown[], name: string): unknown {
-  return definitions.find((candidate) => readDefinitionName(candidate) === name);
 }
 
 /** Object key order carries no meaning: a JSON store may return keys in another order. */

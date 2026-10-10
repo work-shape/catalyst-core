@@ -28,8 +28,10 @@ export function createSkillAssetKind(options: { config: ClientInstanceConfig }):
         description: skill.description
       })
     }),
-    definitions: (bundle) => bundle.skills,
-    withDefinitions: (bundle, skills) => ({ ...bundle, skills }),
+    bundle: {
+      definitions: (bundle) => bundle.skills,
+      withDefinitions: (bundle, skills) => ({ ...bundle, skills })
+    },
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,

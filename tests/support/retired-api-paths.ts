@@ -100,3 +100,15 @@ export const retiredApiPaths = [
   ["GET", "/api/dev/captured-mail"],
   ["POST", "/auth/session-token"]
 ] as const satisfies readonly (readonly ["GET" | "POST" | "PATCH" | "PUT" | "DELETE", string])[];
+
+/**
+ * The asset addresses of the release before `/api/v1/assets`, with an agent named. None is
+ * kept as an alias: each must answer 404.
+ */
+export const removedAssetPaths = [
+  ["GET", "/api/v1/instance/config/assets/agent/assistant"],
+  ["PUT", "/api/v1/instance/config/assets/agent/assistant"],
+  ["POST", "/api/v1/instance/config/assets/agent/assistant/delete"],
+  ["POST", "/api/v1/instance/config/assets/agent/assistant/revert"],
+  ["GET", "/api/v1/instance/config/assets/agent/assistant/revisions"]
+] as const satisfies readonly (readonly ["GET" | "POST" | "PUT", string])[];

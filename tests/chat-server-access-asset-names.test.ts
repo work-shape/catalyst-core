@@ -15,7 +15,7 @@ describe("what a grant row says to a caller who may not read agents and skills",
       permissions: ["users.manage"]
     });
     for (const name of ["kai-secret", "kai-gone"]) {
-      await t.expectOk(t.admin.id, "config_assets.put", {
+      await t.expectOk(t.admin.id, "assets.put", {
         params: { kind: "skill", name },
         payload: { config: skill(name) }
       });
@@ -41,7 +41,7 @@ describe("what a grant row says to a caller who may not read agents and skills",
       scopeAsset: { kind: "skill", active: true }
     });
     await t.expectOk(t.admin.id, "permissions.grant", deny(goneId));
-    await t.expectOk(t.admin.id, "config_assets.delete", {
+    await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "skill", name: "kai-gone" },
       payload: {}
     });

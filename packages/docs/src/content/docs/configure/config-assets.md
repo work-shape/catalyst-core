@@ -187,6 +187,32 @@ blocked if the skill has newer revisions. Reverting a newly created skill
 removes it and its agent reference together; other agents' references must be
 removed first. Reverting retains the original approval and proposal history.
 
+## The asset API
+
+Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. The admin panel uses these operations, and so can a script or an outside editor. Each call is one Operation Run with its actor, effect and outcome. The [API reference](/reference/api/) lists the fields.
+
+| Operation               | Address                                      | Right                |
+| ----------------------- | -------------------------------------------- | -------------------- |
+| `assets.list`           | `GET /api/v1/assets/{kind}`                  | `<kind>.read`        |
+| `assets.get`            | `GET /api/v1/assets/{kind}/{name}`           | `<kind>.read`        |
+| `assets.put`            | `PUT /api/v1/assets/{kind}/{name}`           | `<kind>.write`       |
+| `assets.delete`         | `POST /api/v1/assets/{kind}/{name}/delete`   | `<kind>.delete`      |
+| `assets.revisions.list` | `GET /api/v1/assets/{kind}/{name}/revisions` | `<kind>.read`        |
+| `assets.revert`         | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
+| `assets.validate`       | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
+| `assets.sync`           | `POST /api/v1/assets/sync`                   | per item             |
+| `platform.context.get`  | `GET /api/v1/context`                        | any signed-in caller |
+
+The right is decided for the one asset: an instance right, a grant in the Namespace of its name, or a grant on the asset. `assets.list` answers only the assets the caller may read, as summaries without content, in the order of their names. It filters by `prefix` (a name prefix such as a Namespace) and by `text` (a part of the name, in any case), and pages with `limit` and `cursor`. It is built for up to 10,000 assets of a kind.
+
+A write names the revision it was made against. `assets.put` with `expectedRevision` replaces the asset at that revision; without it the call creates the asset and is refused when the name is taken. `assets.delete` and `assets.revert` always need `expectedRevision`. When the asset stands at another revision the call answers `409 CONFLICT` with `details.currentRevision` and changes nothing; read the asset again and repeat the call. The four writing operations answer the new `revision`, the configuration `version` and a list `warnings`, which is empty today.
+
+`assets.sync` applies up to 200 puts and deletes for one registered Namespace, named by its prefix in `namespace`. Each item is checked like the single call: the right on that asset, its revision, its content. The batch is applied completely or not at all. When any item is refused the answer carries `details.items` with one entry per item, `refused` with its error or `not_applied`, and nothing is written. An item whose name does not start with the prefix is refused for every caller, an administrator included.
+
+The writing operations and `assets.sync` belong to the module `assetManagement` and follow the same rules as edits in the admin panel: `editableAgentFields`, the lists of a Namespace, and the rights for the default agent and for model settings. `catalyst config push` keeps using the release import and is not affected.
+
+`platform.context.get` tells a caller where it is: the instance, its release, the asset kinds with their rights, and the Namespaces in which the caller may do something. It answers a person and a service principal. An action is named only when the credential's scopes allow it: `config_assets:read` for reading, `config_assets:write` for writing and deleting.
+
 ## Permissions
 
 | Permission              | Grants                                                                       | Default roles              |

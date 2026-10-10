@@ -123,9 +123,15 @@ describe("every operation of the catalog", () => {
   });
 
   // The reference of the instance asks no scope: whoever is signed in may read what it offers.
+  // Neither does the context read of an outside editor, which cuts its answer to the actions
+  // the credential's scopes open (tests/platform-context.test.ts).
   const unscoped = authenticated.filter(({ operation }) => operation.scope === null);
-  it("asks a scope of every operation but the two of the reference", () => {
-    expect(unscoped.map(({ name }) => name)).toEqual(["openapi.get", "docs.get"]);
+  it("asks a scope of every operation but the reference and the context read", () => {
+    expect(unscoped.map(({ name }) => name)).toEqual([
+      "platform.context.get",
+      "openapi.get",
+      "docs.get"
+    ]);
   });
 
   it.each(authenticated.filter((entry) => !unscoped.includes(entry)))(

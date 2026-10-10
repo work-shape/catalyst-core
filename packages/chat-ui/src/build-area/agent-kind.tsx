@@ -166,7 +166,7 @@ function AgentAssetEditor({
             mutating={mutations.isPending}
             onLoadRevisions={(kind, name) =>
               listAll((paging) =>
-                client.config_assets.revisions.list({ params: { kind, name }, query: paging })
+                client.assets.revisions.list({ params: { kind, name }, query: paging })
               )
             }
             onRevert={

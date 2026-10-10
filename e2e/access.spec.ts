@@ -1,12 +1,12 @@
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 const accessPath = "/settings/instance/access";
-const assetPath = `${apiBaseUrl}/api/v1/instance/config/assets/agent/kai-helper`;
+const assetPath = `${apiBaseUrl}/api/v1/assets/agent/kai-helper`;
 /** Where a closed Instance page sends the visitor: the workspace, or its first settings page. */
 const awayFromInstancePagesPattern = /\/w\/[^/]+$|\/settings\/workspace\/general$/u;
 const NARROW = { width: 390, height: 844 };
@@ -226,7 +226,9 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     await page.setViewportSize(WIDE);
     await page.getByRole("button", { name: "Expand sidebar" }).click();
   } finally {
-    const deleted = await requestWithOrigin(page, "post", `${assetPath}/delete`, { data: {} });
+    const deleted = await requestWithOrigin(page, "post", `${assetPath}/delete`, {
+      data: { expectedRevision: await assetRevision(page, assetPath) }
+    });
     expect(deleted.ok()).toBe(true);
   }
 

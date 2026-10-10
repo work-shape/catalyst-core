@@ -18,7 +18,7 @@ describe("Namespace grants on agents and skills", () => {
     // Before the grant the same call is refused: the grant is what allows it.
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "agent", name: "kai-helper" }, payload: { config: agent("kai-helper") } },
       t.forbidden("agent.write", "no_grant")
     );
@@ -33,7 +33,7 @@ describe("Namespace grants on agents and skills", () => {
     for (const name of ["other-helper", "assistant", "kai", "kaiser-helper", "team-kai-helper"]) {
       await t.expectRefused(
         t.kai.id,
-        "config_assets.put",
+        "assets.put",
         { params: { kind: "agent", name }, payload: { config: agent(name) } },
         t.forbidden("agent.write", "no_grant")
       );
@@ -55,25 +55,25 @@ describe("Namespace grants on agents and skills", () => {
 
     await t.expectRefused(
       t.kai.id,
-      "config_assets.get",
+      "assets.get",
       { params: { kind: "agent", name: "kai-helper" } },
       t.forbidden("agent.read", "no_grant")
     );
     await t.expectRefused(
       t.kai.id,
-      "config_assets.revisions.list",
+      "assets.revisions.list",
       { params: { kind: "agent", name: "kai-helper" } },
       t.forbidden("agent.read", "no_grant")
     );
     await t.expectRefused(
       t.kai.id,
-      "config_assets.delete",
+      "assets.delete",
       { params: { kind: "agent", name: "kai-helper" }, payload: {} },
       t.forbidden("agent.delete", "no_grant")
     );
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "skill", name: "kai-notes" }, payload: { config: skill("kai-notes") } },
       t.forbidden("skill.write", "no_grant")
     );
@@ -81,24 +81,24 @@ describe("Namespace grants on agents and skills", () => {
     await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
     await t.grant(t.kai.id, "agent.delete", { namespace: "kai-" });
     await t.grant(t.kai.id, "skill.write", { namespace: "kai-" });
-    await t.expectOk(t.kai.id, "config_assets.get", {
+    await t.expectOk(t.kai.id, "assets.get", {
       params: { kind: "agent", name: "kai-helper" }
     });
-    await t.expectOk(t.kai.id, "config_assets.revisions.list", {
+    await t.expectOk(t.kai.id, "assets.revisions.list", {
       params: { kind: "agent", name: "kai-helper" }
     });
-    await t.expectOk(t.kai.id, "config_assets.put", {
+    await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "skill", name: "kai-notes" },
       payload: { config: skill("kai-notes") }
     });
-    await t.expectOk(t.kai.id, "config_assets.delete", {
+    await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "agent", name: "kai-helper" },
       payload: {}
     });
     // The read grant is no read outside the Namespace.
     await t.expectRefused(
       t.kai.id,
-      "config_assets.get",
+      "assets.get",
       { params: { kind: "agent", name: "assistant" } },
       t.forbidden("agent.read", "no_grant")
     );
@@ -116,13 +116,13 @@ describe("Namespace grants on agents and skills", () => {
       (await t.putAgent(t.admin.id, "assistant", { instructions: "Changed." })).statusCode
     ).toBe(200);
 
-    await t.expectOk(t.kai.id, "config_assets.revert", {
+    await t.expectOk(t.kai.id, "assets.revert", {
       params: { kind: "agent", name: "kai-helper" },
       payload: { revision: 1 }
     });
     await t.expectRefused(
       t.kai.id,
-      "config_assets.revert",
+      "assets.revert",
       { params: { kind: "agent", name: "assistant" }, payload: { revision: 1 } },
       t.forbidden("agent.write", "no_grant")
     );
@@ -132,13 +132,13 @@ describe("Namespace grants on agents and skills", () => {
     const t = await setup();
     const existing = await t.expectRefused(
       t.kai.id,
-      "config_assets.get",
+      "assets.get",
       { params: { kind: "agent", name: "assistant" } },
       t.forbidden("agent.read", "no_grant")
     );
     const missing = await t.expectRefused(
       t.kai.id,
-      "config_assets.get",
+      "assets.get",
       { params: { kind: "agent", name: "nobody" } },
       t.forbidden("agent.read", "no_grant")
     );
@@ -146,7 +146,7 @@ describe("Namespace grants on agents and skills", () => {
     // The administrator, who may read, learns that it is missing.
     await t.expectRefused(
       t.admin.id,
-      "config_assets.get",
+      "assets.get",
       { params: { kind: "agent", name: "nobody" } },
       { status: 404, code: "NOT_FOUND" }
     );
@@ -232,13 +232,13 @@ describe("Namespace grants on agents and skills", () => {
     await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
     await t.grant(t.kai.id, "agent.delete", { namespace: "kai-" });
     // With no agent left, the next one written would become the default.
-    await t.expectOk(t.admin.id, "config_assets.delete", {
+    await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "agent", name: "assistant" },
       payload: {}
     });
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "agent", name: "kai-helper" }, payload: { config: agent("kai-helper") } },
       t.forbidden("agent.write", "no_grant")
     );
@@ -246,7 +246,7 @@ describe("Namespace grants on agents and skills", () => {
     // The last agent takes the default with it.
     await t.expectRefused(
       t.kai.id,
-      "config_assets.delete",
+      "assets.delete",
       { params: { kind: "agent", name: "kai-helper" }, payload: {} },
       t.forbidden("agent.write", "no_grant")
     );
@@ -254,7 +254,7 @@ describe("Namespace grants on agents and skills", () => {
     await t.expectOk(t.admin.id, "config_agents.set_default", {
       payload: { agentName: "assistant" }
     });
-    await t.expectOk(t.kai.id, "config_assets.delete", {
+    await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "agent", name: "kai-helper" },
       payload: {}
     });
@@ -277,7 +277,7 @@ describe("deny rows and asset grants", () => {
     );
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { instructions: "Denied." }) }
@@ -312,7 +312,7 @@ describe("deny rows and asset grants", () => {
 
     await t.expectRefused(
       t.kai.id,
-      "config_assets.delete",
+      "assets.delete",
       { params: { kind: "agent", name: "kai-helper" }, payload: {} },
       t.forbidden("agent.write", "denied")
     );
@@ -322,7 +322,7 @@ describe("deny rows and asset grants", () => {
     expect(rows.filter((row) => row.id === denyId)).toHaveLength(1);
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { instructions: "Denied." }) }
@@ -330,7 +330,7 @@ describe("deny rows and asset grants", () => {
       t.forbidden("agent.write", "denied")
     );
     // The neighbour without a deny is deleted as before.
-    await t.expectOk(t.kai.id, "config_assets.delete", {
+    await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "agent", name: "kai-second" },
       payload: {}
     });
@@ -349,7 +349,7 @@ describe("deny rows and asset grants", () => {
     await t.grant(t.kai.id, "agent.write", { namespace: "kai-" }, "deny");
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { instructions: "Two." }) }
@@ -365,7 +365,7 @@ describe("deny rows and asset grants", () => {
     });
     await t.expectRefused(
       t.lena.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { instructions: "Three." }) }
@@ -389,14 +389,14 @@ describe("deny rows and asset grants", () => {
     );
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "agent", name: "shared-two" }, payload: { config: agent("shared-two") } },
       t.forbidden("agent.write", "no_grant")
     );
     // Lena holds nothing on the asset Kai was granted.
     await t.expectRefused(
       t.lena.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "agent", name: "shared-one" }, payload: { config: agent("shared-one") } },
       t.forbidden("agent.write", "no_grant")
     );
@@ -409,7 +409,7 @@ describe("deny rows and asset grants", () => {
     await t.grant(t.kai.id, "agent.write", { assetId: first });
     await t.grant(t.lena.id, "agent.write", { assetId: first }, "deny");
 
-    await t.expectOk(t.admin.id, "config_assets.delete", {
+    await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "agent", name: "shared-one" },
       payload: {}
     });
@@ -420,7 +420,7 @@ describe("deny rows and asset grants", () => {
     expect((await t.putAgent(t.admin.id, "shared-one")).statusCode).toBe(200);
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "agent", name: "shared-one" }, payload: { config: agent("shared-one") } },
       t.forbidden("agent.write", "no_grant")
     );
@@ -435,7 +435,7 @@ describe("deny rows and asset grants", () => {
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId } });
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { instructions: "After." }) }
@@ -459,7 +459,7 @@ describe("deny rows and asset grants", () => {
     await t.stores.users.updateUser({ clientInstanceId, userId: t.kai.id, status: "disabled" });
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { instructions: "Disabled." }) }
@@ -512,7 +512,7 @@ describe("Namespace allowlists", () => {
 
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { toolNames: ["known.tool"] }) }
@@ -534,7 +534,7 @@ describe("Namespace allowlists", () => {
 
     await t.expectRefused(
       t.root.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { toolNames: ["known.tool", "second.tool"] }) }
@@ -579,7 +579,7 @@ describe("Namespace allowlists", () => {
     expect((await t.putAgent(t.admin.id, "kai-new")).statusCode).toBe(200);
     await t.expectRefused(
       t.admin.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-old" },
         payload: {
@@ -605,7 +605,7 @@ describe("Namespace allowlists", () => {
 
     await t.expectRefused(
       t.root.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "agent", name: "kai-helper" }, payload: { config: bound("other") } },
       {
         status: 403,
@@ -613,14 +613,14 @@ describe("Namespace allowlists", () => {
         details: { reason: "model_not_allowed", modelBindingId: "other", namespace: "kai-" }
       }
     );
-    await t.expectOk(t.root.id, "config_assets.put", {
+    await t.expectOk(t.root.id, "assets.put", {
       params: { kind: "agent", name: "kai-helper" },
       payload: { config: bound("plain") }
     });
     // A list only restricts: changing a model field still needs agent_models.manage.
     const refusal = await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: { ...bound("plain"), reasoningEffort: "low" } }
@@ -655,7 +655,7 @@ describe("Namespace allowlists", () => {
     await t.createNamespace("kai-", { allowedToolNames: [] });
     await t.expectRefused(
       t.admin.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { toolNames: ["known.tool"] }) }

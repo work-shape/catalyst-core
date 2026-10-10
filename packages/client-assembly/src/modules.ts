@@ -18,9 +18,10 @@ const resourcesModule = defineModule({
 const assetManagementModule = defineModule({
   name: "assetManagement",
   operations: [
-    "config_assets.put",
-    "config_assets.delete",
-    "config_assets.revert",
+    "assets.put",
+    "assets.delete",
+    "assets.revert",
+    "assets.sync",
     "config_agents.set_default",
     "config_agents.set_availability"
   ],

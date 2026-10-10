@@ -403,13 +403,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/chat-server/src/config-asset-workflow.ts",
-      "count": 1,
-      "owner": "PA-1b"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "packages/chat-server/src/conversation-workflow.ts",
       "count": 1,
       "owner": "CB-9"

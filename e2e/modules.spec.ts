@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import postgres from "postgres";
 import { z } from "zod";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // Instance > Modules: an operator reads which modules this instance runs. And a module that is
@@ -108,7 +108,7 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
   const staleTool = "demo.weather_forecast";
   // An agent of this test alone: other files write agents and skills while this one runs.
   const agentName = "modules_e2e_agent";
-  const agentUrl = `${apiBaseUrl}/api/v1/instance/config/assets/agent/${agentName}`;
+  const agentUrl = `${apiBaseUrl}/api/v1/assets/agent/${agentName}`;
   await signIn(page);
   const exported = exportSchema.parse(
     await (await page.request.get(`${apiBaseUrl}/api/v1/instance/config/export`)).json()
@@ -192,7 +192,9 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
         .toEqual([]);
     }).toPass({ timeout: 30_000 });
   } finally {
-    const deleted = await requestWithOrigin(page, "post", `${agentUrl}/delete`, { data: {} });
+    const deleted = await requestWithOrigin(page, "post", `${agentUrl}/delete`, {
+      data: { expectedRevision: await assetRevision(page, agentUrl) }
+    });
     expect(deleted.ok(), await deleted.text()).toBe(true);
   }
 });

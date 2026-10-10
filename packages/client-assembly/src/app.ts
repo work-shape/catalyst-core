@@ -348,13 +348,11 @@ export async function createClientInstanceExecutionAssembly(
       createAgentAssetKind({
         config,
         validationRefs,
-        // A definition handed to the kind is one that is being written.
-        validateAgents: (agents) => validateAgents(agents, agents)
+        validateAgents
       }),
       createSkillAssetKind({ config })
     ]),
-    validationRefs,
-    validateAgents
+    validationRefs
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
   const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;

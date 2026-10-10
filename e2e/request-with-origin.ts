@@ -15,3 +15,21 @@ export function requestWithOrigin(
     headers: { ...options?.headers, Origin: new URL(baseURL).origin }
   });
 }
+
+/**
+ * The revision an asset stands at, read at its address under `/api/v1/assets`: what a replace
+ * or a delete of it names as `expectedRevision`.
+ */
+export async function assetRevision(page: Page, assetUrl: string): Promise<number> {
+  const response = await page.request.get(assetUrl);
+  const body: unknown = await response.json();
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("revision" in body) ||
+    typeof body.revision !== "number"
+  ) {
+    throw new Error(`No revision at ${assetUrl}: ${response.status()}`);
+  }
+  return body.revision;
+}

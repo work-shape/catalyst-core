@@ -35,6 +35,45 @@ const schemeNames = (id: keyof typeof apiOperations) =>
   documentedOperation(id).security.flatMap((requirement) => Object.keys(requirement));
 
 describe("the released OpenAPI document", () => {
+  it("lists the nine asset operations at their addresses and none of the five they replace", () => {
+    const listed = Object.entries(released.paths).flatMap(([path, methods]) =>
+      Object.entries(methods).map(
+        ([method, operation]) => `${operation.operationId}  ${method.toUpperCase()} ${path}`
+      )
+    );
+    expect(
+      listed.filter((entry) => /^(?:assets\.|platform\.context\.get )/u.test(entry)).sort()
+    ).toEqual([
+      "assets.delete  POST /api/v1/assets/{kind}/{name}/delete",
+      "assets.get  GET /api/v1/assets/{kind}/{name}",
+      "assets.list  GET /api/v1/assets/{kind}",
+      "assets.put  PUT /api/v1/assets/{kind}/{name}",
+      "assets.revert  POST /api/v1/assets/{kind}/{name}/revert",
+      "assets.revisions.list  GET /api/v1/assets/{kind}/{name}/revisions",
+      "assets.sync  POST /api/v1/assets/sync",
+      "assets.validate  POST /api/v1/assets/{kind}/validate",
+      "platform.context.get  GET /api/v1/context"
+    ]);
+    const ids = listed.map((entry) => entry.split("  ")[0]);
+    for (const removed of ["get", "put", "delete", "revert", "revisions.list"]) {
+      expect(ids).not.toContain(`config_assets.${removed}`);
+    }
+    expect(Object.keys(released.paths).filter((path) => path.includes("/config/assets/"))).toEqual(
+      []
+    );
+    // What stays of the old group.
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "config_assets.get_overview",
+        "config_assets.export",
+        "config_assets.replace",
+        "config_assets.validate",
+        "config_agents.set_default",
+        "config_agents.set_availability"
+      ])
+    );
+  });
+
   it("carries the release version and is the same on every generation", async () => {
     const manifest = z
       .object({ version: z.string() })
@@ -58,11 +97,7 @@ describe("the released OpenAPI document", () => {
       { sessionCookie: ["conversation:read"] },
       { sessionToken: ["conversation:read"] }
     ]);
-    expect(schemeNames("config_assets.get")).toEqual([
-      "sessionCookie",
-      "sessionToken",
-      "accessToken"
-    ]);
+    expect(schemeNames("assets.get")).toEqual(["sessionCookie", "sessionToken", "accessToken"]);
     expect(documentedOperation("openapi.get").security).toEqual([
       { sessionCookie: [] },
       { sessionToken: [] },
@@ -313,13 +348,13 @@ describe("the breaking-change comparison", () => {
         )
       );
       limit.schema = { ...limit.schema, maximum: 10 };
-      documentedOperationOf(document, "config_assets.get").security.pop();
+      documentedOperationOf(document, "assets.get").security.pop();
       documentedOperationOf(document, "branding.get").security.push({ sessionCookie: [] });
     });
     expect(findings).toEqual([
+      "GET /api/v1/assets/{kind}/{name}: the credential accessToken is no longer accepted",
       "GET /api/v1/conversations: query parameter limit: maximum accepts less than before",
-      "GET /api/v1/instance/branding: the operation now asks for a credential",
-      "GET /api/v1/instance/config/assets/{kind}/{name}: the credential accessToken is no longer accepted"
+      "GET /api/v1/instance/branding: the operation now asks for a credential"
     ]);
   });
 

@@ -2,6 +2,7 @@
 // of the OpenAPI document; the name is the export's, without the suffix.
 export * from "./access";
 export * from "./approval-requests";
+export * from "./assets";
 export * from "./collaboration-workspaces";
 export * from "./configuration";
 export * from "./conversations";

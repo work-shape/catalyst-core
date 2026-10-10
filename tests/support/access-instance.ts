@@ -10,6 +10,7 @@ import {
   type UserRecord,
   type UserRole
 } from "@vivd-catalyst/core";
+import { atCurrentRevision } from "./asset-revisions";
 import type { TestCallInput, TestOperationName } from "./operations";
 import { createTestInstanceWith, type TestInstance, type TestStore } from "./test-instance";
 
@@ -53,6 +54,8 @@ const config = parseClientInstanceConfig({
 
 const USER_HEADER = "x-test-user";
 export const SERVICE_HEADER = "x-test-service";
+/** The scopes of the credential, separated by spaces. Left out, the credential carries all. */
+export const SCOPES_HEADER = "x-test-scopes";
 
 /**
  * Signs in whoever the header names with what their stored record holds, a disabled user
@@ -64,6 +67,8 @@ function recordAuthAdapter(stores: TestStore): AuthAdapter {
     id: "test-record",
     credentialMode: "ambient",
     async authenticate(request) {
+      const named = request.headers[SCOPES_HEADER];
+      const scopes = typeof named === "string" ? named.split(" ").filter(Boolean) : ["*"];
       const service = request.headers[SERVICE_HEADER];
       if (typeof service === "string") {
         return {
@@ -75,7 +80,7 @@ function recordAuthAdapter(stores: TestStore): AuthAdapter {
           permissions: ["config_assets.read", "config_assets.release"],
           clientInstanceId,
           authSource: "test",
-          scopes: ["*"]
+          scopes
         };
       }
       const userId = request.headers[USER_HEADER];
@@ -91,7 +96,7 @@ function recordAuthAdapter(stores: TestStore): AuthAdapter {
         permissionRefs: user.permissionRefs,
         clientInstanceId,
         authSource: "test",
-        scopes: ["*"]
+        scopes
       };
     }
   };
@@ -209,8 +214,11 @@ export async function setupAccessInstance(): Promise<AccessInstance> {
     ]
   });
 
-  const call = (userId: string, operation: TestOperationName, input: TestCallInput = {}) =>
-    instance.call(operation, { ...input, headers: { [USER_HEADER]: userId } });
+  const call = async (userId: string, operation: TestOperationName, input: TestCallInput = {}) =>
+    instance.call(operation, {
+      ...(await atCurrentRevision(stores, clientInstanceId, operation, input)),
+      headers: { ...input.headers, [USER_HEADER]: userId }
+    });
   const expectOk = async (
     userId: string,
     operation: TestOperationName,
@@ -265,7 +273,7 @@ export async function setupAccessInstance(): Promise<AccessInstance> {
     return grantSchema.parse(response.json()).id;
   };
   const putAgent = (userId: string, name: string, overrides: Record<string, unknown> = {}) =>
-    call(userId, "config_assets.put", {
+    call(userId, "assets.put", {
       params: { kind: "agent", name },
       payload: { config: agent(name, overrides) }
     });

@@ -5,7 +5,8 @@ import {
   createAssetKindRegistry,
   defineAssetKind,
   findNamespaceOfAssetName,
-  type AssetValidationContext
+  type AssetValidationContext,
+  type RegisteredAssetKind
 } from "@vivd-catalyst/core";
 import { createAgentAssetKind, createSkillAssetKind } from "@vivd-catalyst/chat-server";
 
@@ -17,13 +18,15 @@ const widgetKind = defineAssetKind({
   schema: z.object({ name: z.string(), title: z.string(), skillName: z.string().optional() }),
   nameRule: { pattern: /^[a-z][a-z0-9-]*$/u, maxLength: 12, description: "Widget name is invalid" },
   actions: { read: "widget.read", write: "widget.write", delete: "widget.delete" },
-  validate: (context, widget) =>
-    widget.skillName === undefined ||
-    context
-      .definitions("skill")
-      .some((skill) => z.object({ name: z.string() }).parse(skill).name === widget.skillName)
-      ? []
-      : [{ message: `Widget '${widget.name}' references missing skill '${widget.skillName}'` }],
+  validate: (context, widgets) =>
+    widgets.flatMap((widget) =>
+      widget.skillName === undefined ||
+      context
+        .definitions("skill")
+        .some((skill) => z.object({ name: z.string() }).parse(skill).name === widget.skillName)
+        ? []
+        : [{ message: `Widget '${widget.name}' references missing skill '${widget.skillName}'` }]
+    ),
   summarize: (widget) => ({ name: widget.name, title: widget.title })
 });
 
@@ -45,8 +48,18 @@ const agentKind = createAgentAssetKind({ config, validationRefs });
 const skillKind = createSkillAssetKind({ config });
 const skill = { name: "research", title: "Research", description: "How to", content: "Read." };
 const withSkills = (...skills: unknown[]): AssetValidationContext => ({
-  definitions: (kind) => (kind === "skill" ? skills : [])
+  definitions: (kind) => (kind === "skill" ? skills : []),
+  changes: () => true
 });
+/** What the write path asks of a kind for one definition: read it, then check what was accepted. */
+const issuesOf = (
+  kind: RegisteredAssetKind,
+  context: AssetValidationContext,
+  definition: unknown
+) => {
+  const reading = kind.read([definition]);
+  return [...reading.refused.flatMap((refused) => refused.issues), ...reading.validate(context)];
+};
 
 function agent(overrides: Record<string, unknown> = {}) {
   return {
@@ -77,12 +90,12 @@ describe("asset kind registry", () => {
       write: "widget.write",
       delete: "widget.delete"
     });
-    expect(widget.validate(withSkills(skill), { name: "board", title: "Board" })).toEqual([]);
+    expect(issuesOf(widget, withSkills(skill), { name: "board", title: "Board" })).toEqual([]);
     expect(
-      widget.validate(withSkills(skill), { name: "board", title: "Board", skillName: "research" })
+      issuesOf(widget, withSkills(skill), { name: "board", title: "Board", skillName: "research" })
     ).toEqual([]);
     expect(
-      widget.validate(withSkills(), { name: "board", title: "Board", skillName: "research" })
+      issuesOf(widget, withSkills(), { name: "board", title: "Board", skillName: "research" })
     ).toEqual([{ message: "Widget 'board' references missing skill 'research'" }]);
     expect(widget.summarize({ name: "board", title: "Board" })).toEqual({
       name: "board",
@@ -91,13 +104,13 @@ describe("asset kind registry", () => {
   });
 
   it("answers a definition its schema or name rule refuses before the kind's own checks", () => {
-    expect(widgetKind.validate(withSkills(), { name: "board" })).toEqual([
+    expect(issuesOf(widgetKind, withSkills(), { name: "board" })).toEqual([
       expect.objectContaining({ path: ["title"] })
     ]);
-    expect(widgetKind.validate(withSkills(), { name: "Board", title: "Board" })).toEqual([
+    expect(issuesOf(widgetKind, withSkills(), { name: "Board", title: "Board" })).toEqual([
       { message: "Widget name is invalid", path: ["name"] }
     ]);
-    expect(widgetKind.validate(withSkills(), { name: "a-very-long-board", title: "B" })).toEqual([
+    expect(issuesOf(widgetKind, withSkills(), { name: "a-very-long-board", title: "B" })).toEqual([
       { message: "Widget name is invalid", path: ["name"] }
     ]);
     expect(() => widgetKind.summarize({ name: "board" })).toThrow(
@@ -141,21 +154,22 @@ describe("asset kind registry", () => {
       write: "skill.write",
       delete: "skill.delete"
     });
-    expect(agentKind.validate(withSkills(), agent())).toEqual([]);
+    expect(issuesOf(agentKind, withSkills(), agent())).toEqual([]);
     expect(
-      agentKind.validate(
+      issuesOf(
+        agentKind,
         withSkills(skill),
         agent({ skillNames: ["research"], toolNames: ["read_skill"] })
       )
     ).toEqual([]);
     expect(
-      agentKind.validate(withSkills(), agent({ skillNames: ["research"], toolNames: ["web"] }))
+      issuesOf(agentKind, withSkills(), agent({ skillNames: ["research"], toolNames: ["web"] }))
     ).toEqual([
       { message: "Agent 'assistant' references missing skill 'research'" },
       { message: "Agent 'assistant' references unavailable tool 'web'" },
       { message: "Agent 'assistant' references skills but does not allow 'read_skill'" }
     ]);
-    expect(agentKind.validate(withSkills(), agent({ instructions: "" }))).toEqual([
+    expect(issuesOf(agentKind, withSkills(), agent({ instructions: "" }))).toEqual([
       expect.objectContaining({ path: ["instructions"] })
     ]);
     expect(agentKind.summarize(agent())).toEqual({
@@ -164,8 +178,8 @@ describe("asset kind registry", () => {
       description: "Answers"
     });
 
-    expect(skillKind.validate(withSkills(), skill)).toEqual([]);
-    expect(skillKind.validate(withSkills(), { ...skill, name: "1st" })).toEqual([
+    expect(issuesOf(skillKind, withSkills(), skill)).toEqual([]);
+    expect(issuesOf(skillKind, withSkills(), { ...skill, name: "1st" })).toEqual([
       expect.objectContaining({ path: ["name"] })
     ]);
     expect(skillKind.summarize(skill)).toEqual({

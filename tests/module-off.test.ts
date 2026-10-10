@@ -314,7 +314,7 @@ describe("a module that is off", () => {
     // The release config still enables the tool, and the capability brings none: the API
     // starts, the stored agent is as it was, and a run of it is not offered the tool.
     const off = await startInstance({ resources: true, documents: false }, true);
-    const kept = await off.instance.call("config_assets.get", {
+    const kept = await off.instance.call("assets.get", {
       params: { kind: "agent", name: "test_agent" }
     });
     expect(kept.statusCode).toBe(200);
@@ -341,9 +341,10 @@ describe("a module that is off", () => {
     expect((await push(instance, [agent([]), second])).statusCode).toBe(200);
     // A skill is written under the agent that still names it.
     expect((await push(instance, [agent([]), second], [skill("First")])).statusCode).toBe(200);
-    const written = await instance.call("config_assets.put", {
+    const written = await instance.call("assets.put", {
       params: { kind: "skill", name: "research" },
-      payload: { config: skill("Second") }
+      // The skill is at its first revision: the push before created it.
+      payload: { config: skill("Second"), expectedRevision: 1 }
     });
     expect(written.statusCode, written.body).toBe(200);
 

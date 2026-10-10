@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AdministeredUser,
   AgentAvailability,
-  ConfigAssetKind,
   AdministeredUserIdentity,
   ApiClient,
   OperationInput,
@@ -22,6 +21,7 @@ import type {
 } from "@vivd-catalyst/api-client";
 import { signOut } from "@vivd-catalyst/api-client";
 import { apiErrorMessage } from "../workspace-utils";
+import { createAssetWrites } from "./asset-writes";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 import {
   createApiAccessRevealController,
@@ -572,25 +572,14 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
     ]);
   };
 
-  const putAsset = useMutation({
-    mutationFn: (mutationInput: {
-      kind: ConfigAssetKind;
-      name: string;
-      config: Record<string, unknown>;
-      baseVersion?: number;
-    }) =>
-      input.client.config_assets.put({
-        params: { kind: mutationInput.kind, name: mutationInput.name },
-        body: { config: mutationInput.config, baseVersion: mutationInput.baseVersion }
-      }),
-    onSuccess: invalidateConfigAssets
+  const assetWrites = createAssetWrites({
+    client: input.client,
+    queryClient,
+    overviewKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope)
   });
+  const putAsset = useMutation({ mutationFn: assetWrites.put, onSuccess: invalidateConfigAssets });
   const deleteAsset = useMutation({
-    mutationFn: (mutationInput: { kind: ConfigAssetKind; name: string; baseVersion?: number }) =>
-      input.client.config_assets.delete({
-        params: { kind: mutationInput.kind, name: mutationInput.name },
-        body: { baseVersion: mutationInput.baseVersion }
-      }),
+    mutationFn: assetWrites.delete,
     onSuccess: invalidateConfigAssets
   });
   const setDefaultAgent = useMutation({
@@ -622,16 +611,7 @@ export function useConfigAssetMutations(input: WorkspaceMutationInput) {
       ])
   });
   const revertAsset = useMutation({
-    mutationFn: (mutationInput: {
-      kind: ConfigAssetKind;
-      name: string;
-      revision: number;
-      baseVersion?: number;
-    }) =>
-      input.client.config_assets.revert({
-        params: { kind: mutationInput.kind, name: mutationInput.name },
-        body: { revision: mutationInput.revision, baseVersion: mutationInput.baseVersion }
-      }),
+    mutationFn: assetWrites.revert,
     onSuccess: invalidateConfigAssets
   });
 

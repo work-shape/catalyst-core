@@ -217,14 +217,6 @@ export const configAssetSummarySchema = z.object({
 // chat-server workflow without coupling this transport package to config-schema.
 export const configAssetConfigSchema = z.record(z.string(), z.unknown());
 
-export const configAssetSchema = z.object({
-  kind: configAssetKindSchema,
-  name: z.string(),
-  revision: z.number().int().positive(),
-  config: configAssetConfigSchema,
-  updatedAt: timestampSchema
-});
-
 export const configAssetRevisionSchema = z.object({
   revision: z.number().int().positive(),
   operation: z.enum(["create", "update", "delete", "revert"]),
@@ -273,31 +265,12 @@ export const exportConfigAssetsResponseSchema = configAssetBundleSchema.extend({
   revisions: z.record(z.string(), z.number().int().positive()).optional()
 });
 
-export const putConfigAssetRequestSchema = z.object({
-  config: configAssetConfigSchema,
-  baseVersion: z.number().int().nonnegative().optional()
-});
-
-export const putConfigAssetResponseSchema = z.object({
-  version: z.number().int().positive(),
-  revision: z.number().int().positive()
-});
-
-export const configAssetMutationVersionRequestSchema = z.object({
-  baseVersion: z.number().int().nonnegative().optional()
-});
-
 export const configAssetMutationVersionResponseSchema = z.object({
   version: z.number().int().positive()
 });
 
 export const setDefaultConfigAgentRequestSchema = z.object({
   agentName: z.string().min(1).optional(),
-  baseVersion: z.number().int().nonnegative().optional()
-});
-
-export const revertConfigAssetRequestSchema = z.object({
-  revision: z.number().int().positive(),
   baseVersion: z.number().int().nonnegative().optional()
 });
 
@@ -323,7 +296,6 @@ export type SafeConfig = z.infer<typeof safeConfigSchema>;
 export type LocaleCode = z.infer<typeof localeCodeSchema>;
 export type ConfigAssetKind = z.infer<typeof configAssetKindSchema>;
 export type ConfigAssetSummary = z.infer<typeof configAssetSummarySchema>;
-export type ConfigAsset = z.infer<typeof configAssetSchema>;
 export type ConfigAssetRevision = z.infer<typeof configAssetRevisionSchema>;
 export type ConfigAssetsOverview = z.infer<typeof configAssetsOverviewSchema>;
 export type AgentAvailability = z.infer<typeof agentAvailabilitySchema>;

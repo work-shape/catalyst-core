@@ -11,7 +11,7 @@ import type { ChatServerOptions } from "./types";
  * loaded resource.
  */
 export async function recordGovernanceAccess(input: {
-  options: ChatServerOptions;
+  options: Pick<ChatServerOptions, "auditRecorder">;
   user: AuthenticatedIdentity;
   context: Pick<RuntimeCallContext, "correlationId">;
   auditType: string;

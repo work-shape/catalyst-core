@@ -19,7 +19,7 @@ describe("a deny and the deletion of its asset", () => {
     await t.grant(t.kai.id, "skill.read", { namespace: "kai-" });
     await t.grant(t.kai.id, "skill.delete", { namespace: "kai-" });
     for (const name of ["kai-secret", "kai-open"]) {
-      await t.expectOk(t.admin.id, "config_assets.put", {
+      await t.expectOk(t.admin.id, "assets.put", {
         params: { kind: "skill", name },
         payload: { config: skill(name, "Not for Kai.") }
       });
@@ -33,7 +33,7 @@ describe("a deny and the deletion of its asset", () => {
 
     await t.expectRefused(
       t.kai.id,
-      "config_assets.delete",
+      "assets.delete",
       { params: { kind: "skill", name: "kai-secret" }, payload: {} },
       t.forbidden("skill.read", "denied")
     );
@@ -41,16 +41,16 @@ describe("a deny and the deletion of its asset", () => {
     expect(rows.filter((row) => row.id === denyId)).toHaveLength(1);
     await t.expectRefused(
       t.kai.id,
-      "config_assets.revisions.list",
+      "assets.revisions.list",
       { params: { kind: "skill", name: "kai-secret" } },
       t.forbidden("skill.read", "denied")
     );
     // The neighbour without a deny is deleted, and its history stays readable.
-    await t.expectOk(t.kai.id, "config_assets.delete", {
+    await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "skill", name: "kai-open" },
       payload: {}
     });
-    const history = await t.expectOk(t.kai.id, "config_assets.revisions.list", {
+    const history = await t.expectOk(t.kai.id, "assets.revisions.list", {
       params: { kind: "skill", name: "kai-open" }
     });
     expect(revisionsPage.parse(history.json()).items).toHaveLength(2);
@@ -63,7 +63,7 @@ describe("a deny and the deletion of its asset", () => {
       await t.grant(holder.id, "skill.read", { namespace: "kai-" });
       await t.grant(holder.id, "skill.write", { namespace: "kai-" });
     }
-    await t.expectOk(t.admin.id, "config_assets.put", {
+    await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-secret" },
       payload: { config: skill("kai-secret", "Not for Kai.") }
     });
@@ -71,7 +71,7 @@ describe("a deny and the deletion of its asset", () => {
     const denyId = await t.grant(t.kai.id, "skill.read", { assetId }, "deny");
     const allowId = await t.grant(t.lena.id, "skill.delete", { assetId });
 
-    await t.expectOk(t.admin.id, "config_assets.delete", {
+    await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "skill", name: "kai-secret" },
       payload: {}
     });
@@ -84,27 +84,27 @@ describe("a deny and the deletion of its asset", () => {
     // to read it.
     await t.expectRefused(
       t.kai.id,
-      "config_assets.revisions.list",
+      "assets.revisions.list",
       { params: { kind: "skill", name: "kai-secret" } },
       t.forbidden("skill.read", "denied")
     );
-    await t.expectOk(t.kai.id, "config_assets.revert", {
+    await t.expectOk(t.kai.id, "assets.revert", {
       params: { kind: "skill", name: "kai-secret" },
       payload: { revision: 1 }
     });
     await t.expectRefused(
       t.kai.id,
-      "config_assets.get",
+      "assets.get",
       { params: { kind: "skill", name: "kai-secret" } },
       t.forbidden("skill.read", "denied")
     );
     // Lena, who could read it, still reads the history.
-    await t.expectOk(t.lena.id, "config_assets.revisions.list", {
+    await t.expectOk(t.lena.id, "assets.revisions.list", {
       params: { kind: "skill", name: "kai-secret" }
     });
     // Revoking the deny is what opens it.
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: denyId } });
-    await t.expectOk(t.kai.id, "config_assets.get", {
+    await t.expectOk(t.kai.id, "assets.get", {
       params: { kind: "skill", name: "kai-secret" }
     });
   });
@@ -128,13 +128,13 @@ describe("a Namespace's model list and an agent without a binding", () => {
     for (const userId of [t.kai.id, t.admin.id]) {
       await t.expectRefused(
         userId,
-        "config_assets.put",
+        "assets.put",
         { params: { kind: "agent", name: "kai-helper" }, payload: { config: agent("kai-helper") } },
         required
       );
       await t.expectRefused(
         userId,
-        "config_assets.put",
+        "assets.put",
         { params: { kind: "agent", name: "kai-helper" }, payload: { config: withoutModel } },
         required
       );
@@ -144,18 +144,18 @@ describe("a Namespace's model list and an agent without a binding", () => {
 
     // The holder of the model right may leave the list that way, and binds an agent to it.
     expect((await t.putAgent(t.root.id, "kai-provider")).statusCode).toBe(200);
-    await t.expectOk(t.root.id, "config_assets.put", {
+    await t.expectOk(t.root.id, "assets.put", {
       params: { kind: "agent", name: "kai-helper" },
       payload: { config: { ...withoutModel, modelBindingId: "plain" } }
     });
     // Kai edits the bound agent and cannot take the binding off it.
-    await t.expectOk(t.kai.id, "config_assets.put", {
+    await t.expectOk(t.kai.id, "assets.put", {
       params: { kind: "agent", name: "kai-helper" },
       payload: { config: { ...withoutModel, modelBindingId: "plain", instructions: "More." } }
     });
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       {
         params: { kind: "agent", name: "kai-helper" },
         payload: { config: agent("kai-helper", { instructions: "More." }) }
@@ -181,26 +181,21 @@ describe("a Namespace's model list and its writer", () => {
       payload: { config }
     });
 
-    await t.expectOk(t.kai.id, "config_assets.put", put("kai-new", bound("kai-new", "plain")));
-    await t.expectRefused(
-      t.kai.id,
-      "config_assets.put",
-      put("kai-other", bound("kai-other", "other")),
-      {
-        status: 403,
-        code: "FORBIDDEN",
-        details: { reason: "model_not_allowed", modelBindingId: "other", namespace: "kai-" }
-      }
-    );
+    await t.expectOk(t.kai.id, "assets.put", put("kai-new", bound("kai-new", "plain")));
+    await t.expectRefused(t.kai.id, "assets.put", put("kai-other", bound("kai-other", "other")), {
+      status: 403,
+      code: "FORBIDDEN",
+      details: { reason: "model_not_allowed", modelBindingId: "other", namespace: "kai-" }
+    });
     // Editing the agent keeps working, and every other model setting still needs the right.
     await t.expectOk(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       put("kai-new", bound("kai-new", "plain", { instructions: "More." }))
     );
     const effort = await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       put("kai-new", { ...bound("kai-new", "plain"), reasoningEffort: "low" }),
       { status: 403, code: "FORBIDDEN" }
     );
@@ -210,12 +205,10 @@ describe("a Namespace's model list and its writer", () => {
       [t.kai.id, "free-helper"],
       [t.admin.id, "plain-helper"]
     ] as const) {
-      const refusal = await t.expectRefused(
-        userId,
-        "config_assets.put",
-        put(name, bound(name, "plain")),
-        { status: 403, code: "FORBIDDEN" }
-      );
+      const refusal = await t.expectRefused(userId, "assets.put", put(name, bound(name, "plain")), {
+        status: 403,
+        code: "FORBIDDEN"
+      });
       expect(refusal.message).toContain("agent_models.manage");
     }
 
@@ -251,7 +244,7 @@ describe("a deny that outlived its asset", () => {
     expect((await t.putAgent(t.admin.id, "shared-one")).statusCode).toBe(200);
     const assetId = await t.assetId("agent", "shared-one");
     const denyId = await t.grant(t.kai.id, "agent.read", { assetId }, "deny");
-    await t.expectOk(t.admin.id, "config_assets.delete", {
+    await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "agent", name: "shared-one" },
       payload: {}
     });

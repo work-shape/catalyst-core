@@ -71,7 +71,10 @@ export type TestServerOptions = Omit<
   Partial<Pick<ChatServerOptions, "logger" | "modules">> & {
     /** Left out, `kinds` is the registry of the platform's own kinds, agent and skill. */
     configAssets?: Omit<ChatServerOptions["configAssets"], "source" | "kinds"> &
-      Partial<Pick<ChatServerOptions["configAssets"], "source" | "kinds">>;
+      Partial<Pick<ChatServerOptions["configAssets"], "source" | "kinds">> & {
+        /** The assembly's own agent checks, handed to the agent kind where `kinds` is left out. */
+        validateAgents?: Parameters<typeof createAgentAssetKind>[0]["validateAgents"];
+      };
     /**
      * What answers the server's own model calls, such as a conversation title. It stands
      * behind the gateway for every model entry of the config. Left out, such a call fails.
@@ -378,15 +381,15 @@ export function completeServerOptions(
     modules: options.modules ?? resolveInstanceModules(options.config).snapshot,
     stores: options.stores,
     configAssets: {
-      ...configAssets,
+      store: configAssets.store,
+      validationRefs: configAssets.validationRefs,
       source: configAssets.source ?? createStaticConfigAssetSource({}),
       kinds:
         configAssets.kinds ??
         createTestAssetKinds({
           config: options.config,
           validationRefs: configAssets.validationRefs,
-          // A definition handed to the kind is one that is being written.
-          validateAgents: (agents) => configAssets.validateAgents?.(agents, agents) ?? []
+          validateAgents: configAssets.validateAgents
         })
     }
   };

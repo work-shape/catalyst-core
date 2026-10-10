@@ -80,7 +80,7 @@ describe("Namespace administration", () => {
     await t.createNamespace("kai-");
     const grantId = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
     expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
-    await t.expectOk(t.admin.id, "config_assets.put", {
+    await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-notes" },
       payload: { config: skill("kai-notes") }
     });
@@ -447,7 +447,7 @@ describe("what a grant row says about the asset it names", () => {
   it("names the asset of an asset row, and says when a deny outlived it", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
-    await t.expectOk(t.admin.id, "config_assets.put", {
+    await t.expectOk(t.admin.id, "assets.put", {
       params: { kind: "skill", name: "kai-secret" },
       payload: { config: skill("kai-secret") }
     });
@@ -473,7 +473,7 @@ describe("what a grant row says about the asset it names", () => {
     });
     await t.grant(t.kai.id, "skill.write", { namespace: "kai-" });
 
-    await t.expectOk(t.admin.id, "config_assets.delete", {
+    await t.expectOk(t.admin.id, "assets.delete", {
       params: { kind: "skill", name: "kai-secret" },
       payload: {}
     });
@@ -619,7 +619,7 @@ describe("tenant and holder boundaries of the access store", () => {
     // It opens no asset call over HTTP: the config asset checks name no workspace.
     await t.expectRefused(
       t.kai.id,
-      "config_assets.put",
+      "assets.put",
       { params: { kind: "agent", name: "kai-helper" }, payload: { config: agent("kai-helper") } },
       t.forbidden("agent.write", "no_grant")
     );
