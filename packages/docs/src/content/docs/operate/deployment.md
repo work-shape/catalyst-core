@@ -180,6 +180,8 @@ So no layer may write these addresses down:
 - `docker/nginx-spa.conf` answers `/app-content` with `404` and `access_log off`, for the case that such an address reaches the interface's server.
 - Any other proxy, load balancer or CDN in front must be set the same way, and must not cache these answers: they carry `Cache-Control: private` or `no-store`.
 
+A proxy's error log is not its access log: when the API does not answer, Caddy writes the address of the failed request to its error log, so proxy error logs can hold the address of a Page that stays valid for up to the lifetime of its token.
+
 A Page's own script can read the address it was loaded from. The token is therefore a secret from other people and not from the Page.
 
 ## Production Readiness Checklist

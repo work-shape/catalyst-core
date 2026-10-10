@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { connect } from "node:net";
 import { runInNewContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
-import { callTestPath, createTestInstanceWith } from "./support/test-instance";
+import { callTestPath, createTestInstanceWith, listenTestInstance } from "./support/test-instance";
 
 // A Page revision is served to the frame that shows it and to nobody else. The address a member
 // is given holds a token for one file set; every answer under it carries the same header set,
@@ -162,6 +163,20 @@ function runPageScript(script: string, builtIns: Record<string, unknown> = {}) {
     thrown = error;
   }
   return { written, state, thrown };
+}
+
+/** Sends one request with the request line as written and returns the whole answer. */
+function sendRequestLine(origin: string, requestLine: string): Promise<string> {
+  const { hostname, port } = new URL(origin);
+  return new Promise((done, failed) => {
+    const socket = connect(Number(port), hostname);
+    let answer = "";
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk: string) => (answer += chunk));
+    socket.on("end", () => done(answer));
+    socket.on("error", failed);
+    socket.write(`${requestLine}\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`);
+  });
 }
 
 type Started = Awaited<ReturnType<typeof startInstance>>;
@@ -535,6 +550,18 @@ describe("the content route of a Page", () => {
       });
       withoutToken(malformed);
     }
+
+    // The same when the request names a whole address, as a client may towards a proxy.
+    const origin = await listenTestInstance(instance);
+    const whole = await sendRequestLine(
+      origin,
+      `GET http://instance.example.test${url}%zz HTTP/1.1`
+    );
+    expect(whole).toMatch(/^HTTP\/1\.1 422 /u);
+    expect(whole).toContain("The address of the request cannot be read");
+    expect(whole.toLowerCase()).toContain("content-security-policy: sandbox allow-scripts;");
+    expect(whole).not.toContain(payload);
+    expect(whole).not.toContain(signature);
 
     // Another method reaches no operation. Its answer is held like the others.
     for (const method of ["POST", "PUT", "DELETE", "PATCH"] as const) {

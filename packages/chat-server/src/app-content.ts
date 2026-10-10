@@ -166,7 +166,8 @@ const APP_CONTENT_ROUTE = `${APP_CONTENT_PREFIX}*`;
  * a malformed one included, so that it is kept out of logs and error bodies all the same.
  */
 export function isAppContentAddress(url: string | undefined): boolean {
-  const first = /^\/+([^/?#]*)/u.exec(url ?? "")?.[1] ?? "";
+  // A request target may be a whole address, with scheme and host. Its path is what counts.
+  const first = /^(?:[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*)?\/+([^/?#]*)/u.exec(url ?? "")?.[1] ?? "";
   const unescaped = first.replaceAll(/%([0-9A-Fa-f]{2})/gu, (_escape, hex: string) =>
     String.fromCharCode(Number.parseInt(hex, 16))
   );
