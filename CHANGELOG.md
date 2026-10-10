@@ -11,22 +11,26 @@ contain breaking changes; a patch version does not.
   skills inside a Namespace or on one asset, and can deny it. A Namespace is a registered name
   prefix such as `kai-`; it can carry a list of allowed tools and a list of allowed model
   bindings, which bind every writer of an agent in it, an administrator and the release sync
-  included. Eight operations under `/api/v1/instance/access` write and read grants and
-  Namespaces; they need `users.manage`. A deny wins over every grant and role that would allow the same action on that asset. It does not
-  wall the asset off from holders of instance rights: export and setting the default agent are
-  decided at the instance and still reach it. A holder whose write is denied for an asset cannot
-  delete it either. Deleting a user
-  deletes the user's grant rows. No interface
-  for it ships yet. A migration adds the tables `permission_grants` and `namespaces` and
-  changes no other table; no user, service principal or API key gains or loses a right.
-  `node --experimental-strip-types scripts/verify-permissions.ts` with `DATABASE_URL` set
-  compares every holder's rights with what the legacy columns answered and exits non-zero on
-  a difference. Before rolling back to an earlier release, list the deny rows
-  (`select * from permission_grants where effect = 'deny'`): an earlier release reads neither
-  table, so every grant stops applying and every deny stops refusing. An earlier release that
-  deletes an agent or skill leaves the grant rows on it, and they apply again if the same name
-  is created after rolling forward. Remove them first:
-  `delete from permission_grants where scope_kind = 'asset' and scope_id in (select id from config_assets where status = 'deleted')`.
+  included. Eight operations under `/api/v1/instance/access` write and read grants and Namespaces;
+  they need `users.manage`. A deny wins over every grant and role that would allow the same action
+  on that asset. It does not wall the asset off from holders of instance rights: export and
+  setting the default agent are decided at the instance and still reach it. A holder who is denied
+  anything on an asset cannot delete it. Deleting an asset removes the allow rows on it and keeps
+  the deny rows: they go on refusing its history and the same name if it is created again, until
+  they are revoked. In a Namespace with a list of model bindings an agent must select a binding on
+  the list; an agent that names a provider or no model is refused unless the writer holds
+  `agent_models.manage`. A grant's `grantedBy` and a Namespace's `createdBy` are left out for a
+  caller who is not shown that user. Deleting a user deletes the user's grant rows. No interface
+  for it ships yet. A migration adds the tables `permission_grants` and `namespaces` and changes
+  no other table; no user, service principal or API key gains or loses a right. `node
+  --experimental-strip-types scripts/verify-permissions.ts` with `DATABASE_URL` set compares every
+  holder's rights with what the legacy columns answered and exits non-zero on a difference. Before
+  rolling back to an earlier release, list the deny rows (`select * from permission_grants where
+  effect = 'deny'`): an earlier release reads neither table, so every grant stops applying and
+  every deny stops refusing. An earlier release that deletes an agent or skill leaves the grant
+  rows on it, and they apply again if the same name is created after rolling forward. Remove them
+  first: `delete from permission_grants where scope_kind = 'asset' and effect = 'allow' and
+  scope_id in (select id from config_assets where status = 'deleted')`.
 - **Operations:** an operation can be registered once in the operation registry and is then
   reached through one call path, `runOperation`, that checks the actor's right, resolves the
   policy, asks the guardrails, executes and records the call as an Operation Run. Over HTTP

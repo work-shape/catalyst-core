@@ -231,15 +231,17 @@ export async function applyConfigAssetMutations(
         await tx
           .delete(configAssetAvailability)
           .where(eq(configAssetAvailability.assetId, asset.id));
-        // The row is reused when the name is created again, so a grant on this asset must not
-        // come back with the next one.
+        // The row is reused when the name is created again, so an allow on this asset must not
+        // come back with the next one. A deny stays: the retained revisions are still the
+        // content it refuses, and whoever restores the name restores that content.
         await tx
           .delete(permissionGrants)
           .where(
             and(
               eq(permissionGrants.clientInstanceId, input.clientInstanceId),
               eq(permissionGrants.scopeKind, "asset"),
-              eq(permissionGrants.scopeId, asset.id)
+              eq(permissionGrants.scopeId, asset.id),
+              eq(permissionGrants.effect, "allow")
             )
           );
         continue;

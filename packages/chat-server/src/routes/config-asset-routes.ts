@@ -49,12 +49,12 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
     workflow.exportAssets(identity, context)
   );
 
-  route(apiOperations["config_assets.replace"], ({ identity, context, body }) =>
-    workflow.replaceAssets(identity, context, body)
+  route(apiOperations["config_assets.replace"], ({ identity, access, context, body }) =>
+    workflow.replaceAssets(identity, access, context, body)
   );
 
-  route(apiOperations["config_assets.validate"], ({ identity, context, body }) =>
-    workflow.validateAssets(identity, context, body)
+  route(apiOperations["config_assets.validate"], ({ identity, access, context, body }) =>
+    workflow.validateAssets(identity, access, context, body)
   );
 }
 

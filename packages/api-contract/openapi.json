@@ -12872,7 +12872,6 @@
           "displayName",
           "allowedToolNames",
           "allowedModelBindingIds",
-          "createdBy",
           "createdAt"
         ]
       },
@@ -12943,7 +12942,6 @@
           "displayName",
           "allowedToolNames",
           "allowedModelBindingIds",
-          "createdBy",
           "createdAt",
           "grantCount",
           "assetCount"
@@ -13734,7 +13732,6 @@
           "action",
           "effect",
           "scopeKind",
-          "grantedBy",
           "createdAt"
         ]
       },

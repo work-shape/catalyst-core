@@ -325,6 +325,20 @@ export class AccessWorkflow {
     };
   }
 
+  /**
+   * The users whose ids the caller is not shown: the user list hides superadmins from everyone
+   * else, and so does the attribution of a grant or a Namespace.
+   */
+  async hiddenUserIds(actor: AuthenticatedUser): Promise<ReadonlySet<string>> {
+    if (isSuperadmin(actor)) {
+      return new Set();
+    }
+    const users = await this.options.stores.users.listUsers({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    return new Set(users.filter((user) => isSuperadmin(user)).map((user) => String(user.id)));
+  }
+
   private async findUser(userId: string): Promise<UserRecord | undefined> {
     const users = await this.options.stores.users.listUsers({
       clientInstanceId: this.options.clientInstanceId

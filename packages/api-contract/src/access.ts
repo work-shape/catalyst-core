@@ -22,7 +22,8 @@ export const permissionGrantSchema = z.object({
   scopeId: z.string().optional(),
   /** The registered prefix, for Namespace scope. */
   namespace: z.string().optional(),
-  grantedBy: z.string(),
+  /** Left out when the user who wrote the row is hidden from the caller. */
+  grantedBy: z.string().optional(),
   createdAt: timestampSchema
 });
 
@@ -94,7 +95,8 @@ export const namespaceSchema = z.object({
   displayName: z.string(),
   allowedToolNames: namespaceAllowlistSchema,
   allowedModelBindingIds: namespaceAllowlistSchema,
-  createdBy: z.string(),
+  /** Left out when the user who registered it is hidden from the caller. */
+  createdBy: z.string().optional(),
   createdAt: timestampSchema
 });
 

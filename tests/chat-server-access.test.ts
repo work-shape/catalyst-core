@@ -402,7 +402,7 @@ describe("deny rows and asset grants", () => {
     );
   });
 
-  it("removes the asset's rows when the asset is deleted, so a new asset of the name inherits nothing", async () => {
+  it("removes the asset's allow rows when the asset is deleted, so a new asset of the name inherits no right", async () => {
     const t = await setup();
     expect((await t.putAgent(t.admin.id, "shared-one")).statusCode).toBe(200);
     const first = await t.assetId("agent", "shared-one");
@@ -413,7 +413,9 @@ describe("deny rows and asset grants", () => {
       params: { kind: "agent", name: "shared-one" },
       payload: {}
     });
-    expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
+    // The deny stays with the name; see `chat-server-access-boundaries.test.ts`.
+    const left = await t.stores.access.listGrants({ clientInstanceId });
+    expect(left.map((row) => [row.holderId, row.effect])).toEqual([[t.lena.id, "deny"]]);
 
     expect((await t.putAgent(t.admin.id, "shared-one")).statusCode).toBe(200);
     await t.expectRefused(

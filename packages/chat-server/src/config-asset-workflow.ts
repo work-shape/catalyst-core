@@ -122,7 +122,7 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
-    await this.assertNamespaceAllowlists(current, validated.agents);
+    await this.assertNamespaceAllowlists(access, current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
       access,
@@ -166,11 +166,13 @@ export class ConfigAssetWorkflow {
   ) {
     const resource = await this.assetResource(command);
     access.require(`${command.kind}.delete`, resource);
-    // Deleting an asset deletes the grant rows on it, a deny among them, and frees the name to
-    // be written again. So a holder whose write is denied for the asset does not delete it.
-    const write = access.authorize(`${command.kind}.write`, resource);
-    if (!write.allowed && write.reason === "denied") {
-      access.require(`${command.kind}.write`, resource);
+    // A holder who is denied anything on the asset does not delete it: the delete right is no
+    // way around a deny on reading or writing.
+    for (const verb of ["read", "write"] as const) {
+      const decision = access.authorize(`${command.kind}.${verb}`, resource);
+      if (!decision.allowed && decision.reason === "denied") {
+        access.require(`${command.kind}.${verb}`, resource);
+      }
     }
     await this.authorizeInteractiveWrite(user, context);
     this.assertInteractiveDeleteAllowed(command.kind);
@@ -344,7 +346,7 @@ export class ConfigAssetWorkflow {
       : replaced;
     const validated = this.validateBundle(candidate);
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
-    await this.assertNamespaceAllowlists(current, validated.agents);
+    await this.assertNamespaceAllowlists(access, current, validated.agents);
     const config = findValidatedConfig(validated, command.kind, command.name);
     this.assertInteractiveAssetUpsertAllowed({
       access,
@@ -405,6 +407,7 @@ export class ConfigAssetWorkflow {
 
   async replaceAssets(
     user: AuthenticatedIdentity,
+    access: ActorAccess,
     context: ConfigAssetCallContext,
     command: ConfigAssetBundleInput & {
       baseVersion: number | null;
@@ -502,7 +505,7 @@ export class ConfigAssetWorkflow {
     const validated = this.validateBundle(candidate);
     const currentBundle = assetBundle(currentAssets, currentState.defaultAgentName);
     this.assertChangedUserSelectableModelsEligible(currentBundle, validated.agents);
-    await this.assertNamespaceAllowlists(currentBundle, validated.agents);
+    await this.assertNamespaceAllowlists(access, currentBundle, validated.agents);
     const providedAgentNames = new Set(command.agents.map(readConfigName));
     const providedSkillNames = new Set(command.skills.map(readConfigName));
     const desiredKeys = new Set([
@@ -569,6 +572,7 @@ export class ConfigAssetWorkflow {
 
   async validateAssets(
     user: AuthenticatedIdentity,
+    access: ActorAccess,
     context: ConfigAssetCallContext,
     command: ConfigAssetBundleInput
   ): Promise<{ valid: true }> {
@@ -576,7 +580,7 @@ export class ConfigAssetWorkflow {
     const validated = this.validateBundle(command);
     const current = await this.loadCurrentBundle();
     this.assertChangedUserSelectableModelsEligible(current, validated.agents);
-    await this.assertNamespaceAllowlists(current, validated.agents);
+    await this.assertNamespaceAllowlists(access, current, validated.agents);
     return { valid: true };
   }
 
@@ -598,11 +602,9 @@ export class ConfigAssetWorkflow {
       kind: input.kind,
       name: input.name
     });
-    return {
-      kind: input.kind,
-      name: input.name,
-      ...(asset?.status === "active" ? { assetId: asset.id } : {})
-    };
+    // A deleted asset keeps its row, its revisions and the deny rows on it, so its history and
+    // its name are decided with the same id as before the delete.
+    return { kind: input.kind, name: input.name, ...(asset ? { assetId: asset.id } : {}) };
   }
 
   // The first agent becomes the default and the last one takes the default with it. Either is
@@ -616,9 +618,12 @@ export class ConfigAssetWorkflow {
   /**
    * A Namespace's lists bind every writer, an instance administrator and the release sync
    * included. They are checked for every agent a write creates or changes and only restrict:
-   * a null list allows everything, an empty one nothing.
+   * a null list allows everything, an empty one nothing. An agent's tools are the names in its
+   * own `toolNames` and nothing else (a skill is text, and no tool set is added by default), so
+   * the tool list is complete once those names are checked.
    */
   private async assertNamespaceAllowlists(
+    access: ActorAccess,
     current: ConfigAssetBundleInput,
     nextAgents: AgentConfig[]
   ): Promise<void> {
@@ -655,6 +660,19 @@ export class ConfigAssetWorkflow {
           "FORBIDDEN",
           `Model binding '${modelBindingId}' is not allowed in Namespace '${namespace.prefix}'`,
           { reason: "model_not_allowed", modelBindingId, namespace: namespace.prefix }
+        );
+      }
+      // Without a binding the agent runs the provider it names or the instance default, which
+      // no list can name. Only the right that manages models may leave the list that way.
+      if (
+        allowedModelBindingIds &&
+        agent.modelBindingId === undefined &&
+        !access.authorize("agent_models.manage").allowed
+      ) {
+        throw new AppError(
+          "FORBIDDEN",
+          `An agent in Namespace '${namespace.prefix}' must select a model binding the Namespace allows`,
+          { reason: "model_binding_required", namespace: namespace.prefix }
         );
       }
     }
