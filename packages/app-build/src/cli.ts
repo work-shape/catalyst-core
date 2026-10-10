@@ -2,6 +2,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { buildPage } from "./bundle";
+import { RELEASED_KIT_VERSIONS } from "./kit";
 import { PAGE_BUILD_FILES_DIRECTORY, PAGE_BUILD_RESULT_FILE } from "./limits";
 import type { PageBuildResultFile } from "./output";
 import type { PageFile } from "./types";
@@ -27,10 +28,46 @@ async function readInput(directory: string, prefix = ""): Promise<PageFile[]> {
   return files;
 }
 
+/**
+ * Builds a small React Page from memory, so the image that carries this command is known to
+ * carry the bundler's binary and the route generator too, not only this script.
+ */
+async function check(): Promise<void> {
+  const text = (value: string) => new TextEncoder().encode(value);
+  const result = await buildPage({
+    files: [
+      {
+        path: "app.yaml",
+        bytes: text(`id: image-check\nname: Image Check\nkit: ${RELEASED_KIT_VERSIONS.at(-1)}\n`)
+      },
+      {
+        path: "src/routes/__root.tsx",
+        bytes: text(
+          `import { createRootRoute, Outlet } from "@tanstack/react-router";\nexport const Route = createRootRoute({ component: () => <Outlet /> });\n`
+        )
+      },
+      {
+        path: "src/routes/index.tsx",
+        bytes: text(
+          `import { createFileRoute } from "@tanstack/react-router";\nexport const Route = createFileRoute("/")({ component: () => <p>ok</p> });\n`
+        )
+      }
+    ]
+  });
+  if (result.status !== "built") {
+    throw new Error(`The check Page did not build: ${JSON.stringify(result.errors)}`);
+  }
+  process.stdout.write("catalyst-page-build builds a Page\n");
+}
+
 async function main(): Promise<void> {
   const [input, output] = process.argv.slice(2);
   if (input === "--version") {
     process.stdout.write(`${PAGE_BUILD_CLI_VERSION}\n`);
+    return;
+  }
+  if (input === "--check") {
+    await check();
     return;
   }
   if (!input || !output) {

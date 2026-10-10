@@ -69,7 +69,30 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
   && convert -version \
   && rm -rf /var/lib/apt/lists/*
 
+# The command that builds a saved Page (the `apps` module). It runs in the runner image, so it
+# is built here from the lockfile and copied there with its production dependencies only. The
+# first three steps are those of `deps`, so both stages share their layers.
+FROM base AS page-build-command
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm fetch --frozen-lockfile
+
+COPY . ./
+
+RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm --filter "@vivd-catalyst/app-build..." install --offline --frozen-lockfile \
+  && pnpm --filter "@vivd-catalyst/app-build..." build \
+  && pnpm --config.inject-workspace-packages=true --filter "@vivd-catalyst/app-build" deploy --prod --offline /opt/catalyst-page-build
+
 FROM workspace-artifact-runtime AS workspace-command-runner
+
+COPY --from=page-build-command /opt/catalyst-page-build /opt/catalyst-page-build
+RUN chmod +x /opt/catalyst-page-build/dist/cli.js \
+  && ln -s /opt/catalyst-page-build/dist/cli.js /usr/local/bin/catalyst-page-build \
+  && catalyst-page-build --version \
+  && catalyst-page-build --check
 
 WORKDIR /workspace
 CMD ["/bin/bash"]

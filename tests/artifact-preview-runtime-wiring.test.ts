@@ -169,6 +169,19 @@ describe("artifact preview runtime wiring", () => {
       "FROM workspace-artifact-runtime AS workspace-command-runner"
     );
     expect(workspaceRunner).toContain("WORKDIR /workspace");
+    // The runner carries the command that builds a saved Page, and its build runs the command:
+    // an image without it, or with one that cannot build, does not come out of the build.
+    const pageBuild = extractDockerStage(dockerfile, "page-build-command");
+    expect(pageBuild).toContain('pnpm --filter "@vivd-catalyst/app-build..." build');
+    expect(pageBuild).toContain("install --offline --frozen-lockfile");
+    expect(workspaceRunner).toContain(
+      "COPY --from=page-build-command /opt/catalyst-page-build /opt/catalyst-page-build"
+    );
+    expect(workspaceRunner).toContain("/usr/local/bin/catalyst-page-build");
+    expect(workspaceRunner).toContain("catalyst-page-build --check");
+    // Nothing else of the build workspace reaches the image agent commands run in.
+    expect(workspaceRunner).not.toContain("COPY . ");
+    expect(workspaceRunner).not.toContain("COPY --from=deps");
     expect(workspaceRunner).toContain('CMD ["/bin/bash"]');
     expect(previewRuntime).toContain("FROM workspace-artifact-runtime AS artifact-preview-runtime");
     expect(artifactWorker).toContain("FROM artifact-preview-runtime AS artifact-preview-worker");

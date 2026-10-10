@@ -10,6 +10,8 @@
 # knows and with the committed lockfile, so such a package fails before a deployment meets it.
 #
 # The two worker images add a Docker client and system packages to the same two build stages.
+# The runner image, in which commands and Page builds run, is built too: it installs
+# `catalyst-page-build` from this repository and fails to build when the command does not run.
 set -euo pipefail
 
 platform_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -80,4 +82,6 @@ build() {
 
 build api
 build ui
-echo "==> Both images build"
+# The runner image carries the command that builds a saved Page; its build runs the command.
+build workspace-command-runner
+echo "==> The API, UI and runner images build"
