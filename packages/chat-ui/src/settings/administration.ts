@@ -9,6 +9,7 @@ import type { ChatShellAdministration } from "./page-definition";
 import { ApiAccessPage } from "./pages/api-access";
 import { AuditPage } from "./pages/audit";
 import { BuildPage } from "./pages/build";
+import { JobsPage } from "./pages/jobs";
 import { UsagePage } from "./pages/usage";
 import { UsersPage } from "./pages/users";
 
@@ -48,6 +49,14 @@ export const administration: ChatShellAdministration = {
       width: "wide",
       visible: (viewer) => canViewAudit(viewer.user),
       component: AuditPage
+    },
+    {
+      id: "jobs",
+      group: "instance",
+      labelKey: "jobs.title",
+      width: "wide",
+      visible: (viewer) => canViewAudit(viewer.user),
+      component: JobsPage
     }
   ],
   build: {

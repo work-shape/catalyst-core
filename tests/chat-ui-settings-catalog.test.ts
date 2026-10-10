@@ -41,7 +41,13 @@ function resolve(path: string, of: SettingsViewer, build = buildOn, workspacesRe
 
 const you = ["you/profile", "you/language-appearance", "you/security"];
 const workspace = ["workspace/general", "workspace/members"];
-const instance = ["instance/users", "instance/api-access", "instance/usage", "instance/audit"];
+const instance = [
+  "instance/users",
+  "instance/api-access",
+  "instance/usage",
+  "instance/audit",
+  "instance/jobs"
+];
 
 const member = viewer();
 const workspaceOwner = viewer({}, [personalWorkspace(), sharedWorkspace()]);
@@ -91,16 +97,18 @@ describe("Settings catalog", () => {
     expect(de.t("nav.build")).toBe("Bauen");
   });
 
-  it.each<[key: string, page: string]>([
-    ["users.manage", "instance/users"],
-    ["api_access.manage", "instance/api-access"],
-    ["usage.view", "instance/usage"],
-    ["audit.view", "instance/audit"]
-  ])("shows the page behind %s exactly to its holders", (permission, page) => {
-    expect(pageIds(viewer({ permissions: [permission] }))).toEqual([...you, page]);
+  it.each<[key: string, pages: string[]]>([
+    ["users.manage", ["instance/users"]],
+    ["api_access.manage", ["instance/api-access"]],
+    ["usage.view", ["instance/usage"]],
+    ["audit.view", ["instance/audit", "instance/jobs"]]
+  ])("shows the pages behind %s exactly to its holders", (permission, pages) => {
+    expect(pageIds(viewer({ permissions: [permission] }))).toEqual([...you, ...pages]);
     for (const other of ["users.manage", "api_access.manage", "usage.view", "audit.view"]) {
       if (other !== permission) {
-        expect(pageIds(viewer({ permissions: [other] }))).not.toContain(page);
+        for (const page of pages) {
+          expect(pageIds(viewer({ permissions: [other] }))).not.toContain(page);
+        }
       }
     }
   });
