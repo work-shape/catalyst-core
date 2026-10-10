@@ -1,7 +1,9 @@
 import {
   AppError,
   approvalExecutionOf,
+  asUserId,
   defineJobHandler,
+  type ApprovalRequest,
   type ApprovalRequestStore,
   type ClientInstanceId,
   type JobSchedule,
@@ -16,6 +18,7 @@ import {
 import {
   OPERATION_CALL_APPROVAL_KIND,
   readApprovedOperationEnd,
+  refuseWaitingOperation,
   type RunOperationDeps
 } from "@vivd-catalyst/tool-execution";
 import {
@@ -204,6 +207,11 @@ async function recordAbandonedOperationCall(
 /**
  * Removes the input from the requests of held calls that have ended and still keep it. A
  * request whose approved call has not run yet keeps its input: the call is executed from it.
+ *
+ * A request that is still open, or approved and not executed, is ended here where its call
+ * can never run: the run no longer exists, because its conversation was deleted while
+ * somebody decided on the request, or the person who made the call is gone. Such a request
+ * has no run the expiry could find, so nothing else would end it.
  */
 async function removeEndedOperationCallInput(
   options: OperationRunJobOptions,
@@ -219,12 +227,15 @@ async function removeEndedOperationCallInput(
     const requests = await approvals.listApprovalRequests({
       clientInstanceId,
       kinds: [OPERATION_CALL_APPROVAL_KIND],
-      excludeStatus: "pending",
       payloadKey: "input",
       page: { limit: ENDED_INPUT_CLEANUP_PAGE_SIZE, ...(after ? { after } : {}) }
     });
     for (const request of requests) {
-      if (request.status === "approved" && approvalExecutionOf(request) === "queued") continue;
+      const queued = request.status === "approved" && approvalExecutionOf(request) === "queued";
+      if (request.status === "pending" || queued) {
+        if (await endOrphanedOperationCall(options, approvals, request)) removed += 1;
+        continue;
+      }
       const replaced = await approvals.replaceEndedApprovalRequestPayload({
         clientInstanceId,
         requestId: request.id,
@@ -238,6 +249,74 @@ async function removeEndedOperationCallInput(
   }
   if (removed > 0) logger.info({ removed }, "Removed the input of ended operation call requests");
   return removed;
+}
+
+const RUN_GONE = { code: "NOT_FOUND", message: "The call of this request no longer exists." };
+const REQUESTER_GONE = {
+  code: "FORBIDDEN",
+  message: "The account of the person who made this call was deleted."
+};
+
+/**
+ * Ends a request that still keeps its call when that call can never run, and removes its
+ * input. Answers whether it did. A request somebody decides at this moment is left to the
+ * next tick.
+ */
+async function endOrphanedOperationCall(
+  options: OperationRunJobOptions,
+  approvals: ApprovalRequestStore,
+  request: ApprovalRequest
+): Promise<boolean> {
+  const { clientInstanceId } = options;
+  const runId = typeof request.payload.runId === "string" ? request.payload.runId : "";
+  const run = await options.runs.get({ clientInstanceId, id: runId });
+  const requester =
+    run && options.calls
+      ? await options.calls.users.getUser({
+          clientInstanceId,
+          userId: asUserId(request.requestedBy.id)
+        })
+      : undefined;
+  const requesterGone =
+    run !== undefined &&
+    options.calls !== undefined &&
+    (requester === undefined || requester.status === "deleting");
+  if (run && !requesterGone) return false;
+  if (request.status === "approved") {
+    // The job of an approved call refuses a requester who is gone itself.
+    if (run) return false;
+    await recordApprovedOperationCallEnd({ clientInstanceId, approvals }, request.id, {
+      execution: "refused",
+      error: RUN_GONE
+    });
+    return true;
+  }
+  try {
+    await approvals.transitionPendingApprovalRequest({
+      clientInstanceId,
+      requestId: request.id,
+      resolve: async (pending, stores) => {
+        const waiting = await stores.operationRuns.get({ clientInstanceId, id: runId });
+        if (waiting) {
+          await refuseWaitingOperation(
+            waiting.id,
+            { kind: "forbidden", action: "operations.call", reason: "holder_inactive" },
+            { clientInstanceId, runs: stores.operationRuns, now: options.now }
+          );
+        }
+        return endedOperationCallOutcome(pending, {
+          execution: "refused",
+          error: waiting ? REQUESTER_GONE : RUN_GONE
+        });
+      }
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof AppError && (error.code === "CONFLICT" || error.code === "NOT_FOUND")) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /**

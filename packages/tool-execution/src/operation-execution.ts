@@ -96,6 +96,16 @@ export interface RunOperationDeps {
     userId: string;
     workspaceId: CollaborationWorkspaceId;
   }): Promise<boolean>;
+  /**
+   * Whether an agent is available in a workspace now, by the rule a new run of it is started
+   * under. Asked before an agent's call that waited for an approval is executed in a
+   * workspace: an agent that was withdrawn from it meanwhile no longer acts there. Without it
+   * this process does not ask.
+   */
+  agentAvailable?(input: {
+    agentName: string;
+    workspaceId: CollaborationWorkspaceId;
+  }): Promise<boolean>;
   logger: Logger;
   now?: () => Date;
 }
@@ -334,17 +344,49 @@ export async function denyRun(
  * throws ends the run as failed; a refusal it raises through `context.access.require` ends it
  * as denied.
  */
+/** Thrown by the `begin` of `executeAdmitted`: the operation was not called. */
+export class OperationNotBegunError extends Error {
+  constructor() {
+    super("The operation was not called");
+    this.name = "OperationNotBegunError";
+  }
+}
+
+/** Calls the operation now. What it throws, at once or later, rejects the answer. */
+function callOperation(
+  definition: OperationDefinition,
+  input: unknown,
+  execution: OperationExecutionContext
+): Promise<unknown> {
+  let executing: Promise<unknown>;
+  try {
+    executing = Promise.resolve(definition.execute(input, execution));
+  } catch (error) {
+    executing = Promise.reject(error instanceof Error ? error : new Error(String(error)));
+  }
+  // The answer is awaited after the started event. A rejection before that is still handled.
+  executing.catch(() => undefined);
+  return executing;
+}
+
 export async function executeAdmitted(
   context: RunContext,
   access: ActorAccess,
   /** The decision of a call that ran on its own caller's word. An approved run has its own. */
-  decisionMode?: "direct"
+  decisionMode?: "direct",
+  /**
+   * Called as the last thing before the operation is, with nothing awaited between the two.
+   * A caller that marks the run as started only now does it here. It throws
+   * `OperationNotBegunError` to keep the operation from being called; that error leaves here
+   * as it is and ends no run.
+   */
+  begin?: () => Promise<void>
 ): Promise<OperationEnding> {
   const { run, definition, call, deps, now } = context;
   let completed: OperationEnding | undefined;
   let started = false;
   try {
-    await context.emit("operation.started", "after", { status: "success" });
+    if (!begin) await context.emit("operation.started", "after", { status: "success" });
     const execution: OperationExecutionContext = {
       runId: run.id,
       actor: call.actor,
@@ -355,8 +397,12 @@ export async function executeAdmitted(
       access,
       audit: auditForRun(deps.audit, run.id, call.correlationId)
     };
+    await begin?.();
     started = true;
-    const answer = await definition.execute(call.input, execution);
+    const executing = callOperation(definition, call.input, execution);
+    // With `begin` the call is said to have started once it has: nothing may be awaited before.
+    if (begin) await context.emit("operation.started", "after", { status: "success" });
+    const answer = await executing;
     if (isToolOperationAnswer(answer) && answer.result.status !== "success") {
       return await endToolFailure(context, answer.result);
     }
@@ -391,6 +437,7 @@ export async function executeAdmitted(
     if (definition.events?.after) await context.emit(definition.events.after, "after");
     return completed;
   } catch (error) {
+    if (error instanceof OperationNotBegunError) throw error;
     if (completed) {
       deps.logger.error(
         {

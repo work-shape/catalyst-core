@@ -347,6 +347,169 @@ describe("an agent's tool calls in a chat run", () => {
     await f.app.close();
   });
 
+  // Fails before the fix: the availability of the agent in the workspace was asked when its
+  // run started and never when the call it left behind ran.
+  it("does not run an approved call of an agent that was withdrawn from the workspace", async () => {
+    const f = await fixture([{ operation: "demo.change", value: "approval" }]);
+    const shared = await f.app.call("workspaces.create", { payload: { name: "Shared" } });
+    const said = await f.say(
+      '/tool demo.change {"text":"withdrawn"}',
+      shared.json<{ id: string }>().id
+    );
+    const [held] = await f.runs();
+    const requestId = held?.approvalRequestId ?? "";
+    expect(held).toMatchObject({ status: "pending_approval", workspaceId: said.workspaceId });
+    const approved = await f.app.call("approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    expect(approved.json()).toMatchObject({ status: "approved" });
+    // An admin withdraws the agent from this workspace before the call runs. The default
+    // agent stays available everywhere, so another agent becomes the default first.
+    await f.app.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId: f.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "other_agent",
+          config: {
+            skillNames: [],
+            name: "other_agent",
+            displayName: "Other Agent",
+            instructions: "Use configured tools only.",
+            modelProviderId: "local",
+            toolNames: [],
+            initialPrompts: []
+          }
+        },
+        { type: "setDefaultAgent", agentName: "other_agent" }
+      ]
+    });
+    await f.app.stores.configAssets.setAgentAvailability({
+      clientInstanceId: f.clientInstanceId,
+      agentName: "test_agent",
+      availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+    });
+
+    await getTestJobs(f.app).runDue();
+
+    expect(calls).toEqual([]);
+    const [run] = await f.runs();
+    expect(run).toMatchObject({
+      id: held?.id,
+      status: "denied",
+      denial: { kind: "forbidden", action: "agent_tool:demo.change" }
+    });
+    const request = await f.app.stores.approvals.getApprovalRequest({
+      clientInstanceId: f.clientInstanceId,
+      requestId
+    });
+    expect(request).toMatchObject({
+      status: "superseded",
+      applyResult: {
+        execution: "refused",
+        error: { message: "The agent that made this call is no longer available in its workspace." }
+      }
+    });
+    expect(JSON.stringify(request?.payload)).not.toContain("withdrawn");
+    await f.app.close();
+  });
+
+  // Was not tested before; it passes without the fix of this round.
+  it("ends the held call of a deleted conversation and removes its input", async () => {
+    const f = await fixture([{ operation: "demo.change", value: "approval" }]);
+    const said = await f.say('/tool demo.change {"text":"secret-conversation"}');
+    const [held] = await f.runs();
+    const requestId = held?.approvalRequestId ?? "";
+
+    const deleted = await f.app.call("conversations.delete", {
+      params: { conversationId: said.conversationId }
+    });
+    expect(deleted.statusCode).toBeLessThan(300);
+
+    expect(await f.runs()).toEqual([]);
+    const request = await f.app.stores.approvals.getApprovalRequest({
+      clientInstanceId: f.clientInstanceId,
+      requestId
+    });
+    expect(request).toMatchObject({
+      status: "superseded",
+      applyResult: {
+        execution: "refused",
+        error: { message: "The conversation of this call was deleted." }
+      },
+      payload: { inputRemoved: true }
+    });
+    expect(JSON.stringify(request)).not.toContain("secret-conversation");
+    const late = await f.app.call("approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    expect(late.statusCode).toBe(409);
+    expect(calls).toEqual([]);
+    await f.app.close();
+  });
+
+  // Fails before the fix: the deletion skipped the request somebody was deciding, deleted
+  // its run, and nothing found the open request again. It kept its input for good.
+  it("ends a held call whose conversation was deleted while a decision on it failed", async () => {
+    const f = await fixture([{ operation: "demo.change", value: "approval" }]);
+    const said = await f.say('/tool demo.change {"text":"secret-orphan"}');
+    const [held] = await f.runs();
+    const requestId = held?.approvalRequestId ?? "";
+    let entered: () => void = () => undefined;
+    const holding = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let fail: () => void = () => undefined;
+    const failing = new Promise<void>((resolve) => {
+      fail = resolve;
+    });
+    // A decision that holds the request and fails in the end, as one whose commit fails.
+    const decision = f.app.stores.approvals
+      .transitionPendingApprovalRequest({
+        clientInstanceId: f.clientInstanceId,
+        requestId,
+        resolve: async () => {
+          entered();
+          await failing;
+          throw new Error("The decision could not be recorded");
+        }
+      })
+      .catch(() => undefined);
+    await holding;
+    const deleted = await f.app.call("conversations.delete", {
+      params: { conversationId: said.conversationId }
+    });
+    expect(deleted.statusCode).toBeLessThan(300);
+    fail();
+    await decision;
+    const stored = () =>
+      f.app.stores.approvals.getApprovalRequest({
+        clientInstanceId: f.clientInstanceId,
+        requestId
+      });
+    // The run is gone and the request is open, with what the agent was given.
+    expect(await f.runs()).toEqual([]);
+    expect(await stored()).toMatchObject({ status: "pending" });
+
+    await getTestJobs(f.app).runDue();
+
+    const request = await stored();
+    expect(request).toMatchObject({
+      status: "superseded",
+      applyResult: {
+        execution: "refused",
+        error: { message: "The call of this request no longer exists." }
+      },
+      payload: { inputRemoved: true }
+    });
+    expect(JSON.stringify(request)).not.toContain("secret-orphan");
+    expect(calls).toEqual([]);
+    await f.app.close();
+  });
+
   it("deletes the runs of a conversation with it and leaves a run no conversation caused", async () => {
     const f = await fixture();
     const gone = await f.say('/tool demo.change {"text":"one"}');

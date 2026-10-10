@@ -272,10 +272,19 @@ export interface HeldOperationCallEnderOptions {
 const HELD_CALLS_END_PAGE_SIZE = 100;
 
 /**
+ * How often an ender reads again after it met a request somebody decides at that moment, and
+ * how long it waits before each: at most 3 times 200 ms. What is still held after that is
+ * ended by the cleanup job of ended requests, which finds a request whose run is gone.
+ */
+const HELD_CALLS_LOCKED_RETRIES = 3;
+const HELD_CALLS_LOCKED_RETRY_MS = 200;
+
+/**
  * Ends the held calls that match, for a reason outside any decision: their conversation or
  * the account of the person who made them is deleted. In one transaction per call the run is
  * ended as refused, where it still waits, and the request is `superseded` without its input.
- * A call somebody decides at the same moment is left to that decision.
+ * A call somebody decides at the same moment is read again shortly after; one that is still
+ * being decided then is left to that decision, and to the cleanup job if the decision fails.
  */
 export async function endHeldOperationCalls(
   options: HeldOperationCallEnderOptions,
@@ -287,6 +296,7 @@ export async function endHeldOperationCalls(
 ): Promise<number> {
   const { clientInstanceId, approvals } = options;
   let ended = 0;
+  let waits = 0;
   for (;;) {
     const held = await approvals.listApprovalRequests({
       clientInstanceId,
@@ -296,6 +306,7 @@ export async function endHeldOperationCalls(
       page: { limit: HELD_CALLS_END_PAGE_SIZE }
     });
     let endedOfPage = 0;
+    let locked = 0;
     for (const request of held) {
       try {
         await approvals.transitionPendingApprovalRequest({
@@ -325,9 +336,17 @@ export async function endHeldOperationCalls(
         if (!(isAppError(error) && (error.code === "CONFLICT" || error.code === "NOT_FOUND"))) {
           throw error;
         }
+        locked += 1;
       }
     }
     ended += endedOfPage;
+    if (locked > 0 && waits < HELD_CALLS_LOCKED_RETRIES) {
+      // The decision that holds the request is over in a moment. If it took the call, the
+      // request is no longer open; if it failed, the request is open again and is ended now.
+      waits += 1;
+      await new Promise((resolve) => setTimeout(resolve, HELD_CALLS_LOCKED_RETRY_MS));
+      continue;
+    }
     // A page that ended nothing would be read again as it is.
     if (held.length < HELD_CALLS_END_PAGE_SIZE || endedOfPage === 0) return ended;
   }

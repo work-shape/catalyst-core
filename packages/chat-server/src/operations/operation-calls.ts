@@ -1,4 +1,8 @@
-import { asUserId, createOperationRegistry } from "@vivd-catalyst/core";
+import {
+  asUserId,
+  createOperationRegistry,
+  isAgentAvailableInWorkspace
+} from "@vivd-catalyst/core";
 import type { RunOperationDeps } from "@vivd-catalyst/tool-execution";
 import {
   ApprovalRequestWorkflow,
@@ -73,6 +77,17 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
         collaborationWorkspaceId: workspaceId,
         userId: asUserId(userId)
       })) !== undefined,
+    agentAvailable: async ({ agentName, workspaceId }) => {
+      const [workspace, availability] = await Promise.all([
+        options.stores.workspaces.getWorkspace(clientInstanceId, workspaceId),
+        options.stores.configAssets.listAgentAvailability({ clientInstanceId })
+      ]);
+      // The rule a new run is started under (`getWorkspaceAssetSnapshot`).
+      return (
+        workspace !== undefined &&
+        isAgentAvailableInWorkspace(availability.get(agentName), workspace)
+      );
+    },
     logger: options.logger,
     now: options.operations?.now
   };

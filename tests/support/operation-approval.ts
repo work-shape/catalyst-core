@@ -33,7 +33,7 @@ export const approvalSetting: CentralPolicySetting = {
 export async function fixture(
   input: {
     now?: () => Date;
-    settings?: () => CentralPolicySetting[];
+    settings?: () => CentralPolicySetting[] | Promise<CentralPolicySetting[]>;
     /** The time the fixture operation may take. */
     timeoutMs?: number;
   } = {}

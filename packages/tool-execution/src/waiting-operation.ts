@@ -1,4 +1,5 @@
 import {
+  AGENT_TOOL_ACTION_PREFIX,
   AppError,
   INTERRUPTED_RUN_ERROR,
   assertOperationChecksRights,
@@ -7,6 +8,8 @@ import {
   type OperationDefinition,
   type OperationDenial,
   type OperationRun,
+  type OperationRunDecision,
+  type OperationRunEnd,
   type OperationRunId
 } from "@vivd-catalyst/core";
 import {
@@ -14,10 +17,10 @@ import {
   authorizeOrigin,
   createRunContext,
   deniedEnd,
-  denyRun,
   executeAdmitted,
   failRun,
   hashInput,
+  OperationNotBegunError,
   requireModuleOn,
   resolveGuardedPolicy,
   type RunContext,
@@ -54,21 +57,22 @@ export type ApprovedOperationEnd = { run?: OperationRun } & (
 /**
  * Executes a call another person approved, once, outside the request that approved it.
  *
- * The run is taken for execution in one statement, so of two takers one executes. Whoever
- * finds the run already taken executes nothing and answers what the run says. A run that is
- * still `running` then belongs to an attempt that ended without recording its outcome: the
- * caller is the only executor of the run, so the run is ended as interrupted and never runs a
- * second time.
+ * While the run still waits, the call is asked again as the person who made it, as that person
+ * is at this moment: the operation exists and its module is on, the input is the one that was
+ * asked for, the person is a member of the call's workspace, the surface and the right still
+ * allow it, and the policy with its guardrails does not refuse it. A call that may not run
+ * ends its run with the reason and is `refused`.
  *
- * Before anything of the operation runs, the call is asked again as the person who made it,
- * as that person is at this moment: the operation exists and its module is on, the input is
- * the one that was asked for, the person is a member of the call's workspace, the surface and
- * the right still allow it, and the policy with its guardrails does not refuse it. A call
- * that may not run ends its run with the reason and is `refused`.
+ * The run is then taken for execution in one statement, so of two takers one executes, and
+ * the operation is called at once: nothing is awaited between the two. A run that is found
+ * already taken executes nothing and answers what the run says; one that is still `running`
+ * was taken by an executor that is gone, so it is ended as interrupted and never runs a second
+ * time.
  *
- * The call then runs for at most the time its operation names. A call that takes longer, or
- * whose `signal` is aborted, is told to stop through its own signal and its run ends at once:
- * as failed with `TIMEOUT`, or as interrupted.
+ * A `signal` that is aborted before the run is taken throws `OperationNotBegunError`: the run
+ * still waits and whoever calls again executes it. Once it is taken, a call that takes longer
+ * than its operation names, or whose `signal` is aborted, is told to stop through its own
+ * signal and its run ends at once: as failed with `TIMEOUT`, or as interrupted.
  */
 export async function executeApprovedOperation(
   waiting: WaitingOperationCall,
@@ -76,27 +80,23 @@ export async function executeApprovedOperation(
   deps: RunOperationDeps,
   options: { signal?: AbortSignal } = {}
 ): Promise<ApprovedOperationEnd> {
-  const now = deps.now ?? (() => new Date());
-  const taken = await deps.runs.resume({
-    clientInstanceId: deps.clientInstanceId,
-    id: waiting.runId,
-    startedAt: now().toISOString(),
-    decision: {
-      mode: "approved",
-      by: approver.id,
-      byLabel: approver.label,
-      at: approver.at,
-      ...(approver.comment ? { comment: approver.comment } : {})
-    }
-  });
-  if (!taken) {
+  options.signal?.throwIfAborted();
+  const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: waiting.runId });
+  if (run?.status !== "pending_approval") {
     return readApprovedOperationEnd(waiting.runId, deps);
   }
-  const admitted = await admitAgain(taken, waiting, deps);
+  const decision: OperationRunDecision = {
+    mode: "approved",
+    by: approver.id,
+    byLabel: approver.label,
+    at: approver.at,
+    ...(approver.comment ? { comment: approver.comment } : {})
+  };
+  const admitted = await admitAgain(run, waiting, deps, decision);
   if ("end" in admitted) {
     return admitted.end;
   }
-  return executeWithinTime(admitted.context, options.signal);
+  return executeWithinTime(admitted.context, decision, options.signal);
 }
 
 /**
@@ -155,14 +155,29 @@ export async function readApprovedOperationEnd(
 const UNKNOWN_END = { code: "INTERNAL", message: "The run does not say how the call ended." };
 
 /**
- * Asks again whether a call that was taken for execution may run. A call that may not has its
- * run ended here, because nothing else will end it.
+ * Asks again whether a call that waits may run. A call that may not has its run ended here,
+ * with the approval it had, because nothing else will end it. A run that stopped waiting
+ * meanwhile, because its time ran out, says itself what became of it.
  */
 async function admitAgain(
   run: OperationRun,
   waiting: WaitingOperationCall,
-  deps: RunOperationDeps
+  deps: RunOperationDeps,
+  decision: OperationRunDecision
 ): Promise<{ context: RunContext } | { end: ApprovedOperationEnd }> {
+  const now = deps.now ?? (() => new Date());
+  /** Ends the waiting run. Without a run to answer, the run did not wait any more. */
+  const endWaiting = (end: Extract<OperationRunEnd, { status: "denied" | "failed" }>) =>
+    deps.runs.endWaiting({ clientInstanceId: deps.clientInstanceId, id: run.id, end, decision });
+  const refused = async (
+    ended: OperationRun | undefined,
+    error: (ended: OperationRun) => { code: string; message: string }
+  ): Promise<{ end: ApprovedOperationEnd }> => ({
+    end: ended
+      ? { execution: "refused", run: ended, error: error(ended) }
+      : await readApprovedOperationEnd(run.id, deps)
+  });
+
   const found = await waitingContext(run, waiting, deps).catch((error: unknown) => {
     if (error instanceof AppError && error.code === "NOT_FOUND") {
       return { gone: { code: error.code, message: error.message } };
@@ -170,19 +185,29 @@ async function admitAgain(
     throw error;
   });
   if ("gone" in found) {
-    return { end: await endWithoutContext(run, deps, { error: found.gone }) };
+    const { gone } = found;
+    const ended = await endWaiting({
+      status: "failed",
+      finishedAt: now().toISOString(),
+      error: { ...gone, unexecuted: true }
+    });
+    return refused(ended, () => gone);
   }
   if ("actorGone" in found) {
-    return {
-      end: await endWithoutContext(run, deps, {
-        denial: {
+    const ended = await endWaiting(
+      deniedEnd(
+        { now },
+        {
           kind: "forbidden",
           action: found.definition.action ?? found.definition.name,
           reason: "holder_inactive"
-        },
-        message: "The account of the person who made this call is closed or deleted."
-      })
-    };
+        }
+      )
+    );
+    return refused(ended, (denied) => ({
+      code: denied.error?.code ?? "FORBIDDEN",
+      message: "The account of the person who made this call is closed or deleted."
+    }));
   }
   const context = found;
   const { definition, call } = context;
@@ -190,27 +215,32 @@ async function admitAgain(
   // a schema that changes what it reads would refuse its own output. The hash says that what
   // is executed is what was asked for.
   if (hashInput(call.input) !== run.inputHash) {
-    const error = new AppError("VALIDATION_FAILED", "The input of this call is no longer valid");
-    const failed = await failRun(context, error, true);
-    return {
-      end: {
-        execution: "refused",
-        run: failed.run,
-        error: { code: error.code, message: error.message }
-      }
+    const error = {
+      code: "VALIDATION_FAILED",
+      message: "The input of this call is no longer valid"
     };
+    const ended = await endWaiting({
+      status: "failed",
+      finishedAt: now().toISOString(),
+      error: { ...error, unexecuted: true }
+    });
+    if (ended) {
+      await context.emit("operation.failed", "after", { status: "failed", reason: error.code });
+    }
+    return refused(ended, () => error);
   }
   const refuse = async (denial: OperationDenial, message?: string) => {
-    const denied = await denyRun(context, denial);
-    return {
-      end: {
-        execution: "refused" as const,
-        run: denied.run,
-        error: message
-          ? { code: denied.run.error?.code ?? "FORBIDDEN", message }
-          : (denied.run.error ?? UNKNOWN_END)
-      }
-    };
+    const end = deniedEnd(context, denial);
+    const ended = await endWaiting(end);
+    if (ended) {
+      await context.emit("operation.denied", "after", {
+        status: "denied",
+        reason: end.error.code
+      });
+    }
+    return refused(ended, (denied) =>
+      message ? { code: denied.error?.code ?? "FORBIDDEN", message } : (denied.error ?? UNKNOWN_END)
+    );
   };
   if (
     call.workspaceId !== undefined &&
@@ -224,6 +254,24 @@ async function admitAgain(
         reason: "no_grant"
       },
       "The person who made this call is no longer a member of its workspace."
+    );
+  }
+  if (
+    call.origin.kind === "agent" &&
+    call.workspaceId !== undefined &&
+    deps.agentAvailable &&
+    !(await deps.agentAvailable({
+      agentName: call.origin.agentName,
+      workspaceId: call.workspaceId
+    }))
+  ) {
+    return refuse(
+      {
+        kind: "forbidden",
+        action: `${AGENT_TOOL_ACTION_PREFIX}${call.origin.toolName}`,
+        reason: "no_grant"
+      },
+      "The agent that made this call is no longer available in its workspace."
     );
   }
   const access = await deps.authorizer.forActor(call.actor);
@@ -242,33 +290,6 @@ async function admitAgain(
     return refuse(guarded.denial);
   }
   return { context };
-}
-
-/** Ends a run that was taken for execution and whose operation or actor is gone. */
-async function endWithoutContext(
-  run: OperationRun,
-  deps: RunOperationDeps,
-  reason:
-    { denial: OperationDenial; message: string } | { error: { code: string; message: string } }
-): Promise<ApprovedOperationEnd> {
-  const now = deps.now ?? (() => new Date());
-  const finishedAt = now().toISOString();
-  const ended = await deps.runs.finish({
-    clientInstanceId: deps.clientInstanceId,
-    id: run.id,
-    end:
-      "denial" in reason
-        ? deniedEnd({ now }, reason.denial)
-        : { status: "failed", finishedAt, error: { ...reason.error, unexecuted: true } }
-  });
-  return {
-    execution: "refused",
-    run: ended ?? run,
-    error:
-      "denial" in reason
-        ? { code: ended?.error?.code ?? "FORBIDDEN", message: reason.message }
-        : reason.error
-  };
 }
 
 /**
@@ -303,9 +324,13 @@ async function waitingContext(
   });
 }
 
-/** Runs the call for at most the time its operation names, and until `signal` is aborted. */
+/**
+ * Takes the run and calls the operation, for at most the time its operation names and until
+ * `signal` is aborted.
+ */
 async function executeWithinTime(
   admitted: RunContext,
+  decision: OperationRunDecision,
   signal: AbortSignal | undefined
 ): Promise<ApprovedOperationEnd> {
   const { definition, deps, call } = admitted;
@@ -317,14 +342,48 @@ async function executeWithinTime(
   };
   const access = await deps.authorizer.forActor(call.actor);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let onAbort: (() => void) | undefined;
+  let cutAfter: (cause: "timeout" | "aborted") => void = () => undefined;
   const cut = new Promise<"timeout" | "aborted">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), timeoutMs);
-    onAbort = () => resolve("aborted");
-    if (signal?.aborted) onAbort();
-    else signal?.addEventListener("abort", onAbort, { once: true });
+    cutAfter = resolve;
   });
-  const execution = executeAdmitted(context, access);
+  const onAbort = () => cutAfter("aborted");
+  /** What kept the call from being dispatched, where something did. */
+  let notBegun: ApprovedOperationEnd | "still_waiting" | undefined;
+  /**
+   * The last thing before the operation is called: the run is marked as started here and not
+   * earlier, and only while nobody asked this executor to stop.
+   */
+  const begin = async (): Promise<void> => {
+    if (signal?.aborted) {
+      notBegun = "still_waiting";
+      throw new OperationNotBegunError();
+    }
+    const taken = await deps.runs.resume({
+      clientInstanceId: deps.clientInstanceId,
+      id: context.run.id,
+      startedAt: context.now().toISOString(),
+      decision
+    });
+    if (!taken) {
+      notBegun = await readApprovedOperationEnd(context.run.id, deps);
+      throw new OperationNotBegunError();
+    }
+    if (signal?.aborted) {
+      // The stop came while the run was being taken. Nothing is dispatched after a stop, and
+      // the run that is marked as started cannot be taken a second time.
+      const interrupted = await deps.runs.markInterrupted({
+        clientInstanceId: deps.clientInstanceId,
+        id: taken.id
+      });
+      notBegun = interrupted
+        ? { execution: "interrupted", run: interrupted, error: INTERRUPTED_RUN_ERROR }
+        : await readApprovedOperationEnd(taken.id, deps);
+      throw new OperationNotBegunError();
+    }
+    timer = setTimeout(() => cutAfter("timeout"), timeoutMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  };
+  const execution = executeAdmitted(context, access, undefined, begin);
   try {
     const first = await Promise.race([execution, cut]);
     if (first === "timeout") {
@@ -371,9 +430,15 @@ async function executeWithinTime(
       default:
         throw new AppError("INTERNAL", `An approved call ended as '${result.status}'`);
     }
+  } catch (error) {
+    if (error instanceof OperationNotBegunError && notBegun !== undefined) {
+      if (notBegun === "still_waiting") throw error;
+      return notBegun;
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
-    if (onAbort) signal?.removeEventListener("abort", onAbort);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 

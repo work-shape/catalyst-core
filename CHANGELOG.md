@@ -122,9 +122,12 @@ contain breaking changes; a patch version does not.
   that somebody else is deciding at that moment. Declining or withdrawing ends the run as
   `denied` with the reason `DECLINED`. When the job runs the call it asks again: the caller's
   account is open, they are still a member of the workspace, they still hold the right, the
-  agent still lists the tool, and the policy and the guardrails still let the call through.
-  Otherwise the call does not run and its request ends as superseded with the reason, shown
-  as "Not executed". A request says what became of its call: approved and executed, approved
+  agent is still available in the workspace and still lists the tool, and the policy and the
+  guardrails still let the call through. Otherwise the call does not run and its request ends
+  as superseded with the reason, shown as "Not executed". The run is marked as started
+  immediately before the operation is called. A worker that is told to stop before that calls
+  nothing: the call stays queued and the next worker executes it. Only a call that was being
+  executed when the worker stopped is recorded as interrupted, and is not run again. A request says what became of its call: approved and executed, approved
   and failed (also when the target changed while it waited, for example an asset write whose
   expected revision no longer matches), approved and interrupted, not executed, or expired;
   the thread is told the same and reads "active" only for a call that succeeded. A held call
@@ -135,7 +138,10 @@ contain breaking changes; a patch version does not.
   the call ran, on a rejection, a withdrawal or an expiry, and when the conversation or the
   account of the caller is deleted. The request keeps which run, operation, actor and origin it
   was. The job `operation_call.remove_ended_input` (every six hours and at start, 2,500
-  requests a tick) removes the input from requests that ended before this release.
+  requests a tick) removes the input from requests that ended before this release. It also
+  ends, as not executed, a request that still keeps its call when that call can never run:
+  its run no longer exists, or the account of the caller is being deleted. This reaches a
+  request whose conversation or account was deleted while a decision on it failed.
   The page **Instance > Operations** in the settings lists the runs with filters for operation,
   status, origin and workspace and shows one run with its decision and correlation id, without
   input or output; it needs `audit.view`. Two scheduled job kinds keep runs from staying open:
