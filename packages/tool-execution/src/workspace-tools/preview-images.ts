@@ -15,7 +15,7 @@ import {
 } from "../workspace-tool-schemas";
 import { failed, normalizeWorkspaceFilePath } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
-import { ensureWorkspace } from "./workspace";
+import { resolveWorkspaceHandle } from "./workspace";
 
 export const EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE = "execution_workspace";
 
@@ -83,13 +83,13 @@ async function previewWorkspaceImagePaths(
     normalizedPaths.push(normalizedPath.value);
   }
 
-  const workspace = await ensureWorkspace(deps, context);
+  const workspace = await resolveWorkspaceHandle(deps, context);
   if (workspace.status === "failed") {
     return workspace.result;
   }
   const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
     clientInstanceId: context.clientInstanceId,
-    workspaceId: workspace.value.id
+    workspaceId: workspace.value.workspaceId
   });
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const images: z.infer<typeof workspacePreviewImagesOutputSchema>["images"] = [];
@@ -135,7 +135,7 @@ async function previewWorkspaceImagePaths(
     }
     const artifact = await deps.store.files.createManagedArtifact({
       clientInstanceId: context.clientInstanceId,
-      conversationId: workspace.value.conversationId,
+      conversationId: workspace.value.holder.id,
       kind: previewImageKind(mimeType),
       objectKey: file.objectKey,
       filename: path.basename(file.path),
@@ -144,7 +144,7 @@ async function previewWorkspaceImagePaths(
       checksum: file.checksum,
       metadata: {
         source: EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
-        workspaceId: workspace.value.id,
+        workspaceId: workspace.value.workspaceId,
         workspacePath: file.path
       }
     });
@@ -183,7 +183,7 @@ async function previewWorkspaceImagePaths(
       artifacts: artifacts.length > 0 ? artifacts : undefined,
       auditSummary: {
         action: "workspace.preview_images",
-        subject: workspace.value.id,
+        subject: workspace.value.workspaceId,
         metadata: {
           status: "ready",
           source: "workspace_path",

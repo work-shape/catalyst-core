@@ -7,7 +7,7 @@ import {
 } from "../workspace-tool-schemas";
 import { readPromotedFileArtifacts } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
-import { ensureWorkspace } from "./workspace";
+import { resolveWorkspaceHandle } from "./workspace";
 
 export function workspaceListFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
@@ -26,17 +26,17 @@ export async function listWorkspaceFiles(
   _input: z.infer<typeof workspaceListFilesInputSchema>,
   context: ToolExecutionContext
 ): Promise<ToolHandlerResult<z.infer<typeof workspaceListFilesOutputSchema>>> {
-  const workspace = await ensureWorkspace(deps, context);
+  const workspace = await resolveWorkspaceHandle(deps, context);
   if (workspace.status === "failed") {
     return workspace.result;
   }
   const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
     clientInstanceId: context.clientInstanceId,
-    workspaceId: workspace.value.id
+    workspaceId: workspace.value.workspaceId
   });
   return toolSuccess(
     {
-      workspaceId: workspace.value.id,
+      workspaceId: workspace.value.workspaceId,
       files: files.map((file) => ({
         path: file.path,
         byteSize: file.byteSize,
@@ -50,7 +50,7 @@ export async function listWorkspaceFiles(
     {
       auditSummary: {
         action: "workspace.list_files",
-        subject: workspace.value.id,
+        subject: workspace.value.workspaceId,
         metadata: {
           count: files.length
         }

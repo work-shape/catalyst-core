@@ -26,7 +26,7 @@ import {
   type ValidationResult
 } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
-import { ensureWorkspace } from "./workspace";
+import { resolveWorkspaceHandle } from "./workspace";
 
 export function workspaceApplyPatchTool(deps: WorkspaceToolDependencies) {
   return defineTool({
@@ -53,14 +53,14 @@ export async function applyWorkspacePatch(
   if (changes.status === "failed") {
     return changes.result;
   }
-  const workspace = await ensureWorkspace(deps, context);
+  const workspace = await resolveWorkspaceHandle(deps, context);
   if (workspace.status === "failed") {
     return workspace.result;
   }
   const prepared = await preparePatchChanges(deps, {
     changes: changes.value,
     context,
-    workspaceId: workspace.value.id
+    workspaceId: workspace.value.workspaceId
   });
   if (prepared.status === "failed") {
     return prepared.result;
@@ -81,8 +81,8 @@ export async function applyWorkspacePatch(
   for (const write of prepared.value.writes) {
     const stored = await deps.fileStore.putWorkspaceFile({
       clientInstanceId: context.clientInstanceId,
-      conversationId: workspace.value.conversationId,
-      workspaceId: workspace.value.id,
+      conversationId: workspace.value.holder.id,
+      workspaceId: workspace.value.workspaceId,
       commandId: patchObjectKeyId,
       path: write.path,
       bytes: write.bytes,
@@ -95,7 +95,7 @@ export async function applyWorkspacePatch(
       deps.telemetry,
       {
         clientInstanceId: context.clientInstanceId,
-        workspaceId: workspace.value.id,
+        workspaceId: workspace.value.workspaceId,
         path: write.path,
         objectKey: stored.objectKey,
         byteSize: write.bytes.byteLength,
@@ -122,7 +122,7 @@ export async function applyWorkspacePatch(
   for (const deletion of prepared.value.deletes) {
     const deleted = await deps.store.executionWorkspaces.deleteWorkspaceFile({
       clientInstanceId: context.clientInstanceId,
-      workspaceId: workspace.value.id,
+      workspaceId: workspace.value.workspaceId,
       path: deletion.path,
       deletedAt: deps.now()
     });
@@ -133,14 +133,14 @@ export async function applyWorkspacePatch(
 
   return toolSuccess(
     {
-      workspaceId: workspace.value.id,
+      workspaceId: workspace.value.workspaceId,
       changedFiles,
       deletedFiles
     },
     {
       auditSummary: {
         action: "workspace.apply_patch",
-        subject: workspace.value.id,
+        subject: workspace.value.workspaceId,
         metadata: {
           changedCount: changedFiles.length,
           deletedCount: deletedFiles.length

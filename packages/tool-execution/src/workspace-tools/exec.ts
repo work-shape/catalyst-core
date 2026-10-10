@@ -34,7 +34,7 @@ import {
 } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies, WorkspaceToolStore } from "./dependencies";
 import { normalizeExecInput } from "./exec-input";
-import { ensureWorkspace } from "./workspace";
+import { resolveWorkspaceHandle } from "./workspace";
 
 export function workspaceExecTool(deps: WorkspaceToolDependencies) {
   return defineTool({
@@ -59,12 +59,12 @@ export async function execWorkspaceCommand(
   if (normalized.status === "failed") {
     return normalized.result;
   }
-  const workspace = await ensureWorkspace(deps, context);
+  const workspace = await resolveWorkspaceHandle(deps, context);
   if (workspace.status === "failed") {
     return workspace.result;
   }
 
-  const queued = await enqueueCommand(deps, context, workspace.value.id, normalized.value);
+  const queued = await enqueueCommand(deps, context, workspace.value.workspaceId, normalized.value);
   if (queued.status === "failed") {
     return queued.result;
   }
@@ -94,7 +94,7 @@ export async function execWorkspaceCommand(
             (
               await deps.store.executionWorkspaces.listWorkspaceFiles({
                 clientInstanceId: context.clientInstanceId,
-                workspaceId: workspace.value.id
+                workspaceId: workspace.value.workspaceId
               })
             ).map((file) => file.path)
           )
@@ -109,7 +109,7 @@ export async function execWorkspaceCommand(
     }
   }
 
-  const output = commandToExecOutput(resultCommand.value, workspace.value.id);
+  const output = commandToExecOutput(resultCommand.value, workspace.value.workspaceId);
   const artifacts = commandArtifacts(resultCommand.value);
   return toolSuccess(output, {
     artifacts: artifacts.length > 0 ? artifacts : undefined,

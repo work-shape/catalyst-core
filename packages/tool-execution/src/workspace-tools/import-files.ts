@@ -24,7 +24,7 @@ import {
   type ValidationResult
 } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
-import { ensureWorkspace } from "./workspace";
+import { resolveWorkspaceHandle } from "./workspace";
 
 export function workspaceImportFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
@@ -47,16 +47,21 @@ export async function importWorkspaceFiles(
   if (!deps.fileStore || !deps.sourceFileReader) {
     return failed("handler_failed", "Workspace source file import is not configured");
   }
-  const workspace = await ensureWorkspace(deps, context);
+  const workspace = await resolveWorkspaceHandle(deps, context);
   if (workspace.status === "failed") {
     return workspace.result;
   }
 
-  const files = await loadImportSourceFiles(deps, input, context, workspace.value.conversationId);
+  const files = await loadImportSourceFiles(deps, input, context, workspace.value.holder.id);
   if (files.status === "failed") {
     return files.result;
   }
-  const capacity = await validateImportCapacity(deps, workspace.value.id, context, files.value);
+  const capacity = await validateImportCapacity(
+    deps,
+    workspace.value.workspaceId,
+    context,
+    files.value
+  );
   if (capacity.status === "failed") {
     return capacity.result;
   }
@@ -65,8 +70,8 @@ export async function importWorkspaceFiles(
   for (const file of files.value) {
     const stored = await deps.fileStore.putWorkspaceFile({
       clientInstanceId: context.clientInstanceId,
-      conversationId: workspace.value.conversationId,
-      workspaceId: workspace.value.id,
+      conversationId: workspace.value.holder.id,
+      workspaceId: workspace.value.workspaceId,
       commandId: createPlatformId<"WorkspaceCommandId">("wcmd_import"),
       path: file.path,
       bytes: file.bytes,
@@ -79,7 +84,7 @@ export async function importWorkspaceFiles(
       deps.telemetry,
       {
         clientInstanceId: context.clientInstanceId,
-        workspaceId: workspace.value.id,
+        workspaceId: workspace.value.workspaceId,
         path: file.path,
         objectKey: stored.objectKey,
         byteSize: file.byteSize,
@@ -105,13 +110,13 @@ export async function importWorkspaceFiles(
 
   return toolSuccess(
     {
-      workspaceId: workspace.value.id,
+      workspaceId: workspace.value.workspaceId,
       importedFiles
     },
     {
       auditSummary: {
         action: "workspace.import_files",
-        subject: workspace.value.id,
+        subject: workspace.value.workspaceId,
         metadata: {
           count: importedFiles.length
         }
