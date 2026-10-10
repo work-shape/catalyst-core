@@ -23,15 +23,68 @@ function typescriptFiles(directory: string): string[] {
   });
 }
 
+const sourceDirectory = join(process.cwd(), "packages/tool-execution/src");
+
+/** Every file that addresses a workspace: the workspace tools and the tool that saves a Page. */
+function workspaceAddressingFiles(): string[] {
+  return [
+    ...typescriptFiles(join(sourceDirectory, "workspace-tools")),
+    ...readdirSync(sourceDirectory)
+      .filter((name) => /^(?:workspace|page)-.*\.ts$/u.test(name))
+      .map((name) => join(sourceDirectory, name))
+  ];
+}
+
+// The only lines of these files that may name the tool request. A read through an alias or a
+// destructured name passes the patterns above, so any other mention fails here.
+const TOOL_REQUEST_MENTIONS: Record<string, string[]> = {
+  "workspace-tools/workspace-handle-resolver.ts": [
+    "const conversationId = context.toolRequest?.conversationId;"
+  ],
+  "workspace-tools/exec.ts": [
+    "agentRunId: context.toolRequest?.agentRunId,",
+    "toolCallId: context.toolRequest?.toolCallId,"
+  ],
+  "workspace-preview-images.ts": ["if (!context.toolRequest) {"]
+};
+
+function toolRequestMentions(source: string): string[] {
+  return source
+    .split("\n")
+    .filter((line) => /toolRequest/u.test(line))
+    .map((line) => line.trim());
+}
+
 describe("the workspace handle boundary", () => {
+  it("covers the tool that saves a Page", () => {
+    expect(workspaceAddressingFiles().map((file) => relative(sourceDirectory, file))).toContain(
+      "page-save-tool.ts"
+    );
+  });
+
+  it("names the tool request only on the listed lines", () => {
+    const mentions = Object.fromEntries(
+      workspaceAddressingFiles()
+        .map((file): [string, string[]] => [
+          relative(sourceDirectory, file),
+          toolRequestMentions(readFileSync(file, "utf8"))
+        ])
+        .filter(([, lines]) => lines.length > 0)
+    );
+
+    expect(mentions).toEqual(TOOL_REQUEST_MENTIONS);
+  });
+
+  it.each([
+    "const request = context.toolRequest;",
+    "const { toolRequest } = context;",
+    "const { toolRequest: request } = context;"
+  ])("counts the alias in %s as a mention", (source) => {
+    expect(toolRequestMentions(source)).toEqual([source]);
+  });
+
   it("reads the tool request's conversation only in the handle resolver", () => {
-    const sourceDirectory = join(process.cwd(), "packages/tool-execution/src");
-    const files = [
-      ...typescriptFiles(join(sourceDirectory, "workspace-tools")),
-      ...readdirSync(sourceDirectory)
-        .filter((name) => /^workspace-.*\.ts$/u.test(name))
-        .map((name) => join(sourceDirectory, name))
-    ];
+    const files = workspaceAddressingFiles();
     const readers = files
       .filter((file) => readsToolRequestConversation(readFileSync(file, "utf8")))
       .map((file) => relative(sourceDirectory, file));
