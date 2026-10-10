@@ -22,7 +22,10 @@ contain breaking changes; a patch version does not.
   `agent_models.manage`; a binding off the list is refused for everyone, and an agent that names a
   provider or no model is refused unless the writer holds `agent_models.manage`. A grant's
   `grantedBy` and a Namespace's `createdBy` are left out for a caller who is not shown that user.
-  Deleting a user deletes the user's grant rows. No interface for it ships yet. A migration adds
+  Deleting a user deletes the user's grant rows. The page **Instance > Access** in the settings
+  writes and shows all of this in three tabs, Namespaces, Grants and Check, and is shown to holders
+  of `users.manage`; a grant row of asset scope answers with `scopeAsset`, the kind and name of
+  its asset and whether it still exists. A migration adds
   the tables `permission_grants` and `namespaces` and changes no other table; no user, service
   principal or API key gains or loses a right. `node --experimental-strip-types
 scripts/verify-permissions.ts` with `DATABASE_URL` set compares every holder's rights with what

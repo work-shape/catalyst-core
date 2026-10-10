@@ -39,6 +39,7 @@ export default defineConfig({
             "operate/runner-security",
             "operate/auth-and-embedding",
             "operate/governance",
+            "operate/rights-and-namespaces",
             "operate/instance-brief"
           ]
         },
