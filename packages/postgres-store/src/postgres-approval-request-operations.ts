@@ -4,7 +4,8 @@ import {
   AppError,
   createPlatformId,
   type ApprovalRequest,
-  type ApprovalRequestStore
+  type ApprovalRequestStore,
+  type PlatformStores
 } from "@vivd-catalyst/core";
 import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
 import type { PostgresConnection } from "./postgres-database";
@@ -16,7 +17,7 @@ export async function createApprovalRequest(
   db: PostgresConnection,
   input: Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
-  const { runFence, ...request } = input;
+  const { runFence, pendingLimits, ...request } = input;
   const insert = async (tx: PostgresConnection) => {
     const now = new Date();
     const [row] = await tx
@@ -33,11 +34,52 @@ export async function createApprovalRequest(
     if (!row) throw new AppError("INTERNAL", "Failed to create approval request");
     return mapApprovalRequest(row);
   };
-  if (!runFence) return insert(db);
+  if (!runFence && !pendingLimits) return insert(db);
   return db.transaction(async (tx) => {
-    await requireClaimedAgentRun(tx, request.clientInstanceId, runFence);
+    if (runFence) await requireClaimedAgentRun(tx, request.clientInstanceId, runFence);
+    if (pendingLimits) await requireBelowPendingLimits(tx, request, pendingLimits);
     return insert(tx);
   });
+}
+
+/**
+ * Counts the pending requests of the kind under a lock that every filing of that kind on the
+ * instance takes, held until the insert commits. Of two requests filed at the same moment the
+ * second counts the first.
+ */
+async function requireBelowPendingLimits(
+  tx: PostgresConnection,
+  request: Pick<ApprovalRequest, "clientInstanceId" | "kind" | "requestedBy">,
+  limits: NonNullable<Parameters<ApprovalRequestStore["createApprovalRequest"]>[0]["pendingLimits"]>
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`approval_requests:${request.clientInstanceId}:${request.kind}`}, 0))`
+  );
+  const [row] = await tx
+    .select({
+      own: sql<number>`count(*) filter (where ${requestedBy(request.requestedBy.id)})::int`,
+      all: count()
+    })
+    .from(approvalRequests)
+    .where(
+      and(
+        eq(approvalRequests.clientInstanceId, request.clientInstanceId),
+        eq(approvalRequests.kind, request.kind),
+        eq(approvalRequests.status, "pending")
+      )
+    );
+  if (limits.perRequester !== undefined && (row?.own ?? 0) >= limits.perRequester) {
+    throw new AppError("RATE_LIMITED", "Too many of your requests of this kind are pending", {
+      limit: "requester",
+      max: limits.perRequester
+    });
+  }
+  if (limits.perKind !== undefined && (row?.all ?? 0) >= limits.perKind) {
+    throw new AppError("RATE_LIMITED", "Too many requests of this kind are pending", {
+      limit: "kind",
+      max: limits.perKind
+    });
+  }
 }
 
 export async function getApprovalRequest(
@@ -80,7 +122,10 @@ export async function listApprovalRequests(
           : gte(approvalRequests.updatedAt, input.updatedSince),
         input.conversationId === undefined
           ? undefined
-          : sql`${approvalRequests.origin}->>'conversationId' = ${input.conversationId}`
+          : sql`${approvalRequests.origin}->>'conversationId' = ${input.conversationId}`,
+        input.payloadKey === undefined
+          ? undefined
+          : sql`jsonb_exists(${approvalRequests.payload}, ${input.payloadKey})`
       )
     )
     .orderBy(desc(approvalRequests.createdAt), desc(approvalRequests.id))
@@ -132,33 +177,67 @@ function requestedBy(userId: string) {
   return sql`(${approvalRequests.requestedBy}->>'id') = ${userId}`;
 }
 
+/**
+ * Runs `fn` in a transaction with the stores bound to it, and tells the workers of a job that
+ * was enqueued inside once it committed.
+ */
+export type TransactWithStores = <Result>(
+  fn: (tx: PostgresConnection, stores: PlatformStores) => Promise<Result>
+) => Promise<Result>;
+
 export async function transitionPendingApprovalRequest(
-  db: PostgresConnection,
+  transact: TransactWithStores,
   input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
-  return transition(db, input, "pending");
+  return transition(transact, input, "pending");
 }
 export async function transitionApprovedApprovalRequest(
-  db: PostgresConnection,
+  transact: TransactWithStores,
   input: Parameters<ApprovalRequestStore["transitionApprovedApprovalRequest"]>[0]
 ): Promise<ApprovalRequest> {
-  return transition(db, input, "approved");
+  return transition(transact, input, "approved");
 }
+
+/** Postgres answers a `FOR UPDATE NOWAIT` on a locked row with this code. */
+const LOCK_NOT_AVAILABLE = "55P03";
+
+function isLockNotAvailable(error: unknown): boolean {
+  for (let cause = error, depth = 0; depth < 4; depth++) {
+    if (typeof cause !== "object" || cause === null) return false;
+    if ("code" in cause && cause.code === LOCK_NOT_AVAILABLE) return true;
+    cause = "cause" in cause ? cause.cause : undefined;
+  }
+  return false;
+}
+
 async function transition(
-  db: PostgresConnection,
+  transact: TransactWithStores,
   input: Parameters<ApprovalRequestStore["transitionPendingApprovalRequest"]>[0],
   expectedStatus: "pending" | "approved"
 ): Promise<ApprovalRequest> {
-  return db.transaction(async (tx) => {
+  return transact(async (tx, stores) => {
     const identity = and(
       eq(approvalRequests.clientInstanceId, input.clientInstanceId),
       eq(approvalRequests.id, input.requestId)
     );
-    const [row] = await tx.select().from(approvalRequests).where(identity).for("update").limit(1);
+    // The lock is not waited for. A decision that waited would hold its connection for as long
+    // as the one before it takes, and a pool of waiting decisions serves nobody else.
+    const [row] = await tx
+      .select()
+      .from(approvalRequests)
+      .where(identity)
+      .for("update", { noWait: true })
+      .limit(1)
+      .catch((error: unknown) => {
+        if (isLockNotAvailable(error)) {
+          throw new AppError("CONFLICT", "Approval request is being decided right now");
+        }
+        throw error;
+      });
     if (!row) throw new AppError("NOT_FOUND", "Approval request was not found");
     if (row.status !== expectedStatus)
       throw new AppError("CONFLICT", `Approval request is no longer ${expectedStatus}`);
-    const outcome = await input.resolve(mapApprovalRequest(row));
+    const outcome = await input.resolve(mapApprovalRequest(row), stores);
     const [updated] = await tx
       .update(approvalRequests)
       .set({
@@ -167,6 +246,7 @@ async function transition(
           ? { ...outcome.decision, ...(outcome.reversion ? { reversion: outcome.reversion } : {}) }
           : null,
         applyResult: outcome.applyResult ?? null,
+        ...(outcome.payload ? { payload: outcome.payload } : {}),
         updatedAt: new Date()
       })
       .where(and(identity, eq(approvalRequests.status, expectedStatus)))
@@ -176,4 +256,22 @@ async function transition(
     await appendApprovalDecision(tx, request);
     return request;
   });
+}
+
+export async function replaceEndedApprovalRequestPayload(
+  db: PostgresConnection,
+  input: Parameters<ApprovalRequestStore["replaceEndedApprovalRequestPayload"]>[0]
+): Promise<boolean> {
+  const rows = await db
+    .update(approvalRequests)
+    .set({ payload: input.payload })
+    .where(
+      and(
+        eq(approvalRequests.clientInstanceId, input.clientInstanceId),
+        eq(approvalRequests.id, input.requestId),
+        ne(approvalRequests.status, "pending")
+      )
+    )
+    .returning({ id: approvalRequests.id });
+  return rows.length > 0;
 }

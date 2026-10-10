@@ -10,12 +10,14 @@ import {
   type ApprovalRequestDecision,
   type ApprovalRequestHandler,
   type ApprovalRequestHandlerRegistry,
+  type ApprovalRequestPendingLimits,
   type ApprovalRequestStatus,
   type ApprovalRequestStore,
   type AuditRecorder,
   type AuthenticatedUser,
   type ClientInstanceId,
   type JsonObject,
+  type ApprovalTransactionStores,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
@@ -53,7 +55,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   async createRequest(
     user: AuthenticatedUser,
     context: CallContext,
-    command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin">
+    command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin"> & {
+      pendingLimits?: ApprovalRequestPendingLimits;
+    }
   ): Promise<ApprovalRequest> {
     this.assertClientInstance(user);
     const handler = this.handler(command.kind);
@@ -181,7 +185,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const updated = await this.options.store.transitionPendingApprovalRequest({
       clientInstanceId: this.options.clientInstanceId,
       requestId: request.id,
-      resolve: async (pending) => {
+      resolve: async (pending, stores) => {
         const decision = {
           approved: command.decision === "approve",
           decidedBy: user.id,
@@ -189,18 +193,27 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
           decidedAt: new Date().toISOString(),
           ...(comment ? { comment } : {})
         };
+        const handlerContext = this.handlerContext(pending, context, stores);
         if (command.decision !== "approve") {
-          await this.assertNotApplied(pending, context);
-          await this.endWithoutApproval(pending, decision, context);
+          await this.assertNotApplied(pending, handlerContext);
+          await this.endWithoutApproval(pending, decision, handlerContext);
           return {
             status: command.decision === "reject" ? "rejected" : "changes_requested",
-            decision
+            decision,
+            ...this.endedPayload(pending)
           };
         }
         const payload = handler.validate(pending.payload);
-        const handlerContext = this.handlerContext(pending, context);
-        if (await handler.isStale(payload, handlerContext)) {
-          return { status: "superseded", decision };
+        const stale = await handler.isStale(payload, handlerContext);
+        if (stale) {
+          // A kind that says why keeps the reason, and a decision that came too late to
+          // count is not recorded as one.
+          return {
+            status: "superseded",
+            ...(typeof stale === "object" ? { applyResult: stale.result } : {}),
+            ...(typeof stale === "object" && stale.undecided ? {} : { decision }),
+            ...this.endedPayload(pending)
+          };
         }
         const applyResult = await handler.apply(payload, user, handlerContext);
         return { status: "approved", decision, applyResult };
@@ -224,16 +237,17 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const updated = await this.options.store.transitionPendingApprovalRequest({
       clientInstanceId: this.options.clientInstanceId,
       requestId,
-      resolve: async (pending) => {
-        await this.assertNotApplied(pending, context);
+      resolve: async (pending, stores) => {
+        const handlerContext = this.handlerContext(pending, context, stores);
+        await this.assertNotApplied(pending, handlerContext);
         const decision = {
           approved: false,
           decidedBy: user.id,
           decidedByLabel: user.displayLabel,
           decidedAt: new Date().toISOString()
         };
-        await this.endWithoutApproval(pending, decision, context);
-        return { status: "withdrawn", decision };
+        await this.endWithoutApproval(pending, decision, handlerContext);
+        return { status: "withdrawn", decision, ...this.endedPayload(pending) };
       }
     });
     await this.record(user, context, "approval_request.withdrawn", updated);
@@ -279,9 +293,12 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
    * Apply may have committed before recording the approval failed. Such a request must not end
    * as rejected or withdrawn while its change is live; approving it again records the outcome.
    */
-  private async assertNotApplied(pending: ApprovalRequest, context: CallContext): Promise<void> {
+  private async assertNotApplied(
+    pending: ApprovalRequest,
+    context: ApprovalRequestContext
+  ): Promise<void> {
     const handler = this.options.handlers.get(pending.kind);
-    if (await handler?.isApplied?.(pending.payload, this.handlerContext(pending, context))) {
+    if (await handler?.isApplied?.(pending.payload, context)) {
       throw new AppError(
         "CONFLICT",
         "This request's change is already applied; approve it to record the outcome"
@@ -293,11 +310,15 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   private async endWithoutApproval(
     pending: ApprovalRequest,
     decision: ApprovalRequestDecision,
-    context: CallContext
+    context: ApprovalRequestContext
   ): Promise<void> {
-    await this.options.handlers
-      .get(pending.kind)
-      ?.declined?.(pending.payload, decision, this.handlerContext(pending, context));
+    await this.options.handlers.get(pending.kind)?.declined?.(pending.payload, decision, context);
+  }
+
+  /** What the kind keeps of the payload of a request that ends here, where it says so. */
+  private endedPayload(pending: ApprovalRequest): { payload?: JsonObject } {
+    const payload = this.options.handlers.get(pending.kind)?.endedPayload?.(pending.payload);
+    return payload ? { payload } : {};
   }
 
   private async visibleRequest(
@@ -371,8 +392,14 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     return handler;
   }
 
-  private handlerContext(request: ApprovalRequest, context: CallContext): ApprovalRequestContext {
+  private handlerContext(
+    request: ApprovalRequest,
+    context: CallContext,
+    /** The stores of the transaction that decides the request. */
+    transaction?: ApprovalTransactionStores
+  ): ApprovalRequestContext {
     return {
+      ...(transaction ? { transaction } : {}),
       clientInstanceId: this.options.clientInstanceId,
       requestId: request.id,
       correlationId: context.correlationId,

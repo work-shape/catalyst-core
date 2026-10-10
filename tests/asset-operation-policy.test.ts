@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { operationRunSchema } from "@vivd-catalyst/api-contract";
 import type { CentralPolicySetting, PlatformEventEmitter } from "@vivd-catalyst/core";
-import { agent, errorSchema, skill } from "./support/access-instance";
+import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { setupNamespaceHolder, type NamespaceHolderInstance } from "./support/asset-operations";
+import { getTestJobs } from "./support/test-instance";
 
 // What the policy is asked about for an asset call, and that it is asked only once the caller's
 // right on every asset the call names is decided.
@@ -234,9 +235,55 @@ describe("an asset write that waits for another person", () => {
         payload: { decision: "approve" }
       });
     expect((await decide()).statusCode).toBe(200);
+    // The approval is recorded; the job that executes the call writes the asset.
+    expect(await t.stored("agent", "kai-intake")).toBeUndefined();
+    await getTestJobs(t.instance).runDue();
     // Written as Kai asked, by the call that waited.
     expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 1, status: "active" });
     expect((await decide()).statusCode).toBe(409);
+    await getTestJobs(t.instance).runDue();
     expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 1 });
+  });
+
+  // An asset write names the revision it was made against. A write whose target changed while
+  // it waited is not superseded: it is approved, runs, and fails by the operation's own rule.
+  // The request says so. Fails without the outcome on the request: it read `approved` alone.
+  it("ends as approved and failed, and overwrites nothing, when the asset changed while it waited", async () => {
+    let settings: CentralPolicySetting[] = [];
+    const t = await setupNamespaceHolder({
+      operations: { centralPolicySettings: () => settings }
+    });
+    await t.put(t.kai.id, "agent", "kai-intake");
+    settings = [{ operation: "assets.put", value: "approval" }];
+    const held = await t.call(t.kai.id, "assets.put", {
+      params: { kind: "agent", name: "kai-intake" },
+      payload: { config: agent("kai-intake", { instructions: "Held." }), expectedRevision: 1 }
+    });
+    expect(held.statusCode).toBe(202);
+    const { approvalRequestId: requestId = "" } = operationRunSchema.parse(held.json());
+    // Somebody else changes the asset while the write waits.
+    settings = [];
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "agent", name: "kai-intake" },
+      payload: { config: agent("kai-intake", { instructions: "Newer." }), expectedRevision: 1 }
+    });
+
+    const approved = await t.call(t.admin.id, "approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    expect(approved.statusCode).toBe(200);
+    await getTestJobs(t.instance).runDue();
+
+    const request = await t.stores.approvals.getApprovalRequest({
+      clientInstanceId,
+      requestId
+    });
+    expect(request).toMatchObject({
+      status: "approved",
+      applyResult: { execution: "failed", error: { code: "CONFLICT" } }
+    });
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 2 });
+    expect(JSON.stringify(await t.stored("agent", "kai-intake"))).toContain("Newer.");
   });
 });

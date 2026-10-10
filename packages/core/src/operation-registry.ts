@@ -127,12 +127,6 @@ interface OperationDefinitionBase<Input, Output> {
   timeoutMs: number;
   /** The module the operation belongs to. MD-1 reads it; nothing does before. */
   module?: string;
-  /**
-   * Whether a call that was frozen earlier can no longer apply, such as a write whose base
-   * revision is gone. Asked before a call that waited for an approval is executed. Without it
-   * the call is executed and fails or succeeds by its own rules.
-   */
-  isStale?(input: Input, context: OperationAuthorizeContext): Promise<boolean>;
   execute(
     input: Input,
     context: OperationExecutionContext

@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { ClientInstanceCapability } from "@vivd-catalyst/capability-sdk";
 import {
   asClientInstanceId,
+  asCollaborationWorkspaceId,
+  asUserId,
   createPlatformId,
   getRuntimeSubjectUserId,
   type CentralPolicySetting
@@ -10,7 +12,7 @@ import {
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
-import { createTestInstance, getTestConfig } from "./support/test-instance";
+import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
 
 // A chat run on an assembled instance whose agent calls tools: each call is a call of the
 // operation the tool is registered as, so it leaves an Operation Run, and what the person
@@ -32,6 +34,8 @@ const changeCapability: ClientInstanceCapability = {
       defineTool({
         name: "demo.change",
         effect: "changing",
+        // Named, because a changing tool without a mode takes the instance default.
+        permission: { mode: "allow" },
         description: "Changes something and calls a model for it.",
         inputSchema: z.object({ text: z.string() }),
         outputSchema: z.object({ changed: z.string() }),
@@ -88,8 +92,13 @@ async function fixture(centralSettings: CentralPolicySetting[] = []) {
   });
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
   /** One conversation with one message to the agent, and the run that answered it. */
-  const say = async (text: string) => {
-    const created = await app.call("conversations.create", { payload: { title: "Tools" } });
+  const say = async (text: string, inWorkspaceId?: string) => {
+    const created = await app.call("conversations.create", {
+      payload: {
+        title: "Tools",
+        ...(inWorkspaceId ? { collaborationWorkspaceId: inWorkspaceId } : {})
+      }
+    });
     const { id: conversationId, collaborationWorkspaceId: workspaceId } = created.json<{
       id: string;
       collaborationWorkspaceId: string;
@@ -225,6 +234,9 @@ describe("an agent's tool calls in a chat run", () => {
       });
     expect((await decide()).statusCode).toBe(200);
     expect((await decide()).statusCode).toBe(409);
+    // The approval is recorded; the job that executes the call runs the tool.
+    expect(calls).toEqual([]);
+    await getTestJobs(f.app).runDue();
 
     expect(calls).toEqual(["held"]);
     const [done] = await f.runs();
@@ -239,6 +251,99 @@ describe("an agent's tool calls in a chat run", () => {
       clientInstanceId: f.clientInstanceId
     });
     expect(usage.filter((event) => event.operationRunId === held?.id)).toHaveLength(1);
+    await f.app.close();
+  });
+
+  // Fails before the fix: nothing asked for the membership when the call ran, and the tool
+  // ran as a person who had left the workspace.
+  it("does not run an approved call of a person who left the workspace, and says why", async () => {
+    const f = await fixture([{ operation: "demo.change", value: "approval" }]);
+    const shared = await f.app.call("workspaces.create", { payload: { name: "Shared" } });
+    expect(shared.statusCode).toBe(200);
+    const said = await f.say('/tool demo.change {"text":"left"}', shared.json<{ id: string }>().id);
+    const [held] = await f.runs();
+    const requestId = held?.approvalRequestId ?? "";
+    expect(held).toMatchObject({ status: "pending_approval", workspaceId: said.workspaceId });
+    const approved = await f.app.call("approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    expect(approved.json()).toMatchObject({ status: "approved" });
+    // The person leaves the workspace before the call runs.
+    const removed = await f.app.stores.workspaces.removeMembership({
+      clientInstanceId: f.clientInstanceId,
+      collaborationWorkspaceId: asCollaborationWorkspaceId(said.workspaceId),
+      userId: asUserId(held?.actor.id ?? "")
+    });
+    expect(removed).toBeDefined();
+
+    await getTestJobs(f.app).runDue();
+
+    expect(calls).toEqual([]);
+    const [run] = await f.runs();
+    expect(run).toMatchObject({ id: held?.id, status: "denied", denial: { kind: "forbidden" } });
+    const request = await f.app.stores.approvals.getApprovalRequest({
+      clientInstanceId: f.clientInstanceId,
+      requestId
+    });
+    expect(request).toMatchObject({
+      status: "superseded",
+      applyResult: {
+        execution: "refused",
+        error: {
+          message: "The person who made this call is no longer a member of its workspace."
+        }
+      }
+    });
+    expect(JSON.stringify(request?.payload)).not.toContain("left");
+    await f.app.close();
+  });
+
+  // Fails before the fix: the allowlist of the agent was read when the call was approved,
+  // inside the approval, and never when it ran.
+  it("does not run an approved call of a tool the agent no longer lists", async () => {
+    const f = await fixture([{ operation: "demo.change", value: "approval" }]);
+    await f.say('/tool demo.change {"text":"unlisted"}');
+    const [held] = await f.runs();
+    const requestId = held?.approvalRequestId ?? "";
+    await f.app.call("approval_requests.decide", {
+      params: { requestId },
+      payload: { decision: "approve" }
+    });
+    // The tool is taken off the agent's list before the call runs.
+    await f.app.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId: f.clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "test_agent",
+          config: {
+            skillNames: [],
+            name: "test_agent",
+            displayName: "Test Agent",
+            instructions: "Use configured tools only.",
+            modelProviderId: "local",
+            toolNames: [read.name],
+            initialPrompts: []
+          }
+        }
+      ]
+    });
+
+    await getTestJobs(f.app).runDue();
+
+    expect(calls).toEqual([]);
+    const [run] = await f.runs();
+    expect(run).toMatchObject({
+      status: "denied",
+      denial: { kind: "forbidden", action: "agent_tool:demo.change" }
+    });
+    const request = await f.app.stores.approvals.getApprovalRequest({
+      clientInstanceId: f.clientInstanceId,
+      requestId
+    });
+    expect(request).toMatchObject({ status: "superseded", applyResult: { execution: "refused" } });
     await f.app.close();
   });
 

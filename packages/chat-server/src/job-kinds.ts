@@ -139,6 +139,40 @@ export const expireOperationRunsJob = defineScheduledKind("operation_runs.expire
 /** Fails the Operation Runs whose process ended before their call did. */
 export const recoverOperationRunsJob = defineScheduledKind("operation_runs.recover");
 
+/**
+ * How many approved calls run at once across the instance. A call takes at most the time its
+ * operation names, an agent tool 60 minutes, so this many slow calls hold back the approved
+ * calls behind them for that long. They wait in the queue and lose nothing.
+ */
+export const APPROVED_OPERATION_CALL_SLOTS = 4;
+
+/**
+ * Executes the frozen call of an approved request. Enqueued in the transaction that records
+ * the approval, with the request as dedupe and concurrency key, so a request has one job and
+ * one attempt of it runs at a time. An attempt whose process ended is noticed after the
+ * lease: the next attempt records the call as interrupted and does not run it again.
+ */
+export const executeApprovedOperationCallJob = defineJobKind({
+  kind: "operation_call.execute",
+  payloadSchema: z.object({ requestId: z.string().min(1) }),
+  maxAttempts: 3,
+  backoff: { baseMs: 10 * 1000, maxMs: MINUTE_MS },
+  leaseMs: 2 * MINUTE_MS,
+  heartbeatMs: 20 * 1000,
+  concurrency: { global: APPROVED_OPERATION_CALL_SLOTS, perKey: 1 }
+});
+
+/** Removes the input that ended requests of held calls still keep. */
+export const removeEndedOperationCallInputJob = defineScheduledKind(
+  "operation_call.remove_ended_input"
+);
+export const removeEndedOperationCallInputSchedule = defineSchedule({
+  kind: removeEndedOperationCallInputJob,
+  every: 6 * HOUR_MS,
+  // The requests that ended before a release removed their input lose it as soon as it is up.
+  dueAtStart: true
+});
+
 export const expireOperationRunsSchedule = defineSchedule({
   kind: expireOperationRunsJob,
   every: 5 * MINUTE_MS

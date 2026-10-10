@@ -1,4 +1,4 @@
-import { createOperationRegistry } from "@vivd-catalyst/core";
+import { asUserId, createOperationRegistry } from "@vivd-catalyst/core";
 import type { RunOperationDeps } from "@vivd-catalyst/tool-execution";
 import {
   ApprovalRequestWorkflow,
@@ -45,7 +45,6 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
   const filer = options.approvalRequests
     ? createOperationApprovalFiler({
         clientInstanceId,
-        store: options.approvalRequests.store,
         creator: new ApprovalRequestWorkflow({
           ...options.approvalRequests,
           handlers: approvalRequestHandlers,
@@ -68,6 +67,12 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     approvals: options.operations?.approvals ?? filer,
     modules: options.modules,
     agentToolNames: options.agentToolNames,
+    workspaceMember: async ({ userId, workspaceId }) =>
+      (await options.stores.workspaces.getMembership({
+        clientInstanceId,
+        collaborationWorkspaceId: workspaceId,
+        userId: asUserId(userId)
+      })) !== undefined,
     logger: options.logger,
     now: options.operations?.now
   };

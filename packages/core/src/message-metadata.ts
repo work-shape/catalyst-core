@@ -1,4 +1,10 @@
-import type { ApprovalRequest, ApprovalRequestStatus } from "./approval-requests";
+import {
+  APPROVAL_EXECUTIONS,
+  approvalExecutionOf,
+  type ApprovalExecution,
+  type ApprovalRequest,
+  type ApprovalRequestStatus
+} from "./approval-request";
 import type { CreateMessageInput } from "./conversation";
 import { asMessageId } from "./ids";
 import type { AttachmentManifest } from "./files";
@@ -85,6 +91,11 @@ export interface ApprovalDecisionMessageMetadata {
   comment?: string;
   /** User id of the requester. Absent on decisions stored before it was recorded. */
   requestedBy?: string;
+  /**
+   * What became of an approved change that ran after the decision. Absent where the change
+   * was applied with the decision.
+   */
+  execution?: Exclude<ApprovalExecution, "queued">;
 }
 
 /** No payload, apply result, or skill text crosses this boundary. */
@@ -92,6 +103,11 @@ export function createApprovalDecisionMessage(
   request: ApprovalRequest
 ): (CreateMessageInput & { id: MessageId }) | undefined {
   if (!request.origin || request.status === "pending") {
+    return undefined;
+  }
+  const execution = approvalExecutionOf(request);
+  if (execution === "queued") {
+    // The change has not ended yet. The thread is told what became of it, not that it started.
     return undefined;
   }
   const reversion = request.status === "reverted" ? request.reversion : undefined;
@@ -111,10 +127,13 @@ export function createApprovalDecisionMessage(
     ...(request.status !== "reverted" && request.decision?.comment
       ? { comment: request.decision.comment }
       : {}),
-    requestedBy: request.requestedBy.id
+    requestedBy: request.requestedBy.id,
+    ...(execution ? { execution } : {})
   };
   return {
-    id: asMessageId(`msg_${request.id}_${request.status}`),
+    id: asMessageId(
+      `msg_${request.id}_${request.status}${execution && execution !== "done" ? `_${execution}` : ""}`
+    ),
     clientInstanceId: request.clientInstanceId,
     conversationId: request.origin.conversationId,
     role: "system",
@@ -141,10 +160,21 @@ export function approvalRevisionOwner(
 }
 
 export function approvalDecisionNote(event: ApprovalDecisionMessageMetadata): string {
+  const subject = `Approval request ${event.requestId} (${event.requestKind}: ${JSON.stringify(event.summary)})`;
+  if (event.execution === "expired") {
+    return `${subject} expired at ${event.decidedAt} before it was decided. Nothing was executed.`;
+  }
+  if (event.execution === "refused") {
+    return `${subject} was not executed: when it should run, it was no longer allowed. Nothing was changed.`;
+  }
   const revisionOwner = approvalRevisionOwner(event);
   const outcome =
     event.status === "approved"
-      ? " The change is now active."
+      ? event.execution === "failed"
+        ? " The approved call ran and failed. It is not run again by itself."
+        : event.execution === "interrupted"
+          ? " The approved call was interrupted while it ran. Whether it changed something is not known, and it is not run again by itself."
+          : " The change is now active."
       : revisionOwner === "reviewer"
         ? " The reviewer has taken over the revision and submits the revised proposal themselves. Do NOT submit a revised proposal in this conversation unless the user explicitly asks for one."
         : revisionOwner === "requester"
@@ -152,7 +182,7 @@ export function approvalDecisionNote(event: ApprovalDecisionMessageMetadata): st
           : event.status === "reverted"
             ? " The approved change has been reverted."
             : "";
-  return `Approval request ${event.requestId} (${event.requestKind}: ${JSON.stringify(event.summary)}) was ${event.status} by ${JSON.stringify(event.decidedByLabel)} at ${event.decidedAt}.${outcome}${event.comment ? ` Comment: ${JSON.stringify(event.comment)}` : ""}`;
+  return `${subject} was ${event.status} by ${JSON.stringify(event.decidedByLabel)} at ${event.decidedAt}.${outcome}${event.comment ? ` Comment: ${JSON.stringify(event.comment)}` : ""}`;
 }
 
 export function readApprovalDecisionMetadata(
@@ -269,6 +299,7 @@ export function readAgentRuntimeMessageMetadata(
       runtime.status === "withdrawn" ||
       runtime.status === "reverted")
   ) {
+    const execution = APPROVAL_EXECUTIONS.find((candidate) => candidate === runtime.execution);
     return {
       version: MESSAGE_METADATA_VERSION,
       kind: "approval_decision",
@@ -280,7 +311,8 @@ export function readAgentRuntimeMessageMetadata(
       decidedAt: runtime.decidedAt,
       summary: runtime.summary,
       ...(typeof runtime.comment === "string" ? { comment: runtime.comment } : {}),
-      ...(typeof runtime.requestedBy === "string" ? { requestedBy: runtime.requestedBy } : {})
+      ...(typeof runtime.requestedBy === "string" ? { requestedBy: runtime.requestedBy } : {}),
+      ...(execution && execution !== "queued" ? { execution } : {})
     };
   }
   if (runtime.kind === "user_message") {

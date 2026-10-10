@@ -6,7 +6,6 @@ import {
   createPlatformId,
   isAuthenticatedServicePrincipal,
   operationDenialError,
-  resolvePolicy,
   type ActorAccess,
   type OperationAuthorization,
   type OperationCall,
@@ -14,9 +13,7 @@ import {
   type OperationDefinition,
   type OperationResult,
   type OperationRun,
-  type OperationRunActor,
-  type PlatformEventOutcome,
-  type PolicyResolution
+  type OperationRunActor
 } from "@vivd-catalyst/core";
 import {
   authorizeActor,
@@ -27,8 +24,8 @@ import {
   executeAdmitted,
   failRun,
   hashInput,
-  policyInputOf,
   requireModuleOn,
+  resolveGuardedPolicy,
   type OperationEnding,
   type OperationOutcome,
   type RunContext,
@@ -225,7 +222,7 @@ function replay(
 }
 
 /** The result a run that has an outcome answers with, whoever asks again. */
-export function recordedResult(held: OperationRun): OperationResult {
+function recordedResult(held: OperationRun): OperationResult {
   const runId = held.id;
   switch (held.status) {
     case "done":
@@ -316,27 +313,11 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     };
   }
 
-  const policyInput = await policyInputOf(context);
-  let policy: PolicyResolution = resolvePolicy(policyInput);
-  if (policy.next === "refuse") {
-    return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
+  const guarded = await resolveGuardedPolicy(context);
+  if ("denial" in guarded) {
+    return { ending: await denyRun(context, guarded.denial) };
   }
-  const guardrailOutcome = strictestOutcome([
-    await context.emit("operation.before_call", "before"),
-    ...(definition.events?.before ? [await context.emit(definition.events.before, "before")] : [])
-  ]);
-  policy = resolvePolicy({ ...policyInput, guardrailOutcome });
-  if (policy.next === "refuse") {
-    return {
-      ending: await denyRun(
-        context,
-        policy.source === "guardrail"
-          ? // The emitter names no guardrail yet, so the event that asked stands in for it.
-            { kind: "guardrail", guardrailId: definition.events?.before ?? "operation.before_call" }
-          : { kind: "policy", operation: definition.name }
-      )
-    };
-  }
+  const { policy } = guarded;
   if (policy.next === "await_confirmation") {
     throw new AppError("INTERNAL", "This surface cannot hold a call for a confirmation");
   }
@@ -371,18 +352,4 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     };
   }
   return { access, decisionMode: "decisionMode" in policy ? policy.decisionMode : undefined };
-}
-
-const OUTCOME_ORDER: readonly PlatformEventOutcome[] = [
-  "allow",
-  "warn",
-  "require_approval",
-  "block"
-];
-
-function strictestOutcome(outcomes: readonly PlatformEventOutcome[]): PlatformEventOutcome {
-  return outcomes.reduce(
-    (left, right) => (OUTCOME_ORDER.indexOf(left) >= OUTCOME_ORDER.indexOf(right) ? left : right),
-    "allow"
-  );
 }

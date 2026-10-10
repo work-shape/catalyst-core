@@ -124,7 +124,9 @@ export const approvalDecisionMessageMetadataSchema = z.object({
   decidedAt: timestampSchema,
   summary: z.string(),
   comment: z.string().optional(),
-  requestedBy: z.string().optional()
+  requestedBy: z.string().optional(),
+  /** What became of an approved change that ran after the decision. */
+  execution: z.enum(["done", "failed", "interrupted", "refused", "expired"]).optional()
 });
 
 export const agentRuntimeMessageMetadataSchema = z.discriminatedUnion("kind", [

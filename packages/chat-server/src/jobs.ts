@@ -263,6 +263,10 @@ export function createChatServerJobs(
     runs: options.stores.operationRuns,
     registry: operationCalls.registry,
     approvals: options.approvalRequests?.store,
+    // Approved calls are executed where the call path of the instance exists, with its tools.
+    calls: options.operationCalls
+      ? { deps: () => operationCalls.deps, users: options.stores.users }
+      : undefined,
     now
   });
   handlers.push(...operationRuns.handlers);

@@ -14,6 +14,7 @@ import {
   type Authorizer,
   type CentralPolicySetting,
   type ClientInstanceId,
+  type CollaborationWorkspaceId,
   type JsonObject,
   type JsonValue,
   type Logger,
@@ -36,6 +37,7 @@ import {
   type PlatformEventOutcome,
   type PolicyDefaults,
   type PolicyInput,
+  type PolicyResolution,
   type ToolExecutionResult
 } from "@vivd-catalyst/core";
 import { z } from "zod";
@@ -85,6 +87,15 @@ export interface RunOperationDeps {
    * process serves no agent and refuses every call of one.
    */
   agentToolNames?(agentName: string): readonly string[] | Promise<readonly string[]>;
+  /**
+   * Whether a person is a member of a workspace now. Asked before a call that waited for an
+   * approval is executed in a workspace: whoever left it meanwhile no longer acts there.
+   * Without it this process does not ask.
+   */
+  workspaceMember?(input: {
+    userId: string;
+    workspaceId: CollaborationWorkspaceId;
+  }): Promise<boolean>;
   logger: Logger;
   now?: () => Date;
 }
@@ -213,7 +224,7 @@ function namedRight(decision: AccessDecision, action: string): OperationAuthoriz
 }
 
 /** What the policy is resolved from for this call, before a guardrail answered. */
-export async function policyInputOf(
+async function policyInputOf(
   context: Pick<RunContext, "definition" | "call" | "resource" | "deps">
 ): Promise<PolicyInput> {
   const { definition, call, resource, deps } = context;
@@ -233,8 +244,48 @@ export async function policyInputOf(
   };
 }
 
-export function policyRefuses(input: PolicyInput): boolean {
-  return resolvePolicy(input).next === "refuse";
+/**
+ * What the policy asks of a call once the guardrails answered, or why it is refused. Asked
+ * when a call is made, and again, as the caller is then, before a call that waited for an
+ * approval is executed.
+ */
+export async function resolveGuardedPolicy(
+  context: RunContext
+): Promise<{ policy: PolicyResolution } | { denial: OperationDenial }> {
+  const { definition } = context;
+  const policyInput = await policyInputOf(context);
+  if (resolvePolicy(policyInput).next === "refuse") {
+    return { denial: { kind: "policy", operation: definition.name } };
+  }
+  const guardrailOutcome = strictestOutcome([
+    await context.emit("operation.before_call", "before"),
+    ...(definition.events?.before ? [await context.emit(definition.events.before, "before")] : [])
+  ]);
+  const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
+  if (policy.next !== "refuse") {
+    return { policy };
+  }
+  return {
+    denial:
+      policy.source === "guardrail"
+        ? // The emitter names no guardrail yet, so the event that asked stands in for it.
+          { kind: "guardrail", guardrailId: definition.events?.before ?? "operation.before_call" }
+        : { kind: "policy", operation: definition.name }
+  };
+}
+
+const OUTCOME_ORDER: readonly PlatformEventOutcome[] = [
+  "allow",
+  "warn",
+  "require_approval",
+  "block"
+];
+
+function strictestOutcome(outcomes: readonly PlatformEventOutcome[]): PlatformEventOutcome {
+  return outcomes.reduce(
+    (left, right) => (OUTCOME_ORDER.indexOf(left) >= OUTCOME_ORDER.indexOf(right) ? left : right),
+    "allow"
+  );
 }
 
 /** Ends a run that is still `running`. The run as it was when something else ended it first. */

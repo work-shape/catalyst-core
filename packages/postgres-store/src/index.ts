@@ -16,6 +16,7 @@ import { createPostgresApiAccessStore } from "./stores/apiAccess";
 import { createPostgresAccessStore } from "./stores/access";
 import { createPostgresConfigAssetsStore } from "./stores/configAssets";
 import { createPostgresApprovalsStore } from "./stores/approvals";
+import type { TransactWithStores } from "./postgres-approval-request-operations";
 import { createPostgresExecutionWorkspacesStore } from "./stores/executionWorkspaces";
 import { createPostgresStructuredDataStore } from "./stores/structuredData";
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
@@ -57,6 +58,17 @@ function bindStores(
   enqueued: () => void = () => notifyJobsEnqueued(db),
   inTransaction = false
 ): PlatformStores {
+  const transact: TransactWithStores = async (fn) => {
+    // A nested transaction reports to the outermost one: nothing is visible before that commits.
+    if (inTransaction) return db.transaction((tx) => fn(tx, bindStores(tx, enqueued, true)));
+    let enqueuedInside = false;
+    const noteEnqueued = () => {
+      enqueuedInside = true;
+    };
+    const result = await db.transaction((tx) => fn(tx, bindStores(tx, noteEnqueued, true)));
+    if (enqueuedInside) notifyJobsEnqueued(db);
+    return result;
+  };
   return {
     conversations: createPostgresConversationsStore(db),
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
@@ -68,24 +80,14 @@ function bindStores(
     apiAccess: createPostgresApiAccessStore(db),
     access: createPostgresAccessStore(db),
     configAssets: createPostgresConfigAssetsStore(db),
-    approvals: createPostgresApprovalsStore(db),
+    approvals: createPostgresApprovalsStore(db, transact),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),
     jobs: createPostgresJobsStore(db, enqueued),
     operationRuns: createPostgresOperationRunsStore(db),
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
     pages: createPostgresPagesStore(db),
-    async transaction(fn) {
-      // A nested transaction reports to the outermost one: nothing is visible before that commits.
-      if (inTransaction) return db.transaction((tx) => fn(bindStores(tx, enqueued, true)));
-      let enqueuedInside = false;
-      const noteEnqueued = () => {
-        enqueuedInside = true;
-      };
-      const result = await db.transaction((tx) => fn(bindStores(tx, noteEnqueued, true)));
-      if (enqueuedInside) notifyJobsEnqueued(db);
-      return result;
-    }
+    transaction: (fn) => transact((_tx, stores) => fn(stores))
   };
 }
 

@@ -11,6 +11,7 @@ import {
   createChatServer,
   createAgentAssetKind,
   createChatServerJobs,
+  createOperationCalls,
   createSkillAssetKind,
   type ChatServerJobOptions,
   type ChatServerOptions
@@ -20,6 +21,7 @@ import { buildApiPath, operationPathParamNames } from "@vivd-catalyst/api-contra
 import {
   asClientInstanceId,
   createAssetKindRegistry,
+  createAuthorizer,
   NoopAuditRecorder,
   SecretNotResolvedError,
   type HttpRuntime,
@@ -370,7 +372,7 @@ export function completeServerOptions(
       enabledToolNames: []
     }
   };
-  return {
+  const completed: ChatServerOptions = {
     ...serverOptions,
     logger: options.logger ?? createLogger(),
     modelGateway: createScriptedInstanceModelGateway({
@@ -392,6 +394,15 @@ export function completeServerOptions(
           validateAgents: configAssets.validateAgents
         })
     }
+  };
+  // One call path for the server and for the jobs `getTestJobs` builds from these options, as
+  // on an assembled instance: the job that executes an approved call finds the operations the
+  // routes registered.
+  const authorizer = completed.authorizer ?? createAuthorizer(stores.access);
+  return {
+    ...completed,
+    authorizer,
+    operationCalls: completed.operationCalls ?? createOperationCalls({ ...completed, authorizer })
   };
 }
 

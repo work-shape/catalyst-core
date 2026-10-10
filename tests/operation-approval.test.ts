@@ -1,19 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { apiErrorResponseSchema, operationRunSchema } from "@vivd-catalyst/api-contract";
-import {
-  asClientInstanceId,
-  createPlatformId,
-  legacyPermissionFor,
-  type CentralPolicySetting
-} from "@vivd-catalyst/core";
-import { createTestConfig } from "./support/fixtures";
-import { registeredTestOperations as operations } from "./support/operations";
-import {
-  createTestInstance,
-  getTestConfig,
-  getTestJobs,
-  registerTestOperations
-} from "./support/test-instance";
+import { createPlatformId, type CentralPolicySetting } from "@vivd-catalyst/core";
+import { approvalSetting, errorOf, fixture, HOUR_MS } from "./support/operation-approval";
+import { getTestJobs } from "./support/test-instance";
 
 // A call the policy holds for another person: from the 202 to the Inbox request, the decision
 // and the one execution. The instance is assembled as a deployment assembles it, so the
@@ -21,87 +9,9 @@ import {
 //
 // Every test here fails without the change: before it nothing held a call (the answer was 403
 // POLICY_DENIED), and no approval kind executed one.
-
-const HOUR_MS = 60 * 60 * 1000;
-const approvalSetting: CentralPolicySetting = { operation: "testRunChange", value: "approval" };
-
-async function fixture(input: { now?: () => Date; settings?: () => CentralPolicySetting[] } = {}) {
-  /** `<actor id>:<name>` of every execution of the fixture operation. */
-  const executed: string[] = [];
-  const person = (id: string, roles: string[], rights: string[] = []) => ({
-    id,
-    externalUserId: id,
-    displayLabel: id[0]?.toUpperCase() + id.slice(1),
-    roles,
-    permissionRefs: [],
-    permissions: rights
-  });
-  const app = await createTestInstance({
-    config: createTestConfig({
-      developmentAuth: {
-        enabled: true,
-        users: [
-          // May call the operation and may not decide on it.
-          person("requester", ["user"], [legacyPermissionFor("users.manage")]),
-          // An admin: may call and may decide, their own calls included.
-          person("approver", ["admin"]),
-          person("second", ["admin"]),
-          person("stranger", ["user"])
-        ],
-        defaultUserId: "requester"
-      }
-    }),
-    env: {},
-    tools: [],
-    operations: {
-      centralPolicySettings: input.settings ?? (() => [approvalSetting]),
-      ...(input.now ? { now: input.now } : {})
-    }
-  });
-  registerTestOperations(app, (route) =>
-    route.operation(operations.testRunChange, {
-      execute: (item, context) => {
-        executed.push(`${context.actor.displayLabel.toLowerCase()}:${item.name}`);
-        return Promise.resolve({ name: item.name });
-      }
-    })
-  );
-  const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
-  const as = (user: string) => ({ "x-dev-user-id": user });
-  const call = (user: string, name: string, key?: string) =>
-    app.call("testRunChange", {
-      payload: { name },
-      headers: { ...as(user), ...(key ? { "idempotency-key": key } : {}) }
-    });
-  const decide = (
-    user: string,
-    requestId: string,
-    decision: "approve" | "reject",
-    comment?: string
-  ) =>
-    app.call("approval_requests.decide", {
-      params: { requestId },
-      headers: as(user),
-      payload: { decision, ...(comment ? { comment } : {}) }
-    });
-  const run = async (id: string) => {
-    const found = await app.stores.operationRuns.get({ clientInstanceId, id });
-    if (!found) throw new Error(`No run ${id}`);
-    return found;
-  };
-  /** Files one call and answers its run and its approval request. */
-  const hold = async (name = "held", key = "key-1", user = "requester") => {
-    const response = await call(user, name, key);
-    expect(response.statusCode).toBe(202);
-    const body = operationRunSchema.parse(response.json());
-    if (!body.approvalRequestId) throw new Error("The held call names no approval request");
-    return { runId: body.id, requestId: body.approvalRequestId, body };
-  };
-  return { app, clientInstanceId, executed, as, call, decide, run, hold };
-}
-
-const errorOf = (response: { json(): unknown }) =>
-  apiErrorResponseSchema.parse(response.json()).error;
+//
+// An approval records the decision and enqueues the job that executes the call. `approve`
+// lets that job run; a test that looks at the moment between the two decides with `decide`.
 
 describe("a call that waits for another person", () => {
   it("answers 202, is listed for the people who decide with the call, its actor and its inputs", async () => {
@@ -162,10 +72,26 @@ describe("a call that waits for another person", () => {
     const f = await fixture();
     const { runId, requestId } = await f.hold("approved");
 
+    // The decision is recorded and answered before anything of the call runs.
     const approved = await f.decide("approver", requestId, "approve", "Looks right");
     expect(approved.statusCode).toBe(200);
-    expect(approved.json()).toMatchObject({ status: "approved" });
+    expect(approved.json()).toMatchObject({
+      status: "approved",
+      applyResult: { runId, execution: "queued" }
+    });
+    expect(f.executed).toEqual([]);
+    expect((await f.run(runId)).status).toBe("pending_approval");
+
+    await f.runJobs();
     // It ran as the requester, not as the approver.
+    expect(f.executed).toEqual(["requester:approved"]);
+    expect(await f.stored(requestId)).toMatchObject({
+      status: "approved",
+      decision: { decidedByLabel: "Approver", comment: "Looks right" },
+      applyResult: { runId, execution: "done" }
+    });
+    // A job that comes by again finds the call executed and runs nothing.
+    await f.runJobs();
     expect(f.executed).toEqual(["requester:approved"]);
     const run = await f.run(runId);
     const users = await f.app.stores.users.listUsers({ clientInstanceId: f.clientInstanceId });
@@ -199,6 +125,8 @@ describe("a call that waits for another person", () => {
     });
     const ofRun = audit.filter((event) => event.metadata?.operationRunId === runId);
     expect(ofRun.map((event) => event.type).sort()).toEqual([
+      // Asked when the call was made and again when it was to run.
+      "operation.authorization_checked",
       "operation.authorization_checked",
       "operation.completed",
       "operation.started"
@@ -220,6 +148,7 @@ describe("a call that waits for another person", () => {
       f.decide("second", requestId, "approve")
     ]);
     expect(both.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    await f.runJobs();
     expect(f.executed).toEqual(["requester:raced"]);
     expect((await f.run(runId)).status).toBe("done");
   });
@@ -227,7 +156,7 @@ describe("a call that waits for another person", () => {
   it("lets a person with the right approve their own call", async () => {
     const f = await fixture();
     const { runId, requestId } = await f.hold("own", "key-own", "approver");
-    const approved = await f.decide("approver", requestId, "approve");
+    const approved = await f.approve("approver", requestId);
     expect(approved.statusCode).toBe(200);
     expect(f.executed).toEqual(["approver:own"]);
     expect(await f.run(runId)).toMatchObject({ status: "done", decision: { mode: "approved" } });
@@ -264,9 +193,17 @@ describe("a call that waits for another person", () => {
       headers: f.as("requester")
     });
     expect(withdrawn.statusCode).toBe(200);
-    expect(await f.run(runId)).toMatchObject({ status: "denied", denial: { kind: "declined" } });
-    expect((await f.decide("approver", requestId, "approve")).statusCode).toBe(409);
+    // Withdrawing ends the run: it does not stay waiting for a request nobody can decide.
+    expect(await f.run(runId)).toMatchObject({
+      status: "denied",
+      denial: { kind: "declined" },
+      decision: { mode: "declined", byLabel: "Requester" }
+    });
+    expect(await f.stored(requestId)).toMatchObject({ status: "withdrawn" });
+    expect((await f.approve("approver", requestId)).statusCode).toBe(409);
     expect(f.executed).toEqual([]);
+    const replay = await f.call("requester", "withdrawn", "key-1");
+    expect(errorOf(replay).code).toBe("DECLINED");
   });
 
   it("expires a call nobody decided: run expired, request superseded, key answers 409", async () => {
@@ -282,7 +219,12 @@ describe("a call that waits for another person", () => {
       clientInstanceId: f.clientInstanceId,
       requestId
     });
-    expect(request?.status).toBe("superseded");
+    // The request says that it expired and names nobody who decided it.
+    expect(request).toMatchObject({
+      status: "superseded",
+      applyResult: { runId, execution: "expired" }
+    });
+    expect(request?.decision).toBeUndefined();
     const replay = await f.call("requester", "too-late", "key-1");
     expect(replay.statusCode).toBe(409);
     expect(errorOf(replay).code).toBe("OPERATION_EXPIRED");
@@ -297,10 +239,15 @@ describe("a call that waits for another person", () => {
     const { runId, requestId } = await f.hold("stale");
     now = new Date();
 
-    const late = await f.decide("approver", requestId, "approve");
-    expect(late.json()).toMatchObject({ status: "superseded" });
+    // Fails before the fix: the request was recorded as superseded by the approver, as if
+    // their approval had been a decision.
+    const late = await f.approve("approver", requestId);
+    expect(late.json()).toMatchObject({
+      status: "superseded",
+      applyResult: { runId, execution: "expired" }
+    });
+    expect(late.json().decision).toBeUndefined();
     expect(f.executed).toEqual([]);
-    expect((await f.run(runId)).status).toBe("pending_approval");
     // The job that comes by afterwards ends the run. Its request is ended already.
     await getTestJobs(f.app).runDue();
     expect((await f.run(runId)).status).toBe("expired");
@@ -319,9 +266,13 @@ describe("a call that waits for another person", () => {
       permissions: []
     });
 
-    // The request ends as superseded: the approval is not recorded and nothing runs.
-    const approved = await f.decide("approver", requestId, "approve");
-    expect(approved.json()).toMatchObject({ status: "superseded" });
+    // The right is asked when the call is to run. The request ends as superseded with the
+    // reason, and nothing runs.
+    await f.approve("approver", requestId);
+    expect(await f.stored(requestId)).toMatchObject({
+      status: "superseded",
+      applyResult: { runId, execution: "refused", error: { code: "FORBIDDEN" } }
+    });
     expect(f.executed).toEqual([]);
     expect(await f.run(runId)).toMatchObject({
       status: "denied",
@@ -335,10 +286,193 @@ describe("a call that waits for another person", () => {
     const { runId, requestId } = await f.hold("refused-now");
     settings = [{ operation: "testRunChange", value: "deny" }];
 
-    const approved = await f.decide("approver", requestId, "approve");
-    expect(approved.json()).toMatchObject({ status: "superseded" });
+    await f.approve("approver", requestId);
+    expect(await f.stored(requestId)).toMatchObject({
+      status: "superseded",
+      applyResult: { execution: "refused", error: { code: "POLICY_DENIED" } }
+    });
     expect(f.executed).toEqual([]);
     expect(await f.run(runId)).toMatchObject({ status: "denied", denial: { kind: "policy" } });
+  });
+});
+
+/** Fails the test when `work` has not answered in time, instead of hanging with it. */
+async function within<T>(ms: number, what: string, work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms} ms`)), ms);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// The decision of a held call uses the one connection of its transaction and executes nothing.
+// Before, each approval held its transaction's connection while its handler took more from the
+// same pool and then ran the call: as many approvals as the pool has connections (10 by
+// default) left every connection idle in a transaction for good and the API answered nobody.
+describe("many approvals at the same moment", () => {
+  const POOL_SIZE = 10;
+
+  it("answers at once when pool-size-plus-two held calls are approved together, and every call ends", async () => {
+    const f = await fixture();
+    const held: { runId: string; requestId: string }[] = [];
+    for (let index = 0; index < POOL_SIZE + 2; index++) {
+      held.push(await f.hold(`load-${index}`, `key-${index}`));
+    }
+
+    const decided = await within(
+      15_000,
+      "Approving all calls at once",
+      Promise.all(held.map(({ requestId }) => f.decide("approver", requestId, "approve")))
+    );
+    expect(decided.map((response) => response.statusCode)).toEqual(held.map(() => 200));
+    // The API answers while the approved calls still wait to be executed.
+    const listed = await within(
+      5_000,
+      "The API",
+      f.app.call("approval_requests.list", {
+        query: { status: "pending" },
+        headers: f.as("approver")
+      })
+    );
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().items).toEqual([]);
+    expect(f.executed).toEqual([]);
+
+    // Four calls run at a time, so the queue takes several passes.
+    for (let pass = 0; pass < held.length && f.executed.length < held.length; pass++) {
+      await f.runJobs();
+    }
+    expect([...f.executed].sort()).toEqual(
+      held.map((_call, index) => `requester:load-${index}`).sort()
+    );
+    for (const { runId, requestId } of held) {
+      expect(await f.run(runId)).toMatchObject({
+        status: "done",
+        decision: { mode: "approved" }
+      });
+      expect(await f.stored(requestId)).toMatchObject({
+        status: "approved",
+        applyResult: { execution: "done" }
+      });
+    }
+    const health = await within(5_000, "The API", f.call("approver", "after", "key-after"));
+    expect(health.statusCode).toBe(202);
+  }, 60_000);
+
+  it("refuses fifteen of sixteen approvals of one request at once and executes the call once", async () => {
+    const f = await fixture();
+    const { runId, requestId } = await f.hold("sixteen");
+
+    const decided = await within(
+      15_000,
+      "Sixteen approvals of one request",
+      Promise.all(
+        Array.from({ length: 16 }, (_unused, index) =>
+          f.decide(index % 2 === 0 ? "approver" : "second", requestId, "approve")
+        )
+      )
+    );
+    const codes = decided.map((response) => response.statusCode).sort();
+    expect(codes).toEqual([200, ...Array.from({ length: 15 }, () => 409)]);
+    await f.runJobs();
+    expect(f.executed).toEqual(["requester:sixteen"]);
+    expect((await f.run(runId)).status).toBe("done");
+  }, 60_000);
+});
+
+// What is asked again, as the person who made the call, at the moment the call is to run.
+// Before, an approved call ran on what was true when it was approved, inside that request.
+describe("an approved call at the moment it runs", () => {
+  it("does not run for a person whose account was closed after the approval", async () => {
+    const f = await fixture();
+    const { runId, requestId } = await f.hold("closed");
+    // Approved while the account was open: the decision is recorded.
+    const approved = await f.decide("approver", requestId, "approve");
+    expect(approved.json()).toMatchObject({ status: "approved" });
+    await f.app.stores.users.updateUser({
+      clientInstanceId: f.clientInstanceId,
+      userId: await f.userId("Requester"),
+      status: "disabled"
+    });
+
+    await f.runJobs();
+
+    expect(f.executed).toEqual([]);
+    expect(await f.stored(requestId)).toMatchObject({
+      status: "superseded",
+      applyResult: {
+        runId,
+        execution: "refused",
+        error: { message: "The account of the person who made this call is closed or deleted." }
+      }
+    });
+    expect(await f.run(runId)).toMatchObject({
+      status: "denied",
+      denial: { kind: "forbidden", reason: "holder_inactive" }
+    });
+  });
+
+  it("does not run a call the policy came to refuse after the approval", async () => {
+    let settings: CentralPolicySetting[] = [approvalSetting];
+    const f = await fixture({ settings: () => settings });
+    const { runId, requestId } = await f.hold("denied-after");
+    expect((await f.decide("approver", requestId, "approve")).json().status).toBe("approved");
+    settings = [{ operation: "testRunChange", value: "deny" }];
+
+    await f.runJobs();
+
+    expect(f.executed).toEqual([]);
+    expect(await f.stored(requestId)).toMatchObject({
+      status: "superseded",
+      applyResult: { execution: "refused", error: { code: "POLICY_DENIED" } }
+    });
+    expect(await f.run(runId)).toMatchObject({ status: "denied", denial: { kind: "policy" } });
+  });
+
+  it("ends a call that takes longer than its operation's time as failed, and tells it to stop", async () => {
+    const f = await fixture({ timeoutMs: 100 });
+    const { runId, requestId } = await f.hold("slow-one");
+
+    await f.approve("approver", requestId);
+
+    expect(f.executed).toEqual(["requester:slow-one"]);
+    // The implementation was told to stop through its signal.
+    expect(f.stopped).toEqual(["slow-one"]);
+    expect(await f.run(runId)).toMatchObject({ status: "failed", error: { code: "TIMEOUT" } });
+    expect(await f.stored(requestId)).toMatchObject({
+      status: "approved",
+      applyResult: { runId, execution: "failed", error: { code: "TIMEOUT" } }
+    });
+  });
+
+  it("records a call whose first attempt never ended as interrupted and does not run it again", async () => {
+    const f = await fixture();
+    const { runId, requestId } = await f.hold("cut-off");
+    expect((await f.decide("approver", requestId, "approve")).statusCode).toBe(200);
+    // The process that took the run for execution ended before the call did.
+    const taken = await f.app.stores.operationRuns.resume({
+      clientInstanceId: f.clientInstanceId,
+      id: (await f.run(runId)).id,
+      startedAt: new Date().toISOString(),
+      decision: { mode: "approved", by: "usr_x", at: new Date().toISOString() }
+    });
+    expect(taken?.status).toBe("running");
+
+    // The job's next attempt does not wait for the sweep of runs that never ended.
+    await f.runJobs();
+
+    expect(f.executed).toEqual([]);
+    expect(await f.run(runId)).toMatchObject({ status: "failed", error: { code: "interrupted" } });
+    expect(await f.stored(requestId)).toMatchObject({
+      status: "approved",
+      applyResult: { runId, execution: "interrupted" }
+    });
   });
 });
 

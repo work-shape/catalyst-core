@@ -8,6 +8,7 @@ import {
   StoreBackedAuditRecorder,
   asAgentRunId,
   asClientInstanceId,
+  asConversationId,
   asToolCallId,
   approvalDecisionNote,
   approvalRevisionOwner,
@@ -161,6 +162,68 @@ describe("approval decision history", () => {
     if (status === "reverted") {
       expect(event?.comment).toBeUndefined();
     }
+  });
+
+  // Fails before the fix: every approved request told the agent "The change is now active",
+  // also when the approved call had failed, was cut off, or had not run yet.
+  it("tells the agent what became of an approved change that ran after the decision", () => {
+    const decided = (
+      status: Exclude<ApprovalRequestStatus, "pending">,
+      execution?: string
+    ): ApprovalRequest => ({
+      id: "apr_1",
+      clientInstanceId,
+      kind: "operation_call",
+      summary: "assets.put",
+      payload: {},
+      requestedBy: { id: owner.id, displayLabel: owner.displayLabel },
+      origin: {
+        conversationId: asConversationId("conv_1"),
+        agentRunId: asAgentRunId("origin-run"),
+        toolCallId: asToolCallId("origin-call"),
+        agentName: "agent"
+      },
+      status,
+      decision: {
+        approved: status === "approved",
+        decidedBy: reviewer.id,
+        decidedByLabel: reviewer.displayLabel,
+        decidedAt: "2026-10-05T09:30:00.000Z"
+      },
+      checks: [],
+      ...(execution ? { applyResult: { execution } } : {}),
+      createdAt: "2026-10-05T09:00:00.000Z",
+      updatedAt: "2026-10-05T09:30:00.000Z"
+    });
+    const note = (request: ApprovalRequest) => createApprovalDecisionMessage(request)?.text;
+
+    // Approved and not run yet: the thread is told nothing until the call has ended.
+    expect(createApprovalDecisionMessage(decided("approved", "queued"))).toBeUndefined();
+
+    expect(note(decided("approved", "done"))).toContain("The change is now active.");
+    const failed = note(decided("approved", "failed"));
+    expect(failed).toContain("The approved call ran and failed.");
+    expect(failed).not.toContain("now active");
+    const interrupted = note(decided("approved", "interrupted"));
+    expect(interrupted).toContain("was interrupted while it ran");
+    expect(interrupted).not.toContain("now active");
+    const refused = note(decided("superseded", "refused"));
+    expect(refused).toContain("was not executed: when it should run, it was no longer allowed");
+    const expired = note(decided("superseded", "expired"));
+    expect(expired).toContain("expired at 2026-10-05T09:30:00.000Z before it was decided");
+    // An expiry names nobody who decided it.
+    expect(expired).not.toContain("Reviewer");
+
+    // Each outcome is a message of its own, and its metadata says which one.
+    const ids = ["done", "failed", "interrupted"].map(
+      (execution) => createApprovalDecisionMessage(decided("approved", execution))?.id
+    );
+    expect(new Set(ids).size).toBe(3);
+    expect(
+      readApprovalDecisionMetadata(
+        createApprovalDecisionMessage(decided("approved", "failed"))?.metadata
+      )
+    ).toMatchObject({ status: "approved", execution: "failed" });
   });
 
   it("lets the origin agent revise only a proposal its own requester sent back", async () => {

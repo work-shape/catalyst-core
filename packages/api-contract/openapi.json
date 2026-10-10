@@ -10843,6 +10843,16 @@
           },
           "requestedBy": {
             "type": "string"
+          },
+          "execution": {
+            "type": "string",
+            "enum": [
+              "done",
+              "failed",
+              "interrupted",
+              "refused",
+              "expired"
+            ]
           }
         },
         "required": [

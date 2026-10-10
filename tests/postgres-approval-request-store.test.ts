@@ -5,6 +5,7 @@ import { createTestInstance } from "./support/test-instance";
 import { describe, expect, it } from "vitest";
 import postgres from "postgres";
 import {
+  AppError,
   asClientInstanceId,
   asAgentRunId,
   asToolCallId,
@@ -212,6 +213,58 @@ describe("Postgres approval request store", () => {
       await store.close();
     }
   });
+
+  // Fails before the fix: every decision waited for the row lock inside its own transaction
+  // and held a connection for it. The winner's handler asked the pool for one more connection
+  // and got none, so with a pool of ten, sixteen decisions of one request never ended.
+  it("refuses every other decision of a request at once while one is being made", async () => {
+    const store = (await createTestInstance({ postgres: {} })).stores;
+    const sql = postgres(databaseUrl, { max: 1 });
+    const clientInstanceId = asClientInstanceId(`approval_${globalThis.crypto.randomUUID()}`);
+    try {
+      const request = await store.approvals.createApprovalRequest({
+        clientInstanceId,
+        kind: "fake",
+        summary: "Decided by sixteen at once",
+        payload: {},
+        requestedBy: { id: "owner", displayLabel: "Owner" }
+      });
+      let resolved = 0;
+      const decide = () =>
+        store.approvals.transitionPendingApprovalRequest({
+          clientInstanceId,
+          requestId: request.id,
+          async resolve() {
+            resolved += 1;
+            // What a handler does that reads outside the transaction: one more connection.
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            await store.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id });
+            return { status: "approved", applyResult: { applied: true } };
+          }
+        });
+
+      const outcomes = await Promise.allSettled(Array.from({ length: 16 }, decide));
+
+      expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+      const refused = outcomes.flatMap((outcome) =>
+        outcome.status === "rejected" && outcome.reason instanceof AppError ? [outcome.reason] : []
+      );
+      expect(refused).toHaveLength(15);
+      expect(refused.every((error) => error.code === "CONFLICT")).toBe(true);
+      expect(refused.map((error) => error.message)).toContain(
+        "Approval request is being decided right now"
+      );
+      expect(resolved).toBe(1);
+      // The pool is free again: nothing was left in a transaction.
+      expect(
+        await store.approvals.getApprovalRequest({ clientInstanceId, requestId: request.id })
+      ).toMatchObject({ status: "approved" });
+    } finally {
+      await sql`delete from approval_requests where client_instance_id = ${clientInstanceId}`;
+      await sql.end();
+      await store.close();
+    }
+  }, 20_000);
 });
 
 /**

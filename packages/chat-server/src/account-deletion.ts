@@ -19,6 +19,7 @@ import {
   type DeletionOutcome,
   type DeletionTransaction
 } from "./subject-deletion";
+import { endHeldOperationCalls } from "./operation-call-approval-handler";
 import type { ChatServerOptions } from "./types";
 import { cleanupProductUserData, requireNoSoleOwnedSharedWorkspace } from "./user-deletion";
 
@@ -94,6 +95,18 @@ export async function completeAccountDeletion(
   }
   await cancelRunsInProgress(options, { ownerUserId: user.id });
   await deleteStandalonePasswordSignIns(options, user);
+  // The calls of the user that still wait for an approval can never run as them again. They
+  // end here, and their requests lose the input the user gave.
+  if (options.approvalRequests) {
+    await endHeldOperationCalls(
+      { clientInstanceId: options.clientInstanceId, approvals: options.approvalRequests.store },
+      { requestedById: user.id },
+      {
+        denial: { kind: "forbidden", action: "operations.call", reason: "holder_inactive" },
+        message: "The account of the person who made this call was deleted."
+      }
+    );
+  }
   const personalWorkspaceId = await personalWorkspaceIdOf(options.stores, options, user.id);
   if (personalWorkspaceId) {
     await retryPendingCleanup(options, { collaborationWorkspaceId: personalWorkspaceId });

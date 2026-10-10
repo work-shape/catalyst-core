@@ -7,7 +7,6 @@ import {
   type OperationDefinition,
   type OperationDenial,
   type OperationRun,
-  type OperationRunEnd,
   type OperationRunId
 } from "@vivd-catalyst/core";
 import {
@@ -15,16 +14,15 @@ import {
   authorizeOrigin,
   createRunContext,
   deniedEnd,
+  denyRun,
   executeAdmitted,
+  failRun,
   hashInput,
-  policyInputOf,
-  policyRefuses,
   requireModuleOn,
-  type OperationOutcome,
+  resolveGuardedPolicy,
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
-import { recordedResult } from "./run-operation";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
 export interface WaitingOperationCall {
@@ -44,112 +42,233 @@ export interface OperationDecider {
 }
 
 /**
- * Asks again, before a call that waited for an approval is executed, whether it may still
- * run: the operation exists, the input is the one that was asked for, the actor still has the
- * right, the policy does not refuse it, and what it changes has not changed. A call that may
- * not is stale. Its run is ended here with the reason, because nothing else will end it, and
- * the answer is `true`. A run that was declined or expired is stale too and is left as it is.
+ * What became of a call that was approved. `refused` is a call that was not executed because
+ * it may no longer run as the person who made it; `expired` one whose time ran out first.
  */
-export async function endWaitingOperationIfStale(
-  waiting: WaitingOperationCall,
-  deps: RunOperationDeps
-): Promise<boolean> {
-  const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: waiting.runId });
-  if (!run) {
-    return true;
-  }
-  if (run.status !== "pending_approval") {
-    // A run that was taken for execution is not stale: approving it again answers what that
-    // execution came to. Every other run that waits no more was declined or expired.
-    return !wasTakenForExecution(run);
-  }
-  const now = (deps.now ?? (() => new Date()))();
-  if (run.expiresAt !== undefined && new Date(run.expiresAt) <= now) {
-    // The job that marks expired runs has not come by yet. The call is not executed.
-    return true;
-  }
-  const stale = await findStaleness(run, waiting, deps);
-  if (!stale) {
-    return false;
-  }
-  const finishedAt = (deps.now ?? (() => new Date()))().toISOString();
-  const end: Extract<OperationRunEnd, { status: "denied" | "failed" }> =
-    "denial" in stale
-      ? deniedEnd({ now: () => new Date(finishedAt) }, stale.denial)
-      : { status: "failed", finishedAt, error: stale.error };
-  await deps.runs.endWaiting({ clientInstanceId: deps.clientInstanceId, id: run.id, end });
-  await stale.context?.emit(
-    end.status === "denied" ? "operation.denied" : "operation.failed",
-    "after",
-    { status: end.status, reason: end.error.code }
-  );
-  return true;
-}
-
-type Staleness = { context?: RunContext } & (
-  { denial: OperationDenial } | { error: { code: string; message: string } }
+export type ApprovedOperationEnd = { run?: OperationRun } & (
+  | { execution: "done" }
+  | { execution: "failed" | "interrupted" | "refused"; error: { code: string; message: string } }
+  | { execution: "expired" }
 );
 
-async function findStaleness(
-  run: OperationRun,
+/**
+ * Executes a call another person approved, once, outside the request that approved it.
+ *
+ * The run is taken for execution in one statement, so of two takers one executes. Whoever
+ * finds the run already taken executes nothing and answers what the run says. A run that is
+ * still `running` then belongs to an attempt that ended without recording its outcome: the
+ * caller is the only executor of the run, so the run is ended as interrupted and never runs a
+ * second time.
+ *
+ * Before anything of the operation runs, the call is asked again as the person who made it,
+ * as that person is at this moment: the operation exists and its module is on, the input is
+ * the one that was asked for, the person is a member of the call's workspace, the surface and
+ * the right still allow it, and the policy with its guardrails does not refuse it. A call
+ * that may not run ends its run with the reason and is `refused`.
+ *
+ * The call then runs for at most the time its operation names. A call that takes longer, or
+ * whose `signal` is aborted, is told to stop through its own signal and its run ends at once:
+ * as failed with `TIMEOUT`, or as interrupted.
+ */
+export async function executeApprovedOperation(
   waiting: WaitingOperationCall,
-  deps: RunOperationDeps
-): Promise<Staleness | undefined> {
-  const context = await waitingContext(run, waiting, deps).catch((error: unknown) => {
-    if (error instanceof AppError && error.code === "NOT_FOUND") return undefined;
-    throw error;
+  approver: OperationDecider & { at: string },
+  deps: RunOperationDeps,
+  options: { signal?: AbortSignal } = {}
+): Promise<ApprovedOperationEnd> {
+  const now = deps.now ?? (() => new Date());
+  const taken = await deps.runs.resume({
+    clientInstanceId: deps.clientInstanceId,
+    id: waiting.runId,
+    startedAt: now().toISOString(),
+    decision: {
+      mode: "approved",
+      by: approver.id,
+      byLabel: approver.label,
+      at: approver.at,
+      ...(approver.comment ? { comment: approver.comment } : {})
+    }
   });
-  if (!context) {
-    return { error: { code: "NOT_FOUND", message: "The operation of this call does not exist" } };
+  if (!taken) {
+    return readApprovedOperationEnd(waiting.runId, deps);
   }
-  if ("actorGone" in context) {
+  const admitted = await admitAgain(taken, waiting, deps);
+  if ("end" in admitted) {
+    return admitted.end;
+  }
+  return executeWithinTime(admitted.context, options.signal);
+}
+
+/**
+ * What a run that does not wait any more says about its approved call. A run that is still
+ * `running` is ended as interrupted: only the one executor of the run may ask.
+ */
+export async function readApprovedOperationEnd(
+  runId: string,
+  deps: Pick<RunOperationDeps, "clientInstanceId" | "runs">
+): Promise<ApprovedOperationEnd> {
+  const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: runId });
+  if (!run) {
     return {
-      denial: {
-        kind: "forbidden",
-        action: context.definition.action ?? context.definition.name,
-        reason: "holder_inactive"
+      execution: "refused",
+      error: { code: "NOT_FOUND", message: "The call of this request no longer exists." }
+    };
+  }
+  if (run.status === "expired" || run.status === "pending_approval") {
+    // A run that still waits and could not be taken ran out of time; the expiry job marks it.
+    return { execution: "expired", run };
+  }
+  if (!wasTakenForExecution(run)) {
+    return {
+      execution: "refused",
+      run,
+      error: run.error ?? {
+        code: "CONFLICT",
+        message: "This call does not wait for an approval any more."
       }
     };
   }
-  const { definition, call, resource } = context;
+  switch (run.status) {
+    case "done":
+      return { execution: "done", run };
+    case "running": {
+      const interrupted = await deps.runs.markInterrupted({
+        clientInstanceId: deps.clientInstanceId,
+        id: run.id
+      });
+      // A run that ended between the two statements says itself how.
+      return interrupted
+        ? { execution: "interrupted", run: interrupted, error: INTERRUPTED_RUN_ERROR }
+        : readApprovedOperationEnd(runId, deps);
+    }
+    case "denied":
+      return { execution: "refused", run, error: run.error ?? UNKNOWN_END };
+    default:
+      return {
+        execution: run.error?.code === INTERRUPTED_RUN_ERROR.code ? "interrupted" : "failed",
+        run,
+        error: run.error ?? UNKNOWN_END
+      };
+  }
+}
+
+const UNKNOWN_END = { code: "INTERNAL", message: "The run does not say how the call ended." };
+
+/**
+ * Asks again whether a call that was taken for execution may run. A call that may not has its
+ * run ended here, because nothing else will end it.
+ */
+async function admitAgain(
+  run: OperationRun,
+  waiting: WaitingOperationCall,
+  deps: RunOperationDeps
+): Promise<{ context: RunContext } | { end: ApprovedOperationEnd }> {
+  const found = await waitingContext(run, waiting, deps).catch((error: unknown) => {
+    if (error instanceof AppError && error.code === "NOT_FOUND") {
+      return { gone: { code: error.code, message: error.message } };
+    }
+    throw error;
+  });
+  if ("gone" in found) {
+    return { end: await endWithoutContext(run, deps, { error: found.gone }) };
+  }
+  if ("actorGone" in found) {
+    return {
+      end: await endWithoutContext(run, deps, {
+        denial: {
+          kind: "forbidden",
+          action: found.definition.action ?? found.definition.name,
+          reason: "holder_inactive"
+        },
+        message: "The account of the person who made this call is closed or deleted."
+      })
+    };
+  }
+  const context = found;
+  const { definition, call } = context;
   // The input was validated when the call was made and is not read through the schema again:
   // a schema that changes what it reads would refuse its own output. The hash says that what
   // is executed is what was asked for.
   if (hashInput(call.input) !== run.inputHash) {
+    const error = new AppError("VALIDATION_FAILED", "The input of this call is no longer valid");
+    const failed = await failRun(context, error, true);
     return {
-      context,
-      error: { code: "VALIDATION_FAILED", message: "The input of this call is no longer valid" }
+      end: {
+        execution: "refused",
+        run: failed.run,
+        error: { code: error.code, message: error.message }
+      }
     };
+  }
+  const refuse = async (denial: OperationDenial, message?: string) => {
+    const denied = await denyRun(context, denial);
+    return {
+      end: {
+        execution: "refused" as const,
+        run: denied.run,
+        error: message
+          ? { code: denied.run.error?.code ?? "FORBIDDEN", message }
+          : (denied.run.error ?? UNKNOWN_END)
+      }
+    };
+  };
+  if (
+    call.workspaceId !== undefined &&
+    deps.workspaceMember &&
+    !(await deps.workspaceMember({ userId: call.actor.id, workspaceId: call.workspaceId }))
+  ) {
+    return refuse(
+      {
+        kind: "forbidden",
+        action: definition.action ?? definition.name,
+        reason: "no_grant"
+      },
+      "The person who made this call is no longer a member of its workspace."
+    );
   }
   const access = await deps.authorizer.forActor(call.actor);
   const surface = await authorizeOrigin(call, definition, deps);
   const right = surface.allowed ? await authorizeActor(context, access) : surface;
-  if (!right.allowed) {
-    return {
-      context,
-      denial: { kind: "forbidden", action: right.action, reason: right.reason }
-    };
-  }
-  if (policyRefuses(await policyInputOf(context))) {
-    return { context, denial: { kind: "policy", operation: definition.name } };
-  }
-  const changed = await definition.isStale?.(call.input, {
-    actor: call.actor,
-    origin: call.origin,
-    workspaceId: call.workspaceId,
-    correlationId: call.correlationId,
-    access,
-    resource
+  await context.emit("operation.authorization_checked", "after", {
+    ...(definition.action === null ? {} : { action: definition.action }),
+    status: right.allowed ? "success" : "denied",
+    ...(right.allowed ? {} : { action: right.action, reason: right.reason })
   });
-  return changed
-    ? {
-        context,
-        error: {
-          code: "CONFLICT",
-          message: "What this call changes has changed since it was requested"
-        }
-      }
-    : undefined;
+  if (!right.allowed) {
+    return refuse({ kind: "forbidden", action: right.action, reason: right.reason });
+  }
+  const guarded = await resolveGuardedPolicy(context);
+  if ("denial" in guarded) {
+    return refuse(guarded.denial);
+  }
+  return { context };
+}
+
+/** Ends a run that was taken for execution and whose operation or actor is gone. */
+async function endWithoutContext(
+  run: OperationRun,
+  deps: RunOperationDeps,
+  reason:
+    { denial: OperationDenial; message: string } | { error: { code: string; message: string } }
+): Promise<ApprovedOperationEnd> {
+  const now = deps.now ?? (() => new Date());
+  const finishedAt = now().toISOString();
+  const ended = await deps.runs.finish({
+    clientInstanceId: deps.clientInstanceId,
+    id: run.id,
+    end:
+      "denial" in reason
+        ? deniedEnd({ now }, reason.denial)
+        : { status: "failed", finishedAt, error: { ...reason.error, unexecuted: true } }
+  });
+  return {
+    execution: "refused",
+    run: ended ?? run,
+    error:
+      "denial" in reason
+        ? { code: ended?.error?.code ?? "FORBIDDEN", message: reason.message }
+        : reason.error
+  };
 }
 
 /**
@@ -178,84 +297,83 @@ async function waitingContext(
     call,
     resource: definition.resource(call.input),
     deps,
-    // The call is executed later and elsewhere than it was made: nothing of the live call is left.
+    // The call is executed later and elsewhere than it was made: nothing of the live call is
+    // left. Its time and its signal are set where it is executed.
     runtime: {}
   });
 }
 
-/**
- * Executes a call another person approved, once. The run is taken for execution in one
- * statement, so of two approvals of the same run one executes. An approval of a run that was
- * already taken answers what that execution came to and executes nothing. The call runs as
- * its original actor; the approver is recorded as who decided.
- */
-export async function executeApprovedOperation(
-  waiting: WaitingOperationCall,
-  approver: OperationDecider,
-  deps: RunOperationDeps
-): Promise<OperationOutcome> {
-  const now = deps.now ?? (() => new Date());
-  const startedAt = now().toISOString();
-  const taken = await deps.runs.resume({
-    clientInstanceId: deps.clientInstanceId,
-    id: waiting.runId,
-    startedAt,
-    decision: {
-      mode: "approved",
-      by: approver.id,
-      byLabel: approver.label,
-      at: startedAt,
-      ...(approver.comment ? { comment: approver.comment } : {})
-    }
+/** Runs the call for at most the time its operation names, and until `signal` is aborted. */
+async function executeWithinTime(
+  admitted: RunContext,
+  signal: AbortSignal | undefined
+): Promise<ApprovedOperationEnd> {
+  const { definition, deps, call } = admitted;
+  const { timeoutMs } = definition;
+  const stop = new AbortController();
+  const context: RunContext = {
+    ...admitted,
+    runtime: { signal: stop.signal, deadline: new Date(admitted.now().getTime() + timeoutMs) }
+  };
+  const access = await deps.authorizer.forActor(call.actor);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  const cut = new Promise<"timeout" | "aborted">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), timeoutMs);
+    onAbort = () => resolve("aborted");
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
   });
-  if (!taken) {
-    return answerTakenRun(waiting.runId, deps);
-  }
-  const context = await waitingContext(taken, waiting, deps);
-  if ("actorGone" in context) {
-    throw new AppError("INTERNAL", "An approved call lost its actor between check and execution");
-  }
-  const access = await deps.authorizer.forActor(context.call.actor);
-  return { ...(await executeAdmitted(context, access)), replayed: false };
-}
-
-/** What an approval answers for a run that does not wait any more. */
-async function answerTakenRun(
-  runId: OperationRunId,
-  deps: RunOperationDeps
-): Promise<OperationOutcome> {
-  const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: runId });
-  if (!run) {
-    throw new AppError("NOT_FOUND", "The call of this request no longer exists");
-  }
-  if (run.decision?.mode !== "approved") {
-    throw new AppError("CONFLICT", waitingEndedMessage(run), { operationRunId: run.id });
-  }
-  if (run.status === "running") {
-    throw new AppError(
-      "CONFLICT",
-      "This call was approved and is being executed. Look at its run for the outcome.",
-      { operationRunId: run.id }
-    );
-  }
-  if (run.status === "failed" && run.error?.code === INTERRUPTED_RUN_ERROR.code) {
-    // The execution was cut off. The record says so; nothing runs a second time.
-    return { result: { status: "failed", runId, error: run.error }, run, replayed: true };
-  }
-  if (run.status === "done" && !run.output) {
-    return { result: { status: "done", runId, output: undefined }, run, replayed: true };
-  }
-  return { result: recordedResult(run), run, replayed: true };
-}
-
-function waitingEndedMessage(run: OperationRun): string {
-  switch (run.status) {
-    case "expired":
-      return "This call expired before it was decided. Nothing was executed.";
-    case "denied":
-      return "This call was declined. Nothing was executed.";
-    default:
-      return "This call does not wait for an approval any more.";
+  const execution = executeAdmitted(context, access);
+  try {
+    const first = await Promise.race([execution, cut]);
+    if (first === "timeout") {
+      const error = new AppError(
+        "TIMEOUT",
+        `'${definition.name}' did not end within its ${timeoutMs / 1000} seconds`,
+        undefined,
+        { exposeMessage: true }
+      );
+      // The run ends before the implementation is told to stop, so one that stops at once
+      // cannot record itself as done. What it writes later is refused by the run store.
+      const failed = await failRun(context, error, false);
+      stop.abort(error);
+      void execution.catch(() => undefined);
+      return {
+        execution: "failed",
+        run: failed.run,
+        error: { code: error.code, message: error.message }
+      };
+    }
+    if (first === "aborted") {
+      const interrupted = await deps.runs.markInterrupted({
+        clientInstanceId: deps.clientInstanceId,
+        id: context.run.id
+      });
+      stop.abort(signal?.reason);
+      void execution.catch(() => undefined);
+      return interrupted
+        ? { execution: "interrupted", run: interrupted, error: INTERRUPTED_RUN_ERROR }
+        : await readApprovedOperationEnd(context.run.id, deps);
+    }
+    const { result, run } = first;
+    switch (result.status) {
+      case "done":
+        return { execution: "done", run };
+      case "denied":
+        return { execution: "refused", run, error: run.error ?? UNKNOWN_END };
+      case "failed":
+        return {
+          execution: "failed",
+          run,
+          error: { code: result.error.code, message: result.error.message }
+        };
+      default:
+        throw new AppError("INTERNAL", `An approved call ended as '${result.status}'`);
+    }
+  } finally {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -267,7 +385,7 @@ function waitingEndedMessage(run: OperationRun): string {
 export async function declineWaitingOperation(
   runId: OperationRunId,
   decider: OperationDecider,
-  deps: RunOperationDeps
+  deps: Pick<RunOperationDeps, "clientInstanceId" | "runs" | "now">
 ): Promise<OperationRun> {
   const at = (deps.now ?? (() => new Date()))().toISOString();
   const comment = decider.comment ? { comment: decider.comment } : {};
@@ -292,9 +410,28 @@ export async function declineWaitingOperation(
     "CONFLICT",
     run.decision?.mode === "approved"
       ? "This call was approved and has been executed. It cannot be declined any more."
-      : waitingEndedMessage(run),
+      : run.status === "expired"
+        ? "This call expired before it was decided. Nothing was executed."
+        : "This call does not wait for an approval any more.",
     { operationRunId: run.id }
   );
+}
+
+/**
+ * Ends a waiting call that nobody can decide any more, such as the call of a deleted
+ * conversation or account: the run is `denied` with the reason and nothing is executed.
+ * A run that does not wait any more is left as it is.
+ */
+export async function refuseWaitingOperation(
+  runId: OperationRunId,
+  denial: OperationDenial,
+  deps: Pick<RunOperationDeps, "clientInstanceId" | "runs" | "now">
+): Promise<void> {
+  await deps.runs.endWaiting({
+    clientInstanceId: deps.clientInstanceId,
+    id: runId,
+    end: deniedEnd({ now: deps.now ?? (() => new Date()) }, denial)
+  });
 }
 
 /** Whether a waiting call was taken for execution: it ran, runs, or was cut off while running. */

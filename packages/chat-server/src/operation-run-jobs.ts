@@ -1,5 +1,6 @@
 import {
   AppError,
+  approvalExecutionOf,
   defineJobHandler,
   type ApprovalRequestStore,
   type ClientInstanceId,
@@ -8,14 +9,31 @@ import {
   type OperationRegistry,
   type OperationRun,
   type OperationRunStore,
-  type RegisteredJobHandler
+  type PlatformStores,
+  type RegisteredJobHandler,
+  type UserStore
 } from "@vivd-catalyst/core";
 import {
+  OPERATION_CALL_APPROVAL_KIND,
+  readApprovedOperationEnd,
+  type RunOperationDeps
+} from "@vivd-catalyst/tool-execution";
+import {
+  APPROVED_OPERATION_CALL_SLOTS,
+  executeApprovedOperationCallJob,
   expireOperationRunsJob,
   expireOperationRunsSchedule,
   recoverOperationRunsJob,
-  recoverOperationRunsSchedule
+  recoverOperationRunsSchedule,
+  removeEndedOperationCallInputJob,
+  removeEndedOperationCallInputSchedule
 } from "./job-kinds";
+import {
+  endedOperationCallOutcome,
+  executeApprovedOperationCall,
+  minimizedOperationCallPayload,
+  recordApprovedOperationCallEnd
+} from "./operation-call-approval-handler";
 
 /**
  * How many waiting runs one statement of the expire job marks, and how many statements one
@@ -44,12 +62,24 @@ const OPERATION_RUN_RECOVER_MIN_AGE_MS = 60 * 1000;
  */
 const UNKNOWN_OPERATION_TIMEOUT_MS = 60 * 60 * 1000;
 
+/**
+ * How many ended requests one statement of the input cleanup reads, with their payload of at
+ * most 256 KiB each, and how many statements one tick makes. A tick so clears at most 2,500
+ * requests; the next one, six hours later or at the next start, takes the rest. Every path
+ * that ends a request removes its input itself: the tick finds what a process that stopped in
+ * between left, and the requests that ended before this was so.
+ */
+const ENDED_INPUT_CLEANUP_PAGE_SIZE = 25;
+const ENDED_INPUT_CLEANUP_PAGES_PER_TICK = 100;
+
 export interface OperationRunJobOptions {
   clientInstanceId: ClientInstanceId;
   runs: OperationRunStore;
   registry: OperationRegistry;
   /** Without it no call was ever held, and an expired run has no request to end. */
-  approvals?: Pick<ApprovalRequestStore, "transitionPendingApprovalRequest">;
+  approvals?: ApprovalRequestStore;
+  /** The call path approved calls are executed on. Without it this process executes none. */
+  calls?: { deps(): RunOperationDeps; users: Pick<UserStore, "getUser"> };
   now(): Date;
 }
 
@@ -89,7 +119,9 @@ async function supersedeRequestOf(options: OperationRunJobOptions, run: Operatio
     await options.approvals.transitionPendingApprovalRequest({
       clientInstanceId: options.clientInstanceId,
       requestId: run.approvalRequestId,
-      resolve: () => Promise.resolve({ status: "superseded" })
+      // The request says that it expired, names nobody who decided it and loses its input.
+      resolve: (pending) =>
+        Promise.resolve(endedOperationCallOutcome(pending, { execution: "expired" }))
     });
   } catch (error) {
     // The request was decided or deleted meanwhile. Its run is expired either way.
@@ -131,13 +163,129 @@ async function recoverOperationRuns(
   return interrupted;
 }
 
-/** The two job kinds that keep Operation Runs from waiting or running for ever. */
+/**
+ * Records an approved call whose job used up its attempts, in the transaction that marks the
+ * job dead. A call that was never taken did not run and ends as failed; one that was taken and
+ * not ended is interrupted. Either way the request says so and nothing runs it again.
+ */
+async function recordAbandonedOperationCall(
+  options: OperationRunJobOptions,
+  requestId: string,
+  stores: PlatformStores
+): Promise<void> {
+  const { clientInstanceId } = options;
+  const request = await stores.approvals.getApprovalRequest({ clientInstanceId, requestId });
+  if (request?.status !== "approved" || approvalExecutionOf(request) !== "queued") {
+    return;
+  }
+  const runId = typeof request.payload.runId === "string" ? request.payload.runId : "";
+  const error = { code: "INTERNAL", message: "The approved call could not be started." };
+  const run = await stores.operationRuns.get({ clientInstanceId, id: runId });
+  const unstarted = run
+    ? await stores.operationRuns.endWaiting({
+        clientInstanceId,
+        id: run.id,
+        end: {
+          status: "failed",
+          finishedAt: options.now().toISOString(),
+          error: { ...error, unexecuted: true }
+        }
+      })
+    : undefined;
+  await recordApprovedOperationCallEnd(
+    { clientInstanceId, approvals: stores.approvals },
+    requestId,
+    unstarted
+      ? { execution: "failed", run: unstarted, error }
+      : await readApprovedOperationEnd(runId, { clientInstanceId, runs: stores.operationRuns })
+  );
+}
+
+/**
+ * Removes the input from the requests of held calls that have ended and still keep it. A
+ * request whose approved call has not run yet keeps its input: the call is executed from it.
+ */
+async function removeEndedOperationCallInput(
+  options: OperationRunJobOptions,
+  approvals: ApprovalRequestStore,
+  logger: Logger,
+  signal?: AbortSignal
+): Promise<number> {
+  const { clientInstanceId } = options;
+  let removed = 0;
+  let after: readonly string[] | undefined;
+  for (let page = 0; page < ENDED_INPUT_CLEANUP_PAGES_PER_TICK; page++) {
+    if (signal?.aborted) break;
+    const requests = await approvals.listApprovalRequests({
+      clientInstanceId,
+      kinds: [OPERATION_CALL_APPROVAL_KIND],
+      excludeStatus: "pending",
+      payloadKey: "input",
+      page: { limit: ENDED_INPUT_CLEANUP_PAGE_SIZE, ...(after ? { after } : {}) }
+    });
+    for (const request of requests) {
+      if (request.status === "approved" && approvalExecutionOf(request) === "queued") continue;
+      const replaced = await approvals.replaceEndedApprovalRequestPayload({
+        clientInstanceId,
+        requestId: request.id,
+        payload: minimizedOperationCallPayload(request.payload)
+      });
+      if (replaced) removed += 1;
+    }
+    const last = requests.at(-1);
+    if (!last || requests.length < ENDED_INPUT_CLEANUP_PAGE_SIZE) break;
+    after = [last.createdAt, last.id];
+  }
+  if (removed > 0) logger.info({ removed }, "Removed the input of ended operation call requests");
+  return removed;
+}
+
+/**
+ * The job kinds of Operation Runs: the two that keep runs from waiting or running for ever,
+ * the one that executes an approved call, and the one that removes the input ended requests
+ * still keep. The last two exist where this process holds calls for an approval.
+ */
 export function createOperationRunJobs(options: OperationRunJobOptions): {
   handlers: RegisteredJobHandler[];
   schedules: JobSchedule[];
 } {
+  const { approvals, calls, clientInstanceId } = options;
+  const held: { handlers: RegisteredJobHandler[]; schedules: JobSchedule[] } =
+    approvals && calls
+      ? {
+          handlers: [
+            defineJobHandler({
+              kind: executeApprovedOperationCallJob,
+              slots: APPROVED_OPERATION_CALL_SLOTS,
+              async run(job, control) {
+                await executeApprovedOperationCall(
+                  { clientInstanceId, approvals, ...calls },
+                  job.payload.requestId,
+                  control.signal
+                );
+              },
+              onExhausted: (job, stores) =>
+                recordAbandonedOperationCall(options, job.payload.requestId, stores)
+            }),
+            defineJobHandler({
+              kind: removeEndedOperationCallInputJob,
+              slots: 1,
+              async run(_job, control) {
+                await removeEndedOperationCallInput(
+                  options,
+                  approvals,
+                  control.logger,
+                  control.signal
+                );
+              }
+            })
+          ],
+          schedules: [removeEndedOperationCallInputSchedule]
+        }
+      : { handlers: [], schedules: [] };
   return {
     handlers: [
+      ...held.handlers,
       defineJobHandler({
         kind: expireOperationRunsJob,
         slots: 1,
@@ -153,6 +301,6 @@ export function createOperationRunJobs(options: OperationRunJobOptions): {
         }
       })
     ],
-    schedules: [expireOperationRunsSchedule, recoverOperationRunsSchedule]
+    schedules: [expireOperationRunsSchedule, recoverOperationRunsSchedule, ...held.schedules]
   };
 }
