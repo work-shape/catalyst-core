@@ -11,6 +11,7 @@ import {
   createControllerStateFromSnapshot,
   createInitialControllerState,
   resolveRunConnectionTarget,
+  staleThreadReread,
   type ConversationControllerState,
   type RunConnectionTarget
 } from "./conversation-controller-state";
@@ -147,6 +148,33 @@ export function useConversationController({
       manager.stop();
     };
   }, [activeRunConnection, client, onTerminalObservation, onToolCallCompleted, refreshSnapshot]);
+
+  // A thread read before the store had recorded the end of a run stays behind the page, which
+  // saw the run end. Nothing else would read it again, so the page does, a bounded few times.
+  const [staleRereads, setStaleRereads] = useState<{ runId: string; attempts: number }>();
+  const reread = staleThreadReread({
+    snapshot: snapshot?.conversation.id === conversationId ? snapshot : undefined,
+    state,
+    attempts:
+      staleRereads && staleRereads.runId === snapshot?.activeRun?.run.id ? staleRereads.attempts : 0
+  });
+  const rereadRunId = reread?.runId;
+  const rereadDelayMs = reread?.delayMs;
+
+  useEffect(() => {
+    if (!conversationId || rereadRunId === undefined || rereadDelayMs === undefined) {
+      return undefined;
+    }
+    const timeout = globalThis.setTimeout(() => {
+      setStaleRereads((current) => ({
+        runId: rereadRunId,
+        attempts: (current?.runId === rereadRunId ? current.attempts : 0) + 1
+      }));
+      // A re-read that fails shows as the thread's own error.
+      refreshSnapshot(conversationId).catch(() => undefined);
+    }, rereadDelayMs);
+    return () => globalThis.clearTimeout(timeout);
+  }, [conversationId, refreshSnapshot, rereadDelayMs, rereadRunId]);
 
   return state;
 }

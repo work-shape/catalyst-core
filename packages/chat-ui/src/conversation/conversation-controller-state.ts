@@ -114,6 +114,37 @@ export function resolveRunConnectionTarget(input: {
   };
 }
 
+/**
+ * How long the page waits before it reads a thread again that still reports as live a run whose
+ * end the page has already seen: one re-read per entry. After the last one it keeps what it has.
+ */
+const STALE_THREAD_REREAD_DELAYS_MS = [400, 1_500, 4_000] as const;
+
+/**
+ * The next re-read of a thread that is behind the page: its snapshot still reports as live the
+ * run whose end the page has already seen, so it lacks what the end of the run brought. Nothing
+ * once the thread has caught up or `attempts` re-reads for this run have not helped.
+ */
+export function staleThreadReread(input: {
+  snapshot: ConversationThreadSnapshot | undefined;
+  state: ConversationControllerState;
+  /** The re-reads already made for this run. */
+  attempts: number;
+}): { runId: string; delayMs: number } | undefined {
+  const snapshotRun = input.snapshot?.activeRun?.run;
+  const seenRun = input.state.activeRun?.run;
+  if (
+    !snapshotRun ||
+    seenRun?.id !== snapshotRun.id ||
+    !isLiveRunStatus(snapshotRun.status) ||
+    isLiveRunStatus(seenRun.status)
+  ) {
+    return undefined;
+  }
+  const delayMs = STALE_THREAD_REREAD_DELAYS_MS[input.attempts];
+  return delayMs === undefined ? undefined : { runId: snapshotRun.id, delayMs };
+}
+
 export function createControllerStateFromSnapshot(
   snapshot: ConversationThreadSnapshot,
   previousState?: ConversationControllerState
@@ -301,14 +332,15 @@ function activeRunForSnapshot(
   previousState: ConversationControllerState | undefined
 ): NonNullable<ConversationThreadSnapshot["activeRun"]> | undefined {
   if (snapshot.activeRun) {
+    const seen = previousState?.activeRun;
+    // What the page has seen of the run is ahead of the thread: later observations, or the
+    // end of a run the thread still reports as live. A run that has ended does not start again.
     if (
-      previousState?.activeRun?.run.id === snapshot.activeRun.run.id &&
-      previousState.activeRun.lastAppliedSequence > snapshot.activeRun.projection.lastSequence
+      seen?.run.id === snapshot.activeRun.run.id &&
+      (seen.lastAppliedSequence > snapshot.activeRun.projection.lastSequence ||
+        (!isLiveRunStatus(seen.run.status) && isLiveRunStatus(snapshot.activeRun.run.status)))
     ) {
-      return {
-        run: previousState.activeRun.run,
-        projection: previousState.activeRun.projection
-      };
+      return { run: seen.run, projection: seen.projection };
     }
     return snapshot.activeRun;
   }

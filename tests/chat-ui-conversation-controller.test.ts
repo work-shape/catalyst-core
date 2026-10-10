@@ -6,7 +6,8 @@ import {
   completeRunObservationStreamInControllerState,
   controllerStateForConversation,
   createControllerStateFromSnapshot,
-  resolveRunConnectionTarget
+  resolveRunConnectionTarget,
+  staleThreadReread
 } from "../packages/chat-ui/src/conversation/conversation-controller-state";
 
 describe("chat UI conversation controller", () => {
@@ -583,6 +584,56 @@ describe("chat UI conversation controller", () => {
     expect(refreshed.connectionStatus).toBe("idle");
     expect(refreshed.activeRun).toBeUndefined();
     expect(refreshed.error).toBeUndefined();
+  });
+
+  it("reads a thread again, a bounded few times, while it reports as live a run the page saw end", () => {
+    const running = createSnapshot({ lastSequence: 1, text: "Answer" });
+    const live = createControllerStateFromSnapshot(running);
+    const ended = applyRunObservationToControllerState(
+      live,
+      createObservation({ sequence: 2, type: "run_completed", payload: {} })
+    ).state;
+    // A run that is still going, or no thread at all, asks for nothing.
+    expect(staleThreadReread({ snapshot: running, state: live, attempts: 0 })).toBeUndefined();
+    expect(staleThreadReread({ snapshot: undefined, state: ended, attempts: 0 })).toBeUndefined();
+
+    // The thread was read before the store had recorded the end of the run: without the last
+    // observation, or with it but with the run still live.
+    for (const behind of [running, createSnapshot({ lastSequence: 2, text: "Answer" })]) {
+      const state = createControllerStateFromSnapshot(behind, ended);
+      // The page keeps the end it saw, and no stream opens for the run again.
+      expect(state.activeRun?.run.status).toBe("completed");
+      expect(
+        resolveRunConnectionTarget({
+          conversationId: "conv_1",
+          enabled: true,
+          snapshot: behind,
+          state
+        })
+      ).toBeUndefined();
+
+      // It reads the thread again, each time after a longer wait, and then stops.
+      const waits: number[] = [];
+      for (let attempts = 0; attempts < 20; attempts += 1) {
+        const reread = staleThreadReread({ snapshot: behind, state, attempts });
+        if (!reread) break;
+        expect(reread.runId).toBe("run_1");
+        waits.push(reread.delayMs);
+      }
+      expect(waits.length).toBeGreaterThan(0);
+      expect(waits.length).toBeLessThan(20);
+      expect(waits).toEqual([...waits].sort((left, right) => left - right));
+      expect(waits.every((wait) => wait > 0)).toBe(true);
+
+      // A thread that has the end of the run, with or without the run on it, ends the re-reads.
+      for (const caughtUp of [
+        createSnapshot({ lastSequence: 2, text: "Answer", runStatus: "completed" }),
+        createSnapshot({ lastSequence: 2, text: "Answer", activeRun: false })
+      ]) {
+        const next = createControllerStateFromSnapshot(caughtUp, state);
+        expect(staleThreadReread({ snapshot: caughtUp, state: next, attempts: 0 })).toBeUndefined();
+      }
+    }
   });
 
   it("shows nothing of the conversation left behind while the selected one loads", () => {
