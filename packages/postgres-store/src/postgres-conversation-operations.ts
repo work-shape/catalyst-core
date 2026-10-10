@@ -91,51 +91,56 @@ export async function getConversation(
   return row ? mapConversation(row) : undefined;
 }
 
+export type ListConversationsInput = {
+  clientInstanceId: ClientInstanceId;
+  collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
+  scope: ConversationListScope;
+  titleQuery?: string;
+  page?: StorePage;
+};
+
 export async function listConversationsForWorkspace(
   db: PostgresConnection,
-  input: {
-    clientInstanceId: ClientInstanceId;
-    collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
-    scope: ConversationListScope;
-    titleQuery?: string;
-    page?: StorePage;
-  }
+  input: ListConversationsInput
 ): Promise<Conversation[]> {
-  const { scope } = input;
   const rows = await db
     .select()
     .from(conversations)
-    .where(
-      and(
-        eq(conversations.clientInstanceId, input.clientInstanceId),
-        eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
-        eq(conversations.status, "active"),
-        input.titleQuery === undefined
-          ? undefined
-          : ilike(conversations.title, containsPattern(input.titleQuery)),
-        keysetFilter(input.page, [conversations.updatedAt, conversations.id], true),
-        ...(scope.kind === "lifecycle"
-          ? []
-          : [
-              or(
-                eq(conversations.visibility, "workspace"),
-                eq(conversations.createdByUserId, scope.userId)
-              ),
-              // A Conversation without messages is an unsent draft: only its creator sees it,
-              // and only while it still holds draft attachments.
-              or(
-                exists(conversationMessages(db)),
-                and(
-                  eq(conversations.createdByUserId, scope.userId),
-                  exists(conversationDraftAttachments(db))
-                )
-              )
-            ])
-      )
-    )
+    .where(listedConversations(db, input))
     .orderBy(desc(conversations.updatedAt), desc(conversations.id))
     .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapConversation);
+}
+
+/** What a list of a workspace holds for its reader, as one condition. */
+export function listedConversations(db: PostgresConnection, input: ListConversationsInput) {
+  const { scope } = input;
+  return and(
+    eq(conversations.clientInstanceId, input.clientInstanceId),
+    eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
+    eq(conversations.status, "active"),
+    input.titleQuery === undefined
+      ? undefined
+      : ilike(conversations.title, containsPattern(input.titleQuery)),
+    keysetFilter(input.page, [conversations.updatedAt, conversations.id], true),
+    ...(scope.kind === "lifecycle"
+      ? []
+      : [
+          or(
+            eq(conversations.visibility, "workspace"),
+            eq(conversations.createdByUserId, scope.userId)
+          ),
+          // A Conversation without messages is an unsent draft: only its creator sees it,
+          // and only while it still holds draft attachments.
+          or(
+            exists(conversationMessages(db)),
+            and(
+              eq(conversations.createdByUserId, scope.userId),
+              exists(conversationDraftAttachments(db))
+            )
+          )
+        ])
+  );
 }
 
 function conversationMessages(db: PostgresConnection) {

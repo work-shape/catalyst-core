@@ -2,6 +2,7 @@ import { auditActorFromUser, projectAgentRun } from "@vivd-catalyst/core";
 import {
   AppError,
   type AgentRun,
+  type ActiveRunSummary,
   type AgentRunProjection,
   type AgentRunId,
   type AgentRunStatus,
@@ -18,11 +19,7 @@ import {
   readAssistantFinalMetadata
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "../types";
-import {
-  ConversationWorkflow,
-  isActiveAgentRunStatus,
-  toActiveRunSummary
-} from "./conversation-workflow";
+import { ConversationWorkflow } from "./conversation-workflow";
 
 export class RunObservationWorkflow {
   private readonly options: ChatServerOptions;
@@ -376,5 +373,31 @@ function toPublicChatMessage(message: ChatMessage): ChatMessage {
   return {
     ...message,
     metadata: withoutAssistantProviderContinuation(message.metadata)
+  };
+}
+
+function isActiveAgentRunStatus(
+  status: AgentRunStatus
+): status is Extract<
+  AgentRunStatus,
+  "queued" | "running" | "waiting_for_permission" | "cancelling"
+> {
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "waiting_for_permission" ||
+    status === "cancelling"
+  );
+}
+
+function toActiveRunSummary(run: AgentRun): ActiveRunSummary {
+  return {
+    id: run.id,
+    conversationId: run.conversationId,
+    agentName: run.agentName,
+    status: run.status,
+    startedAt: run.startedAt,
+    updatedAt: run.updatedAt,
+    lastSequence: run.lastSequence
   };
 }

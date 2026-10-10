@@ -52,6 +52,15 @@ export const conversations = pgTable(
       table.collaborationWorkspaceId,
       table.visibility,
       table.createdByUserId
+    ),
+    // The list of a workspace, newest first, as an index range. Ascending with the tie-break:
+    // Postgres reads it backwards for `order by updated_at desc, id desc`.
+    index("conversations_workspace_updated_idx").on(
+      table.clientInstanceId,
+      table.collaborationWorkspaceId,
+      table.status,
+      table.updatedAt,
+      table.id
     )
   ]
 );

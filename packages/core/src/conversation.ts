@@ -146,6 +146,13 @@ export interface ConversationStore extends ConversationHistoryStore {
     titleQuery?: string;
     page?: StorePage;
   }): Promise<Conversation[]>;
+  /**
+   * The same page as `listConversationsForWorkspace`, each Conversation with the summary of
+   * its active run, read in one statement.
+   */
+  listConversationsWithActiveRun(
+    input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
+  ): Promise<ConversationListItem[]>;
   /** Lifecycle only: every active private Conversation the user created, in any workspace. */
   listPrivateConversationsCreatedByUser(input: {
     clientInstanceId: ClientInstanceId;

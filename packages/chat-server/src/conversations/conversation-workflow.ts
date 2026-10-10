@@ -3,9 +3,6 @@ import { auditActorFromUser } from "@vivd-catalyst/core";
 import {
   AppError,
   JobLeaseLostError,
-  type AgentRun,
-  type ActiveRunSummary,
-  type AgentRunStatus,
   type AuthenticatedUser,
   type Conversation,
   type CollaborationWorkspace,
@@ -77,28 +74,13 @@ export class ConversationWorkflow {
       collaborationWorkspaceId = personal.id;
     }
     await this.workspaces.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    const conversations = await this.options.stores.conversations.listConversationsForWorkspace({
+    return this.options.stores.conversations.listConversationsWithActiveRun({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       scope: { kind: "viewer", userId: getSubjectUserId(user) },
       titleQuery,
       page
     });
-    return Promise.all(
-      conversations.map(async (conversation): Promise<ConversationListItem> => {
-        const activeRun = await this.options.stores.agentRuns.getActiveConversationAgentRun({
-          clientInstanceId: this.options.clientInstanceId,
-          conversationId: conversation.id
-        });
-        const runForList = activeRun;
-        return {
-          ...conversation,
-          ...(runForList && isActiveAgentRunStatus(runForList.status)
-            ? { activeRun: toActiveRunSummary(runForList) }
-            : {})
-        };
-      })
-    );
   }
 
   async createConversation(
@@ -446,32 +428,6 @@ export class ConversationWorkflow {
     }
     return workspace;
   }
-}
-
-export function isActiveAgentRunStatus(
-  status: AgentRunStatus
-): status is Extract<
-  AgentRunStatus,
-  "queued" | "running" | "waiting_for_permission" | "cancelling"
-> {
-  return (
-    status === "queued" ||
-    status === "running" ||
-    status === "waiting_for_permission" ||
-    status === "cancelling"
-  );
-}
-
-export function toActiveRunSummary(run: AgentRun): ActiveRunSummary {
-  return {
-    id: run.id,
-    conversationId: run.conversationId,
-    agentName: run.agentName,
-    status: run.status,
-    startedAt: run.startedAt,
-    updatedAt: run.updatedAt,
-    lastSequence: run.lastSequence
-  };
 }
 
 function toAuditErrorMetadata(error: unknown): JsonObject {

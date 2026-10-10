@@ -3,6 +3,7 @@ import {
   type ClientInstanceId,
   type Conversation,
   type ConversationId,
+  type ConversationListItem,
   type ConversationRetentionStore,
   type ConversationStore,
   type AppendAssistantMessageInput,
@@ -28,6 +29,7 @@ import {
   replaceConversationTitle as replacePostgresConversationTitle,
   updateConversationTitle as updatePostgresConversationTitle
 } from "../postgres-conversation-operations";
+import { listConversationsWithActiveRun as listPostgresConversationsWithActiveRun } from "../postgres-conversation-list-operations";
 import {
   deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
   getModelProviderContinuation as getPostgresModelProviderContinuation
@@ -49,6 +51,11 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
       input: Parameters<ConversationStore["listConversationsForWorkspace"]>[0]
     ): Promise<Conversation[]> {
       return listPostgresConversationsForWorkspace(db, input);
+    },
+    async listConversationsWithActiveRun(
+      input: Parameters<ConversationStore["listConversationsWithActiveRun"]>[0]
+    ): Promise<ConversationListItem[]> {
+      return listPostgresConversationsWithActiveRun(db, input);
     },
     async listPrivateConversationsCreatedByUser(
       input: Parameters<ConversationStore["listPrivateConversationsCreatedByUser"]>[0]
