@@ -89,7 +89,7 @@ async function previewWorkspaceImagePaths(
   }
   const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
     clientInstanceId: context.clientInstanceId,
-    workspaceId: workspace.value.workspaceId
+    workspaceId: workspace.value.handle.id
   });
   const filesByPath = new Map(files.map((file) => [file.path, file]));
   const images: z.infer<typeof workspacePreviewImagesOutputSchema>["images"] = [];
@@ -135,7 +135,7 @@ async function previewWorkspaceImagePaths(
     }
     const artifact = await deps.store.files.createManagedArtifact({
       clientInstanceId: context.clientInstanceId,
-      conversationId: workspace.value.holder.id,
+      conversationId: workspace.value.conversationId,
       kind: previewImageKind(mimeType),
       objectKey: file.objectKey,
       filename: path.basename(file.path),
@@ -144,7 +144,7 @@ async function previewWorkspaceImagePaths(
       checksum: file.checksum,
       metadata: {
         source: EXECUTION_WORKSPACE_ARTIFACT_METADATA_SOURCE,
-        workspaceId: workspace.value.workspaceId,
+        workspaceId: workspace.value.handle.id,
         workspacePath: file.path
       }
     });
@@ -183,7 +183,7 @@ async function previewWorkspaceImagePaths(
       artifacts: artifacts.length > 0 ? artifacts : undefined,
       auditSummary: {
         action: "workspace.preview_images",
-        subject: workspace.value.workspaceId,
+        subject: workspace.value.handle.id,
         metadata: {
           status: "ready",
           source: "workspace_path",

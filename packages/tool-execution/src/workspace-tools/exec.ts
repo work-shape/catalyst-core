@@ -64,7 +64,7 @@ export async function execWorkspaceCommand(
     return workspace.result;
   }
 
-  const queued = await enqueueCommand(deps, context, workspace.value.workspaceId, normalized.value);
+  const queued = await enqueueCommand(deps, context, workspace.value.handle.id, normalized.value);
   if (queued.status === "failed") {
     return queued.result;
   }
@@ -94,7 +94,7 @@ export async function execWorkspaceCommand(
             (
               await deps.store.executionWorkspaces.listWorkspaceFiles({
                 clientInstanceId: context.clientInstanceId,
-                workspaceId: workspace.value.workspaceId
+                workspaceId: workspace.value.handle.id
               })
             ).map((file) => file.path)
           )
@@ -109,7 +109,7 @@ export async function execWorkspaceCommand(
     }
   }
 
-  const output = commandToExecOutput(resultCommand.value, workspace.value.workspaceId);
+  const output = commandToExecOutput(resultCommand.value, workspace.value.handle.id);
   const artifacts = commandArtifacts(resultCommand.value);
   return toolSuccess(output, {
     artifacts: artifacts.length > 0 ? artifacts : undefined,

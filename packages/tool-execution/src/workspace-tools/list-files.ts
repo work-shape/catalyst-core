@@ -32,11 +32,11 @@ export async function listWorkspaceFiles(
   }
   const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
     clientInstanceId: context.clientInstanceId,
-    workspaceId: workspace.value.workspaceId
+    workspaceId: workspace.value.handle.id
   });
   return toolSuccess(
     {
-      workspaceId: workspace.value.workspaceId,
+      workspaceId: workspace.value.handle.id,
       files: files.map((file) => ({
         path: file.path,
         byteSize: file.byteSize,
@@ -50,7 +50,7 @@ export async function listWorkspaceFiles(
     {
       auditSummary: {
         action: "workspace.list_files",
-        subject: workspace.value.workspaceId,
+        subject: workspace.value.handle.id,
         metadata: {
           count: files.length
         }

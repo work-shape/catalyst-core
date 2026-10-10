@@ -52,13 +52,13 @@ export async function importWorkspaceFiles(
     return workspace.result;
   }
 
-  const files = await loadImportSourceFiles(deps, input, context, workspace.value.holder.id);
+  const files = await loadImportSourceFiles(deps, input, context, workspace.value.conversationId);
   if (files.status === "failed") {
     return files.result;
   }
   const capacity = await validateImportCapacity(
     deps,
-    workspace.value.workspaceId,
+    workspace.value.handle.id,
     context,
     files.value
   );
@@ -70,8 +70,8 @@ export async function importWorkspaceFiles(
   for (const file of files.value) {
     const stored = await deps.fileStore.putWorkspaceFile({
       clientInstanceId: context.clientInstanceId,
-      conversationId: workspace.value.holder.id,
-      workspaceId: workspace.value.workspaceId,
+      conversationId: workspace.value.conversationId,
+      workspaceId: workspace.value.handle.id,
       commandId: createPlatformId<"WorkspaceCommandId">("wcmd_import"),
       path: file.path,
       bytes: file.bytes,
@@ -84,7 +84,7 @@ export async function importWorkspaceFiles(
       deps.telemetry,
       {
         clientInstanceId: context.clientInstanceId,
-        workspaceId: workspace.value.workspaceId,
+        workspaceId: workspace.value.handle.id,
         path: file.path,
         objectKey: stored.objectKey,
         byteSize: file.byteSize,
@@ -110,13 +110,13 @@ export async function importWorkspaceFiles(
 
   return toolSuccess(
     {
-      workspaceId: workspace.value.workspaceId,
+      workspaceId: workspace.value.handle.id,
       importedFiles
     },
     {
       auditSummary: {
         action: "workspace.import_files",
-        subject: workspace.value.workspaceId,
+        subject: workspace.value.handle.id,
         metadata: {
           count: importedFiles.length
         }

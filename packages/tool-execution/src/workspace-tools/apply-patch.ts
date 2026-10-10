@@ -60,7 +60,7 @@ export async function applyWorkspacePatch(
   const prepared = await preparePatchChanges(deps, {
     changes: changes.value,
     context,
-    workspaceId: workspace.value.workspaceId
+    workspaceId: workspace.value.handle.id
   });
   if (prepared.status === "failed") {
     return prepared.result;
@@ -81,8 +81,8 @@ export async function applyWorkspacePatch(
   for (const write of prepared.value.writes) {
     const stored = await deps.fileStore.putWorkspaceFile({
       clientInstanceId: context.clientInstanceId,
-      conversationId: workspace.value.holder.id,
-      workspaceId: workspace.value.workspaceId,
+      conversationId: workspace.value.conversationId,
+      workspaceId: workspace.value.handle.id,
       commandId: patchObjectKeyId,
       path: write.path,
       bytes: write.bytes,
@@ -95,7 +95,7 @@ export async function applyWorkspacePatch(
       deps.telemetry,
       {
         clientInstanceId: context.clientInstanceId,
-        workspaceId: workspace.value.workspaceId,
+        workspaceId: workspace.value.handle.id,
         path: write.path,
         objectKey: stored.objectKey,
         byteSize: write.bytes.byteLength,
@@ -122,7 +122,7 @@ export async function applyWorkspacePatch(
   for (const deletion of prepared.value.deletes) {
     const deleted = await deps.store.executionWorkspaces.deleteWorkspaceFile({
       clientInstanceId: context.clientInstanceId,
-      workspaceId: workspace.value.workspaceId,
+      workspaceId: workspace.value.handle.id,
       path: deletion.path,
       deletedAt: deps.now()
     });
@@ -133,14 +133,14 @@ export async function applyWorkspacePatch(
 
   return toolSuccess(
     {
-      workspaceId: workspace.value.workspaceId,
+      workspaceId: workspace.value.handle.id,
       changedFiles,
       deletedFiles
     },
     {
       auditSummary: {
         action: "workspace.apply_patch",
-        subject: workspace.value.workspaceId,
+        subject: workspace.value.handle.id,
         metadata: {
           changedCount: changedFiles.length,
           deletedCount: deletedFiles.length

@@ -13,6 +13,12 @@ import type { ISODateString } from "./time";
 
 export type ExecutionWorkspaceStatus = "active" | "deleted";
 
+/**
+ * What a file or command tool addresses its workspace by. The Execution Workspace of a
+ * conversation is the only kind today.
+ */
+export type WorkspaceHandle = { kind: "execution_workspace"; id: ExecutionWorkspaceId };
+
 export interface ExecutionWorkspace {
   id: ExecutionWorkspaceId;
   clientInstanceId: ClientInstanceId;
