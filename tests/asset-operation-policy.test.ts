@@ -15,7 +15,9 @@ async function setup(settings: CentralPolicySetting[]) {
       return Promise.resolve("allow");
     }
   };
-  const t = await setupNamespaceHolder({ centralPolicySettings: () => settings, events });
+  const t = await setupNamespaceHolder({
+    operations: { centralPolicySettings: () => settings, events }
+  });
   for (const action of ["agent.read", "agent.write", "skill.read", "skill.write"]) {
     await t.grant(t.lena.id, action, { namespace: "lena-" });
   }

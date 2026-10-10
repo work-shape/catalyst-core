@@ -63,7 +63,10 @@ contain breaking changes; a patch version does not.
   `details.currentRevision` when the asset stands at another one; a put without it creates the
   asset and is refused when the name is taken. `assets.sync` applies up to 200 puts and deletes
   for one Namespace completely or not at all, reports each item and reaches no asset outside the
-  prefix. `platform.context.get` now also answers a service principal and names only the actions
+  prefix. The right on every item is decided before the policy is asked, and a policy setting
+  narrowed to a kind or a Namespace applies to every asset call that names one of that kind or in
+  that Namespace. A reference to an asset the caller may not read is answered like a reference to
+  an asset that does not exist. `platform.context.get` now also answers a service principal and names only the actions
   the credential's scopes allow. **Breaking:** the five old asset addresses are gone. Scripts that
   called them use `/api/v1/assets/...`; the CLI is unaffected. The operations
   `config_assets.get`, `put`, `delete`, `revert` and `revisions.list` under

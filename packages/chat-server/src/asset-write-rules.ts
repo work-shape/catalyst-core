@@ -1,10 +1,12 @@
 import {
   AppError,
+  assetScopesEqual,
   findNamespaceOfAssetName,
   isJsonObject,
   unknownToJsonValue,
   type ActorAccess,
   type AgentConfig,
+  type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
   type ConfigAssetKind,
@@ -24,7 +26,15 @@ import {
   readDefinitionName,
   type WorkflowAssetKind
 } from "./asset-kinds/shared";
-import { INVALID_ASSET_SET_MESSAGE, assetSetOf, definitionsOf, type AssetSet } from "./asset-set";
+import { accessResource } from "./asset-access";
+import {
+  INVALID_ASSET_SET_MESSAGE,
+  assetSetOf,
+  definitionsOf,
+  findAssetSetIssues,
+  type AssetSet,
+  type AssetSetIssue
+} from "./asset-set";
 import { recordGovernanceAccess } from "./governance-actions";
 import type { ChatServerOptions } from "./types";
 
@@ -44,6 +54,95 @@ export async function loadStoredAssets(options: ChatServerOptions): Promise<Stor
     })
   ]);
   return { state, assets, set: assetSetOf(assets, state.defaultAgentName) };
+}
+
+/**
+ * What a caller's definition is resolved against: the stored assets the caller may read, and
+ * those beside the written asset, of its owner and its Namespace, which it may refer to
+ * whoever writes it. Every other asset is left out, so a reference to it reads as a reference
+ * to nothing. The instance's default stays in, because the rule that an instance with agents
+ * has one is about the set and not about the change. `complete` says nothing was left out: the
+ * set is then the stored one itself.
+ */
+export async function loadReferableAssets(
+  options: ChatServerOptions,
+  access: ActorAccess,
+  stored: StoredAssets,
+  /** The owner of what is written, and a name of it, or the prefix of its Namespace. */
+  written: { scope: AssetScope; name: string | undefined }
+): Promise<{ set: AssetSet; complete: boolean }> {
+  const readable = (asset: ConfigAssetRecord) => {
+    const kind = options.configAssets.kinds.get(asset.kind);
+    return (
+      // No registered kind reads the definition, so no check resolves anything against it.
+      kind === undefined ||
+      access.authorize(
+        kind.actions.read,
+        accessResource(asset.kind, asset.name, asset.scope, asset.id)
+      ).allowed
+    );
+  };
+  const unread = stored.assets.filter((asset) => !readable(asset));
+  if (unread.length === 0) {
+    return { set: stored.set, complete: true };
+  }
+  const namespaces =
+    written.scope.kind === "instance"
+      ? await options.stores.access.listNamespaceRecords({
+          clientInstanceId: options.clientInstanceId
+        })
+      : [];
+  const namespaceOf = (name: string | undefined) =>
+    name === undefined ? undefined : findNamespaceOfAssetName(namespaces, name)?.prefix;
+  const namespace = namespaceOf(written.name);
+  const isInstanceDefault = (asset: ConfigAssetRecord) =>
+    asset.name === stored.state.defaultAgentName &&
+    options.configAssets.kinds.get(asset.kind)?.holdsInstanceDefault === true;
+  const hidden = new Set(
+    unread.filter(
+      (asset) =>
+        !isInstanceDefault(asset) &&
+        (!assetScopesEqual(asset.scope, written.scope) || namespaceOf(asset.name) !== namespace)
+    )
+  );
+  return hidden.size === 0
+    ? { set: stored.set, complete: true }
+    : {
+        set: assetSetOf(
+          stored.assets.filter((asset) => !hidden.has(asset)),
+          stored.state.defaultAgentName
+        ),
+        complete: false
+      };
+}
+
+/**
+ * What the kinds refuse of a change, read against a set that leaves assets out. Such a set
+ * has issues of its own, because what it keeps may refer to what it leaves out: those are not
+ * the change's and are not told. A reference the changed definition carried already is among
+ * them, so a write is never refused for a reference it only keeps.
+ */
+export function findIssuesOfChange(
+  kinds: readonly WorkflowAssetKind[],
+  view: AssetSet,
+  candidate: AssetSet,
+  /** The keys of the definitions the change writes. */
+  changed: ReadonlySet<string>
+): AssetSetIssue[] {
+  const key = (issue: AssetSetIssue) => JSON.stringify([issue.message, issue.path?.map(String)]);
+  const before = new Map<string, number>();
+  for (const issue of findAssetSetIssues(kinds, view).issues) {
+    before.set(key(issue), (before.get(key(issue)) ?? 0) + 1);
+  }
+  return findAssetSetIssues(kinds, candidate).issues.filter((issue) => {
+    if (issue.assetKind !== undefined && issue.assetName !== undefined) {
+      // An issue of one definition is the change's when the change writes that definition.
+      return changed.has(assetKey(issue.assetKind, issue.assetName));
+    }
+    const count = before.get(key(issue)) ?? 0;
+    before.set(key(issue), count - 1);
+    return count <= 0;
+  });
 }
 
 /** Records the write and refuses it where the instance has interactive editing off. */

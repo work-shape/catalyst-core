@@ -32,6 +32,8 @@ import {
   assetKey,
   authorizeInteractiveWrite,
   findChangedAgentRefusals,
+  findIssuesOfChange,
+  loadReferableAssets,
   loadStoredAssets,
   toJsonObject
 } from "./asset-write-rules";
@@ -137,21 +139,24 @@ export async function syncAssets(
   stopIfRefused();
 
   const stored = await loadStoredAssets(options);
-  let candidate: AssetSet = stored.set;
-  for (const entry of ready()) {
-    candidate =
-      entry.item.type === "delete"
-        ? withoutDefinition(candidate, entry.kind.kind, entry.name)
-        : withDefinition(
-            candidate,
-            entry.kind.kind,
-            entry.name,
-            entry.kind.prepareInteractiveUpsert({
-              current: findDefinition(stored.set, entry.kind.kind, entry.name),
-              next: entry.item.config
-            })
-          );
-  }
+  /** The set as the batch would leave it. */
+  const withItems = (set: AssetSet) =>
+    ready().reduce(
+      (left, entry) =>
+        entry.item.type === "delete"
+          ? withoutDefinition(left, entry.kind.kind, entry.name)
+          : withDefinition(
+              left,
+              entry.kind.kind,
+              entry.name,
+              entry.kind.prepareInteractiveUpsert({
+                current: findDefinition(stored.set, entry.kind.kind, entry.name),
+                next: entry.item.config
+              })
+            ),
+      set
+    );
+  let candidate = withItems(stored.set);
   // The first asset of a kind with an instance default becomes it and the last one takes it
   // away. Either changes the default, which no Namespace or asset grant opens.
   const defaultChange = planDefaultChange(kinds.kinds, stored.set, candidate, ready());
@@ -166,6 +171,20 @@ export async function syncAssets(
     }
   }
   stopIfRefused();
+
+  // What the batch refers to and its caller may not read is refused as a reference to nothing.
+  const view = await loadReferableAssets(options, call.access, stored, {
+    scope: INSTANCE_ASSET_SCOPE,
+    name: input.namespace
+  });
+  if (!view.complete) {
+    const written = new Set(ready().map((entry) => assetKey(entry.kind.kind, entry.name)));
+    const left = defaultChange
+      ? withDefaultAgentName(withItems(view.set), defaultChange.agentName)
+      : withItems(view.set);
+    const unread = findIssuesOfChange(kinds.kinds, view.set, left, written);
+    stopIfRefused(placeIssues(unread, ready()));
+  }
 
   const found = findAssetSetIssues(kinds.kinds, candidate);
   const unplaced = placeIssues(found.issues, ready());

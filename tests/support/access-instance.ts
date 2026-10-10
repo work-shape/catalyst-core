@@ -183,10 +183,17 @@ export interface AccessInstance {
   assetId(kind: "agent" | "skill", name: string): Promise<string>;
 }
 
-/** `operations` sets what the operation layer asks beside the rights: policy and events. */
+export interface AccessInstanceOptions {
+  /** What the operation layer asks beside the rights: policy and events. */
+  operations?: TestServerOptions["operations"];
+  /** Tools an agent may name beside the two of the config, such as `read_skill`. */
+  furtherToolNames?: string[];
+}
+
 export async function setupAccessInstance(
-  operations?: TestServerOptions["operations"]
+  options: AccessInstanceOptions = {}
 ): Promise<AccessInstance> {
+  const { operations, furtherToolNames = [] } = options;
   const instance = await createTestInstanceWith((stores) => ({
     config,
     ...(operations ? { operations } : {}),
@@ -203,7 +210,7 @@ export async function setupAccessInstance(
         ],
         fastModeModelBindingIds: [],
         reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-        enabledToolNames: ["known.tool", "second.tool"]
+        enabledToolNames: ["known.tool", "second.tool", ...furtherToolNames]
       }
     }
   }));

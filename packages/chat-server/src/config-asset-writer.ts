@@ -1,4 +1,4 @@
-import { AppError, type ConfigAssetStore } from "@vivd-catalyst/core";
+import { AppError, type AssetScope, type ConfigAssetStore } from "@vivd-catalyst/core";
 import { assetSetOf, validateAssetSet, withDefaultAgentName, type AssetSet } from "./asset-set";
 import { readDefinitionName } from "./asset-kinds/shared";
 import type { ChatServerOptions } from "./types";
@@ -7,6 +7,15 @@ export type ConfigAssetWriterOptions = Pick<
   ChatServerOptions,
   "config" | "configAssets" | "clientInstanceId"
 >;
+
+/** No registered kind is owned by a workspace yet. The first one that is lifts this. */
+export function assertScopeCanOwn(kind: string, scope: AssetScope): void {
+  if (scope.kind === "workspace") {
+    throw new AppError("VALIDATION_FAILED", `A ${kind} cannot be owned by a workspace`, {
+      reason: "invalid_scope"
+    });
+  }
+}
 
 /** Shared write path. Callers own authorization; all writes validate the resulting bundle. */
 export async function applyValidatedConfigAssetMutations(
@@ -19,11 +28,8 @@ export async function applyValidatedConfigAssetMutations(
       continue;
     }
     kinds.require(mutation.kind);
-    // No registered kind is owned by a workspace yet. The first one that is lifts this.
-    if (mutation.type === "upsert" && mutation.scope?.kind === "workspace") {
-      throw new AppError("VALIDATION_FAILED", `A ${mutation.kind} cannot be owned by a workspace`, {
-        reason: "invalid_scope"
-      });
+    if (mutation.type === "upsert" && mutation.scope) {
+      assertScopeCanOwn(mutation.kind, mutation.scope);
     }
   }
   const [state, assets] = await Promise.all([

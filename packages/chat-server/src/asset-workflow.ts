@@ -21,6 +21,7 @@ import {
 import { z } from "zod";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {
+  INVALID_ASSET_SET_MESSAGE,
   findAssetSetIssues,
   findDefinition,
   validateAssetSet,
@@ -50,13 +51,16 @@ import {
   authorizeInteractiveWrite,
   clearsLastDefault,
   findChangedAgentRefusals,
+  findIssuesOfChange,
+  loadReferableAssets,
   loadStoredAssets,
+  type StoredAssets,
   requireInstanceDefaultChange,
   requireMatchingConfigName,
   setsInitialDefault,
   toJsonObject
 } from "./asset-write-rules";
-import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
+import { applyValidatedConfigAssetMutations, assertScopeCanOwn } from "./config-asset-writer";
 import type { ChatServerOptions } from "./types";
 
 /** How many assets a list reads where its caller names no page. */
@@ -357,6 +361,7 @@ export class AssetWorkflow {
    * Says what a put of this definition would be refused for, and writes nothing. It checks
    * what the write checks of the content: schema, name, references, the instance's own rules
    * and the lists of the Namespace. The caller's right to write is not part of the answer.
+   * A reference to an asset the caller may not read is answered as one to nothing.
    */
   async validate(
     call: AssetCall,
@@ -366,15 +371,21 @@ export class AssetWorkflow {
     const target = await this.target({ ...input, name: name ?? "" });
     const { kind } = target;
     call.access.require(kind.actions.read, target.resource);
+    const kinds = this.options.configAssets.kinds.kinds;
     const stored = await loadStoredAssets(this.options);
-    const current = name === undefined ? undefined : findDefinition(stored.set, kind.kind, name);
+    const view = await loadReferableAssets(this.options, call.access, stored, {
+      scope: target.scope,
+      name
+    });
+    const current = name === undefined ? undefined : findDefinition(view.set, kind.kind, name);
     const prepared = kind.prepareInteractiveUpsert({ current, next: input.config });
-    const found = findAssetSetIssues(
-      this.options.configAssets.kinds.kinds,
-      withDefinition(stored.set, kind.kind, name ?? "", prepared)
-    );
+    const candidate = withDefinition(view.set, kind.kind, name ?? "", prepared);
+    const found = findAssetSetIssues(kinds, candidate);
+    const ofDefinition = view.complete
+      ? found.issues
+      : findIssuesOfChange(kinds, view.set, candidate, new Set([assetKey(kind.kind, name ?? "")]));
     const issues =
-      found.issues.length > 0 ? found.issues : await this.writeIssues(call, stored.set, found);
+      ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found);
     return {
       valid: issues.length === 0,
       issues: issues.map(({ message, path }) => ({
@@ -428,20 +439,18 @@ export class AssetWorkflow {
     const current = findDefinition(stored.set, kind.kind, name);
     const setsDefault = setsInitialDefault(stored.set, kind);
     requireInstanceDefaultChange(call.access, kind, setsDefault);
-    const replaced = withDefinition(
-      stored.set,
-      kind.kind,
-      name,
-      // A revert restores what was stored: nothing is adjusted on the way.
+    // A revert restores what was stored: nothing is adjusted on the way.
+    const definition =
       write.operation === "revert"
         ? config
-        : kind.prepareInteractiveUpsert({ current, next: config })
-    );
-    const validated = validateAssetSet(
-      kinds,
-      setsDefault ? withDefaultAgentName(replaced, name) : replaced,
-      stored.set
-    );
+        : kind.prepareInteractiveUpsert({ current, next: config });
+    /** The set as the write would leave it. */
+    const written = (set: AssetSet) => {
+      const replaced = withDefinition(set, kind.kind, name, definition);
+      return setsDefault ? withDefaultAgentName(replaced, name) : replaced;
+    };
+    await this.requireReadableReferences(call, target, stored, written);
+    const validated = validateAssetSet(kinds, written(stored.set), stored.set);
     const namespaces = await assertChangedAgentsAllowed(
       this.options,
       call.access,
@@ -489,6 +498,30 @@ export class AssetWorkflow {
       version: result.version
     });
     return { version: result.version, revision: updated.revision, warnings: [] };
+  }
+
+  /**
+   * Refuses a definition for what it refers to and its caller may not read, in the words of a
+   * reference to nothing. The whole set is checked after it, as for every write.
+   */
+  private async requireReadableReferences(
+    call: AssetCall,
+    target: AssetTarget,
+    stored: StoredAssets,
+    written: (set: AssetSet) => AssetSet
+  ): Promise<void> {
+    const { kind, name, scope } = target;
+    const view = await loadReferableAssets(this.options, call.access, stored, { scope, name });
+    if (view.complete) return;
+    const issues = findIssuesOfChange(
+      this.options.configAssets.kinds.kinds,
+      view.set,
+      written(view.set),
+      new Set([assetKey(kind.kind, name)])
+    );
+    if (issues.length > 0) {
+      throw new AppError("VALIDATION_FAILED", INVALID_ASSET_SET_MESSAGE, { issues });
+    }
   }
 
   /** Applies a batch. The store checks the expected revisions once more under its lock. */
@@ -578,8 +611,14 @@ function notFound(target: Pick<AssetTarget, "kind" | "name">): AppError {
   return new AppError("NOT_FOUND", `Config ${target.kind.kind} '${target.name}' was not found`);
 }
 
-/** A name belongs to one owner. A write that means another one is refused, never moved. */
+/**
+ * A name belongs to one owner. A write that means another one is refused, never moved. Whether
+ * the owner the call names can own the kind at all is asked first, so that refusal is the same
+ * whether or not another owner holds the name: it tells nothing of an asset the caller may not
+ * read.
+ */
 function requireOwnScope(target: AssetTarget): void {
+  assertScopeCanOwn(target.kind.kind, target.scope);
   if (target.elsewhere) {
     throw new AppError(
       "VALIDATION_FAILED",
