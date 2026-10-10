@@ -214,7 +214,10 @@ export function AssistantThread({
                     <span>{t("newConversationPrivateHint")}</span>
                   </p>
                 ) : null}
-                <RetentionNotice retention={config?.retention} retainedUntil={retainedUntil} />
+                {/* A conversation without a message is a draft and keeps the start page as it is. */}
+                {startPage ? null : (
+                  <RetentionNotice retention={config?.retention} retainedUntil={retainedUntil} />
+                )}
                 <div className="relative">
                   {messagesEnabled ? (
                     <AuiIf condition={(state) => !state.thread.isEmpty}>
