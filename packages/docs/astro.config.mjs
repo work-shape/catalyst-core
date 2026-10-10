@@ -53,7 +53,7 @@ export default defineConfig({
       title: "Workshape Catalyst",
       description:
         "Documentation for configuring, extending, and running dedicated Workshape Catalyst client instances.",
-      // The mark is the application's own: the file the chat interface ships as its favicon.
+      // The mark is the Workshape mark, the favicon of the company site; it follows the colour scheme itself.
       logo: { src: "./public/favicon.svg", alt: "" },
       customCss: ["./src/styles/theme.css"],
       // Code is highlighted with the themes the chat interface uses, on the site's own surfaces.
