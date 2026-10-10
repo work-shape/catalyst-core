@@ -1,6 +1,6 @@
 import type { ApprovalRequestView, LocaleCode, Message } from "@vivd-catalyst/api-client";
 import { approvalRevisionOwner, readApprovalDecisionMetadata } from "@vivd-catalyst/core";
-import type { TranslationKey } from "../i18n";
+import type { TranslationContextValue, TranslationKey } from "../i18n";
 
 /** Display kind a tool result carries to render its Approval Request inline in the thread. */
 export const APPROVAL_REQUEST_DISPLAY_KIND = "catalyst.approval_request";
@@ -210,4 +210,24 @@ export function formatApprovalDate(value: string, locale: LocaleCode): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The sentence for a failed action. A decision refused because the request was already decided
+ * names who decided; a request that left the queue another way (withdrawn) has no such person.
+ */
+export function approvalActionFailureText(
+  failure: "failed" | "revert_conflict" | "already_decided",
+  request: Pick<ApprovalRequestView, "decision">,
+  t: TranslationContextValue["t"]
+): string {
+  if (failure === "revert_conflict") {
+    return t("approvalRevertConflict");
+  }
+  if (failure === "already_decided") {
+    return request.decision
+      ? t("approvalAlreadyDecidedBy", { name: request.decision.decidedByLabel })
+      : t("approvalNoLongerOpen");
+  }
+  return t("approvalActionFailed");
 }

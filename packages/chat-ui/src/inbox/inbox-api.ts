@@ -6,8 +6,11 @@ import {
 } from "../approvals/approval-request-api";
 import type { InboxTab } from "./inbox-model";
 
-/** How often an open list asks again, so a decision made elsewhere shows without a reload. */
-const INBOX_LIST_REFETCH_MS = 60_000;
+/**
+ * How often an open list and the open item ask again, so a decision made elsewhere shows
+ * without a reload.
+ */
+export const INBOX_REFETCH_MS = 60_000;
 
 /**
  * The key of a list. It stands under the prefix of every approval request query, so a decision
@@ -40,6 +43,6 @@ export function useInboxListQuery(
       ),
     enabled: input.enabled,
     refetchOnWindowFocus: true,
-    refetchInterval: INBOX_LIST_REFETCH_MS
+    refetchInterval: INBOX_REFETCH_MS
   });
 }

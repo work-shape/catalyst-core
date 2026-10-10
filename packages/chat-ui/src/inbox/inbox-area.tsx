@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { List as ListIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import {
   APPROVAL_AUTH_SCOPE,
+  approvalRequestQueryKeys,
   useApprovalPendingCountQuery,
   useApprovalRequestQuery
 } from "../approvals/approval-request-api";
@@ -23,6 +25,7 @@ import { useInboxItemKindLookup } from "./inbox-item-kinds";
 import { inboxItemSurface } from "./inbox-item-surface";
 import { InboxList, type InboxListState } from "./inbox-list";
 import {
+  inboxListOutdatesItem,
   inboxTabCount,
   inboxTabLabelKeys,
   inboxTabOfItem,
@@ -96,6 +99,18 @@ export function InboxArea({
     placedItemRef.current = item.id;
     setChosenTab(inboxTabOfItem(item, { userId, canReview }));
   }, [canReview, counts, item, userId]);
+
+  // A list that arrives with other news of the open item has the item asked for again.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (item && listItems && inboxListOutdatesItem(tab, listItems, item)) {
+      queryClient
+        .invalidateQueries({
+          queryKey: approvalRequestQueryKeys.request(apiBaseUrl, APPROVAL_AUTH_SCOPE, item.id)
+        })
+        .catch(() => undefined);
+    }
+  }, [apiBaseUrl, item, listItems, queryClient, tab]);
 
   // The header's place and the lists' tab order follow the slot only while the Inbox is open.
   useEffect(

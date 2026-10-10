@@ -24,7 +24,7 @@ const proposal = {
   ]
 };
 
-// The two tests share the instance: the first needs a member who has asked for nothing yet,
+// The tests share the instance: the first needs a member who has asked for nothing yet,
 // and the second lets that member ask. Both fail without the Inbox: there was no such area.
 test.describe.configure({ mode: "serial" });
 
@@ -156,6 +156,61 @@ test("a member's proposal waits in the reviewer's Inbox, is rejected there and c
   await expect(
     memberInbox.getByText("This proposal no longer exists or is not visible to you.")
   ).toBeVisible();
+});
+
+// Fails without the sentence and the kept comment: the item turned to "Rejected" under the
+// Accept click, and what the reviewer had written was gone.
+test("a decision on a request that was decided meanwhile is refused in a sentence", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors
+}) => {
+  const lateSummary = "Add a checklist for reviewing mileage claims.";
+  await signIn(page, member);
+  await page.getByPlaceholder("Message").fill(
+    `/tool propose_skill_change ${JSON.stringify({
+      ...proposal,
+      skillName: "inbox_e2e_mileage",
+      summary: lateSummary,
+      operations: [{ ...proposal.operations[0], name: "inbox_e2e_mileage" }]
+    })}`
+  );
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByTestId("approval-request-card")).toContainText("Awaiting approval");
+
+  const reviewerContext = await browser.newContext({ baseURL });
+  await pageErrors.watch(reviewerContext);
+  const reviewerPage = await reviewerContext.newPage();
+  await signIn(reviewerPage, reviewer);
+  await reviewerPage.goto("/inbox");
+  const inbox = reviewerPage.getByRole("region", { name: "Inbox", exact: true });
+  await inbox.getByTestId("inbox-row").filter({ hasText: lateSummary }).getByRole("button").click();
+  await expect(reviewerPage).toHaveURL(/\/inbox\/[^/]+$/u);
+  const itemId = new URL(reviewerPage.url()).pathname.split("/").at(-1) ?? "";
+  const surface = inbox.getByRole("complementary", { name: "Skill change", exact: true });
+  await surface.getByRole("textbox", { name: /^Comment/u }).fill("Fine, with the mileage rate.");
+
+  // The same request is rejected from elsewhere while this page still shows it as waiting.
+  const elsewhere = await requestWithOrigin(
+    reviewerPage,
+    "post",
+    `${apiBaseUrl}/api/v1/approval-requests/${itemId}/decide`,
+    { data: { decision: "reject" } }
+  );
+  expect(elsewhere.ok()).toBe(true);
+  await expect(surface.getByTestId("inbox-item")).toContainText("Awaiting approval");
+
+  await surface.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(surface.getByRole("alert")).toHaveText(
+    "Your decision was not stored: E2E Superadmin has already decided this request."
+  );
+  await expect(surface.getByTestId("inbox-item")).toContainText("Rejected");
+  await expect(surface.getByTestId("inbox-item-kept-comment")).toHaveValue(
+    "Fine, with the mileage rate."
+  );
+  await expect(surface.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
+  await reviewerContext.close();
 });
 
 async function signIn(page: Page, user: { email: string; password: string }): Promise<void> {

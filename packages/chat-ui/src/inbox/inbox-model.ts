@@ -112,3 +112,20 @@ export function formatInboxAge(value: string, locale: LocaleCode, now: Date): st
     ? format.format(-Math.floor(seconds / step.seconds), step.unit)
     : format.format(0, "second");
 }
+
+/**
+ * Whether a list that just arrived says the open item is no longer what the page shows: its row
+ * is in another state, or it left To decide while the page still offers to decide it. The item
+ * is then asked for again, so nobody decides on a request someone else has decided.
+ */
+export function inboxListOutdatesItem(
+  tab: InboxTab,
+  rows: readonly Pick<ApprovalRequestView, "id" | "status" | "updatedAt">[],
+  item: Pick<ApprovalRequestView, "id" | "status" | "updatedAt" | "canDecide">
+): boolean {
+  const row = rows.find((candidate) => candidate.id === item.id);
+  if (!row) {
+    return tab === "to_decide" && item.canDecide;
+  }
+  return row.status !== item.status || row.updatedAt > item.updatedAt;
+}

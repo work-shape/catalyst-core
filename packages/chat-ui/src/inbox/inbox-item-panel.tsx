@@ -22,6 +22,7 @@ import {
   type ApprovalRequestState
 } from "../approvals/approval-request-api";
 import {
+  approvalActionFailureText,
   formatApprovalDate,
   offersApprovalWithdraw,
   visibleApprovalChecks
@@ -30,6 +31,7 @@ import { useApprovalRevisionHost } from "../approvals/approval-revision-host";
 import { ApprovalStatusBadge } from "../approvals/approval-status-badge";
 import { useAttachmentContentContext } from "../attachment-content";
 import { useTranslation } from "../i18n";
+import { INBOX_REFETCH_MS } from "./inbox-api";
 import { useInboxItemActions, type InboxItemActions } from "./inbox-item-actions";
 import {
   defaultInboxDecisions,
@@ -44,12 +46,19 @@ import {
  * sets off exactly what it would anywhere else.
  */
 export function InboxItemPanel({ itemId }: { itemId: string }) {
+  // Another item starts clean: no comment and no refusal carried over from the one before.
+  return <InboxItemLive key={itemId} itemId={itemId} />;
+}
+
+function InboxItemLive({ itemId }: { itemId: string }) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const query = useApprovalRequestQuery({
     apiBaseUrl,
     authScope: APPROVAL_AUTH_SCOPE,
     client,
-    requestId: itemId
+    requestId: itemId,
+    // The open item is what a person decides on, so it keeps up like the lists do.
+    refetchIntervalMs: INBOX_REFETCH_MS
   });
   const actions = useInboxItemActions(itemId, query.data);
 
@@ -70,6 +79,9 @@ export function InboxItemView({
   const { locale, t } = useTranslation();
   const kindOf = useInboxItemKindLookup();
   const host = useApprovalRevisionHost();
+  // Held above the foot, which starts over when the item changes state: a comment written for
+  // a decision that was refused is still there to copy.
+  const [comment, setComment] = useState("");
 
   if (state.status === "loading") {
     return <SkeletonPage sections={1} />;
@@ -143,6 +155,8 @@ export function InboxItemView({
         item={item}
         kind={kind}
         actions={actions}
+        comment={comment}
+        onCommentChange={setComment}
       />
     </article>
   );
@@ -190,11 +204,15 @@ function InboxItemOutcome({ item }: { item: ApprovalRequestView }) {
 function InboxItemFoot({
   item,
   kind,
-  actions
+  actions,
+  comment,
+  onCommentChange
 }: {
   item: ApprovalRequestView;
   kind: InboxItemKind | undefined;
   actions: InboxItemActions;
+  comment: string;
+  onCommentChange(comment: string): void;
 }) {
   const { t } = useTranslation();
   const host = useApprovalRevisionHost();
@@ -223,13 +241,7 @@ function InboxItemFoot({
       data-testid="inbox-item-foot"
     >
       {actions.failure ? (
-        <Banner tone="danger">
-          {t(
-            actions.failure === "revert_conflict"
-              ? "approvalRevertConflict"
-              : "approvalActionFailed"
-          )}
-        </Banner>
+        <Banner tone="danger">{approvalActionFailureText(actions.failure, item, t)}</Banner>
       ) : null}
       {canDecide ? (
         KindFoot ? (
@@ -238,8 +250,15 @@ function InboxItemFoot({
           <InboxDecisionForm
             decisions={kind?.decisions ?? defaultInboxDecisions}
             actions={actions}
+            comment={comment}
+            onCommentChange={onCommentChange}
           />
         )
+      ) : actions.failure === "already_decided" && comment.trim() ? (
+        // Nothing is left to decide, but what was written is not thrown away.
+        <Field label={t("inbox.comment")}>
+          <Textarea rows={2} value={comment} readOnly data-testid="inbox-item-kept-comment" />
+        </Field>
       ) : null}
       {canWithdraw || canRevert || opensConversation ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -300,14 +319,17 @@ function InboxItemFoot({
  */
 function InboxDecisionForm({
   decisions,
-  actions
+  actions,
+  comment,
+  onCommentChange
 }: {
   decisions: NonNullable<InboxItemKind["decisions"]>;
   actions: InboxItemActions;
+  comment: string;
+  onCommentChange(comment: string): void;
 }) {
   const { t } = useTranslation();
   const commentRef = useRef<HTMLTextAreaElement>(null);
-  const [comment, setComment] = useState("");
   const [commentMissing, setCommentMissing] = useState(false);
 
   function decide(decision: InboxDecision) {
@@ -363,7 +385,7 @@ function InboxDecisionForm({
           value={comment}
           disabled={actions.pending}
           onChange={(event) => {
-            setComment(event.target.value);
+            onCommentChange(event.target.value);
             setCommentMissing(false);
           }}
         />

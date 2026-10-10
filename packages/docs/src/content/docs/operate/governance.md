@@ -116,6 +116,8 @@ To decide and Decided need a right to decide, such as `agent_skills.approve` for
 
 Opening a row shows the request beside the list at `/inbox/<id>`. A decision is made there or on the card in the conversation; both read and change the same Approval Request. Who may decide is answered by the server for each request.
 
+The lists and the open request ask for their state every 60 seconds. When two people decide the same request, the first decision stands. The second person is told who decided, and a comment they had written stays on the page.
+
 ## Deletion
 
 Support deletion as a product workflow, not a manual database habit.

@@ -23,7 +23,11 @@ import {
   useApprovalRequestQuery,
   type ApprovalRequestState
 } from "./approval-request-api";
-import { offersApprovalWithdraw, visibleApprovalChecks } from "./approval-request-model";
+import {
+  approvalActionFailureText,
+  offersApprovalWithdraw,
+  visibleApprovalChecks
+} from "./approval-request-model";
 import { ApprovalStatusBadge } from "./approval-status-badge";
 
 /**
@@ -233,7 +237,7 @@ function ApprovalRequestActions({
 
   const failure = actions.failure ? (
     <p role="alert" className="text-caption text-destructive">
-      {t(actions.failure === "revert_conflict" ? "approvalRevertConflict" : "approvalActionFailed")}
+      {approvalActionFailureText(actions.failure, request, t)}
     </p>
   ) : null;
 

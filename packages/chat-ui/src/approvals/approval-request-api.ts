@@ -16,8 +16,11 @@ export interface ApprovalRequestApiInput {
 
 export type ApprovalDecisionInput = OperationInput<"approval_requests.decide">["body"];
 
-/** `revert_conflict`: newer changes sit on top of the one that should be undone. */
-export type ApprovalActionFailure = "failed" | "revert_conflict";
+/**
+ * `revert_conflict`: newer changes sit on top of the one that should be undone.
+ * `already_decided`: the decision was refused because the request was no longer pending.
+ */
+export type ApprovalActionFailure = "failed" | "revert_conflict" | "already_decided";
 
 /** Cache dimension of first-party sessions, matching the rest of the workspace queries. */
 export const APPROVAL_AUTH_SCOPE = "standalone";
@@ -55,7 +58,12 @@ export function approvalRequestState(
 }
 
 export function useApprovalRequestQuery(
-  input: ApprovalRequestApiInput & { requestId: string; enabled?: boolean }
+  input: ApprovalRequestApiInput & {
+    requestId: string;
+    enabled?: boolean;
+    /** Asks again this often while shown. Absent: only when the window gets the focus back. */
+    refetchIntervalMs?: number;
+  }
 ) {
   return useQuery({
     queryKey: approvalRequestQueryKeys.request(input.apiBaseUrl, input.authScope, input.requestId),
@@ -64,6 +72,7 @@ export function useApprovalRequestQuery(
     // The card is the live state of a shared request: another approver may
     // have decided while this tab was in the background.
     refetchOnWindowFocus: true,
+    refetchInterval: input.refetchIntervalMs ?? false,
     retry: (failureCount, error) => !isApprovalRequestNotFound(error) && failureCount < 2
   });
 }
@@ -152,15 +161,11 @@ export function useApprovalRequestActions(
     onSettled: refreshAfterAction
   });
 
-  // A lost race on a decision needs no message: the refetched card shows who
-  // decided. A refused rollback changes nothing on the card, so it has to say why.
-  const failure: ApprovalActionFailure | undefined = revert.error
-    ? isApprovalRequestConflict(revert.error)
-      ? "revert_conflict"
-      : "failed"
-    : [decide.error, withdraw.error].some((error) => error && !isApprovalRequestConflict(error))
-      ? "failed"
-      : undefined;
+  const failure = approvalActionFailure({
+    decide: decide.error,
+    withdraw: withdraw.error,
+    revert: revert.error
+  });
 
   return {
     decide: (decision: ApprovalDecisionInput) => decide.mutate(decision),
@@ -171,10 +176,31 @@ export function useApprovalRequestActions(
   };
 }
 
+/**
+ * What a failed action has to say. A refused rollback changes nothing on the request, so it says
+ * why. A decision that lost the race says so too: the refetched request shows another outcome
+ * than the one just clicked. A withdrawal that lost it needs no word: the outcome is on screen.
+ */
+export function approvalActionFailure(errors: {
+  decide: unknown;
+  withdraw: unknown;
+  revert: unknown;
+}): ApprovalActionFailure | undefined {
+  if (errors.revert) {
+    return isApprovalRequestConflict(errors.revert) ? "revert_conflict" : "failed";
+  }
+  if (errors.decide && isApprovalRequestConflict(errors.decide)) {
+    return "already_decided";
+  }
+  return errors.decide || (errors.withdraw && !isApprovalRequestConflict(errors.withdraw))
+    ? "failed"
+    : undefined;
+}
+
 function isApprovalRequestNotFound(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 404 || error.code === "NOT_FOUND");
 }
 
-export function isApprovalRequestConflict(error: unknown): boolean {
+function isApprovalRequestConflict(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 409 || error.code === "CONFLICT");
 }

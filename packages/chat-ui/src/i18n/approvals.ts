@@ -4,6 +4,8 @@ export const approvals = defineTranslations({
   en: {
     approvalAccept: "Accept",
     approvalActionFailed: "That did not work. Please try again.",
+    approvalAlreadyDecidedBy:
+      "Your decision was not stored: {name} has already decided this request.",
     approvalCheckBlocked: "Blocked",
     approvalCheckUnevaluated: "The automatic check could not be run.",
     approvalCheckWarned: "Warning",
@@ -21,6 +23,7 @@ export const approvals = defineTranslations({
     approvalFollowUpMessage: "Please revise the proposal.",
     approvalLoadFailed: "The proposal could not be loaded.",
     approvalLoading: "Loading proposal…",
+    approvalNoLongerOpen: "Your decision was not stored: this request is no longer open.",
     approvalNotFound: "This proposal no longer exists or is not visible to you.",
     approvalReject: "Reject",
     approvalRejectLabel: "Reason (optional)",
@@ -74,6 +77,8 @@ export const approvals = defineTranslations({
   de: {
     approvalAccept: "Übernehmen",
     approvalActionFailed: "Das hat nicht geklappt. Bitte versuche es erneut.",
+    approvalAlreadyDecidedBy:
+      "Deine Entscheidung wurde nicht gespeichert: {name} hat diese Anfrage bereits entschieden.",
     approvalCheckBlocked: "Blockiert",
     approvalCheckUnevaluated: "Die automatische Prüfung konnte nicht ausgeführt werden.",
     approvalCheckWarned: "Hinweis",
@@ -91,6 +96,8 @@ export const approvals = defineTranslations({
     approvalFollowUpMessage: "Bitte überarbeite den Vorschlag.",
     approvalLoadFailed: "Der Vorschlag konnte nicht geladen werden.",
     approvalLoading: "Vorschlag wird geladen…",
+    approvalNoLongerOpen:
+      "Deine Entscheidung wurde nicht gespeichert: Diese Anfrage ist nicht mehr offen.",
     approvalNotFound: "Diesen Vorschlag gibt es nicht mehr oder du darfst ihn nicht sehen.",
     approvalReject: "Ablehnen",
     approvalRejectLabel: "Begründung (optional)",

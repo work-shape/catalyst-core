@@ -867,6 +867,14 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 - **Migrations:** two migration steps that start at once no longer deadlock on a migration
   that builds an index concurrently. The step asks for its lock again every 100 ms instead of
   waiting inside one statement.
+- **Migrations:** a migration step whose database connection the server ended names the
+  migration and the cause (`Migration <name> failed: the database connection ended (…)`) and
+  exits, instead of dying with a `TypeError` of the driver or not ending at all. A step that
+  waits for another step's lock says so when it starts to wait and every 30 seconds after.
+- **Inbox:** the open item asks for its state every 60 seconds and whenever a list shows it
+  changed, so it no longer offers a decision on a request someone else has decided. A decision
+  that still comes too late is answered in one sentence that names who decided, and a comment
+  already written stays on the page.
 
 ## 0.6.3 — 2026-10-08
 

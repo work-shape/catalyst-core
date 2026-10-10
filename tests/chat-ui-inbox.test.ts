@@ -1,8 +1,9 @@
 import { createElement, type ReactNode } from "react";
-import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
+import { ApiError, type ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
+  approvalActionFailure,
   formatInboxAge,
   InboxAreaView,
   inboxItemKinds,
@@ -10,6 +11,7 @@ import {
   inboxItemSurface,
   InboxItemView,
   InboxList,
+  inboxListOutdatesItem,
   inboxRailEntry,
   inboxTabCount,
   inboxTabOfItem,
@@ -174,6 +176,37 @@ describe("inbox model", () => {
     expect(ids("mine")).toEqual(["b", "c", "a"]);
     expect(ids("decided")).toEqual(["c", "b", "a"]);
     expect(rows.map((row) => row.id)).toEqual(["b", "a", "c"]);
+  });
+
+  // Fails without the check: nothing asked for the open item again when a list brought news.
+  it("has the open item asked for again when a list shows it in another state or lost it", () => {
+    const open = item({ canDecide: true });
+    const row = item();
+
+    expect(inboxListOutdatesItem("to_decide", [row], open)).toBe(false);
+    expect(inboxListOutdatesItem("to_decide", [{ ...row, status: "rejected" }], open)).toBe(true);
+    expect(
+      inboxListOutdatesItem("mine", [{ ...row, updatedAt: "2026-10-05T09:00:00Z" }], open)
+    ).toBe(true);
+    // Someone else decided it: it left To decide while this page still offers the buttons.
+    expect(inboxListOutdatesItem("to_decide", [], open)).toBe(true);
+    // The other lists never held it, and a decided item is missing from To decide by right.
+    expect(inboxListOutdatesItem("decided", [], open)).toBe(false);
+    expect(inboxListOutdatesItem("to_decide", [], item({ status: "rejected" }))).toBe(false);
+  });
+
+  // Fails without the mapping: a decision that lost the race said nothing.
+  it("tells a refused decision on a decided request apart from a failure", () => {
+    const conflict = new ApiError(409, "Conflict", { code: "CONFLICT" });
+    const broken = new ApiError(500, "Internal", {});
+    const none = { decide: null, withdraw: null, revert: null };
+
+    expect(approvalActionFailure(none)).toBeUndefined();
+    expect(approvalActionFailure({ ...none, decide: conflict })).toBe("already_decided");
+    expect(approvalActionFailure({ ...none, decide: broken })).toBe("failed");
+    expect(approvalActionFailure({ ...none, withdraw: conflict })).toBeUndefined();
+    expect(approvalActionFailure({ ...none, withdraw: broken })).toBe("failed");
+    expect(approvalActionFailure({ ...none, revert: conflict })).toBe("revert_conflict");
   });
 
   it("says how long ago in the reader's language", () => {
@@ -352,6 +385,24 @@ describe("inbox item", () => {
     );
 
     expect(markup).toContain("weil es inzwischen neuere Änderungen gibt");
+  });
+
+  // Fails without the sentence: the item turned to "Rejected" under an Accept click, unexplained.
+  it("says who decided when a decision came too late, in both languages", () => {
+    const refused = { actions: { ...idleActions, failure: "already_decided" as const } };
+    const decided = { status: "rejected" as const, decision };
+
+    expect(renderItem(decided, refused)).toContain(
+      "Deine Entscheidung wurde nicht gespeichert: Felix Pahlke hat diese Anfrage bereits entschieden."
+    );
+    expect(renderItem(decided, { ...refused, locale: "en" })).toContain(
+      "Your decision was not stored: Felix Pahlke has already decided this request."
+    );
+    // Withdrawn by the requester: nobody decided.
+    expect(renderItem({ status: "withdrawn" }, refused)).toContain(
+      "Deine Entscheidung wurde nicht gespeichert: Diese Anfrage ist nicht mehr offen."
+    );
+    expect(renderItem(decided, refused)).not.toContain(">Übernehmen</button>");
   });
 
   it("shows warned and blocked checks and stays silent about passed ones", () => {

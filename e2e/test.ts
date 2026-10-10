@@ -144,6 +144,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "decision-that-came-too-late",
+    reason:
+      "Chromium's own log line: the test decides a request the instance has already decided, " +
+      "the instance answers 409 and the page says who decided, which it asserts.",
+    matches: requestAnswered(409),
+    path: /^\/api\/v1\/approval-requests\/[^/]+\/decide$/u,
+    tests: ["a decision on a request that was decided meanwhile is refused in a sentence"]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +
