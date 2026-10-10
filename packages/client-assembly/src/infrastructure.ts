@@ -200,7 +200,7 @@ export function infrastructureOverview(input: {
     origin: "operator",
     // Where the database runs is a deployment choice the product does not know.
     external: false,
-    secretNames: [PLATFORM_SECRET_NAMES.databaseUrl],
+    secrets: [{ name: PLATFORM_SECRET_NAMES.databaseUrl }],
     // Whether it answers. A database that answers and is behind its release is the matter of
     // `/ready`, not of this row.
     check: () =>
@@ -219,6 +219,51 @@ export function infrastructureOverview(input: {
   ];
 }
 
+/**
+ * What the page may show of a provider's description. A bucket reads as an S3 bucket name and a
+ * host as a bare host with an optional port. A description that holds anything else there, such
+ * as a signed address or a path, is a mistake in config or in an adapter: the value is withheld.
+ */
+const BUCKET_NAME = /^(?!\d{1,3}(?:\.\d{1,3}){3}$)(?!.*\.\.)[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u;
+const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+const BARE_HOST = new RegExp(
+  `^(?:${HOST_LABEL}(?:\\.${HOST_LABEL})*|\\[[0-9a-f:.]{2,45}\\])(?::\\d{1,5})?$`,
+  "iu"
+);
+const HOST_MAX_LENGTH = 259;
+const SHOWN_FIELDS = {
+  endpointHost: (value: string) => value.length <= HOST_MAX_LENGTH && BARE_HOST.test(value),
+  bucket: (value: string) => BUCKET_NAME.test(value)
+} as const;
+type ShownField = keyof typeof SHOWN_FIELDS;
+
+/** The fields of a description that may be shown, and the names of those that are withheld. */
+function shownDescription(
+  id: string,
+  description: Record<string, unknown>,
+  logger: Logger
+): { shown: Partial<Record<ShownField, string>>; withheld: ShownField[] } {
+  const shown: Partial<Record<ShownField, string>> = {};
+  const withheld: ShownField[] = [];
+  for (const field of ["endpointHost", "bucket"] as const) {
+    const value = description[field];
+    if (value === undefined) {
+      continue;
+    }
+    if (typeof value === "string" && SHOWN_FIELDS[field](value)) {
+      shown[field] = value;
+      continue;
+    }
+    withheld.push(field);
+    // The value stays out of the line: it is what must not be repeated.
+    logger.warn(
+      { provider: id, field },
+      "A config value of a provider is not shown on Instance > Infrastructure: it does not read as a bucket name or a bare host"
+    );
+  }
+  return { shown, withheld };
+}
+
 function providerOverview<Port extends ProviderPort>(
   port: Port,
   entry: ProviderEntry,
@@ -229,7 +274,7 @@ function providerOverview<Port extends ProviderPort>(
   const validated = definition.validate(entry);
   const id = entry.path.slice("infrastructure.".length);
   const name = id.includes(".") ? id.slice(id.indexOf(".") + 1) : undefined;
-  const { endpointHost, bucket } = validated.description;
+  const { shown, withheld } = shownDescription(id, validated.description, context.logger);
   // The provider the check asks is created at the first check and kept. It is one of its own:
   // creating it reaches nothing, and the one the product works with stays where it is.
   let created: ReturnType<typeof definition.create> | undefined;
@@ -241,24 +286,47 @@ function providerOverview<Port extends ProviderPort>(
     origin: "operator",
     external: validated.external,
     ...(validated.region ? { region: validated.region } : {}),
-    ...(typeof endpointHost === "string" ? { endpointHost } : {}),
-    ...(typeof bucket === "string" ? { bucket } : {}),
-    secretNames: validated.secrets.map((secret) => secret.name),
+    ...shown,
+    ...(withheld.length > 0 ? { withheld } : {}),
+    secrets: validated.secrets.map((secret) => ({ name: secret.name, field: secret.field })),
     ...(PORTS_CHECKED_BY_THE_API.has(port)
       ? {
-          check: async () => {
-            created ??= definition.create(entry, context);
-            const instance = await created.catch(() => {
-              created = undefined;
-              return undefined;
-            });
-            return instance === undefined
-              ? { ok: false, errorClass: "failed" }
-              : definition.check(instance);
-          }
+          // Creation resolves the provider's secrets, which can stall like the provider can:
+          // it runs inside the same time as the check. A creation that has not ended is
+          // waited for again by the next run and is not started a second time.
+          check: () =>
+            runProviderCheck(async () => {
+              const creating = (created ??= definition.create(entry, context));
+              let instance: Awaited<typeof creating>;
+              try {
+                instance = await creating;
+              } catch {
+                if (created === creating) {
+                  created = undefined;
+                }
+                return { ok: false, errorClass: "failed" };
+              }
+              return definition.check(instance);
+            })
         }
       : {})
   };
+}
+
+/** Every secret name the release config declares: the platform's own and each entry's. */
+export function declaredSecretNames(
+  config: Pick<ClientInstanceConfig, "infrastructure">,
+  registry: ProviderRegistry
+): Set<string> {
+  return new Set([
+    ...Object.values(PLATFORM_SECRET_NAMES),
+    ...infrastructureEntries(config).flatMap(({ port, entry }) =>
+      registry
+        .find(port, entry)
+        .validate(entry)
+        .secrets.map((secret) => secret.name)
+    )
+  ]);
 }
 
 /** Instance > Infrastructure of an API process: the overview with the checks behind it. */
@@ -269,6 +337,7 @@ export function createInfrastructureWorkflow(
 ): InfrastructureWorkflow {
   return new InfrastructureWorkflow({
     entries: infrastructureOverview({ config, infrastructure, stores }),
+    declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
     secrets: infrastructure.secrets,
     logger: infrastructure.context.logger
   });

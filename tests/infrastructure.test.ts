@@ -11,6 +11,7 @@ import {
 } from "@vivd-catalyst/chat-server";
 import {
   createInstanceInfrastructure,
+  declaredSecretNames,
   infrastructureOverview
 } from "@vivd-catalyst/client-assembly";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
@@ -19,7 +20,8 @@ import {
   legacyPermissionFor,
   PROVIDER_CHECK_TIMEOUT_MS,
   runProviderCheck,
-  type Logger
+  type Logger,
+  type SecretResolver
 } from "@vivd-catalyst/core";
 import { MailjetTransport } from "@vivd-catalyst/mail";
 import type { ModelAdapterFactory } from "@vivd-catalyst/model-provider";
@@ -38,7 +40,10 @@ const administrator = asCaller({
 });
 const member = asCaller({ id: "usr_member", roles: ["user"] });
 
-/** Every secret of the instance carries the marker. `MODEL_KEY_UNSET` is named and not set. */
+/**
+ * Every secret of the instance carries the marker. `SUMMER_2024` stands where a name belongs,
+ * reads as one and resolves to nothing: a password typed into the field of a reference.
+ */
 const secretValues = {
   DATABASE_URL: `postgres://catalyst:${MARKER}@database.example.test:5432/catalyst`,
   MODEL_KEY: `${MARKER}-model-key`,
@@ -62,6 +67,22 @@ const throwingModelProvider = defineProvider({
     throw new Error(`401 from https://vendor.example.test: the key ${MARKER} is not valid`);
   },
   describe: () => ({})
+});
+
+/** A provider whose description holds what no page may show: an address with its signature. */
+const oddlyDescribedModelProvider = defineProvider({
+  port: "models",
+  type: "oddly-described",
+  configSchema: z.object({}),
+  external: false,
+  create: (): ModelAdapterFactory => () => {
+    throw new Error("This provider is never called for a model");
+  },
+  check: async () => ({ ok: true }),
+  describe: () => ({
+    endpointHost: `https://user:${MARKER}@signed.example.test/path?X-Amz-Signature=${MARKER}`,
+    bucket: `internal/path/${MARKER}`
+  })
 });
 
 function recordingLogger(): { logger: Logger; lines: unknown[] } {
@@ -88,7 +109,13 @@ afterEach(async () => {
 });
 
 /** An API on a full `infrastructure` section, with every provider's secrets in a fake resolver. */
-async function createServer(options: { extraEntries?: InfrastructureEntry[] } = {}) {
+async function createServer(
+  options: {
+    extraEntries?: InfrastructureEntry[];
+    /** Replaces the resolver in which every secret of the instance is set. */
+    secrets?: SecretResolver;
+  } = {}
+) {
   const root = await mkdtemp(join(tmpdir(), "infrastructure-test-"));
   roots.push(root);
   const config = parseClientInstanceConfig({
@@ -115,9 +142,10 @@ async function createServer(options: { extraEntries?: InfrastructureEntry[] } = 
           region: "global",
           model: "test-model",
           baseUrl: "https://other-models.example.test/v1",
-          credentialSecret: "MODEL_KEY_UNSET"
+          credentialSecret: "SUMMER_2024"
         },
-        throws: { provider: "throwing", model: "test-model" }
+        throws: { provider: "throwing", model: "test-model" },
+        odd: { provider: "oddly-described", model: "test-model" }
       },
       mail: {
         provider: "mailjet",
@@ -144,22 +172,22 @@ async function createServer(options: { extraEntries?: InfrastructureEntry[] } = 
     }
   });
   const { logger, lines } = recordingLogger();
-  const secrets = createFakeSecrets(secretValues);
+  const secrets = options.secrets ?? createFakeSecrets(secretValues);
   const infrastructure = await createInstanceInfrastructure({
     config,
     env: {},
     logger,
     secrets,
-    providers: [throwingModelProvider]
+    providers: [throwingModelProvider, oddlyDescribedModelProvider]
   });
   let now = new Date("2026-10-10T08:00:00.000Z");
   let workflow: InfrastructureWorkflow | undefined;
+  let overview: InfrastructureEntry[] = [];
   const server = await createTestInstanceWith((stores) => {
+    overview = infrastructureOverview({ config, infrastructure, stores });
     workflow = new InfrastructureWorkflow({
-      entries: [
-        ...infrastructureOverview({ config, infrastructure, stores }),
-        ...(options.extraEntries ?? [])
-      ],
+      entries: [...overview, ...(options.extraEntries ?? [])],
+      declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
       secrets,
       logger,
       now: () => now
@@ -168,6 +196,12 @@ async function createServer(options: { extraEntries?: InfrastructureEntry[] } = 
   });
   return {
     server,
+    /** The entry of the release config with this id, once the API process has started. */
+    entry(id: string): InfrastructureEntry {
+      const found = overview.find((entry) => entry.id === id);
+      if (!found) throw new Error(`No entry ${id}`);
+      return found;
+    },
     /** What the scheduled job calls. */
     runChecks(): Promise<void> {
       if (!workflow) throw new Error("The API process has not started");
@@ -222,7 +256,8 @@ describe("Instance > Infrastructure: what an operator reads", () => {
       ["sandbox", "sandbox", "local"],
       ["models.main", "models", "openai-compatible"],
       ["models.unset", "models", "openai-compatible"],
-      ["models.throws", "models", "throwing"]
+      ["models.throws", "models", "throwing"],
+      ["models.odd", "models", "oddly-described"]
     ]);
     const items = byId(infrastructure);
     expect(items["models.main"]).toEqual({
@@ -240,7 +275,11 @@ describe("Instance > Infrastructure: what an operator reads", () => {
       ],
       check: { status: "pending" }
     });
-    expect(items["models.unset"]?.secrets).toEqual([{ name: "MODEL_KEY_UNSET", state: "missing" }]);
+    // What stands in the field resolves to nothing: the field is named, the text is not.
+    expect(items["models.unset"]?.secrets).toEqual([
+      { field: "credentialSecret", state: "missing" }
+    ]);
+    expect(response.body).not.toContain("SUMMER_2024");
     expect(items["objectStorage.files"]).toMatchObject({
       name: "files",
       region: "eu",
@@ -251,7 +290,65 @@ describe("Instance > Infrastructure: what an operator reads", () => {
     // The sandbox runs in the command worker, so the API does not ask it.
     expect(items.sandbox?.check).toEqual({ status: "not_checked" });
     // A read asks no provider.
-    expect(infrastructure.items.filter((item) => item.check.status === "pending")).toHaveLength(8);
+    expect(infrastructure.items.filter((item) => item.check.status === "pending")).toHaveLength(9);
+  });
+
+  it("withholds a host or a bucket that does not read as one and says so in the log", async () => {
+    const { server, lines } = await createServer();
+
+    const response = await server.call("instance.infrastructure.get", {}, administrator);
+
+    expect(byId(read(response))["models.odd"]).toEqual({
+      id: "models.odd",
+      class: "models",
+      name: "odd",
+      type: "oddly-described",
+      origin: "operator",
+      external: false,
+      withheld: ["endpointHost", "bucket"],
+      secrets: [],
+      check: { status: "pending" }
+    });
+    for (const field of ["endpointHost", "bucket"]) {
+      expect(lines).toContainEqual({
+        level: "warn",
+        input: { provider: "models.odd", field },
+        message: expect.stringContaining("is not shown")
+      });
+    }
+    for (const output of [response.body, JSON.stringify(lines)]) {
+      expect(output).not.toContain(MARKER);
+      expect(output).not.toContain("signed.example.test");
+      expect(output).not.toContain("internal/path");
+    }
+  });
+
+  it("lists no secret reference that the release config does not declare", async () => {
+    const undeclared: InfrastructureEntry = {
+      id: "models.later",
+      class: "models",
+      name: "later",
+      type: "openai-compatible",
+      origin: "instance",
+      external: true,
+      region: "eu",
+      // Both resolve. The second is no reference of the release config.
+      secrets: [
+        { name: "MODEL_KEY", field: "credentialSecret" },
+        { name: "STORE_SECRET_OTHER", field: "organizationSecret" }
+      ]
+    };
+    const { server } = await createServer({
+      extraEntries: [undeclared],
+      secrets: createFakeSecrets({ ...secretValues, STORE_SECRET_OTHER: MARKER })
+    });
+
+    const response = await server.call("instance.infrastructure.get", {}, administrator);
+
+    expect(byId(read(response))["models.later"]?.secrets).toEqual([
+      { name: "MODEL_KEY", state: "set" }
+    ]);
+    expect(response.body).not.toContain("STORE_SECRET_OTHER");
   });
 
   it("refuses a caller without the right to administer the instance", async () => {
@@ -387,7 +484,7 @@ describe("Instance > Infrastructure: the checks", () => {
       origin: "operator",
       external: true,
       region: "eu",
-      secretNames: [],
+      secrets: [],
       check: () => {
         asked += 1;
         return new Promise((resolve) => {
@@ -415,6 +512,32 @@ describe("Instance > Infrastructure: the checks", () => {
 });
 
 describe("a provider check", () => {
+  it("ends as 'timeout' when the provider's secret never resolves, and creates the provider once", async () => {
+    let asked = 0;
+    const stalled: SecretResolver = {
+      resolve(name) {
+        if (name !== "MODEL_KEY") return createFakeSecrets(secretValues).resolve(name);
+        asked += 1;
+        return new Promise(() => {});
+      }
+    };
+    const { server, entry } = await createServer({ secrets: stalled });
+    await server.call("health.get");
+    const check = entry("models.main").check;
+    if (!check) throw new Error("The API checks its model providers");
+    vi.useFakeTimers();
+
+    const first = check();
+    await vi.advanceTimersByTimeAsync(PROVIDER_CHECK_TIMEOUT_MS);
+    await expect(first).resolves.toEqual({ ok: false, errorClass: "timeout" });
+    const second = check();
+    await vi.advanceTimersByTimeAsync(PROVIDER_CHECK_TIMEOUT_MS);
+    await expect(second).resolves.toEqual({ ok: false, errorClass: "timeout" });
+
+    // The creation that has not ended is waited for again: it is not started a second time.
+    expect(asked).toBe(1);
+  });
+
   it("ends as 'timeout' after the timeout and aborts what it started", async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | undefined;

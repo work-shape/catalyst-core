@@ -33,6 +33,18 @@ export const infrastructureCheckSchema = z.discriminatedUnion("status", [
 export type InfrastructureCheck = z.infer<typeof infrastructureCheckSchema>;
 
 /**
+ * A secret a provider takes. `name` is the name the release config declares, shown while it is
+ * set. One that is missing is told by `field`, the key of the config that names it: what stands
+ * there resolves to nothing, so it is not known to be a name and is not repeated.
+ */
+export const infrastructureSecretSchema = z.object({
+  name: z.string().optional(),
+  field: z.string().optional(),
+  state: z.enum(["set", "missing"])
+});
+export type InfrastructureSecret = z.infer<typeof infrastructureSecretSchema>;
+
+/**
  * One thing the instance runs on, as an operator reads it. It holds the names of the secrets
  * and whether each is set: never a value, a connection string, a key or a path on the host.
  */
@@ -51,7 +63,12 @@ export const infrastructureProviderSchema = z.object({
   /** The host the instance calls, without a path, a query or credentials. */
   endpointHost: z.string().optional(),
   bucket: z.string().optional(),
-  secrets: z.array(z.object({ name: z.string(), state: z.enum(["set", "missing"]) })),
+  /**
+   * The fields of the config that are set and not shown, because the value does not read as a
+   * bare host or as a bucket name.
+   */
+  withheld: z.array(z.enum(["endpointHost", "bucket"])).optional(),
+  secrets: z.array(infrastructureSecretSchema),
   check: infrastructureCheckSchema
 });
 export type InfrastructureProvider = z.infer<typeof infrastructureProviderSchema>;

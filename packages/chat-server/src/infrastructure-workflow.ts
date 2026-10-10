@@ -3,10 +3,12 @@ import type {
   InfrastructureCheck,
   InfrastructureClass,
   InfrastructureOrigin,
-  InfrastructureProvider
+  InfrastructureProvider,
+  InfrastructureSecret
 } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  isSecretName,
   type Logger,
   type ProviderCheckResult,
   type ProviderRegion,
@@ -37,7 +39,13 @@ export interface InfrastructureEntry {
   region?: ProviderRegion;
   endpointHost?: string;
   bucket?: string;
-  secretNames: readonly string[];
+  /** The fields named in `InfrastructureProvider.withheld`. */
+  withheld?: readonly ("endpointHost" | "bucket")[];
+  /**
+   * The secrets it takes: the name the config gives and the key of the config that gives it.
+   * A name the platform fixes itself, such as `DATABASE_URL`, has no key.
+   */
+  secrets: readonly { name: string; field?: string }[];
   /**
    * Asks the provider. It must end by itself and never throw, which a provider definition's
    * `check` does. Absent when another process holds the provider.
@@ -64,6 +72,11 @@ export class InfrastructureWorkflow {
   constructor(
     private readonly options: {
       entries: readonly InfrastructureEntry[];
+      /**
+       * Every secret name the release config declares. A reference of an entry that is not
+       * among them is not looked up and not listed.
+       */
+      declaredSecretNames: ReadonlySet<string>;
       secrets: SecretResolver;
       logger: Logger;
       now?: () => Date;
@@ -161,11 +174,30 @@ export class InfrastructureWorkflow {
       ...(entry.region === undefined ? {} : { region: entry.region }),
       ...(entry.endpointHost === undefined ? {} : { endpointHost: entry.endpointHost }),
       ...(entry.bucket === undefined ? {} : { bucket: entry.bucket }),
-      secrets: await Promise.all(
-        entry.secretNames.map(async (name) => ({ name, state: await this.secretState(name) }))
-      ),
+      ...(entry.withheld?.length ? { withheld: [...entry.withheld] } : {}),
+      secrets: (await Promise.all(entry.secrets.map((secret) => this.listedSecret(secret)))).flat(),
       check: this.checkOf(entry)
     };
+  }
+
+  /**
+   * A reference is listed when the release config declares it. Its name is shown while it
+   * resolves, which is what makes it the name of a secret; one that resolves to nothing is told
+   * by the key of the config, because what stands there may be the secret itself.
+   */
+  private async listedSecret(secret: {
+    name: string;
+    field?: string;
+  }): Promise<InfrastructureSecret[]> {
+    if (!this.options.declaredSecretNames.has(secret.name) || !isSecretName(secret.name)) {
+      return [];
+    }
+    const state = await this.secretState(secret.name);
+    return [
+      state === "set" || secret.field === undefined
+        ? { name: secret.name, state }
+        : { field: secret.field, state }
+    ];
   }
 
   /** Whether a secret resolves. The value is dropped here and goes nowhere. */

@@ -209,20 +209,7 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
         )}
       </TableCell>
       <TableCell>
-        {provider.endpointHost === undefined && provider.bucket === undefined ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <>
-            {provider.endpointHost === undefined ? null : (
-              <span className="font-mono whitespace-nowrap">{provider.endpointHost}</span>
-            )}
-            {provider.bucket === undefined ? null : (
-              <TableCellDetail>
-                {t("infrastructure.bucket", { bucket: provider.bucket })}
-              </TableCellDetail>
-            )}
-          </>
-        )}
+        <Destination provider={provider} />
       </TableCell>
       <TableCell>
         {provider.secrets.length === 0 ? (
@@ -230,8 +217,12 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
         ) : (
           <ul className="grid gap-1">
             {provider.secrets.map((secret) => (
-              <li key={secret.name} className="flex flex-wrap items-center gap-2">
-                <span className="font-mono whitespace-nowrap">{secret.name}</span>
+              <li
+                key={secret.name ?? secret.field}
+                className="flex flex-wrap items-center gap-2"
+                data-secret-field={secret.name === undefined ? secret.field : undefined}
+              >
+                <span className="font-mono whitespace-nowrap">{secret.name ?? secret.field}</span>
                 <Badge tone={secret.state === "set" ? "neutral" : "danger"} size="sm">
                   {t(
                     secret.state === "set"
@@ -248,6 +239,34 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
         <Health check={provider.check} />
       </TableCell>
     </TableRow>
+  );
+}
+
+/** The host and the bucket. A value the instance withholds is named as not shown. */
+function Destination({ provider }: { provider: InfrastructureProvider }) {
+  const { t } = useTranslation();
+  const withheld = new Set(provider.withheld);
+  const host = withheld.has("endpointHost") ? t("infrastructure.notShown") : provider.endpointHost;
+  const bucket = withheld.has("bucket") ? t("infrastructure.notShown") : provider.bucket;
+  if (host === undefined && bucket === undefined) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return (
+    <>
+      {host === undefined ? null : (
+        <span
+          className={withheld.has("endpointHost") ? undefined : "font-mono whitespace-nowrap"}
+          data-withheld={withheld.has("endpointHost") ? "endpointHost" : undefined}
+        >
+          {host}
+        </span>
+      )}
+      {bucket === undefined ? null : (
+        <TableCellDetail data-withheld={withheld.has("bucket") ? "bucket" : undefined}>
+          {t("infrastructure.bucket", { bucket })}
+        </TableCellDetail>
+      )}
+    </>
   );
 }
 

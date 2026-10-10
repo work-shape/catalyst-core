@@ -40,6 +40,7 @@ export {
   createEnvironmentSecrets,
   createInstanceInfrastructure,
   infrastructureEntries,
+  declaredSecretNames,
   infrastructureOverview,
   PLATFORM_SECRET_NAMES,
   type InstanceInfrastructure

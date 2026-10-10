@@ -13025,6 +13025,7 @@
                   "timeout",
                   "access_denied",
                   "not_found",
+                  "bucket_missing",
                   "rejected",
                   "failed"
                 ]
@@ -13090,26 +13091,20 @@
           "bucket": {
             "type": "string"
           },
+          "withheld": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "endpointHost",
+                "bucket"
+              ]
+            }
+          },
           "secrets": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "state": {
-                  "type": "string",
-                  "enum": [
-                    "set",
-                    "missing"
-                  ]
-                }
-              },
-              "required": [
-                "name",
-                "state"
-              ]
+              "$ref": "#/components/schemas/InfrastructureSecret"
             }
           },
           "check": {
@@ -13124,6 +13119,27 @@
           "external",
           "secrets",
           "check"
+        ]
+      },
+      "InfrastructureSecret": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "set",
+              "missing"
+            ]
+          }
+        },
+        "required": [
+          "state"
         ]
       },
       "InstanceModule": {
