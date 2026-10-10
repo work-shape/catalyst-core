@@ -539,6 +539,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   of a run before its stores had recorded it, so a page that read the conversation back at that
   moment was told the run was still going and kept showing the answer as unfinished. The end
   of a run is now announced once it is recorded.
+- **Audit:** the audit event for the end of a run (`message.completed`, `message.failed`,
+  `message.cancelled`) is written before the run's event stream announces that end. It was
+  written beside the stream, so a reader of the audit right after the end could miss it.
 - **Chat:** a conversation opened while another one is answering shows only its own messages.
   Until its thread arrives it is empty, where it used to show the messages and the partial
   answer of the conversation left behind, and the page no longer asks for that conversation's

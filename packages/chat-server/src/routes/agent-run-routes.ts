@@ -11,6 +11,7 @@ import {
   AppError,
   type AgentRun,
   type AgentRunId,
+  type AgentRuntimeEvent,
   type AuthenticatedUser,
   type ChatMessage,
   type Conversation,
@@ -33,7 +34,8 @@ export function registerAgentRunRoutes(
   log: FastifyBaseLogger
 ): void {
   const conversations = new ConversationWorkflow(options);
-  const lifecycleMonitorTasks = new Set<AgentRunId>();
+  // The monitors of the runs started here, each until it has recorded how its run ended.
+  const lifecycleMonitorTasks = new Map<AgentRunId, Promise<void>>();
 
   async function readCurrentConversation(
     conversationId: ConversationId,
@@ -175,6 +177,11 @@ export function registerAgentRunRoutes(
               if (closed) {
                 return;
               }
+              if (isTerminalRunEventType(event.type)) {
+                // The monitor records the end of the run in the audit behind the event. Whoever
+                // hears that a run has ended reads back what is recorded, the audit included.
+                await lifecycleMonitorTasks.get(runId);
+              }
               const observation = runObservationSchema.parse({
                 clientInstanceId: options.clientInstanceId,
                 runId,
@@ -202,8 +209,7 @@ export function registerAgentRunRoutes(
     if (lifecycleMonitorTasks.has(input.runId)) {
       return;
     }
-    lifecycleMonitorTasks.add(input.runId);
-    void (async () => {
+    const task = (async () => {
       let assistantMessageCount = 0;
       for await (const event of conversations.observeRun(input.runId, input.context)) {
         if (event.type === "message_completed") {
@@ -218,7 +224,6 @@ export function registerAgentRunRoutes(
             assistantMessageCount,
             event
           );
-          lifecycleMonitorTasks.delete(input.runId);
           return;
         }
         if (event.type === "run_cancelled") {
@@ -230,7 +235,6 @@ export function registerAgentRunRoutes(
             assistantMessageCount,
             event
           );
-          lifecycleMonitorTasks.delete(input.runId);
           return;
         }
         if (event.type === "run_completed") {
@@ -241,18 +245,20 @@ export function registerAgentRunRoutes(
             input.runId,
             assistantMessageCount
           );
-          lifecycleMonitorTasks.delete(input.runId);
           return;
         }
       }
-      lifecycleMonitorTasks.delete(input.runId);
-    })().catch((error: unknown) => {
-      lifecycleMonitorTasks.delete(input.runId);
-      log.warn(
-        { err: error, conversationId: input.conversationId, runId: input.runId },
-        "Agent run lifecycle monitor failed"
-      );
-    });
+    })()
+      .catch((error: unknown) => {
+        log.warn(
+          { err: error, conversationId: input.conversationId, runId: input.runId },
+          "Agent run lifecycle monitor failed"
+        );
+      })
+      .finally(() => {
+        lifecycleMonitorTasks.delete(input.runId);
+      });
+    lifecycleMonitorTasks.set(input.runId, task);
   }
 
   async function createStartRunResponse(
@@ -277,6 +283,10 @@ export function registerAgentRunRoutes(
       eventsUrl: new URL(eventsUrl, `${request.protocol}://${requestHost}`).toString()
     });
   }
+}
+
+function isTerminalRunEventType(type: AgentRuntimeEvent["type"]): boolean {
+  return type === "run_completed" || type === "run_cancelled" || type === "run_failed";
 }
 
 function isObservableRunStatus(status: string | undefined): boolean {
