@@ -5,7 +5,7 @@ import {
   resolvePolicy,
   type ModuleSnapshot
 } from "@vivd-catalyst/core";
-import { toolOperationPolicy } from "@vivd-catalyst/tool-execution";
+import { toolEffectIssue, toolOperationPolicy } from "@vivd-catalyst/tool-execution";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   type ModelBindingRef,
@@ -204,6 +204,11 @@ function findToolReferenceIssues(
       );
     }
     const provided = providedTools.get(tool.name);
+    const effectIssue = provided ? toolEffectIssue(provided) : undefined;
+    if (effectIssue) {
+      issues.push(effectIssue);
+      continue;
+    }
     if (
       tool.enabled &&
       provided?.effect === "reading" &&
@@ -216,7 +221,9 @@ function findToolReferenceIssues(
       );
     } else if (tool.enabled && provided && waitsForAPerson(config, provided)) {
       issues.push(
-        `Tool '${tool.name}' requires approval, but v1 client assembly does not support approval-required tool policies yet. They arrive with the pause of a run (OP-3).`
+        provided.permission?.mode === undefined
+          ? `Tool '${tool.name}' declares no permission mode, so the instance default '${config.policy.defaults[provided.effect]}' for ${provided.effect} calls applies, and an agent's call cannot wait for a person yet. Declare permission.mode 'allow' or 'deny' on the tool, or set policy.defaults.${provided.effect}.`
+          : `Tool '${tool.name}' requires approval, but v1 client assembly does not support approval-required tool policies yet. They arrive with the pause of a run (OP-3).`
       );
     }
   }

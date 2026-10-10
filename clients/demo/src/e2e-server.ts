@@ -13,6 +13,8 @@ const HELD_TOOL = "e2e.record_note";
 const recordNote = defineTool({
   name: HELD_TOOL,
   effect: "changing",
+  // Runs on the agent's own call. Without a mode the instance default for changes would apply.
+  permission: { mode: "allow" },
   description: "Records a note. A fixture of the browser suite: it stores nothing.",
   inputSchema: z.object({ text: z.string().min(1) }),
   outputSchema: z.object({ recorded: z.string() }),

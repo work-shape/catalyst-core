@@ -49,28 +49,46 @@ export interface ToolOperationOptions {
   logger?: Logger;
 }
 
-/** What a tool declares for the policy of its operation: its name, effect and default. */
+/**
+ * What a tool declares for the policy of its operation: its name, effect and, where it names a
+ * mode, its default. A tool that names no mode declares no default, so the instance default of
+ * its effect applies.
+ */
 export function toolOperationPolicy(
   tool: Pick<AnyToolDefinition, "name" | "effect" | "permission">
-): { name: string; effect: OperationEffect; defaultPolicy: PolicyValue } {
+): { name: string; effect: OperationEffect; defaultPolicy?: PolicyValue } {
+  const defaultPolicy = declaredPolicy(tool.permission?.mode);
   return {
     name: tool.name,
     effect: tool.effect,
-    defaultPolicy: declaredPolicy(tool.permission?.mode)
+    ...(defaultPolicy ? { defaultPolicy } : {})
   };
 }
 
 /** What a tool's mode is as the declared default policy of its operation. */
-function declaredPolicy(mode: ToolPermissionMode | undefined): PolicyValue {
+function declaredPolicy(mode: ToolPermissionMode | undefined): PolicyValue | undefined {
   switch (mode) {
     case "deny":
       return "deny";
     case "approval_required":
       return "approval";
     case "allow":
-    case undefined:
       return "allow";
+    case undefined:
+      return undefined;
   }
+}
+
+const effectSchema = z.enum(["reading", "changing"]);
+
+/**
+ * What is wrong with the effect a tool declares, or nothing. A tool is written outside this
+ * repository too, by code its types do not reach, so the effect is read as a value.
+ */
+export function toolEffectIssue(tool: { name: string; effect?: unknown }): string | undefined {
+  return effectSchema.safeParse(tool.effect).success
+    ? undefined
+    : `Tool '${tool.name}' declares no effect. Declare effect 'reading' or 'changing' in its definition.`;
 }
 
 /**
@@ -83,6 +101,12 @@ export function toolOperation(
   tool: AnyToolDefinition,
   options: ToolOperationOptions
 ): OperationDefinition {
+  const effectIssue = toolEffectIssue(tool);
+  if (effectIssue) {
+    // Registering happens at startup, so the process stops here with the name of the tool
+    // instead of failing every call of it later.
+    throw new AppError("VALIDATION_FAILED", effectIssue);
+  }
   const requiredPermissionRefs = tool.permission?.requiredPermissionRefs ?? [];
   return {
     ...toolOperationPolicy(tool),

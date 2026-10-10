@@ -22,6 +22,7 @@ describe("tool handler error boundary on Postgres", () => {
         name: "test.write",
         description: "Writes a row that breaks a foreign key.",
         effect: "changing",
+        permission: { mode: "allow" },
         inputSchema: z.object({}),
         async execute() {
           await harness.store.executionWorkspaces.upsertWorkspaceFile({
@@ -88,6 +89,7 @@ describe("tool handler error boundary on Postgres", () => {
         name: "test.write",
         description: "Refuses with a message for the model.",
         effect: "changing",
+        permission: { mode: "allow" },
         inputSchema: z.object({}),
         async execute() {
           throw new AppError("NOT_FOUND", "Sheet 'Summary' does not exist");

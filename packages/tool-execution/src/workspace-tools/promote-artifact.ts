@@ -15,6 +15,8 @@ export function workspacePromoteArtifactTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.promote_artifact",
     effect: "changing",
+    // Runs on the agent's own call. Without a mode the instance default for changes would apply.
+    permission: { mode: "allow" },
     description:
       "Promote a final workspace file to a managed artifact. Catalyst automatically displays promoted artifacts as clickable download cards below the assistant response.",
     inputSchema: workspacePromoteArtifactInputSchema,

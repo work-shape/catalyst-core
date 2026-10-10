@@ -10,7 +10,12 @@ import {
   type ToolExecutionContext,
   type ToolExecutionRequest
 } from "@vivd-catalyst/core";
-import { ToolRegistry, type OperationApprovalRequests } from "@vivd-catalyst/tool-execution";
+import { createOperationRegistry } from "@vivd-catalyst/core";
+import {
+  registerToolOperations,
+  ToolRegistry,
+  type OperationApprovalRequests
+} from "@vivd-catalyst/tool-execution";
 import { defineTool, toolFailed, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { createMemoryOperationRunStore } from "./support/memory-operation-runs";
 import {
@@ -360,5 +365,68 @@ describe("an agent's tool call that needs another person's approval", () => {
     expect(result).toMatchObject({ status: "failed", error: { code: "not_allowed" } });
     expect(executed).toEqual([]);
     expect(runs[0]).toMatchObject({ status: "denied", denial: { kind: "policy" } });
+  });
+});
+
+describe("a tool that declares less than a call of it needs", () => {
+  const modeless = defineTool({
+    name: "demo.modeless",
+    description: "Changes something and names no permission mode.",
+    effect: "changing",
+    inputSchema: z.object({ text: z.string() }),
+    execute(input) {
+      executed.push(input.text);
+      return toolSuccess({});
+    }
+  });
+  const withModeless = (options: Partial<TestToolRunnerOptions> = {}) =>
+    setup({
+      registry: new ToolRegistry({ tools: [modeless] }),
+      getAgentToolNames: () => [modeless.name],
+      ...options
+    });
+
+  // Fails before the fix: a tool without a mode was registered with the default `allow`, so
+  // it ran whatever the instance default said.
+  it("takes the instance default where it names no mode, and is never allowed on its own", async () => {
+    const confirmed = withModeless();
+    const refused = await confirmed.runTool(request(modeless.name, { text: "one" }), context());
+    // An agent's call cannot wait for its own caller, so `confirm` refuses it.
+    expect(refused).toMatchObject({ status: "failed", error: { code: "not_allowed" } });
+    expect(executed).toEqual([]);
+    expect(confirmed.runs[0]).toMatchObject({ status: "denied", denial: { kind: "policy" } });
+
+    const filed: string[] = [];
+    const held = withModeless({
+      changingDefault: "approval",
+      approvals: {
+        request({ run }) {
+          filed.push(run.id);
+          return Promise.resolve({ approvalRequestId: "apr_modeless" });
+        }
+      }
+    });
+    await held.runTool(request(modeless.name, { text: "two" }), context());
+    expect(executed).toEqual([]);
+    expect(held.runs[0]).toMatchObject({
+      status: "pending_approval",
+      approvalRequestId: "apr_modeless"
+    });
+    expect(filed).toEqual([held.runs[0]?.id]);
+
+    const allowed = withModeless({ changingDefault: "allow" });
+    const ran = await allowed.runTool(request(modeless.name, { text: "three" }), context());
+    expect(ran).toMatchObject({ status: "success" });
+    expect(executed).toEqual(["three"]);
+  });
+
+  // Fails before the fix: the tool was registered, and every call of it ended as INTERNAL.
+  it("refuses to register a tool that declares no effect, with the name of the tool", () => {
+    const effectless = Object.assign({}, modeless, { name: "demo.effectless", effect: undefined });
+    expect(() =>
+      registerToolOperations(createOperationRegistry(), [effectless], { clientInstanceId })
+    ).toThrowError(
+      "Tool 'demo.effectless' declares no effect. Declare effect 'reading' or 'changing' in its definition."
+    );
   });
 });

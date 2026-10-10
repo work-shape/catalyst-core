@@ -12,6 +12,7 @@ import {
   type Logger,
   type ModuleSnapshot,
   type OperationRunStore,
+  type PolicyValue,
   type ToolOperationRunner
 } from "@vivd-catalyst/core";
 import {
@@ -33,6 +34,8 @@ export interface TestToolRunnerOptions {
   runs?: OperationRunStore;
   centralSettings?: readonly CentralPolicySetting[];
   approvals?: OperationApprovalRequests;
+  /** The instance default of changing calls. Without it `confirm`, as an instance has it. */
+  changingDefault?: PolicyValue;
   /** Which modules are on. Without it every tool is of a module that is on. */
   modules?: ModuleSnapshot;
 }
@@ -88,7 +91,7 @@ export function createTestToolRunner(
       events: createAuditingEventEmitter(audit),
       audit,
       policy: {
-        instanceDefaults: { reading: "allow", changing: "confirm" },
+        instanceDefaults: { reading: "allow", changing: options.changingDefault ?? "confirm" },
         centralSettings: () => options.centralSettings ?? []
       },
       approvals: options.approvals,

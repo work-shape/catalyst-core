@@ -31,6 +31,8 @@ export function createStructuredDataToolDefinitions(input: {
     defineTool({
       name: "structured_data.publish",
       effect: "changing",
+      // Named, because a changing tool without a mode takes the instance default.
+      permission: { mode: "allow" },
       description:
         "Publish or update the conversation's current structured-data resource shown in the Resources panel. Use replace to supply the full structure and patch to edit named fields by stable section and field keys. Reuse the resource, section, and field keys you published earlier when updating.",
       inputSchema: structuredDataPublishInputSchema,

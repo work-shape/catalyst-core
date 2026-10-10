@@ -40,6 +40,8 @@ export function workspaceExecTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.exec",
     effect: "changing",
+    // Runs on the agent's own call. Without a mode the instance default for changes would apply.
+    permission: { mode: "allow" },
     description:
       "Run a bounded Bash command from /workspace in the conversation execution workspace. Each call starts in /workspace unless cwd is provided for that call; cwd, processes, and files outside /workspace do not persist. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Pass a complete shell command or multiline script. Files created or changed under /workspace persist across calls and stay internal until promoted. For multiline create-and-verify commands, put `set -e` on its own line before later commands so helpers do not run after a failed script. Run artifact helpers directly. Do not prefix helpers with `set -e`, and do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`.",
     inputSchema: workspaceExecInputSchema,

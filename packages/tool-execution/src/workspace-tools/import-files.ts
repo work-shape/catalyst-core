@@ -30,6 +30,8 @@ export function workspaceImportFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.import_files",
     effect: "changing",
+    // Runs on the agent's own call. Without a mode the instance default for changes would apply.
+    permission: { mode: "allow" },
     description:
       "Copy uploaded managed conversation files into the execution workspace by fileId. The result returns a shell-safe workspace path in importedFiles[].path; use that exact path in workspace.exec and do not invent shortened filenames. This uses managed file access and never exposes object-storage credentials.",
     inputSchema: workspaceImportFilesInputSchema,
