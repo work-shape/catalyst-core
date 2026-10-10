@@ -139,6 +139,13 @@ describe("test instance", () => {
   });
 });
 
+/**
+ * For the tests that make a run of their own: they create databases and migrate a template from
+ * nothing, which is seconds of work for the database server alone and many times that beside
+ * other suites. The limit only ends a run that hangs; nothing here asserts a duration.
+ */
+const OWN_RUN_TIMEOUT_MS = 180_000;
+
 describe("Postgres fixture lifecycle", () => {
   it("drains an ordered race when BEGIN fails before the transaction callback", async () => {
     const instance = await createTestInstance();
@@ -213,7 +220,8 @@ describe("Postgres fixture lifecycle", () => {
       } finally {
         await admin.end();
       }
-    }
+    },
+    OWN_RUN_TIMEOUT_MS
   );
 
   it("refuses to drop a whole run through fixtures that only joined it", async () => {
@@ -223,60 +231,68 @@ describe("Postgres fixture lifecycle", () => {
     );
   });
 
-  it("uses CATALYST_TEST_MIGRATIONS_DIRECTORY for the template and all clones", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "catalyst-test-migrations-"));
-    let fixtures: PostgresFixtures | undefined;
-    try {
-      await mkdir(join(directory, "meta"));
-      await writeFile(
-        join(directory, "meta/_journal.json"),
-        JSON.stringify({
-          version: "7",
-          dialect: "postgresql",
-          entries: [{ idx: 0, version: "7", when: 1, tag: "0000_probe", breakpoints: true }]
-        })
-      );
-      await writeFile(
-        join(directory, "0000_probe.sql"),
-        "create table alternate_migrations_probe (id text primary key);"
-      );
-      vi.stubEnv("CATALYST_TEST_MIGRATIONS_DIRECTORY", directory);
-      fixtures = new PostgresFixtures();
-      for (const file of ["alternate-first.test.ts", "alternate-second.test.ts"]) {
-        const sql = postgres(await fixtures.database(file), { max: 1 });
-        try {
-          expect(
-            await sql`select to_regclass('alternate_migrations_probe')::text as marker, to_regclass('conversations')::text as conversations`
-          ).toEqual([{ marker: "alternate_migrations_probe", conversations: null }]);
-          expect(await sql`select * from drizzle.__drizzle_migrations`).toHaveLength(1);
-        } finally {
-          await sql.end();
+  it(
+    "uses CATALYST_TEST_MIGRATIONS_DIRECTORY for the template and all clones",
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "catalyst-test-migrations-"));
+      let fixtures: PostgresFixtures | undefined;
+      try {
+        await mkdir(join(directory, "meta"));
+        await writeFile(
+          join(directory, "meta/_journal.json"),
+          JSON.stringify({
+            version: "7",
+            dialect: "postgresql",
+            entries: [{ idx: 0, version: "7", when: 1, tag: "0000_probe", breakpoints: true }]
+          })
+        );
+        await writeFile(
+          join(directory, "0000_probe.sql"),
+          "create table alternate_migrations_probe (id text primary key);"
+        );
+        vi.stubEnv("CATALYST_TEST_MIGRATIONS_DIRECTORY", directory);
+        fixtures = new PostgresFixtures();
+        for (const file of ["alternate-first.test.ts", "alternate-second.test.ts"]) {
+          const sql = postgres(await fixtures.database(file), { max: 1 });
+          try {
+            expect(
+              await sql`select to_regclass('alternate_migrations_probe')::text as marker, to_regclass('conversations')::text as conversations`
+            ).toEqual([{ marker: "alternate_migrations_probe", conversations: null }]);
+            expect(await sql`select * from drizzle.__drizzle_migrations`).toHaveLength(1);
+          } finally {
+            await sql.end();
+          }
         }
+      } finally {
+        vi.unstubAllEnvs();
+        await fixtures?.close();
+        await rm(directory, { recursive: true, force: true });
       }
-    } finally {
-      vi.unstubAllEnvs();
-      await fixtures?.close();
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
+    },
+    OWN_RUN_TIMEOUT_MS
+  );
 
-  it("cleans up a template whose migrations fail", async () => {
-    vi.stubEnv("CATALYST_TEST_MIGRATIONS_DIRECTORY", "/missing-catalyst-test-migrations");
-    const fixtures = new PostgresFixtures();
-    try {
-      await expect(fixtures.database("failed.test.ts")).rejects.toThrow(
-        "Postgres test fixture setup failed"
-      );
-    } finally {
-      vi.unstubAllEnvs();
-      await fixtures.close();
-    }
-    const admin = postgres(requiredTestDatabaseUrl(), { max: 1 });
-    try {
-      const databases = await admin<{ datname: string }[]>`select datname from pg_database`;
-      expect(databases.filter(({ datname }) => datname.startsWith(fixtures.prefix))).toEqual([]);
-    } finally {
-      await admin.end();
-    }
-  });
+  it(
+    "cleans up a template whose migrations fail",
+    async () => {
+      vi.stubEnv("CATALYST_TEST_MIGRATIONS_DIRECTORY", "/missing-catalyst-test-migrations");
+      const fixtures = new PostgresFixtures();
+      try {
+        await expect(fixtures.database("failed.test.ts")).rejects.toThrow(
+          "Postgres test fixture setup failed"
+        );
+      } finally {
+        vi.unstubAllEnvs();
+        await fixtures.close();
+      }
+      const admin = postgres(requiredTestDatabaseUrl(), { max: 1 });
+      try {
+        const databases = await admin<{ datname: string }[]>`select datname from pg_database`;
+        expect(databases.filter(({ datname }) => datname.startsWith(fixtures.prefix))).toEqual([]);
+      } finally {
+        await admin.end();
+      }
+    },
+    OWN_RUN_TIMEOUT_MS
+  );
 });

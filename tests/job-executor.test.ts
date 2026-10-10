@@ -498,20 +498,32 @@ describe("job executor", () => {
     ]);
     const job = await db.store.jobs.enqueue(retried, { n: 1 }, { clientInstanceId });
     const other = await db.store.jobs.enqueue(refused, { n: 2 }, { clientInstanceId });
-    const waitOf = async () => {
-      const [row] = await db.sql<{ status: string; attempts: number; wait: number }[]>`
-        select status, attempts, extract(epoch from run_after - now())::float8 as wait
-        from platform_jobs where id = ${job.id}
+    const state = async () => {
+      const [row] = await db.sql<{ status: string; attempts: number; run_after: Date }[]>`
+        select status, attempts, run_after from platform_jobs where id = ${job.id}
       `;
       return required(row);
     };
+    const databaseNow = async () =>
+      required((await db.sql<{ now: Date }[]>`select clock_timestamp() as now`)[0]).now.getTime();
+    /**
+     * Runs a pass in which the attempt fails and returns the backoff it was given, as the two
+     * bounds the database's clock gives: the attempt ended between the two readings, however
+     * long the pass took.
+     */
+    const backoffOfFailedPass = async () => {
+      const before = await databaseNow();
+      await only.runDue();
+      const after = await databaseNow();
+      const runAfter = (await state()).run_after.getTime();
+      return { atLeast: runAfter - after, atMost: runAfter - before };
+    };
     const makeDue = () => db.sql`update platform_jobs set run_after = now() where id = ${job.id}`;
 
-    await only.runDue();
-    const afterFirst = await waitOf();
-    expect(afterFirst).toMatchObject({ status: "queued", attempts: 1 });
-    expect(afterFirst.wait).toBeGreaterThan(50);
-    expect(afterFirst.wait).toBeLessThanOrEqual(60);
+    const first = await backoffOfFailedPass();
+    expect(await state()).toMatchObject({ status: "queued", attempts: 1 });
+    expect(first.atLeast).toBeLessThanOrEqual(60_000);
+    expect(first.atMost).toBeGreaterThanOrEqual(60_000);
     const [refusedRow] = await db.sql<{ status: string; error_message: string }[]>`
       select status, error_message from platform_jobs where id = ${other.id}
     `;
@@ -519,18 +531,18 @@ describe("job executor", () => {
 
     // Not due yet: another pass leaves it alone.
     await only.runDue();
-    expect((await waitOf()).attempts).toBe(1);
+    expect((await state()).attempts).toBe(1);
+
+    // Doubled it would be 120 seconds; the kind's limit holds it at 90.
+    await makeDue();
+    const second = await backoffOfFailedPass();
+    expect(await state()).toMatchObject({ status: "queued", attempts: 2 });
+    expect(second.atLeast).toBeLessThanOrEqual(90_000);
+    expect(second.atMost).toBeGreaterThanOrEqual(90_000);
 
     await makeDue();
     await only.runDue();
-    const afterSecond = await waitOf();
-    expect(afterSecond).toMatchObject({ status: "queued", attempts: 2 });
-    expect(afterSecond.wait).toBeGreaterThan(80);
-    expect(afterSecond.wait).toBeLessThanOrEqual(90);
-
-    await makeDue();
-    await only.runDue();
-    expect(await waitOf()).toMatchObject({ status: "dead", attempts: 3 });
+    expect(await state()).toMatchObject({ status: "dead", attempts: 3 });
     expect(exhausted.map((entry) => entry.payload)).toEqual([{ n: 1 }]);
     // The stored error is the envelope's: an unknown error tells nothing.
     const [dead] = await db.sql<{ error_code: string; error_message: string }[]>`
@@ -566,7 +578,8 @@ describe("job executor", () => {
     it("produces one tick per interval with two workers, the first one due at once", async () => {
       const clientInstanceId = db.clientInstance("schedule");
       const kind = tick("test.tick");
-      const schedule = defineSchedule({ kind, every: 400 });
+      const hour = 60 * 60 * 1000;
+      const schedule = defineSchedule({ kind, every: hour });
       let ticks = 0;
       let overlapping = 0;
       let highest = 0;
@@ -585,28 +598,27 @@ describe("job executor", () => {
       const first = worker(db.store, clientInstanceId, [handler()], [schedule]);
       const second = worker(db.secondStore, clientInstanceId, [handler()], [schedule]);
 
-      await Promise.all([first.runDue(), second.runDue()]);
-      expect(ticks).toBe(1);
-      await waitUntil(async () => {
-        await Promise.all([first.runDue(), second.runDue()]);
-        return ticks >= 4;
-      }, "four ticks have run");
+      const bothPass = () => Promise.all([first.runDue(), second.runDue()]);
 
-      const rows = await jobs(clientInstanceId);
-      const ended = rows.filter((row) => row.status === "succeeded");
-      const live = rows.filter((row) => row.status === "queued" || row.status === "running");
-      expect(highest).toBe(1);
-      expect(ended).toHaveLength(ticks);
-      expect(live).toHaveLength(1);
-      expect(rows).toHaveLength(ticks + 1);
-      // Each tick is due one interval after the end of the one before it, by the database clock.
-      for (let index = 1; index < rows.length; index += 1) {
-        const previousEnd = required(required(rows[index - 1]).finished_at).getTime();
-        const current = required(rows[index]);
-        expect(current.run_after.getTime() - previousEnd).toBe(400);
-        if (current.started_at)
-          expect(current.started_at.getTime()).toBeGreaterThanOrEqual(current.run_after.getTime());
+      for (let expected = 1; expected <= 4; expected += 1) {
+        await bothPass();
+        expect(ticks).toBe(expected);
+        const rows = await jobs(clientInstanceId);
+        expect(rows.map((row) => row.status)).toEqual([
+          ...Array.from({ length: expected }, () => "succeeded"),
+          "queued"
+        ]);
+        // The next tick is due one interval after the end of this one, by the database clock.
+        const ended = required(required(rows[expected - 1]).finished_at).getTime();
+        const next = required(rows[expected]);
+        expect(next.run_after.getTime() - ended).toBe(hour);
+        // Until then passes of both workers leave it alone.
+        await bothPass();
+        expect(ticks).toBe(expected);
+        // As if the interval had passed.
+        await db.sql`update platform_jobs set run_after = now() where id = ${next.id}`;
       }
+      expect(highest).toBe(1);
     });
 
     it("enqueues the next tick when a tick fails, and a failed tick is never dead", async () => {

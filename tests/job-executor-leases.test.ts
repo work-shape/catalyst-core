@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { deferred, required, waitUntil } from "./support/assertions";
 import { kindOf, useJobExecutorHarness } from "./support/job-executor-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
+import { withTestSql } from "./support/test-sql";
 
 describe("job executor leases, wake and start", () => {
   const db = usePostgresSuite("job_leases");
@@ -59,8 +60,13 @@ describe("job executor leases, wake and start", () => {
 
   it("runs a job once when its transaction outlives the lease", async () => {
     const clientInstanceId = db.clientInstance("long_tx");
-    const kind = kindOf("test.long_transaction", { leaseMs: 600 });
+    // The lease the transaction leaves behind is long, so the attempt ends under it on any
+    // machine. The lease that runs out is the one the test shortens below.
+    const kind = kindOf("test.long_transaction");
+    heartbeatsByHand();
     const user = await db.store.users.createUser({ clientInstanceId, displayLabel: "Before" });
+    const started = deferred<undefined>();
+    const enter = deferred<undefined>();
     const inTransaction = deferred<undefined>();
     const letGo = deferred<undefined>();
     let runs = 0;
@@ -70,6 +76,8 @@ describe("job executor leases, wake and start", () => {
         slots: 1,
         async run(_job, control) {
           runs += 1;
+          started.resolve(undefined);
+          await enter.promise;
           await control.transaction(async (stores) => {
             inTransaction.resolve(undefined);
             await letGo.promise;
@@ -84,26 +92,59 @@ describe("job executor leases, wake and start", () => {
     const first = worker(db.store, clientInstanceId, [handler()]);
     const second = worker(db.secondStore, clientInstanceId, [handler()]);
     await db.store.jobs.enqueue(kind, { n: 1 }, { clientInstanceId });
-
-    startPass(first);
-    await inTransaction.promise;
-    // The transaction holds the row, so the attempt's own heartbeat waits and the lease runs
-    // out. A waiting heartbeat computed its new expiry when it began to wait; a whole lease
-    // later that expiry is in the past as well.
-    await waitUntil(async () => {
-      const [row] = await db.sql<{ expired: boolean }[]>`
-        select lease_expires_at < now() - interval '700 milliseconds' as expired
-        from platform_jobs where client_instance_id = ${clientInstanceId}`;
-      return row?.expired === true;
-    }, "the lease has run out during the transaction, a lease ago");
-    // The second worker sees an expired lease and waits for the row to take the job over.
-    startPass(second);
-    await waitUntil(async () => {
+    const waitingForARow = async (applicationName: string) => {
       const [row] = await db.sql<{ waiting: number }[]>`
         select count(*)::int as waiting from pg_stat_activity
-        where application_name = ${db.second} and wait_event_type = 'Lock'`;
+        where application_name = ${applicationName} and wait_event_type = 'Lock'`;
       return (row?.waiting ?? 0) > 0;
-    }, "the second worker waits for the job row");
+    };
+
+    startPass(first);
+    await started.promise;
+    // The transaction must take the row under a live lease, and the lease must be over while
+    // it holds the row. So the lease gets one more second in the statement that hands the row
+    // to the waiting transaction: between the two lies no round trip of this process, only
+    // the database passing a lock on.
+    const gate = 706_002;
+    const held = await db.hold((tx) => tx`select pg_advisory_xact_lock(${gate})`);
+    await withTestSql(async (sql) => {
+      // The driver sends a query when it is awaited or executed; this one must be on its way.
+      const shortened = sql
+        .unsafe(
+          `
+        begin;
+        select id from platform_jobs where client_instance_id = '${clientInstanceId}' for update;
+        select pg_advisory_xact_lock(${gate});
+        update platform_jobs set lease_expires_at = clock_timestamp() + interval '1 second'
+          where client_instance_id = '${clientInstanceId}';
+        commit;
+      `
+        )
+        .execute();
+      await waitUntil(async () => {
+        const [row] = await db.sql<{ waiting: number }[]>`
+          select count(*)::int as waiting from pg_locks
+          where locktype = 'advisory' and objid = ${gate} and not granted`;
+        return row?.waiting === 1;
+      }, "the job row is held for the shortened lease");
+      enter.resolve(undefined);
+      await waitUntil(() => waitingForARow(db.first), "the transaction waits for the job row");
+      await held.rollback();
+      await shortened;
+    });
+    await inTransaction.promise;
+
+    // No heartbeat begins in this test. One that waited for the row since the lease was live
+    // would renew it when the transaction lets go, and hide a transaction that does not.
+    await waitUntil(async () => {
+      const [row] = await db.sql<{ expired: boolean }[]>`
+        select lease_expires_at < now() as expired
+        from platform_jobs where client_instance_id = ${clientInstanceId}`;
+      return row?.expired === true;
+    }, "the lease has run out during the transaction");
+    // The second worker sees an expired lease and waits for the row to take the job over.
+    startPass(second);
+    await waitUntil(() => waitingForARow(db.second), "the second worker waits for the job row");
     letGo.resolve(undefined);
 
     await waitUntil(
