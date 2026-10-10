@@ -21,6 +21,7 @@ const sourceAlias = {
   "@vivd-catalyst/document-execution": "packages/document-execution/src/index.ts",
   "@vivd-catalyst/mail": "packages/mail/src/index.ts",
   "@vivd-catalyst/model-provider": "packages/model-provider/src/index.ts",
+  "@vivd-catalyst/postgres-connector": "packages/postgres-connector/src/index.ts",
   "@vivd-catalyst/postgres-store/migration-statements":
     "packages/postgres-store/src/migration-statements.js",
   "@vivd-catalyst/postgres-store": "packages/postgres-store/src/index.ts",

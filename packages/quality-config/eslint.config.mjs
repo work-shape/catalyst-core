@@ -301,12 +301,17 @@ const plugin = {
     // ESLint's no-restricted-globals and no-restricted-properties would cover these three,
     // but under one rule name. The baseline counts by rule and each boundary has its own owner.
     "sql-boundary": rule(
-      "SQL drivers and Drizzle belong in postgres-store, auth or data-source",
+      "SQL drivers and Drizzle belong in postgres-store, auth, data-source or postgres-connector",
       (filename) => {
         const directory = packageAt(filename)?.directory;
         return (
           directory !== undefined &&
-          !["packages/postgres-store", "packages/auth", "packages/data-source"].includes(directory)
+          ![
+            "packages/postgres-store",
+            "packages/auth",
+            "packages/data-source",
+            "packages/postgres-connector"
+          ].includes(directory)
         );
       },
       (_context, report) => {
