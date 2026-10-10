@@ -689,12 +689,13 @@ export class ConversationWorkflow {
     await this.requireConversationAccess(persistedRun.conversationId, context.user);
 
     let lastSequence = options.afterSequence ?? 0;
-    const observations = await this.options.stores.agentRuns.listRunObservations({
-      clientInstanceId: this.options.clientInstanceId,
-      runId,
-      afterSequence: lastSequence
-    });
-    for (const observation of observations) {
+    const readStored = () =>
+      this.options.stores.agentRuns.listRunObservations({
+        clientInstanceId: this.options.clientInstanceId,
+        runId,
+        afterSequence: lastSequence
+      });
+    for (const observation of await readStored()) {
       lastSequence = Math.max(lastSequence, observation.sequence);
       yield observation.payload;
     }
@@ -705,6 +706,11 @@ export class ConversationWorkflow {
         runId
       })) ?? persistedRun;
     if (!isActiveAgentRunStatus(latestRun.status)) {
+      // A worker may have stored events and the end of the run between the two reads above. The
+      // run has ended, so one more read holds everything that was not delivered.
+      if (lastSequence < latestRun.lastSequence) {
+        for (const observation of await readStored()) yield observation.payload;
+      }
       return;
     }
 
