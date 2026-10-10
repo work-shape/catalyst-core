@@ -123,28 +123,38 @@ describe("the migration boundary", () => {
     }
   });
 
+  const takeMigrationLock =
+    "select pg_advisory_lock(hashtextextended('vivd-catalyst:postgres-store:migrations', 0))";
+
   it("waits for the migration advisory lock while another session holds it", async () => {
     const databaseUrl = await emptyDatabase("lock");
     const holder = postgres(databaseUrl, { max: 1 });
+    let migration: Promise<string[]> | undefined;
     try {
-      await holder`select pg_advisory_lock(hashtextextended('vivd-catalyst:postgres-store:migrations', 0))`;
+      await holder.unsafe(takeMigrationLock);
       let settled = false;
       const lines: string[] = [];
-      const migration = migrateDatabase({ databaseUrl, log: (line) => lines.push(line) }).finally(
-        () => {
-          settled = true;
-        }
+      migration = migrateDatabase({ databaseUrl, log: (line) => lines.push(line) }).finally(() => {
+        settled = true;
+      });
+      // It says once that it waits: by then it has asked for the lock and was refused.
+      await vi.waitFor(() =>
+        expect(lines).toEqual(["Waiting for the migration lock: another migration step holds it."])
       );
       // The run asks for the lock again every 100 ms and holds no statement open meanwhile: a
-      // session blocked in pg_advisory_lock would deadlock with a concurrent index build.
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // session blocked in pg_advisory_lock would deadlock with a concurrent index build. Only
+      // this database's locks are read: pg_locks lists every database of the server, and the
+      // other test files wait for advisory locks of their own.
       expect(
-        await holder`select 1 from pg_locks where locktype = 'advisory' and not granted`
+        await holder`
+          select 1 from pg_locks
+          where locktype = 'advisory' and not granted
+            and database = (select oid from pg_database where datname = current_database())
+        `
       ).toHaveLength(0);
       expect(settled).toBe(false);
       expect(await schemaObjects(databaseUrl)).toEqual([]);
-      // It says once that it waits, and again every 30 seconds: here the clock is moved on.
-      expect(lines).toEqual(["Waiting for the migration lock: another migration step holds it."]);
+      // It says again every 30 seconds that it waits: here the clock is moved on.
       const realNow = Date.now.bind(Date);
       const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + 31_000);
       try {
@@ -155,6 +165,38 @@ describe("the migration boundary", () => {
       expect(lines[1]).toMatch(/^Still waiting for the migration lock after 3[12] s\.$/u);
       await holder`select pg_advisory_unlock(hashtextextended('vivd-catalyst:postgres-store:migrations', 0))`;
       expect(await migration).toEqual(committed);
+    } finally {
+      await holder.end();
+      // A failed expectation must not leave the run going while its database is dropped.
+      await migration?.catch(() => undefined);
+    }
+  });
+
+  // Fails without the check before each request for the lock: the next request went to the dead
+  // session, the driver threw a TypeError outside every promise, and the run never settled.
+  it("fails when the server ends its session while it waits for the migration lock", async () => {
+    const databaseUrl = await emptyDatabase("lock-wait-cut");
+    const holder = postgres(databaseUrl, { max: 1 });
+    try {
+      await holder.unsafe(takeMigrationLock);
+      const lines: string[] = [];
+      const outcome = migrateDatabase({ databaseUrl, log: (line) => lines.push(line) }).then(
+        () => undefined,
+        (error: unknown) => error
+      );
+      await vi.waitFor(() => expect(lines).toHaveLength(1));
+      expect(
+        await holder`
+          select pg_terminate_backend(pid) as ended from pg_stat_activity
+          where datname = current_database() and pid <> pg_backend_pid()
+        `
+      ).toEqual([{ ended: true }]);
+      const error = await outcome;
+      expect(error).toBeInstanceOf(Error);
+      expect(error instanceof Error ? error.message : "").toBe(
+        "The database connection ended while the run waited for the migration lock."
+      );
+      expect(await schemaObjects(databaseUrl)).toEqual([]);
     } finally {
       await holder.end();
     }
