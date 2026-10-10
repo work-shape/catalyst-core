@@ -263,7 +263,7 @@ What a view with private rows keeps:
 | Lists and tables | also `colspan`, `rowspan`, `headers`, `scope`, `span`, `start`, `value` |
 | Inline formatting, `time`, `meter`, `progress` | their value attributes |
 | `a` | its text, never an address |
-| `img` | `alt`, `width`, `height`, and `src` only when it starts with `data:` or `blob:` |
+| `img` | `alt`, `width`, `height`, and `src` only when it is a `data:` address of type `image/png`, `image/jpeg`, `image/gif` or `image/webp` |
 | `style` blocks and `style` attributes | only without `url(` other than `url(#id)`, `@import`, `image-set(`, `image(`, `src(` or a backslash |
 | Inline `svg` with shapes, `text`, gradients and clip paths | geometry and paint attributes, no `href` |
 
@@ -272,7 +272,7 @@ Everything else is left out with what is inside it: `script`, `link`, `meta`, `b
 The limits:
 
 - **WebRTC.** A view that runs scripts can send UDP packets to a host its script names. No content policy and no sandbox flag of current browsers forbids WebRTC. The view's bootstrap removes `RTCPeerConnection` and its prefixed variants from the view's window. That is hardening and not a boundary: a script gets the constructor back in a frame it writes itself.
-- **Links in a view that runs scripts.** The view's bootstrap takes the address from every link, image map area and SVG link, and cancels a click on one that still has an address. That is hardening and not a boundary: a script can put a link back where the bootstrap does not run, in a frame it writes itself, and a click on it with a modifier key or the middle button then opens the address in a new tab. Opening a link from the context menu and dragging a link out of a view have not been tested.
+- **Links in a view that runs scripts.** The view's bootstrap takes the address from every link, image map area and SVG link, and cancels a click on one that still has an address. That is hardening and not a boundary: a script can put a link back where the bootstrap does not run, in a frame it writes itself, and a click on it with a modifier key or the middle button then opens the address in a new tab. A link inside a closed shadow root keeps its address, because the bootstrap does not look into shadow roots. Opening a link from the context menu and dragging a link out of a view have not been tested.
 - **A static view is static.** A view with private rows shows HTML and CSS. A chart drawn by a script on a canvas does not appear, and the frame keeps a fixed height and scrolls inside, since nothing in it can report its height.
 - **DNS.** Whether a view can cause a DNS lookup for a host of its choosing has not been observed. A view with private rows keeps no `link` or `meta` element, so it carries no resource hint. For a view that runs scripts this is open.
 - **Allowed script hosts are data destinations.** A host named in `views.allowedScriptSrc` receives the requests a view makes for its scripts, and a view chooses the address, so data can leave in it. Name only hosts you would send the data to.
