@@ -1,6 +1,7 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { vivdCatalystChatUiPlugin } from "@vivd-catalyst/chat-ui/vite";
 
@@ -84,7 +85,48 @@ describe("vivdCatalystChatUiPlugin", () => {
 
     await expect(access(join(root, "dist/client/favicon.svg"))).rejects.toThrow();
   });
+
+  it("serves the Catalyst mark as the default favicon", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vivd-catalyst-default-favicon-client-"));
+    cleanupDirectories.push(root);
+    const plugin = vivdCatalystChatUiPlugin({ faviconPath: platformFile(defaultFavicon) });
+    plugin.configResolved({
+      root,
+      publicDir: false,
+      build: {
+        outDir: "dist/client"
+      }
+    });
+
+    plugin.closeBundle();
+
+    const served = await readFile(join(root, "dist/client/favicon.svg"), "utf8");
+    expect(served).toContain('aria-label="Workshape Catalyst"');
+    // The orange field with the small dark square at the bottom right, switching by itself.
+    expect(served).toContain('<rect class="s" width="32" height="32"/>');
+    expect(served).toContain('<rect class="b" x="18" y="18" width="12" height="12"/>');
+    expect(served).toContain("@media (prefers-color-scheme:dark)");
+    expect(served).not.toContain("<path");
+  });
+
+  it("keeps one mark in every place the platform ships its own favicon", async () => {
+    const mark = await readFile(platformFile(defaultFavicon), "utf8");
+
+    for (const copy of [
+      "clients/demo/public/favicon.svg",
+      "packages/chat-standalone/public/favicon.svg",
+      "packages/docs/public/favicon.svg"
+    ]) {
+      expect(await readFile(platformFile(copy), "utf8"), copy).toBe(mark);
+    }
+  });
 });
+
+const defaultFavicon = "packages/chat-ui/assets/favicon.svg";
+
+function platformFile(path: string): string {
+  return fileURLToPath(new URL(`../${path}`, import.meta.url));
+}
 
 async function createClientFixture(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "vivd-catalyst-client-"));
