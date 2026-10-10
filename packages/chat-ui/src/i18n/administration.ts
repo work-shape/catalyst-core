@@ -28,6 +28,11 @@ export const administration = defineTranslations({
     "jobs.attempts": "Attempts",
     "jobs.attemptsOf": "{attempts} of {maxAttempts}",
     "jobs.created": "Created",
+    "jobs.ended": "Ended {time}",
+    "jobs.showKind": "Show the jobs of {kind}",
+    "jobs.kindFilter": "Kind: {kind}",
+    "jobs.refreshFailed":
+      "The jobs could not be refreshed. This is the last state that was loaded.",
     "jobs.errorClass": "Last error",
     "jobs.subject": "Subject",
     "jobs.waitingFor": "Oldest waiting",
@@ -53,7 +58,7 @@ export const administration = defineTranslations({
       "The {kind} job is queued again and starts with its first attempt.",
     "jobs.retryFailed": "The job could not be retried.",
     "jobs.retryConflict":
-      "This job can no longer be retried. It is already queued, or a newer job does its work.",
+      "This job can no longer be retried. It is already queued, a newer job does its work, or what it worked on is gone.",
     newPasswordsDoNotMatch: "New passwords do not match",
     passwordUpdated: "Password updated",
     passwordUpdateFailed: "Password update failed",
@@ -119,6 +124,11 @@ export const administration = defineTranslations({
     "jobs.attempts": "Versuche",
     "jobs.attemptsOf": "{attempts} von {maxAttempts}",
     "jobs.created": "Erstellt",
+    "jobs.ended": "Beendet {time}",
+    "jobs.showKind": "Jobs der Art {kind} anzeigen",
+    "jobs.kindFilter": "Art: {kind}",
+    "jobs.refreshFailed":
+      "Die Jobs konnten nicht aktualisiert werden. Zu sehen ist der zuletzt geladene Stand.",
     "jobs.errorClass": "Letzter Fehler",
     "jobs.subject": "Gegenstand",
     "jobs.waitingFor": "Wartet am längsten",
@@ -144,7 +154,7 @@ export const administration = defineTranslations({
       "Der Job {kind} wird wieder eingereiht und beginnt mit seinem ersten Versuch.",
     "jobs.retryFailed": "Der Job konnte nicht erneut versucht werden.",
     "jobs.retryConflict":
-      "Dieser Job kann nicht mehr erneut versucht werden. Er wartet bereits, oder ein neuerer Job erledigt seine Arbeit.",
+      "Dieser Job kann nicht mehr erneut versucht werden. Er wartet bereits, ein neuerer Job erledigt seine Arbeit, oder sein Gegenstand ist nicht mehr da.",
     newPasswordsDoNotMatch: "Neue Passwörter stimmen nicht überein",
     passwordUpdated: "Passwort aktualisiert",
     passwordUpdateFailed: "Passwortaktualisierung fehlgeschlagen",

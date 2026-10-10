@@ -41,6 +41,21 @@ async function plantDeadJob(job: { id: string; subject: string }): Promise<void>
   );
 }
 
+/** A schedule tick that failed: the next tick is its retry, so the page offers none. */
+async function plantFailedTick(id: string): Promise<void> {
+  await withSql(
+    (sql) => sql`
+      insert into platform_jobs (
+        id, client_instance_id, kind, payload, status, run_after, attempts, max_attempts,
+        error_code, error_message, correlation_id, created_at, finished_at
+      )
+      select
+        ${id}, client_instance_id, 'audit.prune', '{}', 'failed', now(), 1, 1, 'INTERNAL',
+        ${MESSAGE_MARKER}, ${`corr_${id}`}, now(), now()
+      from platform_jobs limit 1`
+  );
+}
+
 function jobStatus(id: string): Promise<string | undefined> {
   return withSql(async (sql) => {
     const [row] = await sql<{ status: string }[]>`
@@ -58,7 +73,9 @@ async function signIn(page: Page): Promise<void> {
 
 test("a superadmin sees a dead job with its error class and retries it", async ({ page }) => {
   const job = { id: `job_e2e_${randomUUID()}`, subject: `conv_e2e_${randomUUID()}` };
+  const tickId = `job_e2e_tick_${randomUUID()}`;
   await plantDeadJob(job);
+  await plantFailedTick(tickId);
   const answers: Promise<string>[] = [];
   page.on("response", (response) => {
     if (jobsApiPattern.test(response.url())) answers.push(response.text());
@@ -80,10 +97,25 @@ test("a superadmin sees a dead job with its error class and retries it", async (
   await expect(row).toContainText("2 of 2");
   await expect(row).toContainText("INTERNAL");
   await expect(row).toContainText(job.subject);
-  // The kind is counted in the summary above the list.
-  await expect(
-    page.getByRole("row").filter({ hasText: "conversation.generate_title" }).first()
-  ).toBeVisible();
+  await expect(row).toContainText("Ended");
+
+  // A failed tick is listed and has no retry.
+  const tick = page.locator(`[data-job-id="${tickId}"]`);
+  await expect(tick).toContainText("Failed");
+  await expect(tick.getByRole("button")).toHaveCount(0);
+
+  // The kinds with failures lead the summary, and a kind there narrows the list to itself.
+  const firstKind = page.locator("[data-job-kind]").first();
+  await expect(firstKind).toHaveAttribute(
+    "data-job-kind",
+    /^(audit\.prune|conversation\.generate_title)$/u
+  );
+  await page.getByRole("button", { name: "Show the jobs of conversation.generate_title" }).click();
+  await expect(page.getByText("Kind: conversation.generate_title")).toBeVisible();
+  await expect(tick).toHaveCount(0);
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Remove" }).click();
+  await expect(tick).toBeVisible();
 
   await row.getByRole("button", { name: `Actions for job ${job.id}` }).click();
   await page.getByRole("menuitem", { name: "Retry" }).click();

@@ -6,12 +6,14 @@ import {
   Badge,
   Banner,
   Button,
+  Chip,
   ConfirmDialog,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   EmptyState,
+  FilterBar,
   IconButton,
   PageHeader,
   Section,
@@ -86,6 +88,7 @@ const statusTones: Record<JobStatus, BadgeTone> = {
  */
 interface JobListFilter {
   statuses: readonly JobStatus[];
+  kind?: string;
 }
 
 function useJobsApi() {
@@ -103,29 +106,43 @@ export function JobsPage() {
     queryFn: async () => (await client.instance.jobs.summary()).items,
     refetchInterval: JOBS_REFRESH_MS
   });
+  // The page opens on what needs a person: the jobs that failed.
   const [tab, setTab] = useState<string>(jobTabs[0].id);
+  const [kind, setKind] = useState<string>();
   const summary = summaryQuery.data;
+  const counted = summary?.filter((row) => kind === undefined || row.kind === kind);
 
   return (
     <>
       <PageHeader title={t("jobs.title")} description={t("jobs.description")} />
       <Section layout="stacked" title={t("jobs.byKind")}>
-        {summaryQuery.error ? (
-          <Banner tone="danger">{t("jobs.loadFailed")}</Banner>
-        ) : summary ? (
-          <JobSummaryTable summary={summary} />
-        ) : (
-          <SkeletonList rows={3} />
-        )}
+        <div className="grid gap-4">
+          {summaryQuery.error ? (
+            <Banner tone="danger">{t(summary ? "jobs.refreshFailed" : "jobs.loadFailed")}</Banner>
+          ) : null}
+          {summary ? (
+            <JobSummaryTable summary={summary} selectedKind={kind} onSelectKind={setKind} />
+          ) : summaryQuery.error ? null : (
+            <SkeletonList rows={3} />
+          )}
+        </div>
       </Section>
       <Section layout="stacked" title={t("jobs.list")}>
+        {kind === undefined ? null : (
+          <FilterBar
+            className="mb-3"
+            filters={
+              <Chip onRemove={() => setKind(undefined)}>{t("jobs.kindFilter", { kind })}</Chip>
+            }
+          />
+        )}
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList label={t("jobs.tabs")}>
             {jobTabs.map((jobTab) => (
               <TabsTrigger
                 key={jobTab.id}
                 value={jobTab.id}
-                count={summary ? countOf(summary, jobTab.statuses) : undefined}
+                count={counted ? countOf(counted, jobTab.statuses) : undefined}
               >
                 {t(jobTab.labelKey)}
               </TabsTrigger>
@@ -133,7 +150,7 @@ export function JobsPage() {
           </TabsList>
           {jobTabs.map((jobTab) => (
             <TabsContent key={jobTab.id} value={jobTab.id} className="pt-4">
-              <JobList tab={jobTab} />
+              <JobList tab={jobTab} kind={kind} />
             </TabsContent>
           ))}
         </Tabs>
@@ -149,13 +166,37 @@ function countOf(summary: readonly JobKindSummary[], statuses: JobTab["statuses"
   );
 }
 
-function JobSummaryTable({ summary }: { summary: readonly JobKindSummary[] }) {
+/** Kinds with failed or dead jobs first, then by name. */
+function failuresFirst(summary: readonly JobKindSummary[]): JobKindSummary[] {
+  const needsAttention = (row: JobKindSummary) => (row.failed + row.dead > 0 ? 0 : 1);
+  return [...summary].sort(
+    (a, b) => needsAttention(a) - needsAttention(b) || a.kind.localeCompare(b.kind)
+  );
+}
+
+function JobSummaryTable({
+  summary,
+  selectedKind,
+  onSelectKind
+}: {
+  summary: readonly JobKindSummary[];
+  selectedKind: string | undefined;
+  onSelectKind(kind: string | undefined): void;
+}) {
   const { t, locale } = useTranslation();
   if (summary.length === 0) {
     return <EmptyState layout="inline">{t("jobs.summaryEmpty")}</EmptyState>;
   }
   const now = new Date();
-  const count = (value: number) => value.toLocaleString(locale);
+  /** A zero steps back, so the eye lands on what is there. */
+  const count = (value: number, tone?: BadgeTone) =>
+    value === 0 ? (
+      <span className="text-muted-foreground">0</span>
+    ) : tone ? (
+      <Badge tone={tone}>{value.toLocaleString(locale)}</Badge>
+    ) : (
+      value.toLocaleString(locale)
+    );
   return (
     <Table>
       <TableHeader>
@@ -169,34 +210,50 @@ function JobSummaryTable({ summary }: { summary: readonly JobKindSummary[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {summary.map((kind) => (
-          <TableRow key={kind.kind}>
-            <TableCell className="font-mono">{kind.kind}</TableCell>
-            <TableCell className="text-right tabular-nums">{count(kind.queued)}</TableCell>
-            <TableCell className="text-right tabular-nums">{count(kind.running)}</TableCell>
-            <TableCell className="text-right tabular-nums">{count(kind.failed)}</TableCell>
-            <TableCell className="text-right tabular-nums">{count(kind.dead)}</TableCell>
-            <TableCell className="text-right text-muted-foreground tabular-nums">
-              {kind.waitingSince ? formatElapsed(kind.waitingSince, now, locale) : "—"}
-            </TableCell>
-          </TableRow>
-        ))}
+        {failuresFirst(summary).map((row) => {
+          const selected = row.kind === selectedKind;
+          return (
+            <TableRow key={row.kind} data-job-kind={row.kind}>
+              <TableCell>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 font-mono text-foreground"
+                  aria-pressed={selected}
+                  aria-label={t("jobs.showKind", { kind: row.kind })}
+                  onClick={() => onSelectKind(selected ? undefined : row.kind)}
+                >
+                  {row.kind}
+                </Button>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{count(row.queued)}</TableCell>
+              <TableCell className="text-right tabular-nums">{count(row.running)}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {count(row.failed, "warning")}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{count(row.dead, "danger")}</TableCell>
+              <TableCell className="text-right text-muted-foreground tabular-nums">
+                {row.waitingSince ? formatElapsed(row.waitingSince, now, locale) : "—"}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
 }
 
-function JobList({ tab }: { tab: JobTab }) {
+function JobList({ tab, kind }: { tab: JobTab; kind: string | undefined }) {
   const { t, locale } = useTranslation();
   const { user } = useSettingsPage();
   const { client, scope } = useJobsApi();
   const queryClient = useQueryClient();
-  const filter: JobListFilter = { statuses: tab.statuses };
+  const filter: JobListFilter = { statuses: tab.statuses, kind };
   const jobsQuery = useInfiniteQuery({
     queryKey: [...scope, "list", filter],
     queryFn: ({ pageParam, signal }) =>
       client.instance.jobs.list({
-        query: { status: filter.statuses.join(","), cursor: pageParam },
+        query: { status: filter.statuses.join(","), kind: filter.kind, cursor: pageParam },
         signal
       }),
     initialPageParam: undefined as string | undefined,
@@ -212,14 +269,17 @@ function JobList({ tab }: { tab: JobTab }) {
   const canRetry = user.roles.includes("superadmin");
   const jobs = jobsQuery.data?.pages.flatMap((page) => page.items);
 
-  if (jobsQuery.error) {
-    return <Banner tone="danger">{t("jobs.loadFailed")}</Banner>;
-  }
   if (!jobs) {
-    return <SkeletonList />;
+    return jobsQuery.error ? (
+      <Banner tone="danger">{t("jobs.loadFailed")}</Banner>
+    ) : (
+      <SkeletonList />
+    );
   }
   return (
     <div className="grid gap-4">
+      {/* A refresh that failed leaves the rows that were loaded and says so above them. */}
+      {jobsQuery.error ? <Banner tone="danger">{t("jobs.refreshFailed")}</Banner> : null}
       {retry.error ? (
         <Banner tone="danger">
           {t(
@@ -267,9 +327,14 @@ function JobList({ tab }: { tab: JobTab }) {
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">
                   {formatDateTime(job.createdAt, locale)}
+                  {job.finishedAt ? (
+                    <div className="mt-1 text-caption">
+                      {t("jobs.ended", { time: formatDateTime(job.finishedAt, locale) })}
+                    </div>
+                  ) : null}
                 </TableCell>
                 <TableCell className="w-0 text-right">
-                  {job.status === "failed" || job.status === "dead" ? (
+                  {job.retryable ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <IconButton size="sm" label={t("jobs.actions", { id: job.id })}>
