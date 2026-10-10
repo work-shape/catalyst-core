@@ -358,19 +358,19 @@ id from config_assets where status = 'deleted')`.
   workspace is removed from its usage records and the amounts stay. The database enforces
   both: no user and no workspace row can go while a usage record still names it. A call that
   was being admitted while its workspace was deleted no longer fails with a database error.
-- **Database:** migrations `0037_usage_attribution`, `0038_usage_attribution_indexes` and
-  `0039_usage_attribution_validate` add the nullable columns `purpose`, `region` and
+- **Database:** migrations `0041_usage_attribution`, `0042_usage_attribution_indexes` and
+  `0043_usage_attribution_validate` add the nullable columns `purpose`, `region` and
   `binding_id` to `model_usage_events`, drop `NOT NULL` from `agent_name`, tie `user_id` and
   `collaboration_workspace_id` to their tables with `ON DELETE SET NULL`, and add one partial
   index for each of the two. No column is dropped. After the upgrade a background job fills
   older usage rows. Until it ends, older rows show no region. The job
   (`usage.backfill_attribution`) runs in the API and worker processes, 5,000 rows per
   statement, and may be interrupted at any time. A row whose provider and model are no longer
-  configured keeps no region. `0038` is the first migration that builds an index with
+  configured keeps no region. `0042` is the first migration that builds an index with
   `CREATE INDEX CONCURRENTLY`; a migration step that finds another step running now asks for
   the migration lock again every 250 ms and no longer waits inside a statement, because the
   index build would wait for that statement and the two would stop each other.
-- **Database:** migrations `0040_usage_counters` and `0041_usage_pending_index` add the tables
+- **Database:** migrations `0044_usage_counters` and `0045_usage_pending_index` add the tables
   `model_usage_counters`, `model_usage_daily_rollups` and `model_usage_maintenance`, the
   columns `status` (default `settled`), `counted_tokens` and `counted_cost_micros` on
   `model_usage_events`, and a partial index on the calls in flight. No column is dropped.
