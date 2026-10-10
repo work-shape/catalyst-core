@@ -3039,7 +3039,8 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
     "Users",
     "API access",
     "Usage",
-    "Audit"
+    "Audit",
+    "Jobs"
   ]);
   await expect(rail.getByRole("button", { name: "Users", exact: true })).toHaveAttribute(
     "aria-current",
@@ -3088,7 +3089,7 @@ test("a plain user finds only their own pages in the Settings rail", async ({ pa
   );
   await expect(rail.getByRole("button", { name: "Language and appearance" })).toBeVisible();
   await expect(rail.getByRole("button", { name: "Security", exact: true })).toBeVisible();
-  for (const closed of ["Users", "API access", "Usage", "Audit"]) {
+  for (const closed of ["Users", "API access", "Usage", "Audit", "Jobs"]) {
     await expect(rail.getByRole("button", { name: closed, exact: true })).toHaveCount(0);
   }
   await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
