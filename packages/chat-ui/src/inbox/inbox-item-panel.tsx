@@ -114,7 +114,7 @@ export function InboxItemView({
           <h3 className="min-w-0 flex-1 text-heading break-words">
             {item.summary.trim() || t("approvalFallbackTitle")}
           </h3>
-          <ApprovalStatusBadge status={item.status} />
+          <ApprovalStatusBadge status={item.status} applyResult={item.applyResult} />
         </div>
         <p className="text-caption text-muted-foreground">
           {t("approvalRequestedBy", {

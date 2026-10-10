@@ -525,6 +525,108 @@ describe("inbox item of an operation call", () => {
     expect(english).toContain("Shortened. The call runs with the full value.");
   });
 
+  // Fails before the fix: the preview ended at 50 fields and 2,000 characters without a word,
+  // and the item had no way to read the rest.
+  it("says in words what the rows leave out and offers the full input", () => {
+    const long = "x".repeat(2000);
+    const payload = { runId: "opr_1", input: { path: "docs/plan.md", patch: `${long}tail` } };
+    const markup = call({
+      payload,
+      preview: {
+        ...callPreview,
+        inputs: [
+          { key: "path", value: "docs/plan.md" },
+          { key: "patch", value: long, truncated: true, length: 2004 }
+        ],
+        inputFieldCount: 61
+      }
+    });
+
+    expect(markup).toContain(
+      "Gekürzt: Hier stehen 2000 von 2004 Zeichen. Der Aufruf läuft mit dem ganzen Wert, den die vollständige Eingabe zeigt."
+    );
+    expect(markup).toMatch(
+      /data-testid="operation-call-hidden-fields"[^>]*>Dieser Aufruf hat 61 Eingabefelder\. Hier stehen die ersten 2\. Öffne die vollständige Eingabe und lies alle, bevor du entscheidest\./u
+    );
+    expect(markup).toMatch(
+      /data-testid="operation-call-full-input-open"[^>]*>Vollständige Eingabe anzeigen<\/button>/u
+    );
+    // The full view opens from the request's own payload; the browser suite reads it there.
+
+    const english = call({ payload, preview: { ...callPreview, inputFieldCount: 61 } }, "en");
+    expect(english).toContain(
+      "This call has 61 input fields. The first 2 are listed here. Open the full input to read all of them before you decide."
+    );
+    expect(english).toContain("Show full input");
+    // Nothing is left out: no sentence about it.
+    expect(call({ payload })).not.toContain('data-testid="operation-call-hidden-fields"');
+  });
+
+  // Fails before the fix: a decided item read "Übernommen" whatever became of the call.
+  it("says what became of the call once the request is decided", () => {
+    const ended = (status: ApprovalRequestView["status"], applyResult: Record<string, unknown>) =>
+      call({
+        status,
+        canDecide: false,
+        applyResult,
+        payload: { runId: "opr_1", inputRemoved: true },
+        preview: { ...callPreview, inputs: [], inputFieldCount: 0, inputRemoved: true }
+      });
+    const outcomes = [
+      [
+        "approved",
+        { execution: "queued" },
+        "Freigegeben. Der Aufruf wird ausgeführt.",
+        "Freigegeben, läuft"
+      ],
+      [
+        "approved",
+        { execution: "done" },
+        "Freigegeben und ausgeführt.",
+        "Freigegeben und ausgeführt"
+      ],
+      [
+        "approved",
+        { execution: "failed", error: { message: "Revision 2 erwartet." } },
+        "Freigegeben, aber der Aufruf ist fehlgeschlagen. Er wird nicht erneut ausgeführt.",
+        "Freigegeben, fehlgeschlagen"
+      ],
+      [
+        "approved",
+        { execution: "interrupted" },
+        "Ob er etwas geändert hat, ist nicht bekannt.",
+        "Freigegeben, unterbrochen"
+      ],
+      [
+        "superseded",
+        { execution: "refused", error: { message: "Kein Mitglied mehr." } },
+        "Nicht ausgeführt. Als der Aufruf laufen sollte, war er nicht mehr erlaubt.",
+        "Nicht ausgeführt"
+      ],
+      [
+        "superseded",
+        { execution: "expired" },
+        "Abgelaufen, bevor entschieden wurde. Es wurde nichts ausgeführt.",
+        "Abgelaufen"
+      ]
+    ] as const;
+    for (const [status, applyResult, sentence, badge] of outcomes) {
+      const markup = ended(status, applyResult);
+      expect(markup).toContain(`data-outcome="${applyResult.execution}"`);
+      expect(markup).toContain(sentence);
+      expect(markup).toContain(badge);
+      expect(markup).not.toContain("Mit der Freigabe läuft dieser Aufruf einmal");
+      // The input is gone, and the item says so instead of "no input".
+      expect(markup).toContain(
+        "Die Eingabe wurde entfernt, als diese Anfrage endete. Der Lauf behält einen Hash davon."
+      );
+      expect(markup).not.toContain("Dieser Aufruf hat keine Eingabe.");
+      expect(markup).not.toContain('data-testid="operation-call-full-input-open"');
+    }
+    expect(ended("approved", outcomes[2][1])).toContain("Grund: Revision 2 erwartet.");
+    expect(ended("superseded", outcomes[4][1])).toContain("Grund: Kein Mitglied mehr.");
+  });
+
   it("offers approve and decline and no request for changes", () => {
     const markup = call();
 

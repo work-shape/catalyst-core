@@ -40,7 +40,9 @@ export function ApprovalDecisionLine({
   showSummary: boolean;
 }) {
   const { locale, t } = useTranslation();
-  const Icon = DECISION_ICON[decision.status];
+  // An approved call that failed or was cut off did not do what the approval was for.
+  const unsuccessful = decision.execution === "failed" || decision.execution === "interrupted";
+  const Icon = unsuccessful ? XCircle : DECISION_ICON[decision.status];
   const summary = showSummary ? decision.summary.trim() : "";
 
   return (
@@ -48,10 +50,14 @@ export function ApprovalDecisionLine({
       className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs leading-5 text-muted-foreground"
       data-testid="approval-decision-line"
       data-status={decision.status}
+      data-execution={decision.execution}
     >
       <Icon
         size={14}
-        className={cn("mt-[3px] shrink-0", DECISION_ICON_CLASS[decision.status])}
+        className={cn(
+          "mt-[3px] shrink-0",
+          unsuccessful ? "text-destructive" : DECISION_ICON_CLASS[decision.status]
+        )}
         aria-hidden="true"
       />
       <p className="min-w-0">

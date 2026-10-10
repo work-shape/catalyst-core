@@ -78,7 +78,11 @@ export function InboxList({
             // To decide every row is pending, so the state would say nothing.
             chips={
               tab === "to_decide" ? undefined : (
-                <ApprovalStatusBadge status={item.status} size="sm" />
+                <ApprovalStatusBadge
+                  status={item.status}
+                  applyResult={item.applyResult}
+                  size="sm"
+                />
               )
             }
             descriptionLeading={<Avatar kind="person" name={requester} size="xs" />}

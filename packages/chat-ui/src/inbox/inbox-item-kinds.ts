@@ -25,7 +25,10 @@ export interface InboxItemKind {
   icon: LucideIcon;
   /** One line that says what the item is about, for the row and the surface subtitle. */
   subject?(item: ApprovalRequestView, t: Translate): string | undefined;
-  /** The middle of the item. It reads `item.preview` and nothing else from the server. */
+  /**
+   * The middle of the item. It reads `item.preview`, and from the item itself only what the
+   * server recorded on the request.
+   */
   Body: ComponentType<{ item: ApprovalRequestView }>;
   /** Which of the three decisions the foot offers, with the kind's own words. Default: all three. */
   decisions?: readonly {
@@ -73,7 +76,7 @@ const operationCall: InboxItemKind = {
       ? t("operations.callSubject", { operation: call.operation, actor: call.actor.label })
       : undefined;
   },
-  Body: ({ item }) => createElement(OperationCallBody, { preview: item.preview }),
+  Body: ({ item }) => createElement(OperationCallBody, { request: item }),
   decisions: [
     { decision: "reject", label: "operations.callDecline" },
     { decision: "approve", label: "operations.callApprove" }

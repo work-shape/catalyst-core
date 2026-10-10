@@ -114,7 +114,7 @@ export function ApprovalRequestCardView({
           ) : null}
         </div>
         <ApprovalCheckIndicator checks={visibleApprovalChecks(request.checks)} />
-        <ApprovalStatusBadge status={request.status} />
+        <ApprovalStatusBadge status={request.status} applyResult={request.applyResult} />
         {hasActions ? null : detailsButton}
       </div>
       {hasActions ? (

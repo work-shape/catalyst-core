@@ -11,6 +11,12 @@ export const approvals = defineTranslations({
     approvalCheckWarned: "Warning",
     approvalDecidedBy: "Decision by {name}, {date}",
     approvalDecisionApproved: "Accepted by {name}",
+    approvalDecisionExecuted: "Approved by {name} and executed",
+    approvalDecisionExecutionFailed: "Approved by {name}, but the call failed",
+    approvalDecisionExecutionInterrupted:
+      "Approved by {name}, but the call was interrupted and its outcome is not known",
+    approvalDecisionNotExecuted: "Not executed: the call was no longer allowed",
+    approvalDecisionExpired: "Expired before it was decided",
     approvalDecisionChangesRequested: "Changes requested by {name}",
     approvalDecisionChangesRequestedByReviewer:
       "{name} requested changes and is revising the proposal",
@@ -57,6 +63,12 @@ export const approvals = defineTranslations({
     approvalRevisionStartFailed:
       "The revision could not be started. Your message is in the input field; send it to start.",
     approvalStatusApproved: "Accepted",
+    approvalStatusExecuting: "Approved, running",
+    approvalStatusExecuted: "Approved and executed",
+    approvalStatusExecutionFailed: "Approved, failed",
+    approvalStatusExecutionInterrupted: "Approved, interrupted",
+    approvalStatusNotExecuted: "Not executed",
+    approvalStatusExpired: "Expired",
     approvalStatusChangesRequested: "Changes requested",
     approvalStatusPending: "Awaiting approval",
     approvalStatusRejected: "Rejected",
@@ -84,6 +96,12 @@ export const approvals = defineTranslations({
     approvalCheckWarned: "Hinweis",
     approvalDecidedBy: "Entscheidung von {name}, {date}",
     approvalDecisionApproved: "Übernommen von {name}",
+    approvalDecisionExecuted: "Freigegeben von {name} und ausgeführt",
+    approvalDecisionExecutionFailed: "Freigegeben von {name}, aber der Aufruf ist fehlgeschlagen",
+    approvalDecisionExecutionInterrupted:
+      "Freigegeben von {name}, aber der Aufruf wurde unterbrochen und sein Ergebnis ist nicht bekannt",
+    approvalDecisionNotExecuted: "Nicht ausgeführt: Der Aufruf war nicht mehr erlaubt",
+    approvalDecisionExpired: "Abgelaufen, bevor entschieden wurde",
     approvalDecisionChangesRequested: "Änderung gewünscht von {name}",
     approvalDecisionChangesRequestedByReviewer:
       "{name} hat eine Änderung gewünscht und überarbeitet den Vorschlag",
@@ -132,6 +150,12 @@ export const approvals = defineTranslations({
     approvalRevisionStartFailed:
       "Die Überarbeitung konnte nicht gestartet werden. Deine Nachricht steht im Eingabefeld; sende sie, um zu starten.",
     approvalStatusApproved: "Übernommen",
+    approvalStatusExecuting: "Freigegeben, läuft",
+    approvalStatusExecuted: "Freigegeben und ausgeführt",
+    approvalStatusExecutionFailed: "Freigegeben, fehlgeschlagen",
+    approvalStatusExecutionInterrupted: "Freigegeben, unterbrochen",
+    approvalStatusNotExecuted: "Nicht ausgeführt",
+    approvalStatusExpired: "Abgelaufen",
     approvalStatusChangesRequested: "Änderung angefragt",
     approvalStatusPending: "Wartet auf Freigabe",
     approvalStatusRejected: "Abgelehnt",

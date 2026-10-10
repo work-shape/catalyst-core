@@ -91,6 +91,25 @@ export const operations = defineTranslations({
     "operations.callInputs": "Input",
     "operations.callNoInputs": "This call has no input.",
     "operations.callTruncated": "Shortened. The call runs with the full value.",
+    "operations.callTruncatedOf":
+      "Shortened: {shown} of {total} characters are shown here. The call runs with the full value, which the full input shows.",
+    "operations.callHiddenFields":
+      "This call has {total} input fields. The first {shown} are listed here. Open the full input to read all of them before you decide.",
+    "operations.callFullInputOpen": "Show full input",
+    "operations.callFullInputTitle": "Full input",
+    "operations.callFullInputDescription":
+      "Everything {operation} runs with, exactly as the call was frozen.",
+    "operations.callInputRemoved":
+      "The input was removed when this request ended. The run keeps a hash of it.",
+    "operations.callOutcomeQueued": "Approved. The call is being executed.",
+    "operations.callOutcomeDone": "Approved and executed.",
+    "operations.callOutcomeFailed": "Approved, but the call failed. It is not run again.",
+    "operations.callOutcomeInterrupted":
+      "Approved, but the call was interrupted while it ran. Whether it changed something is not known. It is not run again.",
+    "operations.callOutcomeRefused":
+      "Not executed. When the call should run, it was no longer allowed.",
+    "operations.callOutcomeExpired": "Expired before it was decided. Nothing was executed.",
+    "operations.callOutcomeReason": "Reason: {reason}",
     "operations.callExpires": "Expires",
     "operations.callExpiresHint": "After that the call expires and does not run.",
     "operations.callUnreadable": "The details of this call cannot be shown."
@@ -185,6 +204,27 @@ export const operations = defineTranslations({
     "operations.callInputs": "Eingabe",
     "operations.callNoInputs": "Dieser Aufruf hat keine Eingabe.",
     "operations.callTruncated": "Gekürzt. Der Aufruf läuft mit dem ganzen Wert.",
+    "operations.callTruncatedOf":
+      "Gekürzt: Hier stehen {shown} von {total} Zeichen. Der Aufruf läuft mit dem ganzen Wert, den die vollständige Eingabe zeigt.",
+    "operations.callHiddenFields":
+      "Dieser Aufruf hat {total} Eingabefelder. Hier stehen die ersten {shown}. Öffne die vollständige Eingabe und lies alle, bevor du entscheidest.",
+    "operations.callFullInputOpen": "Vollständige Eingabe anzeigen",
+    "operations.callFullInputTitle": "Vollständige Eingabe",
+    "operations.callFullInputDescription":
+      "Alles, womit {operation} läuft, genau so, wie der Aufruf festgehalten wurde.",
+    "operations.callInputRemoved":
+      "Die Eingabe wurde entfernt, als diese Anfrage endete. Der Lauf behält einen Hash davon.",
+    "operations.callOutcomeQueued": "Freigegeben. Der Aufruf wird ausgeführt.",
+    "operations.callOutcomeDone": "Freigegeben und ausgeführt.",
+    "operations.callOutcomeFailed":
+      "Freigegeben, aber der Aufruf ist fehlgeschlagen. Er wird nicht erneut ausgeführt.",
+    "operations.callOutcomeInterrupted":
+      "Freigegeben, aber der Aufruf wurde während der Ausführung unterbrochen. Ob er etwas geändert hat, ist nicht bekannt. Er wird nicht erneut ausgeführt.",
+    "operations.callOutcomeRefused":
+      "Nicht ausgeführt. Als der Aufruf laufen sollte, war er nicht mehr erlaubt.",
+    "operations.callOutcomeExpired":
+      "Abgelaufen, bevor entschieden wurde. Es wurde nichts ausgeführt.",
+    "operations.callOutcomeReason": "Grund: {reason}",
     "operations.callExpires": "Läuft ab",
     "operations.callExpiresHint": "Danach verfällt der Aufruf und läuft nicht.",
     "operations.callUnreadable": "Die Details dieses Aufrufs können nicht angezeigt werden."

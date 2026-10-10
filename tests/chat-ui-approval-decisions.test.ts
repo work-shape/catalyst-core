@@ -41,7 +41,13 @@ function message(overrides: Partial<Message> & Pick<Message, "id" | "role">): Me
 
 function decisionMessage(
   status: ApprovalDecisionStatus,
-  overrides: { requestId?: string; comment?: string; summary?: string; requestedBy?: string } = {}
+  overrides: {
+    requestId?: string;
+    comment?: string;
+    summary?: string;
+    requestedBy?: string;
+    execution?: "done" | "failed" | "interrupted" | "refused" | "expired";
+  } = {}
 ): Message {
   const requestId = overrides.requestId ?? "apr_1";
   return message({
@@ -60,7 +66,8 @@ function decisionMessage(
         decidedAt: "2026-10-05T09:30:00.000Z",
         summary: overrides.summary ?? "Auch die Steuerklasse prüfen.",
         ...(overrides.comment ? { comment: overrides.comment } : {}),
-        ...(overrides.requestedBy ? { requestedBy: overrides.requestedBy } : {})
+        ...(overrides.requestedBy ? { requestedBy: overrides.requestedBy } : {}),
+        ...(overrides.execution ? { execution: overrides.execution } : {})
       }
     }
   });
@@ -161,6 +168,51 @@ describe("approval decision in the thread", () => {
       expect(renderLine(readDecision(projected), "en")).toContain(expectedLines[status].en);
     });
   }
+
+  // Fails before the fix: an approved call that failed read "Übernommen von Bert Prüfer".
+  it("says in the line what became of an approved call, in both languages", () => {
+    const lines = [
+      [
+        "approved",
+        "done",
+        "Freigegeben von Bert Prüfer und ausgeführt",
+        "Approved by Bert Prüfer and executed"
+      ],
+      [
+        "approved",
+        "failed",
+        "Freigegeben von Bert Prüfer, aber der Aufruf ist fehlgeschlagen",
+        "Approved by Bert Prüfer, but the call failed"
+      ],
+      [
+        "approved",
+        "interrupted",
+        "Freigegeben von Bert Prüfer, aber der Aufruf wurde unterbrochen und sein Ergebnis ist nicht bekannt",
+        "Approved by Bert Prüfer, but the call was interrupted and its outcome is not known"
+      ],
+      [
+        "superseded",
+        "refused",
+        "Nicht ausgeführt: Der Aufruf war nicht mehr erlaubt",
+        "Not executed: the call was no longer allowed"
+      ],
+      [
+        "superseded",
+        "expired",
+        "Abgelaufen, bevor entschieden wurde",
+        "Expired before it was decided"
+      ]
+    ] as const;
+    for (const [status, execution, de, en] of lines) {
+      const [projected] = toUiMessages([decisionMessage(status, { execution })]);
+      expect(readDecision(projected)).toMatchObject({ status, execution });
+      const german = renderLine(readDecision(projected));
+      expect(german).toContain(de);
+      expect(german).toContain(`data-execution="${execution}"`);
+      expect(german).not.toContain("Übernommen");
+      expect(renderLine(readDecision(projected), "en")).toContain(en);
+    }
+  });
 
   it("puts the comment on a second line when there is one", () => {
     const withComment = renderLine(

@@ -1,5 +1,10 @@
 import type { ApprovalRequestView, LocaleCode, Message } from "@vivd-catalyst/api-client";
-import { approvalRevisionOwner, readApprovalDecisionMetadata } from "@vivd-catalyst/core";
+import {
+  APPROVAL_EXECUTIONS,
+  approvalRevisionOwner,
+  readApprovalDecisionMetadata,
+  type ApprovalExecution
+} from "@vivd-catalyst/core";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
 
 /** Display kind a tool result carries to render its Approval Request inline in the thread. */
@@ -48,7 +53,32 @@ const STATUS_PRESENTATION: Record<string, ApprovalStatusPresentation> = {
   reverted: { labelKey: "approvalStatusReverted", tone: "neutral" }
 };
 
-export function approvalStatusPresentation(status: string): ApprovalStatusPresentation {
+/**
+ * What became of an approved change that runs after the decision. It replaces the plain
+ * status: "accepted" alone would say the change is live when it failed or never ran.
+ */
+const EXECUTION_PRESENTATION: Record<ApprovalExecution, ApprovalStatusPresentation> = {
+  queued: { labelKey: "approvalStatusExecuting", tone: "pending" },
+  done: { labelKey: "approvalStatusExecuted", tone: "positive" },
+  failed: { labelKey: "approvalStatusExecutionFailed", tone: "negative" },
+  interrupted: { labelKey: "approvalStatusExecutionInterrupted", tone: "negative" },
+  refused: { labelKey: "approvalStatusNotExecuted", tone: "neutral" },
+  expired: { labelKey: "approvalStatusExpired", tone: "neutral" }
+};
+
+/** What a request recorded about a change that ran after its decision, where it did. */
+export function readApprovalExecution(applyResult: unknown): ApprovalExecution | undefined {
+  const value = isRecord(applyResult) ? applyResult.execution : undefined;
+  return APPROVAL_EXECUTIONS.find((execution) => execution === value);
+}
+
+export function approvalStatusPresentation(
+  status: string,
+  execution?: ApprovalExecution
+): ApprovalStatusPresentation {
+  if (execution && status !== "pending") {
+    return EXECUTION_PRESENTATION[execution];
+  }
   return STATUS_PRESENTATION[status] ?? { labelKey: "approvalStatusUnknown", tone: "neutral" };
 }
 
@@ -81,6 +111,8 @@ export interface ApprovalDecisionEvent {
   comment?: string;
   /** Changes were requested by someone other than the requester, who now revises it. */
   revisedByReviewer?: true;
+  /** What became of an approved change that ran after the decision. */
+  execution?: Exclude<ApprovalExecution, "queued">;
 }
 
 export type ApprovalDecisionStatus = Exclude<ApprovalRequestView["status"], "pending">;
@@ -101,7 +133,8 @@ export function readApprovalDecisionEvent(
     decidedAt: decision.decidedAt,
     summary: decision.summary,
     ...(comment ? { comment } : {}),
-    ...(approvalRevisionOwner(decision) === "reviewer" ? { revisedByReviewer: true as const } : {})
+    ...(approvalRevisionOwner(decision) === "reviewer" ? { revisedByReviewer: true as const } : {}),
+    ...(decision.execution ? { execution: decision.execution } : {})
   };
 }
 
@@ -118,9 +151,24 @@ const DECISION_LINE_LABEL_KEY: Record<ApprovalDecisionStatus, TranslationKey> = 
   reverted: "approvalDecisionReverted"
 };
 
+/** The line of an approved change that ran after the decision: it says how that went. */
+const EXECUTION_LINE_LABEL_KEY: Record<
+  NonNullable<ApprovalDecisionEvent["execution"]>,
+  TranslationKey
+> = {
+  done: "approvalDecisionExecuted",
+  failed: "approvalDecisionExecutionFailed",
+  interrupted: "approvalDecisionExecutionInterrupted",
+  refused: "approvalDecisionNotExecuted",
+  expired: "approvalDecisionExpired"
+};
+
 export function approvalDecisionLineLabelKey(
-  decision: Pick<ApprovalDecisionEvent, "status" | "revisedByReviewer">
+  decision: Pick<ApprovalDecisionEvent, "status" | "revisedByReviewer" | "execution">
 ): TranslationKey {
+  if (decision.execution) {
+    return EXECUTION_LINE_LABEL_KEY[decision.execution];
+  }
   return decision.revisedByReviewer
     ? "approvalDecisionChangesRequestedByReviewer"
     : DECISION_LINE_LABEL_KEY[decision.status];

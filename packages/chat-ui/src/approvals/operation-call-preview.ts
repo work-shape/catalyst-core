@@ -8,6 +8,46 @@ interface OperationCallInput {
   value: string;
   /** The server cut the value short for the preview. The call itself holds all of it. */
   truncated: boolean;
+  /** How many characters the whole value has, where it was cut. */
+  length?: number;
+}
+
+/** What became of a call once its request was decided or ended. */
+export type OperationCallOutcome =
+  "queued" | "done" | "failed" | "interrupted" | "refused" | "expired";
+
+const outcomes: readonly OperationCallOutcome[] = [
+  "queued",
+  "done",
+  "failed",
+  "interrupted",
+  "refused",
+  "expired"
+];
+
+/**
+ * What became of the call of a request that is not pending, read from what the server recorded
+ * on it. A request that was approved before outcomes were recorded ran with its approval.
+ */
+export function operationCallOutcome(request: {
+  status: string;
+  applyResult?: unknown;
+}): { outcome: OperationCallOutcome; reason?: string } | undefined {
+  const result = isRecord(request.applyResult) ? request.applyResult : {};
+  const outcome = outcomes.find((candidate) => candidate === result.execution);
+  const reason = isRecord(result.error) ? readText(result.error.message) : undefined;
+  if (outcome) {
+    return { outcome, ...(reason ? { reason } : {}) };
+  }
+  return request.status === "approved" ? { outcome: "done" } : undefined;
+}
+
+/** The whole input of a held call as the request keeps it, as text. Nothing once it is removed. */
+export function operationCallFullInput(payload: unknown): string | undefined {
+  if (!isRecord(payload) || payload.inputRemoved === true || !("input" in payload)) {
+    return undefined;
+  }
+  return typeof payload.input === "string" ? payload.input : JSON.stringify(payload.input, null, 2);
 }
 
 export interface OperationCallPreview {
@@ -18,6 +58,10 @@ export interface OperationCallPreview {
   origin: { kind: OperationCallOriginKind; agentName?: string; toolName?: string };
   workspaceId?: string;
   inputs: OperationCallInput[];
+  /** How many fields the input has. More than `inputs` where the preview lists only the first. */
+  inputFieldCount: number;
+  /** The request ended and its input was removed. */
+  inputRemoved: boolean;
   /** After this moment the call expires unexecuted. */
   expiresAt?: string;
 }
@@ -43,15 +87,21 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
   }
   const workspaceId = readText(preview.workspaceId);
   const expiresAt = readText(preview.expiresAt);
+  const inputs = Array.isArray(preview.inputs)
+    ? preview.inputs.flatMap((input) => parseInput(input) ?? [])
+    : [];
   return {
     runId,
     operation,
     effect: preview.effect,
     actor,
     origin,
-    inputs: Array.isArray(preview.inputs)
-      ? preview.inputs.flatMap((input) => parseInput(input) ?? [])
-      : [],
+    inputs,
+    inputFieldCount:
+      typeof preview.inputFieldCount === "number"
+        ? Math.max(preview.inputFieldCount, inputs.length)
+        : inputs.length,
+    inputRemoved: preview.inputRemoved === true,
     ...(workspaceId ? { workspaceId } : {}),
     ...(expiresAt ? { expiresAt } : {})
   };
@@ -84,7 +134,14 @@ function parseInput(value: unknown): OperationCallInput | undefined {
     return undefined;
   }
   const key = readText(value.key);
-  return key ? { key, value: value.value, truncated: value.truncated === true } : undefined;
+  return key
+    ? {
+        key,
+        value: value.value,
+        truncated: value.truncated === true,
+        ...(typeof value.length === "number" ? { length: value.length } : {})
+      }
+    : undefined;
 }
 
 function readText(value: unknown): string | undefined {
