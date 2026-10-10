@@ -563,8 +563,18 @@ export interface AgentRunStore {
    */
   failLostAgentRun(input: FailLostAgentRunInput): Promise<AgentRun | undefined>;
   /**
-   * The runs in progress that have no queued or running job of `jobKind`, oldest first. The
-   * adoption enqueues a job for each.
+   * Fails the runs that were accepted more than `queuedMs` ago and are still queued, oldest
+   * first, each with `error` and a `run_failed` event. Resolves with the runs it failed.
+   */
+  failAgentRunsQueuedTooLong(input: {
+    clientInstanceId: ClientInstanceId;
+    queuedMs: number;
+    error: AgentRunError;
+    limit: number;
+  }): Promise<AgentRun[]>;
+  /**
+   * The runs in progress that have no queued or running job of `jobKind` and that nobody
+   * holds under a live lease, oldest first. The upkeep enqueues a job for each.
    */
   listAgentRunsWithoutJob(input: {
     clientInstanceId: ClientInstanceId;

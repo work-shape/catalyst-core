@@ -420,6 +420,64 @@ export async function failLostAgentRun(
   });
 }
 
+export async function failAgentRunsQueuedTooLong(
+  db: PostgresConnection,
+  input: Parameters<AgentRunStore["failAgentRunsQueuedTooLong"]>[0]
+): Promise<AgentRun[]> {
+  return db.transaction(async (tx) => {
+    const ofInstance = eq(agentRuns.clientInstanceId, input.clientInstanceId);
+    const waiting = tx
+      .select({ id: agentRuns.id })
+      .from(agentRuns)
+      .where(
+        and(
+          ofInstance,
+          eq(agentRuns.status, "queued"),
+          // `started_at` is when the run was accepted; a queued run has not been claimed.
+          lt(
+            agentRuns.startedAt,
+            drizzleSql`now() - make_interval(secs => ${input.queuedMs}::double precision / 1000)`
+          )
+        )
+      )
+      .orderBy(asc(agentRuns.startedAt), asc(agentRuns.id))
+      .limit(input.limit);
+    const rows = await tx
+      .update(agentRuns)
+      .set({
+        status: "failed",
+        failedAt: drizzleSql`now()`,
+        updatedAt: drizzleSql`now()`,
+        lastSequence: drizzleSql<number>`${agentRuns.lastSequence} + 1`,
+        error: input.error
+      })
+      // The status is read again under the row lock: a run a worker claimed meanwhile stays.
+      .where(and(ofInstance, eq(agentRuns.status, "queued"), inArray(agentRuns.id, waiting)))
+      .returning();
+    const failed = rows.flatMap((row) => (row.failedAt ? [{ row, failedAt: row.failedAt }] : []));
+    if (failed.length === 0) return [];
+    await tx.insert(agentRunObservations).values(
+      failed.map(({ row, failedAt }) => ({
+        clientInstanceId: row.clientInstanceId,
+        runId: row.id,
+        conversationId: row.conversationId,
+        ownerUserId: row.ownerUserId,
+        sequence: row.lastSequence,
+        type: "run_failed" as const,
+        payload: {
+          type: "run_failed" as const,
+          runId: asAgentRunId(row.id),
+          sequence: row.lastSequence,
+          createdAt: failedAt.toISOString(),
+          error: input.error
+        },
+        createdAt: failedAt
+      }))
+    );
+    return failed.map(({ row }) => mapAgentRun(row));
+  });
+}
+
 export async function listAgentRunsWithoutJob(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; jobKind: string; limit: number }
@@ -431,6 +489,8 @@ export async function listAgentRunsWithoutJob(
       and(
         eq(agentRuns.clientInstanceId, input.clientInstanceId),
         inArray(agentRuns.status, RUN_IN_PROGRESS_STATUSES),
+        // A run under a live lease is someone's: a job of it would only find it held.
+        drizzleSql`(${agentRuns.leaseExpiresAt} is null or ${agentRuns.leaseExpiresAt} <= now())`,
         drizzleSql`not exists (
           select 1 from platform_jobs job
           where job.client_instance_id = ${agentRuns.clientInstanceId}

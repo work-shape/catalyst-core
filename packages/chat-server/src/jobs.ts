@@ -2,6 +2,7 @@ import {
   asCollaborationWorkspaceId,
   asConversationId,
   asUserId,
+  createAgentRunUpkeepJobs,
   defineJobHandler,
   defineSchedule,
   type JobSchedule,
@@ -220,6 +221,16 @@ export function createChatServerJobs(
     recoverAbandonedModelCallsSchedule,
     reconcileUsageSchedule
   ];
+
+  // A run executes in an Agent Run worker. Its upkeep is served here as well, so a run whose
+  // worker was killed is failed after its lease time, and a run no worker takes is failed
+  // after its queue limit, while no worker is up.
+  const agentRunUpkeep = createAgentRunUpkeepJobs({
+    clientInstanceId: options.clientInstanceId,
+    stores: options.stores
+  });
+  handlers.push(...agentRunUpkeep.handlers);
+  schedules.push(...agentRunUpkeep.schedules);
 
   const cleanup = options.executionWorkspaceCleanup;
   if (cleanup) {

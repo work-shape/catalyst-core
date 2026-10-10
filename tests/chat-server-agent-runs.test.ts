@@ -4,14 +4,17 @@ import {
   fetchTestOperation,
   listenTestInstance,
   createTestInstance,
-  getTestConfig
+  getTestConfig,
+  getTestJobs
 } from "./support/test-instance";
+import { withTestSql as withSql } from "./support/test-sql";
 
 import { testOperations } from "./support/operations";
 
 import { describe, expect, it } from "vitest";
 
 import {
+  AGENT_RUN_MAX_QUEUED_MS,
   asAgentRunId,
   asClientInstanceId,
   asCollaborationWorkspaceId,
@@ -77,6 +80,45 @@ describe("client instance app vertical slice", () => {
       expect(summary.find((kind) => kind.kind === executeAgentRunJob.kind)).toMatchObject({
         queued: 1
       });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("fails a run that no worker took within the queue limit and takes the next message", async () => {
+    const app = await createTestInstance({
+      config: createTestConfig(),
+      env: {},
+      agentRunWorker: "separate",
+      tools: []
+    });
+    try {
+      const created = await app.call("conversations.create", { payload: { title: "No worker" } });
+      const conversation = created.json<{ id: string }>();
+      const started = await injectStartConversationRun(app, conversation.id, "Is anyone there?");
+      const blocked = await app.call("conversations.runs.start", {
+        params: { conversationId: conversation.id },
+        payload: { idempotencyKey: "while-queued", message: { text: "Hello?" } }
+      });
+      expect(blocked.statusCode).toBe(409);
+
+      // No Agent Run worker is up. The job worker of the API serves the upkeep of the runs.
+      await withSql(async (sql) => {
+        await sql`
+          update agent_runs
+          set started_at = now() - make_interval(secs => ${AGENT_RUN_MAX_QUEUED_MS / 1000 + 1})
+          where id = ${started.run.id}`;
+      });
+      await getTestJobs(app).runDue();
+      await getTestJobs(app).runDue();
+
+      const events = parseSseChunks(await drainRunEvents(app, conversation.id, started.run.id));
+      expect(events.map((event) => event.type)).toEqual(["run_failed"]);
+      expect(events[0]?.payload).toMatchObject({
+        error: { code: "AGENT_RUN_NOT_STARTED", category: "runtime_interrupted" }
+      });
+      const next = await injectStartConversationRun(app, conversation.id, "Hello again");
+      expect(next.run.status).toBe("queued");
     } finally {
       await app.close();
     }

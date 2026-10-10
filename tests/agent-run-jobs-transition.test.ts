@@ -43,16 +43,17 @@ describe("agent run jobs beside an API and a worker of the previous release", ()
     await expect(legacyClaim(fixture, "legacy-lease")).resolves.toBe(run.id);
     const worker = fixture.worker({ schedules: true });
 
-    // The job finds the run held and ends without waiting on it. The adoption gives the run
-    // a job again for as long as it is in progress, and each of them ends the same way.
+    // The job finds the run held and ends without waiting on it. The upkeep gives a run
+    // that someone holds no further job, however often it ticks.
     await worker.runDue();
     await worker.runDue();
-    await fixture.makeAdoptionDue();
-    await worker.runDue();
-    await worker.runDue();
+    for (let tick = 0; tick < 3; tick += 1) {
+      await fixture.makeAdoptionDue();
+      await worker.runDue();
+      await worker.runDue();
+    }
     const whileHeld = await fixture.jobs();
-    expect(whileHeld.length).toBeGreaterThanOrEqual(2);
-    expect(whileHeld.every((job) => job.status === "succeeded" && job.attempts === 1)).toBe(true);
+    expect(whileHeld).toMatchObject([{ status: "succeeded", attempts: 1 }]);
     expect(await fixture.run(run)).toMatchObject({ status: "running", leaseToken: "legacy-lease" });
 
     await legacyAppend(fixture, run, "legacy-lease", 1, "message_delta");
@@ -92,6 +93,29 @@ describe("agent run jobs beside an API and a worker of the previous release", ()
     );
     expect(await fixture.run(run)).toMatchObject({ status: "completed" });
     expect(fixture.executor.calls).toHaveLength(0);
+  });
+
+  it("adopts and fails a held run once the previous release's worker is gone", async () => {
+    const fixture = await createFixture("old_worker_gone_later");
+    const run = await fixture.accept();
+    await legacyClaim(fixture, "legacy-lease");
+    const worker = fixture.worker({ schedules: true });
+    // The run's own job found it held and ended. Then the old worker was killed.
+    await worker.runDue();
+    await worker.runDue();
+    await db.sql`
+      update agent_runs set lease_expires_at = now() - interval '1 second' where id = ${run.id}`;
+
+    await fixture.makeAdoptionDue();
+    await worker.runDue();
+    await worker.runDue();
+
+    expect(fixture.executor.calls).toHaveLength(0);
+    expect(await fixture.run(run)).toMatchObject({
+      status: "failed",
+      error: { code: "AGENT_RUN_WORKER_LOST" }
+    });
+    expect(await fixture.jobs()).toMatchObject([{ status: "succeeded" }, { status: "succeeded" }]);
   });
 
   it("fails a run whose previous-release worker was killed, without executing it again", async () => {

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createLocalAgentRunExecutor } from "@vivd-catalyst/agent-runtime";
 import {
   AGENT_RUN_LEASE_MS,
+  AGENT_RUN_MAX_QUEUED_MS,
   asClientInstanceId,
   asToolCallId,
   type AgentRunAuthorization,
@@ -459,6 +460,86 @@ describe("agent runs as claimed jobs", () => {
     expect(await fixture.jobs()).toMatchObject([{ status: "succeeded", attempts: 1 }]);
     expect(fixture.executor.calls).toHaveLength(1);
     expect(await fixture.run(run)).toMatchObject({ status: "completed" });
+  });
+
+  it("fails the run of a killed worker when no worker is left, by the job worker of the API", async () => {
+    const fixture = await createFixture("killed_no_worker");
+    const run = await fixture.accept();
+    const child = startWorkerProcess(fixture);
+    await waitUntil(
+      async () => (await fixture.events(run)).length === 1,
+      "the worker process stored a piece of the reply",
+      60_000
+    );
+    await kill(child);
+    // No worker comes back. The only job worker left is the one of a process that executes
+    // no runs.
+    const api = fixture.upkeepWorker();
+    await api.runDue();
+    expect(await fixture.run(run)).toMatchObject({ status: "running" });
+
+    await fixture.expireJobLeases();
+    await api.runDue();
+
+    expect(await fixture.run(run)).toMatchObject({
+      status: "failed",
+      error: { code: "AGENT_RUN_WORKER_LOST", category: "runtime_interrupted" }
+    });
+    expect(await fixture.eventTypes(run)).toEqual(["message_delta", "run_failed"]);
+    expect(await fixture.jobs()).toMatchObject([{ status: "dead", attempts: 1 }]);
+    // The conversation takes the next message. Its run waits for a worker: this one claims
+    // no run.
+    const next = await fixture.accept("And now?");
+    await api.runDue();
+    expect(await fixture.run(next)).toMatchObject({ status: "queued" });
+    expect(await fixture.jobs()).toMatchObject([
+      { status: "dead" },
+      { subject: next.id, status: "queued", attempts: 0 }
+    ]);
+  });
+
+  it("fails a run that no worker took within the queue limit, and never executes it", async () => {
+    const fixture = await createFixture("queued_too_long");
+    const run = await fixture.accept();
+    const api = fixture.upkeepWorker();
+    const upkeep = async () => {
+      await fixture.makeAdoptionDue();
+      await api.runDue();
+    };
+
+    await fixture.acceptedAgo(run, AGENT_RUN_MAX_QUEUED_MS - 60_000);
+    await upkeep();
+    expect(await fixture.run(run)).toMatchObject({ status: "queued" });
+
+    await fixture.acceptedAgo(run, AGENT_RUN_MAX_QUEUED_MS + 1000);
+    await upkeep();
+
+    expect(await fixture.run(run)).toMatchObject({
+      status: "failed",
+      lastSequence: 1,
+      error: { code: "AGENT_RUN_NOT_STARTED", category: "runtime_interrupted" }
+    });
+    expect(await fixture.eventTypes(run)).toEqual(["run_failed"]);
+    const audit = await db.sql<{ subject: string }[]>`
+      select subject from audit_events
+      where client_instance_id = ${fixture.clientInstanceId} and type = 'agent_run.recovered'`;
+    expect(audit).toEqual([{ subject: run.id }]);
+    // A second tick fails nothing twice.
+    await upkeep();
+    expect(await fixture.eventTypes(run)).toEqual(["run_failed"]);
+
+    // The conversation takes the next message, and a worker that comes up executes only that.
+    const next = await fixture.accept("And now?");
+    const pass = fixture.worker().runDue();
+    const execution = await fixture.executor.next();
+    expect(execution.input.preparedRun?.id).toBe(next.id);
+    execution.complete();
+    await pass;
+    expect(fixture.executor.calls).toHaveLength(1);
+    expect(await fixture.jobs()).toMatchObject([
+      { subject: run.id, status: "succeeded", attempts: 1 },
+      { subject: next.id, status: "succeeded", attempts: 1 }
+    ]);
   });
 
   it("runs the local runtime with the job as the only writer of the run", async () => {

@@ -417,6 +417,7 @@ export {
   appendClaimedRunObservation,
   assertClaimedAgentRun,
   claimAgentRunForJob,
+  failAgentRunsQueuedTooLong,
   failLostAgentRun,
   listAgentRunsInProgress,
   listAgentRunsWithoutJob,

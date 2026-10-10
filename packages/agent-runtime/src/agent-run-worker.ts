@@ -1,16 +1,14 @@
 import {
-  AGENT_RUN_ADOPTION_BATCH_SIZE,
   AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS,
   AGENT_RUN_INTERRUPTED_ERROR,
-  AGENT_RUN_WORKER_LOST_ERROR,
   AppError,
   JobLeaseLostError,
-  adoptAgentRunsJob,
   adoptAgentRunsSchedule,
-  agentRunJobOptions,
+  agentRunUpkeepHandler,
   asAgentRunId,
   defineJobHandler,
   executeAgentRunJob,
+  failAgentRunOfLostJob,
   getSubjectUserId,
   type AgentRun,
   type AgentRunError,
@@ -21,7 +19,6 @@ import {
   type ClientInstanceId,
   type ConversationHistoryStore,
   type JobControl,
-  type JobId,
   type JobSchedule,
   type PlatformStores,
   type RegisteredJobHandler,
@@ -109,14 +106,13 @@ export function createAgentRunJobs(options: AgentRunJobsOptions): AgentRunJobs {
             // Someone started this run and is gone. It called models and tools already, so it
             // is ended here and never executed again.
             if (claimed.status === "started")
-              await failLostRun(txStores, clientInstanceId, runId, job.id);
+              await failAgentRunOfLostJob(txStores, { clientInstanceId, runId, jobId: job.id });
             return claimed;
           });
           if (claim.status !== "claimed") {
             // Transition release only: a worker of the previous release holds the run. This
-            // job ends without waiting, so it keeps no slot, and the adoption gives the run a
-            // job again for as long as it is in progress. Once that worker is done the next
-            // job finds the run ended, and once its lease ran out the next job ends the run.
+            // job ends without waiting, so it keeps no slot. That worker ends the run; when it
+            // is gone and its lease ran out, the upkeep gives the run a job that fails it.
             if (claim.status === "held")
               control.logger.info({ runId }, "Agent run is held by a worker of the last release");
             else options.onObservation?.(runId);
@@ -136,59 +132,17 @@ export function createAgentRunJobs(options: AgentRunJobsOptions): AgentRunJobs {
         // The worker of the job was killed or lost its lease: the run ends in the transaction
         // that marks its job dead, unless someone else holds the run.
         async onExhausted(job, txStores) {
-          await failLostRun(txStores, clientInstanceId, asAgentRunId(job.payload.runId), job.id);
+          await failAgentRunOfLostJob(txStores, {
+            clientInstanceId,
+            runId: asAgentRunId(job.payload.runId),
+            jobId: job.id
+          });
         }
       }),
-      defineJobHandler({
-        kind: adoptAgentRunsJob,
-        slots: 1,
-        async run(_job, control) {
-          // An enqueue under a live dedupe key inserts nothing, so a tick may run twice.
-          const runs = await stores.agentRuns.listAgentRunsWithoutJob({
-            clientInstanceId,
-            jobKind: executeAgentRunJob.kind,
-            limit: AGENT_RUN_ADOPTION_BATCH_SIZE
-          });
-          for (const run of runs) {
-            await stores.jobs.enqueue(
-              executeAgentRunJob,
-              { runId: run.id },
-              agentRunJobOptions({ clientInstanceId, ...run })
-            );
-          }
-          if (runs.length > 0) control.logger.info({ runs: runs.length }, "Adopted agent runs");
-        }
-      })
+      agentRunUpkeepHandler({ clientInstanceId, stores, onObservation: options.onObservation })
     ],
     schedules: [adoptAgentRunsSchedule]
   };
-}
-
-async function failLostRun(
-  stores: PlatformStores,
-  clientInstanceId: ClientInstanceId,
-  runId: AgentRunId,
-  jobId: JobId
-): Promise<void> {
-  const failed = await stores.agentRuns.failLostAgentRun({
-    clientInstanceId,
-    runId,
-    jobId,
-    error: AGENT_RUN_WORKER_LOST_ERROR
-  });
-  if (!failed) return;
-  await stores.audit.appendAuditEvent({
-    clientInstanceId,
-    type: "agent_run.recovered",
-    status: "failed",
-    subject: failed.id,
-    correlationId: failed.correlationId,
-    metadata: {
-      conversationId: failed.conversationId,
-      errorCategory: AGENT_RUN_WORKER_LOST_ERROR.category,
-      errorCode: AGENT_RUN_WORKER_LOST_ERROR.code
-    }
-  });
 }
 
 /** Why the execution of a run was stopped from outside. */

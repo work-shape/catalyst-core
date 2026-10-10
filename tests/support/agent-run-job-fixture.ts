@@ -8,6 +8,7 @@ import {
 import {
   asAgentRunId,
   asMessageId,
+  createAgentRunUpkeepJobs,
   executeAgentRunJob,
   type AgentRun,
   type AgentRunAuthorization,
@@ -157,6 +158,15 @@ export function useAgentRunJobFixture(
           options.schedules ? jobs.schedules : []
         );
       },
+      upkeepWorker() {
+        const jobs = createAgentRunUpkeepJobs({ clientInstanceId, stores: db.store });
+        return harness.worker(db.store, clientInstanceId, jobs.handlers, jobs.schedules);
+      },
+      async acceptedAgo(run, ms) {
+        await db.sql`
+          update agent_runs set started_at = now() - make_interval(secs => ${ms / 1000})
+          where id = ${run.id}`;
+      },
       run: async (run) => required(await db.store.agentRuns.getAgentRun(ofRun(run))),
       async events(run) {
         const observations = await db.store.agentRuns.listRunObservations(ofRun(run));
@@ -213,6 +223,13 @@ export interface AgentRunJobFixture {
   eventTypes(run: Pick<AgentRun, "id">): Promise<string[]>;
   messages(): Promise<ChatMessage[]>;
   /** The `agent_run.execute` jobs of the instance, oldest first. */
+  /**
+   * The job worker of a process that executes no runs, the API for one: it serves the upkeep
+   * of the runs and buries the jobs of lost workers.
+   */
+  upkeepWorker(): JobWorker;
+  /** As if the run had been accepted this long ago. */
+  acceptedAgo(run: Pick<AgentRun, "id">, ms: number): Promise<void>;
   jobs(): Promise<AgentRunJobRecord[]>;
   /** As if the heartbeats had stopped for the lease time: the leases of the running jobs are over. */
   expireJobLeases(): Promise<void>;
