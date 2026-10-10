@@ -128,7 +128,9 @@ function createDeterministicConversationTitle(content: string): string {
 }
 
 function toTitleCase(value: string): string {
-  return value.replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase());
+  // The first letter of each word. `\b` knows only ASCII letters as part of a word, so it
+  // found a new word after every umlaut: "für" became "FÜR".
+  return value.replace(/(?<![\p{L}\p{N}])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
 }
 
 function noReportedUsage() {

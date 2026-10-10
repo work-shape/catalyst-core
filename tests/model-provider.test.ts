@@ -1834,6 +1834,24 @@ describe("OpenAI-compatible model provider", () => {
     expect(events.some((event) => event.type === "text_delta")).toBe(true);
     expect(events.at(-1)?.type).toBe("completed");
   });
+
+  // Fails without the change: the title was "Bitte PrÜFen Sie Die GebÜHren".
+  it("capitalises only the first letter of a word in the deterministic provider's title", async () => {
+    const title = await new DeterministicModelProvider("local").complete({
+      providerId: "local",
+      model: "deterministic-local",
+      messages: [
+        {
+          role: "system",
+          content: "Generate a short neutral headline/topic for a persisted conversation list."
+        },
+        { role: "user", content: "Initial user message:\nbitte prüfen sie die gebühren für 2026" }
+      ],
+      tools: []
+    });
+
+    expect(title.text).toBe("Bitte Prüfen Sie Die Gebühren");
+  });
 });
 
 function createSseStream(chunks: unknown[], includeDone = true): ReadableStream<Uint8Array> {
