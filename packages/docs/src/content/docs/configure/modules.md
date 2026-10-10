@@ -35,8 +35,8 @@ A module that a later release adds is off until its entry says otherwise.
 A module that is off is off for every caller and on every surface:
 
 - Each of its operations answers `404 NOT_FOUND` with `details.reason: "module_off"` and the module's name in `details.module`. The caller is authenticated first: a call without a valid credential gets `401` as on any route and learns nothing about modules. The module is checked before any right.
-- Its agent tools are not offered to the model and cannot be called, also for an agent that still lists one. Saving or pushing an agent that names such a tool is refused with a message that names the module. An agent stored before the module was turned off keeps its entry and runs without the tool.
-- Its job kinds are not claimed. Jobs of such a kind that are already queued stay queued and show as queued under **Settings > Instance > Jobs**. They run when the module is on again.
+- Its agent tools are not offered to the model and cannot be called, also for an agent that still lists one. A write that adds or changes an agent that names such a tool is refused with a message that names the module. An agent stored before the module was turned off keeps its entry and runs without the tool: the instance starts, and a write to another agent or to a skill is not held up by it. The agent editor shows such an entry as not available, with the module, and lets it be removed.
+- Its job kinds are not claimed. Jobs of such a kind that are already queued stay queued. **Settings > Instance > Jobs** shows each with the module it waits for, and `GET /api/v1/instance/jobs` names it in `waitingForModule`. They run when the module is on again.
 - Its screens, panels and buttons are absent from the interface.
 
 Turning a module off deletes nothing. Its stored data is there when the module is turned on again.
