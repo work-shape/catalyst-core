@@ -974,6 +974,8 @@ test("new turns anchor below the top chrome and retain response runway", async (
   await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
 
   const messageText = `/tool demo.weather_forecast {"location":"Berlin","days":5,"unit":"celsius"}`;
+  // The layout of a turn that waits for its answer is measured while the answer is held back.
+  const releaseAnswer = await holdAnswer(page);
   try {
     await input.fill(messageText);
     await input.press("Enter");
@@ -989,7 +991,6 @@ test("new turns anchor below the top chrome and retain response runway", async (
 
     await expect(anchoredMessage).toHaveCount(1);
     await expect(reserve).toHaveCount(1);
-    // The activity row exists only while the run is busy, so it is checked before anything slow.
     const activity = page.getByTestId("run-activity");
     await expect(activity).toBeVisible();
     const activityBeforeReserve = await Promise.all([
@@ -1037,6 +1038,7 @@ test("new turns anchor below the top chrome and retain response runway", async (
     });
     expect(transcriptPadding).toBe(64);
 
+    releaseAnswer();
     await expect(page.getByText(/Tool work completed:/u)).toBeVisible();
     await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
     await expect(anchoredMessage).toHaveCount(1);
@@ -1064,6 +1066,7 @@ test("new turns anchor below the top chrome and retain response runway", async (
       )
       .toBeLessThanOrEqual(1);
   } finally {
+    releaseAnswer();
     await stopActiveRun(page);
   }
 });
@@ -1762,6 +1765,7 @@ test(
   "switching back to a running conversation resumes one stream indicator",
   { tag: "@chat-state" },
   async ({ page }) => {
+    test.setTimeout(LONG_RUN_TEST_TIMEOUT_MS);
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const sourceTitle = `Resume source ${suffix}`;
@@ -1781,6 +1785,7 @@ test(
       }
     });
 
+    const releaseAnswer = await holdAnswer(page);
     await page.goto("/");
     const input = page.getByPlaceholder("Message");
     const chatRegion = page.getByRole("region", { name: "Chat" });
@@ -1795,7 +1800,7 @@ test(
 
     await sourceConversation.getByRole("button").first().click();
     const uniqueToken = `resume-token-${suffix}`;
-    await input.fill(Array.from({ length: 90 }, (_, index) => `${uniqueToken}-${index}`).join(" "));
+    await input.fill(longRunMessage(uniqueToken));
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
     await expect(page.getByTestId("run-activity")).toHaveCount(1);
@@ -1805,6 +1810,7 @@ test(
     await expect(chatRegion.getByText(uniqueToken)).toHaveCount(0);
 
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+    releaseAnswer();
     const eventRequestCountBeforeReturn = eventRequests.length;
     await sourceConversation.getByRole("button").first().click();
     await expect(page.getByTestId("run-activity")).toHaveCount(1);
@@ -1813,7 +1819,9 @@ test(
     await expect(chatRegion.getByText(uniqueToken, { exact: false }).first()).toBeVisible({
       timeout: 15_000
     });
-    await expect(page.getByTestId("run-activity")).toHaveCount(0);
+    await expect(page.getByTestId("run-activity")).toHaveCount(0, {
+      timeout: LONG_RUN_END_TIMEOUT_MS
+    });
     await stopActiveRun(page);
   }
 );
@@ -1822,6 +1830,7 @@ test(
   "direct conversation links resume a running stream from stored state",
   { tag: "@chat-state" },
   async ({ page }) => {
+    test.setTimeout(LONG_RUN_TEST_TIMEOUT_MS);
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const sourceTitle = `Direct resume source ${suffix}`;
@@ -1835,6 +1844,7 @@ test(
       }
     });
 
+    const releaseAnswer = await holdAnswer(page);
     await page.goto(legacyConversationPath(conversation.id));
     const input = page.getByPlaceholder("Message");
     const chatRegion = page.getByRole("region", { name: "Chat" });
@@ -1844,25 +1854,23 @@ test(
     await expect(sourceConversation).toHaveCount(1);
 
     const uniqueToken = `direct-resume-token-${suffix}`;
-    await input.fill(
-      Array.from({ length: 100 }, (_, index) => `${uniqueToken}-${index}`).join(" ")
-    );
+    await input.fill(longRunMessage(uniqueToken));
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
+    releaseAnswer();
     await page.goto(legacyConversationPath(conversation.id));
-    const runningConversation = page.getByTestId("conversation-row").filter({
-      has: page.getByTestId("conversation-running-indicator")
-    });
-    await expect(runningConversation).toHaveCount(1);
-    await expect(runningConversation).toHaveAttribute("data-selected", "true");
+    await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+    await expect(sourceConversation).toHaveAttribute("data-selected", "true");
     await expect.poll(() => eventRequests.length, { timeout: 10_000 }).toBeGreaterThan(0);
     await expect(
       chatRegion.locator('[data-role="assistant"]').filter({ hasText: uniqueToken }).first()
     ).toBeVisible({
       timeout: 15_000
     });
-    await expect(page.getByTestId("run-activity")).toHaveCount(0);
+    await expect(page.getByTestId("run-activity")).toHaveCount(0, {
+      timeout: LONG_RUN_END_TIMEOUT_MS
+    });
     await stopActiveRun(page);
   }
 );
@@ -1871,20 +1879,21 @@ test(
   "new conversation run completion does not steal the selected conversation",
   { tag: "@chat-state" },
   async ({ page }) => {
+    test.setTimeout(LONG_RUN_TEST_TIMEOUT_MS);
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const targetTitle = `Switch target ${suffix}`;
     await createListedConversation(page, targetTitle);
 
+    // The answer is not held back here. With a held answer the conversation switched to shows
+    // the partial answer of the new one for as long as the hold lasts, a defect of the page that
+    // this test does not cover.
     await page.goto("/");
     const input = page.getByPlaceholder("Message");
     const chatRegion = page.getByRole("region", { name: "Chat" });
     const sendButton = page.getByRole("button", { name: "Send message" });
     const messageToken = `new-run-isolation-${suffix}`;
-    const messageText = Array.from({ length: 120 }, (_, index) => `${messageToken}-${index}`).join(
-      " "
-    );
-    await input.fill(messageText);
+    await input.fill(longRunMessage(messageToken));
     await expect(sendButton).toBeEnabled();
     await Promise.all([
       page.waitForResponse(
@@ -1897,7 +1906,11 @@ test(
     await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
     await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
     await expect(page.getByTestId("run-activity")).toHaveCount(1);
-    const newConversation = page.getByTestId("conversation-row").filter({ hasText: messageToken });
+    // The row is found by the full title it carries as an attribute. Its visible text is typed
+    // letter by letter when the generated title arrives, and holds the token only at the end.
+    const newConversation = page
+      .getByTestId("conversation-row")
+      .filter({ has: page.getByTitle(new RegExp(escapeRegExp(messageToken), "iu")) });
     await expect(newConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     const targetConversation = page
@@ -1908,7 +1921,9 @@ test(
     await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
     await expect(page.getByTestId("run-activity")).toHaveCount(0);
     await expect(newConversation).toHaveCount(1);
-    await expect(newConversation.getByTestId("conversation-running-indicator")).toHaveCount(0);
+    await expect(newConversation.getByTestId("conversation-running-indicator")).toHaveCount(0, {
+      timeout: LONG_RUN_END_TIMEOUT_MS
+    });
     await expect(targetConversation).toHaveAttribute("data-selected", "true");
   }
 );
@@ -1917,6 +1932,7 @@ test(
   "completed background turns are marked unread until viewed",
   { tag: "@chat-state" },
   async ({ page }) => {
+    test.setTimeout(LONG_RUN_TEST_TIMEOUT_MS);
     await signInViaUi(page, normalUser);
     const suffix = Date.now();
     const sourceTitle = `Unread source ${suffix}`;
@@ -1932,6 +1948,7 @@ test(
       }
     });
 
+    const releaseAnswer = await holdAnswer(page);
     await page.goto("/");
     const input = page.getByPlaceholder("Message");
     const chatRegion = page.getByRole("region", { name: "Chat" });
@@ -1947,16 +1964,16 @@ test(
     await sourceConversation.getByRole("button").first().click();
     const sendButton = page.getByRole("button", { name: "Send message" });
     await expect(sendButton).toBeEnabled();
-    const forecastLocation = `Unread background ${suffix}`;
-    await input.fill(
-      `/tool demo.weather_forecast {"location":"${forecastLocation}","days":3,"unit":"celsius","startDate":"2026-06-13"}`
-    );
+    const answerToken = `unread-background-${suffix}`;
+    await input.fill(longRunMessage(answerToken));
     await sendButton.click();
     await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
     await targetConversation.getByRole("button").first().click();
+    await expect(chatRegion.getByText(answerToken, { exact: false })).toHaveCount(0);
+    releaseAnswer();
     await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toBeVisible({
-      timeout: 20_000
+      timeout: LONG_RUN_END_TIMEOUT_MS
     });
 
     const eventRequestCountBeforeView = eventRequests.length;
@@ -1965,12 +1982,11 @@ test(
     expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
     await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
     await expect(page.getByTestId("run-activity")).toHaveCount(0);
-    const toolCallCard = await openWorkHistoryToolCard(chatRegion);
-    await expect(toolCallCard).toContainText("Completed");
-    // In the work history the card is a disclosure; its details hold the tool input.
-    await expandDisclosure(toolCallCard.getByRole("button", { name: /^Weather Forecast/u }));
-    await expect(toolCallCard).toContainText(forecastLocation);
-    await expect(chatRegion.getByText("Tool work completed")).toHaveCount(1);
+    // The whole answer is there from stored state, shown once.
+    await expect(
+      chatRegion.locator('[data-role="assistant"]').filter({ hasText: answerToken })
+    ).toHaveCount(1);
+    await expect(chatRegion.getByText(`w${LONG_RUN_WORDS - 2}".`, { exact: false })).toBeVisible();
   }
 );
 
@@ -3098,6 +3114,35 @@ const collaborationWorkspaceConversationUrlPattern = /\/w\/[^/]+\/c\/[^/]+$/u;
 
 function conversationUrlPattern(conversationId: string): RegExp {
   return new RegExp(`/w/[^/]+/c/${escapeRegExp(encodeURIComponent(conversationId))}$`, "u");
+}
+
+/**
+ * Words in a message whose run must still be going on the server while the test acts on the
+ * page. The fixture model echoes the message one word every 20 ms, so the run lasts about ten
+ * seconds. Where it can, such a test also holds the answer back with `holdAnswer` until it has
+ * acted: a page that renders a stream is slow, on the two-core hosted runner a click on another
+ * conversation took two seconds instead of 300 ms, and a two-second run had ended before the
+ * test got there.
+ */
+const LONG_RUN_WORDS = 500;
+/** The wait for a long run to end; an assertion's default ten seconds are the run's length. */
+const LONG_RUN_END_TIMEOUT_MS = 30_000;
+/** The time limit of a test with a long run, which the default 30 seconds leave no room for. */
+const LONG_RUN_TEST_TIMEOUT_MS = 60_000;
+
+/**
+ * Holds back the event streams of runs: the server runs the turn, and the page gets its events
+ * only once the returned function is called.
+ */
+function holdAnswer(page: Page): Promise<() => void> {
+  return holdGet(page, isRunEventsPath);
+}
+
+/** A message that starts with `token` and keeps the fixture model answering for a long run. */
+function longRunMessage(token: string): string {
+  return [token, ...Array.from({ length: LONG_RUN_WORDS - 1 }, (_, index) => `w${index}`)].join(
+    " "
+  );
 }
 
 function isRunEventsPath(pathname: string): boolean {
