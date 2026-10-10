@@ -7,7 +7,7 @@ import type {
   ToolCallId,
   WorkspaceCommandId
 } from "./ids";
-import type { ManagedArtifactImagePagesPreview } from "./files";
+import type { ManagedArtifactImagePagesPreview, SubjectRowClaim } from "./files";
 import type { JsonObject, JsonValue } from "./json";
 import type { ISODateString } from "./time";
 
@@ -103,7 +103,7 @@ export interface WorkspaceCommandResult {
 }
 
 export type WorkspaceCommandFailureCategory =
-  "runner_error" | "timeout" | "cancelled" | "stale_lease" | "internal_error";
+  "runner_error" | "timeout" | "cancelled" | "stale_lease" | "worker_lost" | "internal_error";
 
 export interface WorkspaceCommandError {
   code: string;
@@ -183,10 +183,18 @@ export interface EnqueueWorkspaceCommandInput {
 
 export interface ClaimWorkspaceCommandInput {
   clientInstanceId: ClientInstanceId;
-  workerId: string;
+  commandId: WorkspaceCommandId;
+  /** Names the executor job, so the job takes back a row an earlier attempt of it left. */
+  leaseOwnerId: string;
   leaseToken: string;
-  now: ISODateString;
-  leaseExpiresAt: ISODateString;
+  leaseMs: number;
+}
+
+export interface RenewClaimedWorkspaceCommandLeaseInput {
+  clientInstanceId: ClientInstanceId;
+  commandId: WorkspaceCommandId;
+  leaseToken: string;
+  leaseMs: number;
 }
 
 export interface CompleteWorkspaceCommandInput {
@@ -220,22 +228,6 @@ export interface CancelClaimedWorkspaceCommandInput {
   reason?: string;
   output?: WorkspaceCommandOutput;
   cancelledAt: ISODateString;
-}
-
-export interface HeartbeatWorkspaceCommandInput {
-  clientInstanceId: ClientInstanceId;
-  commandId: WorkspaceCommandId;
-  leaseToken: string;
-  heartbeatAt: ISODateString;
-  leaseExpiresAt: ISODateString;
-}
-
-export interface RecoverStaleWorkspaceCommandsInput {
-  clientInstanceId: ClientInstanceId;
-  staleLeaseExpiredBefore: ISODateString;
-  recoveredAt: ISODateString;
-  error: WorkspaceCommandError;
-  limit: number;
 }
 
 export interface CountActiveWorkspaceCommandsInput {
@@ -309,9 +301,32 @@ export interface WorkspaceCommandStore {
     clientInstanceId: ClientInstanceId;
     commandId: WorkspaceCommandId;
   }): Promise<WorkspaceCommand | undefined>;
-  claimNextWorkspaceCommand(
+  /**
+   * Takes a command by id for the executor job that drives it and writes the job's lease onto
+   * the row. The row is taken when it is queued, and also when it was running and nobody holds
+   * it any more: its lease ran out, or `leaseOwnerId` already holds it. Such a row comes back
+   * with `attempts` above 1. It ran before and is not run again; the caller fails it.
+   */
+  claimWorkspaceCommand(
     input: ClaimWorkspaceCommandInput
-  ): Promise<WorkspaceCommand | undefined>;
+  ): Promise<SubjectRowClaim<WorkspaceCommand>>;
+  /**
+   * Transition release only: extends the lease copied onto the row, which a worker of the
+   * previous release reads. False when the row is no longer held under `leaseToken`.
+   */
+  renewClaimedWorkspaceCommandLease(
+    input: RenewClaimedWorkspaceCommandLeaseInput
+  ): Promise<boolean>;
+  /**
+   * Transition release only: the commands that are not finished and have no queued or running
+   * job of `jobKind`, oldest first. An API of the previous release queued them, or a worker of
+   * it left them behind.
+   */
+  listWorkspaceCommandsWithoutJob(input: {
+    clientInstanceId: ClientInstanceId;
+    jobKind: string;
+    limit: number;
+  }): Promise<Array<Pick<WorkspaceCommand, "id" | "workspaceId">>>;
   completeWorkspaceCommand(input: CompleteWorkspaceCommandInput): Promise<WorkspaceCommand>;
   failWorkspaceCommand(input: FailWorkspaceCommandInput): Promise<WorkspaceCommand>;
   requestWorkspaceCommandCancellation(
@@ -320,10 +335,6 @@ export interface WorkspaceCommandStore {
   cancelClaimedWorkspaceCommand(
     input: CancelClaimedWorkspaceCommandInput
   ): Promise<WorkspaceCommand>;
-  heartbeatWorkspaceCommand(input: HeartbeatWorkspaceCommandInput): Promise<WorkspaceCommand>;
-  recoverStaleWorkspaceCommands(
-    input: RecoverStaleWorkspaceCommandsInput
-  ): Promise<WorkspaceCommand[]>;
 }
 
 export interface ExecutionWorkspaceCleanupStore {

@@ -14,9 +14,9 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import {
-  type ClientInstanceId,
   type ExecutionWorkspace,
   type AuditRecorder,
+  type JobControl,
   type JsonObject,
   type PlatformStores,
   type WorkspaceCommand,
@@ -28,7 +28,6 @@ import {
   type WorkspaceFile
 } from "@vivd-catalyst/core";
 import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
-import type { WorkspaceCommandResultSource } from "./workspace-tools";
 import { upsertStoredWorkspaceFile, type WorkspaceFileByteStore } from "./workspace-file-bytes";
 import {
   normalizeWorkspaceDirectory,
@@ -50,7 +49,6 @@ import {
 import { createWorkspaceChecksum } from "./workspace-tool-results";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
-const DEFAULT_LEASE_DURATION_MS = 10 * 60 * 1000;
 const DEFAULT_WORKSPACE_BYTES = 100 * 1024 * 1024;
 const STANDARD_WORKSPACE_DIRECTORIES = ["scripts", "artifacts", "previews", "tmp"] as const;
 
@@ -61,7 +59,6 @@ export interface LocalWorkspaceCommandRunnerOptions {
   byteStore: WorkspaceFileByteStore;
   workerId?: string;
   tempRootDirectory?: string;
-  leaseDurationMs?: number;
   maxPathLength?: number;
   reuseWorkspaceDirectories?: boolean;
   shellPath?: string;
@@ -69,10 +66,6 @@ export interface LocalWorkspaceCommandRunnerOptions {
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
   now?: () => string;
-}
-
-export interface RunNextWorkspaceCommandInput {
-  clientInstanceId: ClientInstanceId;
 }
 
 interface CommandExecutionResult {
@@ -101,7 +94,13 @@ interface SyncedWorkspaceFile {
 }
 
 export interface RunClaimedWorkspaceCommandOptions {
+  /** Aborting it ends the process group; the command is then recorded as cancelled. */
   signal?: AbortSignal;
+  /**
+   * The fenced transaction of the job that holds the command. The command's final state is
+   * written inside it, so a job that lost its lease records nothing.
+   */
+  transaction?: JobControl["transaction"];
 }
 
 export class LocalWorkspaceCommandRunner {
@@ -109,7 +108,6 @@ export class LocalWorkspaceCommandRunner {
   private readonly byteStore: WorkspaceFileByteStore;
   private readonly workerId: string;
   private readonly tempRootDirectory: string;
-  private readonly leaseDurationMs: number;
   private readonly maxPathLength: number;
   private readonly reuseWorkspaceDirectories: boolean;
   private readonly processExecutor: WorkspaceCommandProcessExecutor;
@@ -123,7 +121,6 @@ export class LocalWorkspaceCommandRunner {
     this.byteStore = options.byteStore;
     this.workerId = options.workerId ?? `local-workspace-runner-${randomUUID()}`;
     this.tempRootDirectory = options.tempRootDirectory ?? tmpdir();
-    this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
     this.maxPathLength = options.maxPathLength ?? DEFAULT_MAX_PATH_LENGTH;
     this.reuseWorkspaceDirectories = options.reuseWorkspaceDirectories ?? false;
     this.processExecutor =
@@ -132,22 +129,6 @@ export class LocalWorkspaceCommandRunner {
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
-  }
-
-  async runNextCommand(input: RunNextWorkspaceCommandInput): Promise<WorkspaceCommand | undefined> {
-    const now = this.now();
-    const claimed = await this.store.executionWorkspaces.claimNextWorkspaceCommand({
-      clientInstanceId: input.clientInstanceId,
-      workerId: this.workerId,
-      leaseToken: randomUUID(),
-      now,
-      leaseExpiresAt: addMilliseconds(now, this.leaseDurationMs)
-    });
-    if (!claimed) {
-      return undefined;
-    }
-    await this.recordRunningCommand(claimed);
-    return this.runClaimedCommand(claimed);
   }
 
   async runClaimedCommand(
@@ -160,54 +141,49 @@ export class LocalWorkspaceCommandRunner {
     }
 
     const result = await this.executeCommand(command, options);
-    const completedAt = this.now();
-    let terminal: WorkspaceCommand;
-    if (result.cancelled) {
-      terminal = await this.store.executionWorkspaces.cancelClaimedWorkspaceCommand({
-        clientInstanceId: command.clientInstanceId,
-        commandId: command.id,
-        leaseToken,
-        reason: result.error?.message,
-        output: result.output,
-        cancelledAt: completedAt
-      });
-      await this.recordTerminalCommand(terminal);
-      return terminal;
-    }
-    if (result.error) {
-      terminal = await this.store.executionWorkspaces.failWorkspaceCommand({
-        clientInstanceId: command.clientInstanceId,
-        commandId: command.id,
-        leaseToken,
-        error: result.error,
-        output: result.output,
-        failedAt: completedAt
-      });
-      await this.recordTerminalCommand(terminal);
-      return terminal;
-    }
-    if (!result.output) {
-      terminal = await this.store.executionWorkspaces.failWorkspaceCommand({
-        clientInstanceId: command.clientInstanceId,
-        commandId: command.id,
-        leaseToken,
-        error: workspaceCommandError(
-          "WORKSPACE_COMMAND_RUNNER_ERROR",
-          "Workspace command runner did not produce an output",
-          "internal_error"
-        ),
-        failedAt: completedAt
-      });
-      await this.recordTerminalCommand(terminal);
-      return terminal;
-    }
-    terminal = await this.store.executionWorkspaces.completeWorkspaceCommand({
+    const held = {
       clientInstanceId: command.clientInstanceId,
       commandId: command.id,
-      leaseToken,
-      output: result.output,
-      completedAt
-    });
+      leaseToken
+    };
+    const completedAt = this.now();
+    const record = (commands: PlatformStores["executionWorkspaces"]): Promise<WorkspaceCommand> => {
+      if (result.cancelled) {
+        return commands.cancelClaimedWorkspaceCommand({
+          ...held,
+          reason: result.error?.message,
+          output: result.output,
+          cancelledAt: completedAt
+        });
+      }
+      if (result.error) {
+        return commands.failWorkspaceCommand({
+          ...held,
+          error: result.error,
+          output: result.output,
+          failedAt: completedAt
+        });
+      }
+      if (!result.output) {
+        return commands.failWorkspaceCommand({
+          ...held,
+          error: workspaceCommandError(
+            "WORKSPACE_COMMAND_RUNNER_ERROR",
+            "Workspace command runner did not produce an output",
+            "internal_error"
+          ),
+          failedAt: completedAt
+        });
+      }
+      return commands.completeWorkspaceCommand({
+        ...held,
+        output: result.output,
+        completedAt
+      });
+    };
+    const terminal = await (options.transaction
+      ? options.transaction((stores) => record(stores.executionWorkspaces))
+      : record(this.store.executionWorkspaces));
     await this.recordTerminalCommand(terminal);
     return terminal;
   }
@@ -246,25 +222,6 @@ export class LocalWorkspaceCommandRunner {
       }
     }
     return { removedCount, failedCount };
-  }
-
-  private async recordRunningCommand(command: WorkspaceCommand): Promise<void> {
-    await recordWorkspaceCommandLifecycleAudit({
-      auditRecorder: this.auditRecorder,
-      type: "workspace_command.running",
-      status: "success",
-      command,
-      metadata: {
-        workerId: this.workerId,
-        leaseExpiresAt: command.leaseExpiresAt ?? null
-      }
-    });
-    await emitWorkspaceCommandTelemetry(
-      this.telemetry,
-      workspaceCommandTelemetryEvent("running", command, {
-        workerId: this.workerId
-      })
-    );
   }
 
   private async recordTerminalCommand(command: WorkspaceCommand): Promise<void> {
@@ -734,20 +691,6 @@ export class LocalWorkspaceCommandRunner {
   }
 }
 
-export class LocalWorkspaceCommandResultSource implements WorkspaceCommandResultSource {
-  constructor(private readonly runner: LocalWorkspaceCommandRunner) {}
-
-  async resolveWorkspaceCommand(input: { command: WorkspaceCommand }): Promise<WorkspaceCommand> {
-    if (input.command.status !== "queued") {
-      return input.command;
-    }
-    const resolved = await this.runner.runNextCommand({
-      clientInstanceId: input.command.clientInstanceId
-    });
-    return resolved?.id === input.command.id ? resolved : input.command;
-  }
-}
-
 class WorkspaceRunnerFailure extends Error {
   constructor(
     readonly code: string,
@@ -856,8 +799,4 @@ function inferWorkspaceMimeType(path: string): string | undefined {
     return "image/jpeg";
   }
   return undefined;
-}
-
-function addMilliseconds(isoDate: string, milliseconds: number): string {
-  return new Date(new Date(isoDate).getTime() + milliseconds).toISOString();
 }

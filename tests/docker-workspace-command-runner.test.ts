@@ -1,4 +1,5 @@
 import { createTestInstance } from "./support/test-instance";
+import { inlineCommandResults } from "./support/workspace-command-jobs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +20,6 @@ import {
   createDockerRunInvocation,
   createLocalWorkspaceFileByteStore,
   DockerWorkspaceCommandProcessExecutor,
-  LocalWorkspaceCommandResultSource,
   LocalWorkspaceCommandRunner,
   WorkspaceCommandService,
   type DockerCommandClient,
@@ -262,7 +262,7 @@ async function createDockerHarness(input: {
   const service = new WorkspaceCommandService({
     store,
     objectStore: byteStore,
-    commandResults: new LocalWorkspaceCommandResultSource(runner)
+    commandResults: inlineCommandResults(store, { runner })
   });
   const context = createToolContext(
     clientInstanceId,

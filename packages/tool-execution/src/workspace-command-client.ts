@@ -1,10 +1,11 @@
 import {
   type EnqueueWorkspaceCommandInput,
   type ISODateString,
+  type PlatformStores,
   type WorkspaceCommand,
-  type WorkspaceCommandStore,
   isAppError
 } from "@vivd-catalyst/core";
+import { runWorkspaceCommandJob, workspaceCommandJobOptions } from "./workspace-command-kind";
 
 const DEFAULT_RESULT_POLL_INTERVAL_MS = 500;
 
@@ -49,21 +50,23 @@ export interface WorkspaceCommandClient {
 }
 
 export interface WorkspaceCommandClientOptions {
-  store: Pick<
-    WorkspaceCommandStore,
-    "enqueueWorkspaceCommand" | "getWorkspaceCommand" | "requestWorkspaceCommandCancellation"
-  >;
+  /** The stores of the process. The row and its job are written in one transaction of them. */
+  stores: Pick<PlatformStores, "executionWorkspaces" | "transaction">;
   /** The longest wait for a result. Zero or less returns at once; unset waits without a limit. */
   resultWaitMs?: number;
   resultPollIntervalMs?: number;
   now: () => ISODateString;
 }
 
-/** Queues commands in the workspace command table and polls it for the result. */
+/**
+ * Queues a command as its row and the `workspace.command` job that runs it, and polls the row
+ * for the result. A cancellation is written to the row, where the running job looks for it.
+ */
 export function createWorkspaceCommandClient(
   options: WorkspaceCommandClientOptions
 ): WorkspaceCommandClient {
-  const { store, resultWaitMs, now } = options;
+  const { stores, resultWaitMs, now } = options;
+  const store = stores.executionWorkspaces;
   const resultPollIntervalMs = options.resultPollIntervalMs ?? DEFAULT_RESULT_POLL_INTERVAL_MS;
 
   async function requestCommandCancellation(
@@ -105,9 +108,18 @@ export function createWorkspaceCommandClient(
 
   return {
     async enqueue(command) {
-      return {
-        command: await store.enqueueWorkspaceCommand({ ...command, queuedAt: now() })
-      };
+      return stores.transaction(async (tx) => {
+        const queued = await tx.executionWorkspaces.enqueueWorkspaceCommand({
+          ...command,
+          queuedAt: now()
+        });
+        await tx.jobs.enqueue(
+          runWorkspaceCommandJob,
+          { commandId: queued.id },
+          { clientInstanceId: queued.clientInstanceId, ...workspaceCommandJobOptions(queued) }
+        );
+        return { command: queued };
+      });
     },
 
     async await({ command }, wait) {

@@ -266,20 +266,23 @@ describe("Postgres execution workspace store", () => {
       total: 1
     });
 
-    const claimed = await secondStore.executionWorkspaces.claimNextWorkspaceCommand({
+    const claim = await secondStore.executionWorkspaces.claimWorkspaceCommand({
       clientInstanceId: fixture.clientInstanceId,
-      workerId: "worker-a",
+      commandId: command.id,
+      leaseOwnerId: "worker-a",
       leaseToken: "lease-a",
-      now: "2026-06-29T10:21:00.000Z",
-      leaseExpiresAt: "2026-06-29T10:22:00.000Z"
+      leaseMs: 60_000
     });
-    expect(claimed).toMatchObject({
-      id: command.id,
-      status: "running",
-      leaseOwner: "worker-a",
-      leaseToken: "lease-a",
-      attempts: 1,
-      startedAt: "2026-06-29T10:21:00.000Z"
+    expect(claim).toMatchObject({
+      status: "claimed",
+      row: {
+        id: command.id,
+        status: "running",
+        leaseOwner: "worker-a",
+        leaseToken: "lease-a",
+        attempts: 1,
+        startedAt: expect.any(String)
+      }
     });
     await expect(
       store.executionWorkspaces.countActiveWorkspaceCommands({
@@ -377,11 +380,7 @@ describe("Postgres execution workspace store", () => {
 
   it("fails a claimed command through a lease-token guarded update", async () => {
     const fixture = await createWorkspaceFixture(store);
-    const command = await enqueueAndClaim(store, fixture, {
-      leaseToken: "lease-fail",
-      now: "2026-06-29T10:30:00.000Z",
-      leaseExpiresAt: "2026-06-29T10:31:00.000Z"
-    });
+    const command = await enqueueAndClaim(store, fixture, "lease-fail");
 
     await expect(
       store.executionWorkspaces.failWorkspaceCommand({
@@ -452,11 +451,7 @@ describe("Postgres execution workspace store", () => {
       completedAt: "2026-06-29T10:40:05.000Z"
     });
 
-    const claimed = await enqueueAndClaim(store, fixture, {
-      leaseToken: "lease-cancel",
-      now: "2026-06-29T10:41:00.000Z",
-      leaseExpiresAt: "2026-06-29T10:42:00.000Z"
-    });
+    const claimed = await enqueueAndClaim(store, fixture, "lease-cancel");
     const requested = await store.executionWorkspaces.requestWorkspaceCommandCancellation({
       clientInstanceId: fixture.clientInstanceId,
       commandId: claimed.id,
@@ -542,11 +537,7 @@ describe("Postgres execution workspace store", () => {
 
   it("does not resurrect a terminal command when cancellation races with completion", async () => {
     const fixture = await createWorkspaceFixture(store);
-    const command = await enqueueAndClaim(store, fixture, {
-      leaseToken: "lease-complete-race",
-      now: "2026-06-29T10:46:00.000Z",
-      leaseExpiresAt: "2026-06-29T10:47:00.000Z"
-    });
+    const command = await enqueueAndClaim(store, fixture, "lease-complete-race");
 
     let cancellation:
       | Promise<
@@ -608,54 +599,6 @@ describe("Postgres execution workspace store", () => {
       completedAt: "2026-06-29T10:46:04.000Z"
     });
   });
-
-  it("recovers stale claimed commands as failed", async () => {
-    const fixture = await createWorkspaceFixture(store);
-    const stale = await enqueueAndClaim(store, fixture, {
-      leaseToken: "lease-stale",
-      now: "2026-06-29T10:50:00.000Z",
-      leaseExpiresAt: "2026-06-29T10:51:00.000Z"
-    });
-    const active = await enqueueAndClaim(store, fixture, {
-      leaseToken: "lease-active",
-      now: "2026-06-29T10:52:00.000Z",
-      leaseExpiresAt: "2026-06-29T10:55:00.000Z"
-    });
-
-    const recovered = await store.executionWorkspaces.recoverStaleWorkspaceCommands({
-      clientInstanceId: fixture.clientInstanceId,
-      staleLeaseExpiredBefore: "2026-06-29T10:52:00.000Z",
-      recoveredAt: "2026-06-29T10:52:05.000Z",
-      error: {
-        code: "WORKSPACE_COMMAND_STALE",
-        message: "Workspace command lease expired",
-        category: "stale_lease"
-      },
-      limit: 10
-    });
-
-    expect(recovered).toHaveLength(1);
-    expect(recovered[0]).toMatchObject({
-      id: stale.id,
-      status: "failed",
-      error: {
-        code: "WORKSPACE_COMMAND_STALE",
-        category: "stale_lease"
-      },
-      leaseToken: undefined,
-      completedAt: "2026-06-29T10:52:05.000Z"
-    });
-
-    await expect(
-      store.executionWorkspaces.getWorkspaceCommand({
-        clientInstanceId: fixture.clientInstanceId,
-        commandId: active.id
-      })
-    ).resolves.toMatchObject({
-      status: "running",
-      leaseToken: "lease-active"
-    });
-  });
 });
 
 async function createWorkspaceFixture(store: PlatformStores): Promise<{
@@ -701,31 +644,26 @@ async function enqueueAndClaim(
     ownerUserId: string;
     workspace: ExecutionWorkspace;
   },
-  lease: {
-    leaseToken: string;
-    now: string;
-    leaseExpiresAt: string;
-  }
+  leaseToken: string
 ) {
-  await store.executionWorkspaces.enqueueWorkspaceCommand({
+  const queued = await store.executionWorkspaces.enqueueWorkspaceCommand({
     clientInstanceId: fixture.clientInstanceId,
     workspaceId: fixture.workspace.id,
     ownerUserId: fixture.ownerUserId,
     command: "node script.js",
-    limits: { timeoutSeconds: 60 },
-    queuedAt: lease.now
+    limits: { timeoutSeconds: 60 }
   });
-  const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
+  const claim = await store.executionWorkspaces.claimWorkspaceCommand({
     clientInstanceId: fixture.clientInstanceId,
-    workerId: "worker-test",
-    leaseToken: lease.leaseToken,
-    now: lease.now,
-    leaseExpiresAt: lease.leaseExpiresAt
+    commandId: queued.id,
+    leaseOwnerId: "worker-test",
+    leaseToken,
+    leaseMs: 5 * 60_000
   });
-  if (!claimed) {
+  if (claim.status !== "claimed") {
     throw new Error("Expected workspace command to be claimed");
   }
-  return claimed;
+  return claim.row;
 }
 
 async function waitForBlockedWorkspaceCommandUpdate(sql: Sql): Promise<void> {

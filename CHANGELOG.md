@@ -484,6 +484,40 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     `claimNextArtifactPreviewJob`, `recoverStaleArtifactPreviewJobs` and
     `claimNextQueuedConversationAttachment`; a row is claimed by id with
     `claimArtifactPreviewJob` and `claimConversationAttachmentForPreprocessing`.
+- **Jobs (operator-relevant, breaking for integrators):** workspace commands run on the job
+  executor, as the kind `workspace.command` (one attempt, a lease of 10 minutes, one command
+  per workspace at a time, so two commands of a workspace run in the order they were queued).
+  The command row stays the record a tool reads; the row and its job are written in one
+  transaction. No migration. A command is never run twice: when its worker dies, the command
+  fails with the code `WORKSPACE_COMMAND_WORKER_LOST` and the category `worker_lost`, in place
+  of `WORKSPACE_COMMAND_STALE`, once the lease has run out. What `workspace.exec` returns is
+  unchanged.
+  - A cancelled command ends within about a second: the job reads its row once a second and
+    stops the process group. On SIGTERM a running command is recorded as cancelled with the
+    reason "Workspace command worker is stopping" and is not run again.
+  - The command worker reads only `executionWorkspaces.worker.concurrency`, which is how many
+    commands one process runs at once. `pollIntervalMs`, `leaseDurationMs`,
+    `heartbeatIntervalMs`, `cancellationPollIntervalMs`, `staleRecoveryIntervalMs` and
+    `staleRecoveryLimit` under `executionWorkspaces.worker` are still accepted and no longer
+    read. The lease is renewed every third of its length, so a worker that died is noticed
+    after up to 10 minutes; until now it was noticed after the configured lease.
+  - Temporary command state is removed by the schedule `workspace_command.clean_temp_state`,
+    which the command worker serves. With several command workers on separate disks one tick
+    cleans one host.
+  - This release can run beside the previous one and be rolled back to it. A job copies its
+    lease onto the lease columns of its command row, so a worker of the previous release
+    leaves the row alone; the job leaves a row alone while a worker of the previous release
+    holds it, and fails the command as lost when that lease runs out; and the schedule
+    `workspace_command.adopt_legacy` gives every unfinished command without a job its job
+    every 15 seconds, which covers commands the previous release's API queues. A job that
+    waits for a worker of the previous release holds one slot of the new worker. The copy,
+    the schedule and the lease columns go in a later release.
+  - `@vivd-catalyst/tool-execution` exports `createWorkspaceCommandJobs` in place of the class
+    `WorkspaceCommandWorker`, and the client and the tools take a store with `transaction`.
+    `ClientInstanceWorkspaceCommandWorker.worker` is a `JobWorker` and its `stop()` takes no
+    argument. The command store loses `claimNextWorkspaceCommand`,
+    `heartbeatWorkspaceCommand` and `recoverStaleWorkspaceCommands`; a command is claimed by
+    id with `claimWorkspaceCommand`.
   - `@vivd-catalyst/capability-sdk` exports `defineJobKind` and `defineJobHandler`. The
     capability context has `jobs`, to enqueue, and `transaction`, to write a record and
     enqueue its job together. An attachment handler may implement `adoptLegacyAttachments`

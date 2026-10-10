@@ -10,12 +10,12 @@ Execution workspaces give agents a persistent conversation-scoped file area and 
 The production-shaped deployment has these roles:
 
 - chat API: validates tool calls, enqueues workspace commands, exposes promoted artifacts, and never runs shell commands
-- workspace command worker: claims command rows, hydrates workspace files, starts a short-lived runner, syncs changed files, and records terminal status
+- workspace command worker: runs the job of each command on the job executor, hydrates workspace files, starts a short-lived runner, syncs changed files, and records terminal status
 - runner container: executes the agent-authored command with no platform secrets and no network by default
 - object storage: stores workspace file bytes and promoted artifact bytes
 - Postgres: stores workspace, file manifest, command queue, leases, audit events, and managed artifact records
 
-Commands wait in the durable Postgres queue until worker capacity is available. `executionWorkspaces.worker.concurrency` is the deployment control for simultaneous runner containers; queued commands are not rejected through separate per-user or global admission caps. Size worker concurrency for the host, and use queue wait time as the signal to add execution capacity.
+Commands wait in the durable Postgres queue until worker capacity is available. Each command is a job of the kind `workspace.command`; one workspace runs one command at a time, in the order they were queued. A command runs once: when its worker dies, the command fails with the category `worker_lost` after its lease of 10 minutes and is not started again. `executionWorkspaces.worker.concurrency` is the deployment control for simultaneous runner containers; queued commands are not rejected through separate per-user or global admission caps. Size worker concurrency for the host, and use queue wait time as the signal to add execution capacity.
 
 ## Runner Image
 
@@ -62,7 +62,7 @@ Users should only receive promoted artifacts. Internal workspace files and logs 
 For command failures:
 
 - check `workspace_command.failed` and `workspace_command.timed_out` audit events
-- check worker logs for queue counts and stale recovery
+- check worker logs for queue counts and for commands that failed as `worker_lost`
 - verify the workspace command worker is running
 - verify the runner image tag matches the release
 - verify object storage root or credentials are writable by the worker

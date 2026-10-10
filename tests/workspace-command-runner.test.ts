@@ -1,5 +1,6 @@
 import { required } from "./support/assertions";
 import { createTestInstance } from "./support/test-instance";
+import { inlineCommandResults, runQueuedCommands } from "./support/workspace-command-jobs";
 import { createHash } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,7 +25,7 @@ import {
 import {
   createLocalWorkspaceFileByteStore,
   createObjectStoreWorkspaceFileByteStore,
-  LocalWorkspaceCommandResultSource,
+  createWorkspaceCommandClient,
   LocalWorkspaceCommandRunner,
   normalizeWorkspaceFilePath,
   WorkspaceCommandService,
@@ -571,9 +572,13 @@ describe("local workspace command runner", () => {
       byteSize: bytes.byteLength,
       checksum: checksum(bytes)
     });
-    await traversal.enqueue("true");
-    const traversalResult = await traversal.runner.runNextCommand({
-      clientInstanceId: traversal.clientInstanceId
+    const traversalCommand = await traversal.enqueue("true");
+    await runQueuedCommands(traversal.store, traversal.clientInstanceId, {
+      runner: traversal.runner
+    });
+    const traversalResult = await traversal.store.executionWorkspaces.getWorkspaceCommand({
+      clientInstanceId: traversal.clientInstanceId,
+      commandId: traversalCommand.id
     });
     expect(traversalResult).toMatchObject({
       status: "failed",
@@ -1144,7 +1149,7 @@ async function createRunnerHarness(
     store,
     objectStore: byteStore,
     commandResults:
-      input.useResultSource === false ? undefined : new LocalWorkspaceCommandResultSource(runner),
+      input.useResultSource === false ? undefined : inlineCommandResults(store, { runner }),
     ...(auditRecorder ? { auditRecorder } : {}),
     ...(input.telemetry ? { telemetry: input.telemetry } : {}),
     limits: input.limits
@@ -1192,7 +1197,10 @@ async function createRunnerHarness(
     },
     async enqueue(command: string, limits: Partial<WorkspaceCommandLimits> = {}) {
       const workspace = await ensureWorkspace();
-      return store.executionWorkspaces.enqueueWorkspaceCommand({
+      const queued = await createWorkspaceCommandClient({
+        stores: store,
+        now: () => new Date().toISOString()
+      }).enqueue({
         clientInstanceId,
         workspaceId: workspace.id,
         ownerUserId,
@@ -1206,6 +1214,7 @@ async function createRunnerHarness(
           ...limits
         }
       });
+      return queued.command;
     },
     async commandExecutionDirectories() {
       try {

@@ -14,18 +14,20 @@ import {
   type ExecutionWorkspace,
   type ExecutionWorkspaceId,
   type FailWorkspaceCommandInput,
-  type HeartbeatWorkspaceCommandInput,
   type ExecutionWorkspaceCleanupTarget,
   type ExecutionWorkspaceDeletionSummary,
   type ListExecutionWorkspaceCleanupTargetsInput,
   type ListExecutionWorkspaceObjectsForDeletionInput,
   type MarkExecutionWorkspaceDeletedInput,
-  type RecoverStaleWorkspaceCommandsInput,
+  type RenewClaimedWorkspaceCommandLeaseInput,
   type RequestWorkspaceCommandCancellationInput,
+  type SubjectRowClaim,
   type UpsertWorkspaceFileInput,
   type WorkspaceCommand,
   type WorkspaceCommandId,
   type WorkspaceFile,
+  asExecutionWorkspaceId,
+  asWorkspaceCommandId,
   createPlatformId
 } from "@vivd-catalyst/core";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
@@ -373,54 +375,112 @@ export async function countActiveWorkspaceCommands(
   return counts;
 }
 
-export async function claimNextWorkspaceCommand(
+/**
+ * Takes a command by id for the executor job that drives it and writes the job's lease onto the
+ * row's lease columns, which a worker of the previous release reads. A queued row is taken, and
+ * a running one that nobody holds: its lease ran out, or `leaseOwnerId` already holds it, which
+ * is an earlier attempt of the same job. `attempts` counts every claim, so a row that comes back
+ * with more than one ran before.
+ */
+export async function claimWorkspaceCommand(
   db: PostgresConnection,
   input: ClaimWorkspaceCommandInput
-): Promise<WorkspaceCommand | undefined> {
-  const claimed = await db.transaction(async (tx) => {
-    const rows = (await tx.execute(drizzleSql<{ id: string }>`
-      with candidate as (
-        select wc.id
-        from workspace_commands wc
-        join execution_workspaces ew on ew.id = wc.workspace_id
-        where wc.client_instance_id = ${input.clientInstanceId}
-          and wc.status = 'queued'
-          and ew.status = 'active'
-        order by wc.queued_at asc, wc.id asc
-        limit 1
-        for update skip locked
+): Promise<SubjectRowClaim<WorkspaceCommand>> {
+  const ofRow = and(
+    eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
+    eq(workspaceCommands.id, input.commandId)
+  );
+  const [claimed] = await db
+    .update(workspaceCommands)
+    .set({
+      status: "running",
+      leaseOwner: input.leaseOwnerId,
+      leaseToken: input.leaseToken,
+      leaseExpiresAt: leaseExpiry(input.leaseMs),
+      heartbeatAt: drizzleSql`now()`,
+      startedAt: drizzleSql`coalesce(${workspaceCommands.startedAt}, now())`,
+      attempts: drizzleSql`${workspaceCommands.attempts} + 1`,
+      error: null,
+      updatedAt: drizzleSql`now()`
+    })
+    .where(
+      and(
+        ofRow,
+        drizzleSql`(
+          ${workspaceCommands.status} = 'queued'
+          or (
+            ${workspaceCommands.status} in ('running', 'cancelling')
+            and (
+              ${workspaceCommands.leaseExpiresAt} is null
+              or ${workspaceCommands.leaseExpiresAt} <= now()
+              or ${workspaceCommands.leaseOwner} = ${input.leaseOwnerId}
+            )
+          )
+        )`
       )
-      update workspace_commands wc
-      set status = 'running',
-          lease_owner = ${input.workerId},
-          lease_token = ${input.leaseToken},
-          lease_expires_at = ${input.leaseExpiresAt}::timestamptz,
-          heartbeat_at = ${input.now}::timestamptz,
-          started_at = coalesce(wc.started_at, ${input.now}::timestamptz),
-          attempts = wc.attempts + 1,
-          error = null,
-          updated_at = ${input.now}::timestamptz
-      from candidate
-      where wc.id = candidate.id
-      returning wc.id
-    `)) as unknown as Array<{ id: string }>;
-    const commandId = rows[0]?.id;
-    if (!commandId) {
-      return undefined;
-    }
-    const [row] = await tx
-      .select()
-      .from(workspaceCommands)
-      .where(
-        and(
-          eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
-          eq(workspaceCommands.id, commandId)
-        )
+    )
+    .returning();
+  if (claimed) return { status: "claimed", row: mapWorkspaceCommand(claimed) };
+  const [current] = await db
+    .select({ status: workspaceCommands.status })
+    .from(workspaceCommands)
+    .where(ofRow)
+    .limit(1);
+  return current?.status === "running" || current?.status === "cancelling"
+    ? { status: "held" }
+    : { status: "finished" };
+}
+
+export async function renewClaimedWorkspaceCommandLease(
+  db: PostgresConnection,
+  input: RenewClaimedWorkspaceCommandLeaseInput
+): Promise<boolean> {
+  const rows = await db
+    .update(workspaceCommands)
+    .set({
+      heartbeatAt: drizzleSql`now()`,
+      leaseExpiresAt: leaseExpiry(input.leaseMs),
+      updatedAt: drizzleSql`now()`
+    })
+    .where(claimedCommandWhere(input, "running", "cancelling"))
+    .returning({ id: workspaceCommands.id });
+  return rows.length > 0;
+}
+
+/**
+ * Transition release only: the commands that are not finished and have no queued or running job
+ * of `jobKind` under the command's dedupe key, oldest first.
+ */
+export async function listWorkspaceCommandsWithoutJob(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; jobKind: string; limit: number }
+): Promise<Array<Pick<WorkspaceCommand, "id" | "workspaceId">>> {
+  const rows = await db
+    .select({ id: workspaceCommands.id, workspaceId: workspaceCommands.workspaceId })
+    .from(workspaceCommands)
+    .where(
+      and(
+        eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
+        inArray(workspaceCommands.status, ["queued", "running", "cancelling"]),
+        drizzleSql`not exists (
+          select 1 from platform_jobs job
+          where job.client_instance_id = ${workspaceCommands.clientInstanceId}
+            and job.kind = ${input.jobKind}
+            and job.dedupe_key = ${input.jobKind} || ':' || ${workspaceCommands.id}
+            and job.status in ('queued', 'running')
+        )`
       )
-      .limit(1);
-    return row;
-  });
-  return claimed ? mapWorkspaceCommand(claimed) : undefined;
+    )
+    .orderBy(asc(workspaceCommands.queuedAt), asc(workspaceCommands.id))
+    .limit(input.limit);
+  return rows.map((row) => ({
+    id: asWorkspaceCommandId(row.id),
+    workspaceId: asExecutionWorkspaceId(row.workspaceId)
+  }));
+}
+
+function leaseExpiry(leaseMs: number) {
+  return drizzleSql`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
 }
 
 export async function completeWorkspaceCommand(
@@ -556,74 +616,6 @@ export async function cancelClaimedWorkspaceCommand(
     throw new AppError("CONFLICT", "Workspace command lease is no longer active");
   }
   return mapWorkspaceCommand(row);
-}
-
-export async function heartbeatWorkspaceCommand(
-  db: PostgresConnection,
-  input: HeartbeatWorkspaceCommandInput
-): Promise<WorkspaceCommand> {
-  const heartbeatAt = new Date(input.heartbeatAt);
-  const leaseExpiresAt = new Date(input.leaseExpiresAt);
-  const [row] = await db
-    .update(workspaceCommands)
-    .set({
-      heartbeatAt,
-      leaseExpiresAt,
-      updatedAt: heartbeatAt
-    })
-    .where(claimedCommandWhere(input, "running", "cancelling"))
-    .returning();
-  if (!row) {
-    throw new AppError("CONFLICT", "Workspace command lease is no longer active");
-  }
-  return mapWorkspaceCommand(row);
-}
-
-export async function recoverStaleWorkspaceCommands(
-  db: PostgresConnection,
-  input: RecoverStaleWorkspaceCommandsInput
-): Promise<WorkspaceCommand[]> {
-  if (input.limit <= 0) {
-    return [];
-  }
-  const recoveredAt = new Date(input.recoveredAt);
-  return db.transaction(async (tx) => {
-    const staleRows = (await tx.execute(drizzleSql<{ id: string }>`
-      select id
-      from workspace_commands
-      where client_instance_id = ${input.clientInstanceId}
-        and status in ('running', 'cancelling')
-        and lease_expires_at is not null
-        and lease_expires_at < ${input.staleLeaseExpiredBefore}::timestamptz
-      order by lease_expires_at asc, id asc
-      limit ${input.limit}
-      for update skip locked
-    `)) as unknown as Array<{ id: string }>;
-    const commandIds = staleRows.map((row) => row.id);
-    if (commandIds.length === 0) {
-      return [];
-    }
-    const rows = await tx
-      .update(workspaceCommands)
-      .set({
-        status: "failed",
-        error: input.error,
-        leaseOwner: null,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        heartbeatAt: null,
-        completedAt: recoveredAt,
-        updatedAt: recoveredAt
-      })
-      .where(
-        and(
-          eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
-          inArray(workspaceCommands.id, commandIds)
-        )
-      )
-      .returning();
-    return rows.map(mapWorkspaceCommand);
-  });
 }
 
 export async function listExecutionWorkspaceCleanupTargets(

@@ -12,7 +12,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   cancelClaimedWorkspaceCommand as cancelClaimedPostgresWorkspaceCommand,
-  claimNextWorkspaceCommand as claimNextPostgresWorkspaceCommand,
+  claimWorkspaceCommand as claimPostgresWorkspaceCommand,
   completeWorkspaceCommand as completePostgresWorkspaceCommand,
   countActiveWorkspaceCommands as countActivePostgresWorkspaceCommands,
   deleteWorkspaceFile as deletePostgresWorkspaceFile,
@@ -22,12 +22,12 @@ import {
   getExecutionWorkspace as getPostgresExecutionWorkspace,
   getExecutionWorkspaceForConversation as getPostgresExecutionWorkspaceForConversation,
   getWorkspaceCommand as getPostgresWorkspaceCommand,
-  heartbeatWorkspaceCommand as heartbeatPostgresWorkspaceCommand,
   listExecutionWorkspaceCleanupTargets as listPostgresExecutionWorkspaceCleanupTargets,
   listExecutionWorkspaceObjectsForDeletion as listPostgresExecutionWorkspaceObjectsForDeletion,
+  listWorkspaceCommandsWithoutJob as listPostgresWorkspaceCommandsWithoutJob,
   listWorkspaceFiles as listPostgresWorkspaceFiles,
   markExecutionWorkspaceDeleted as markPostgresExecutionWorkspaceDeleted,
-  recoverStaleWorkspaceCommands as recoverStalePostgresWorkspaceCommands,
+  renewClaimedWorkspaceCommandLease as renewClaimedPostgresWorkspaceCommandLease,
   requestWorkspaceCommandCancellation as requestPostgresWorkspaceCommandCancellation,
   upsertWorkspaceFile as upsertPostgresWorkspaceFile
 } from "../postgres-execution-workspace-operations";
@@ -84,10 +84,20 @@ export function createPostgresExecutionWorkspacesStore(
     }): Promise<WorkspaceCommand | undefined> {
       return getPostgresWorkspaceCommand(db, input);
     },
-    async claimNextWorkspaceCommand(
-      input: Parameters<WorkspaceCommandStore["claimNextWorkspaceCommand"]>[0]
-    ): Promise<WorkspaceCommand | undefined> {
-      return claimNextPostgresWorkspaceCommand(db, input);
+    async claimWorkspaceCommand(
+      input: Parameters<WorkspaceCommandStore["claimWorkspaceCommand"]>[0]
+    ) {
+      return claimPostgresWorkspaceCommand(db, input);
+    },
+    async renewClaimedWorkspaceCommandLease(
+      input: Parameters<WorkspaceCommandStore["renewClaimedWorkspaceCommandLease"]>[0]
+    ) {
+      return renewClaimedPostgresWorkspaceCommandLease(db, input);
+    },
+    async listWorkspaceCommandsWithoutJob(
+      input: Parameters<WorkspaceCommandStore["listWorkspaceCommandsWithoutJob"]>[0]
+    ) {
+      return listPostgresWorkspaceCommandsWithoutJob(db, input);
     },
     async completeWorkspaceCommand(
       input: Parameters<WorkspaceCommandStore["completeWorkspaceCommand"]>[0]
@@ -108,16 +118,6 @@ export function createPostgresExecutionWorkspacesStore(
       input: Parameters<WorkspaceCommandStore["cancelClaimedWorkspaceCommand"]>[0]
     ): Promise<WorkspaceCommand> {
       return cancelClaimedPostgresWorkspaceCommand(db, input);
-    },
-    async heartbeatWorkspaceCommand(
-      input: Parameters<WorkspaceCommandStore["heartbeatWorkspaceCommand"]>[0]
-    ): Promise<WorkspaceCommand> {
-      return heartbeatPostgresWorkspaceCommand(db, input);
-    },
-    async recoverStaleWorkspaceCommands(
-      input: Parameters<WorkspaceCommandStore["recoverStaleWorkspaceCommands"]>[0]
-    ): Promise<WorkspaceCommand[]> {
-      return recoverStalePostgresWorkspaceCommands(db, input);
     },
     async listExecutionWorkspaceCleanupTargets(
       input: Parameters<ExecutionWorkspaceCleanupStore["listExecutionWorkspaceCleanupTargets"]>[0]

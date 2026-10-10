@@ -12,6 +12,7 @@ export * from "./workspace-paths";
 export * from "./workspace-file-bytes";
 export * from "./workspace-command-client";
 export * from "./workspace-command-executor";
+export * from "./workspace-command-kind";
 export * from "./workspace-command-runner";
 export * from "./workspace-command-telemetry";
 export * from "./docker-workspace-command-runner";

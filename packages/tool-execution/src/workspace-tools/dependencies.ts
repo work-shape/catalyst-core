@@ -39,7 +39,8 @@ export interface WorkspaceCommandResultSource {
 }
 
 export interface WorkspaceCommandServiceOptions {
-  store: Pick<PlatformStores, "files" | "executionWorkspaces">;
+  /** The stores of the process. A command and its job are queued in one transaction of them. */
+  store: Pick<PlatformStores, "files" | "executionWorkspaces" | "transaction">;
   objectStore?: WorkspaceObjectStore;
   fileStore?: WorkspaceFileByteStore;
   sourceFileReader?: WorkspaceSourceFileReader;
@@ -73,7 +74,7 @@ export function resolveWorkspaceToolDependencies(
   return {
     store: options.store,
     commands: createWorkspaceCommandClient({
-      store: options.store.executionWorkspaces,
+      stores: options.store,
       resultWaitMs: options.execResultWaitMs,
       resultPollIntervalMs: options.execResultPollIntervalMs,
       now

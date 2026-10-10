@@ -1,6 +1,11 @@
 import { createLogger } from "./logger";
 import { tmpdir } from "node:os";
-import { AppError, StoreBackedAuditRecorder, type SecretResolver } from "@vivd-catalyst/core";
+import {
+  AppError,
+  StoreBackedAuditRecorder,
+  type JobWorker,
+  type SecretResolver
+} from "@vivd-catalyst/core";
 import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile,
@@ -8,8 +13,8 @@ import {
 } from "@vivd-catalyst/config-schema";
 import {
   createConsoleWorkspaceCommandTelemetry,
-  LocalWorkspaceCommandRunner,
-  WorkspaceCommandWorker
+  createWorkspaceCommandJobs,
+  LocalWorkspaceCommandRunner
 } from "@vivd-catalyst/tool-execution";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
@@ -19,6 +24,7 @@ import {
   SANDBOX_PATH,
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
+import { createJobWorker } from "./job-worker";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
@@ -31,9 +37,12 @@ export interface CreateClientInstanceWorkspaceCommandWorkerInput {
 
 export interface ClientInstanceWorkspaceCommandWorker {
   readonly config: ClientInstanceConfig;
-  readonly worker: WorkspaceCommandWorker;
+  /** The job worker that serves `workspace.command`. */
+  readonly worker: JobWorker;
+  /** Starts the worker and resolves once `stop` has ended its commands. */
   runUntilStopped(): Promise<void>;
-  stop(input?: { cancelActive?: boolean; reason?: string }): Promise<void>;
+  /** Cancels the running commands, records them as cancelled and stops claiming. */
+  stop(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -74,32 +83,46 @@ export async function createClientInstanceWorkspaceCommandWorker(
     store,
     byteStore,
     tempRootDirectory: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
-    leaseDurationMs: config.executionWorkspaces.worker.leaseDurationMs,
     reuseWorkspaceDirectories: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs > 0,
     processExecutor,
     auditRecorder,
     telemetry
   });
-  const worker = new WorkspaceCommandWorker({
+  const workerId = env.WORKSPACE_COMMAND_WORKER_ID;
+  const worker = createJobWorker({
+    stores: store,
     clientInstanceId,
-    store: store.executionWorkspaces,
-    runner,
-    workerId: env.WORKSPACE_COMMAND_WORKER_ID,
-    ...config.executionWorkspaces.worker,
-    tempStateCleanupIntervalMs: config.executionWorkspaces.cleanup.tempStateCleanupIntervalMs,
-    hydratedWorkspaceIdleTtlMs: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs,
-    auditRecorder,
-    telemetry
+    // The worker id names this process in the log lines of its jobs.
+    logger: workerId ? logger.child({ workerId }) : logger,
+    ...createWorkspaceCommandJobs({
+      stores: store,
+      runner,
+      workerId,
+      slots: config.executionWorkspaces.worker.concurrency,
+      tempStateCleanupIntervalMs: config.executionWorkspaces.cleanup.tempStateCleanupIntervalMs,
+      hydratedWorkspaceIdleTtlMs: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs,
+      auditRecorder,
+      telemetry
+    })
+  });
+  let stopped: (() => void) | undefined;
+  const untilStopped = new Promise<void>((resolve) => {
+    stopped = resolve;
   });
 
   return {
     config,
     worker,
     runUntilStopped() {
-      return worker.runUntilStopped();
+      worker.start();
+      return untilStopped;
     },
-    stop(stopInput = {}) {
-      return worker.stop(stopInput);
+    async stop() {
+      try {
+        await worker.stop();
+      } finally {
+        stopped?.();
+      }
     },
     async close() {
       await store.close?.();
@@ -137,15 +160,11 @@ export async function runClientInstanceWorkspaceCommandWorker(
       return;
     }
     stopping = true;
-    service
-      .stop({
-        cancelActive: true,
-        reason: `Received ${signal}`
-      })
-      .catch((error: unknown) => {
-        createLogger().error({ error }, "Worker shutdown failed");
-        process.exitCode = 1;
-      });
+    createLogger().info({ signal }, "Workspace command worker is stopping");
+    service.stop().catch((error: unknown) => {
+      createLogger().error({ error }, "Worker shutdown failed");
+      process.exitCode = 1;
+    });
   };
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);

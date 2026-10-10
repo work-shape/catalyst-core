@@ -1,5 +1,6 @@
 import { withTestModelGateway, type FakeModelProvider } from "./support/model-gateway";
 import { createTestInstance } from "./support/test-instance";
+import { inlineCommandResults } from "./support/workspace-command-jobs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,7 +13,6 @@ import {
   createLocalWorkspaceFileByteStore,
   createWorkspaceToolDefinitions,
   InProcessToolExecution,
-  LocalWorkspaceCommandResultSource,
   LocalWorkspaceCommandRunner,
   ToolRegistry,
   WorkspaceCommandService
@@ -81,7 +81,7 @@ describe("agent workspace file e2e", () => {
             return { ...sourceFile, byteSize: sourceFile.bytes.byteLength };
           }
         },
-        commandResults: new LocalWorkspaceCommandResultSource(runner),
+        commandResults: inlineCommandResults(store, { runner }),
         execResultWaitMs: 5000,
         execResultPollIntervalMs: 10
       });

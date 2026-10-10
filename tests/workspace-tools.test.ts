@@ -12,7 +12,6 @@ import {
 import {
   LocalWorkspaceCommandRunner,
   shapeWorkspaceCommandOutput,
-  WorkspaceCommandWorker,
   type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
 import {
@@ -20,6 +19,7 @@ import {
   settleOnFakeClock,
   useFakeClockBesidePostgres
 } from "./support/fake-clock";
+import { createCommandWorker } from "./support/workspace-command-jobs";
 import { createWorkspaceHarness, encode } from "./support/workspace-tools-harness";
 
 describe("workspace tools", () => {
@@ -389,14 +389,8 @@ describe("workspace tools", () => {
       byteStore: harness.objectStore,
       tempRootDirectory: tempRoot
     });
-    const worker = new WorkspaceCommandWorker({
-      clientInstanceId: harness.clientInstanceId,
-      store: harness.store.executionWorkspaces,
-      runner,
-      pollIntervalMs: 10,
-      tempStateCleanupIntervalMs: 60_000
-    });
-    const workerLoop = worker.start();
+    const worker = createCommandWorker(harness.store, harness.clientInstanceId, { runner });
+    worker.start();
 
     try {
       const result = await harness.runTool("workspace.exec", {
@@ -463,8 +457,7 @@ describe("workspace tools", () => {
         changedFiles: []
       });
     } finally {
-      await worker.stop({ cancelActive: true, reason: "test complete" });
-      await workerLoop;
+      await worker.stop();
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
@@ -492,14 +485,14 @@ describe("workspace tools", () => {
                       if (!current || reads < 8) {
                         return current;
                       }
-                      const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
+                      const claimed = await store.executionWorkspaces.claimWorkspaceCommand({
                         clientInstanceId: input.clientInstanceId,
-                        workerId: "queued-wait-worker",
+                        commandId: input.commandId,
+                        leaseOwnerId: "queued-wait-worker",
                         leaseToken,
-                        now: "2026-06-29T12:00:07.000Z",
-                        leaseExpiresAt: "2026-06-29T12:05:07.000Z"
+                        leaseMs: 5 * 60 * 1000
                       });
-                      if (!claimed) {
+                      if (claimed.status !== "claimed") {
                         throw new Error("Expected queued command to be claimable");
                       }
                       return store.executionWorkspaces.completeWorkspaceCommand({
@@ -513,7 +506,7 @@ describe("workspace tools", () => {
                             stderr: "",
                             durationMs: 17
                           },
-                          claimed.limits
+                          claimed.row.limits
                         ),
                         completedAt: "2026-06-29T12:00:08.000Z"
                       });
@@ -634,15 +627,14 @@ describe("workspace tools", () => {
                     typeof store.executionWorkspaces.requestWorkspaceCommandCancellation
                   >[0]
                 ) => {
-                  const claimed = await store.executionWorkspaces.claimNextWorkspaceCommand({
+                  const claimed = await store.executionWorkspaces.claimWorkspaceCommand({
                     clientInstanceId: input.clientInstanceId,
-                    workerId: "race-worker",
+                    commandId: input.commandId,
+                    leaseOwnerId: "race-worker",
                     leaseToken,
-                    now: "2026-06-29T12:00:01.000Z",
-                    leaseExpiresAt: "2026-06-29T12:05:01.000Z"
+                    leaseMs: 5 * 60 * 1000
                   });
-                  expect(claimed?.id).toBe(input.commandId);
-                  if (!claimed) {
+                  if (claimed.status !== "claimed") {
                     throw new Error("Expected queued command to be claimable");
                   }
                   await store.executionWorkspaces.completeWorkspaceCommand({
@@ -656,7 +648,7 @@ describe("workspace tools", () => {
                         stderr: "",
                         durationMs: 17
                       },
-                      claimed.limits
+                      claimed.row.limits
                     ),
                     completedAt: "2026-06-29T12:00:02.000Z"
                   });
@@ -781,14 +773,8 @@ describe("workspace tools", () => {
       byteStore: harness.objectStore,
       tempRootDirectory: tempRoot
     });
-    const worker = new WorkspaceCommandWorker({
-      clientInstanceId: harness.clientInstanceId,
-      store: harness.store.executionWorkspaces,
-      runner,
-      pollIntervalMs: 10,
-      tempStateCleanupIntervalMs: 60_000
-    });
-    const workerLoop = worker.start();
+    const worker = createCommandWorker(harness.store, harness.clientInstanceId, { runner });
+    worker.start();
 
     try {
       const created = await harness.runTool("workspace.apply_patch", {
@@ -886,8 +872,7 @@ describe("workspace tools", () => {
         stdoutPreview: ""
       });
     } finally {
-      await worker.stop({ cancelActive: true, reason: "test complete" });
-      await workerLoop;
+      await worker.stop();
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
