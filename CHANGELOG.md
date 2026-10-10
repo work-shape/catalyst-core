@@ -332,14 +332,21 @@ id from config_assets where status = 'deleted')`.
   both at the highest price the rate card has for the model. When the call ends, the
   reservation is replaced by what it used. **Changed behaviour:** a call is refused when its
   reservation no longer fits a token or spend limit, so a limit is reached slightly before it
-  is used up, and a token limit below about 20,000 admits no call. With a spend budget, a
-  model without a price on the rate card is refused. A cost that is not whole, such as one
-  whose provider reported no cached tokens, no longer stops every later call: it counts at
-  the highest price.
+  is used up. A token limit at or below the 16,000 reserved output tokens would admit no
+  call: the config is refused with a message that names both numbers. With a spend budget, a
+  model without a price on the rate card is refused; a `deterministic` provider needs no
+  price and its calls reserve no cost. A cost that is not whole, such as one whose provider
+  reported no cached tokens, no longer stops every later call: it counts at the highest
+  price. The limits are protective safeguards: a call settles its real usage, which can be
+  more than it reserved, so a limit can be passed by the calls in flight times what each
+  used beyond its reservation (`MODEL_CALL_RESERVED_OUTPUT_TOKENS`).
 - **Usage:** a usage record has a status. `pending`: the call was admitted and has not ended;
-  the Usage page shows it as "Running". `settled`: it ended with the usage its provider
-  reported. `failed`: it ended without an answer, was stopped or timed out; it counts as one
-  call, uses nothing and shows "No usage reported". `abandoned`: its process went away. A job
+  the Usage page shows it as "Running". `settled`: it ended with usage, and the page says
+  whether the provider reported it, reported none, or it is estimated. `failed`: it failed,
+  was stopped or timed out before any answer arrived; it counts as one call, uses nothing
+  and shows "Failed". A stream that is stopped or breaks off after its answer began is
+  settled with an estimate of three characters a token and marked `estimated`.
+  `abandoned`: its process went away; it shows "Abandoned". A job
   (`usage.recover_abandoned_calls`, every 10 minutes) takes a call that is still `pending`
   six hours after its admission as abandoned and releases what it reserved.
 - **Usage and deletion:** usage records are kept for the accounting of the instance. When an

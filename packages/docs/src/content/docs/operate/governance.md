@@ -71,9 +71,11 @@ Every model call leaves one record, including conversation titles and approval c
 A record has a status:
 
 - `pending`: the call was admitted and has not ended. The Usage page shows it as "Running".
-- `settled`: the call ended with the usage its provider reported.
-- `failed`: the call ended without an answer, was stopped or timed out. It counts as one call toward the daily call limit, uses no tokens and shows "No usage reported".
-- `abandoned`: the process that made the call went away before the call ended. The job `usage.recover_abandoned_calls` runs every 10 minutes and takes a call that is still `pending` six hours after its admission as abandoned.
+- `settled`: the call ended with usage. The Usage page says where the amounts come from: "Reported by provider", "No usage reported" when the provider answered and reported none, or "Estimated".
+- `failed`: the call failed, was stopped or timed out before any of its answer arrived. It counts as one call toward the daily call limit and uses no tokens. The Usage page shows it as "Failed".
+- `abandoned`: the process that made the call went away before the call ended. The job `usage.recover_abandoned_calls` runs every 10 minutes and takes a call that is still `pending` six hours after its admission as abandoned. The Usage page shows it as "Abandoned".
+
+A streamed call that is stopped or breaks off after its answer began has cost something, and its provider reports no usage for it. Such a call is settled with an estimate: every three characters that were sent and every three that arrived count as one token, the input counts as not cached, and a web search that had started counts as one search. Its record is marked `estimated`.
 
 ### How a call is admitted
 
@@ -84,8 +86,10 @@ At admission a call reserves the most it can use: its input by the size of the r
 This has three consequences for how you set limits:
 
 - A call is refused when its reservation no longer fits, so a token or spend limit is reached slightly before it is used up.
-- A token limit below about 20,000 admits no call.
-- With a spend budget, a model without a price on the customer rate card is refused.
+- A token limit at or below the 16,000 reserved output tokens would admit no call. The config is refused with a message that names the limit and the reservation.
+- With a spend budget, a model without a price on the customer rate card is refused. A `deterministic` provider needs no price: it bills nothing, and its calls reserve no cost.
+
+The limits are protective safeguards, not exact caps. A call reserves a fixed amount at admission and settles its real usage when it ends, and the request sets no maximum for the answer, so a call can use more than it reserved. The most a limit can be passed by is the sum, over the calls in flight when it is reached, of what each used minus what it reserved. The reserved output is the constant `MODEL_CALL_RESERVED_OUTPUT_TOKENS` (16,000) in `@vivd-catalyst/core`. Set a limit with that margin in mind, and keep a provider-side budget as the hard stop.
 
 A cost that cannot be settled, such as one whose provider reported no cached tokens, counts toward a spend budget at the highest price of the model. It does not stop later calls.
 
@@ -93,7 +97,7 @@ The Usage page lists the caller and the provider with its region for the recent 
 
 ### What stays after a deletion
 
-Usage records are the accounting of the instance and are kept. When an account is deleted, the user is removed from its usage records together with the conversation id, the agent run id, the operation id and the correlation id. The amounts, the model, the provider and the agent or purpose stay. When a workspace is deleted, the workspace is removed from its usage records and the amounts stay.
+Usage records are the accounting of the instance and are kept. When an account is deleted, the user is removed from its usage records together with the conversation id, the agent run id, the operation id and the correlation id. A call that ends or is recorded after the account is gone is written without them. The amounts, the model, the provider and the agent or purpose stay. When a workspace is deleted, the workspace is removed from its usage records and the amounts stay.
 
 ### After an upgrade
 
@@ -164,6 +168,6 @@ Deletion should cover:
 
 The customer or legal owner decides the lawful basis and exact retention durations. Workshape Catalyst provides the mechanisms and evidence path.
 
-The job `usage.reconcile` builds the daily sums of the days before the upgrade from the usage records. Until it ends, the Usage page shows no sums for those days. It takes about 3 seconds per million records and needs no action. Afterwards it runs once a day and at every start, compares the counters and the sums with the usage records of the month, and corrects what differs.
+The job `usage.reconcile` builds the daily sums of the days before the upgrade from the usage records. Until it ends, the Usage page shows no sums for those days. It takes about 3 seconds per million records and needs no action. Afterwards it runs once a day and at every start, compares the counters and the sums with the usage records from the month of its previous run on, and corrects what differs. After a rollback it therefore reads the months in which the previous release wrote. One comparison of an instance runs at a time; admission and settlement do not wait for it.
 
 During a rolling upgrade a process of the previous release writes usage records that are in no counter and no sum. A limit can be passed by what those processes admit until the next run of `usage.reconcile`. To avoid that, stop the previous release before the new one takes calls.
