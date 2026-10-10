@@ -373,13 +373,17 @@ export interface ModelUsageEventStore {
   /**
    * Compares the counters of the current day and month and the daily sums with the usage
    * events, and corrects what differs, such as what a process of the previous release wrote.
-   * `recent` reads the events from the start of the month, `all` every event. Each comparison
-   * is one statement on one snapshot and its correction is added, not set, so calls that are
-   * admitted or end meanwhile stay counted. It takes no lock that admission waits for.
+   * `recent` reads the events from the start of the month, or of the month of `since` where
+   * that is earlier; `all` reads every event. Each comparison is one statement on one snapshot
+   * and its correction is added, not set, so calls that are admitted or end meanwhile stay
+   * counted. One reconciliation of an instance runs at a time: a second waits for the first
+   * to commit before it reads. It takes no lock that admission or settlement waits for.
    */
   reconcileModelUsage(input: {
     clientInstanceId: ClientInstanceId;
     scope: "recent" | "all";
+    /** When the reconciliation before this one ran. */
+    since?: ISODateString;
   }): Promise<{ correctedCounters: number; correctedSums: number }>;
   readModelUsageMaintenance(input: {
     clientInstanceId: ClientInstanceId;

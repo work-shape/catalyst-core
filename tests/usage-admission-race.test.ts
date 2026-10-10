@@ -353,4 +353,71 @@ describe("usage admission under concurrent calls", () => {
       db.store.usage.reconcileModelUsage({ clientInstanceId, scope: "recent" })
     ).resolves.toEqual({ correctedCounters: 0, correctedSums: 0 });
   });
+  // Fails without the change: each reconciler read the same difference and added it, so the
+  // counters and the sums ended two differences too high.
+  it("corrects a difference once when three reconcilers find it at the same time", async () => {
+    const clientInstanceId = db.clientInstance("reconcilers");
+    const governance = new ModelUsageGovernance({
+      store: db.store.usage,
+      costs: { customer: rateCard },
+      budget: {},
+      safeguards: {}
+    });
+    // The counters of the day and the month exist.
+    await governance.settleModelCall(await governance.admitModelCall(call(clientInstanceId, 1)), {
+      inputTokens: 100,
+      cachedInputTokens: 0,
+      outputTokens: 10,
+      totalTokens: 110,
+      source: "provider_reported"
+    });
+    const third = await createTestInstance({
+      postgres: { applicationName: `${db.first}_third` }
+    });
+    try {
+      const processes = [db.store, db.secondStore, third.stores];
+      for (const round of [1, 2, 3, 4, 5]) {
+        // What a process of the previous release wrote: in no counter and no sum.
+        await db.sql`
+          insert into model_usage_events (
+            id, client_instance_id, agent_name, provider_id, model, input_tokens, output_tokens,
+            total_tokens, source, customer_billable_cost, correlation_id, created_at
+          )
+          select ${`usage_old_${clientInstanceId}_${round}_`} || n, ${clientInstanceId},
+            'conversation_title', 'azure-eu', 'gpt-main', 40, 2, 42, 'provider_reported',
+            '{"status":"settled","currency":"EUR","totalCostMicros":96,"components":{"uncachedInputCostMicros":80,"cachedInputCostMicros":0,"outputCostMicros":16,"webSearchCostMicros":0}}'::jsonb,
+            'corr_old', now()
+          from generate_series(1, 2000) n`;
+
+        const corrections = await Promise.all(
+          processes.map((store) =>
+            store.usage.reconcileModelUsage({ clientInstanceId, scope: "all" })
+          )
+        );
+
+        // One of the three found the difference. The others found what it left: nothing.
+        expect(
+          corrections.filter((made) => made.correctedCounters + made.correctedSums > 0)
+        ).toHaveLength(1);
+        const calls = 1 + round * 2000;
+        const ledger = { calls, tokens: 110 + round * 2000 * 42, cost: 280 + round * 2000 * 96 };
+        expect(await counters(clientInstanceId)).toEqual([
+          { period_kind: "day", ...ledger },
+          { period_kind: "month", ...ledger }
+        ]);
+        const history = await db.store.usage.summarizeModelUsageHistory({ clientInstanceId });
+        expect(history.allTime).toMatchObject({
+          modelCallCount: calls,
+          totalTokens: ledger.tokens,
+          settledModelCallCount: calls
+        });
+        expect(
+          history.allTime.settledCost.uncachedInputCostMicros +
+            history.allTime.settledCost.outputCostMicros
+        ).toBe(ledger.cost);
+      }
+    } finally {
+      await third.close();
+    }
+  });
 });

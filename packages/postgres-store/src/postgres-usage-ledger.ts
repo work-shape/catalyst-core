@@ -642,7 +642,29 @@ export async function summarizeRecentModelUsage(
   };
 }
 
-export async function reconcileModelUsage(
+/**
+ * One reconciliation at a time per instance. A correction is the difference a reconciler read,
+ * added: two that read the same difference would add it twice. Each takes this lock before it
+ * reads and holds it until its transaction ends, so the next reads what the one before wrote.
+ * Only reconcilers take it. Admission and settlement never do, and wait for no reconciler
+ * longer than the one statement in which it updates a counter or a sum.
+ */
+const reconciliationLock = (clientInstanceId: string): SQL =>
+  drizzleSql`select pg_advisory_xact_lock(hashtextextended(${`model_usage_reconciliation:${clientInstanceId}`}, 0))`;
+
+export function reconcileModelUsage(
+  db: PostgresConnection,
+  input: Parameters<Store["reconcileModelUsage"]>[0]
+): ReturnType<Store["reconcileModelUsage"]> {
+  // Inside the caller's transaction this is a savepoint, and the lock lasts until the caller
+  // commits: the correction and what the caller records about it become visible together.
+  return db.transaction(async (tx) => {
+    await tx.execute(reconciliationLock(input.clientInstanceId));
+    return reconcileLocked(tx, input);
+  });
+}
+
+async function reconcileLocked(
   db: PostgresConnection,
   input: Parameters<Store["reconcileModelUsage"]>[0]
 ): ReturnType<Store["reconcileModelUsage"]> {
@@ -691,7 +713,13 @@ export async function reconcileModelUsage(
     correctedCounters += 1;
   }
 
-  const from = drizzleSql`date_trunc('month', (now() - interval '1 day') at time zone 'UTC')`;
+  // From the month of yesterday, or of `since` where that is earlier: what a process of the
+  // previous release wrote while no reconciliation ran lies after the last one.
+  const since =
+    input.since === undefined
+      ? drizzleSql`now()`
+      : drizzleSql`least(now(), ${input.since}::timestamptz)`;
+  const from = drizzleSql`date_trunc('month', (${since} - interval '1 day') at time zone 'UTC')`;
   const eventsFrom =
     input.scope === "all"
       ? drizzleSql``
