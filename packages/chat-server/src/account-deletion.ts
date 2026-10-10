@@ -29,14 +29,14 @@ interface AccountDeletion {
 }
 
 /**
- * Accepts the deletion of an account. It refuses, before anything is marked, while the user
- * is the last active owner of a Shared Workspace. From the mark on the user is closed.
+ * Accepts the deletion of an account. It refuses, in the transaction of the mark and before
+ * the mark, while the user is the last active owner of a Shared Workspace. From the mark on
+ * the user is closed.
  */
 export async function requestAccountDeletion(
   options: ChatServerOptions,
   input: AccountDeletion & { actorUserId: UserId; alreadyRequested: boolean }
 ): Promise<DeletionOutcome<UserRecord>> {
-  if (!input.alreadyRequested) await requireNoSoleOwnedSharedWorkspace(options, input.userId);
   return acceptDeletion(options, {
     job: deleteAccountJob,
     payload: {
@@ -47,6 +47,9 @@ export async function requestAccountDeletion(
     subjectId: input.userId,
     correlationId: input.correlationId,
     async mark(stores) {
+      if (!input.alreadyRequested) {
+        await requireNoSoleOwnedSharedWorkspace(stores, options, input.userId);
+      }
       const marked = await stores.users.markUserDeletionRequested({
         clientInstanceId: options.clientInstanceId,
         userId: input.userId

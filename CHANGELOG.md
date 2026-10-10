@@ -140,7 +140,10 @@ id from config_assets where status = 'deleted')`.
   for, the request answers `200` as before. A repeated request answers `202` and starts
   nothing new. After the last attempt the job is dead, the audit log holds
   `user.deletion_stalled` or `collaboration_workspace.deletion_stalled`, the account or
-  workspace stays closed, and deleting it again starts a new job. The audit log records
+  workspace stays closed, and deleting it again starts a new job. The dead job is kept until
+  the account or workspace is gone, also past the 30 days other dead jobs are kept. A closed
+  account leaves its Shared Workspaces and access requests with the first pass. Of two owners
+  who delete their accounts at the same moment, the second is refused as the last owner. The audit log records
   `user.deletion_requested` and `collaboration_workspace.deletion_requested` when a deletion
   is accepted; `user.delete_failed` and `collaboration_workspace.delete_failed` are no longer
   written. A client that calls one of the three delete operations must accept `202`. Upgrade:

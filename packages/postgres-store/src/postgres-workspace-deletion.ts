@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, sql as drizzleSql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type CollaborationWorkspace,
@@ -41,6 +41,35 @@ export async function markWorkspaceDeletionRequested(
     throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be deleted");
   }
   return false;
+}
+
+export async function lockOwnedSharedWorkspaces(
+  db: PostgresConnection,
+  input: Parameters<CollaborationWorkspaceStore["lockOwnedSharedWorkspaces"]>[0]
+): Promise<void> {
+  const owned = db
+    .select({ id: collaborationWorkspaceMemberships.collaborationWorkspaceId })
+    .from(collaborationWorkspaceMemberships)
+    .where(
+      and(
+        eq(collaborationWorkspaceMemberships.clientInstanceId, input.clientInstanceId),
+        eq(collaborationWorkspaceMemberships.userId, input.userId),
+        eq(collaborationWorkspaceMemberships.role, "owner")
+      )
+    );
+  // In the order of the ids, so two transactions never wait for each other.
+  await db
+    .select({ id: collaborationWorkspaces.id })
+    .from(collaborationWorkspaces)
+    .where(
+      and(
+        eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+        eq(collaborationWorkspaces.kind, "shared"),
+        inArray(collaborationWorkspaces.id, owned)
+      )
+    )
+    .orderBy(asc(collaborationWorkspaces.id))
+    .for("update");
 }
 
 export async function getWorkspaceInDeletion(

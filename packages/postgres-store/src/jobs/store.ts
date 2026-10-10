@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, lte, not, sql } from "drizzle-orm";
 import {
   AppError,
   createPlatformId,
@@ -15,6 +15,8 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
 import { platformJobs } from "../schema/jobs";
+import { productUsers } from "../schema/users";
+import { collaborationWorkspaces } from "../schema/workspaces";
 
 export type JobRow = typeof platformJobs.$inferSelect;
 
@@ -159,6 +161,27 @@ export async function enqueueJob<Payload extends JsonObject>(
   throw new AppError("CONFLICT", `Job of kind '${kind.kind}' could not be enqueued`);
 }
 
+/**
+ * A dead job whose subject is a user or a Shared Workspace that is still marked for deletion
+ * is the record of an erasure that stopped. It is kept, whatever its age, until the subject
+ * is gone, which is when a later job for it succeeded.
+ */
+const deadJobOfSubjectInDeletion = sql`(
+  ${platformJobs.status} = 'dead' and (
+    exists (
+      select 1 from ${productUsers}
+      where ${productUsers.clientInstanceId} = ${platformJobs.clientInstanceId}
+        and ${productUsers.id} = ${platformJobs.subject}
+        and ${productUsers.deletionRequestedAt} is not null
+    ) or exists (
+      select 1 from ${collaborationWorkspaces}
+      where ${collaborationWorkspaces.clientInstanceId} = ${platformJobs.clientInstanceId}
+        and ${collaborationWorkspaces.id} = ${platformJobs.subject}
+        and ${collaborationWorkspaces.deletionRequestedAt} is not null
+    )
+  )
+)`;
+
 async function pruneEndedJobs(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId }
@@ -170,7 +193,8 @@ async function pruneEndedJobs(
         and(
           eq(platformJobs.clientInstanceId, input.clientInstanceId),
           inArray(platformJobs.status, statuses),
-          lt(platformJobs.finishedAt, sql`now() - make_interval(days => ${retentionDays})`)
+          lt(platformJobs.finishedAt, sql`now() - make_interval(days => ${retentionDays})`),
+          not(deadJobOfSubjectInDeletion)
         )
       );
   const completed = await endedBefore(["succeeded", "cancelled"], COMPLETED_JOB_RETENTION_DAYS);

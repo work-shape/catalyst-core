@@ -75,7 +75,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     await expect(fixture.eventsOfType("collaboration_workspace.deleted")).resolves.toHaveLength(1);
   });
 
-  it("keeps an account in deletion whole while its conversations' data is still there", async () => {
+  it("keeps the row of an account in deletion while its conversations' data is still there", async () => {
     const fixture = await createConversationCleanupFixture(db, "account_deletion");
     const superadmin = await fixture.createUser("superadmin", ["user", "admin", "superadmin"]);
     const removedUser = await fixture.createUser("removed-user");
@@ -143,10 +143,11 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     // The claim came before the first object was touched.
     expect(statusAtDeletion.size).toBeGreaterThanOrEqual(2);
     expect([...new Set(statusAtDeletion.values())]).toEqual(["deleted"]);
-    // Each account is whole apart from its Conversations, which are deleted and not removed.
+    // Each account still has its row and its Personal Workspace. Its Conversations are deleted
+    // and not removed, and it is no longer a member or a requester anywhere.
     await expect(userIds()).resolves.toEqual(everyone);
-    await expect(memberIds()).resolves.toEqual(everyone);
-    await expect(requesterIds()).resolves.toEqual([removedUser.id, leavingUser.id].sort());
+    await expect(memberIds()).resolves.toEqual([superadmin.id]);
+    await expect(requesterIds()).resolves.toEqual([]);
     for (const { user, conversation, data } of accounts) {
       await expect(fixture.statusOf(conversation)).resolves.toBe("deleted");
       await fixture.expectDataLeft(conversation, data);
@@ -163,7 +164,6 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     await expect(fixture.eventsOfType("user.deleted")).resolves.toEqual([]);
     await runDeletionJobs(api, fixture.clientInstanceId);
     await expect(userIds()).resolves.toEqual(everyone);
-    await expect(memberIds()).resolves.toEqual(everyone);
 
     fixture.byteStore.failDeletes = false;
     await runDeletionJobs(api, fixture.clientInstanceId);

@@ -140,6 +140,14 @@ export interface CollaborationWorkspaceStore {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;
   }): Promise<boolean>;
+  /**
+   * Locks the Shared Workspaces the user owns to the end of the transaction it is called in,
+   * so two owners who leave at the same moment are judged one after the other.
+   */
+  lockOwnedSharedWorkspaces(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: UserId;
+  }): Promise<void>;
   /** The workspace whose deletion was requested, with its memberships, or undefined. */
   getWorkspaceInDeletion(input: {
     clientInstanceId: ClientInstanceId;

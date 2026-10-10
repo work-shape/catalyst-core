@@ -169,7 +169,7 @@ export interface JobsStore {
   ): Promise<void>;
   /**
    * Removes ended jobs: succeeded and cancelled ones 7 days after they ended, failed and dead
-   * ones 30 days after.
+   * ones 30 days after. A dead job whose subject is still marked for deletion is kept.
    */
   pruneEndedJobs(input: { clientInstanceId: ClientInstanceId }): Promise<PruneEndedJobsResult>;
 }

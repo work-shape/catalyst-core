@@ -108,6 +108,10 @@ describe("a deletion that finishes by itself", () => {
       ])
     });
     await t.expectDataLeft(conversation, data);
+    // The request's own pass failed on the stored data. The person is listed nowhere already.
+    await expect(
+      db.store.workspaces.listMemberships({ ...t.scope, collaborationWorkspaceId: joined.id })
+    ).resolves.toEqual([expect.objectContaining({ userId: superadmin.id })]);
     await expect(t.jobs()).resolves.toEqual([
       { kind: "account.delete", status: "queued", attempts: 0 }
     ]);
@@ -341,6 +345,89 @@ describe("a deletion that finishes by itself", () => {
     await expect(t.userRow(removed)).resolves.toEqual([]);
     await t.expectDataRemoved(conversation, data);
     await expect(t.eventsOfType("user.deletion_stalled")).resolves.toHaveLength(1);
+  });
+
+  // Fails without the change: no request waited for the workspace, and both were accepted.
+  it("accepts one of two owners who delete their accounts at the same moment", async () => {
+    const t = await arrange(db, "two_owners");
+    const first = await t.createUser("first-owner");
+    const second = await t.createUser("second-owner");
+    const workspace = await t.createSharedWorkspace(first, "Shared");
+    await db.store.workspaces.addMembership({
+      ...t.scope,
+      collaborationWorkspaceId: workspace.id,
+      userId: asUserId(second.id),
+      role: "owner"
+    });
+    // Both requests are held at the workspace they own, so neither has judged yet.
+    const held = await db.hold(
+      (tx) => tx`select id from collaboration_workspaces where id = ${workspace.id} for update`
+    );
+    const requests = [first, second].map((owner) => t.api.call("me.delete", {}, owner.id));
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      const [row] = await db.sql<Array<{ waiting: number }>>`
+        select count(*)::int as waiting from pg_locks blocked
+        join pg_stat_activity waiter on waiter.pid = blocked.pid
+        where not blocked.granted and waiter.application_name = ${db.first}`;
+      if ((row?.waiting ?? 0) >= 2) break;
+      if (Date.now() > deadline) throw new Error("The two requests never waited for the workspace");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await held.commit();
+
+    const answers = await Promise.all(requests);
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([200, 409]);
+    const refused = answers.find((answer) => answer.statusCode === 409);
+    expect(refused?.json()).toMatchObject({
+      error: { code: "CONFLICT", details: { blockingWorkspaceCount: 1 } }
+    });
+    const users = await db.store.users.listUsers(t.scope);
+    expect(users).toEqual([expect.objectContaining({ status: "active" })]);
+    await expect(
+      db.store.workspaces.listMemberships({ ...t.scope, collaborationWorkspaceId: workspace.id })
+    ).resolves.toEqual([expect.objectContaining({ userId: users[0]?.id, role: "owner" })]);
+    await expect(t.eventsOfType("user.deletion_requested")).resolves.toHaveLength(1);
+  });
+
+  // Fails without the change: the dead job was removed with the others of its age.
+  it("keeps the dead job of a stalled deletion until its subject is gone", async () => {
+    const t = await arrange(db, "prune");
+    const superadmin = await t.createUser("superadmin", ["user", "admin", "superadmin"]);
+    const removed = await t.createUser("removed");
+    await t.createData(await t.createConversation(removed, "own"));
+    const deleteUser = () =>
+      t.api.call("users.delete", { params: { userId: removed.id } }, superadmin.id);
+    const prune = () => db.store.jobs.pruneEndedJobs(t.scope);
+
+    t.byteStore.failDeletes = true;
+    expect((await deleteUser()).statusCode).toBe(202);
+    // As after the last attempt, long ago, with a dead job of another subject of the same age.
+    await db.sql`
+      update platform_jobs set status = 'dead', finished_at = now() - interval '400 days'
+      where client_instance_id = ${t.clientInstanceId} and kind = 'account.delete'`;
+    await db.sql`
+      insert into platform_jobs
+        (id, client_instance_id, kind, subject, payload, status, run_after, attempts,
+         max_attempts, correlation_id, created_at, finished_at)
+      select 'job_other_' || id, client_instance_id, 'test.other', 'something else', payload,
+        status, run_after, attempts, max_attempts, correlation_id, created_at, finished_at
+      from platform_jobs
+      where client_instance_id = ${t.clientInstanceId} and kind = 'account.delete'`;
+
+    await expect(prune()).resolves.toMatchObject({ failedCount: 1 });
+    await expect(t.jobs()).resolves.toEqual([
+      { kind: "account.delete", status: "dead", attempts: 0 }
+    ]);
+
+    t.byteStore.failDeletes = false;
+    expect((await deleteUser()).statusCode).toBe(202);
+    await t.runDeletionJobs();
+    await expect(t.userRow(removed)).resolves.toEqual([]);
+    await expect(prune()).resolves.toMatchObject({ failedCount: 1 });
+    await expect(t.jobs()).resolves.toEqual([
+      { kind: "account.delete", status: "succeeded", attempts: 1 }
+    ]);
   });
 
   // Fails without the change: a user row had no mark, and both credentials kept working.

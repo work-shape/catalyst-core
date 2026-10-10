@@ -1,4 +1,10 @@
-import { AppError, type AuditActor, type ConversationId, type UserId } from "@vivd-catalyst/core";
+import {
+  AppError,
+  type AuditActor,
+  type ConversationId,
+  type PlatformStores,
+  type UserId
+} from "@vivd-catalyst/core";
 import {
   attemptConversationDataCleanup,
   type ConversationDataCleanupOutcome,
@@ -15,18 +21,24 @@ export interface UserDeletionTotals extends ConversationDataDeletionTotals {
 /**
  * Refuses while the user is the last active owner of a Shared Workspace: deleting the account
  * would leave that workspace to nobody. An owner whose own account is being deleted does not
- * count as active. This is checked before a deletion is accepted and not again afterwards: an
- * accepted deletion finishes, also when the other owner leaves meanwhile.
+ * count as active. It runs in the transaction that marks the user and locks the workspaces the
+ * user owns first, so of two owners who ask at the same moment the second sees the first one's
+ * mark. It is not checked again afterwards: an accepted deletion finishes.
  */
 export async function requireNoSoleOwnedSharedWorkspace(
-  options: ChatServerOptions,
+  stores: PlatformStores,
+  options: Pick<ChatServerOptions, "clientInstanceId">,
   userId: UserId
 ): Promise<void> {
-  const workspaces = await options.stores.workspaces.listWorkspacesForUser({
+  await stores.workspaces.lockOwnedSharedWorkspaces({
     clientInstanceId: options.clientInstanceId,
     userId
   });
-  const users = await options.stores.users.listUsers({
+  const workspaces = await stores.workspaces.listWorkspacesForUser({
+    clientInstanceId: options.clientInstanceId,
+    userId
+  });
+  const users = await stores.users.listUsers({
     clientInstanceId: options.clientInstanceId
   });
   const activeUserIds = new Set(
@@ -35,7 +47,7 @@ export async function requireNoSoleOwnedSharedWorkspace(
   let blockingWorkspaceCount = 0;
   for (const workspace of workspaces) {
     if (workspace.kind !== "shared" || workspace.role !== "owner") continue;
-    const memberships = await options.stores.workspaces.listMemberships({
+    const memberships = await stores.workspaces.listMemberships({
       clientInstanceId: options.clientInstanceId,
       collaborationWorkspaceId: workspace.id
     });
@@ -57,10 +69,10 @@ export async function requireNoSoleOwnedSharedWorkspace(
 }
 
 /**
- * Removes what belongs to the user alone: the Conversations of their Personal Workspace and
- * their private Conversations elsewhere, with stored data, then the Personal Workspace, their
- * access requests and their memberships. Safe to repeat: a pass that is refused because data
- * is still being removed leaves the rest for the next.
+ * Removes what belongs to the user alone: first their access requests and their memberships
+ * of Shared Workspaces, then the Conversations of their Personal Workspace and their private
+ * Conversations elsewhere, with stored data, then the Personal Workspace. Safe to repeat: a
+ * pass that is refused because data is still being removed leaves the rest for the next.
  */
 export async function cleanupProductUserData(input: {
   options: ChatServerOptions;
@@ -107,6 +119,18 @@ export async function cleanupProductUserData(input: {
     sharedMembershipCount: 0
   };
 
+  // First what shows the person to others: while stored data is still being removed, a closed
+  // account is no longer a listed member of a Shared Workspace and asks for no access. The
+  // last-owner rule was settled when the deletion was accepted.
+  totals.accessRequestCount = await options.stores.workspaces.deleteAccessRequestsForUser({
+    clientInstanceId: options.clientInstanceId,
+    userId: input.userId
+  });
+  totals.sharedMembershipCount = await options.stores.workspaces.removeMembershipsForUser({
+    clientInstanceId: options.clientInstanceId,
+    userId: input.userId
+  });
+
   for (const conversation of conversations) {
     const deletedAt = new Date().toISOString();
     const deletion = await deleteConversationAggregate(options, conversation.id, deletedAt);
@@ -135,8 +159,7 @@ export async function cleanupProductUserData(input: {
     });
   }
 
-  // The store refuses this while a cleanup is pending, so it comes before anything else of the
-  // account is removed: a refusal leaves the user with every membership and access request.
+  // The store refuses this while a cleanup is pending. The next pass goes on from here.
   if (personalWorkspace) {
     await options.stores.workspaces.deletePersonalWorkspaceForUser({
       clientInstanceId: options.clientInstanceId,
@@ -144,14 +167,6 @@ export async function cleanupProductUserData(input: {
     });
   }
 
-  totals.accessRequestCount = await options.stores.workspaces.deleteAccessRequestsForUser({
-    clientInstanceId: options.clientInstanceId,
-    userId: input.userId
-  });
-  totals.sharedMembershipCount = await options.stores.workspaces.removeMembershipsForUser({
-    clientInstanceId: options.clientInstanceId,
-    userId: input.userId
-  });
   return totals;
 }
 

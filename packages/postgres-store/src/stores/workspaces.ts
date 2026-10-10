@@ -37,6 +37,7 @@ import type { PostgresConnection } from "../postgres-database";
 import {
   deleteWorkspace as deletePostgresWorkspace,
   getWorkspaceInDeletion as getPostgresWorkspaceInDeletion,
+  lockOwnedSharedWorkspaces as lockPostgresOwnedSharedWorkspaces,
   markWorkspaceDeletionRequested as markPostgresWorkspaceDeletionRequested
 } from "../postgres-workspace-deletion";
 export function createPostgresWorkspacesStore(db: PostgresConnection): CollaborationWorkspaceStore {
@@ -72,6 +73,11 @@ export function createPostgresWorkspacesStore(db: PostgresConnection): Collabora
       input: Parameters<CollaborationWorkspaceStore["markWorkspaceDeletionRequested"]>[0]
     ): Promise<boolean> {
       return markPostgresWorkspaceDeletionRequested(db, input);
+    },
+    async lockOwnedSharedWorkspaces(
+      input: Parameters<CollaborationWorkspaceStore["lockOwnedSharedWorkspaces"]>[0]
+    ): Promise<void> {
+      return lockPostgresOwnedSharedWorkspaces(db, input);
     },
     async getWorkspaceInDeletion(
       input: Parameters<CollaborationWorkspaceStore["getWorkspaceInDeletion"]>[0]
