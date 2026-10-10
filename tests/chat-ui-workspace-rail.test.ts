@@ -720,6 +720,12 @@ describe("workspace rail conversation rows", () => {
         /class="[^"]*text-warning[^"]*" data-testid="conversation-expiry-warning"/u
       );
       expect(near?.button).not.toContain("text-warning");
+      // It stands in the row's label, which shows at rest, not in the slot of the row menu.
+      const nearRow = markup.split('data-testid="conversation-row"')[1] ?? "";
+      expect(nearRow).toContain("conversation-expiry-warning");
+      expect(nearRow.indexOf("conversation-expiry-warning")).toBeLessThan(
+        nearRow.indexOf("</button>")
+      );
       expect(markup).toContain("lucide-clock");
       expect(markup).not.toContain("lucide-triangle-alert");
       expect(far).toEqual({ button: near?.button.replace(/ aria-describedby="[^"]+"/u, "") });

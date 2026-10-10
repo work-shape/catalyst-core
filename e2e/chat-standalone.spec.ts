@@ -2065,14 +2065,12 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   const rowButton = row.getByRole("button").first();
   const clock = row.getByTestId("conversation-expiry-warning");
   const hint = page.getByTestId("conversation-expiry-hint");
-  // The clock waits in the row's trailing slot and shows with the pointer or the keyboard.
-  const trailingSlot = clock.locator("..");
-  await expect(trailingSlot).toHaveCSS("opacity", "0");
-  await row.hover();
-  await expect(trailingSlot).toHaveCSS("opacity", "1");
-  await expect(clock).toHaveAccessibleName("will be deleted soon");
-  // The row's name is its title; the sentence is its description.
-  await expect(rowButton).toHaveAccessibleName(title);
+  // Deletion cannot be undone: the clock shows at rest, without the pointer or the keyboard.
+  await page.getByPlaceholder("Message").hover();
+  await expect(clock).toBeVisible();
+  await expect(clock).toHaveCSS("opacity", "1");
+  // The row's name stays short for a list read aloud; the sentence is its description.
+  await expect(rowButton).toHaveAccessibleName(`${title} will be deleted soon`);
   await expect(rowButton).toHaveAccessibleDescription(sentence);
   await expect(hint).toHaveCount(0);
 
@@ -2091,7 +2089,6 @@ test("the retention clock explains itself on hover, on keyboard focus and in the
   await page.keyboard.press("Tab");
   await rowButton.focus();
   await expect(rowButton).toBeFocused();
-  await expect(trailingSlot).toHaveCSS("opacity", "1");
   await expect(hint).toBeVisible();
   await expect(hint).toContainText(sentence);
   // The pointer passing over the clock does not take the hint from the keyboard.
@@ -3239,7 +3236,10 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   expect(searches).toBeGreaterThan(0);
 
   await field.fill(`nothing ${stamp}`);
-  await expect(palette.getByRole("status")).toHaveText(`No results for "nothing ${stamp}".`);
+  // The search is limited to the active workspace, and the answer says so.
+  await expect(palette.getByRole("status")).toHaveText(
+    `No results for "nothing ${stamp}" in Personal workspace.`
+  );
   await expect(palette.getByRole("option")).toHaveCount(0);
 
   // Enter opens the conversation and puts the focus in the composer.
@@ -3259,6 +3259,16 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await expect(page).not.toHaveURL(conversationUrlPattern(alphaId));
   await expect(composer).toBeFocused();
 
+  // Over the open palette the same keys close it, so the new chat is not left behind it.
+  await page.getByTestId("conversation-row").filter({ hasText: alphaTitle }).click();
+  await expect(page).toHaveURL(conversationUrlPattern(alphaId));
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(field).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+Shift+O");
+  await expect(palette).toBeHidden();
+  await expect(page).not.toHaveURL(conversationUrlPattern(alphaId));
+  await expect(composer).toBeFocused();
+
   // A typed text narrows the places too, and Enter goes there.
   await page.keyboard.press("ControlOrMeta+k");
   await field.fill("langu");
@@ -3266,6 +3276,33 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await page.keyboard.press("Enter");
   await expect(palette).toBeHidden();
   await expect(page).toHaveURL(/\/settings\/you\/language-appearance$/u);
+});
+
+test("the palette lists the eight most recent conversations and reaches the rest by title", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+  const stamp = Date.now();
+  const titles = Array.from({ length: 9 }, (_, index) => `Recent cap ${index + 1} ${stamp}`);
+  for (const title of titles) {
+    await createListedConversation(page, title);
+  }
+  const [oldest, ...newer] = titles;
+  await page.goto("/");
+  // The rail lists all nine, the newest first.
+  await expect(page.getByTestId("conversation-row").filter({ hasText: oldest })).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog", { name: "Search" });
+  const recent = palette.getByRole("group", { name: "Recent" });
+  await expect(recent.getByRole("option")).toHaveText([...newer].reverse());
+  // The places stay in reach under them.
+  await expect(palette.getByRole("group", { name: "Go to" }).getByRole("option")).not.toHaveCount(
+    0
+  );
+
+  await palette.getByRole("combobox").fill(oldest ?? "");
+  await expect(palette.getByRole("option")).toHaveText([oldest ?? ""]);
 });
 
 test("the palette's Go to group offers an administrator the instance pages and Build", async ({

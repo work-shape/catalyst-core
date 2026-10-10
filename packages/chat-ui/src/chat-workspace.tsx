@@ -280,7 +280,11 @@ function ChatWorkspaceContent({
         <WorkspaceShortcuts
           paletteOpen={paletteOpen}
           onTogglePalette={() => setPaletteOpen((open) => !open)}
-          onNewChat={startNewChat}
+          // The shortcut also works over the open palette, which would otherwise stay in front.
+          onNewChat={() => {
+            setPaletteOpen(false);
+            startNewChat();
+          }}
         />
         <SkipLink target={CONTENT_ID}>
           <SkipLinkLabel />
@@ -424,6 +428,7 @@ function ChatWorkspaceContent({
           client={chat.client}
           collaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
           collaborationWorkspacesAvailable={collaborationWorkspacesAvailable}
+          searchedWorkspace={collaborationWorkspace.activeCollaborationWorkspace}
           recentConversations={rail.conversations}
           goToTargets={model.controlPlane.goToTargets}
           onNewChat={startNewChat}

@@ -156,8 +156,9 @@ contain breaking changes; a patch version does not.
   conversations of the active workspace, whose titles it searches on the server, and under
   "Go to" the Settings pages the viewer may open and Build. New chat also has ⌘⇧O
   (Ctrl+Shift+O). The account menu in the rail's footer leads to Profile and to Language and
-  appearance and holds the theme switch and sign out. The retention clock and the row menu of a
-  conversation show while the pointer or the keyboard is on the row. The list shows placeholder
+  appearance and holds the theme switch and sign out. The row menu of a conversation shows
+  while the pointer or the keyboard is on the row; the retention clock shows all the time.
+  Before anything is typed the palette lists the eight most recent conversations. The list shows placeholder
   rows while it loads and a retry when the load failed. A skip link leads past the rail.
 - **Interface, surface:** closing a surface returns the focus to what opened it, a surface that
   covers the conversation takes it out of the tab order, and Escape closes a menu or the

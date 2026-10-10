@@ -238,19 +238,7 @@ export function ConversationButton({
           <NavItem
             selected={selected}
             aria-describedby={expiryLabel ? expiryHintId : undefined}
-            trailing={
-              <>
-                {expiryLabel ? (
-                  <RetentionClock
-                    name={t("conversationExpiresSoon")}
-                    hint={expiryLabel}
-                    open={retentionHintOpen(expiryHint)}
-                    onHintEvent={onExpiryHintEvent}
-                  />
-                ) : null}
-                {options}
-              </>
-            }
+            trailing={options}
             onClick={() => {
               onExpiryHintEvent("dismiss");
               onSelect();
@@ -297,6 +285,15 @@ export function ConversationButton({
                 >
                   <Lock className="size-3" aria-hidden="true" />
                 </span>
+              ) : null}
+              {expiryLabel ? (
+                // Deletion cannot be undone, so its mark shows at rest, not only with the row's menu.
+                <RetentionClock
+                  name={t("conversationExpiresSoon")}
+                  hint={expiryLabel}
+                  open={retentionHintOpen(expiryHint)}
+                  onHintEvent={onExpiryHintEvent}
+                />
               ) : null}
               {unread ? (
                 <span
@@ -394,7 +391,7 @@ export function retentionHintOpen(state: RetentionHintState): boolean {
 
 // The icon is swapped when the hint opens and closes. It takes no pointer events, so the swap
 // under a resting pointer does not read as the pointer entering the clock again.
-const clockClassName = "pointer-events-none size-3.5";
+const clockClassName = "pointer-events-none size-3.5!";
 
 function RetentionClock({
   name,
@@ -410,7 +407,7 @@ function RetentionClock({
   // The span stays mounted while the hint opens and closes, so its pointer tracking holds.
   return (
     <span
-      className="flex shrink-0 px-1 text-warning"
+      className="flex shrink-0 text-warning"
       data-testid="conversation-expiry-warning"
       role="img"
       aria-label={name}
