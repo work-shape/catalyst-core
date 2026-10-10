@@ -14,8 +14,14 @@ const CONSUMER_SET = ["core", "config-schema", "api-contract", "api-client", "co
 const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
 // chat-ui and ui ship src/ next to dist/ for Tailwind scanning. chat-server ships the pinned
-// view runtime it serves, about 230 kB packed.
-const MAX_TARBALL_BYTES_BY_DIR = { "chat-ui": 1_000_000, ui: 500_000, "chat-server": 600_000 };
+// view runtime it serves, about 230 kB packed. postgres-store ships its migrations with one
+// schema snapshot each, about 9 kB packed per migration.
+const MAX_TARBALL_BYTES_BY_DIR = {
+  "chat-ui": 1_000_000,
+  ui: 500_000,
+  "chat-server": 600_000,
+  "postgres-store": 400_000
+};
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],
   [/\.(test|spec)\.[cm]?[jt]sx?$/u, "test file"],
