@@ -29,6 +29,7 @@ import type { CapturedMail, MailSender } from "@vivd-catalyst/mail";
 import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";
 import type { ChatAttachmentService } from "./attachments";
+import type { InfrastructureWorkflow } from "./infrastructure-workflow";
 import type { SystemModelGateway } from "./system-model-call";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
 
@@ -50,6 +51,11 @@ export interface ChatServerOptions {
   config: ClientInstanceConfig;
   /** Which modules are on, resolved once by the assembly for the API and every worker. */
   modules: ModuleSnapshot;
+  /**
+   * What the instance runs on, with the checks of its providers. The routes and the scheduled
+   * check share this one object. Absent on an API assembled without its providers.
+   */
+  infrastructure?: InfrastructureWorkflow;
   clientInstanceId: ClientInstanceId;
   authAdapter: AuthAdapter;
   stores: PlatformStores;

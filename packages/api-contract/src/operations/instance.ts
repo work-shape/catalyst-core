@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { clientBrandingSchema, instanceModuleSchema, safeConfigSchema } from "../configuration";
+import { infrastructureSchema } from "../infrastructure";
 import { defineOperation, json } from "./define-operation";
 
 export const instanceOperations = {
@@ -45,5 +46,36 @@ export const instanceOperations = {
     response: json(z.object({ items: z.array(instanceModuleSchema) })),
     errors: [],
     rateClass: "read"
+  }),
+  // A plain read: it answers from the last checks and calls no provider.
+  "instance.infrastructure.get": defineOperation({
+    id: "instance.infrastructure.get",
+    method: "GET",
+    path: "/api/v1/instance/infrastructure",
+    summary: "List what the instance runs on, with the result of each provider's last check",
+    tag: "Instance",
+    auth: "user",
+    scope: "user_admin:read",
+    requires: ["users.manage"],
+    effect: "reading",
+    response: json(infrastructureSchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  // It stores nothing and changes no setting. The instance runs it at most once a minute,
+  // whoever asks: a call inside that minute is refused with `RATE_LIMITED`.
+  "instance.infrastructure.check": defineOperation({
+    id: "instance.infrastructure.check",
+    method: "POST",
+    path: "/api/v1/instance/infrastructure/check",
+    summary: "Check every provider now and answer with the results",
+    tag: "Instance",
+    auth: "user",
+    scope: "user_admin:read",
+    requires: ["users.manage"],
+    effect: "reading",
+    response: json(infrastructureSchema),
+    errors: [],
+    rateClass: "write"
   })
 } as const;

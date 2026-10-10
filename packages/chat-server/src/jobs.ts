@@ -15,6 +15,8 @@ import {
   adoptLegacyJobsSchedule,
   backfillUsageAttributionJob,
   backfillUsageAttributionSchedule,
+  checkInfrastructureJob,
+  checkInfrastructureSchedule,
   cleanUpExecutionWorkspacesJob,
   deleteAccountJob,
   deleteWorkspaceJob,
@@ -253,6 +255,19 @@ export function createChatServerJobs(
         every: cleanup.jobOptions?.checkIntervalMs ?? DEFAULT_WORKSPACE_CLEANUP_INTERVAL_MS
       })
     );
+  }
+
+  const { infrastructure } = options;
+  if (infrastructure) {
+    handlers.push(
+      defineJobHandler({
+        kind: checkInfrastructureJob,
+        slots: 1,
+        // A provider that fails is a result, not a failed job: the run itself does not throw.
+        run: () => infrastructure.runChecks()
+      })
+    );
+    schedules.push(checkInfrastructureSchedule);
   }
 
   return { handlers, schedules };

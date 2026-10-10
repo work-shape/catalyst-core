@@ -12,6 +12,7 @@ import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerOperationRunRoutes } from "./routes/operation-run-routes";
 import { registerJobRoutes } from "./routes/job-routes";
+import { registerInfrastructureRoutes } from "./routes/infrastructure-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerAccessRoutes } from "./routes/access-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
@@ -46,6 +47,8 @@ export { createChatServerJobs } from "./jobs";
 export type { ChatServerJobOptions, ChatServerJobs } from "./jobs";
 export {
   DELETION_MAX_ATTEMPTS,
+  INFRASTRUCTURE_CHECK_INTERVAL_MS,
+  checkInfrastructureJob,
   cleanUpExecutionWorkspacesJob,
   deleteAccountJob,
   deleteWorkspaceJob,
@@ -54,6 +57,11 @@ export {
   pruneAuditEventsJob,
   pruneJobsJob
 } from "./job-kinds";
+export {
+  INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS,
+  InfrastructureWorkflow
+} from "./infrastructure-workflow";
+export type { InfrastructureEntry } from "./infrastructure-workflow";
 export {
   ExecutionWorkspaceCleanupWorkflow,
   cleanupExecutionWorkspaceForConversation
@@ -127,6 +135,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerAuditRoutes(route, options);
   registerOperationRunRoutes(route, options);
   registerJobRoutes(route, options);
+  registerInfrastructureRoutes(route, options);
   registerApiAccessAdministrationRoutes(route, options);
   registerSuperadminRoutes(route, options);
   registerAccessRoutes(route, options);

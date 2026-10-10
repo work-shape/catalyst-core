@@ -119,6 +119,15 @@ export const recoverAbandonedModelCallsJob = defineScheduledKind("usage.recover_
 /** Corrects the usage counters and the daily sums from the usage events. */
 export const reconcileUsageJob = defineScheduledKind("usage.reconcile");
 
+/** Asks every provider of the instance whether it answers. */
+export const checkInfrastructureJob = defineScheduledKind("infrastructure.check", 2 * MINUTE_MS);
+
+/**
+ * How often the instance checks its providers by itself. A run is one cheap call per configured
+ * provider, all at once, each ended after `PROVIDER_CHECK_TIMEOUT_MS`: 288 runs a day.
+ */
+export const INFRASTRUCTURE_CHECK_INTERVAL_MS = 5 * MINUTE_MS;
+
 export const expireConversationsSchedule = defineSchedule({
   kind: expireConversationsJob,
   every: HOUR_MS
@@ -151,5 +160,11 @@ export const reconcileUsageSchedule = defineSchedule({
   kind: reconcileUsageJob,
   every: DAY_MS,
   // The Usage page shows no sums of the days before the upgrade until the first run is through.
+  dueAtStart: true
+});
+export const checkInfrastructureSchedule = defineSchedule({
+  kind: checkInfrastructureJob,
+  every: INFRASTRUCTURE_CHECK_INTERVAL_MS,
+  // The Infrastructure page shows no health until the first run after a start is through.
   dueAtStart: true
 });

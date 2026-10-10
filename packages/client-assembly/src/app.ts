@@ -76,7 +76,11 @@ import type {
   ClientInstanceManagedObjectReaderContribution
 } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
-import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
+import {
+  createInstanceInfrastructure,
+  createWorkspacesStore,
+  createInfrastructureWorkflow
+} from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
@@ -153,6 +157,7 @@ export async function createClientInstanceApp(
     logger,
     config,
     modules: execution.modules,
+    infrastructure: createInfrastructureWorkflow(config, execution.infrastructure, store),
     clientInstanceId,
     authAdapter,
     stores: store,

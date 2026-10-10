@@ -7,6 +7,17 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Infrastructure:** the page **Instance > Infrastructure** in the settings and
+  `GET /api/v1/instance/infrastructure` list what the instance runs on: every entry of the
+  `infrastructure` section and the database, each with its provider, region, endpoint host or
+  bucket, the names of its secrets with "set" or "missing", and the result of its last check.
+  Both need `users.manage` and change nothing. No secret value, connection string, key or host
+  path is returned. Every provider now has a check, the cheapest authenticated call it has, which
+  ends after five seconds. The new job kind `infrastructure.check` runs all checks every five
+  minutes, and `POST /api/v1/instance/infrastructure/check` runs them once more, at most once a
+  minute for the instance. A failed check carries a class from a closed list and never the
+  provider's own error text. A provider that fails does not change `/ready`.
+  `defineProvider` requires `check`: a capability that registers a provider must add one.
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
   `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
   caller who is authenticated; a call without a credential gets `401` as on any route. Its agent tools are not offered to the model and cannot be called,

@@ -1,13 +1,17 @@
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
+import { InfrastructureWorkflow, type InfrastructureEntry } from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createEnvironmentSecretResolver,
   createProvider,
   defineProvider,
   ProviderRegistry,
+  readDatabaseReadiness,
+  runProviderCheck,
   type Logger,
   type ObjectStorage,
+  type PlatformStores,
   type ProviderCreateContext,
   type ProviderDefinition,
   type ProviderEntry,
@@ -51,6 +55,8 @@ function secretProviderDefinitions(
       configSchema: z.object({}),
       external: false,
       create: () => createEnvironmentSecrets(env),
+      // The environment of the process: there is nothing to reach.
+      check: async () => ({ ok: true }),
       describe: () => ({})
     })
   ];
@@ -162,4 +168,108 @@ export async function createSandbox(
     { path: SANDBOX_PATH, entry: config.infrastructure.sandbox },
     infrastructure.context
   );
+}
+
+/**
+ * The ports whose providers the API process uses itself, so it can ask them. The sandbox runs
+ * in the workspace command worker, which alone reaches the Docker engine: asked from the API
+ * it would read as down on an instance where it works.
+ */
+const PORTS_CHECKED_BY_THE_API: ReadonlySet<ProviderPort> = new Set([
+  "secrets",
+  "models",
+  "mail",
+  "objectStorage"
+]);
+
+/**
+ * What Instance > Infrastructure lists: every configured entry of the section and the
+ * database. Of an entry's config it takes the endpoint host and the bucket and nothing else,
+ * so a path on the host, a limit or a setting an adapter adds later is not shown by default.
+ */
+export function infrastructureOverview(input: {
+  config: Pick<ClientInstanceConfig, "infrastructure">;
+  infrastructure: InstanceInfrastructure;
+  stores: PlatformStores;
+}): InfrastructureEntry[] {
+  const { registry, context } = input.infrastructure;
+  const database: InfrastructureEntry = {
+    id: "database",
+    class: "database",
+    type: "postgres",
+    origin: "operator",
+    // Where the database runs is a deployment choice the product does not know.
+    external: false,
+    secretNames: [PLATFORM_SECRET_NAMES.databaseUrl],
+    // Whether it answers. A database that answers and is behind its release is the matter of
+    // `/ready`, not of this row.
+    check: () =>
+      runProviderCheck(async () => {
+        const readiness = await readDatabaseReadiness(input.stores);
+        return readiness.status === "not_ready" && readiness.reason === "database_unreachable"
+          ? { ok: false, errorClass: "unreachable" }
+          : { ok: true };
+      })
+  };
+  return [
+    database,
+    ...infrastructureEntries(input.config).map(({ port, entry }) =>
+      providerOverview(port, entry, registry, context)
+    )
+  ];
+}
+
+function providerOverview<Port extends ProviderPort>(
+  port: Port,
+  entry: ProviderEntry,
+  registry: ProviderRegistry,
+  context: ProviderCreateContext
+): InfrastructureEntry {
+  const definition = registry.find(port, entry);
+  const validated = definition.validate(entry);
+  const id = entry.path.slice("infrastructure.".length);
+  const name = id.includes(".") ? id.slice(id.indexOf(".") + 1) : undefined;
+  const { endpointHost, bucket } = validated.description;
+  // The provider the check asks is created at the first check and kept. It is one of its own:
+  // creating it reaches nothing, and the one the product works with stays where it is.
+  let created: ReturnType<typeof definition.create> | undefined;
+  return {
+    id,
+    class: port,
+    ...(name === undefined ? {} : { name }),
+    type: validated.type,
+    origin: "operator",
+    external: validated.external,
+    ...(validated.region ? { region: validated.region } : {}),
+    ...(typeof endpointHost === "string" ? { endpointHost } : {}),
+    ...(typeof bucket === "string" ? { bucket } : {}),
+    secretNames: validated.secrets.map((secret) => secret.name),
+    ...(PORTS_CHECKED_BY_THE_API.has(port)
+      ? {
+          check: async () => {
+            created ??= definition.create(entry, context);
+            const instance = await created.catch(() => {
+              created = undefined;
+              return undefined;
+            });
+            return instance === undefined
+              ? { ok: false, errorClass: "failed" }
+              : definition.check(instance);
+          }
+        }
+      : {})
+  };
+}
+
+/** Instance > Infrastructure of an API process: the overview with the checks behind it. */
+export function createInfrastructureWorkflow(
+  config: Pick<ClientInstanceConfig, "infrastructure">,
+  infrastructure: InstanceInfrastructure,
+  stores: PlatformStores
+): InfrastructureWorkflow {
+  return new InfrastructureWorkflow({
+    entries: infrastructureOverview({ config, infrastructure, stores }),
+    secrets: infrastructure.secrets,
+    logger: infrastructure.context.logger
+  });
 }

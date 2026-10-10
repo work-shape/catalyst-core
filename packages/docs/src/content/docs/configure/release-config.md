@@ -616,6 +616,28 @@ The platform takes its own secrets from the same provider by fixed names: `DATAB
 `CHAT_SERVER_CREDENTIAL`. A data source's `connectionRef: env:NAME` and a seed user's
 `passwordEnvName` name secrets too.
 
+### Reading what an instance runs on
+
+The page **Instance > Infrastructure** in the settings and `GET /api/v1/instance/infrastructure`
+list every configured entry of this section and the database: the provider, its region, the host
+it calls or its bucket, the names of its secrets with whether each is set, and the result of its
+last check. Both need `users.manage` and change nothing. A secret value, a connection string, a
+key and a path on the host are never part of the answer.
+
+A check is the cheapest authenticated call a provider has: the list of models of a model
+endpoint, the account of a Mailjet key pair, the `head` of a key that is never written in an
+object store, one query against the database. It generates nothing, sends no mail and writes
+nothing. The instance runs the checks every five minutes, all at once, and each check ends after
+five seconds as `timeout`. **Check now** and `POST /api/v1/instance/infrastructure/check` run
+them once more, at most once a minute for the whole instance; a call inside that minute answers
+`429 RATE_LIMITED`. Opening the page asks no provider.
+
+A failed check shows a class and a sentence of the product: `unreachable`, `timeout`,
+`access_denied`, `not_found`, `rejected` or `failed`. What the provider itself answered is not
+shown, logged or returned. The results are kept in the memory of the API process and start empty
+after a restart. A failing provider does not change `/ready`. The command sandbox is listed and
+not checked, because the workspace command worker reaches it and the API does not.
+
 The keys `modelProviders`, `mail`, `executionWorkspaces.runner` and
 `capabilities.documentProcessing.objectStorage` moved into this section. Config that still
 carries one of them does not load: startup stops and names the key and its new place. The

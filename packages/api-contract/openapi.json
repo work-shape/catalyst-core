@@ -4647,6 +4647,120 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/instance/infrastructure": {
+      "get": {
+        "operationId": "instance.infrastructure.get",
+        "summary": "List what the instance runs on, with the result of each provider's last check",
+        "tags": [
+          "Instance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infrastructure"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/instance/infrastructure/check": {
+      "post": {
+        "operationId": "instance.infrastructure.check",
+        "summary": "Check every provider now and answer with the results",
+        "tags": [
+          "Instance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Infrastructure"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/instance/jobs": {
       "get": {
         "operationId": "instance.jobs.list",
@@ -12827,6 +12941,189 @@
           "workspace",
           "namespace",
           "asset"
+        ]
+      },
+      "Infrastructure": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InfrastructureProvider"
+            }
+          },
+          "checkIntervalSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "checkAvailableAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "items",
+          "checkIntervalSeconds"
+        ]
+      },
+      "InfrastructureCheck": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "pending"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "not_checked"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "ok"
+              },
+              "checkedAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              }
+            },
+            "required": [
+              "status",
+              "checkedAt"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "failed"
+              },
+              "checkedAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              "errorClass": {
+                "type": "string",
+                "enum": [
+                  "unreachable",
+                  "timeout",
+                  "access_denied",
+                  "not_found",
+                  "rejected",
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "checkedAt",
+              "errorClass"
+            ]
+          }
+        ]
+      },
+      "InfrastructureClass": {
+        "type": "string",
+        "enum": [
+          "models",
+          "mail",
+          "objectStorage",
+          "sandbox",
+          "secrets",
+          "database"
+        ]
+      },
+      "InfrastructureOrigin": {
+        "type": "string",
+        "enum": [
+          "operator",
+          "instance"
+        ]
+      },
+      "InfrastructureProvider": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "class": {
+            "$ref": "#/components/schemas/InfrastructureClass"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/InfrastructureOrigin"
+          },
+          "external": {
+            "type": "boolean"
+          },
+          "region": {
+            "type": "string",
+            "enum": [
+              "eu",
+              "global"
+            ]
+          },
+          "endpointHost": {
+            "type": "string"
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "secrets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "set",
+                    "missing"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "state"
+              ]
+            }
+          },
+          "check": {
+            "$ref": "#/components/schemas/InfrastructureCheck"
+          }
+        },
+        "required": [
+          "id",
+          "class",
+          "type",
+          "origin",
+          "external",
+          "secrets",
+          "check"
         ]
       },
       "InstanceModule": {
