@@ -13,6 +13,7 @@ export * from "./infrastructure";
 export * from "./jobs";
 export * from "./openapi-document";
 export * from "./operation-runs";
+export * from "./pages";
 export * from "./platform";
 export * from "./shared";
 export * from "./system";

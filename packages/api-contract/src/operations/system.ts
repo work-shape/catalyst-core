@@ -58,6 +58,23 @@ export const systemOperations = {
     errors: ["FORBIDDEN", "NOT_FOUND"],
     rateClass: "read"
   }),
+  // Outside `/api` like the two above: the address of a frame and of the files it loads. The
+  // frame has no origin, so no request for a file carries a session; the token in the path is
+  // the whole authorization of a request. The rest of the path is `<file set id>/<token>/<path
+  // of the file in the file set>`. It is one wildcard and not three parts, because the token
+  // is longer than the router lets a named part be and a file's path holds slashes.
+  "app_content.files.get": defineOperation({
+    id: "app_content.files.get",
+    method: "GET",
+    path: "/app-content/*",
+    summary: "Serve one file of a Page revision to the frame that shows it",
+    tag: "System",
+    auth: "public",
+    effect: "reading",
+    response: blob(),
+    errors: ["FORBIDDEN", "NOT_FOUND"],
+    rateClass: "read"
+  }),
   "captured_mail.list": defineOperation({
     id: "captured_mail.list",
     method: "GET",

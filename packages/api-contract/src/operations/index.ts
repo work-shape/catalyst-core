@@ -12,6 +12,7 @@ import { governanceOperations } from "./governance";
 import { instanceOperations } from "./instance";
 import { jobOperations } from "./jobs";
 import { operationRunOperations } from "./operations";
+import { pageOperations } from "./pages";
 import { platformOperations } from "./platform";
 import { referenceOperations } from "./reference";
 import { systemOperations } from "./system";
@@ -28,6 +29,7 @@ export const apiOperations = {
   ...governanceOperations,
   ...jobOperations,
   ...operationRunOperations,
+  ...pageOperations,
   ...configAssetOperations,
   ...assetOperations,
   ...userOperations,
