@@ -1,0 +1,52 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://aiplatform.eu.rep.googleapis.com/v1/projects/recorded-project/locations/eu/publishers/google/models/recorded-gemini-model:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What colour is this pixel?"
+                },
+                {
+                  "inlineData": {
+                    "mimeType": "image/png",
+                    "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "The pixel is transparent."
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 90,
+            "candidatesTokenCount": 6,
+            "totalTokenCount": 96
+          },
+          "modelVersion": "recorded-gemini-model",
+          "responseId": "recorded-response"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": [],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "events": [
+          {
+            "id": "chatcmpl-recorded",
+            "object": "chat.completion.chunk",
+            "model": "recorded-chat-model",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": "Hello from"
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-recorded",
+            "object": "chat.completion.chunk",
+            "model": "recorded-chat-model",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": " the recording."
+                },
+                "finish_reason": null
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-recorded",
+            "object": "chat.completion.chunk",
+            "model": "recorded-chat-model",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+              }
+            ]
+          },
+          {
+            "id": "chatcmpl-recorded",
+            "object": "chat.completion.chunk",
+            "model": "recorded-chat-model",
+            "choices": [],
+            "usage": {
+              "prompt_tokens": 12,
+              "completion_tokens": 5,
+              "total_tokens": 17,
+              "prompt_tokens_details": {
+                "cached_tokens": 4
+              }
+            }
+          },
+          "[DONE]"
+        ]
+      }
+    }
+  ]
+}

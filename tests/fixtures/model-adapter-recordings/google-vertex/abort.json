@@ -1,0 +1,25 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://aiplatform.eu.rep.googleapis.com/v1/projects/recorded-project/locations/eu/publishers/google/models/recorded-gemini-model:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Say hello."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "neverAnswers": true
+      }
+    }
+  ]
+}

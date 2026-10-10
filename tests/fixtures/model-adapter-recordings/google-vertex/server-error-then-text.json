@@ -1,0 +1,74 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://aiplatform.eu.rep.googleapis.com/v1/projects/recorded-project/locations/eu/publishers/google/models/recorded-gemini-model:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Say hello."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 503,
+        "body": {
+          "error": {
+            "code": 503,
+            "message": "PLANTED-PROVIDER-TEXT: the model is overloaded",
+            "status": "UNAVAILABLE"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "url": "https://aiplatform.eu.rep.googleapis.com/v1/projects/recorded-project/locations/eu/publishers/google/models/recorded-gemini-model:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Say hello."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "Hello from the recording."
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 12,
+            "candidatesTokenCount": 5,
+            "totalTokenCount": 17,
+            "cachedContentTokenCount": 4
+          },
+          "modelVersion": "recorded-gemini-model",
+          "responseId": "recorded-response"
+        }
+      }
+    }
+  ]
+}

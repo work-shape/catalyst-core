@@ -1,0 +1,116 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "retry-after": "30"
+        },
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT: rate limit reached for recorded-chat-model",
+            "type": "rate_limit_error",
+            "code": "rate_limit_exceeded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "retry-after": "30"
+        },
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT: rate limit reached for recorded-chat-model",
+            "type": "rate_limit_error",
+            "code": "rate_limit_exceeded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "retry-after": "30"
+        },
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT: rate limit reached for recorded-chat-model",
+            "type": "rate_limit_error",
+            "code": "rate_limit_exceeded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "retry-after": "30"
+        },
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT: rate limit reached for recorded-chat-model",
+            "type": "rate_limit_error",
+            "code": "rate_limit_exceeded"
+          }
+        }
+      }
+    }
+  ]
+}

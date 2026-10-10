@@ -1,0 +1,97 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Weather and time in Berlin?"
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "tool_Z2V0X3dlYXRoZXI",
+                "description": "Reads the weather of a city.",
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["city"],
+                  "properties": {
+                    "city": {
+                      "type": "string",
+                      "description": "The name of the city."
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "tool_Z2V0X3RpbWU",
+                "description": "Reads the time of a zone.",
+                "parameters": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["zone"],
+                  "properties": {
+                    "zone": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "tool_choice": "auto"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": "chatcmpl-recorded",
+          "object": "chat.completion",
+          "model": "recorded-chat-model",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [
+                  {
+                    "id": "call_recorded_1",
+                    "type": "function",
+                    "function": {
+                      "name": "tool_Z2V0X3dlYXRoZXI",
+                      "arguments": "{\"city\":\"Berlin\"}"
+                    }
+                  },
+                  {
+                    "id": "call_recorded_2",
+                    "type": "function",
+                    "function": {
+                      "name": "tool_Z2V0X3RpbWU",
+                      "arguments": "{\"zone\":\"Europe/Berlin\"}"
+                    }
+                  }
+                ]
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 40,
+            "completion_tokens": 18,
+            "total_tokens": 58
+          }
+        }
+      }
+    }
+  ]
+}

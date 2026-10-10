@@ -1,0 +1,23 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 200,
+        "neverAnswers": true
+      }
+    }
+  ]
+}

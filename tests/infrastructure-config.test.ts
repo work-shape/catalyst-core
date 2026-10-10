@@ -84,7 +84,7 @@ describe("infrastructure section", () => {
       models: { main: { provider: "acme-llm", region: "eu", model: "m" } }
     });
     expect(error.message).toBe(
-      "'infrastructure.models.main.provider' 'acme-llm' is not a registered provider for the port 'models'; registered: deterministic, openai-compatible"
+      "'infrastructure.models.main.provider' 'acme-llm' is not a registered provider for the port 'models'; registered: deterministic, google-vertex, openai-compatible"
     );
 
     const mail = await startupFailure({

@@ -1,0 +1,52 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://aiplatform.eu.rep.googleapis.com/v1/projects/recorded-project/locations/eu/publishers/google/models/recorded-gemini-model:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "inlineData": {
+                    "mimeType": "application/pdf",
+                    "data": "JVBERi0xLjQKJSBzeW50aGV0aWMgY29uZm9ybWFuY2UgZG9jdW1lbnQK"
+                  }
+                },
+                {
+                  "text": "Summarize the document."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "The document is a synthetic page."
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 300,
+            "candidatesTokenCount": 8,
+            "totalTokenCount": 308
+          },
+          "modelVersion": "recorded-gemini-model",
+          "responseId": "recorded-response"
+        }
+      }
+    }
+  ]
+}

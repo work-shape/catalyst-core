@@ -433,7 +433,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function* readServerSentEventData(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
+/** The `data` of each server-sent event of a response body, read under the idle limit. */
+export async function* readServerSentEventData(
+  body: ReadableStream<Uint8Array>
+): AsyncIterable<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const parser = new ServerSentEventDataLineParser();

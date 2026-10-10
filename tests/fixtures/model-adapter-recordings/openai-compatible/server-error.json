@@ -1,0 +1,79 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 503,
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT: the engine is overloaded",
+            "type": "server_error",
+            "code": "server_overloaded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 503,
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT: the engine is overloaded",
+            "type": "server_error",
+            "code": "server_overloaded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": []
+        }
+      },
+      "response": {
+        "status": 503,
+        "body": {
+          "error": {
+            "message": "PLANTED-PROVIDER-TEXT: the engine is overloaded",
+            "type": "server_error",
+            "code": "server_overloaded"
+          }
+        }
+      }
+    }
+  ]
+}

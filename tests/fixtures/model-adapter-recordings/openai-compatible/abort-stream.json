@@ -1,0 +1,44 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://models.example.test/v1/chat/completions",
+        "body": {
+          "model": "recorded-chat-model",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Say hello."
+            }
+          ],
+          "tools": [],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "events": [
+          {
+            "id": "chatcmpl-recorded",
+            "object": "chat.completion.chunk",
+            "model": "recorded-chat-model",
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "role": "assistant",
+                  "content": "Hello from"
+                },
+                "finish_reason": null
+              }
+            ]
+          }
+        ],
+        "staysOpen": true
+      }
+    }
+  ]
+}

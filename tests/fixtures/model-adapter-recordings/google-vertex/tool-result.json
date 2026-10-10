@@ -1,0 +1,105 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://aiplatform.eu.rep.googleapis.com/v1/projects/recorded-project/locations/eu/publishers/google/models/recorded-gemini-model:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the weather in Berlin?"
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "name": "get_weather",
+                    "args": {
+                      "city": "Berlin"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "functionResponse": {
+                    "name": "get_weather",
+                    "response": {
+                      "output": "{\"temperatureC\":18}"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "functionDeclarations": [
+                {
+                  "name": "get_weather",
+                  "description": "Reads the weather of a city.",
+                  "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "city": {
+                        "type": "STRING",
+                        "description": "The name of the city."
+                      }
+                    },
+                    "required": ["city"]
+                  }
+                },
+                {
+                  "name": "get_time",
+                  "description": "Reads the time of a zone.",
+                  "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "zone": {
+                        "type": "STRING"
+                      }
+                    },
+                    "required": ["zone"]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "It is 18 degrees in Berlin."
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 52,
+            "candidatesTokenCount": 9,
+            "totalTokenCount": 61
+          },
+          "modelVersion": "recorded-gemini-model",
+          "responseId": "recorded-response"
+        }
+      }
+    }
+  ]
+}

@@ -63,7 +63,16 @@ export type ModelContentPart =
        * tool can load its own image again; an image the user attached cannot be loaded again.
        */
       source?: { kind: "tool_result" | "user_attachment"; label: string };
+    }
+  | {
+      /** A whole document for the model to read. Only a model that declares document input takes it. */
+      type: "document";
+      mimeType: ModelDocumentMimeType;
+      data: Uint8Array;
     };
+
+/** The document formats a call can carry. */
+export type ModelDocumentMimeType = "application/pdf";
 
 export type ModelContent = string | ModelContentPart[];
 

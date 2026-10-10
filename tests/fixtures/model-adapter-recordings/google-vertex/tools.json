@@ -1,0 +1,92 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://aiplatform.eu.rep.googleapis.com/v1/projects/recorded-project/locations/eu/publishers/google/models/recorded-gemini-model:generateContent",
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Weather and time in Berlin?"
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "functionDeclarations": [
+                {
+                  "name": "get_weather",
+                  "description": "Reads the weather of a city.",
+                  "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "city": {
+                        "type": "STRING",
+                        "description": "The name of the city."
+                      }
+                    },
+                    "required": ["city"]
+                  }
+                },
+                {
+                  "name": "get_time",
+                  "description": "Reads the time of a zone.",
+                  "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "zone": {
+                        "type": "STRING"
+                      }
+                    },
+                    "required": ["zone"]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "functionCall": {
+                      "name": "get_weather",
+                      "args": {
+                        "city": "Berlin"
+                      }
+                    }
+                  },
+                  {
+                    "functionCall": {
+                      "name": "get_time",
+                      "args": {
+                        "zone": "Europe/Berlin"
+                      }
+                    }
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 40,
+            "candidatesTokenCount": 18,
+            "totalTokenCount": 58
+          },
+          "modelVersion": "recorded-gemini-model",
+          "responseId": "recorded-response"
+        }
+      }
+    }
+  ]
+}

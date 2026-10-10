@@ -201,6 +201,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           const completion = await limit.bound(target.adapter.complete(request));
           attempt.retrySafe = false;
           seen.completion = completion;
+          assertAnswersInFormat(call, completion);
           yield { type: "completed", completion };
           return;
         }
@@ -223,6 +224,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           } else if (event.type === "completed") {
             attempt.retrySafe = false;
             seen.completion = event.completion;
+            assertAnswersInFormat(call, event.completion);
           } else if (
             !(event.type === "text_delta" || event.type === "reasoning_delta") ||
             event.delta.length > 0
@@ -533,11 +535,39 @@ function assertWithinCapabilities(
   if (call.output !== undefined && !capabilities.structuredOutput) {
     missing.push("structured output");
   }
+  if (!capabilities.documentInput && call.messages.some(carriesDocument)) {
+    missing.push("document input");
+  }
   if (missing.length > 0) {
     throw new AppError(
       "VALIDATION_FAILED",
       `Model '${target.model}' of provider '${target.provider.id}' does not support: ${missing.join(", ")}`
     );
+  }
+}
+
+function carriesDocument(message: ModelMessage): boolean {
+  return (
+    typeof message.content !== "string" && message.content.some((part) => part.type === "document")
+  );
+}
+
+/**
+ * A call that asked for an answer format gets JSON or fails: the same for every adapter. The
+ * check runs after the completion is noted, so the tokens of an answer that is refused here are
+ * settled. Whether the JSON has the shape of the schema is for the caller to check.
+ */
+function assertAnswersInFormat(call: ModelCall, completion: ModelCompletion): void {
+  if (call.output === undefined || completion.toolCalls.length > 0) {
+    return;
+  }
+  try {
+    JSON.parse(completion.text);
+  } catch {
+    throw new ModelProviderError({
+      kind: "invalid_response",
+      message: "Model answer is not valid JSON"
+    });
   }
 }
 
