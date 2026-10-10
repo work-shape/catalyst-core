@@ -536,13 +536,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/tool-execution/src/workspace-tools.ts",
-      "count": 1,
-      "owner": "EW-1"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "packages/usage-governance/src/index.ts",
       "count": 1,
       "owner": "LU-1"
