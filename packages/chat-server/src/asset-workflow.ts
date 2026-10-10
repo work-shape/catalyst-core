@@ -334,7 +334,7 @@ export class AssetWorkflow {
     }
     const stored = await loadStoredAssets(this.options);
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
-    requireInstanceDefaultChange(call.access, "delete", kind, clearsDefault);
+    requireInstanceDefaultChange(call.access, kind, clearsDefault);
     /** The set as the delete would leave it. */
     const deleted = (set: AssetSet) => {
       const removed = withoutDefinition(set, kind.kind, name);
@@ -449,7 +449,7 @@ export class AssetWorkflow {
     const stored = await loadStoredAssets(this.options);
     const current = findDefinition(stored.set, kind.kind, name);
     const setsDefault = setsInitialDefault(stored.set, kind);
-    requireInstanceDefaultChange(call.access, surface, kind, setsDefault);
+    requireInstanceDefaultChange(call.access, kind, setsDefault);
     // A revert restores what was stored: nothing is adjusted on the way.
     const definition =
       write.operation === "revert"

@@ -35,12 +35,13 @@ import {
   itemWriteDecision,
   loadReferableAssets,
   loadStoredAssets,
+  impliesDefaultChange,
   maxSyncItems,
-  mayChangeInstanceDefault,
   missingUpsertRightOf,
   preparedUpsert,
   releaseInitialAvailability,
   requireAssetManagementOn,
+  requireNamespaceOrRelease,
   requireReleaseSync,
   toJsonObject
 } from "./asset-write-rules";
@@ -53,8 +54,8 @@ type AssetSyncItem =
 
 export interface AssetSyncInput {
   /**
-   * The prefix of the one Namespace the batch belongs to. Without one the batch may name any
-   * asset of the instance, each still decided by the caller's right on it.
+   * The prefix of the one Namespace the batch belongs to. A release names none and may name
+   * any asset of the instance.
    */
   namespace?: string;
   items: AssetSyncItem[];
@@ -171,19 +172,38 @@ export async function syncAssets(
   /** The set as the batch would leave it. */
   const withItems = (set: AssetSet) => leftByItems(call.access, stored.set, ready(), set);
   let candidate = withItems(stored.set);
+  const storedDefault = stored.state.defaultAgentName ?? null;
+  if (
+    input.expectedDefaultAgentName !== undefined &&
+    input.expectedDefaultAgentName !== storedDefault
+  ) {
+    throw new AppError(
+      "CONFLICT",
+      storedDefault === null
+        ? "The instance has no default agent"
+        : `The default agent is '${storedDefault}'`,
+      { reason: "default_agent_changed", currentDefaultAgentName: storedDefault }
+    );
+  }
   // The first asset of a kind with an instance default becomes it and the last one takes it
-  // away. Either changes the default, which no Namespace or asset grant opens. A release that
-  // names the default is taken at its word instead.
+  // away. Either changes the default, which no Namespace or asset grant opens. A release is
+  // taken at its word instead: the default it names, or the stored one.
   const impliedDefault =
-    input.defaultAgentName === undefined
+    input.defaultAgentName === undefined && impliesDefaultChange(call.access)
       ? planDefaultChange(kinds.kinds, stored.set, candidate, ready())
       : undefined;
-  if (impliedDefault && !mayChangeInstanceDefault(call.access, "sync", impliedDefault.entry.kind)) {
+  if (impliedDefault && !call.access.authorize(impliedDefault.entry.kind.actions.write).allowed) {
     impliedDefault.entry.refusal = defaultChangeRefusal(impliedDefault.entry.kind);
   }
+  // A batch made against a default the caller read writes the default it leaves, so that the
+  // store checks the expectation once more under its lock.
+  const keptDefault =
+    input.expectedDefaultAgentName === undefined
+      ? undefined
+      : { agentName: stored.state.defaultAgentName };
   const defaultChange =
     input.defaultAgentName === undefined
-      ? impliedDefault
+      ? (impliedDefault ?? keptDefault)
       : { agentName: input.defaultAgentName ?? undefined };
   if (defaultChange) {
     candidate = withDefaultAgentName(candidate, defaultChange.agentName);
@@ -259,14 +279,7 @@ export async function syncAssets(
         entry.item.expectedRevision ?? null
       ])
     ),
-    ...(defaultChange
-      ? {
-          baseDefaultAgentName:
-            input.expectedDefaultAgentName === undefined
-              ? (stored.state.defaultAgentName ?? null)
-              : input.expectedDefaultAgentName
-        }
-      : {}),
+    ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
     ...releaseInitialAvailability(call.access, "sync"),
     mutations
   }).catch((error: unknown) => {
@@ -361,6 +374,7 @@ async function authorizeItems(
   // The module's switch is asked here because the release holder passes it: the operation
   // itself belongs to no module, so the route does not refuse it before the caller is known.
   requireAssetManagementOn(options, access, "sync");
+  requireNamespaceOrRelease(access, input.namespace);
   if (input.defaultAgentName !== undefined || input.expectedDefaultAgentName !== undefined) {
     requireReleaseSync(access, "sync");
   }
@@ -435,7 +449,7 @@ async function requireFurtherRights(
     options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId })
   ]);
   const defaultChange =
-    input.defaultAgentName === undefined
+    input.defaultAgentName === undefined && impliesDefaultChange(access)
       ? planDefaultChange(
           options.configAssets.kinds.kinds,
           stored.set,
@@ -443,7 +457,7 @@ async function requireFurtherRights(
           ready
         )
       : undefined;
-  if (defaultChange && !mayChangeInstanceDefault(access, "sync", defaultChange.entry.kind)) {
+  if (defaultChange && !access.authorize(defaultChange.entry.kind.actions.write).allowed) {
     defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
   }
   for (const entry of ready) {

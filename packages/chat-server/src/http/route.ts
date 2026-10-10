@@ -307,7 +307,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
     }
     if (caller.identity && operation.scope) {
-      requireOperationScope(caller.identity, operation.id, operation.scope);
+      await requireOperationScope(options, caller.identity, operation.id, operation.scope);
     }
     const query = parseInput(operation.query, request.query, "Request query is invalid");
     const body = parseInput(operation.body, request.body ?? {}, "Request body is invalid");
@@ -357,21 +357,31 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
 }
 
 /**
- * The scopes that pass an operation's check beside its own. A release is written through
- * `assets.sync`, which asks for the scope of writing assets, so a key issued for release sync
- * passes there and on no other operation of that scope.
+ * The scope that passes an operation's check beside its own, for a holder of one right on the
+ * instance. A release is written through `assets.sync`, which asks for the scope of writing
+ * assets: a key issued for release sync passes there when its principal holds the release
+ * right, and on no other operation and for no other principal.
  */
-const FURTHER_SCOPES_OF_OPERATION: Partial<Record<string, readonly OperationScope[]>> = {
-  "assets.sync": ["config_assets:release"]
+const FURTHER_SCOPE_OF_OPERATION: Partial<
+  Record<string, { scope: OperationScope; heldWith: string }>
+> = {
+  "assets.sync": { scope: "config_assets:release", heldWith: "assets.release" }
 };
 
-function requireOperationScope(
+async function requireOperationScope(
+  options: Pick<ResolvedChatServerOptions, "authorizer">,
   identity: AuthenticatedIdentity,
   operationId: string,
   scope: OperationScope
-): void {
-  const further = FURTHER_SCOPES_OF_OPERATION[operationId] ?? [];
-  if (!further.some((accepted) => hasAuthScope(identity, accepted))) {
+): Promise<void> {
+  const further = FURTHER_SCOPE_OF_OPERATION[operationId];
+  if (hasAuthScope(identity, scope) || !further || !hasAuthScope(identity, further.scope)) {
+    requireAuthScope(identity, scope);
+    return;
+  }
+  // Asked without a resource, so only a right on the instance answers.
+  const access = await options.authorizer.forActor(identity);
+  if (!access.authorize(further.heldWith).allowed) {
     requireAuthScope(identity, scope);
   }
 }

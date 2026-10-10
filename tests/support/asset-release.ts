@@ -15,6 +15,8 @@ import {
 // What the tests of a release through `assets.sync` share: the service principal that holds
 // the release right, the items of a batch, and how a refused batch reads.
 
+/** The Namespace the assets of these tests lie in, which a batch of an ordinary caller names. */
+const NAMESPACE = "rel-";
 export const SERVICE = "sp_test";
 /** The limits of an instance that is edited by release only, but for the display name. */
 export const RELEASE_ONLY = {
@@ -67,6 +69,7 @@ export interface ReleaseInstance extends AccessInstance {
 
 export async function setupRelease(options: AccessInstanceOptions = {}): Promise<ReleaseInstance> {
   const t = await setupAccessInstance(options);
+  await t.createNamespace(NAMESPACE);
   // An administrator who also holds the release right: bound outside a sync like anyone.
   const releaser = await t.stores.users.createUser({
     clientInstanceId,
@@ -77,8 +80,8 @@ export async function setupRelease(options: AccessInstanceOptions = {}): Promise
   await t.stores.configAssets.applyConfigAssetMutations({
     clientInstanceId,
     mutations: [
-      { type: "upsert", kind: "agent", name: "old", config: agent("old") },
-      { type: "upsert", kind: "skill", name: "guide", config: skill("guide") }
+      { type: "upsert", kind: "agent", name: "rel-old", config: agent("rel-old") },
+      { type: "upsert", kind: "skill", name: "rel-guide", config: skill("rel-guide") }
     ]
   });
   const stored = (kind: string, name: string) =>
@@ -108,7 +111,7 @@ export const syncAsService = (t: AccessInstance, items: Item[], scopes?: string)
 export const releaseAsService = (t: AccessInstance, payload: Item): Answer =>
   asService(t, "assets.sync", { payload });
 export const syncAs = (t: AccessInstance, userId: string, items: Item[], more: Item = {}): Answer =>
-  t.call(userId, "assets.sync", { payload: { items, ...more } });
+  t.call(userId, "assets.sync", { payload: { namespace: NAMESPACE, items, ...more } });
 
 export function refusedItems(response: { json(): unknown }) {
   const { error } = errorSchema.parse(response.json());

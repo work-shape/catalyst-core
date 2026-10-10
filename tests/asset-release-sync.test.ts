@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
+import {
+  SCOPES_HEADER,
+  agent,
+  clientInstanceId,
+  errorSchema,
+  skill
+} from "./support/access-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
 import {
   RELEASE_ONLY,
@@ -9,9 +15,11 @@ import {
   putAgent,
   putSkill,
   refusedItems,
+  releaseAsService,
   setupRelease as setup,
   syncAs,
-  syncAsService
+  syncAsService,
+  type Item
 } from "./support/asset-release";
 
 // A whole release through `assets.sync`: what a holder of the release right is exempt from in
@@ -25,13 +33,13 @@ describe("a release through assets.sync", () => {
     // The agent the release replaces is one an operator placed in chosen workspaces.
     await t.stores.configAssets.setAgentAvailability({
       clientInstanceId,
-      agentName: "old",
+      agentName: "rel-old",
       availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
     });
     const release = [
-      putAgent("intake", { instructions: "Take the request in." }),
-      putSkill("guide", "The new guidance.", 1),
-      deleteAgent("old")
+      putAgent("rel-intake", { instructions: "Take the request in." }),
+      putSkill("rel-guide", "The new guidance.", 1),
+      deleteAgent("rel-old")
     ];
     const before = await t.version();
 
@@ -41,10 +49,10 @@ describe("a release through assets.sync", () => {
     expect(refusedItems(asAdmin)).toEqual({
       code: "FORBIDDEN",
       items: [
-        { name: "intake", status: "not_applied" },
-        { name: "guide", status: "not_applied" },
+        { name: "rel-intake", status: "not_applied" },
+        { name: "rel-guide", status: "not_applied" },
         {
-          name: "old",
+          name: "rel-old",
           status: "refused",
           code: "FORBIDDEN",
           message: "Interactive agent deletion is disabled"
@@ -54,21 +62,21 @@ describe("a release through assets.sync", () => {
     const withoutDelete = await syncAs(t, t.admin.id, release.slice(0, 2));
     expect(refusedItems(withoutDelete).items).toEqual([
       {
-        name: "intake",
+        name: "rel-intake",
         status: "refused",
         code: "FORBIDDEN",
         message: "Interactive agent creation is disabled"
       },
       {
-        name: "guide",
+        name: "rel-guide",
         status: "refused",
         code: "FORBIDDEN",
         message: "Interactive skill editing is disabled"
       }
     ]);
     expect(await t.version()).toBe(before);
-    expect(await t.stored("agent", "intake")).toBeUndefined();
-    expect(await t.stored("agent", "old")).toMatchObject({ status: "active", revision: 1 });
+    expect(await t.stored("agent", "rel-intake")).toBeUndefined();
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ status: "active", revision: 1 });
 
     // A key without a scope for writing assets does not reach the operation.
     const readOnly = await syncAsService(t, release, "config_assets:read");
@@ -83,21 +91,21 @@ describe("a release through assets.sync", () => {
     expect(pushed.json()).toMatchObject({
       version: before + 1,
       items: [
-        { name: "intake", status: "applied", revision: 1 },
-        { name: "guide", status: "applied", revision: 2 },
-        { name: "old", status: "applied", revision: 2 }
+        { name: "rel-intake", status: "applied", revision: 1 },
+        { name: "rel-guide", status: "applied", revision: 2 },
+        { name: "rel-old", status: "applied", revision: 2 }
       ]
     });
     expect(await t.version()).toBe(before + 1);
-    expect(await t.stored("agent", "intake")).toMatchObject({ status: "active", revision: 1 });
-    expect(await t.stored("skill", "guide")).toMatchObject({
+    expect(await t.stored("agent", "rel-intake")).toMatchObject({ status: "active", revision: 1 });
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({
       revision: 2,
       config: { content: "The new guidance." }
     });
-    expect(await t.stored("agent", "old")).toMatchObject({ status: "deleted" });
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ status: "deleted" });
     // The pushed agent is in no workspace until someone places it.
     const availability = await t.stores.configAssets.listAgentAvailability({ clientInstanceId });
-    expect(availability.get("intake")).toEqual({
+    expect(availability.get("rel-intake")).toEqual({
       mode: "selected",
       personalWorkspaces: false,
       collaborationWorkspaceIds: []
@@ -107,7 +115,7 @@ describe("a release through assets.sync", () => {
   it("exempts nobody from the editing limits on a single put, delete or revert", async () => {
     const t = await setup({ editingLimits: RELEASE_ONLY });
     const changed = await syncAs(t, t.releaser.id, [
-      putAgent("old", { instructions: "Changed by release." }, 1)
+      putAgent("rel-old", { instructions: "Changed by release." }, 1)
     ]);
     expect(changed.statusCode, changed.body).toBe(200);
 
@@ -116,25 +124,27 @@ describe("a release through assets.sync", () => {
     const refusals = [
       [
         await t.call(t.releaser.id, "assets.put", {
-          params: { kind: "agent", name: "old" },
-          payload: { config: agent("old", { instructions: "Changed by hand." }) }
+          params: { kind: "agent", name: "rel-old" },
+          payload: { config: agent("rel-old", { instructions: "Changed by hand." }) }
         }),
         limited("Interactive changes are not allowed for agent field: instructions")
       ],
       [
         await t.call(t.releaser.id, "assets.put", {
-          params: { kind: "agent", name: "fresh" },
-          payload: { config: agent("fresh"), expectedRevision: undefined }
+          params: { kind: "agent", name: "rel-fresh" },
+          payload: { config: agent("rel-fresh"), expectedRevision: undefined }
         }),
         limited("Interactive agent creation is disabled")
       ],
       [
-        await t.call(t.releaser.id, "assets.delete", { params: { kind: "agent", name: "old" } }),
+        await t.call(t.releaser.id, "assets.delete", {
+          params: { kind: "agent", name: "rel-old" }
+        }),
         limited("Interactive agent deletion is disabled")
       ],
       [
         await t.call(t.releaser.id, "assets.revert", {
-          params: { kind: "agent", name: "old" },
+          params: { kind: "agent", name: "rel-old" },
           payload: { revision: 1 }
         }),
         limited("Interactive changes are not allowed for agent field: instructions")
@@ -148,8 +158,8 @@ describe("a release through assets.sync", () => {
     }
     // The service principal holds no right of the kind, so the single operations refuse it.
     const single = await asService(t, "assets.put", {
-      params: { kind: "agent", name: "old" },
-      payload: { config: agent("old", { displayName: "Renamed" }), expectedRevision: 2 }
+      params: { kind: "agent", name: "rel-old" },
+      payload: { config: agent("rel-old", { displayName: "Renamed" }), expectedRevision: 2 }
     });
     expect(single.statusCode).toBe(403);
     expect(errorSchema.parse(single.json()).error.details).toEqual({
@@ -161,16 +171,16 @@ describe("a release through assets.sync", () => {
       t,
       "assets.put",
       {
-        params: { kind: "agent", name: "old" },
-        payload: { config: agent("old", { displayName: "Renamed" }), expectedRevision: 2 }
+        params: { kind: "agent", name: "rel-old" },
+        payload: { config: agent("rel-old", { displayName: "Renamed" }), expectedRevision: 2 }
       },
       "config_assets:read config_assets:release"
     );
     expect(errorSchema.parse(scoped.json()).error.message).toBe(
       "Missing auth scope 'config_assets:write'"
     );
-    expect(await t.stored("agent", "old")).toMatchObject({ status: "active", revision: 2 });
-    expect(await t.stored("agent", "fresh")).toBeUndefined();
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ status: "active", revision: 2 });
+    expect(await t.stored("agent", "rel-fresh")).toBeUndefined();
   });
 
   it("is pushed while changing assets in the interface is off, by the release holder only", async () => {
@@ -180,7 +190,7 @@ describe("a release through assets.sync", () => {
       code: "NOT_FOUND",
       details: { reason: "module_off", module: "assetManagement" }
     };
-    const release = [putSkill("guide", "Pushed.", 1)];
+    const release = [putSkill("rel-guide", "Pushed.", 1)];
 
     await t.expectRefused(t.admin.id, "assets.sync", { payload: { items: release } }, moduleOff);
     // A user without any right learns the same and nothing of the items.
@@ -188,14 +198,17 @@ describe("a release through assets.sync", () => {
     await t.expectRefused(
       t.releaser.id,
       "assets.put",
-      { params: { kind: "skill", name: "guide" }, payload: { config: skill("guide", "By hand.") } },
+      {
+        params: { kind: "skill", name: "rel-guide" },
+        payload: { config: skill("rel-guide", "By hand.") }
+      },
       moduleOff
     );
-    expect(await t.stored("skill", "guide")).toMatchObject({ revision: 1 });
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
 
     const pushed = await syncAsService(t, release);
     expect(pushed.statusCode, pushed.body).toBe(200);
-    expect(await t.stored("skill", "guide")).toMatchObject({
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({
       revision: 2,
       config: { content: "Pushed." }
     });
@@ -203,31 +216,31 @@ describe("a release through assets.sync", () => {
 
   it("carries model settings without the right that governs them, in a sync only", async () => {
     const t = await setup();
-    const bound = putAgent("old", { modelProviderId: undefined, modelBindingId: "plain" }, 1);
+    const bound = putAgent("rel-old", { modelProviderId: undefined, modelBindingId: "plain" }, 1);
 
     // An administrator holds `agent.write` and not `agent_models.manage`.
     const asAdmin = await syncAs(t, t.admin.id, [bound]);
     expect(asAdmin.statusCode).toBe(403);
     expect(refusedItems(asAdmin).items).toEqual([
-      expect.objectContaining({ name: "old", status: "refused", action: "agent_models.manage" })
+      expect.objectContaining({ name: "rel-old", status: "refused", action: "agent_models.manage" })
     ]);
     const single = await t.call(t.releaser.id, "assets.put", {
-      params: { kind: "agent", name: "old" },
-      payload: { config: agent("old", { modelProviderId: undefined, modelBindingId: "plain" }) }
+      params: { kind: "agent", name: "rel-old" },
+      payload: { config: agent("rel-old", { modelProviderId: undefined, modelBindingId: "plain" }) }
     });
     expect(single.statusCode).toBe(403);
     expect(errorSchema.parse(single.json()).error.message).toContain("'agent_models.manage'");
-    expect(await t.stored("agent", "old")).toMatchObject({ revision: 1 });
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ revision: 1 });
 
     const pushed = await syncAsService(t, [bound]);
     expect(pushed.statusCode, pushed.body).toBe(200);
-    expect(await t.stored("agent", "old")).toMatchObject({
+    expect(await t.stored("agent", "rel-old")).toMatchObject({
       revision: 2,
       config: { modelBindingId: "plain" }
     });
   });
 
-  it("gives an empty instance its default agent and takes the last one away, in a sync only", async () => {
+  it("names the default of an empty instance and of one it empties, and nothing is picked for it", async () => {
     const t = await setupNamespaceHolder();
     const defaultAgentName = async () =>
       (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).defaultAgentName;
@@ -238,9 +251,10 @@ describe("a release through assets.sync", () => {
         { type: "delete", kind: "agent", name: "assistant" }
       ]
     });
+    const inKai = { namespace: "kai-" };
 
     // Kai holds `agent.write` in the Namespace: the default of the instance is not his.
-    const asKai = await syncAs(t, t.kai.id, [putAgent("kai-first")]);
+    const asKai = await syncAs(t, t.kai.id, [putAgent("kai-first")], inKai);
     expect(asKai.statusCode).toBe(403);
     expect(refusedItems(asKai).items).toEqual([
       {
@@ -257,18 +271,41 @@ describe("a release through assets.sync", () => {
       payload: { config: agent("kai-first") }
     });
     expect(single.statusCode).toBe(403);
+
+    // A release must say which agent is the default: the first one is not taken for it.
+    const unnamed = await syncAsService(t, [putAgent("kai-first")]);
+    expect(unnamed.statusCode).toBe(422);
+    expect(JSON.stringify(errorSchema.parse(unnamed.json()).error.details)).toContain(
+      "defaultAgentName must be set when agents are defined"
+    );
+    expect(await t.stored("agent", "kai-first")).toBeUndefined();
     expect(await defaultAgentName()).toBeUndefined();
 
-    const first = await syncAsService(t, [putAgent("kai-first")]);
+    const first = await releaseAsService(t, {
+      items: [putAgent("kai-first")],
+      defaultAgentName: "kai-first"
+    });
     expect(first.statusCode, first.body).toBe(200);
     expect(await defaultAgentName()).toBe("kai-first");
     // The default is available everywhere, though it arrived by a push.
     const availability = await t.stores.configAssets.listAgentAvailability({ clientInstanceId });
-    expect(availability.get("kai-first")?.mode ?? "all").toBe("all");
+    expect(availability.get("kai-first")).toMatchObject({ mode: "all" });
 
-    const last = await syncAsService(t, [deleteAgent("kai-first")]);
+    // Nor does deleting the last agent take the default away by itself.
+    const orphaned = await syncAsService(t, [deleteAgent("kai-first")]);
+    expect(orphaned.statusCode).toBe(422);
+    expect(await defaultAgentName()).toBe("kai-first");
+    const last = await releaseAsService(t, {
+      items: [deleteAgent("kai-first")],
+      defaultAgentName: null
+    });
     expect(last.statusCode, last.body).toBe(200);
     expect(await defaultAgentName()).toBeUndefined();
+
+    // The administrator's batch still makes the first agent the default, as it always did.
+    const asAdmin = await syncAs(t, t.admin.id, [putAgent("kai-second")], inKai);
+    expect(asAdmin.statusCode, asAdmin.body).toBe(200);
+    expect(await defaultAgentName()).toBe("kai-second");
   });
 
   it("is refused as a whole for a deny on one asset, which names the item", async () => {
@@ -284,81 +321,107 @@ describe("a release through assets.sync", () => {
         scopeId: assetId,
         grantedBy: t.admin.id
       });
-    await deny("agent.write", await t.assetId("agent", "old"));
+    await deny("agent.write", await t.assetId("agent", "rel-old"));
     const before = await t.version();
 
     const refused = await syncAsService(t, [
-      putSkill("guide", "Pushed.", 1),
-      putAgent("old", { instructions: "Pushed." }, 1),
-      putAgent("intake")
+      putSkill("rel-guide", "Pushed.", 1),
+      putAgent("rel-old", { instructions: "Pushed." }, 1),
+      putAgent("rel-intake")
     ]);
     expect(refused.statusCode).toBe(403);
     expect(refusedItems(refused)).toEqual({
       code: "FORBIDDEN",
       items: [
-        { name: "guide", status: "not_applied" },
+        { name: "rel-guide", status: "not_applied" },
         {
-          name: "old",
+          name: "rel-old",
           status: "refused",
           code: "FORBIDDEN",
           action: "agent.write",
           message: "Missing the right 'agent.write'"
         },
-        { name: "intake", status: "not_applied" }
+        { name: "rel-intake", status: "not_applied" }
       ]
     });
     // A deny on reading the asset is no way around for a delete either.
     await deny("agent.read", await t.assetId("agent", "assistant"));
     const deleted = await syncAsService(t, [
-      putSkill("guide", "Pushed.", 1),
+      putSkill("rel-guide", "Pushed.", 1),
       deleteAgent("assistant")
     ]);
     expect(refusedItems(deleted).items).toEqual([
-      { name: "guide", status: "not_applied" },
+      { name: "rel-guide", status: "not_applied" },
       expect.objectContaining({ name: "assistant", status: "refused", action: "agent.read" })
     ]);
     expect(await t.version()).toBe(before);
-    expect(await t.stored("skill", "guide")).toMatchObject({ revision: 1 });
-    expect(await t.stored("agent", "intake")).toBeUndefined();
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
+    expect(await t.stored("agent", "rel-intake")).toBeUndefined();
   });
 });
 
 describe("assets.sync without a Namespace", () => {
-  it("decides every item by the caller's right on it", async () => {
+  it("is a release: every other caller names the one Namespace of the batch", async () => {
     const t = await setupNamespaceHolder();
     await t.put(t.admin.id, "agent", "lena-notes");
+    const unnamed = (userId: string, items: Item[]) =>
+      t.call(userId, "assets.sync", { payload: { items } });
+    const needsNamespace = {
+      code: "VALIDATION_FAILED",
+      message: "A batch names the Namespace it belongs to"
+    };
 
-    const outside = await syncAs(t, t.kai.id, [
-      putAgent("kai-intake"),
-      putAgent("lena-notes", { displayName: "Taken" }, 1)
-    ]);
-    expect(outside.statusCode).toBe(403);
-    expect(refusedItems(outside)).toEqual({
-      code: "FORBIDDEN",
-      items: [
-        { name: "kai-intake", status: "not_applied" },
-        {
-          name: "lena-notes",
-          status: "refused",
-          code: "FORBIDDEN",
-          action: "agent.write",
-          message: "Missing the right 'agent.write'"
-        }
-      ]
-    });
+    // A Namespace holder, an administrator and a superadmin: none of them holds the release right.
+    for (const userId of [t.kai.id, t.admin.id, t.root.id]) {
+      const refused = await unnamed(userId, [putAgent("kai-intake")]);
+      expect(refused.statusCode).toBe(422);
+      expect(errorSchema.parse(refused.json()).error).toMatchObject(needsNamespace);
+    }
     expect(await t.stored("agent", "kai-intake")).toBeUndefined();
+    // With the Namespace named the batch is Kai's to make, and stays inside it.
+    expect(
+      (await syncAs(t, t.kai.id, [putAgent("kai-intake")], { namespace: "kai-" })).statusCode
+    ).toBe(200);
 
-    // Inside his prefix the same call is his to make, and the administrator's reaches anywhere.
-    expect((await syncAs(t, t.kai.id, [putAgent("kai-intake")])).statusCode).toBe(200);
-    const anywhere = await syncAs(t, t.admin.id, [
+    // A release reaches across Namespaces and outside every one of them.
+    const release = await syncAsService(t, [
       putAgent("kai-second"),
       putAgent("lena-notes", { displayName: "Renamed" }, 1),
       putSkill("free-standing", "Outside every Namespace.")
     ]);
-    expect(anywhere.statusCode, anywhere.body).toBe(200);
+    expect(release.statusCode, release.body).toBe(200);
     expect(await t.stored("skill", "free-standing")).toMatchObject({ status: "active" });
-    // An agent created in the interface starts where it always did.
-    const availability = await t.stores.configAssets.listAgentAvailability({ clientInstanceId });
-    expect(availability.get("kai-second")?.mode ?? "all").toBe("all");
+    expect(await t.stored("agent", "lena-notes")).toMatchObject({ revision: 2 });
+  });
+
+  it("is opened by the key's release scope only for a principal who holds the release right", async () => {
+    const t = await setupNamespaceHolder();
+    const releaseKey = { [SCOPES_HEADER]: "config_assets:read config_assets:release" };
+    const payload = { namespace: "kai-", items: [putAgent("kai-intake")] };
+
+    // Kai may write the item, and his key carries no scope for writing assets.
+    const asKai = await t.call(t.kai.id, "assets.sync", { payload, headers: releaseKey });
+    expect(asKai.statusCode).toBe(403);
+    expect(errorSchema.parse(asKai.json()).error.message).toBe(
+      "Missing auth scope 'config_assets:write'"
+    );
+    // Nor does the superadmin's, who holds every right but the release right.
+    const asRoot = await t.call(t.root.id, "assets.sync", { payload, headers: releaseKey });
+    expect(asRoot.statusCode).toBe(403);
+    expect(await t.stored("agent", "kai-intake")).toBeUndefined();
+
+    // With the scope for writing assets the same call is Kai's to make.
+    const scoped = await t.call(t.kai.id, "assets.sync", {
+      payload,
+      headers: { [SCOPES_HEADER]: "config_assets:read config_assets:write" }
+    });
+    expect(scoped.statusCode, scoped.body).toBe(200);
+    // The service principal holds the release right, so its release key opens the sync.
+    const pushed = await syncAsService(
+      t,
+      [putAgent("kai-pushed")],
+      "config_assets:read config_assets:release"
+    );
+    expect(pushed.statusCode, pushed.body).toBe(200);
   });
 });

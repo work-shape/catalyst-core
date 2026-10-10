@@ -55,10 +55,10 @@ describe("where the agents of a release start", () => {
     // One agent for each path to rename, both placed in chosen workspaces.
     await t.stores.configAssets.applyConfigAssetMutations({
       clientInstanceId,
-      mutations: [{ type: "upsert", kind: "agent", name: "older", config: agent("older") }]
+      mutations: [{ type: "upsert", kind: "agent", name: "rel-older", config: agent("rel-older") }]
     });
-    await placeInChosenWorkspaces(t, "old");
-    await placeInChosenWorkspaces(t, "older");
+    await placeInChosenWorkspaces(t, "rel-old");
+    await placeInChosenWorkspaces(t, "rel-older");
 
     // A new agent beside the others is available everywhere.
     const added = await syncAsService(t, [putAgent("added")]);
@@ -71,10 +71,10 @@ describe("where the agents of a release start", () => {
     expect(hiddenSchema.parse(addedByReplace.json()).hiddenAgentNames).toBeUndefined();
 
     // A batch that deletes an agent placed in chosen workspaces renames it: the new one is hidden.
-    const renamed = await syncAsService(t, [putAgent("renamed"), deleteAgent("old")]);
+    const renamed = await syncAsService(t, [putAgent("renamed"), deleteAgent("rel-old")]);
     const renamedByReplace = await replace(t, {
       agents: [agent("renamed-by-replace")],
-      deleteAssets: [{ kind: "agent", name: "older" }]
+      deleteAssets: [{ kind: "agent", name: "rel-older" }]
     });
     expect(renamed.statusCode, renamed.body).toBe(200);
     expect(renamedByReplace.statusCode, renamedByReplace.body).toBe(200);
@@ -94,7 +94,7 @@ describe("where the agents of a release start", () => {
 
   it("leaves an agent created or brought back by a put, a revert or another caller's sync where it always started", async () => {
     const t = await setup();
-    await placeInChosenWorkspaces(t, "old");
+    await placeInChosenWorkspaces(t, "rel-old");
     // A key that may write agents one by one: its calls come from automation, as the CLI's do.
     for (const action of ["agent.write", "agent.delete"]) {
       await t.stores.access.createGrant({
@@ -117,21 +117,21 @@ describe("where the agents of a release start", () => {
     expect(await availabilityOf(t, "by-key")).toMatchObject({ mode: "all" });
 
     const deleted = await asService(t, "assets.delete", {
-      ...address("old"),
+      ...address("rel-old"),
       payload: { expectedRevision: 1 }
     });
     expect(deleted.statusCode, deleted.body).toBe(200);
     const revived = await asService(t, "assets.revert", {
-      ...address("old"),
+      ...address("rel-old"),
       payload: { revision: 1, expectedRevision: 2 }
     });
     expect(revived.statusCode, revived.body).toBe(200);
-    expect(await availabilityOf(t, "old")).toMatchObject({ mode: "all" });
+    expect(await availabilityOf(t, "rel-old")).toMatchObject({ mode: "all" });
 
     // Neither does a sync of a caller who holds no release right.
-    const synced = await syncAs(t, t.admin.id, [putAgent("by-sync")]);
+    const synced = await syncAs(t, t.admin.id, [putAgent("rel-by-sync")]);
     expect(synced.statusCode, synced.body).toBe(200);
-    expect(await availabilityOf(t, "by-sync")).toMatchObject({ mode: "all" });
+    expect(await availabilityOf(t, "rel-by-sync")).toMatchObject({ mode: "all" });
     expect(hiddenSchema.parse(synced.json()).hiddenAgentNames).toBeUndefined();
   });
 });
@@ -141,7 +141,7 @@ describe("a definition in a release", () => {
     const t = await setup();
     const fast = { modelProviderId: undefined, modelBindingId: "plain", fastMode: true };
 
-    const refused = await syncAsService(t, [putAgent("old", fast, 1)]);
+    const refused = await syncAsService(t, [putAgent("rel-old", fast, 1)]);
     const refusedByReplace = await replace(t, { agents: [agent("assistant", fast)] });
     expect(refused.statusCode).toBe(422);
     expect(refusedByReplace.statusCode).toBe(422);
@@ -150,12 +150,12 @@ describe("a definition in a release", () => {
       JSON.stringify(errorSchema.parse(response.json()).error.details);
     expect(issuesOf(refused)).toContain("fast mode");
     expect(issuesOf(refusedByReplace)).toContain("fast mode");
-    expect(await t.stored("agent", "old")).toMatchObject({ revision: 1 });
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ revision: 1 });
 
     // The superadmin's save through the same operation is adjusted, as it always was.
-    const saved = await syncAs(t, t.root.id, [putAgent("old", fast, 1)]);
+    const saved = await syncAs(t, t.root.id, [putAgent("rel-old", fast, 1)]);
     expect(saved.statusCode, saved.body).toBe(200);
-    const config = (await t.stored("agent", "old"))?.config;
+    const config = (await t.stored("agent", "rel-old"))?.config;
     expect(config).toMatchObject({ modelBindingId: "plain" });
     expect(config).not.toHaveProperty("fastMode");
   });
@@ -181,12 +181,12 @@ describe("a definition in a release", () => {
     const t = await setup({ furtherKinds: [widgetKind] });
 
     const refused = await syncAsService(t, [
-      putSkill("guide", "Pushed.", 1),
+      putSkill("rel-guide", "Pushed.", 1),
       { type: "put", kind: "widget", config: { name: "board", title: "Board" } }
     ]);
     expect(refused.statusCode).toBe(422);
     expect(refusedItems(refused).items).toEqual([
-      { name: "guide", status: "not_applied" },
+      { name: "rel-guide", status: "not_applied" },
       {
         name: "board",
         status: "refused",
@@ -195,7 +195,7 @@ describe("a definition in a release", () => {
       }
     ]);
     expect(await t.stored("widget", "board")).toBeUndefined();
-    expect(await t.stored("skill", "guide")).toMatchObject({ revision: 1 });
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
   });
 });
 
@@ -206,30 +206,30 @@ describe("the default agent of a release", () => {
 
     // The default moves while the agent that held it stays.
     const moved = await releaseAsService(t, {
-      items: [putAgent("intake")],
-      defaultAgentName: "old",
+      items: [putAgent("rel-intake")],
+      defaultAgentName: "rel-old",
       expectedDefaultAgentName: "assistant"
     });
     expect(moved.statusCode, moved.body).toBe(200);
-    expect(await defaultAgentOf(t)).toBe("old");
+    expect(await defaultAgentOf(t)).toBe("rel-old");
     expect(await t.stored("agent", "assistant")).toMatchObject({ status: "active" });
     expect(await t.version()).toBe(before + 1);
 
     // A batch without items changes the default and nothing else.
-    const alone = await releaseAsService(t, { items: [], defaultAgentName: "intake" });
+    const alone = await releaseAsService(t, { items: [], defaultAgentName: "rel-intake" });
     expect(alone.statusCode, alone.body).toBe(200);
     expect(alone.json()).toMatchObject({ version: before + 2, items: [] });
-    expect(await defaultAgentOf(t)).toBe("intake");
+    expect(await defaultAgentOf(t)).toBe("rel-intake");
 
     // The default is deleted and replaced in one batch, while other agents stay.
     const replaced = await releaseAsService(t, {
-      items: [deleteAgent("intake")],
+      items: [deleteAgent("rel-intake")],
       defaultAgentName: "assistant"
     });
     expect(replaced.statusCode, replaced.body).toBe(200);
     expect(await defaultAgentOf(t)).toBe("assistant");
-    expect(await t.stored("agent", "intake")).toMatchObject({ status: "deleted" });
-    expect(await t.stored("agent", "old")).toMatchObject({ status: "active" });
+    expect(await t.stored("agent", "rel-intake")).toMatchObject({ status: "deleted" });
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ status: "active" });
   });
 
   it("is refused against another default than the caller read, for a name that is no agent, and for anyone without the release right", async () => {
@@ -237,10 +237,29 @@ describe("the default agent of a release", () => {
 
     const stale = await releaseAsService(t, {
       items: [],
-      defaultAgentName: "old",
+      defaultAgentName: "rel-old",
       expectedDefaultAgentName: "somebody"
     });
     expect(stale.statusCode).toBe(409);
+    expect(errorSchema.parse(stale.json()).error.details).toEqual({
+      reason: "default_agent_changed",
+      currentDefaultAgentName: "assistant"
+    });
+    // The expectation is checked also where the batch leaves the default as it is.
+    const before = await t.version();
+    const staleUpdate = await releaseAsService(t, {
+      items: [putSkill("rel-guide", "Pushed.", 1)],
+      expectedDefaultAgentName: "somebody"
+    });
+    expect(staleUpdate.statusCode).toBe(409);
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
+    expect(await t.version()).toBe(before);
+    const current = await releaseAsService(t, {
+      items: [putSkill("rel-guide", "Pushed.", 1)],
+      expectedDefaultAgentName: "assistant"
+    });
+    expect(current.statusCode, current.body).toBe(200);
+    expect(await defaultAgentOf(t)).toBe("assistant");
     const nobody = await releaseAsService(t, { items: [], defaultAgentName: "nobody" });
     expect(nobody.statusCode).toBe(422);
     const empty = await releaseAsService(t, { items: [] });
@@ -250,7 +269,7 @@ describe("the default agent of a release", () => {
     });
     // An administrator changes the default through the operation that is his.
     for (const userId of [t.admin.id, t.root.id]) {
-      const refused = await syncAs(t, userId, [], { defaultAgentName: "old" });
+      const refused = await syncAs(t, userId, [], { defaultAgentName: "rel-old" });
       expect(refused.statusCode).toBe(403);
       expect(errorSchema.parse(refused.json()).error.details).toEqual({
         action: "assets.release",
@@ -266,39 +285,39 @@ describe("a delete in a release", () => {
     const t = await setup();
     await t.stores.configAssets.applyConfigAssetMutations({
       clientInstanceId,
-      mutations: [{ type: "delete", kind: "agent", name: "old" }]
+      mutations: [{ type: "delete", kind: "agent", name: "rel-old" }]
     });
     const release = [
-      deleteAgent("never-there"),
-      deleteAgent("old", 2),
-      putSkill("guide", "Pushed.", 1)
+      deleteAgent("rel-never-there"),
+      deleteAgent("rel-old", 2),
+      putSkill("rel-guide", "Pushed.", 1)
     ];
 
     const asAdmin = await syncAs(t, t.admin.id, release);
     expect(asAdmin.statusCode).toBe(404);
     expect(refusedItems(asAdmin).items.map((item) => [item.name, item.status])).toEqual([
-      ["never-there", "refused"],
-      ["old", "refused"],
-      ["guide", "not_applied"]
+      ["rel-never-there", "refused"],
+      ["rel-old", "refused"],
+      ["rel-guide", "not_applied"]
     ]);
 
     const pushed = await syncAsService(t, release);
     expect(pushed.statusCode, pushed.body).toBe(200);
     expect(pushed.json()).toMatchObject({
       items: [
-        { type: "delete", kind: "agent", name: "never-there", status: "absent" },
-        { type: "delete", kind: "agent", name: "old", status: "absent" },
-        { type: "put", kind: "skill", name: "guide", status: "applied", revision: 2 }
+        { type: "delete", kind: "agent", name: "rel-never-there", status: "absent" },
+        { type: "delete", kind: "agent", name: "rel-old", status: "absent" },
+        { type: "put", kind: "skill", name: "rel-guide", status: "applied", revision: 2 }
       ]
     });
-    expect(await t.stored("agent", "never-there")).toBeUndefined();
-    expect(await t.stored("agent", "old")).toMatchObject({ status: "deleted", revision: 2 });
+    expect(await t.stored("agent", "rel-never-there")).toBeUndefined();
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ status: "deleted", revision: 2 });
   });
 });
 
 describe("the size of a batch", () => {
   const skills = (count: number) =>
-    Array.from({ length: count }, (_, index) => putSkill(`bulk-${index}`, "Guidance."));
+    Array.from({ length: count }, (_, index) => putSkill(`rel-bulk-${index}`, "Guidance."));
 
   it("is the release's own for a release holder and the ordinary one for everyone else", async () => {
     const t = await setup();
@@ -315,7 +334,9 @@ describe("the size of a batch", () => {
     const pushed = await syncAsService(t, overOrdinary);
     expect(pushed.statusCode, pushed.body).toBe(200);
     expect(await t.version()).toBe(before + 1);
-    expect(await t.stored("skill", `bulk-${ASSET_SYNC_MAX_ITEMS}`)).toMatchObject({ revision: 1 });
+    expect(await t.stored("skill", `rel-bulk-${ASSET_SYNC_MAX_ITEMS}`)).toMatchObject({
+      revision: 1
+    });
 
     const overRelease = await syncAsService(t, skills(ASSET_RELEASE_SYNC_MAX_ITEMS + 1));
     expect(overRelease.statusCode).toBe(422);

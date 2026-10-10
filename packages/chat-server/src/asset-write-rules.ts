@@ -208,20 +208,25 @@ const RELEASE_ACTION = "assets.release";
  *    `assertUpsertWithinLimits`, `assertDeleteWithinLimits`)
  * 3. The model settings right. `agent_models.manage` is not asked for the model settings a
  *    pushed agent carries. (`missingUpsertRightOf`, `assertUpsertWithinLimits`)
- * 4. The default agent. The holder names the instance default with the batch, and the first
- *    agent becomes the default and the last one takes it away without the kind's write right
- *    on the instance. (`requireReleaseSync`, `mayChangeInstanceDefault`)
+ * 4. The default agent. The holder names the instance default with the batch, which no
+ *    other caller of the operation may. (`requireReleaseSync`)
+ * 5. The Namespace. A release names none and reaches any asset of the instance; every other
+ *    batch names the one Namespace it stays in. (`requireNamespaceOrRelease`)
  *
- * And a release is handled in five ways no other write is:
+ * And a release is handled in six ways no other write is:
  *
- * 5. A definition is written as it was sent. Nothing is adjusted on the way, so a setting the
+ * 6. A definition is written as it was sent. Nothing is adjusted on the way, so a setting the
  *    instance cannot run is refused and never dropped. (`preparedUpsert`)
- * 6. An agent it creates is available everywhere, and hidden only where the batch also
+ * 7. An agent it creates is available everywhere, and hidden only where the batch also
  *    deletes an agent that was available in chosen workspaces: that is a rename, and the new
  *    name must not reach more people than the old one did. (`releaseInitialAvailability`)
- * 7. A delete of an asset that is not there is no refusal. (`asset-sync.ts`)
- * 8. It may hold `ASSET_RELEASE_SYNC_MAX_ITEMS` items. (`maxSyncItems`)
- * 9. It reaches only the kinds a release carries. (`isReleasedKind`)
+ * 8. A delete of an asset that is not there is no refusal. (`asset-sync.ts`)
+ * 9. It may hold `ASSET_RELEASE_SYNC_MAX_ITEMS` items. (`maxSyncItems`)
+ * 10. It reaches only the kinds a release carries. (`isReleasedKind`)
+ * 11. Nothing picks its default agent. A batch of another caller makes the first agent of an
+ *     instance its default and lets the last one take it away; a release leaves the default
+ *     it names or the one that is stored, and is refused where that is no agent of the set.
+ *     (`impliesDefaultChange`)
  *
  * Everything else binds the release holder as it binds everyone: the validation of the
  * definitions and of the set, the lists of a Namespace, the expected revisions, the policy and
@@ -238,6 +243,21 @@ export function requireReleaseSync(access: ActorAccess, surface: AssetWriteSurfa
   if (!isReleaseSync(access, surface)) {
     throw operationDenialError({ kind: "forbidden", action: RELEASE_ACTION, reason: "no_grant" });
   }
+}
+
+/** Refuses a batch that names no Namespace, unless it is a release. */
+export function requireNamespaceOrRelease(
+  access: ActorAccess,
+  namespace: string | undefined
+): void {
+  if (namespace === undefined && !isReleaseSync(access, "sync")) {
+    throw new AppError("VALIDATION_FAILED", "A batch names the Namespace it belongs to");
+  }
+}
+
+/** Whether the first and the last agent of an instance move its default with the batch. */
+export function impliesDefaultChange(access: ActorAccess): boolean {
+  return !isReleaseSync(access, "sync");
 }
 
 /** What a save writes of what its caller sent: adjusted by the kind, or untouched in a release. */
@@ -380,21 +400,12 @@ export function missingUpsertRightOf(
 
 // The first asset of a kind with an instance default becomes it and the last one takes it
 // away. Either changes the default, which no Namespace or asset grant opens.
-export function mayChangeInstanceDefault(
-  access: ActorAccess,
-  surface: AssetWriteSurface,
-  kind: WorkflowAssetKind
-): boolean {
-  return isReleaseSync(access, surface) || access.authorize(kind.actions.write).allowed;
-}
-
 export function requireInstanceDefaultChange(
   access: ActorAccess,
-  surface: AssetWriteSurface,
   kind: WorkflowAssetKind,
   changesDefault: boolean
 ): void {
-  if (changesDefault && !mayChangeInstanceDefault(access, surface, kind)) {
+  if (changesDefault) {
     access.require(kind.actions.write);
   }
 }

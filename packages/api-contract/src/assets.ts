@@ -145,7 +145,8 @@ export const assetSyncItemSchema = z.discriminatedUnion("type", [
 export const syncAssetsRequestSchema = z.object({
   /**
    * The prefix of the one Namespace the batch belongs to. No item may name an asset outside it.
-   * Left out, the batch may name any asset of the instance its caller may write.
+   * Only a holder of the release right may leave it out: a release names any asset of the
+   * instance.
    */
   namespace: nameText(z.string().min(1)).optional(),
   /**
@@ -155,10 +156,13 @@ export const syncAssetsRequestSchema = z.object({
   items: z.array(assetSyncItemSchema).max(ASSET_RELEASE_SYNC_MAX_ITEMS),
   /**
    * The agent that becomes the instance default with this batch, or `null` for none. Only a
-   * holder of the release right may name it. Left out, the default stays as it is.
+   * holder of the release right may name it. Left out, a release keeps the stored default.
    */
   defaultAgentName: nameText(z.string().min(1)).nullable().optional(),
-  /** The default agent the caller last read. Given, a batch made against another is refused. */
+  /**
+   * The default agent the caller last read. Given, a batch made against another is refused,
+   * whether or not it changes the default. Only a holder of the release right may send it.
+   */
   expectedDefaultAgentName: nameText(z.string().min(1)).nullable().optional()
 });
 
