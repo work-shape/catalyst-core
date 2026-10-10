@@ -25,7 +25,10 @@ function readCursor(
           : field === "revision"
             ? z.number().int().positive()
             : z.string();
-      if (!schema.safeParse(parsed.keys[index]).success) throw new Error("Wrong key type");
+      const key = parsed.keys[index];
+      if (!schema.safeParse(key).success) throw new Error("Wrong key type");
+      // No store holds a NUL byte, so no row a list answered carries one in its key.
+      if (typeof key === "string" && key.includes("\u0000")) throw new Error("Wrong key");
     }
     return parsed.keys;
   } catch {

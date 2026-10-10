@@ -605,5 +605,24 @@ describe("a name with a NUL byte", () => {
       expect(error.code, label).toBe("VALIDATION_FAILED");
       expect(JSON.stringify(error), label).toContain("A name must not contain a NUL byte");
     }
+
+    // A cursor is the caller's text too: one forged to carry such a name is no cursor.
+    const agents = { params: { kind: "agent" } };
+    await t.put(t.admin.id, "agent", "kai-intake");
+    const first = pageSchema.parse(
+      (await t.expectOk(t.admin.id, "assets.list", { ...agents, query: { limit: 1 } })).json()
+    );
+    const cursor = z
+      .object({ scope: z.string(), keys: z.array(z.string()) })
+      .parse(JSON.parse(Buffer.from(first.nextCursor ?? "", "base64url").toString()));
+    const forged = Buffer.from(JSON.stringify({ ...cursor, keys: ["kai-\u0000"] })).toString(
+      "base64url"
+    );
+    await t.expectRefused(
+      t.admin.id,
+      "assets.list",
+      { ...agents, query: { limit: 1, cursor: forged } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
   });
 });
