@@ -180,11 +180,8 @@ describe("job executor", () => {
 
   it("claims the job of a killed worker again after the lease, counts the attempt and buries it at the last one", async () => {
     const clientInstanceId = db.clientInstance("killed");
-    const kind = kindOf("test.killed", {
-      maxAttempts: 2,
-      leaseMs: 600,
-      backoff: { baseMs: 50, maxMs: 50 }
-    });
+    // The lease is long, so it is over when the test ends it and not when the machine is slow.
+    const kind = kindOf("test.killed", { maxAttempts: 2, backoff: { baseMs: 50, maxMs: 50 } });
     const attempts: number[] = [];
     const exhausted: Array<{ jobId: string; statusSeenFromOutside: string | undefined }> = [];
     const handler: JobHandler<Numbered> = {
@@ -229,6 +226,7 @@ describe("job executor", () => {
     await second.worker.runDue();
     expect(await onlyJob(clientInstanceId)).toMatchObject({ status: "running", attempts: 1 });
 
+    await expireLeases(clientInstanceId);
     await waitUntil(async () => {
       startPass(second.worker);
       return attempts.length === 2;
@@ -237,6 +235,11 @@ describe("job executor", () => {
     expect(await onlyJob(clientInstanceId)).toMatchObject({ status: "running", attempts: 2 });
     await second.kill();
 
+    // The last attempt's lease is live as well: nobody buries a job that may still be running.
+    await survivor.runDue();
+    expect(await onlyJob(clientInstanceId)).toMatchObject({ status: "running", attempts: 2 });
+
+    await expireLeases(clientInstanceId);
     await waitUntil(async () => {
       await survivor.runDue();
       return (await onlyJob(clientInstanceId)).status === "dead";
@@ -357,10 +360,22 @@ describe("job executor", () => {
     await db.store.jobs.enqueue(kind, { n: 1 }, { clientInstanceId });
     startPass(stopped);
     await waitUntil(() => started, "the job runs");
+    // Passes run one after another, so after this one the pass that claimed the job is over
+    // and the stop below reaches its grace without a round trip to the database.
+    await stopped.runDue();
 
     useFakeClockBesidePostgres();
     const stoppedAt = Date.now();
-    await advanceFakeClockUntilSettled(stopped.stop(), 1_000);
+    const stopping = stopped.stop();
+    const shortlyBeforeTheGraceEnds = new Promise<void>((resolve) => {
+      setTimeout(resolve, 19_900);
+    });
+    // The fake clock moves for as long as the work takes on the real clock. Up to the end of
+    // the grace nothing waits for the database, so the steps may be large. The release is
+    // real round trips: in steps of a millisecond the fake clock stays far below the bound
+    // however slow the machine is.
+    await advanceFakeClockUntilSettled(Promise.race([stopping, shortlyBeforeTheGraceEnds]), 100);
+    await advanceFakeClockUntilSettled(stopping, 1);
     const waitedMs = Date.now() - stoppedAt;
     vi.useRealTimers();
 

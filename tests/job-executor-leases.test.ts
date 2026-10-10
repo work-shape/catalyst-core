@@ -8,18 +8,18 @@ import {
   type JobWorker
 } from "@vivd-catalyst/core";
 import { describe, expect, it } from "vitest";
-import { deferred, waitUntil } from "./support/assertions";
+import { deferred, required, waitUntil } from "./support/assertions";
 import { kindOf, useJobExecutorHarness } from "./support/job-executor-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
 
 describe("job executor leases, wake and start", () => {
   const db = usePostgresSuite("job_leases");
-  const { worker, hang, jobs, onlyJob, expireLeases } = useJobExecutorHarness(db);
+  const { worker, hang, jobs, onlyJob, expireLeases, heartbeatsByHand } = useJobExecutorHarness(db);
 
   it("neither renews nor commits through a lease that ran out, though no worker took the job", async () => {
     const clientInstanceId = db.clientInstance("expired");
-    // A heartbeat every 300 ms.
-    const kind = kindOf("test.expired", { leaseMs: 900 });
+    const kind = kindOf("test.expired");
+    const beat = heartbeatsByHand();
     const user = await db.store.users.createUser({ clientInstanceId, displayLabel: "Before" });
     const started = deferred<JobControl>();
     const only = worker(db.store, clientInstanceId, [
@@ -45,6 +45,8 @@ describe("job executor leases, wake and start", () => {
       )
     ).rejects.toBeInstanceOf(JobLeaseLostError);
     // The next heartbeat finds the lease over and tells the handler, and does not revive it.
+    expect(control.signal.aborted).toBe(false);
+    beat();
     await waitUntil(() => control.signal.aborted, "the handler is told that the lease is lost");
     const [lease] = await db.sql<{ expired: boolean; lease_token: string | null }[]>`
       select lease_expires_at < now() as expired, lease_token from platform_jobs
@@ -117,11 +119,12 @@ describe("job executor leases, wake and start", () => {
 
   it("writes the handler's copy of the lease in the heartbeat's own transaction", async () => {
     const clientInstanceId = db.clientInstance("mirror");
-    // A heartbeat every 100 ms.
-    const kind = kindOf("test.mirror", { leaseMs: 300 });
+    const kind = kindOf("test.mirror");
+    const beat = heartbeatsByHand();
     const user = await db.store.users.createUser({ clientInstanceId, displayLabel: "none" });
     const started = deferred<JobControl>();
     let failing = false;
+    let failed = 0;
     const only = worker(db.store, clientInstanceId, [
       defineJobHandler({
         kind,
@@ -136,7 +139,9 @@ describe("job executor leases, wake and start", () => {
             userId: user.id,
             displayLabel: lease.leaseToken
           });
-          if (failing) throw new Error("the copy cannot be written");
+          if (!failing) return;
+          failed += 1;
+          throw new Error("the copy cannot be written");
         }
       })
     ]);
@@ -146,24 +151,34 @@ describe("job executor leases, wake and start", () => {
     const label = async () =>
       (await db.store.users.listUsers({ clientInstanceId })).map((found) => found.displayLabel);
 
+    /**
+     * The lease's end as committed. The read locks the job row, which a heartbeat under way
+     * holds to the end of its transaction, so it answers only after that heartbeat is over.
+     */
+    const expiry = async () =>
+      (
+        await db.sql<{ lease_expires_at: Date }[]>`
+          select lease_expires_at from platform_jobs
+          where client_instance_id = ${clientInstanceId} for update`
+      )[0]?.lease_expires_at.getTime();
+    const claimed = required(await expiry());
+
+    beat();
     await waitUntil(
       async () => (await label())[0] === control.leaseToken,
       "the heartbeat hands the lease token to the handler"
     );
+    // The same transaction renewed the lease.
+    const renewed = required(await expiry());
+    expect(renewed).toBeGreaterThan(claimed);
 
     // A copy that cannot be written takes the heartbeat with it: the job's lease is not
     // extended past what its subject shows.
     failing = true;
     await db.store.users.updateUser({ clientInstanceId, userId: user.id, displayLabel: "none" });
-    const expiry = async () =>
-      (
-        await db.sql<{ lease_expires_at: Date }[]>`
-          select lease_expires_at from platform_jobs
-          where client_instance_id = ${clientInstanceId}`
-      )[0]?.lease_expires_at.getTime();
-    const before = await expiry();
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    expect(await expiry()).toBe(before);
+    beat();
+    await waitUntil(() => failed === 1, "a heartbeat tries to write the copy and fails");
+    expect(await expiry()).toBe(renewed);
     expect(await label()).toEqual(["none"]);
   });
 

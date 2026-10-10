@@ -118,5 +118,20 @@ export function useJobExecutorHarness(db: PostgresSuite) {
     `;
   }
 
-  return { worker, hang, jobs, onlyJob, expireLeases };
+  /**
+   * Takes the heartbeats out of the clock's hands. A heartbeat is the only interval timer in
+   * these tests, so the interval timers alone are faked: the driver's timeouts stay real. Call
+   * it before the job is claimed. The returned function lets the next heartbeat begin; the test
+   * then waits for what that heartbeat does. A lease that must hold is as long as the default of
+   * `kindOf`, so no load on the machine ends it, and a lease that must be over is ended with
+   * `expireLeases`.
+   */
+  function heartbeatsByHand(): () => void {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    return () => {
+      vi.advanceTimersToNextTimer();
+    };
+  }
+
+  return { worker, hang, jobs, onlyJob, expireLeases, heartbeatsByHand };
 }
