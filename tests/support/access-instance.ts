@@ -197,6 +197,8 @@ export async function setupAccessInstance(
   const instance = await createTestInstanceWith((stores) => ({
     config,
     ...(operations ? { operations } : {}),
+    // A call the policy holds is filed and decided as on an assembled instance.
+    approvalRequests: { store: stores.approvals, handlers: new Map() },
     authAdapter: recordAuthAdapter(stores),
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
     configAssets: {

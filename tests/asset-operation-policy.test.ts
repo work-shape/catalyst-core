@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { operationRunSchema } from "@vivd-catalyst/api-contract";
 import type { CentralPolicySetting, PlatformEventEmitter } from "@vivd-catalyst/core";
 import { agent, errorSchema, skill } from "./support/access-instance";
 import { setupNamespaceHolder, type NamespaceHolderInstance } from "./support/asset-operations";
@@ -207,5 +208,35 @@ describe("the policy of a call on one asset", () => {
       address("kai-intake"),
       t.forbidden("agent.read", "no_grant")
     );
+  });
+});
+
+describe("an asset write that waits for another person", () => {
+  // The approval path is the same for every operation: an asset operation declares nothing
+  // for it. Fails without the approval path: the write was refused with 403 POLICY_DENIED and
+  // nothing could run it later.
+  it("is held with 202, written once when it is approved, and not a second time", async () => {
+    const t = await setupNamespaceHolder({
+      operations: { centralPolicySettings: () => [{ operation: "assets.put", value: "approval" }] }
+    });
+    const held = await t.call(t.kai.id, "assets.put", {
+      params: { kind: "agent", name: "kai-intake" },
+      payload: { config: agent("kai-intake") }
+    });
+    expect(held.statusCode).toBe(202);
+    const { approvalRequestId: requestId = "" } = operationRunSchema.parse(held.json());
+    expect(requestId).not.toBe("");
+    expect(await t.stored("agent", "kai-intake")).toBeUndefined();
+
+    const decide = () =>
+      t.call(t.admin.id, "approval_requests.decide", {
+        params: { requestId },
+        payload: { decision: "approve" }
+      });
+    expect((await decide()).statusCode).toBe(200);
+    // Written as Kai asked, by the call that waited.
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 1, status: "active" });
+    expect((await decide()).statusCode).toBe(409);
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 1 });
   });
 });
