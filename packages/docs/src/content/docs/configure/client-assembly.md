@@ -97,4 +97,4 @@ Keep these in platform packages:
 - datasource registry, adapters, guardrails, and generic datasource query tools
 - capability SDK, managed file, conversation attachment, and managed artifact extension surfaces
 
-Reusable capabilities that are not part of the OSS foundation should live in capability packages. Document processing, for example, owns its preprocessing config under `capabilities.documentProcessing`, its document tools, and its document-specific model-context hints while using platform-managed files and conversation attachments.
+Reusable capabilities that are not part of the open platform live in capability packages. Document processing (`@vivd-catalyst/document-processing`, part of the paid capabilities and not in the open repository), for example, owns its preprocessing config under `capabilities.documentProcessing`, its document tools, and its document-specific model-context hints while using platform-managed files and conversation attachments.

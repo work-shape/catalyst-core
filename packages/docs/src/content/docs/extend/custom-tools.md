@@ -183,7 +183,7 @@ Use `auditSummary` for minimized governance metadata, not raw sensitive payloads
 
 Do not pass broad database handles or global service containers into tools. Give tools explicit capabilities and scoped secrets.
 
-For configured customer/domain databases, prefer platform `dataSources` and the OSS datasource registry. If a datasource enables `tools.query`, the platform exposes guarded `data.<source>.query` and `data.<source>.describe` tools. The description tool lists readable relations or returns columns and key relationships for one relation, so an agent can discover unfamiliar schemas without hand-writing catalog queries. Restricted visualization packages can use the same registry without owning SQL execution, secret resolution, or read-only guardrails.
+For configured customer/domain databases, prefer platform `dataSources` and the datasource registry of the open platform. If a datasource enables `tools.query`, the platform exposes guarded `data.<source>.query` and `data.<source>.describe` tools. The description tool lists readable relations or returns columns and key relationships for one relation, so an agent can discover unfamiliar schemas without hand-writing catalog queries. The private data view capability (part of the paid capabilities and not in the open repository) uses the same registry without owning SQL execution, secret resolution, or read-only guardrails.
 
 For byte-backed files or artifacts, use the Capability SDK's Managed Object Access rather than passing storage object keys through capability workflows. The platform owns managed file/artifact metadata; a capability may provide a byte-store adapter and object-key adapter when its storage layout is capability-specific.
 

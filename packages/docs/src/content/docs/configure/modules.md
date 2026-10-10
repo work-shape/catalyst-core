@@ -26,6 +26,8 @@ modules:
 | `assetManagement` | Changing agents and skills in the interface. Running agents and `catalyst config push` work without it. | Nothing. `administration.agentConfiguration` still says what a person may change. |
 | `userInvitations` | Inviting a user by an emailed link to set a password.                                                   | A mail sender under `infrastructure.mail` and standalone password sign-in.        |
 
+The document processing capability is part of the paid capabilities and not in the open repository. The other three modules ship with the open platform.
+
 A module that a later release adds is off until its entry says otherwise.
 
 ## What Is Checked At Startup

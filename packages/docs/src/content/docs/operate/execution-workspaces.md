@@ -23,7 +23,7 @@ The platform Dockerfile exposes a `workspace-command-runner` target for the `inf
 
 The image target intentionally does not copy the chat API build or deployment secrets. The `workspace-command-worker` target remains the trusted control process image with Docker CLI access; it starts short-lived runner containers from the configured runner image.
 
-Capability-owned Catalyst helper CLIs such as `docx_render`, `xlsx_scan_errors`, `pptx_render`, `pdf_inspect`, and `promote_artifact` are packaged outside the OSS platform. Deployments that enable those premium helpers should layer the capabilities helper package onto the platform runner image and publish that layered image tag through `EXECUTION_WORKSPACE_RUNNER_IMAGE`.
+Capability-owned Catalyst helper CLIs such as `docx_render`, `xlsx_scan_errors`, `pptx_render`, `pdf_inspect`, and `promote_artifact` are part of the paid capabilities and not in the open repository. Deployments that license those helpers layer the capabilities helper package onto the platform runner image and publish that layered image tag through `EXECUTION_WORKSPACE_RUNNER_IMAGE`.
 
 ## Operational Signals
 
