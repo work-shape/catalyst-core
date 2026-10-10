@@ -95,7 +95,7 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
   const pools = new Map<string, PostgresPool>();
 
   /** One pool per target and credential handle. The schemas and limits of a call do not split it. */
-  function poolFor({ location, credentialHandle }: PostgresTarget): PostgresPool {
+  function poolFor(location: PostgresLocation, credentialHandle: string): PostgresPool {
     const key = JSON.stringify([
       location.host,
       location.port,
@@ -117,20 +117,28 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
 
   async function guarded<T>(
     target: PostgresTarget,
-    work: (session: PostgresSession, limits: ResolvedPostgresLimits) => Promise<T>
+    work: (
+      session: PostgresSession,
+      limits: ResolvedPostgresLimits,
+      location: PostgresLocation
+    ) => Promise<T>
   ): Promise<T> {
+    // Read once, before anything is awaited. What the address check saw is what is dialled,
+    // whatever the caller does to its object meanwhile.
+    const location = frozenLocation(target.location);
     const limits = resolvePostgresLimits(target.limits);
-    const pool = poolFor(target);
-    const connection = await pool.acquire(limits.maxConnections, target.signal);
+    const { signal } = target;
+    const pool = poolFor(location, target.credentialHandle);
+    const connection = await pool.acquire(limits.maxConnections, signal);
     const interruption = watchInterruption(
       limits.statementTimeoutMs + POSTGRES_DEADLINE_GRACE_MS,
-      target.signal
+      signal
     );
     const first = await Promise.race([
       interruption.raised,
       rolledBack(connection, limits.maxBytes + POSTGRES_READ_MARGIN_BYTES, async () => {
-        await applySettings(connection, target.location.schemas, limits.statementTimeoutMs);
-        return work(connection, limits);
+        await applySettings(connection, location.schemas, limits.statementTimeoutMs);
+        return work(connection, limits, location);
       })
     ]);
     interruption.stop();
@@ -149,18 +157,25 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
     }
     if (first.outcome.ok) return first.outcome.value;
     if (connection.readLimitPassed) throw new PostgresExecutorError("failed");
-    throw toPostgresExecutorError(first.outcome.error);
+    const { error } = first.outcome;
+    throw error instanceof CallerStatementFailure
+      ? toPostgresExecutorError(error.error, true)
+      : toPostgresExecutorError(error);
   }
 
   return {
     async query(query) {
-      screenPostgresQuery(query.sql);
+      const { sql } = query;
+      screenPostgresQuery(sql);
       const parameters = bindPostgresParameters(query.parameters ?? []);
       return guarded(query, async (session, limits) => {
-        const columns = await resultColumns(session, await session.columns(query.sql, parameters));
+        const described = await callerStatement(() => session.columns(sql, parameters));
+        const columns = await resultColumns(session, described);
         const batchRows = Math.min(POSTGRES_CURSOR_BATCH_ROWS, limits.maxRows + 1);
-        const batches = session.cursor(query.sql, parameters, batchRows);
-        const read = await readCapped(batches, columns, limits, () => session.readLimitPassed);
+        const batches = session.cursor(sql, parameters, batchRows);
+        const read = await callerStatement(() =>
+          readCapped(batches, columns, limits, () => session.readLimitPassed)
+        );
         return {
           columns: columns.map(({ key, type }) => ({ name: key, type })),
           rows: read.rows,
@@ -170,14 +185,16 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
         };
       });
     },
-    describe: (describe) =>
-      guarded(describe, (session, limits) =>
+    describe(describe) {
+      const { relation } = describe;
+      return guarded(describe, (session, limits, location) =>
         describePostgres(session, {
-          schemas: describe.location.schemas,
+          schemas: location.schemas,
           maxRelations: limits.maxRows,
-          ...(describe.relation === undefined ? {} : { relation: describe.relation })
+          ...(relation === undefined ? {} : { relation })
         })
-      ),
+      );
+    },
     readPrivileges: (target) => guarded(target, (session) => readPostgresPrivileges(session)),
     async ping(target) {
       await guarded(target, (session) => session.run("select 1"));
@@ -187,6 +204,31 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
       pools.clear();
     }
   };
+}
+
+/** A failure of the statement the caller wrote, on a session that had authenticated. */
+class CallerStatementFailure {
+  constructor(readonly error: unknown) {}
+}
+
+async function callerStatement<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    throw new CallerStatementFailure(error);
+  }
+}
+
+function frozenLocation(location: PostgresLocation): PostgresLocation {
+  return Object.freeze({
+    host: location.host,
+    port: location.port,
+    database: location.database,
+    user: location.user,
+    tls: location.tls,
+    ...(location.caBundle === undefined ? {} : { caBundle: location.caBundle }),
+    schemas: Object.freeze([...location.schemas])
+  });
 }
 
 type Outcome<T> = { ok: true; value: T } | { ok: false; error: unknown };

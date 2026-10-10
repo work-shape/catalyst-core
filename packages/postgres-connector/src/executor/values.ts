@@ -1,4 +1,4 @@
-import { unknownToJsonValue, type JsonObject, type JsonValue } from "@vivd-catalyst/core";
+import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
 
 /**
  * The driver hands every value over as the server's text. These readers give each type its
@@ -15,8 +15,22 @@ const asNumber: PostgresValueReader = (raw) => {
 
 const asJson: PostgresValueReader = (raw) => {
   const parsed: unknown = JSON.parse(raw);
-  return unknownToJsonValue(parsed);
+  return jsonValue(parsed);
 };
+
+/**
+ * What `JSON.parse` returned, as a JSON value. Every key of an object becomes a property of
+ * its own, at any depth: assigning `__proto__` would change the object instead.
+ */
+function jsonValue(value: unknown): JsonValue {
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : String(value);
+  if (Array.isArray(value)) return value.map(jsonValue);
+  if (typeof value !== "object" || value === null) return null;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nested]: [string, unknown]) => [key, jsonValue(nested)])
+  );
+}
 
 /** `2024-05-01 10:00:00.5+00` as `2024-05-01T10:00:00.5Z`. Other forms, such as `infinity`, stay. */
 const asIsoTimestamp: PostgresValueReader = (raw) => {

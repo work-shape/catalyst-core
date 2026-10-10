@@ -27,7 +27,8 @@ const FIXED_SENTENCES: Record<FixedSentenceKind, string> = {
 /**
  * The one error of the executor. Its text is a fixed sentence for the kind. Only
  * `query_rejected` carries more: a sentence of the executor's own, or the database's message
- * for SQLSTATE class 42. That message is the answer to the caller's own query and can quote a
+ * for SQLSTATE class 42 when the caller's own statement raised it on a connection that had
+ * finished authentication. That message is the answer to the caller's own query and can quote a
  * value the query read, as `(select note from t)::regclass` does. It is for the caller of this
  * call alone: it must not go to a log or a run record, and the executor writes it nowhere. No
  * error holds a driver error, a host, a user, a credential, query text or a parameter.
@@ -68,8 +69,15 @@ const UNREACHABLE_CODES = new Set([
  * code alone, because its text can quote a connection target or a row value, and the driver
  * hangs the query text and the parameters on the errors it passes through. So even an
  * executor error is rebuilt and never handed on as the object the driver touched.
+ *
+ * The server's message is passed on for class 42 only, and only when `fromCallerStatement`
+ * says the caller's statement raised it. While a connection is made, an endpoint could put
+ * anything it was sent into such a message, so those failures get the fixed sentence.
  */
-export function toPostgresExecutorError(error: unknown): PostgresExecutorError {
+export function toPostgresExecutorError(
+  error: unknown,
+  fromCallerStatement = false
+): PostgresExecutorError {
   if (error instanceof PostgresExecutorError) {
     return error.kind === "query_rejected"
       ? new PostgresExecutorError("query_rejected", error.message, error.sqlState)
@@ -80,7 +88,7 @@ export function toPostgresExecutorError(error: unknown): PostgresExecutorError {
   if (!SQLSTATE.test(code)) {
     return new PostgresExecutorError(UNREACHABLE_CODES.has(code) ? "unavailable" : "failed");
   }
-  if (code.startsWith("42")) {
+  if (code.startsWith("42") && fromCallerStatement) {
     return new PostgresExecutorError("query_rejected", rejectionText(error), code);
   }
   return new PostgresExecutorError(kindOfSqlState(code), code);

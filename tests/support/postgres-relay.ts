@@ -10,6 +10,8 @@ export interface PostgresRelay {
   readonly port: number;
   /** Bytes the relay took from the server for its clients. */
   bytesFromServer(): number;
+  /** Connections that opened with a request to cancel a backend's query. */
+  cancelRequests(): number;
   /** Connections that completed the TLS handshake. */
   securedConnections(): number;
   close(): Promise<void>;
@@ -24,6 +26,7 @@ export async function startPostgresRelay(
 ): Promise<PostgresRelay> {
   let fromServer = 0;
   let secured = 0;
+  let cancels = 0;
   const open = new Set<net.Socket>();
 
   function join(client: net.Socket): void {
@@ -41,6 +44,10 @@ export async function startPostgresRelay(
     }
     upstream.on("data", (chunk: Buffer) => {
       fromServer += chunk.length;
+    });
+    client.once("data", (first: Buffer) => {
+      // The CancelRequest message: length 16, code 80877102.
+      if (first.length === 16 && first.readUInt32BE(4) === 80877102) cancels += 1;
     });
     client.pipe(upstream);
     upstream.pipe(client);
@@ -75,6 +82,7 @@ export async function startPostgresRelay(
   return {
     port,
     bytesFromServer: () => fromServer,
+    cancelRequests: () => cancels,
     securedConnections: () => secured,
     close: () =>
       new Promise((resolve) => {

@@ -1,5 +1,8 @@
-import { setTimeout as delay } from "node:timers/promises";
+import { createServer } from "node:net";
+import { setImmediate as nextTurn, setTimeout as delay } from "node:timers/promises";
+import { inspect } from "node:util";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   createPostgresExecutor,
   POSTGRES_READ_MARGIN_BYTES,
@@ -13,6 +16,8 @@ import { executorFailure as failure, useCustomerDatabase } from "./support/custo
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { startPostgresRelay, type PostgresRelay } from "./support/postgres-relay";
 
+const MADE_UP_PASSWORD = "made-up-password-7c1f";
+
 /** What can be on its way between the server and a socket that has just been closed. */
 const SLACK = 8_000_000;
 
@@ -23,6 +28,11 @@ describe("Postgres executor guards", () => {
   /** From which socket on the address check never answers. */
   let addressCheckHangsFrom = Number.POSITIVE_INFINITY;
   let addressChecks = 0;
+  /** Runs while the address check is asked, which is when a caller could change its object. */
+  let duringAddressCheck: (() => void) | undefined;
+  let secretsBeingResolved = 0;
+  const unheard: unknown[] = [];
+  const hear = (error: unknown) => unheard.push(error);
   let relay: PostgresRelay | undefined;
   const executors: PostgresExecutor[] = [];
 
@@ -30,12 +40,17 @@ describe("Postgres executor guards", () => {
     const executor = createPostgresExecutor({
       secrets: {
         async getSecret(name) {
+          secretsBeingResolved += 1;
           await delay(slowCredentialMs);
-          return customer.passwords.get(name);
+          secretsBeingResolved -= 1;
+          return (
+            customer.passwords.get(name) ?? (name === "made-up" ? MADE_UP_PASSWORD : undefined)
+          );
         }
       },
       pinAddress() {
         addressChecks += 1;
+        duringAddressCheck?.();
         if (addressChecks >= addressCheckHangsFrom) return new Promise(() => undefined);
         return Promise.resolve({ allowed: true, address: customer.address });
       }
@@ -64,6 +79,8 @@ describe("Postgres executor guards", () => {
   const asWriter = () => on(writer, "writer-password");
 
   beforeAll(async () => {
+    process.on("uncaughtException", hear);
+    process.on("unhandledRejection", hear);
     relay = await startPostgresRelay({ host: customer.address, port: customer.port });
     newExecutor();
   });
@@ -72,11 +89,14 @@ describe("Postgres executor guards", () => {
     vi.unstubAllEnvs();
     slowCredentialMs = 0;
     addressCheckHangsFrom = Number.POSITIVE_INFINITY;
+    duringAddressCheck = undefined;
   });
 
   afterAll(async () => {
     await Promise.all(executors.map((executor) => executor.close()));
     await relay?.close();
+    process.off("uncaughtException", hear);
+    process.off("unhandledRejection", hear);
   });
 
   describe("bytes read from the socket", () => {
@@ -110,6 +130,7 @@ describe("Postgres executor guards", () => {
     it("counts against the cap a caller lowered", async () => {
       const throughRelay = asReader({ port: required(relay).port });
       const before = required(relay).bytesFromServer();
+      const cancelsBefore = required(relay).cancelRequests();
 
       const result = await calls().query({
         ...throughRelay,
@@ -121,6 +142,9 @@ describe("Postgres executor guards", () => {
       expect(required(relay).bytesFromServer() - before).toBeLessThan(
         POSTGRES_READ_MARGIN_BYTES + SLACK
       );
+      // The socket is closed by the executor, which tells the server nothing. The cancel does.
+      expect(required(relay).cancelRequests() - cancelsBefore).toBe(1);
+      await expect.poll(() => customer.backends(reader), { timeout: 3000 }).toEqual([]);
     });
 
     it("fails a call that is not a query when it reads past the limit", async () => {
@@ -301,6 +325,159 @@ describe("Postgres executor guards", () => {
 
       expect(error).toMatchObject({ kind: "timeout" });
       expect(performance.now() - started).toBeLessThan(2500);
+    });
+  });
+
+  describe("a credential that resolves after the call has ended", () => {
+    const ROUNDS = 3;
+
+    async function expectNothingThrownAndEverySlotFree(executor: PostgresExecutor): Promise<void> {
+      await expect.poll(() => secretsBeingResolved, { timeout: 5000 }).toBe(0);
+      // An authentication that went on would fail in the turns after the secret arrived.
+      for (let turn = 0; turn < 20; turn += 1) await nextTurn();
+      expect(unheard).toEqual([]);
+      slowCredentialMs = 0;
+      const next = await Promise.all([0, 1, 2, 3].map(() => executor.ping(asWriter())));
+      expect(next).toHaveLength(4);
+      expect(unheard).toEqual([]);
+      // The account may hold seven connections, and other tests need theirs.
+      await executor.close();
+    }
+
+    it("stops authenticating at the deadline, time after time", async () => {
+      const executor = newExecutor();
+      const errors = [];
+      for (let round = 0; round < ROUNDS; round += 1) {
+        slowCredentialMs = 1800;
+        errors.push(
+          ...(await Promise.all(
+            [0, 1, 2, 3].map(() =>
+              failure(executor.ping({ ...asWriter(), limits: { statementTimeoutMs: 100 } }))
+            )
+          ))
+        );
+      }
+
+      expect(errors.map((error) => error.kind)).toEqual(
+        Array.from({ length: ROUNDS * 4 }, () => "timeout")
+      );
+      await expectNothingThrownAndEverySlotFree(executor);
+    });
+
+    it("stops authenticating when the caller aborts, time after time", async () => {
+      const executor = newExecutor();
+      const errors = [];
+      for (let round = 0; round < ROUNDS; round += 1) {
+        slowCredentialMs = 600;
+        const abort = new AbortController();
+        const round4 = [0, 1, 2, 3].map(() =>
+          failure(executor.ping({ ...asWriter(), signal: abort.signal }))
+        );
+        await expect.poll(() => secretsBeingResolved, { timeout: 5000 }).toBe(4);
+        abort.abort();
+        errors.push(...(await Promise.all(round4)));
+        await expect.poll(() => secretsBeingResolved, { timeout: 5000 }).toBe(0);
+      }
+
+      expect(errors.map((error) => error.kind)).toEqual(
+        Array.from({ length: ROUNDS * 4 }, () => "cancelled")
+      );
+      await expectNothingThrownAndEverySlotFree(executor);
+    });
+  });
+
+  describe("a caller that changes its target while the call runs", () => {
+    it("dials what the address check was asked about", async () => {
+      const target = asReader();
+      const location = { ...target.location, schemas: [...target.location.schemas] };
+      duringAddressCheck = () => {
+        location.port = 1;
+        location.tls = "verify-full";
+        location.database = "another_database";
+        location.user = writer;
+        location.schemas.splice(0, 1, "public");
+      };
+
+      const result = await newExecutor().query({
+        ...target,
+        location,
+        sql: "select current_user::text as account, count(*)::integer as orders from orders"
+      });
+
+      expect(location.port).toBe(1);
+      expect(result.rows).toEqual([{ account: reader, orders: 2 }]);
+    });
+
+    it("keeps to verified TLS when the caller's object turns it off meanwhile", async () => {
+      const location = { ...asReader().location, tls: "verify-full" as "verify-full" | "off" };
+      duringAddressCheck = () => {
+        location.tls = "off";
+      };
+
+      const error = await failure(newExecutor().ping({ ...asReader(), location }));
+
+      expect(error.kind).toBe("tls_failed");
+    });
+  });
+
+  describe("JSON values", () => {
+    it("keeps keys named like a property every object has, at any depth", async () => {
+      const result = await calls().query({
+        ...asReader(),
+        sql: `select '{"__proto__": {"admin": true}, "constructor": 2,
+                       "deep": [{"__proto__": 3}]}'::jsonb as doc,
+                     '{"__proto__": 1}'::json as plain`
+      });
+
+      const [row] = result.rows;
+      expect(JSON.stringify(row)).toBe(
+        '{"doc":{"deep":[{"__proto__":3}],"__proto__":{"admin":true},"constructor":2},' +
+          '"plain":{"__proto__":1}}'
+      );
+      expect(Object.getPrototypeOf(row?.doc)).toBe(Object.prototype);
+      expect(row?.doc).not.toHaveProperty("admin");
+    });
+  });
+
+  describe("an endpoint that answers a login with a message of its own", () => {
+    it("passes on no text of an error raised before the session is authenticated", async () => {
+      // Asks for the password in clear and sends it back as a syntax error.
+      const hostile = createServer((socket) => {
+        socket.on("error", () => undefined);
+        socket.once("data", () => {
+          socket.write(Buffer.from([0x52, 0, 0, 0, 8, 0, 0, 0, 3]));
+          socket.once("data", (answer: Buffer) => {
+            const password = answer.subarray(5, answer.length - 1).toString();
+            const fields = Buffer.from(
+              `SERROR\0VERROR\0C42601\0Msyntax error at or near "${password}"\0\0`
+            );
+            const head = Buffer.alloc(5);
+            head.write("E");
+            head.writeUInt32BE(fields.length + 4, 1);
+            socket.end(Buffer.concat([head, fields]));
+          });
+        });
+      });
+      await new Promise<void>((resolve) => hostile.listen(0, customer.address, resolve));
+      const { port } = z.object({ port: z.number() }).parse(hostile.address());
+      try {
+        const error = await failure(newExecutor().ping(on(reader, "made-up", { port })));
+
+        expect(error).toMatchObject({
+          kind: "failed",
+          sqlState: "42601",
+          message: "The query failed."
+        });
+        expect(
+          [
+            error.stack,
+            JSON.stringify(error),
+            inspect(error, { depth: 6, showHidden: true })
+          ].join()
+        ).not.toContain(MADE_UP_PASSWORD);
+      } finally {
+        hostile.close();
+      }
     });
   });
 });

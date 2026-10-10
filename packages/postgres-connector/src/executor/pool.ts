@@ -78,6 +78,8 @@ export class PostgresConnection implements PostgresSession {
   private readBytes = 0;
   private readLimitBytes = Number.POSITIVE_INFINITY;
   private pastReadLimit = false;
+  /** False while a call works on the connection it began on. Nothing reconnects under it. */
+  private mayOpenSocket = true;
 
   constructor(source: PostgresConnectionSource) {
     this.source = source;
@@ -139,7 +141,11 @@ export class PostgresConnection implements PostgresSession {
     this.readLimitBytes = readLimitBytes;
     // The driver may have reconnected since the last call, to another backend.
     this.backend = undefined;
+    this.mayOpenSocket = true;
     const begun = await this.sql.unsafe("begin read only");
+    // From here every answer comes from the session that authenticated. A connection that
+    // drops fails the call. It is not replaced by one that would have to authenticate again.
+    this.mayOpenSocket = false;
     this.backend = { pid: begun.state.pid, secret: begun.state.secret };
   }
 
@@ -181,16 +187,23 @@ export class PostgresConnection implements PostgresSession {
    * backend leaves once it reads that. A cancel request ends only the statement that runs at
    * the moment it arrives, and one already on its way may start after it. So the request is
    * repeated until the server has closed the socket, which is the backend saying it is gone.
+   *
+   * A socket the executor destroyed itself says nothing about the backend. Then one request
+   * is sent, with the key noted when the transaction began.
    */
   async cancelRunningQuery(waitMs: number): Promise<void> {
     const { backend, socket } = this;
     if (!backend) return;
+    if (socket === undefined || socket.destroyed) {
+      await requestPostgresCancel(this.source, backend, waitMs);
+      return;
+    }
     const until = performance.now() + waitMs;
-    let gone = socket === undefined || socket.destroyed;
-    socket?.once("close", () => {
+    let gone = false;
+    socket.once("close", () => {
       gone = true;
     });
-    socket?.end();
+    socket.end();
     for (let left = waitMs; !gone && left > 0; left = until - performance.now()) {
       await requestPostgresCancel(this.source, backend, left);
       if (!gone) await delay(Math.min(POSTGRES_CANCEL_REPEAT_MS, left));
@@ -214,7 +227,9 @@ export class PostgresConnection implements PostgresSession {
   }
 
   private async openSocket(): Promise<net.Socket> {
-    if (this.closed.signal.aborted) throw new PostgresExecutorError("unavailable");
+    if (this.closed.signal.aborted || !this.mayOpenSocket) {
+      throw new PostgresExecutorError("unavailable");
+    }
     const socket = await openPostgresSocket(this.source, this.closed.signal);
     // The driver holds a whole message before it hands a row on, so only a count on the
     // socket sees a value that is too large while it still arrives.
@@ -234,23 +249,30 @@ export class PostgresConnection implements PostgresSession {
   /**
    * Called by the driver when the server asks for the password, once per physical connection.
    * The driver cannot take a failure here, so a credential that does not resolve ends the
-   * socket with the reason and leaves the driver's question unanswered.
+   * socket with the reason and leaves the driver's question unanswered. So does a credential
+   * that resolves after the connection was dropped: the driver would go on to answer the
+   * server through a socket it no longer has.
    */
   private async password(): Promise<string> {
+    const { socket } = this;
     let password: string | undefined;
     try {
       password = await this.source.secrets.getSecret(this.source.credentialHandle);
     } catch {
       return this.endSocket("failed");
     }
-    return password ?? this.endSocket("unauthorized");
+    if (password === undefined) return this.endSocket("unauthorized");
+    const open = socket !== undefined && socket === this.socket && !socket.destroyed;
+    return open && !this.closed.signal.aborted ? password : unanswered();
   }
 
   private endSocket(kind: Extract<PostgresExecutorErrorKind, "failed" | "unauthorized">) {
     this.socket?.destroy(new PostgresExecutorError(kind));
-    return new Promise<never>(() => undefined);
+    return unanswered();
   }
 }
+
+const unanswered = (): Promise<never> => new Promise<never>(() => undefined);
 
 interface Waiter {
   maxConnections: number;
