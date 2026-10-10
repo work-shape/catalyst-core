@@ -7,6 +7,35 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Pages:** a conversation can hold Pages, each with numbered revisions. A revision is a file
+  set that is stored once and never changed. The module `apps` owns them and is off by default;
+  with it on, startup stops with the missing piece named unless `infrastructure.objectStorage.files`
+  is configured and `CHAT_SESSION_TOKEN_SECRET` or `BETTER_AUTH_SECRET` is set with at least 32
+  characters. `GET /api/v1/conversations/{conversationId}/pages`, `.../pages/{pageId}` and
+  `.../pages/{pageId}/file-sets/{fileSetId}/source-file` read them, and `POST .../pages/{pageId}/preview`
+  answers the address a frame loads a revision from. No operation stores a Page yet. A file set
+  holds at most 500 files, 2 MiB per file and 25 MiB in all, a Page at most 1,000 revisions, a
+  conversation at most 200 Pages. Deleting a conversation, a workspace or a user removes their
+  Pages, rows and files, whether the module is on or off.
+- **Pages, serving:** the files of a revision are served at
+  `/app-content/<file set>/<token>/<file>`. **A reverse proxy must route `/app-content/*` to the
+  API**, as it does `/app-runtime/*`, and must not write these addresses to an access log:
+  the token is a bearer capability, minted after the check that the person may read the Page
+  and valid for one hour for whoever holds the address. `docker/Caddyfile` and
+  `docker/nginx-spa.conf` are changed accordingly. An HTML file is never answered as stored: the
+  answer is a shell that holds it in a frame with `sandbox="allow-scripts"`, under the header
+  `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'self'
+  'sha256-<the platform's script>'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+  connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none';
+  frame-ancestors 'self' <allowed origins>`. A Page therefore has no origin, sends no form,
+  opens no window, reaches no other host and cannot move its frame. The platform's script is the
+  only content of the frame's document and writes the stored HTML into it as its last step, so
+  there is no Page where that script did not run. In a Page a link has no address, there are no
+  frames, `document.write` is refused and the WebRTC constructors are removed by name; this
+  part runs in the Page's own realm and is hardening, not a boundary. WebRTC from a scripted
+  frame stays a known open exit. Tested in Chromium only.
+- **Database:** migration `0051_pages` adds the tables `pages` and `file_sets`.
+
 - **Infrastructure:** the page **Instance > Infrastructure** in the settings and
   `GET /api/v1/instance/infrastructure` list what the instance runs on: every entry of the
   `infrastructure` section and the database, each with its provider, region, endpoint host or

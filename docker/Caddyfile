@@ -28,6 +28,13 @@
 		reverse_proxy api:4100
 	}
 
+	# The files of a Page, served by the API. The address holds a token that serves the Page to
+	# whoever has it for an hour: this site writes no access log, and one that is added must
+	# leave these addresses out (`log_skip` on this matcher).
+	handle /app-content/* {
+		reverse_proxy api:4100
+	}
+
 	handle {
 		reverse_proxy ui:80
 	}

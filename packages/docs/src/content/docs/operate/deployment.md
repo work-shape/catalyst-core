@@ -157,6 +157,31 @@ Two unversioned addresses answer without a credential.
 
 The proxy has to forward `/ready` to the API like `/health`; it is outside `/api/*`.
 
+## What The Proxy Routes To The API
+
+Everything else goes to the interface. A deployment with its own proxy routes these to the API:
+
+| Address | What it is |
+| --- | --- |
+| `/api/*` | The product API. |
+| `/auth/*` | Sign-in of an instance with standalone auth. |
+| `/health`, `/ready` | The two checks above. |
+| `/app-runtime/*` | The runtime and the shell of a generated view. |
+| `/app-content/*` | The files of a Page, when the module `apps` is on. |
+
+`docker/Caddyfile` routes all of them.
+
+An address below `/app-content/` holds a token in its path: `/app-content/<file set>/<token>/<file>`. The token is a bearer capability. The API mints it after it has checked that the person may read the Page, and for one hour (`APP_CONTENT_TOKEN_TTL_SECONDS`) it serves the built files of that one revision to whoever holds the address. It is not bound to the person's session: signing out or losing access to the conversation does not end it before the hour is over.
+
+So no layer may write these addresses down:
+
+- The API writes no request line for them, whichever way the address is spelled.
+- `docker/Caddyfile` writes no access log. If you add a `log` directive, leave these addresses out with `log_skip /app-content/*`.
+- `docker/nginx-spa.conf` answers `/app-content` with `404` and `access_log off`, for the case that such an address reaches the interface's server.
+- Any other proxy, load balancer or CDN in front must be set the same way, and must not cache these answers: they carry `Cache-Control: private` or `no-store`.
+
+A Page's own script can read the address it was loaded from. The token is therefore a secret from other people and not from the Page.
+
 ## Production Readiness Checklist
 
 Before a real deployment:

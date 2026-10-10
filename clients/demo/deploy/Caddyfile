@@ -3,5 +3,7 @@
   reverse_proxy /auth/* api:4100
   reverse_proxy /health api:4100
   reverse_proxy /app-runtime/* api:4100
+  # The files of a Page. The address holds a token: keep it out of any access log added here.
+  reverse_proxy /app-content/* api:4100
 }
 
