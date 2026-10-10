@@ -214,8 +214,6 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       method: operation.method,
       url: operation.path,
       handler: async (request, reply) => {
-        // An operation of a module that is off does not exist here, for any caller.
-        requireOperationModuleOn(options.modules, operation.id);
         const { caller, query, body, params, takesCredential } = await admit(
           operation,
           request,
@@ -283,8 +281,9 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
 
   /**
    * What every call passes before its operation is reached: it is authenticated as the
-   * operation's `auth` says and counted against the rate class, its credential's scope is
-   * checked, and its query and body are parsed.
+   * operation's `auth` says, the module that owns the operation is on, the call is counted
+   * against the rate class, its credential's scope is checked, and its query and body are
+   * parsed.
    */
   async function admit(operation: Operation, request: FastifyRequest, reply: FastifyReply) {
     const correlationId = createCorrelationId(request);
@@ -295,6 +294,9 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       await requireWithinLimit(options, operation, { address: request.ip }, reply);
     }
     const caller = await authenticate(options, operation, request, reply, correlationId);
+    // An operation of a module that is off does not exist here. The caller is known first, so
+    // a call without a credential is answered as on any route and learns nothing of modules.
+    requireOperationModuleOn(options.modules, operation.id);
     if (caller.identity) {
       await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
     }
@@ -325,7 +327,6 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       method: operation.method,
       url: operation.path,
       handler: async (request, reply) => {
-        requireOperationModuleOn(options.modules, operation.id);
         const { correlationId, caller, params } = await admit(operation, request, reply);
         if (!caller.identity) {
           throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);

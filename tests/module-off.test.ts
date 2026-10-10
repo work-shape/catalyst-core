@@ -116,7 +116,7 @@ async function runToolCommand(instance: Awaited<ReturnType<typeof startInstance>
 }
 
 describe("a module that is off", () => {
-  it("answers its operations with module_off, before the caller is looked at", async () => {
+  it("answers its operations with module_off, before rights and records are looked at", async () => {
     const { instance } = await startInstance({ resources: false, documents: false });
     const created = await instance.call("conversations.create", { payload: { title: "Module" } });
     const conversationId = created.json<{ id: string }>().id;
@@ -130,8 +130,8 @@ describe("a module that is off", () => {
       details: { reason: "module_off", module: "resources" }
     });
 
-    // The same answer for a conversation that does not exist: nothing about the caller or
-    // the record is read first.
+    // The same answer for a conversation that does not exist: the caller is known, and
+    // neither a right nor the record is read first.
     const unknown = await instance.call("conversations.resources.list", {
       params: { conversationId: "conv_not_there" }
     });

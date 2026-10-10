@@ -8,8 +8,8 @@ contain breaking changes; a patch version does not.
 ### Added
 
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
-  `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, before
-  the caller is authenticated. Its agent tools are not offered to the model and cannot be called,
+  `404 NOT_FOUND` with `details.reason: "module_off"` and the module in `details.module`, to a
+  caller who is authenticated; a call without a credential gets `401` as on any route. Its agent tools are not offered to the model and cannot be called,
   and saving or pushing an agent that names one is refused with a message that names the module;
   an agent stored earlier keeps its entry and runs without the tool. Its job kinds are not claimed
   and their queued jobs stay queued. The operations of `assetManagement` answered `403 FORBIDDEN`

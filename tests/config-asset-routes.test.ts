@@ -1057,6 +1057,13 @@ describe("config asset admin routes", () => {
     expect(whileDisabled.json()).toMatchObject({
       error: { details: { reason: "module_off", module: "assetManagement" } }
     });
+    // A caller without a credential is refused as on any route and learns nothing of modules.
+    const anonymous = await disabled.server.call("config_agents.set_availability", {
+      params: { name: "kai" },
+      payload: { mode: "all" }
+    });
+    expect(anonymous.statusCode).toBe(401);
+    expect(JSON.stringify(anonymous.json())).not.toContain("module");
   });
 
   it("hides the agents of a push that renames a restricted agent and reports them", async () => {
