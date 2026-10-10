@@ -247,21 +247,40 @@ The default is an empty list, and `"*"` allows every HTTPS host. The setting app
 
 ### What A View Can Reach
 
-A view cannot load from, navigate to or send HTTP or WebSocket requests to a host the instance has not allowed.
+A view cannot by itself load from, move its frame to or send HTTP or WebSocket requests to a host the instance has not allowed. A view that holds private rows also carries no address a person could open from it.
 
-Two things hold this. The content policy of the view, which the interface composes each time it shows the view, refuses every load and every connection except scripts from the instance's view runtime and from the hosts in `views.allowedScriptSrc`. The shell holds the rest: every view is framed in a small document the instance serves under `/app-runtime/view-shell/<version>/`, and that document's `Content-Security-Policy` header carries `frame-src 'none'`. A view that sets `location`, carries a refresh tag, or has a link or a download link clicked would move its own frame to another address, and no policy of the view itself can forbid that. The browser checks the move against the policy of the framing document and refuses it before it sends a request. Because the policy is a header of the instance, it also holds when another site embeds the chat widget.
+Three things hold this.
+
+- **The view's content policy.** The interface composes it each time it shows the view. It refuses every load and every connection except scripts from the instance's view runtime and from the hosts in `views.allowedScriptSrc`.
+- **The shell.** Every view is framed in a small document the instance serves under `/app-runtime/view-shell/<version>/`, whose `Content-Security-Policy` header carries `frame-src 'none'`. A view that sets `location`, carries a refresh tag or has a script follow a link would move its own frame to another address, and no policy of the view itself can forbid that. The browser checks the move against the policy of the framing document and refuses it before it sends a request, to addresses of the instance as well. Because the policy is a header of the instance, it also holds when another site embeds the chat widget.
+- **The allowlist for views with private rows.** A view of kind `private_hydrated_view` runs no script, and its rows are written into its HTML on the server. Such a view needs no script to send rows away: a link carries them in its address, and a click with a modifier key or the middle button opens it in a new tab, outside the frame. So the interface does not show the stored HTML of such a view. It reads it with the browser's parser and writes the body anew from a list of allowed elements and attributes, each time the view is shown. Row text is already part of the stored HTML at that point, so whatever it became is held to the same list.
+
+What a view with private rows keeps:
+
+| Kept | With |
+| --- | --- |
+| Text, headings, paragraphs, sections, `pre`, `blockquote`, `details` | `class`, `id`, `style`, `title`, `lang`, `dir`, `role`, `hidden`, `aria-*`, `data-*` |
+| Lists and tables | also `colspan`, `rowspan`, `headers`, `scope`, `span`, `start`, `value` |
+| Inline formatting, `time`, `meter`, `progress` | their value attributes |
+| `a` | its text, never an address |
+| `img` | `alt`, `width`, `height`, and `src` only when it starts with `data:` or `blob:` |
+| `style` blocks and `style` attributes | only without `url(` other than `url(#id)`, `@import`, `image-set(`, `image(`, `src(` or a backslash |
+| Inline `svg` with shapes, `text`, gradients and clip paths | geometry and paint attributes, no `href` |
+
+Everything else is left out with what is inside it: `script`, `link`, `meta`, `base`, `area`, `form` and its controls, `iframe`, `object`, `embed`, `canvas`, `video`, `audio`, SVG `a`, `image`, `use` and `foreignObject`, every event handler attribute, `href`, `ping`, `target`, `srcset` and `srcdoc`.
 
 The limits:
 
-- **WebRTC.** A view that runs scripts can send UDP packets to a host its script names. No content policy and no sandbox flag of current browsers forbids WebRTC. The view's bootstrap removes `RTCPeerConnection` and its prefixed variants from the view's window. That is hardening and not a boundary: a script can get the constructor back from a frame it writes itself.
-- **Views with private rows run no script.** Because of the WebRTC limit, a view of kind `private_hydrated_view` is shown in a frame without `allow-scripts`. It shows its HTML and CSS. A template that draws its rows with a script, a chart on a canvas for example, shows none of them, and the frame keeps a fixed height and scrolls inside, since nothing in it can report its height.
-- **DNS.** Whether a view can cause a DNS lookup for a host of its choosing has not been tested.
+- **WebRTC.** A view that runs scripts can send UDP packets to a host its script names. No content policy and no sandbox flag of current browsers forbids WebRTC. The view's bootstrap removes `RTCPeerConnection` and its prefixed variants from the view's window. That is hardening and not a boundary: a script gets the constructor back in a frame it writes itself.
+- **Links in a view that runs scripts.** The view's bootstrap takes the address from every link, image map area and SVG link, and cancels a click on one that still has an address. That is hardening and not a boundary: a script can put a link back where the bootstrap does not run, in a frame it writes itself, and a click on it with a modifier key or the middle button then opens the address in a new tab. Opening a link from the context menu and dragging a link out of a view have not been tested.
+- **A static view is static.** A view with private rows shows HTML and CSS. A chart drawn by a script on a canvas does not appear, and the frame keeps a fixed height and scrolls inside, since nothing in it can report its height.
+- **DNS.** Whether a view can cause a DNS lookup for a host of its choosing has not been observed. A view with private rows keeps no `link` or `meta` element, so it carries no resource hint. For a view that runs scripts this is open.
 - **Allowed script hosts are data destinations.** A host named in `views.allowedScriptSrc` receives the requests a view makes for its scripts, and a view chooses the address, so data can leave in it. Name only hosts you would send the data to.
-- **A view navigates nowhere.** `frame-src 'none'` names no address, so a view cannot move its frame to an address of the instance either. A link in a view does not open. The frame shows the browser's own notice for a refused address.
+- **A view navigates nowhere.** A link in a view has no address, `#fragment` included, and a view that moves its frame anyway shows the browser's own notice for a refused address.
 - **Sites that embed the widget.** The shell is a frame from the instance. A site that embeds the chat widget under a content policy of its own must allow the instance's origin in `frame-src`, or no view is shown there.
-- **Browsers.** The refusal is tested in Chromium. It relies on the browser applying `frame-src` of the framing document to a navigation of the frame, and on a `srcdoc` frame taking over the policies of the document that holds it.
+- **Browsers.** All of this is tested in Chromium only. Firefox and Safari are untested. The shell relies on the browser applying `frame-src` of the framing document to a navigation of the frame, and on a `srcdoc` frame taking over the policies of the document that holds it.
 
-The shell answers only requests a browser makes for a frame: a request whose `Sec-Fetch-Dest` header names anything else gets `403`. A reverse proxy in front of the instance must route `/app-runtime/*` to the API. When it does not, views stay on "Loading view…".
+The shell answers only requests a browser makes for a frame: a request whose `Sec-Fetch-Dest` header names anything else gets `403`. The shell runs under `sandbox`, so it and the view have an opaque origin and neither can read anything of the instance. The requests for the shell and for script files are still requests to the instance, and a browser may attach eligible cookies to them. The routes read none. A reverse proxy in front of the instance must route `/app-runtime/*` to the API. When it does not, views stay on "Loading view…".
 
 ## Agent And Skill Configuration Assets
 

@@ -162,14 +162,20 @@ id from config_assets where status = 'deleted')`.
   data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none';
   form-action 'none'`. Under `frame-src 'none'` the browser refuses `location`, a refresh tag, a
   clicked link and a download link in a view before it sends a request, to the instance's own
-  addresses as well. The shell answers a frame only: another `Sec-Fetch-Dest` gets `403`. A
+  addresses as well. The shell answers a frame only: another `Sec-Fetch-Dest` gets `403`, and
+  both answers carry `Vary: Sec-Fetch-Dest`. A
   reverse proxy must route `/app-runtime/*` to the API, as it already must for the view
   runtime. The view's own policy no longer names `navigate-to`, which no browser enforced.
-- **Views:** a view that holds private rows (`private_hydrated_view`) runs no script. WebRTC
-  lets a script send packets to any host and no browser lets a document forbid it. Such a view
-  shows its HTML and CSS: a template that draws its rows with a script shows none of them, and
-  its frame has a fixed height and scrolls inside. Views that run scripts have
-  `RTCPeerConnection` removed from their window, which is hardening and not a boundary.
+- **Views:** a view that holds private rows (`private_hydrated_view`) is static. It runs no
+  script, because WebRTC lets a script send packets to any host and no browser lets a document
+  forbid it. Its body is not the stored HTML: each time it is shown, the interface reads the
+  stored HTML with the browser's parser and writes the body from an allowlist of elements and
+  attributes. Links lose their address, and scripts, forms, frames, `link`, `meta` and `base`
+  elements, event handlers and styles that name an address are left out. Its frame has a fixed
+  height and scrolls inside.
+- **Views:** a view that runs scripts has `RTCPeerConnection` removed from its window and the
+  address taken from every link, and a click on a link that still has one is cancelled. Both
+  are hardening and not a boundary. Do not put links into a view.
 - **Config assets:** the overview lists the `id` of each agent and skill.
 - **Rights:** every rights check of the API and of tool calls is answered by one evaluator,
   `evaluateAccess` in `@vivd-catalyst/core`. `InProcessToolExecution` takes an optional

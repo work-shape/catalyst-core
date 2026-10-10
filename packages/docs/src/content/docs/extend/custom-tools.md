@@ -160,16 +160,19 @@ when it shows the view, and `connect-src` and external image loading remain bloc
 
 Every view is framed in a shell document the instance serves under
 `/app-runtime/view-shell/<version>/`. Its policy keeps a view from moving its own frame to
-another address, so a link, a refresh tag or `location` in a view leads nowhere: do not put
+another address, and the view's bootstrap takes the address from every link. Do not put
 links into a view. [What A View Can Reach](/configure/release-config/#what-a-view-can-reach)
 states the guarantee and its limits.
 
 Private hydrated views get no library and no script host, whatever `views.allowedScriptSrc`
-says, and they run no script at all: a script can send packets to another host over WebRTC,
-and no browser lets a document forbid that. Network, image, form, and navigation targets are
-blocked. A template must show its rows with HTML, inline CSS and inline SVG alone. A template
-that fills itself from `{{ROWS_JSON}}` or `{{DATA_JSON}}` with a script shows no rows, and the
-frame of such a view has a fixed height and scrolls inside.
+says, and they are static: no script runs in them, because a script can send packets to
+another host over WebRTC and no browser lets a document forbid that. The tool places the rows
+in the template as HTML-escaped text where `{{ROWS_JSON}}` or `{{DATA_JSON}}` stands, or at
+the end. When the view is shown, the interface writes its body anew from an allowlist of
+elements and attributes: text, headings, lists, tables, inline formatting, inline styles
+without `url(`, embedded images and plain inline SVG. Links lose their address, and scripts,
+forms, frames, `link` and `meta` elements are left out. The frame of such a view has a fixed
+height and scrolls inside.
 
 When `display` needs a polished visual treatment, register a client-owned widget for the
 returned `display.kind`. Concrete widgets belong in `clients/*/widgets` for reference
