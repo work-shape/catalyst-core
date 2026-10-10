@@ -7,7 +7,7 @@ Instance roles and the rights set on the Users page apply to the whole instance.
 
 ## Namespaces
 
-A Namespace is a registered name prefix such as `kai-`. Every agent and skill whose name starts with the prefix belongs to it. Two Namespaces never overlap: while `kai-` is registered, `kai-x-` is refused, and so is `ka-` for a registered `ka-team-`. The form checks this as you type. A prefix cannot be changed later.
+A Namespace is a registered name prefix such as `sales-`. Every agent and skill whose name starts with the prefix belongs to it. Two Namespaces never overlap: while `sales-` is registered, `sales-x-` is refused, and so is `sa-` for a registered `sa-team-`. The form checks this as you type. A prefix cannot be changed later.
 
 A Namespace can carry two lists. Each is switched on with **Limit tools** or **Limit models**.
 
@@ -43,7 +43,7 @@ A row on one asset names the asset only for a reader who may read that kind of a
 
 ## Check
 
-Choose a person and enter the name of an agent or a skill. The name does not have to exist yet, which answers "could this person create `kai-helper`?". For each action the tab says whether it is allowed and what decided:
+Choose a person and enter the name of an agent or a skill. The name does not have to exist yet, which answers "could this person create `sales-helper`?". For each action the tab says whether it is allowed and what decided:
 
 | Reason | Meaning |
 | --- | --- |
