@@ -339,6 +339,13 @@ describe("Postgres executor on a customer's database", () => {
   });
 
   describe("deadline", () => {
+    /**
+     * A Node timer runs on the event loop's millisecond clock and may fire a fraction of a
+     * millisecond before its delay has passed on `performance.now()`. A call that ends this
+     * close to its deadline was ended by the deadline, not before it.
+     */
+    const TIMER_EARLY_TOLERANCE_MS = 5;
+
     it("ends a slow statement by the timeout set in the transaction", async () => {
       const [before] = (
         await calls().query({ ...asReader(), sql: "select pg_backend_pid() as pid" })
@@ -403,7 +410,7 @@ describe("Postgres executor on a customer's database", () => {
       expect(error).toMatchObject({ kind: "timeout" });
       // The database's own cancellation would have come with its SQLSTATE.
       expect(error.sqlState).toBeUndefined();
-      expect(performance.now() - started).toBeGreaterThanOrEqual(5000);
+      expect(performance.now() - started).toBeGreaterThanOrEqual(5000 - TIMER_EARLY_TOLERANCE_MS);
       // Left alone, the backend would sleep until the database's timeout at 7.5 seconds.
       await expect.poll(() => customer.ended(writer, pid), { timeout: 1500 }).toBe(true);
       expect(performance.now() - started).toBeLessThan(7000);
@@ -426,7 +433,7 @@ describe("Postgres executor on a customer's database", () => {
         );
 
         expect(error).toMatchObject({ kind: "timeout" });
-        expect(performance.now() - started).toBeGreaterThanOrEqual(1300);
+        expect(performance.now() - started).toBeGreaterThanOrEqual(1300 - TIMER_EARLY_TOLERANCE_MS);
         await closed.promise;
       } finally {
         silent.close();
