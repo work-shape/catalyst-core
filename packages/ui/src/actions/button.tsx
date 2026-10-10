@@ -24,7 +24,8 @@ const buttonVariants = cva(
         ghost: "hover:bg-state-hover hover:text-foreground active:bg-state-pressed",
         danger:
           "border-destructive-border bg-destructive-soft text-destructive-soft-foreground shadow-control hover:bg-destructive/20 active:shadow-none",
-        link: "text-accent-foreground underline-offset-4 hover:underline active:opacity-80"
+        // No line at its sides: without padding its text starts where the text around it does.
+        link: "border-x-0 text-accent-foreground underline-offset-4 hover:underline active:opacity-80"
       },
       size: {
         sm: "h-control-sm px-3",
