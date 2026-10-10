@@ -319,8 +319,19 @@ const welcomeSubtitleSchema = z.union([
     })
 ]);
 
+/**
+ * An agent's id is a segment of its address. A browser reads `.` and `..` as "this place" and
+ * "one up" and drops them from a path, so an agent with either name could not be opened.
+ */
+const agentNameSchema = z
+  .string()
+  .min(1)
+  .refine((name) => name !== "." && name !== "..", {
+    message: "Agent name must not be '.' or '..'"
+  });
+
 export const agentConfigSchema = z.object({
-  name: z.string().min(1),
+  name: agentNameSchema,
   displayName: localizedStringSchema,
   description: localizedStringSchema.optional(),
   welcomeMessage: localizedStringSchema.optional(),

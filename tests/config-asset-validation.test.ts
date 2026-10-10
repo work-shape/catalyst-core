@@ -78,6 +78,34 @@ describe("config asset bundle validation", () => {
     expect(issueMessages(error)).toEqual(expect.arrayContaining([expect.stringMatching(issue)]));
   });
 
+  // An asset's id is the last segment of its address, and a browser drops `.` and `..`.
+  it.each([".", ".."])("refuses the name %j for an agent and for a skill", (name) => {
+    const error = validationError({
+      agents: [agent({ name })],
+      skills: [{ ...skill(), name }],
+      defaultAgentName: name,
+      refs: refs()
+    });
+
+    expect(issueMessages(error)).toEqual(
+      expect.arrayContaining([
+        "Agent name must not be '.' or '..'",
+        expect.stringMatching(/Skill name must start with a letter/u)
+      ])
+    );
+  });
+
+  it("keeps a dot inside an agent name", () => {
+    const result = validateConfigAssetBundle({
+      agents: [agent({ name: "sales.v2" }), agent({ name: "..." })],
+      skills: [],
+      defaultAgentName: "sales.v2",
+      refs: refs()
+    });
+
+    expect(result.agents.map((entry) => entry.name)).toEqual(["sales.v2", "..."]);
+  });
+
   it("aggregates zod issues with per-asset context", () => {
     const error = validationError({
       agents: [{ ...agent(), instructions: "" }],
