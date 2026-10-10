@@ -10,9 +10,9 @@ export type {
   ClientInstanceManagedObjectReader,
   ManagedObjectAccessFactory
 } from "./capabilities";
+export type { AgentRunWorkerPlacement } from "./agent-run-jobs";
 export {
   createClientInstanceApp,
-  type AgentRunWorkerPlacement,
   type ClientInstanceApp,
   type CreateClientInstanceAppInput
 } from "./app";

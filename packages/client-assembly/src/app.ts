@@ -77,7 +77,7 @@ import type {
 } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
-import { createClientInstanceAgentRunJobs } from "./agent-run-jobs";
+import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
@@ -101,14 +101,6 @@ export interface CreateClientInstanceAppInput {
   allowedOrigins?: string | string[];
   agentRunWorker?: AgentRunWorkerPlacement;
 }
-
-/**
- * Where the Agent Runs of the instance execute. `in_process`, the default: this process serves
- * `agent_run.execute` beside the API, which is all a single-process instance needs.
- * `separate`: only the worker processes started with `runAgentRunWorker` serve it, and the API
- * executes no run.
- */
-export type AgentRunWorkerPlacement = "in_process" | "separate";
 
 /** Listens on `HOST` and `PORT` of the instance's environment unless told otherwise. */
 export interface ClientInstanceApp extends HttpRuntime {
@@ -206,18 +198,7 @@ export async function createClientInstanceApp(
     modules: execution.modules,
     ...createChatServerJobs(serverOptions)
   });
-  // A worker of its own, so the runs keep their slots and stop apart from the API's jobs.
-  const agentRunJobs = inProcess
-    ? createJobWorker({
-        stores: store,
-        clientInstanceId,
-        logger,
-        ...createClientInstanceAgentRunJobs(execution, {
-          onObservation: (runId) => inProcess.observations.notify(runId),
-          cancellations: inProcess.cancellations
-        })
-      })
-    : undefined;
+  const agentRunJobs = inProcess ? createInProcessAgentRunWorker(execution, inProcess) : undefined;
 
   return {
     config,

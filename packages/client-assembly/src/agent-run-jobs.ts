@@ -12,15 +12,26 @@ import {
   type AgentRunId,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type JobWorker,
+  type Logger,
   type PlatformStores
 } from "@vivd-catalyst/core";
 import type { ClientInstanceEnv } from "./env";
+import { createJobWorker } from "./job-worker";
 
 // How many runs one process executes at once unless `AGENT_RUN_WORKER_CONCURRENCY` says
 // otherwise. A run waits on its model and its tools most of the time, so the number is bound
 // by memory and by the database pool, not by processors. The runs of an instance that execute
 // at once are this number times its worker processes.
 const DEFAULT_AGENT_RUN_WORKER_SLOTS = 8;
+
+/**
+ * Where the Agent Runs of the instance execute. `in_process`, the default: this process serves
+ * `agent_run.execute` beside the API, which is all a single-process instance needs.
+ * `separate`: only the worker processes started with `runAgentRunWorker` serve it, and the API
+ * executes no run.
+ */
+export type AgentRunWorkerPlacement = "in_process" | "separate";
 
 /** What the execution assembly of a client instance gives the Agent Run jobs. */
 interface AgentRunExecutionAssembly {
@@ -43,6 +54,26 @@ export function createClientInstanceAgentRunJobs(
     execute: createLocalAgentRunExecutor(execution.localAgentRuntimeOptions),
     onObservation: options.onObservation,
     cancellations: options.cancellations
+  });
+}
+
+/**
+ * The job worker that serves the runs inside the API process. A worker of its own, so the runs
+ * keep their slots and stop apart from the API's jobs. It tells the API's observers of every
+ * stored event and hears of a cancellation at once.
+ */
+export function createInProcessAgentRunWorker(
+  execution: AgentRunExecutionAssembly & { logger: Logger },
+  signals: { observations: AgentRunSignal; cancellations: AgentRunSignal }
+): JobWorker {
+  return createJobWorker({
+    stores: execution.store,
+    clientInstanceId: execution.clientInstanceId,
+    logger: execution.logger,
+    ...createClientInstanceAgentRunJobs(execution, {
+      onObservation: (runId) => signals.observations.notify(runId),
+      cancellations: signals.cancellations
+    })
   });
 }
 
