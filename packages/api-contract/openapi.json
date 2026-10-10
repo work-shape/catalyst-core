@@ -11377,6 +11377,13 @@
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
           },
+          "isDefault": {
+            "type": "boolean",
+            "const": true
+          },
+          "availability": {
+            "$ref": "#/components/schemas/AgentAvailability"
+          },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
           }
@@ -11451,6 +11458,10 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
+          },
+          "isDefault": {
+            "type": "boolean",
+            "const": true
           },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"

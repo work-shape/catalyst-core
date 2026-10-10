@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { configAssetConfigSchema } from "./configuration";
+import { agentAvailabilitySchema, configAssetConfigSchema } from "./configuration";
 import { timestampSchema } from "./shared";
 
 /** How many puts and deletes one `assets.sync` call may carry. */
@@ -40,6 +40,12 @@ const assetDefinitionSchema = configAssetConfigSchema.refine(
  */
 const workspaceIdSchema = z.string().min(1).optional();
 
+/**
+ * Set on the one asset that is the instance's default of its kind, and left out on every
+ * other. Only a kind that holds an instance default, such as the agent, ever carries it.
+ */
+const isDefaultSchema = z.literal(true).optional();
+
 /** One asset as a list shows it: what every kind can say about itself, without its content. */
 export const assetSummarySchema = z.object({
   /** What an asset-scoped grant names as its `scopeId`. */
@@ -52,6 +58,7 @@ export const assetSummarySchema = z.object({
   /** The prefix of the Namespace the name belongs to, where it belongs to one. */
   namespace: z.string().optional(),
   revision: revisionNumberSchema,
+  isDefault: isDefaultSchema,
   updatedAt: timestampSchema
 });
 
@@ -63,6 +70,12 @@ export const assetSchema = z.object({
   namespace: z.string().optional(),
   revision: revisionNumberSchema,
   config: configAssetConfigSchema,
+  isDefault: isDefaultSchema,
+  /**
+   * The workspaces the asset is offered in, for a kind that is offered per workspace. Left
+   * out where none is stored: such an asset is hidden in every workspace.
+   */
+  availability: agentAvailabilitySchema.optional(),
   updatedAt: timestampSchema
 });
 

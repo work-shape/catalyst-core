@@ -594,6 +594,17 @@ function runConfigAssetStoreSuite(
         ["assistant", hidden],
         ["second", hidden]
       ]);
+      // Asked for one agent, the read answers that one alone, and nothing for an unknown name.
+      expect([
+        ...(await store.configAssets.listAgentAvailability({
+          clientInstanceId,
+          agentName: "second"
+        }))
+      ]).toEqual([["second", hidden]]);
+      expect(
+        (await store.configAssets.listAgentAvailability({ clientInstanceId, agentName: "nobody" }))
+          .size
+      ).toBe(0);
     });
 
     it("starts agents hidden when the same batch deletes a selected agent", async () => {

@@ -8,6 +8,7 @@ import {
   isAppError,
   type AccessResource,
   type ActorAccess,
+  type AgentAvailability,
   type AssetScope,
   type ConfigAssetMutation,
   type ConfigAssetRecord,
@@ -191,8 +192,9 @@ export class AssetWorkflow {
     const kind = this.kind(input.kind);
     const scope = scopeOf(input.workspaceId);
     const [after] = page?.after ?? [];
-    const [namespaces, records] = await Promise.all([
+    const [namespaces, defaultName, records] = await Promise.all([
       this.namespaces(scope),
+      this.defaultName(kind, scope),
       this.options.configAssets.store.listConfigAssetPage({
         clientInstanceId: this.options.clientInstanceId,
         kind: kind.kind,
@@ -217,6 +219,7 @@ export class AssetWorkflow {
         scope: record.scope,
         ...(namespace ? { namespace: namespace.prefix } : {}),
         revision: record.revision,
+        ...(record.name === defaultName ? { isDefault: true as const } : {}),
         updatedAt: record.updatedAt
       };
     });
@@ -226,7 +229,12 @@ export class AssetWorkflow {
     const target = await this.target(address);
     call.access.require(target.kind.actions.read, target.resource);
     const asset = requireActive(target);
-    const namespace = findNamespaceOfAssetName(await this.namespaces(target.scope), asset.name);
+    const [namespaces, defaultName, availability] = await Promise.all([
+      this.namespaces(target.scope),
+      this.defaultName(target.kind, target.scope),
+      this.availability(target.kind, asset.name)
+    ]);
+    const namespace = findNamespaceOfAssetName(namespaces, asset.name);
     return {
       id: asset.id,
       kind: asset.kind,
@@ -235,6 +243,8 @@ export class AssetWorkflow {
       ...(namespace ? { namespace: namespace.prefix } : {}),
       revision: asset.revision,
       config: asset.config,
+      ...(asset.name === defaultName ? { isDefault: true as const } : {}),
+      ...(availability ? { availability } : {}),
       updatedAt: asset.updatedAt
     };
   }
@@ -584,6 +594,38 @@ export class AssetWorkflow {
           clientInstanceId: this.options.clientInstanceId
         })
       : [];
+  }
+
+  /**
+   * The name of the instance's default of a kind, read once per call. Only a kind that holds
+   * the default has one, and only among the instance's own assets.
+   */
+  private async defaultName(
+    kind: WorkflowAssetKind,
+    scope: AssetScope
+  ): Promise<string | undefined> {
+    if (!kind.holdsInstanceDefault || scope.kind !== "instance") {
+      return undefined;
+    }
+    const state = await this.options.configAssets.store.getConfigAssetState({
+      clientInstanceId: this.options.clientInstanceId
+    });
+    return state.defaultAgentName;
+  }
+
+  /** The workspaces one asset is offered in, where its kind is offered per workspace. */
+  private async availability(
+    kind: WorkflowAssetKind,
+    name: string
+  ): Promise<AgentAvailability | undefined> {
+    if (!kind.hasWorkspaceAvailability) {
+      return undefined;
+    }
+    const stored = await this.options.configAssets.store.listAgentAvailability({
+      clientInstanceId: this.options.clientInstanceId,
+      agentName: name
+    });
+    return stored.get(name);
   }
 
   private async target(address: AssetAddress): Promise<AssetTarget> {

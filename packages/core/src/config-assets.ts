@@ -183,6 +183,8 @@ export interface ConfigAssetStore {
   /** Availability of every active agent that has a record, keyed by agent name. */
   listAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;
+    /** Only this agent's record, for a read of one agent that must not load every other. */
+    agentName?: string;
   }): Promise<Map<string, AgentAvailability>>;
   /** Rejects hiding the instance default agent, which must stay `all`. */
   setAgentAvailability(input: {

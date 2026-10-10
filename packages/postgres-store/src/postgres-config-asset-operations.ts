@@ -448,9 +448,13 @@ export async function listAgentAvailability(
       and(
         eq(configAssets.clientInstanceId, input.clientInstanceId),
         eq(configAssets.kind, "agent"),
-        eq(configAssets.status, "active")
+        eq(configAssets.status, "active"),
+        input.agentName === undefined ? undefined : eq(configAssets.name, input.agentName)
       )
     );
+  if (rows.length === 0) {
+    return new Map();
+  }
   const workspaceRows = await db
     .select({
       assetId: configAssetWorkspaceAvailability.assetId,
@@ -461,7 +465,17 @@ export async function listAgentAvailability(
       configAssetAvailability,
       eq(configAssetAvailability.assetId, configAssetWorkspaceAvailability.assetId)
     )
-    .where(eq(configAssetAvailability.clientInstanceId, input.clientInstanceId))
+    .where(
+      and(
+        eq(configAssetAvailability.clientInstanceId, input.clientInstanceId),
+        input.agentName === undefined
+          ? undefined
+          : inArray(
+              configAssetWorkspaceAvailability.assetId,
+              rows.map((row) => row.assetId)
+            )
+      )
+    )
     .orderBy(asc(configAssetWorkspaceAvailability.collaborationWorkspaceId));
   return new Map(
     rows.map((row) => [

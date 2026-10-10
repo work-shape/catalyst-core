@@ -183,6 +183,74 @@ describe("assets.list", () => {
   });
 });
 
+describe("the instance default and the availability of an asset", () => {
+  const readSchema = z.object({
+    name: z.string(),
+    isDefault: z.literal(true).optional(),
+    availability: z
+      .object({
+        mode: z.string(),
+        personalWorkspaces: z.boolean(),
+        collaborationWorkspaceIds: z.array(z.string())
+      })
+      .optional()
+  });
+  const listSchema = z.object({
+    items: z.array(z.object({ name: z.string(), isDefault: z.literal(true).optional() }))
+  });
+
+  it("marks the default agent in the read and in the list, and no other asset", async () => {
+    const t = await setupNamespace();
+    await t.put(t.admin.id, "agent", "kai-intake");
+    await t.put(t.admin.id, "skill", "kai-guide");
+    await t.stores.configAssets.setAgentAvailability({
+      clientInstanceId,
+      agentName: "kai-intake",
+      availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+    });
+    const read = async (userId: string, kind: string, name: string) =>
+      readSchema.parse((await t.expectOk(userId, "assets.get", { params: { kind, name } })).json());
+
+    expect(await read(t.admin.id, "agent", "assistant")).toEqual({
+      name: "assistant",
+      isDefault: true,
+      availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
+    });
+    // Another agent is no default and carries its own availability, for its Namespace holder too.
+    expect(await read(t.kai.id, "agent", "kai-intake")).toEqual({
+      name: "kai-intake",
+      availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+    });
+    // A kind that holds no default and is offered in no workspace carries neither.
+    expect(await read(t.kai.id, "skill", "kai-guide")).toEqual({ name: "kai-guide" });
+
+    const agents = listSchema.parse(
+      (await t.expectOk(t.admin.id, "assets.list", { params: { kind: "agent" } })).json()
+    );
+    expect(agents.items).toEqual([{ name: "assistant", isDefault: true }, { name: "kai-intake" }]);
+    const skills = listSchema.parse(
+      (await t.expectOk(t.admin.id, "assets.list", { params: { kind: "skill" } })).json()
+    );
+    expect(skills.items).toEqual([{ name: "kai-guide" }]);
+  });
+
+  it("leaves the availability out for an agent that has no stored record", async () => {
+    const t = await setupNamespace();
+    await t.put(t.admin.id, "agent", "kai-intake");
+    const assetId = await t.assetId("agent", "kai-intake");
+    await withTestSql(async (sql) => {
+      await sql`delete from config_asset_availability where asset_id = ${assetId}`;
+    });
+
+    const read = readSchema.parse(
+      (
+        await t.expectOk(t.kai.id, "assets.get", { params: { kind: "agent", name: "kai-intake" } })
+      ).json()
+    );
+    expect(read).toEqual({ name: "kai-intake" });
+  });
+});
+
 describe("assets.put, assets.delete and assets.revert", () => {
   it("creates without a revision, replaces at the one read, and answers a stale one with the current", async () => {
     const t = await setupNamespace();
