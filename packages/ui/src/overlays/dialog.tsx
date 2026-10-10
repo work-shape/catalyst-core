@@ -81,7 +81,12 @@ export function ModalSurface({
         "m-auto max-h-[calc(100dvh-2rem)] overflow-hidden rounded-xl border bg-popover p-0 text-popover-foreground shadow-modal backdrop:bg-scrim",
         className
       )}
-      onClose={onClose}
+      onClose={(event) => {
+        // React hands on the closing of a dialog opened inside this one. Only its own counts.
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
       onPointerDown={(event) => {
         pointerStartedOnBackdropRef.current = event.target === dialogRef.current;
       }}
