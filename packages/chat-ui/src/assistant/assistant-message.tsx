@@ -411,6 +411,9 @@ function AssistantWorkTimeline({
   );
 }
 
+/** How long the work history of a run that just ended stays open before it folds itself. */
+const WORK_SUMMARY_AUTO_COLLAPSE_DELAY_MS = 80;
+
 function AssistantWorkGroup({
   count,
   children,
@@ -429,17 +432,17 @@ function AssistantWorkGroup({
   const { t } = useTranslation();
   const [open, setOpen] = useState(autoCollapse);
   const [suppressOpenAnimation, setSuppressOpenAnimation] = useState(autoCollapse);
-  const autoCollapseStartedRef = useRef(false);
 
+  // The whole timer lives in this effect, so a second run of it, as StrictMode makes one,
+  // starts the timer its cleanup has just cleared.
   useEffect(() => {
-    if (!summary || !autoCollapse || autoCollapseStartedRef.current) {
+    if (!summary || !autoCollapse) {
       return;
     }
-    autoCollapseStartedRef.current = true;
     const timeout = globalThis.setTimeout(() => {
       setSuppressOpenAnimation(false);
       setOpen(false);
-    }, 80);
+    }, WORK_SUMMARY_AUTO_COLLAPSE_DELAY_MS);
     return () => globalThis.clearTimeout(timeout);
   }, [autoCollapse, summary]);
 
