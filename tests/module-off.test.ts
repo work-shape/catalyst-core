@@ -411,6 +411,13 @@ describe("a module that is off", () => {
         .json<{ items: { kind: string; queued: number; running: number }[] }>()
         .items.find((row) => row.kind === JOB_KIND)
     ).toMatchObject({ queued: 1, running: 0 });
+    // The job says why it waits.
+    const waiting = await instance.call("instance.jobs.list", { query: { status: "queued" } });
+    expect(
+      waiting
+        .json<{ items: { kind: string; status: string; waitingForModule?: string }[] }>()
+        .items.filter((job) => job.kind === JOB_KIND)
+    ).toMatchObject([{ status: "queued", waitingForModule: "documents" }]);
 
     // Turned on again, the job that waited is done.
     const on = workerWith(true);

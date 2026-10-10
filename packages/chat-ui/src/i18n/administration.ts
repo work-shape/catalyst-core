@@ -37,6 +37,8 @@ export const administration = defineTranslations({
     "jobs.subject": "Subject",
     "jobs.waitingFor": "Oldest waiting",
     "jobs.statusQueued": "Queued",
+    "jobs.waitingForModule":
+      "Waits until the module {module} is on. No worker takes it while the module is off.",
     "jobs.statusRunning": "Running",
     "jobs.statusSucceeded": "Succeeded",
     "jobs.statusFailed": "Failed",
@@ -160,6 +162,8 @@ export const administration = defineTranslations({
     "jobs.subject": "Gegenstand",
     "jobs.waitingFor": "Wartet am längsten",
     "jobs.statusQueued": "Wartend",
+    "jobs.waitingForModule":
+      "Wartet, bis das Modul {module} an ist. Solange es aus ist, übernimmt kein Worker den Job.",
     "jobs.statusRunning": "Läuft",
     "jobs.statusSucceeded": "Erfolgreich",
     "jobs.statusFailed": "Fehlgeschlagen",

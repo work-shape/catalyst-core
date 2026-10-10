@@ -13017,6 +13017,9 @@
           },
           "retryable": {
             "type": "boolean"
+          },
+          "waitingForModule": {
+            "type": "string"
           }
         },
         "required": [

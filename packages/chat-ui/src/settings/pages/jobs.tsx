@@ -32,6 +32,7 @@ import {
 } from "@vivd-catalyst/ui";
 import { formatDateTime, formatElapsed } from "../../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../../i18n";
+import { useModuleName } from "../../module-texts";
 import { useSettingsPage } from "../settings-page-context";
 
 /** How often the page asks again while its browser tab is visible. */
@@ -267,6 +268,7 @@ function JobList({ tab, kind }: { tab: JobTab; kind: string | undefined }) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: scope })
   });
   const canRetry = user.roles.includes("superadmin");
+  const moduleName = useModuleName();
   const jobs = jobsQuery.data?.pages.flatMap((page) => page.items);
 
   if (!jobs) {
@@ -317,6 +319,14 @@ function JobList({ tab, kind }: { tab: JobTab; kind: string | undefined }) {
                   </Badge>
                   {job.errorCode ? (
                     <JobDetail label={t("jobs.errorClass")}>{job.errorCode}</JobDetail>
+                  ) : null}
+                  {job.waitingForModule ? (
+                    <div
+                      className="mt-1 text-caption text-muted-foreground"
+                      data-waiting-for-module
+                    >
+                      {t("jobs.waitingForModule", { module: moduleName(job.waitingForModule) })}
+                    </div>
                   ) : null}
                 </TableCell>
                 <TableCell className="whitespace-nowrap tabular-nums">

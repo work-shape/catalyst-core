@@ -44,7 +44,12 @@ export const jobSchema = z.object({
    * Whether `instance.jobs.retry` takes the job: it ended as failed or dead and its kind is
    * one that is retried by hand. A schedule tick is not; the next tick is its retry.
    */
-  retryable: z.boolean()
+  retryable: z.boolean(),
+  /**
+   * The module the job waits for: it is queued, and no worker claims its kind while the
+   * module that owns the kind is off.
+   */
+  waitingForModule: z.string().optional()
 });
 
 /** What one job kind has waiting, running and ended in an error. */

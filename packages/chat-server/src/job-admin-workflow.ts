@@ -11,8 +11,8 @@ import {
 import { jobRetriesByKind } from "./job-retries";
 import type { ChatServerOptions } from "./types";
 
-/** A job as the page shows it: with whether a person may retry it. */
-export type ListedJob = JobOverview & { retryable: boolean };
+/** A job as the page shows it: with whether a person may retry it and why it waits. */
+export type ListedJob = JobOverview & { retryable: boolean; waitingForModule?: string };
 
 /**
  * What an operator sees and does about background jobs. The caller's right is checked before
@@ -23,7 +23,10 @@ export class JobAdminWorkflow {
   private readonly retries: ReturnType<typeof jobRetriesByKind>;
 
   constructor(
-    private readonly options: Pick<ChatServerOptions, "clientInstanceId" | "stores" | "jobRetries">
+    private readonly options: Pick<
+      ChatServerOptions,
+      "clientInstanceId" | "stores" | "jobRetries" | "modules"
+    >
   ) {
     this.retries = jobRetriesByKind(options.jobRetries);
   }
@@ -44,9 +47,13 @@ export class JobAdminWorkflow {
   }
 
   private listed(job: JobOverview): ListedJob {
+    // A queued job of a module that is off is not claimed until the module is on again.
+    const waitingForModule =
+      job.status === "queued" ? this.options.modules.offModuleOf("jobKind", job.kind) : undefined;
     return {
       ...job,
-      retryable: (job.status === "failed" || job.status === "dead") && this.retries.has(job.kind)
+      retryable: (job.status === "failed" || job.status === "dead") && this.retries.has(job.kind),
+      ...(waitingForModule === undefined ? {} : { waitingForModule })
     };
   }
 

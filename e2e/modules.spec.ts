@@ -187,6 +187,58 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
   }
 });
 
+test("a queued job of a module that is off says what it waits for", async ({ page }) => {
+  const jobId = `job_e2e_waits_${randomUUID()}`;
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    // Due in a year: no worker of the suite takes it while the test reads it.
+    await sql`
+      insert into platform_jobs (
+        id, client_instance_id, kind, payload, status, run_after, attempts, max_attempts,
+        correlation_id, created_at
+      )
+      select
+        ${jobId}, client_instance_id, 'fixture.index_document', '{}', 'queued',
+        now() + interval '1 year', 0, 1, ${`corr_${jobId}`}, now()
+      from platform_jobs limit 1`;
+    await signIn(page);
+    await page.route(
+      ({ pathname }) => pathname === "/api/v1/instance/jobs",
+      async (route) => {
+        const response = await route.fetch();
+        const body: { items: { id: string }[] } = await response.json();
+        await route.fulfill({
+          response,
+          json: {
+            ...body,
+            items: body.items.map((job) =>
+              job.id === jobId ? { ...job, waitingForModule: "documents" } : job
+            )
+          }
+        });
+      }
+    );
+
+    await page.goto("/settings/instance/jobs");
+    await page.getByRole("tab", { name: /^Queued/u }).click();
+    const row = page.locator(`[data-job-id="${jobId}"]`);
+    await expect(row).toContainText("Queued");
+    await expect(row.locator("[data-waiting-for-module]")).toHaveText(
+      "Waits until the module Documents is on. No worker takes it while the module is off."
+    );
+
+    await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+    await page.reload();
+    await page.getByRole("tab", { name: /^Wartend/u }).click();
+    await expect(row.locator("[data-waiting-for-module]")).toHaveText(
+      "Wartet, bis das Modul Dokumente an ist. Solange es aus ist, übernimmt kein Worker den Job."
+    );
+  } finally {
+    await sql`delete from platform_jobs where id = ${jobId}`;
+    await sql.end();
+  }
+});
+
 test.describe("with the resources module off", () => {
   // The second API starts inside the first test's time.
   test.describe.configure({ timeout: 90_000 });
