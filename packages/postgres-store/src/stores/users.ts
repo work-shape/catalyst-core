@@ -20,6 +20,7 @@ import {
   getUserModelPreference as getPostgresUserModelPreference,
   setUserModelPreference as setPostgresUserModelPreference,
   listUsers as listPostgresUsers,
+  markUserDeletionRequested as markPostgresUserDeletionRequested,
   resolveUserIdentity as resolvePostgresUserIdentity,
   updateUser as updatePostgresUser,
   upsertUserIdentity as upsertPostgresUserIdentity
@@ -42,6 +43,9 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     },
     async updateUser(input: UpdateUserInput): Promise<UserRecord> {
       return updatePostgresUser(db, input);
+    },
+    async markUserDeletionRequested(input: DeleteUserInput): Promise<boolean> {
+      return markPostgresUserDeletionRequested(db, input);
     },
     async deleteUser(input: DeleteUserInput): Promise<UserRecord> {
       return deletePostgresUser(db, input);

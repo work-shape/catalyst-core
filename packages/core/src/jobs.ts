@@ -159,6 +159,15 @@ export interface JobsStore {
     options: EnqueueJobOptions
   ): Promise<Job<Payload>>;
   /**
+   * Removes the queued job of a dedupe key. For a caller that did the job's work itself and
+   * calls this in the transaction that finishes it. A job that an attempt has claimed stays;
+   * that attempt finds nothing left to do.
+   */
+  withdraw(
+    kind: JobKind,
+    options: { clientInstanceId: ClientInstanceId; dedupeKey: string }
+  ): Promise<void>;
+  /**
    * Removes ended jobs: succeeded and cancelled ones 7 days after they ended, failed and dead
    * ones 30 days after.
    */

@@ -131,6 +131,20 @@ id from config_assets where status = 'deleted')`.
   `evaluateAccess` in `@vivd-catalyst/core`. `InProcessToolExecution` takes an optional
   `authorizer`; `ChatServerOptions.stores` needs the `access` store, which
   `createPostgresStores` provides.
+- **Deleting an account or a Shared Workspace:** a deletion now finishes by itself. The
+  request closes the account or the workspace at once: the user can no longer sign in and is
+  listed as "Being deleted", the workspace is gone from every selector and its conversations
+  accept nothing. When stored data cannot be removed at once, the request answers `202`
+  without a body instead of `409`, and a job (`account.delete`, `workspace.delete`) tries
+  again with a growing wait, up to 50 times over about ten days. When nothing is left to wait
+  for, the request answers `200` as before. A repeated request answers `202` and starts
+  nothing new. After the last attempt the job is dead, the audit log holds
+  `user.deletion_stalled` or `collaboration_workspace.deletion_stalled`, the account or
+  workspace stays closed, and deleting it again starts a new job. The audit log records
+  `user.deletion_requested` and `collaboration_workspace.deletion_requested` when a deletion
+  is accepted; `user.delete_failed` and `collaboration_workspace.delete_failed` are no longer
+  written. A client that calls one of the three delete operations must accept `202`. Upgrade:
+  migration `0034_deletion_requested` adds a nullable column to two tables.
 - **API:** a call refused for a missing right answers `403 FORBIDDEN` with the message
   `Missing the right '<action>'` and `details.action` and `details.reason`, on every route.
   The message was `Missing permission '<permission>'` and named the legacy permission. The

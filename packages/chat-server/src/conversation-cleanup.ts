@@ -1,4 +1,9 @@
-import { createPlatformId, isAppError, type ConversationId } from "@vivd-catalyst/core";
+import {
+  createPlatformId,
+  isAppError,
+  type CollaborationWorkspaceId,
+  type ConversationId
+} from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
 import { cleanupExecutionWorkspaceForConversation } from "./workspace-cleanup";
 
@@ -74,17 +79,46 @@ export async function attemptConversationDataCleanup(
   }
 }
 
+export interface ConversationCleanupRetrySummary {
+  /** Conversations whose leftover data was removed in this pass. */
+  completedCount: number;
+  /** Conversations whose cleanup failed again. */
+  cleanupPendingCount: number;
+}
+
 /**
- * The number of Conversations whose pending cleanup made the store refuse to delete their
- * workspace, or undefined when the error is not that refusal.
+ * One pass over the Conversations that are deleted or expired and still hold data, at most
+ * `limit` of them: of the instance, or of one workspace. Each cleanup that completes is
+ * audited. Safe to repeat.
  */
-export function pendingCleanupCountOf(error: unknown): number | undefined {
-  if (!isAppError(error) || error.code !== "CONFLICT") {
-    return undefined;
+export async function retryPendingConversationCleanup(
+  options: ChatServerOptions,
+  input: { collaborationWorkspaceId?: CollaborationWorkspaceId; limit: number; deletedAt: string }
+): Promise<ConversationCleanupRetrySummary> {
+  const summary: ConversationCleanupRetrySummary = { completedCount: 0, cleanupPendingCount: 0 };
+  const pending = await options.stores.files.listConversationsPendingObjectCleanup({
+    clientInstanceId: options.clientInstanceId,
+    collaborationWorkspaceId: input.collaborationWorkspaceId,
+    limit: input.limit
+  });
+  for (const conversationId of pending) {
+    const { cleanup, ...counts } = await attemptConversationDataCleanup(
+      options,
+      conversationId,
+      input.deletedAt
+    );
+    if (cleanup === "pending") {
+      summary.cleanupPendingCount += 1;
+      continue;
+    }
+    await options.auditRecorder.record({
+      type: "conversation.cleanup_completed",
+      status: "success",
+      subject: conversationId,
+      correlationId: createPlatformId("corr"),
+      metadata: counts
+    });
+    summary.completedCount += 1;
   }
-  const { details } = error;
-  if (typeof details !== "object" || details === null || !("pendingCleanupCount" in details)) {
-    return undefined;
-  }
-  return typeof details.pendingCleanupCount === "number" ? details.pendingCleanupCount : undefined;
+  return summary;
 }

@@ -1,6 +1,6 @@
 import { keysetFilter } from "./paging";
 import type { StorePage } from "@vivd-catalyst/core";
-import { and, eq, inArray, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
   type AuditEvent,
@@ -18,7 +18,8 @@ import {
   type UserRecord,
   authenticatedUserFromRecord,
   createPlatformId,
-  createUserId
+  createUserId,
+  requireUsableUser
 } from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapUserIdentity, mapUserRecord, type ProductUserRow, type UserIdentityRow } from "./rows";
@@ -71,9 +72,7 @@ export async function resolveUserIdentity(
       if (!user) {
         throw new AppError("INTERNAL", "User identity mapping points to a missing user");
       }
-      if (user.status !== "active") {
-        throw new AppError("FORBIDDEN", "User is disabled");
-      }
+      requireUsableUser(mapUserRecord(user).status);
 
       const [updatedIdentity] = await tx
         .update(userIdentities)
@@ -133,9 +132,8 @@ export async function resolveUserIdentity(
       linkedByVerifiedEmail = user !== undefined;
     }
 
-    if (user?.status === "disabled") {
-      throw new AppError("FORBIDDEN", "User is disabled");
-    }
+    // A user the session names or a verified email leads to: closed is closed on this way too.
+    if (user) requireUsableUser(mapUserRecord(user).status);
 
     if (!user) {
       const [createdUser] = await tx
@@ -392,6 +390,26 @@ export async function updateUser(
     throw new AppError("NOT_FOUND", "User is not available");
   }
   return requireUserRecord(db, input.clientInstanceId, row.id);
+}
+
+export async function markUserDeletionRequested(
+  db: PostgresConnection,
+  input: DeleteUserInput
+): Promise<boolean> {
+  const marked = await db
+    .update(productUsers)
+    .set({ deletionRequestedAt: drizzleSql`now()` })
+    .where(
+      and(
+        eq(productUsers.clientInstanceId, input.clientInstanceId),
+        eq(productUsers.id, input.userId),
+        isNull(productUsers.deletionRequestedAt)
+      )
+    )
+    .returning({ id: productUsers.id });
+  if (marked.length > 0) return true;
+  await requireUserRecord(db, input.clientInstanceId, input.userId);
+  return false;
 }
 
 export async function deleteUser(

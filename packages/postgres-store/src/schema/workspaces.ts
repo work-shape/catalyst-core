@@ -32,6 +32,8 @@ export const collaborationWorkspaces = pgTable(
     emoji: text("emoji"),
     accentColor: text("accent_color").$type<CollaborationWorkspace["accentColor"]>(),
     personalUserId: text("personal_user_id"),
+    /** Set when the deletion of the workspace was accepted. It is closed from then on. */
+    deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },

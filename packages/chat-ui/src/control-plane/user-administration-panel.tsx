@@ -59,7 +59,7 @@ interface UserAdministrationPanelProps {
   mutating: boolean;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
-  onDeleteUser(userId: string): Promise<AdministeredUser>;
+  onDeleteUser(userId: string): Promise<AdministeredUser | undefined>;
   onUpsertIdentity(
     userId: string,
     input: UpsertAdministeredUserIdentityRequest

@@ -686,10 +686,13 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   const deleteUser = useMutation({
     mutationFn: (userId: string) => input.client.users.delete({ params: { userId } }),
     onSuccess: (deletedUser) => {
-      queryClient.setQueryData<AdministeredUser[]>(
-        workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
-        (currentUsers = []) => currentUsers.filter((user) => user.id !== deletedUser.id)
-      );
+      // Without a user the account is closed and still being removed: the list reads it so.
+      if (deletedUser) {
+        queryClient.setQueryData<AdministeredUser[]>(
+          workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
+          (currentUsers = []) => currentUsers.filter((user) => user.id !== deletedUser.id)
+        );
+      }
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }

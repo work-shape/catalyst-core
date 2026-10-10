@@ -69,6 +69,18 @@ export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => 
       enqueued();
       return job;
     },
+    async withdraw(kind, options) {
+      await db
+        .delete(platformJobs)
+        .where(
+          and(
+            eq(platformJobs.clientInstanceId, options.clientInstanceId),
+            eq(platformJobs.kind, kind.kind),
+            eq(platformJobs.dedupeKey, options.dedupeKey),
+            eq(platformJobs.status, "queued")
+          )
+        );
+    },
     pruneEndedJobs: (input) => pruneEndedJobs(db, input)
   };
   connections.set(store, db);

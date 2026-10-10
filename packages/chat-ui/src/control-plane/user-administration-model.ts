@@ -16,7 +16,8 @@ export interface UserFormState {
   email: string;
   accessLevel: AccessLevel;
   permissionRefs: string;
-  status: AdministeredUser["status"];
+  /** What an administrator can set. A user being deleted is edited as disabled. */
+  status: Exclude<AdministeredUser["status"], "deleting">;
 }
 
 export interface CreateUserFormState extends UserFormState {
@@ -155,7 +156,7 @@ export function userToForm(user: AdministeredUser): UserFormState {
     email: user.email ?? "",
     accessLevel: rolesToAccessLevel(user.roles),
     permissionRefs: formatList(user.permissionRefs),
-    status: user.status
+    status: user.status === "active" ? "active" : "disabled"
   };
 }
 

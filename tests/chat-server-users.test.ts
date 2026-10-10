@@ -1,5 +1,6 @@
 import { required } from "./support/assertions";
-import { createTestInstance, getTestConfig } from "./support/test-instance";
+import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
+import { withTestSql } from "./support/test-sql";
 import { describe, expect, it } from "vitest";
 
 import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
@@ -198,7 +199,7 @@ describe("client instance app vertical slice", () => {
     await app.close();
   });
 
-  it("retries account deletion after final user deletion fails", async () => {
+  it("finishes account deletion in its job after the request's own pass fails", async () => {
     const clientInstanceId = asClientInstanceId("demo-local");
     const store = (await createTestInstance()).stores;
     const config = createTestConfig();
@@ -269,15 +270,6 @@ describe("client instance app vertical slice", () => {
       title: "Keep this conversation",
       retainedUntil: "2030-01-01T00:00:00.000Z"
     });
-    const deleteUser = store.users.deleteUser.bind(store.users);
-    let deleteUserAttempts = 0;
-    store.users.deleteUser = async (input) => {
-      deleteUserAttempts += 1;
-      if (deleteUserAttempts === 1) {
-        throw new AppError("INTERNAL", "Injected final user deletion failure");
-      }
-      return deleteUser(input);
-    };
     const deletedPasswordSignIns: Array<{ externalUserId: string }> = [];
     const server = await createTestInstance({
       server: {
@@ -335,6 +327,9 @@ describe("client instance app vertical slice", () => {
           async changePassword() {},
           async deletePasswordSignIn(input) {
             deletedPasswordSignIns.push(input);
+            if (deletedPasswordSignIns.length === 1) {
+              throw new AppError("INTERNAL", "Injected password sign-in deletion failure");
+            }
           }
         }
       }
@@ -347,19 +342,23 @@ describe("client instance app vertical slice", () => {
     });
     expect(delegatedDelete.statusCode).toBe(403);
 
-    const failed = await server.call("me.delete", {});
-    expect(failed.statusCode).toBe(500);
-    await expect(
-      store.workspaces.listWorkspacesForUser({ clientInstanceId, userId: asUserId(user.id) })
-    ).resolves.toEqual([]);
+    // The request's own pass fails. The account is closed and its job finishes the deletion.
+    const accepted = await server.call("me.delete", {});
+    expect(accepted.statusCode).toBe(202);
+    expect(accepted.body).toBe("");
     await expect(store.users.listUsers({ clientInstanceId })).resolves.toContainEqual(
-      expect.objectContaining({ id: user.id })
+      expect.objectContaining({ id: user.id, status: "deleting" })
     );
+    await expect(
+      store.conversations.getConversation(clientInstanceId, conversation.id)
+    ).resolves.toMatchObject({ status: "active" });
 
-    const deleted = await server.call("me.delete", {});
-    expect(deleted.statusCode).toBe(200);
-    expect(deleted.json()).toEqual({ ok: true });
-    expect(deleteUserAttempts).toBe(2);
+    await withTestSql(
+      (sql) => sql`
+        update platform_jobs set run_after = now()
+        where kind = 'account.delete' and status = 'queued' and subject = ${user.id}`
+    );
+    await getTestJobs(server).runDue();
     expect(deletedPasswordSignIns).toEqual([
       { externalUserId: "auth-delete-me" },
       { externalUserId: "auth-delete-me" }
@@ -395,10 +394,14 @@ describe("client instance app vertical slice", () => {
           })
         }),
         expect.objectContaining({
+          type: "user.deletion_requested",
+          metadata: { requestedBy: "self" }
+        }),
+        expect.objectContaining({
           type: "user.deleted",
           metadata: expect.objectContaining({
             requestedBy: "self",
-            conversationCount: 0
+            conversationCount: 1
           })
         })
       ])

@@ -7,7 +7,11 @@ import {
   createPlatformId,
   isAppError
 } from "@vivd-catalyst/core";
-import { attemptConversationDataCleanup } from "./conversation-cleanup";
+import {
+  attemptConversationDataCleanup,
+  retryPendingConversationCleanup,
+  type ConversationCleanupRetrySummary
+} from "./conversation-cleanup";
 import type { ChatServerOptions, ConversationRetentionOptions } from "./types";
 
 export interface ConversationRetentionRunSummary {
@@ -15,13 +19,6 @@ export interface ConversationRetentionRunSummary {
   /** Conversations whose claim failed. One that is no longer due is skipped, not failed. */
   failedCount: number;
   /** Expired Conversations whose data cleanup failed and waits for the retry. */
-  cleanupPendingCount: number;
-}
-
-export interface ConversationCleanupRetrySummary {
-  /** Conversations whose leftover data was removed in this pass. */
-  completedCount: number;
-  /** Conversations whose cleanup failed again. */
   cleanupPendingCount: number;
 }
 
@@ -137,36 +134,14 @@ export class ConversationRetentionWorkflow {
    * Safe to repeat.
    */
   async cleanUpPendingConversations(): Promise<ConversationCleanupRetrySummary> {
-    const summary: ConversationCleanupRetrySummary = { completedCount: 0, cleanupPendingCount: 0 };
     // Without an attachment service nothing here can remove stored objects.
     if (!this.options.attachments) {
-      return summary;
+      return { completedCount: 0, cleanupPendingCount: 0 };
     }
-    const deletedAt = this.now().toISOString();
-    const pending = await this.options.stores.files.listConversationsPendingObjectCleanup({
-      clientInstanceId: this.options.clientInstanceId,
-      limit: this.batchSize
+    return retryPendingConversationCleanup(this.options, {
+      limit: this.batchSize,
+      deletedAt: this.now().toISOString()
     });
-    for (const conversationId of pending) {
-      const { cleanup, ...counts } = await attemptConversationDataCleanup(
-        this.options,
-        conversationId,
-        deletedAt
-      );
-      if (cleanup === "pending") {
-        summary.cleanupPendingCount += 1;
-        continue;
-      }
-      await this.options.auditRecorder.record({
-        type: "conversation.cleanup_completed",
-        status: "success",
-        subject: conversationId,
-        correlationId: createPlatformId("corr"),
-        metadata: counts
-      });
-      summary.completedCount += 1;
-    }
-    return summary;
   }
 
   /**

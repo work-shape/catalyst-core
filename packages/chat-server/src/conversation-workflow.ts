@@ -51,6 +51,7 @@ import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
 import { CollaborationWorkspaceWorkflow } from "./collaboration-workspace-workflow";
 import { attemptConversationDataCleanup } from "./conversation-cleanup";
+import { assertConversationIdle } from "./conversation-idle";
 import {
   createConversationTitle,
   isTemporaryConversationTitle,
@@ -371,7 +372,7 @@ export class ConversationWorkflow {
         "Only the creator of a conversation can make it private"
       );
     }
-    await this.workspaces.assertConversationIdle(conversationId);
+    await assertConversationIdle(this.options, conversationId);
     const moved = await this.options.stores.conversations.moveConversation({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,

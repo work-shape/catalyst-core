@@ -91,13 +91,15 @@ export const accountOperations = {
     id: "me.delete",
     method: "DELETE",
     path: "/api/v1/me",
-    summary: "Delete the signed-in user's account and data",
+    summary:
+      "Delete the signed-in user's account and data. Answers 202 when the account is closed and its data is still being removed.",
     tag: "Account",
     auth: "user",
     scope: "me:delete",
     requires: [],
     effect: "changing",
     response: json(deleteCurrentUserResponseSchema),
+    deferred: true,
     errors: [],
     rateClass: "write"
   }),

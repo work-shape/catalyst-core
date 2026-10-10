@@ -308,6 +308,14 @@ function createSuccessResponses(operation: Operation): Record<string, OpenApiRes
             content: { "application/json": { schema: schemaFor(operation.accepted, "output") } }
           }
         }
+      : {}),
+    ...(operation.deferred
+      ? {
+          "202": {
+            description:
+              "The call was accepted and its work finishes by itself. The answer has no body."
+          }
+        }
       : {})
   };
   return Object.fromEntries(

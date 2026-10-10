@@ -115,9 +115,18 @@ type RouteResult<Op extends Operation> = Op["response"] extends {
       : never
     : FastifyReply;
 
+/**
+ * What the handler of an operation that declares `deferred` returns when the call was accepted
+ * and its work finishes by itself: the helper answers `202` with no body.
+ */
+export const DEFERRED = Symbol("deferred");
+
+type RouteAnswer<Op extends Operation> =
+  RouteResult<Op> | (Op extends { deferred: true } ? typeof DEFERRED : never);
+
 type RouteHandler<Op extends Operation> = (
   call: RouteCall<Op>
-) => RouteResult<Op> | Promise<RouteResult<Op>>;
+) => RouteAnswer<Op> | Promise<RouteAnswer<Op>>;
 
 type InputPart<Schema> = Schema extends z.ZodType ? z.output<Schema> : unknown;
 
@@ -239,6 +248,9 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
             }
             throw error;
           }
+        }
+        if (result === DEFERRED) {
+          return reply.code(202).send();
         }
         if (operation.response.kind === "page") {
           const resultPage = paginate(

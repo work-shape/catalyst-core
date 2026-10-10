@@ -81,6 +81,7 @@ export const settings = defineTranslations({
     "settings.requestFailed": "Request failed",
     "settings.status": "Status",
     "settings.statusActive": "Active",
+    "settings.statusDeleting": "Being deleted",
     "settings.statusDisabled": "Disabled",
     "settings.time": "Time",
     "settings.updated": "Updated",
@@ -160,6 +161,8 @@ export const settings = defineTranslations({
     "settings.userDeleteConfirmation": "Confirmation",
     "settings.userDeleteDescription":
       "Removes the user profile, sign-in identities, and standalone password access.",
+    "settings.userDeletionInProgress":
+      "This account is closed and its data is being removed. The user can no longer sign in. Delete it again only if the removal has stopped.",
     "settings.userDeleteDialogDescription":
       "This permanently removes the user profile, sign-in identities, and standalone password access. This cannot be undone.",
     "settings.userDeleteDialogTitle": "Delete {name}?",
@@ -297,6 +300,7 @@ export const settings = defineTranslations({
     "settings.requestFailed": "Anfrage fehlgeschlagen",
     "settings.status": "Status",
     "settings.statusActive": "Aktiv",
+    "settings.statusDeleting": "Wird gelöscht",
     "settings.statusDisabled": "Deaktiviert",
     "settings.time": "Zeit",
     "settings.updated": "Aktualisiert",
@@ -378,6 +382,8 @@ export const settings = defineTranslations({
     "settings.userDeleteConfirmation": "Bestätigung",
     "settings.userDeleteDescription":
       "Entfernt das Benutzerprofil, die Anmeldeidentitäten und die Anmeldung per Passwort.",
+    "settings.userDeletionInProgress":
+      "Dieses Konto ist geschlossen und seine Daten werden entfernt. Die Person kann sich nicht mehr anmelden. Lösche es nur erneut, wenn das Entfernen stehen geblieben ist.",
     "settings.userDeleteDialogDescription":
       "Das Benutzerprofil, die Anmeldeidentitäten und die Anmeldung per Passwort werden dauerhaft entfernt. Das kann nicht rückgängig gemacht werden.",
     "settings.userDeleteDialogTitle": "{name} löschen?",

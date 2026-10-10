@@ -4,6 +4,7 @@ import { createSafeConfigView } from "@vivd-catalyst/config-schema";
 import { asCollaborationWorkspaceId, asUserId, getSubjectUserId } from "@vivd-catalyst/core";
 import { CollaborationWorkspaceWorkflow } from "../collaboration-workspace-workflow";
 import type { Route } from "../http/route";
+import { deletionAnswer } from "./deletion-answer";
 import { requirePathParam, resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
@@ -63,11 +64,13 @@ export function registerCollaborationWorkspaceRoutes(
   });
 
   route(apiOperations["workspaces.delete"], async ({ user, context, params, body }) => {
-    return workspaces.deleteSharedWorkspace(
-      user,
-      context,
-      collaborationWorkspaceId(params),
-      body.confirmName
+    return deletionAnswer(
+      await workspaces.deleteSharedWorkspace(
+        user,
+        context,
+        collaborationWorkspaceId(params),
+        body.confirmName
+      )
     );
   });
 

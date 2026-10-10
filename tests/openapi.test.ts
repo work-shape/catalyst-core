@@ -191,13 +191,19 @@ describe("the released OpenAPI document", () => {
       "IdempotentReplayed"
     ]);
 
-    // A hand-written route declares none of it.
+    // A hand-written route declares none of it. The deletions that a job may finish answer
+    // 202 without a body and without a run.
+    const deferred: string[] = [];
     for (const operation of Object.values(released.paths).flatMap((methods) =>
       Object.values(methods)
     )) {
-      expect(Object.keys(operation.responses), operation.operationId).not.toContain("202");
+      if (Object.keys(operation.responses).includes("202")) {
+        deferred.push(operation.operationId);
+        expect(operation.responses["202"], operation.operationId).not.toHaveProperty("content");
+      }
       expect(JSON.stringify(operation), operation.operationId).not.toContain("components/headers");
     }
+    expect(deferred.sort()).toEqual(["me.delete", "users.delete", "workspaces.delete"]);
     expect(released.components.headers).toBeUndefined();
 
     const page = renderApiReferencePage(registered, {

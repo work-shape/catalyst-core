@@ -10,7 +10,6 @@ import {
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
   type CollaborationWorkspaceWithRole,
-  type ConversationId,
   type ConversationVisibility,
   type RuntimeAssetSnapshot,
   type RuntimeCallContext,
@@ -23,8 +22,9 @@ import {
 } from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import type { ChatServerOptions } from "./types";
-import { pendingCleanupCountOf } from "./conversation-cleanup";
-import { deleteConversationAggregate } from "./user-deletion";
+import { assertConversationIdle } from "./conversation-idle";
+import type { DeletionOutcome } from "./subject-deletion";
+import { requestWorkspaceDeletion, type WorkspaceDeletionResult } from "./workspace-deletion";
 
 const MAX_WORKSPACE_NAME_LENGTH = 120;
 const MAX_WORKSPACE_DESCRIPTION_LENGTH = 500;
@@ -77,13 +77,6 @@ export interface WorkspaceDeletionImpact {
   conversationCount: number;
   memberCount: number;
   pendingAccessRequestCount: number;
-}
-
-export interface WorkspaceDeletionResult {
-  collaborationWorkspaceId: CollaborationWorkspaceId;
-  conversationCount: number;
-  fileCount: number;
-  memberCount: number;
 }
 
 export interface CreateSharedWorkspaceCommand {
@@ -235,143 +228,51 @@ export class CollaborationWorkspaceWorkflow {
     };
   }
 
+  /**
+   * Accepts the deletion of a Shared Workspace by one of its Owners. `deferred` means the
+   * workspace is closed and its job removes what is left. A request that is repeated for a
+   * workspace in deletion is answered `deferred` to the same people.
+   */
   async deleteSharedWorkspace(
     user: AuthenticatedUser,
     context: RuntimeCallContext,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     confirmName: string
-  ): Promise<WorkspaceDeletionResult> {
-    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    requireOwner(access);
-    const workspace = await this.requireSharedWorkspace(collaborationWorkspaceId);
+  ): Promise<DeletionOutcome<WorkspaceDeletionResult>> {
+    const scope = { clientInstanceId: this.options.clientInstanceId, collaborationWorkspaceId };
+    const inDeletion = await this.options.stores.workspaces.getWorkspaceInDeletion(scope);
+    if (inDeletion) {
+      const userId = getSubjectUserId(user);
+      const ownsIt = inDeletion.memberships.some(
+        (membership) => membership.userId === userId && membership.role === "owner"
+      );
+      if (!ownsIt && !isSuperadmin(user)) {
+        throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
+      }
+    } else {
+      requireOwner(await this.requireWorkspaceAccess(user, collaborationWorkspaceId));
+    }
+    const workspace =
+      inDeletion?.workspace ?? (await this.requireSharedWorkspace(collaborationWorkspaceId));
     if (confirmName !== workspace.name) {
       throw new AppError("VALIDATION_FAILED", "Workspace name confirmation does not match");
     }
-
-    const conversations = await this.options.stores.conversations.listConversationsForWorkspace({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      scope: { kind: "lifecycle" }
-    });
-    for (const conversation of conversations) {
-      await this.assertConversationIdle(conversation.id);
-    }
-    const memberships = await this.options.stores.workspaces.listMemberships({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId
-    });
-
-    let conversationCount = 0;
-    let fileCount = 0;
-    for (const conversation of conversations) {
-      const current = await this.options.stores.conversations.getConversation(
-        this.options.clientInstanceId,
-        conversation.id
-      );
-      if (!current || current.collaborationWorkspaceId !== collaborationWorkspaceId) {
-        continue;
-      }
-      await this.assertConversationIdle(conversation.id);
-      const deletedAt = new Date().toISOString();
-      const deletion = await deleteConversationAggregate(this.options, conversation.id, deletedAt);
-      conversationCount += 1;
-      if (deletion.cleanup === "complete") {
-        fileCount += deletion.fileCount + deletion.artifactCount + deletion.workspaceFileCount;
-      }
-      await this.options.auditRecorder.record({
-        type: "conversation.deleted",
-        status: "success",
-        actor: auditActorFromUser(user),
-        subject: conversation.id,
-        correlationId: context.correlationId,
-        metadata: {
-          requestedBy: "workspace_deletion",
-          ...deletion
-        }
+    if (!inDeletion) {
+      // Refused before anything is marked: nothing is deleted under work that still writes.
+      const conversations = await this.options.stores.conversations.listConversationsForWorkspace({
+        ...scope,
+        scope: { kind: "lifecycle" }
       });
-    }
-
-    try {
-      await this.options.stores.workspaces.deleteWorkspace({
-        clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId
-      });
-    } catch (error) {
-      const pendingCleanupCount = pendingCleanupCountOf(error);
-      if (pendingCleanupCount !== undefined) {
-        await this.options.auditRecorder.record({
-          type: "collaboration_workspace.delete_failed",
-          status: "failed",
-          actor: auditActorFromUser(user),
-          subject: collaborationWorkspaceId,
-          correlationId: context.correlationId,
-          metadata: { conversationCount, pendingCleanupCount }
-        });
+      for (const conversation of conversations) {
+        await assertConversationIdle(this.options, conversation.id);
       }
-      throw error;
     }
-    const result = {
+    return requestWorkspaceDeletion(this.options, {
       collaborationWorkspaceId,
-      conversationCount,
-      fileCount,
-      memberCount: memberships.length
-    };
-    await this.options.auditRecorder.record({
-      type: "collaboration_workspace.deleted",
-      status: "success",
       actor: auditActorFromUser(user),
-      subject: collaborationWorkspaceId,
-      correlationId: context.correlationId,
-      metadata: {
-        conversationCount: result.conversationCount,
-        fileCount: result.fileCount,
-        memberCount: result.memberCount
-      }
+      actorUserId: asUserId(getSubjectUserId(user)),
+      correlationId: context.correlationId
     });
-    return result;
-  }
-
-  async assertConversationIdle(conversationId: ConversationId): Promise<void> {
-    const [activeRun, draftAttachments, activeCommands, artifacts] = await Promise.all([
-      this.options.stores.agentRuns.getActiveConversationAgentRun({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId
-      }),
-      this.options.attachments?.listDraftAttachments(conversationId) ?? [],
-      this.options.stores.executionWorkspaces.countActiveWorkspaceCommands({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId
-      }),
-      this.options.stores.files.listConversationManagedArtifacts({
-        clientInstanceId: this.options.clientInstanceId,
-        conversationId
-      })
-    ]);
-    const previewJobs = await Promise.all(
-      artifacts.map((artifact) =>
-        this.options.stores.files.getArtifactPreviewJob({
-          clientInstanceId: this.options.clientInstanceId,
-          sourceArtifactId: artifact.id
-        })
-      )
-    );
-    const busyStates = [
-      ...(activeRun ? ["active_agent_run"] : []),
-      ...(draftAttachments.some(
-        (attachment) => attachment.status === "queued" || attachment.status === "preprocessing"
-      )
-        ? ["attachment_processing"]
-        : []),
-      ...(activeCommands.total > 0 ? ["execution_workspace_command"] : []),
-      ...(previewJobs.some((job) => job?.status === "pending" || job?.status === "processing")
-        ? ["artifact_preview"]
-        : [])
-    ];
-    if (busyStates.length > 0) {
-      throw new AppError("CONFLICT", "Conversation has mutable background work in progress", {
-        busyStates
-      });
-    }
   }
 
   async updateSettings(

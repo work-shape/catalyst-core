@@ -560,7 +560,7 @@ export function mapUserRecord(
     roles: row.roles,
     permissionRefs: row.permissionRefs,
     permissions: row.permissions,
-    status: row.status,
+    status: row.deletionRequestedAt ? "deleting" : row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString(),

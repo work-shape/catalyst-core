@@ -56,7 +56,7 @@ export function UserDetail({
   mutating: boolean;
   onBack(): void;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
-  onDeleteUser(userId: string): Promise<AdministeredUser>;
+  onDeleteUser(userId: string): Promise<AdministeredUser | undefined>;
   onDeleted(): void;
   onUpsertIdentity(
     userId: string,
@@ -548,7 +548,7 @@ function DeleteUserCard({
   user: AdministeredUser;
   canDeleteUser: boolean;
   mutating: boolean;
-  onDeleteUser(userId: string): Promise<AdministeredUser>;
+  onDeleteUser(userId: string): Promise<AdministeredUser | undefined>;
   onDeleted(): void;
 }) {
   const { t } = useTranslation();
@@ -585,7 +585,13 @@ function DeleteUserCard({
         <CardTitle className="text-base">{t("deleteAccount")}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 p-4 pt-2">
-        <p className="text-sm text-muted-foreground">{t("settings.userDeleteDescription")}</p>
+        <p className="text-sm text-muted-foreground">
+          {t(
+            user.status === "deleting"
+              ? "settings.userDeletionInProgress"
+              : "settings.userDeleteDescription"
+          )}
+        </p>
         <Button
           type="button"
           variant="outline"

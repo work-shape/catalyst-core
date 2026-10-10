@@ -36,16 +36,16 @@ export type {
   UploadDraftAttachmentInput,
   UploadDraftAttachmentResult
 } from "./attachments";
-export type {
-  ConversationCleanupRetrySummary,
-  ConversationRetentionRunSummary,
-  OrphanedFileCleanupSummary
-} from "./retention";
+export type { ConversationCleanupRetrySummary } from "./conversation-cleanup";
+export type { ConversationRetentionRunSummary, OrphanedFileCleanupSummary } from "./retention";
 export { ConversationRetentionWorkflow } from "./retention";
 export { createChatServerJobs } from "./jobs";
 export type { ChatServerJobOptions, ChatServerJobs } from "./jobs";
 export {
+  DELETION_MAX_ATTEMPTS,
   cleanUpExecutionWorkspacesJob,
+  deleteAccountJob,
+  deleteWorkspaceJob,
   expireConversationsJob,
   generateConversationTitleJob,
   pruneAuditEventsJob,

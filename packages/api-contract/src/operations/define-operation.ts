@@ -149,6 +149,11 @@ export type OperationConfig = OperationAccess & {
    * what it answers meanwhile.
    */
   readonly accepted?: z.ZodType;
+  /**
+   * A second success answer, `202 Accepted` with no body: the call was accepted and its work
+   * finishes by itself. There is nothing to read afterwards.
+   */
+  readonly deferred?: true;
   /** The headers of `OPERATION_HEADERS` the operation takes and sets. */
   readonly headers?: {
     readonly request?: readonly OperationRequestHeader[];
@@ -195,6 +200,7 @@ type RegisteredOperationConfig = OperationConfig & {
   readonly auth: "user" | "principal";
   readonly response: { readonly kind: "json" | "page" };
   readonly accepted?: never;
+  readonly deferred?: never;
   readonly headers?: never;
 };
 

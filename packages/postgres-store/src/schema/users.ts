@@ -8,7 +8,7 @@ import {
   timestamp,
   uniqueIndex
 } from "drizzle-orm/pg-core";
-import type { UserModelPreference, UserRecord } from "@vivd-catalyst/core";
+import type { UserModelPreference, UserRecord, UserStatus } from "@vivd-catalyst/core";
 
 export const productUsers = pgTable(
   "product_users",
@@ -20,8 +20,10 @@ export const productUsers = pgTable(
     roles: jsonb("roles").$type<UserRecord["roles"]>().notNull(),
     permissionRefs: jsonb("permission_refs").$type<string[]>().notNull(),
     permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
-    status: text("status").$type<UserRecord["status"]>().notNull(),
+    status: text("status").$type<UserStatus>().notNull(),
     modelPreference: jsonb("model_preference").$type<UserModelPreference>(),
+    /** Set when the deletion of the account was accepted. The user is closed from then on. */
+    deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
     lastAuthenticatedAt: timestamp("last_authenticated_at", { withTimezone: true })

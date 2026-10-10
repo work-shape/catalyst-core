@@ -42,6 +42,9 @@ export function UserAvatar({
 
 export function StatusBadge({ status }: { status: AdministeredUser["status"] }) {
   const { t } = useTranslation();
+  if (status === "deleting") {
+    return <Badge tone="warning">{t("settings.statusDeleting")}</Badge>;
+  }
   return (
     <Badge
       tone={status === "active" ? "success" : "neutral"}

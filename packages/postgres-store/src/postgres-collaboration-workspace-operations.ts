@@ -45,6 +45,9 @@ export async function createWorkspace(
   return db.transaction(async (tx) => createWorkspaceRecords(tx, input));
 }
 
+/** The condition every read carries: a workspace whose deletion was requested is closed. */
+export const notInDeletion = isNull(collaborationWorkspaces.deletionRequestedAt);
+
 export async function getWorkspace(
   db: WorkspaceDatabase,
   clientInstanceId: ClientInstanceId,
@@ -56,7 +59,8 @@ export async function getWorkspace(
     .where(
       and(
         eq(collaborationWorkspaces.clientInstanceId, clientInstanceId),
-        eq(collaborationWorkspaces.id, collaborationWorkspaceId)
+        eq(collaborationWorkspaces.id, collaborationWorkspaceId),
+        notInDeletion
       )
     )
     .limit(1);
@@ -83,7 +87,8 @@ export async function listWorkspacesForUser(
     .where(
       and(
         eq(collaborationWorkspaceMemberships.clientInstanceId, input.clientInstanceId),
-        eq(collaborationWorkspaceMemberships.userId, input.userId)
+        eq(collaborationWorkspaceMemberships.userId, input.userId),
+        notInDeletion
       )
     )
     .orderBy(asc(collaborationWorkspaces.createdAt));
@@ -101,7 +106,8 @@ export async function listDiscoverableWorkspaces(
       and(
         eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
         eq(collaborationWorkspaces.kind, "shared"),
-        eq(collaborationWorkspaces.visibility, "discoverable")
+        eq(collaborationWorkspaces.visibility, "discoverable"),
+        notInDeletion
       )
     )
     .orderBy(asc(collaborationWorkspaces.createdAt));
@@ -118,7 +124,8 @@ export async function listSharedWorkspaces(
     .where(
       and(
         eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
-        eq(collaborationWorkspaces.kind, "shared")
+        eq(collaborationWorkspaces.kind, "shared"),
+        notInDeletion
       )
     )
     .orderBy(asc(collaborationWorkspaces.createdAt));
@@ -169,84 +176,6 @@ export async function updateWorkspace(
     )
     .returning();
   return mapCollaborationWorkspace(row);
-}
-
-export async function deleteWorkspace(
-  db: PostgresConnection,
-  input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]
-): Promise<CollaborationWorkspace> {
-  return db.transaction(async (tx) => {
-    await lockWorkspaceForHardDelete(
-      tx,
-      and(
-        eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
-        eq(collaborationWorkspaces.id, input.collaborationWorkspaceId)
-      )
-    );
-    const workspace = await requireWorkspace(
-      tx,
-      input.clientInstanceId,
-      input.collaborationWorkspaceId
-    );
-    if (workspace.kind === "personal") {
-      throw new AppError("VALIDATION_FAILED", "A Personal Workspace cannot be deleted");
-    }
-    const [activeConversation] = await tx
-      .select({ id: conversations.id })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.clientInstanceId, input.clientInstanceId),
-          eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId),
-          eq(conversations.status, "active")
-        )
-      )
-      .limit(1);
-    if (activeConversation) {
-      throw new AppError("CONFLICT", "Workspace still contains conversations");
-    }
-    await requireNoPendingConversationCleanup(tx, workspace);
-    await tx
-      .delete(conversations)
-      .where(
-        and(
-          eq(conversations.clientInstanceId, input.clientInstanceId),
-          eq(conversations.collaborationWorkspaceId, input.collaborationWorkspaceId)
-        )
-      );
-    await tx
-      .delete(collaborationWorkspaceAccessRequests)
-      .where(
-        and(
-          eq(collaborationWorkspaceAccessRequests.clientInstanceId, input.clientInstanceId),
-          eq(
-            collaborationWorkspaceAccessRequests.collaborationWorkspaceId,
-            input.collaborationWorkspaceId
-          )
-        )
-      );
-    await tx
-      .delete(collaborationWorkspaceMemberships)
-      .where(
-        and(
-          eq(collaborationWorkspaceMemberships.clientInstanceId, input.clientInstanceId),
-          eq(
-            collaborationWorkspaceMemberships.collaborationWorkspaceId,
-            input.collaborationWorkspaceId
-          )
-        )
-      );
-    const [row] = await tx
-      .delete(collaborationWorkspaces)
-      .where(
-        and(
-          eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
-          eq(collaborationWorkspaces.id, input.collaborationWorkspaceId)
-        )
-      )
-      .returning();
-    return mapCollaborationWorkspace(row);
-  });
 }
 
 export async function ensurePersonalWorkspace(
@@ -442,6 +371,7 @@ export async function searchMemberCandidates(
       and(
         eq(productUsers.clientInstanceId, input.clientInstanceId),
         eq(productUsers.status, "active"),
+        isNull(productUsers.deletionRequestedAt),
         isNull(collaborationWorkspaceMemberships.userId),
         drizzleSql`${effectiveEmail} is not null`,
         or(
@@ -473,11 +403,21 @@ export async function getMembership(
   input: Parameters<CollaborationWorkspaceStore["getMembership"]>[0]
 ): Promise<WorkspaceMembership | undefined> {
   const [row] = await db
-    .select()
+    .select({ membership: collaborationWorkspaceMemberships })
     .from(collaborationWorkspaceMemberships)
-    .where(membershipWhere(input))
+    .innerJoin(
+      collaborationWorkspaces,
+      and(
+        eq(collaborationWorkspaces.id, collaborationWorkspaceMemberships.collaborationWorkspaceId),
+        eq(
+          collaborationWorkspaces.clientInstanceId,
+          collaborationWorkspaceMemberships.clientInstanceId
+        )
+      )
+    )
+    .where(and(membershipWhere(input), notInDeletion))
     .limit(1);
-  return row ? mapWorkspaceMembership(row) : undefined;
+  return row ? mapWorkspaceMembership(row.membership) : undefined;
 }
 
 export async function createAccessRequest(
@@ -731,7 +671,7 @@ async function getPersonalWorkspace(
  * Conversation in the workspace, or moving one in, takes a key-share lock on this row through
  * the foreign key, so it waits and then fails instead of being removed with the rest.
  */
-async function lockWorkspaceForHardDelete(
+export async function lockWorkspaceForHardDelete(
   tx: PostgresTransaction,
   workspace: SQL | undefined
 ): Promise<void> {
@@ -750,6 +690,16 @@ async function requireWorkspace(
   const workspace = await getWorkspace(db, clientInstanceId, collaborationWorkspaceId);
   if (!workspace) throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
   return workspace;
+}
+
+export function workspaceRowWhere(input: {
+  clientInstanceId: ClientInstanceId;
+  collaborationWorkspaceId: CollaborationWorkspaceId;
+}) {
+  return and(
+    eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+    eq(collaborationWorkspaces.id, input.collaborationWorkspaceId)
+  );
 }
 
 function membershipWhere(input: {

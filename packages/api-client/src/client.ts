@@ -96,7 +96,10 @@ type OutputOf<Op extends Operation> = Op["response"] extends {
   : Op["response"] extends { schema: infer Schema extends z.ZodType }
     ? Op extends { accepted: infer Accepted extends z.ZodType }
       ? Promise<OperationOutcome<z.output<Schema>, z.output<Accepted>>>
-      : Promise<z.output<Schema>>
+      : Op extends { deferred: true }
+        ? // Undefined: the call was accepted and its work finishes by itself.
+          Promise<z.output<Schema> | undefined>
+        : Promise<z.output<Schema>>
     : Promise<Blob>;
 
 /** What the method of a catalog operation takes: `params`, `query`, `body` or `file`, `signal`. */
@@ -265,6 +268,9 @@ function callOperation(
   }
   const { accepted } = operation;
   return transport.send(operation, request).then(async (answer) => {
+    if (operation.deferred && answer.status === 202) {
+      return undefined;
+    }
     const text = await readBody(() => answer.text(), request);
     if (!accepted) {
       return parseJson(transport, text, response.schema, answer.status);

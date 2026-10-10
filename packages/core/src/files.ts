@@ -1,5 +1,6 @@
 import type {
   ClientInstanceId,
+  CollaborationWorkspaceId,
   ConversationAttachmentId,
   ConversationId,
   ManagedArtifactId,
@@ -720,6 +721,8 @@ export interface ConversationAttachmentStore {
    */
   listConversationsPendingObjectCleanup(input: {
     clientInstanceId: ClientInstanceId;
+    /** Only this workspace's, and then also those whose execution workspace holds data. */
+    collaborationWorkspaceId?: CollaborationWorkspaceId;
     limit: number;
   }): Promise<ConversationId[]>;
 }

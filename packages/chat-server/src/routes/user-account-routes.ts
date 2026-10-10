@@ -1,6 +1,7 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { asUserId, getSubjectUserId, allowedLegacyPermissions } from "@vivd-catalyst/core";
 import type { Route } from "../http/route";
+import { deletionAnswer } from "./deletion-answer";
 import { resolveRequestLocale } from "../request-context";
 import type { ResolvedChatServerOptions } from "../types";
 import { PasswordSetupWorkflow } from "../password-setup-workflow";
@@ -67,6 +68,6 @@ export function registerUserAccountRoutes(route: Route, options: ResolvedChatSer
   });
 
   route(apiOperations["me.delete"], async ({ user, context }) => {
-    return userAccount.deleteCurrentUser(user, context);
+    return deletionAnswer(await userAccount.deleteCurrentUser(user, context));
   });
 }

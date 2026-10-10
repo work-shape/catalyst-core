@@ -5162,7 +5162,7 @@
       },
       "delete": {
         "operationId": "users.delete",
-        "summary": "Delete a user and their data",
+        "summary": "Delete a user and their data. Answers 202 when the user is closed and their data is still being removed.",
         "tags": [
           "Users"
         ],
@@ -5198,6 +5198,9 @@
                 }
               }
             }
+          },
+          "202": {
+            "description": "The call was accepted and its work finishes by itself. The answer has no body."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -5760,7 +5763,7 @@
       },
       "delete": {
         "operationId": "me.delete",
-        "summary": "Delete the signed-in user's account and data",
+        "summary": "Delete the signed-in user's account and data. Answers 202 when the account is closed and its data is still being removed.",
         "tags": [
           "Account"
         ],
@@ -5787,6 +5790,9 @@
                 }
               }
             }
+          },
+          "202": {
+            "description": "The call was accepted and its work finishes by itself. The answer has no body."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -6816,7 +6822,7 @@
       },
       "delete": {
         "operationId": "workspaces.delete",
-        "summary": "Delete a Shared Workspace and its conversations",
+        "summary": "Delete a Shared Workspace and its conversations. Answers 202 when the workspace is closed and its data is still being removed.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -6862,6 +6868,9 @@
                 }
               }
             }
+          },
+          "202": {
+            "description": "The call was accepted and its work finishes by itself. The answer has no body."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -8150,7 +8159,7 @@
             }
           },
           "status": {
-            "$ref": "#/components/schemas/UserStatus"
+            "$ref": "#/components/schemas/AdministeredUserStatus"
           },
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -8235,6 +8244,14 @@
         },
         "required": [
           "password"
+        ]
+      },
+      "AdministeredUserStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "disabled",
+          "deleting"
         ]
       },
       "AgentAvailability": {

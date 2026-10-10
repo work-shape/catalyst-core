@@ -1,11 +1,4 @@
-import {
-  AppError,
-  auditActorFromUser,
-  type AuthenticatedUser,
-  type ConversationId,
-  type RuntimeCallContext,
-  type UserId
-} from "@vivd-catalyst/core";
+import { AppError, type AuditActor, type ConversationId, type UserId } from "@vivd-catalyst/core";
 import {
   attemptConversationDataCleanup,
   type ConversationDataCleanupOutcome,
@@ -19,20 +12,20 @@ export interface UserDeletionTotals extends ConversationDataDeletionTotals {
   sharedMembershipCount: number;
 }
 
-export async function cleanupProductUserData(input: {
-  options: ChatServerOptions;
-  actor: AuthenticatedUser;
-  context: RuntimeCallContext;
-  userId: UserId;
-}): Promise<UserDeletionTotals> {
-  const { options } = input;
+/**
+ * Refuses while the user is the last active owner of a Shared Workspace: deleting the account
+ * would leave that workspace to nobody. An owner whose own account is being deleted does not
+ * count as active. This is checked before a deletion is accepted and not again afterwards: an
+ * accepted deletion finishes, also when the other owner leaves meanwhile.
+ */
+export async function requireNoSoleOwnedSharedWorkspace(
+  options: ChatServerOptions,
+  userId: UserId
+): Promise<void> {
   const workspaces = await options.stores.workspaces.listWorkspacesForUser({
     clientInstanceId: options.clientInstanceId,
-    userId: input.userId
+    userId
   });
-  const personalWorkspace = workspaces.find(
-    (workspace) => workspace.kind === "personal" && workspace.personalUserId === input.userId
-  );
   const users = await options.stores.users.listUsers({
     clientInstanceId: options.clientInstanceId
   });
@@ -49,7 +42,7 @@ export async function cleanupProductUserData(input: {
     const hasAnotherActiveOwner = memberships.some(
       (membership) =>
         membership.role === "owner" &&
-        membership.userId !== input.userId &&
+        membership.userId !== userId &&
         activeUserIds.has(membership.userId)
     );
     if (!hasAnotherActiveOwner) blockingWorkspaceCount += 1;
@@ -61,6 +54,28 @@ export async function cleanupProductUserData(input: {
       { blockingWorkspaceCount }
     );
   }
+}
+
+/**
+ * Removes what belongs to the user alone: the Conversations of their Personal Workspace and
+ * their private Conversations elsewhere, with stored data, then the Personal Workspace, their
+ * access requests and their memberships. Safe to repeat: a pass that is refused because data
+ * is still being removed leaves the rest for the next.
+ */
+export async function cleanupProductUserData(input: {
+  options: ChatServerOptions;
+  actor: AuditActor;
+  correlationId: string;
+  userId: UserId;
+}): Promise<UserDeletionTotals> {
+  const { options } = input;
+  const workspaces = await options.stores.workspaces.listWorkspacesForUser({
+    clientInstanceId: options.clientInstanceId,
+    userId: input.userId
+  });
+  const personalWorkspace = workspaces.find(
+    (workspace) => workspace.kind === "personal" && workspace.personalUserId === input.userId
+  );
 
   // Private conversations in Shared Workspaces are readable only by their creator, so they
   // are part of the user's own data rather than a shared resource that outlives the account.
@@ -110,9 +125,9 @@ export async function cleanupProductUserData(input: {
     await options.auditRecorder.record({
       type: "conversation.deleted",
       status: "success",
-      actor: auditActorFromUser(input.actor),
+      actor: input.actor,
       subject: conversation.id,
-      correlationId: input.context.correlationId,
+      correlationId: input.correlationId,
       metadata: {
         requestedBy: "account_deletion",
         ...deletion

@@ -79,7 +79,10 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "audit.pruned": "Removed expired audit events",
   "storage.orphaned_file_cleanup_failed": "Orphaned file cleanup failed",
   "collaboration_workspace.created": "Created a workspace",
+  // Written until the deletion became a job. Kept for the events that exist.
   "collaboration_workspace.delete_failed": "Workspace deletion refused",
+  "collaboration_workspace.deletion_requested": "Requested the deletion of a workspace",
+  "collaboration_workspace.deletion_stalled": "Workspace deletion stalled",
   "collaboration_workspace.updated": "Updated a workspace",
   "collaboration_workspace.member_added": "Added a workspace member",
   "collaboration_workspace.member_removed": "Removed a workspace member",
@@ -113,7 +116,10 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "governance.user_password_reset_authorized": "Authorized a password reset",
   "governance.user_invitation_authorized": "Authorized a user invitation",
   "user.created": "Created a user",
+  // Written until the deletion became a job. Kept for the events that exist.
   "user.delete_failed": "User deletion refused",
+  "user.deletion_requested": "Requested the deletion of a user",
+  "user.deletion_stalled": "User deletion stalled",
   "user.updated": "Updated a user",
   "user.profile_updated": "Updated a profile",
   "user.identity_linked": "Linked a user identity",

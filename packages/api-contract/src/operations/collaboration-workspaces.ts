@@ -141,7 +141,8 @@ export const collaborationWorkspaceOperations = {
     id: "workspaces.delete",
     method: "DELETE",
     path: "/api/v1/workspaces/:collaborationWorkspaceId",
-    summary: "Delete a Shared Workspace and its conversations",
+    summary:
+      "Delete a Shared Workspace and its conversations. Answers 202 when the workspace is closed and its data is still being removed.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -149,6 +150,7 @@ export const collaborationWorkspaceOperations = {
     effect: "changing",
     body: deleteCollaborationWorkspaceRequestSchema,
     response: json(collaborationWorkspaceDeletionResultSchema),
+    deferred: true,
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),

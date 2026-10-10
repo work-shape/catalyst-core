@@ -74,7 +74,13 @@ export const exchangeApiKeyResponseSchema = z.object({
   expiresAt: timestampSchema
 });
 
+/** What an administrator sets. */
 export const userStatusSchema = z.enum(["active", "disabled"]);
+/**
+ * The status a user is read with. `deleting`: the deletion of the account was accepted, the
+ * user is closed and their data is being removed.
+ */
+export const administeredUserStatusSchema = z.enum(["active", "disabled", "deleting"]);
 
 export const administeredUserIdentitySchema = z.object({
   clientInstanceId: z.string(),
@@ -97,7 +103,7 @@ export const administeredUserSchema = z.object({
   roles: z.array(z.string()),
   permissionRefs: z.array(z.string()),
   permissions: z.array(z.string()),
-  status: userStatusSchema,
+  status: administeredUserStatusSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   lastAuthenticatedAt: timestampSchema.optional(),

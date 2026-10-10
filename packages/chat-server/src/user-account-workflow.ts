@@ -8,9 +8,9 @@ import {
   type RuntimeCallContext,
   type UserRecord
 } from "@vivd-catalyst/core";
+import { requestAccountDeletion } from "./account-deletion";
+import type { DeletionOutcome } from "./subject-deletion";
 import type { ChatServerOptions } from "./types";
-import { pendingCleanupCountOf } from "./conversation-cleanup";
-import { cleanupProductUserData, type UserDeletionTotals } from "./user-deletion";
 
 interface UpdateCurrentUserCommand {
   displayLabel: string;
@@ -95,59 +95,28 @@ export class UserAccountWorkflow {
     return { ok: true };
   }
 
+  /**
+   * Accepts the deletion of the signed-in user's account. `deferred` means the account is
+   * closed and its job removes what is left.
+   */
   async deleteCurrentUser(
     actor: AuthenticatedUser,
     context: RuntimeCallContext
-  ): Promise<{ ok: true }> {
+  ): Promise<DeletionOutcome<{ ok: true }>> {
     if (actor.principal?.kind === "service" || actor.delegatedActor) {
       throw new AppError("FORBIDDEN", "Account deletion must be requested by the signed-in user");
     }
 
     const existing = await this.getCurrentUserOrThrow(actor);
-    let deletionTotals: UserDeletionTotals;
-    try {
-      deletionTotals = await cleanupProductUserData({
-        options: this.options,
-        actor,
-        context,
-        userId: asUserId(actor.id)
-      });
-    } catch (error) {
-      const pendingCleanupCount = pendingCleanupCountOf(error);
-      if (pendingCleanupCount !== undefined) {
-        await this.options.auditRecorder.record({
-          type: "user.delete_failed",
-          status: "failed",
-          actor: auditActorFromUser(actor),
-          subject: existing.id,
-          correlationId: context.correlationId,
-          metadata: { requestedBy: "self", pendingCleanupCount }
-        });
-      }
-      throw error;
-    }
-    await this.deleteStandalonePasswordSignIns(existing);
-    const deleted = await this.options.stores.users.deleteUser({
-      clientInstanceId: this.options.clientInstanceId,
-      userId: asUserId(actor.id)
-    });
-
-    await this.options.auditRecorder.record({
-      type: "user.deleted",
-      status: "success",
+    const outcome = await requestAccountDeletion(this.options, {
+      userId: existing.id,
+      requestedBy: "self",
       actor: auditActorFromUser(actor),
-      subject: deleted.id,
+      actorUserId: existing.id,
       correlationId: context.correlationId,
-      metadata: {
-        requestedBy: "self",
-        roles: deleted.roles,
-        permissionRefs: deleted.permissionRefs,
-        permissions: deleted.permissions,
-        ...deletionTotals
-      }
+      alreadyRequested: existing.status === "deleting"
     });
-
-    return { ok: true };
+    return outcome.status === "deleted" ? { status: "deleted", result: { ok: true } } : outcome;
   }
 
   private async getCurrentUserOrThrow(actor: AuthenticatedUser): Promise<UserRecord> {
@@ -159,20 +128,5 @@ export class UserAccountWorkflow {
       throw new AppError("NOT_FOUND", "User account is not available");
     }
     return user;
-  }
-
-  private async deleteStandalonePasswordSignIns(user: UserRecord): Promise<void> {
-    const deletePasswordSignIn = this.options.standaloneAuth?.deletePasswordSignIn;
-    if (!deletePasswordSignIn) {
-      return;
-    }
-    const identities = user.identities.filter(
-      (identity) => identity.authSource === STANDALONE_AUTH_SOURCE
-    );
-    for (const identity of identities) {
-      await deletePasswordSignIn({
-        externalUserId: identity.externalUserId
-      });
-    }
   }
 }

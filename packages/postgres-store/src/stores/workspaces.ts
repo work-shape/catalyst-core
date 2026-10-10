@@ -7,6 +7,7 @@ import {
   type CreateWorkspaceInput,
   type UpdateWorkspaceInput,
   type WorkspaceMemberCandidate,
+  type WorkspaceInDeletion,
   type WorkspaceMembership,
   type WorkspaceAccessRequest
 } from "@vivd-catalyst/core";
@@ -17,7 +18,6 @@ import {
   deleteAccessRequest as deletePostgresAccessRequest,
   deleteAccessRequestsForUser as deletePostgresAccessRequestsForUser,
   deletePersonalWorkspaceForUser as deletePostgresPersonalWorkspaceForUser,
-  deleteWorkspace as deletePostgresWorkspace,
   ensurePersonalWorkspace as ensurePostgresPersonalWorkspace,
   getAccessRequest as getPostgresAccessRequest,
   getMembership as getPostgresMembership,
@@ -34,6 +34,11 @@ import {
   updateWorkspace as updatePostgresWorkspace
 } from "../postgres-collaboration-workspace-operations";
 import type { PostgresConnection } from "../postgres-database";
+import {
+  deleteWorkspace as deletePostgresWorkspace,
+  getWorkspaceInDeletion as getPostgresWorkspaceInDeletion,
+  markWorkspaceDeletionRequested as markPostgresWorkspaceDeletionRequested
+} from "../postgres-workspace-deletion";
 export function createPostgresWorkspacesStore(db: PostgresConnection): CollaborationWorkspaceStore {
   return {
     async createWorkspace(input: CreateWorkspaceInput): Promise<CollaborationWorkspace> {
@@ -62,6 +67,16 @@ export function createPostgresWorkspacesStore(db: PostgresConnection): Collabora
     },
     async updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace> {
       return updatePostgresWorkspace(db, input);
+    },
+    async markWorkspaceDeletionRequested(
+      input: Parameters<CollaborationWorkspaceStore["markWorkspaceDeletionRequested"]>[0]
+    ): Promise<boolean> {
+      return markPostgresWorkspaceDeletionRequested(db, input);
+    },
+    async getWorkspaceInDeletion(
+      input: Parameters<CollaborationWorkspaceStore["getWorkspaceInDeletion"]>[0]
+    ): Promise<WorkspaceInDeletion | undefined> {
+      return getPostgresWorkspaceInDeletion(db, input);
     },
     async deleteWorkspace(
       input: Parameters<CollaborationWorkspaceStore["deleteWorkspace"]>[0]

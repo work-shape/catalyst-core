@@ -6,11 +6,23 @@ import {
 import { asUserId, type AuthenticatedUser, type Conversation } from "@vivd-catalyst/core";
 import { createConversationCleanupFixture } from "./support/conversation-cleanup-fixture";
 import { usePostgresSuite } from "./support/postgres-suite";
+import { getTestJobs } from "./support/test-instance";
 
 describe("Postgres hard deletes while conversation cleanup is pending", () => {
   const db = usePostgresSuite("cleanupguard");
+  /** One attempt of the queued deletion jobs of a client instance, without their backoff. */
+  const runDeletionJobs = async (
+    api: Parameters<typeof getTestJobs>[0],
+    clientInstanceId: string
+  ) => {
+    await db.sql`
+      update platform_jobs set run_after = now()
+      where client_instance_id = ${clientInstanceId} and status = 'queued'
+        and kind in ('account.delete', 'workspace.delete')`;
+    await getTestJobs(api).runDue();
+  };
 
-  it("refuses to delete a shared workspace while its conversations' data is still there", async () => {
+  it("keeps a shared workspace in deletion while its conversations' data is still there", async () => {
     const fixture = await createConversationCleanupFixture(db, "workspace_deletion");
     const owner = await fixture.createUser("owner");
     const workspace = await fixture.createSharedWorkspace(owner, "Shared");
@@ -31,17 +43,8 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
       );
 
     fixture.byteStore.failDeletes = true;
-    const refused = await deleteWorkspace();
-    expect(refused.statusCode).toBe(409);
-    expect(refused.json()).toEqual({
-      error: {
-        correlationId: expect.any(String),
-        code: "CONFLICT",
-        message:
-          "This workspace cannot be deleted yet because data of its deleted conversations is still being removed. Try again later.",
-        details: { pendingCleanupCount: 2 }
-      }
-    });
+    const accepted = await deleteWorkspace();
+    expect(accepted.statusCode).toBe(202);
     // The Conversations are deleted, and every row that leads to their data is still there.
     await expect(fixture.statusOf(first)).resolves.toBe("deleted");
     await expect(fixture.statusOf(second)).resolves.toBe("deleted");
@@ -52,19 +55,15 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
       executionWorkspaces: 1
     });
     expect(fixture.byteStore.has(firstObjects.artifact.objectKey)).toBe(true);
-    await expect(fixture.eventsOfType("collaboration_workspace.delete_failed")).resolves.toEqual([
-      expect.objectContaining({
-        status: "failed",
-        subject: workspace.id,
-        metadata: { conversationCount: 2, pendingCleanupCount: 2 }
-      })
-    ]);
     await expect(fixture.eventsOfType("collaboration_workspace.deleted")).resolves.toEqual([]);
+    await runDeletionJobs(api, fixture.clientInstanceId);
+    await expect(fixture.rowsOf(workspace)).resolves.toMatchObject({
+      workspaces: 1,
+      conversations: 2
+    });
 
     fixture.byteStore.failDeletes = false;
-    await expect(fixture.runRetentionJob()).resolves.toEqual([]);
-    const repeated = await deleteWorkspace();
-    expect(repeated.statusCode).toBe(200);
+    await runDeletionJobs(api, fixture.clientInstanceId);
 
     await expect(fixture.rowsOf(workspace)).resolves.toEqual({
       workspaces: 0,
@@ -76,7 +75,7 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     await expect(fixture.eventsOfType("collaboration_workspace.deleted")).resolves.toHaveLength(1);
   });
 
-  it("refuses to delete an account while its conversations' data is still there and leaves it whole", async () => {
+  it("keeps an account in deletion whole while its conversations' data is still there", async () => {
     const fixture = await createConversationCleanupFixture(db, "account_deletion");
     const superadmin = await fixture.createUser("superadmin", ["user", "admin", "superadmin"]);
     const removedUser = await fixture.createUser("removed-user");
@@ -138,17 +137,8 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     const everyone = [superadmin.id, removedUser.id, leavingUser.id].sort();
 
     fixture.byteStore.failDeletes = true;
-    for (const refused of await deleteAccounts()) {
-      expect(refused.statusCode).toBe(409);
-      expect(refused.json()).toEqual({
-        error: {
-          correlationId: expect.any(String),
-          code: "CONFLICT",
-          message:
-            "The account cannot be deleted yet because data of its deleted conversations is still being removed. Try again later.",
-          details: { pendingCleanupCount: 1 }
-        }
-      });
+    for (const accepted of await deleteAccounts()) {
+      expect(accepted.statusCode).toBe(202);
     }
     // The claim came before the first object was touched.
     expect(statusAtDeletion.size).toBeGreaterThanOrEqual(2);
@@ -170,28 +160,13 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
         fixture.auditEvents("conversation.cleanup_failed", conversation)
       ).resolves.toHaveLength(1);
     }
-    await expect(fixture.eventsOfType("user.delete_failed")).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          status: "failed",
-          subject: removedUser.id,
-          metadata: { requestedBy: "admin", pendingCleanupCount: 1 }
-        }),
-        expect.objectContaining({
-          status: "failed",
-          subject: leavingUser.id,
-          metadata: { requestedBy: "self", pendingCleanupCount: 1 }
-        })
-      ])
-    );
-    await expect(fixture.eventsOfType("user.delete_failed")).resolves.toHaveLength(2);
     await expect(fixture.eventsOfType("user.deleted")).resolves.toEqual([]);
+    await runDeletionJobs(api, fixture.clientInstanceId);
+    await expect(userIds()).resolves.toEqual(everyone);
+    await expect(memberIds()).resolves.toEqual(everyone);
 
     fixture.byteStore.failDeletes = false;
-    await expect(fixture.runRetentionJob()).resolves.toEqual([]);
-    for (const repeated of await deleteAccounts()) {
-      expect(repeated.statusCode).toBe(200);
-    }
+    await runDeletionJobs(api, fixture.clientInstanceId);
 
     await expect(userIds()).resolves.toEqual([superadmin.id]);
     await expect(memberIds()).resolves.toEqual([superadmin.id]);
@@ -325,7 +300,6 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     const deletion = await api.call("me.delete", {}, leavingUser.id);
     expect(deletion.statusCode).toBe(200);
 
-    await expect(fixture.eventsOfType("user.delete_failed")).resolves.toEqual([]);
     await expect(fixture.eventsOfType("user.deleted")).resolves.toHaveLength(1);
     await expect(fixture.rowsOf(personalWorkspace)).resolves.toMatchObject({
       workspaces: 0,

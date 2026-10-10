@@ -40,6 +40,52 @@ export const generateConversationTitleJob = defineJobKind({
   concurrency: { global: 4, perKey: 1 }
 });
 
+/**
+ * A deletion that waits for stored data to be removed is tried again after one minute, then
+ * after twice the wait each time up to six hours: fifty attempts are about ten days. After
+ * the last one the job is dead and the subject stays closed.
+ */
+export const DELETION_MAX_ATTEMPTS = 50;
+export const DELETION_BACKOFF_BASE_MS = MINUTE_MS;
+const DELETION_BACKOFF_MAX_MS = 6 * HOUR_MS;
+
+const deletionKind = {
+  maxAttempts: DELETION_MAX_ATTEMPTS,
+  backoff: { baseMs: DELETION_BACKOFF_BASE_MS, maxMs: DELETION_BACKOFF_MAX_MS },
+  leaseMs: 10 * MINUTE_MS,
+  concurrency: { global: 4, perKey: 1 }
+} as const;
+
+/**
+ * Finishes the deletion of a user whose deletion was requested. Enqueued in the transaction
+ * that marks the user, with the user as subject, dedupe and concurrency key.
+ */
+export const deleteAccountJob = defineJobKind({
+  kind: "account.delete",
+  payloadSchema: z.object({
+    userId: z.string().min(1),
+    requestedBy: z.enum(["self", "admin"]),
+    /** The person who asked, for the audit events of the deletion. */
+    actorUserId: z.string().min(1)
+  }),
+  ...deletionKind
+});
+
+/**
+ * Finishes the deletion of a Shared Workspace whose deletion was requested. Enqueued in the
+ * transaction that marks the workspace, with the workspace as subject, dedupe and concurrency
+ * key.
+ */
+export const deleteWorkspaceJob = defineJobKind({
+  kind: "workspace.delete",
+  payloadSchema: z.object({
+    collaborationWorkspaceId: z.string().min(1),
+    /** The person who asked, for the audit events of the deletion. */
+    actorUserId: z.string().min(1)
+  }),
+  ...deletionKind
+});
+
 export const expireConversationsJob = defineScheduledKind("conversation.expire");
 export const cleanUpExecutionWorkspacesJob = defineScheduledKind("execution_workspace.cleanup");
 export const recoverAgentRunsJob = defineScheduledKind("agent_run.recover", 2 * MINUTE_MS);

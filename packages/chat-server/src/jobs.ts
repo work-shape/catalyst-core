@@ -1,4 +1,5 @@
 import {
+  asCollaborationWorkspaceId,
   asConversationId,
   asUserId,
   defineJobHandler,
@@ -6,11 +7,14 @@ import {
   type JobSchedule,
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
+import { completeAccountDeletion, recordAccountDeletionStalled } from "./account-deletion";
 import { ConversationWorkflow } from "./conversation-workflow";
 import {
   adoptLegacyJobsJob,
   adoptLegacyJobsSchedule,
   cleanUpExecutionWorkspacesJob,
+  deleteAccountJob,
+  deleteWorkspaceJob,
   expireConversationsJob,
   expireConversationsSchedule,
   generateConversationTitleJob,
@@ -23,8 +27,10 @@ import {
 } from "./job-kinds";
 import { ConversationRetentionWorkflow } from "./retention";
 import { RunRecoveryWatchdog } from "./run-recovery";
+import { deletionActor } from "./subject-deletion";
 import type { ChatServerOptions, ConversationRetentionOptions, RunRecoveryOptions } from "./types";
 import { ExecutionWorkspaceCleanupWorkflow } from "./workspace-cleanup";
+import { completeWorkspaceDeletion, recordWorkspaceDeletionStalled } from "./workspace-deletion";
 
 /** The job kinds the API process serves, with their schedules. */
 export interface ChatServerJobs {
@@ -67,6 +73,53 @@ export function createChatServerJobs(
           },
           control
         )
+    }),
+    // A deletion that still waits throws, and the executor tries again after the backoff.
+    defineJobHandler({
+      kind: deleteAccountJob,
+      slots: DELETION_SLOTS,
+      async run(job, control) {
+        await completeAccountDeletion(
+          options,
+          {
+            userId: asUserId(job.payload.userId),
+            requestedBy: job.payload.requestedBy,
+            actor: await deletionActor(options, asUserId(job.payload.actorUserId)),
+            correlationId: job.correlationId
+          },
+          (fn) => control.transaction(fn)
+        );
+      },
+      onExhausted: (job, stores) =>
+        recordAccountDeletionStalled(stores, options, {
+          userId: asUserId(job.payload.userId),
+          requestedBy: job.payload.requestedBy,
+          correlationId: job.correlationId
+        })
+    }),
+    defineJobHandler({
+      kind: deleteWorkspaceJob,
+      slots: DELETION_SLOTS,
+      async run(job, control) {
+        await completeWorkspaceDeletion(
+          options,
+          {
+            collaborationWorkspaceId: asCollaborationWorkspaceId(
+              job.payload.collaborationWorkspaceId
+            ),
+            actor: await deletionActor(options, asUserId(job.payload.actorUserId)),
+            correlationId: job.correlationId
+          },
+          (fn) => control.transaction(fn)
+        );
+      },
+      onExhausted: (job, stores) =>
+        recordWorkspaceDeletionStalled(stores, options, {
+          collaborationWorkspaceId: asCollaborationWorkspaceId(
+            job.payload.collaborationWorkspaceId
+          ),
+          correlationId: job.correlationId
+        })
     }),
     defineJobHandler({
       kind: expireConversationsJob,
@@ -172,6 +225,8 @@ export function createChatServerJobs(
 }
 
 const DEFAULT_WORKSPACE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+// Deletions of accounts or of workspaces this process runs at once, per kind.
+const DELETION_SLOTS = 2;
 // Rows one tick of the adopt schedule gives a job, per kind. It keeps a tick inside its lease
 // after an upgrade with a long backlog; the next tick, a minute later, takes the rest.
 const LEGACY_ADOPTION_BATCH_SIZE = 500;

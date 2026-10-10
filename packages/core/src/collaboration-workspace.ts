@@ -51,6 +51,11 @@ export interface CollaborationWorkspace {
   updatedAt: ISODateString;
 }
 
+export interface WorkspaceInDeletion {
+  workspace: CollaborationWorkspace;
+  memberships: WorkspaceMembership[];
+}
+
 export interface WorkspaceMembership {
   collaborationWorkspaceId: CollaborationWorkspaceId;
   clientInstanceId: ClientInstanceId;
@@ -103,6 +108,11 @@ export interface UpdateWorkspaceInput {
   accentColor?: WorkspaceAccentColor | null;
 }
 
+/**
+ * A Shared Workspace whose deletion was requested is closed: no read of the store finds it or
+ * a membership of it, and no write changes it. Only `getWorkspaceInDeletion` and
+ * `deleteWorkspace` reach it, for the deletion itself.
+ */
 export interface CollaborationWorkspaceStore {
   createWorkspace(input: CreateWorkspaceInput): Promise<CollaborationWorkspace>;
   getWorkspace(
@@ -121,6 +131,20 @@ export interface CollaborationWorkspaceStore {
     clientInstanceId: ClientInstanceId;
   }): Promise<CollaborationWorkspace[]>;
   updateWorkspace(input: UpdateWorkspaceInput): Promise<CollaborationWorkspace>;
+  /**
+   * Marks the workspace as being deleted, which closes it from the commit on. Resolves false
+   * when the mark was already set. Nothing removes the mark; the row goes with
+   * `deleteWorkspace`.
+   */
+  markWorkspaceDeletionRequested(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<boolean>;
+  /** The workspace whose deletion was requested, with its memberships, or undefined. */
+  getWorkspaceInDeletion(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+  }): Promise<WorkspaceInDeletion | undefined>;
   deleteWorkspace(input: {
     clientInstanceId: ClientInstanceId;
     collaborationWorkspaceId: CollaborationWorkspaceId;

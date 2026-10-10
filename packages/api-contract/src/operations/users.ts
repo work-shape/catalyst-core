@@ -60,13 +60,15 @@ export const userOperations = {
     id: "users.delete",
     method: "DELETE",
     path: "/api/v1/instance/users/:userId",
-    summary: "Delete a user and their data",
+    summary:
+      "Delete a user and their data. Answers 202 when the user is closed and their data is still being removed.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
     requires: ["users.manage"],
     effect: "changing",
     response: json(administeredUserSchema),
+    deferred: true,
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),

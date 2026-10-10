@@ -6,7 +6,14 @@ import type { ClientInstanceId, UserId } from "./ids";
 import { createPlatformId } from "./ids";
 import type { ISODateString } from "./time";
 
+/** What an administrator sets. */
 export type UserStatus = "active" | "disabled";
+
+/**
+ * The status a user is read with. A user whose deletion was requested reads `deleting`,
+ * whatever an administrator set before: the account is closed and its data is being removed.
+ */
+export type UserRecordStatus = UserStatus | "deleting";
 
 export interface UserIdentity {
   clientInstanceId: ClientInstanceId;
@@ -29,7 +36,7 @@ export interface UserRecord {
   roles: UserRole[];
   permissionRefs: string[];
   permissions: string[];
-  status: UserStatus;
+  status: UserRecordStatus;
   createdAt: ISODateString;
   updatedAt: ISODateString;
   lastAuthenticatedAt?: ISODateString;
@@ -118,6 +125,12 @@ export interface UserStore {
   }): Promise<UserRecord[]>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
   updateUser(input: UpdateUserInput): Promise<UserRecord>;
+  /**
+   * Marks the user as being deleted. From the commit on the user reads `deleting`: every
+   * sign-in, session and token of theirs is refused. Resolves false when the mark was already
+   * set. Nothing removes the mark; the row goes with `deleteUser`.
+   */
+  markUserDeletionRequested(input: DeleteUserInput): Promise<boolean>;
   deleteUser(input: DeleteUserInput): Promise<UserRecord>;
   upsertUserIdentity(input: UpsertUserIdentityInput): Promise<UserRecord>;
   deleteUserIdentity(input: DeleteUserIdentityInput): Promise<UserRecord>;
@@ -131,14 +144,25 @@ export function createUserId(): UserId {
   return createPlatformId<"UserId">("usr");
 }
 
+/**
+ * Refuses a user who may not act. A user being deleted is answered like someone who is not
+ * signed in, so the interface ends the session; a disabled user is told so.
+ */
+export function requireUsableUser(status: UserRecordStatus): void {
+  if (status === "deleting") {
+    throw new AppError("UNAUTHENTICATED", "User account is being deleted");
+  }
+  if (status !== "active") {
+    throw new AppError("FORBIDDEN", "User is disabled");
+  }
+}
+
 export function authenticatedUserFromRecord(input: {
   user: UserRecord;
   identity: Pick<UserIdentity, "authSource" | "externalUserId">;
   correlationId?: string;
 }): AuthenticatedUser {
-  if (input.user.status !== "active") {
-    throw new AppError("FORBIDDEN", "User is disabled");
-  }
+  requireUsableUser(input.user.status);
 
   const authenticatedUser: AuthenticatedUser = {
     id: input.user.id,

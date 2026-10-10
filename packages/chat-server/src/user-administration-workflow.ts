@@ -4,6 +4,7 @@ import { STANDALONE_AUTH_SOURCE } from "@vivd-catalyst/auth";
 import {
   AppError,
   isSuperadmin,
+  asUserId,
   auditActorFromUser,
   type AuthenticatedUser,
   type RuntimeCallContext,
@@ -12,11 +13,11 @@ import {
   type UserRole,
   type UserStatus
 } from "@vivd-catalyst/core";
+import { requestAccountDeletion } from "./account-deletion";
 import type { ChatServerOptions } from "./types";
 import { recordGovernanceAccess } from "./governance-actions";
 import { createPasswordSetupLink, PLATFORM_INVITATION_VALID_DAYS } from "./password-setup-workflow";
-import { pendingCleanupCountOf } from "./conversation-cleanup";
-import { cleanupProductUserData, type UserDeletionTotals } from "./user-deletion";
+import type { DeletionOutcome } from "./subject-deletion";
 
 interface CreateUserCommand {
   displayLabel: string;
@@ -147,7 +148,7 @@ export class UserAdministrationWorkflow {
     actor: AuthenticatedUser,
     context: RuntimeCallContext,
     command: DeleteUserCommand
-  ): Promise<UserRecord> {
+  ): Promise<DeletionOutcome<UserRecord>> {
     if (!isSuperadmin(actor)) {
       throw new AppError("FORBIDDEN", "User deletion requires a superadmin role");
     }
@@ -158,35 +159,14 @@ export class UserAdministrationWorkflow {
 
     const existing = await this.getUserOrThrow(command.userId);
     await this.requireAtLeastOneRemainingSuperadmin(existing);
-    let deletionTotals: UserDeletionTotals;
-    try {
-      deletionTotals = await cleanupProductUserData({
-        options: this.options,
-        actor,
-        context,
-        userId: command.userId
-      });
-    } catch (error) {
-      const pendingCleanupCount = pendingCleanupCountOf(error);
-      if (pendingCleanupCount !== undefined) {
-        await this.options.auditRecorder.record({
-          type: "user.delete_failed",
-          status: "failed",
-          actor: auditActorFromUser(actor),
-          subject: existing.id,
-          correlationId: context.correlationId,
-          metadata: { requestedBy: "admin", pendingCleanupCount }
-        });
-      }
-      throw error;
-    }
-    await this.deleteStandalonePasswordSignIns(existing);
-    const deleted = await this.options.stores.users.deleteUser({
-      clientInstanceId: this.options.clientInstanceId,
-      userId: command.userId
+    return requestAccountDeletion(this.options, {
+      userId: command.userId,
+      requestedBy: "admin",
+      actor: auditActorFromUser(actor),
+      actorUserId: asUserId(actor.id),
+      correlationId: context.correlationId,
+      alreadyRequested: existing.status === "deleting"
     });
-    await this.recordUserMutation(actor, context, "user.deleted", deleted, deletionTotals);
-    return deleted;
   }
 
   async upsertIdentity(
@@ -536,21 +516,6 @@ export class UserAdministrationWorkflow {
     }
   }
 
-  private async deleteStandalonePasswordSignIns(user: UserRecord): Promise<void> {
-    const deletePasswordSignIn = this.options.standaloneAuth?.deletePasswordSignIn;
-    if (!deletePasswordSignIn) {
-      return;
-    }
-    const passwordIdentities = user.identities.filter(
-      (identity) => identity.authSource === STANDALONE_AUTH_SOURCE
-    );
-    for (const identity of passwordIdentities) {
-      await deletePasswordSignIn({
-        externalUserId: identity.externalUserId
-      });
-    }
-  }
-
   private async requireAtLeastOneRemainingSuperadmin(deletedUser: UserRecord): Promise<void> {
     if (!isSuperadmin(deletedUser)) {
       return;
@@ -579,8 +544,7 @@ export class UserAdministrationWorkflow {
     actor: AuthenticatedUser,
     context: RuntimeCallContext,
     type: string,
-    user: UserRecord,
-    deletionTotals?: UserDeletionTotals
+    user: UserRecord
   ): Promise<void> {
     await this.options.auditRecorder.record({
       type,
@@ -592,8 +556,7 @@ export class UserAdministrationWorkflow {
         status: user.status,
         roles: user.roles,
         permissionRefs: user.permissionRefs,
-        permissions: user.permissions,
-        ...deletionTotals
+        permissions: user.permissions
       }
     });
   }

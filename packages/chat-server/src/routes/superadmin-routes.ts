@@ -2,6 +2,7 @@ import { apiOperations } from "@vivd-catalyst/api-contract";
 import { asUserId } from "@vivd-catalyst/core";
 import { recordGovernanceAccess } from "../governance-actions";
 import type { Route } from "../http/route";
+import { deletionAnswer } from "./deletion-answer";
 import { requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
 import { UserAdministrationWorkflow } from "../user-administration-workflow";
@@ -54,9 +55,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
 
   route(apiOperations["users.delete"], async ({ user, context, params }) => {
     const userId = userIdParam(params);
-    return userAdministration.deleteUser(user, context, {
-      userId
-    });
+    return deletionAnswer(await userAdministration.deleteUser(user, context, { userId }));
   });
 
   route(apiOperations["users.identities.upsert"], async ({ user, context, params, body }) => {
