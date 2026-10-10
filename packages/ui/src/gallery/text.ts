@@ -109,6 +109,8 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   pickerGroupInstance: string;
   agentSupportHint: string;
   agentSupportLongHint: string;
+  /** Enough agents that their list scrolls, several of them under the same first letter. */
+  manyAgents: readonly string[];
   agentResearch: string;
   agentResearchHint: string;
   agentContracts: string;
@@ -285,6 +287,34 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     agentSupportHint: "Answers questions from the handbook",
     agentSupportLongHint:
       "Answers questions from the handbook, names the page it found the answer on and says so when the handbook has none",
+    manyAgents: [
+      "Accounting",
+      "Archive",
+      "Audit",
+      "Billing",
+      "Budget",
+      "Compliance",
+      "Contracts",
+      "Customer care",
+      "Data protection",
+      "Delivery",
+      "Events",
+      "Facilities",
+      "Finance",
+      "Handbook",
+      "Hiring",
+      "Insurance",
+      "Legal",
+      "Marketing",
+      "Onboarding",
+      "Payroll",
+      "Procurement",
+      "Quality",
+      "Research",
+      "Sales",
+      "Travel",
+      "Warehouse"
+    ],
     agentResearch: "Research assistant",
     agentResearchHint: "Searches the web and cites its sources",
     agentContracts: "Contract check",
@@ -463,6 +493,34 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     agentSupportHint: "Beantwortet Fragen aus dem Handbuch",
     agentSupportLongHint:
       "Beantwortet Fragen aus dem Handbuch, nennt die Seite mit der Antwort und sagt es, wenn das Handbuch keine hat",
+    manyAgents: [
+      "Abrechnung",
+      "Archiv",
+      "Audit",
+      "Beschaffung",
+      "Budget",
+      "Compliance",
+      "Datenschutz",
+      "Einkauf",
+      "Events",
+      "Finanzen",
+      "Gebäude",
+      "Handbuch",
+      "Inventar",
+      "Kundendienst",
+      "Lager",
+      "Lieferung",
+      "Marketing",
+      "Onboarding",
+      "Personal",
+      "Qualität",
+      "Recherche",
+      "Recht",
+      "Reisen",
+      "Versicherung",
+      "Vertrieb",
+      "Verträge"
+    ],
     agentResearch: "Recherche-Assistent",
     agentResearchHint: "Durchsucht das Web und nennt Quellen",
     agentContracts: "Vertragsprüfung",

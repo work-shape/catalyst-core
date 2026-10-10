@@ -140,6 +140,8 @@ export function Picker(props: PickerProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const typeAhead = useRef({ text: "", at: 0 });
+  // Set when the active row moved without cmdk's own arrow keys, which scroll by themselves.
+  const revealsActiveRow = useRef(false);
   const hover = useRef<{
     /** What the mouse is over. */
     over: "trigger" | "panel" | undefined;
@@ -163,6 +165,7 @@ export function Picker(props: PickerProps) {
   const changeOpen = (next: boolean) => {
     cancelHoverClose();
     setUncontrolledOpen(next);
+    revealsActiveRow.current = next;
     if (!next) {
       setQuery("");
       setActiveValue(undefined);
@@ -225,8 +228,9 @@ export function Picker(props: PickerProps) {
       return;
     }
     typeAhead.current = { text, at: event.timeStamp };
-    const match = choosable.find((option) => option.label.toLocaleLowerCase().startsWith(text));
+    const match = typeAheadMatch(choosable, text, shownActiveValue);
     if (match) {
+      revealsActiveRow.current = true;
       setActiveValue(match.value);
     }
   };
@@ -418,7 +422,11 @@ export function Picker(props: PickerProps) {
                   </div>
                 )}
               </Command.List>
-              <ActiveRowName value={shownActiveValue} listRef={listRef} />
+              <ActiveRowName
+                value={shownActiveValue}
+                listRef={listRef}
+                reveals={revealsActiveRow}
+              />
             </Command>
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>
@@ -465,22 +473,54 @@ export function PickerSearchField({
  */
 function ActiveRowName({
   value,
-  listRef
+  listRef,
+  reveals
 }: {
   value: string;
   listRef: RefObject<HTMLDivElement | null>;
+  /** True when the row may be outside the list's scroller: on opening and after a typed name. */
+  reveals: RefObject<boolean>;
 }) {
   useLayoutEffect(() => {
     const list = listRef.current;
     const row = Array.from(list?.querySelectorAll("[cmdk-item]") ?? []).find(
       (item) => item.getAttribute("data-value") === value
     );
-    if (list && row) {
-      const searchField = list.closest("[cmdk-root]")?.querySelector("[cmdk-input]");
-      (searchField ?? list).setAttribute("aria-activedescendant", row.id);
+    if (!list || !row) {
+      return undefined;
     }
+    const searchField = list.closest("[cmdk-root]")?.querySelector("[cmdk-input]");
+    (searchField ?? list).setAttribute("aria-activedescendant", row.id);
+    if (!reveals.current) {
+      return undefined;
+    }
+    // A frame later the panel has its place and its height, so the scroller knows what it hides.
+    const frame = window.requestAnimationFrame(() => {
+      reveals.current = false;
+      row.scrollIntoView({ block: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
   });
   return null;
+}
+
+/**
+ * The option a typed text moves to: the first whose name starts with it. The same letter typed
+ * again moves on to the next name under that letter, after the active one, and wraps around.
+ */
+function typeAheadMatch(
+  options: readonly PickerOption[],
+  text: string,
+  activeValue: string
+): PickerOption | undefined {
+  const startsWith = (prefix: string) => (option: PickerOption) =>
+    option.label.toLocaleLowerCase().startsWith(prefix);
+  const letter = text.charAt(0);
+  if (text.length < 2 || Array.from(text).some((typed) => typed !== letter)) {
+    return options.find(startsWith(text));
+  }
+  const active = options.findIndex((option) => option.value === activeValue);
+  return [...options.slice(active + 1), ...options.slice(0, active + 1)].find(startsWith(letter));
 }
 
 function isDisabled(option: PickerOption): boolean {

@@ -704,3 +704,57 @@ async function signInViaApi(page: Page, user: { email: string; password: string 
   });
   expect(response.ok()).toBe(true);
 }
+
+test("a long picker list keeps the active row in view after a typed name and on reopening", async ({
+  page
+}) => {
+  await signInViaApi(page, adminUser);
+  await page.goto("/ui-library");
+  await openSection(page, "Overlays");
+  const entry = page.locator('[data-gallery-entry="Picker"]');
+  const list = page.getByRole("listbox", { name: "Choose agent" });
+  const active = list.locator('[role="option"][aria-selected="true"]');
+  /** The active row lies inside the part of the list that shows, and the list does scroll. */
+  const expectActiveInView = async (name: string) => {
+    await expect(active).toHaveText(name);
+    await expect
+      .poll(() =>
+        active.evaluate((row) => {
+          const scroller = row.parentElement;
+          if (!scroller || scroller.scrollHeight <= scroller.clientHeight) {
+            return "the list does not scroll";
+          }
+          const shown = scroller.getBoundingClientRect();
+          const rowBox = row.getBoundingClientRect();
+          return rowBox.top >= shown.top && rowBox.bottom <= shown.bottom ? "in view" : "hidden";
+        })
+      )
+      .toBe("in view");
+  };
+
+  await entry.getByRole("button", { name: "Accounting", exact: true }).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(list).toBeFocused();
+  await expectActiveInView("Accounting");
+
+  // A typed letter moves far down the list; the same letter again moves on and wraps around.
+  await page.keyboard.press("p");
+  await expectActiveInView("Payroll");
+  await page.keyboard.press("p");
+  await expectActiveInView("Procurement");
+  await page.keyboard.press("p");
+  await expectActiveInView("Payroll");
+  await expect(list).toHaveAttribute(
+    "aria-activedescendant",
+    (await active.getAttribute("id")) ?? ""
+  );
+
+  // Enter chooses what shows as active, and the list opens on it the next time.
+  await page.keyboard.press("Enter");
+  await expect(list).toHaveCount(0);
+  const chosen = entry.getByRole("button", { name: "Payroll", exact: true });
+  await expect(chosen).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(list).toBeFocused();
+  await expectActiveInView("Payroll");
+});

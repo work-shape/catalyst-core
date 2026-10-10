@@ -362,6 +362,20 @@ function PointedAgentPicker({ text }: { text: GalleryText }) {
   );
 }
 
+/** So many agents that the list scrolls: the active row has to stay in view. */
+function ManyAgentsPicker({ text }: { text: GalleryText }) {
+  const options: PickerOption[] = text.manyAgents.map((label) => ({ value: label, label }));
+  const [agent, setAgent] = useState(text.manyAgents[0]);
+  return (
+    <Picker label={text.pickAgent} options={options} value={agent} onValueChange={setAgent}>
+      <Button variant="outline">
+        {agent}
+        <ChevronDown aria-hidden="true" />
+      </Button>
+    </Picker>
+  );
+}
+
 function PickerSamples({ text }: { text: GalleryText }) {
   const [workspaces, setWorkspaces] = useState<readonly string[]>([text.workspaceMarketing]);
   const [role, setRole] = useState<string | undefined>(undefined);
@@ -370,6 +384,7 @@ function PickerSamples({ text }: { text: GalleryText }) {
     <Samples>
       <AgentPicker text={text} />
       <PointedAgentPicker text={text} />
+      <ManyAgentsPicker text={text} />
       <Picker
         multiple
         options={workspaceOptions(text)}
