@@ -19,6 +19,13 @@ const adminUser = {
   password: "e2e-admin-password"
 };
 
+// A route that rewrites an answer fetches it first. When the test ends in between, the answer is
+// gone and the handler throws into a test that has already passed. Ending the routes with the
+// test lets such a handler finish without a say.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
 test("standalone login renders the authenticated chat workspace", async ({ page }) => {
   await page.goto("/");
 
