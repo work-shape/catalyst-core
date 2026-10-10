@@ -491,7 +491,8 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   transaction. No migration. A command is never run twice: when its worker dies, the command
   fails with the code `WORKSPACE_COMMAND_WORKER_LOST` and the category `worker_lost`, in place
   of `WORKSPACE_COMMAND_STALE`, once the lease has run out. What `workspace.exec` returns is
-  unchanged.
+  unchanged. Instance > Jobs offers no retry for a `workspace.command` job: the job of a
+  command that has ended does nothing.
   - A cancelled command ends within about a second: the job reads its row once a second and
     stops the process group. A cancellation that arrives after the process has ended does
     not change the record: the command is completed or failed with its real result. A tool

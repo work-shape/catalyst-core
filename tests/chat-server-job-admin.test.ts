@@ -8,6 +8,7 @@ import {
   legacyPermissionFor,
   type JobRetry
 } from "@vivd-catalyst/core";
+import { runWorkspaceCommandJob } from "@vivd-catalyst/tool-execution";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { withTestSql as withSql } from "./support/test-sql";
 import { createTestInstanceWith, getTestJobs } from "./support/test-instance";
@@ -39,6 +40,8 @@ const restoreCalls: (string | undefined)[] = [];
 // cannot be worked on again. `mail.send` stays unknown to the API.
 const capabilityJobRetries: JobRetry[] = [
   { kind: fixtureKind("report.build") },
+  // Handed over by mistake: the kind itself says that it is not retried.
+  { kind: runWorkspaceCommandJob },
   {
     kind: fixtureKind("report.locked"),
     restoreSubject: (job) => {
@@ -392,6 +395,40 @@ describe("Instance > Jobs: retry", () => {
       await expect(storedJob(jobId)).resolves.toMatchObject({ attempts: 3 });
     }
     await expect(storedJob("job_unknown")).resolves.toMatchObject({ status: "dead" });
+  });
+
+  it("offers no retry for a workspace command, even when the API was given one for the kind", async () => {
+    const server = await createServer();
+    await plant(
+      { id: "job_cmd_dead", kind: "workspace.command", status: "dead", subject: "wcmd_1" },
+      { id: "job_cmd_failed", kind: "workspace.command", status: "failed", subject: "wcmd_2" }
+    );
+
+    const listed = await server.call(
+      "instance.jobs.list",
+      { query: { kind: "workspace.command" } },
+      administrator
+    );
+    // The page shows Retry for a job listed as retryable and for no other.
+    expect(
+      jobListSchema
+        .parse(listed.json())
+        .items.map((job) => [job.id, job.retryable])
+        .sort()
+    ).toEqual([
+      ["job_cmd_dead", false],
+      ["job_cmd_failed", false]
+    ]);
+    const refused = await server.call(
+      "instance.jobs.retry",
+      { params: { jobId: "job_cmd_dead" } },
+      superadmin
+    );
+    expect([refused.statusCode, errorOf(refused)]).toEqual([
+      409,
+      expect.objectContaining({ code: "CONFLICT", details: { reason: "kind_not_retried" } })
+    ]);
+    await expect(storedJob("job_cmd_dead")).resolves.toMatchObject({ status: "dead", attempts: 3 });
   });
 
   it("changes nothing when what the job worked on cannot be worked on again", async () => {

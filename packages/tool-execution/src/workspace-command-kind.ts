@@ -28,6 +28,8 @@ const SCHEDULED_LEASE_MS = 2 * 60 * 1000;
  *
  * One attempt: a command that ran half is reported failed to the agent, which decides what to
  * do, and is never run a second time. One command per workspace at a time, in the order queued.
+ * No retry by hand either: the job of a command that has ended finds its row ended and does
+ * nothing.
  */
 export const runWorkspaceCommandJob = defineJobKind({
   kind: "workspace.command",
@@ -36,7 +38,8 @@ export const runWorkspaceCommandJob = defineJobKind({
   backoff: { baseMs: 0, maxMs: 0 },
   leaseMs: WORKSPACE_COMMAND_LEASE_MS,
   heartbeatMs: WORKSPACE_COMMAND_HEARTBEAT_MS,
-  concurrency: { perKey: 1 }
+  concurrency: { perKey: 1 },
+  manualRetry: false
 });
 
 /** How the job of a command is enqueued: one live job per command, one running per workspace. */
@@ -58,7 +61,9 @@ function defineScheduledKind(kind: string) {
     maxAttempts: 1,
     backoff: { baseMs: 0, maxMs: 0 },
     leaseMs: SCHEDULED_LEASE_MS,
-    concurrency: { global: 1 }
+    concurrency: { global: 1 },
+    // The next tick is the retry of a failed one.
+    manualRetry: false
   });
 }
 
