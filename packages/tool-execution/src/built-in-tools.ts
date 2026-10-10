@@ -6,6 +6,7 @@ import {
   type AnyToolDefinition,
   type ToolAssemblyDefinition
 } from "@vivd-catalyst/tool-sdk";
+import { createPageSaveTool, type PageSaveToolOptions } from "./page-save-tool";
 
 /** The part of the instance's `views` config the tool tells the agent about. */
 export interface ShowViewPolicy {
@@ -49,10 +50,17 @@ const showViewOutputSchema = z.object({
   mode: z.enum(["inline", "side_panel", "fullscreen"])
 });
 
+/** What the built-in tools of a module need. A module whose entry is missing adds no tool. */
+export interface BuiltInModuleTools {
+  /** The `apps` module: saving a Page. */
+  apps?: PageSaveToolOptions;
+}
+
 export function createBuiltInToolDefinitions(
-  views: ShowViewPolicy = { allowedScriptSrc: [] }
+  views: ShowViewPolicy = { allowedScriptSrc: [] },
+  modules: BuiltInModuleTools = {}
 ): ToolAssemblyDefinition[] {
-  return [createShowViewTool(views)];
+  return [createShowViewTool(views), ...(modules.apps ? [createPageSaveTool(modules.apps)] : [])];
 }
 
 export const showViewTool = createShowViewTool();

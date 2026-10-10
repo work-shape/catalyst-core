@@ -1,8 +1,11 @@
 import {
+  AppError,
   createModuleRegistry,
   defineModule,
+  moduleConfigKey,
   type ModuleRegistry,
-  type ModuleSnapshot
+  type ModuleSnapshot,
+  type RegisteredJobHandler
 } from "@vivd-catalyst/core";
 import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceCapability } from "./capabilities";
@@ -39,7 +42,10 @@ const userInvitationsModule = defineModule({
   ui: ["settings.users.invitation"]
 });
 
-/** Pages: the file sets a conversation keeps, their history and the route that serves them. */
+/**
+ * Pages: the file sets a conversation keeps, their history, the route that serves them, the
+ * tool that saves one and the job that builds it. The build runs in the Agent Run worker.
+ */
 const appsModule = defineModule({
   name: "apps",
   operations: [
@@ -48,7 +54,10 @@ const appsModule = defineModule({
     "pages.files.get",
     "pages.preview",
     "app_content.files.get"
-  ]
+  ],
+  tools: ["page.save"],
+  jobKinds: ["page.bundle"],
+  agentWorkerJobKinds: ["page.bundle"]
 });
 
 /** The modules whose code ships with the platform. A capability declares its own. */
@@ -79,4 +88,30 @@ export function resolveInstanceModules(
     ...capabilities.flatMap((capability) => capability.modules ?? [])
   ]);
   return { registry, snapshot: registry.snapshot(resolveModuleSwitches(config)) };
+}
+
+/**
+ * Refuses an assembly whose Agent Run worker does not serve a job kind that a module that is
+ * on needs it to serve. `handlers` are the handlers of that worker. A save of a Page would
+ * otherwise queue a build that no process ever takes.
+ */
+export function assertAgentWorkerServesModuleJobKinds(
+  modules: ModuleSnapshot,
+  handlers: readonly RegisteredJobHandler[]
+): void {
+  const served = new Set(
+    handlers.filter((handler) => handler.slots > 0).map((handler) => handler.kind.kind)
+  );
+  for (const module of modules.modules) {
+    if (!module.enabled) {
+      continue;
+    }
+    const missing = module.definition?.agentWorkerJobKinds?.find((kind) => !served.has(kind));
+    if (missing !== undefined) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `'${moduleConfigKey(module.name)}' is true, but the Agent Run worker of this assembly does not serve the job kind '${missing}'. The module needs a worker that serves it. Assemble the worker with the platform's Agent Run jobs, or turn the module off`
+      );
+    }
+  }
 }

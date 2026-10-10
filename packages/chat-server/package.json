@@ -43,6 +43,7 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^9.3.0",
     "@vivd-catalyst/api-contract": "workspace:*",
+    "@vivd-catalyst/app-build": "workspace:*",
     "@vivd-catalyst/auth": "workspace:*",
     "@vivd-catalyst/config-schema": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",

@@ -87,6 +87,23 @@ Rolling back to the previous release in the single-process topology leaves the r
 in flight `running` for up to 30 minutes, with their conversations answering 409, until that
 release's own recovery fails them.
 
+## Page Builds
+
+With the module `apps` on, the tool `page.save` stores a folder of a conversation's Execution Workspace as a revision of a Page. The build is the job kind `page.bundle`, and the Agent Run worker serves it:
+
+- The worker reads the files by the index the save recorded, checks size and checksum of each, and hands them to a child process. That process transforms them from memory. It never imports or runs a file of the Page, loads no plugin and gets no environment variable of the worker.
+- The child gets a temporary directory of its own, which is removed when it ends. Only route files are written there, for the route generator.
+- With `agentRunWorker: "separate"` no file of a Page is parsed in the API process. With `"in_process"` the build process is a child of the API process. Use `"separate"` in production.
+- The child is not placed in a network namespace or a container by the platform. It opens no socket by itself and refuses the Node network modules, but the boundary against a flaw in the bundler is the worker's own container. Give the worker container no more network than Agent Runs need.
+
+| Setting                  | Default | Meaning                                                                                          |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------ |
+| `PAGE_BUILD_CONCURRENCY` | 2       | Builds one worker process runs at once. One conversation never has two at once.                  |
+| `PAGE_BUILD_TIMEOUT_MS`  | 60000   | A build that runs longer is killed with its process group and the save fails.                    |
+| `PAGE_BUILD_MAX_HEAP_MB` | 1024    | Heap of the build's Node process. The bundler's own process is bounded by the input limits only. |
+
+A build takes at most 500 files, 2 MiB per file and 25 MiB in all, and may write 50 MiB. A save waits five minutes for its build; when no worker takes it in that time the save fails and a worker that comes later stores nothing. The assembly refuses to start with `modules.apps.enabled: true` when its Agent Run worker does not serve `page.bundle`.
+
 ## Deployment Flow
 
 Separate publishing from deployment:

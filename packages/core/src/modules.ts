@@ -35,6 +35,11 @@ export interface ModuleDefinition {
    */
   readonly selfCheckedOperations?: readonly string[];
   readonly jobKinds?: readonly string[];
+  /**
+   * The job kinds among `jobKinds` that the Agent Run worker has to serve. An instance with the
+   * module on whose Agent Run worker has no handler for one of them does not start.
+   */
+  readonly agentWorkerJobKinds?: readonly string[];
   /** Agent tool names. */
   readonly tools?: readonly string[];
   /** Names of the screens and panels the interface shows for this module. */
@@ -49,6 +54,7 @@ export function defineModule(definition: ModuleDefinition): ModuleDefinition {
     operations: frozenList(definition.operations),
     selfCheckedOperations: frozenList(definition.selfCheckedOperations),
     jobKinds: frozenList(definition.jobKinds),
+    agentWorkerJobKinds: frozenList(definition.agentWorkerJobKinds),
     tools: frozenList(definition.tools),
     ui: frozenList(definition.ui)
   });

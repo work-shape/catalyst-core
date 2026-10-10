@@ -49,7 +49,8 @@ import {
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
-  ToolRegistry
+  ToolRegistry,
+  WorkspaceCommandService
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import {
@@ -72,7 +73,7 @@ import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createInstanceInfrastructure, createWorkspacesStore } from "./infrastructure";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
-import { createInstancePages } from "./pages";
+import { createInstancePageBuilds, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
 import { resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
@@ -383,8 +384,8 @@ export async function createClientInstanceExecutionAssembly(
     operations: input.operations
   });
   const handlers = operationCalls.approvalRequestHandlers;
-  const workspaceTools = config.executionWorkspaces.enabled
-    ? createWorkspaceToolDefinitions({
+  const workspaceService = config.executionWorkspaces.enabled
+    ? new WorkspaceCommandService({
         store,
         objectStore: workspaceObjectStore,
         fileStore: workspaceObjectStore,
@@ -402,12 +403,22 @@ export async function createClientInstanceExecutionAssembly(
             }
           : undefined
       })
-    : [];
+    : undefined;
+  const pageBuilds = createInstancePageBuilds({
+    modules,
+    clientInstanceId,
+    stores: store,
+    pages,
+    workspaceObjects: workspaceObjectStore,
+    workspaceService,
+    env,
+    logger
+  });
   const tools = createToolDefinitions({
     config,
     tools: [
-      ...createBuiltInToolDefinitions(config.views),
-      ...workspaceTools,
+      ...createBuiltInToolDefinitions(config.views, { apps: pageBuilds.tool }),
+      ...(workspaceService ? createWorkspaceToolDefinitions({ service: workspaceService }) : []),
       ...createStructuredDataToolDefinitions({
         store,
         publicationReviewer: input.structuredDataPublicationReviewer
@@ -505,6 +516,7 @@ export async function createClientInstanceExecutionAssembly(
     jobRetries,
     workspaceObjectStore,
     pages,
+    moduleJobHandlers: pageBuilds.handlers,
     auditRecorder,
     assetSource,
     usageGovernance,

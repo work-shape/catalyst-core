@@ -1,5 +1,21 @@
-import { deriveAppContentKey, type ChatServerOptions } from "@vivd-catalyst/chat-server";
-import { AppError, resolveOptionalSecret, type ModuleSnapshot } from "@vivd-catalyst/core";
+import {
+  createPageBuildClient,
+  createPageBundleJobs,
+  deriveAppContentKey,
+  type ChatServerOptions
+} from "@vivd-catalyst/chat-server";
+import {
+  AppError,
+  resolveOptionalSecret,
+  type ClientInstanceId,
+  type Logger,
+  type ModuleSnapshot,
+  type ObjectStorage,
+  type PlatformStores,
+  type RegisteredJobHandler
+} from "@vivd-catalyst/core";
+import type { PageSaveToolOptions, WorkspaceCommandService } from "@vivd-catalyst/tool-execution";
+import type { ClientInstanceEnv } from "./env";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createFilesStore,
@@ -60,4 +76,65 @@ export async function createInstancePages(input: {
     objects: await createFilesStore(input.config, input.infrastructure.context),
     contentKey: deriveAppContentKey(secret)
   };
+}
+
+/** What the instance builds Pages with: the tool that saves one and the job that builds it. */
+export interface InstancePageBuilds {
+  /** What `page.save` needs. Missing without Execution Workspaces: there is no folder to save. */
+  tool?: PageSaveToolOptions;
+  /** The handler of `page.bundle`, for the Agent Run worker. Empty with the module off. */
+  handlers: RegisteredJobHandler[];
+}
+
+/**
+ * The save tool and the build job of the `apps` module. The three settings are protective
+ * limits of the worker's host, which only its operator knows: how many builds a worker process
+ * runs at once, how long one may take and how much memory its process may use.
+ */
+export function createInstancePageBuilds(input: {
+  modules: ModuleSnapshot;
+  clientInstanceId: ClientInstanceId;
+  stores: PlatformStores;
+  pages: ChatServerOptions["pages"];
+  workspaceObjects: ObjectStorage | undefined;
+  workspaceService: WorkspaceCommandService | undefined;
+  env: ClientInstanceEnv;
+  logger: Logger;
+}): InstancePageBuilds {
+  if (!input.modules.isEnabled("apps") || !input.pages) {
+    return { handlers: [] };
+  }
+  const timeoutMs = readPositiveInteger("PAGE_BUILD_TIMEOUT_MS", input.env.PAGE_BUILD_TIMEOUT_MS);
+  const maxHeapMb = readPositiveInteger("PAGE_BUILD_MAX_HEAP_MB", input.env.PAGE_BUILD_MAX_HEAP_MB);
+  return {
+    ...(input.workspaceService
+      ? {
+          tool: {
+            workspace: input.workspaceService.dependencies,
+            builds: createPageBuildClient({ stores: input.stores })
+          }
+        }
+      : {}),
+    handlers: createPageBundleJobs({
+      clientInstanceId: input.clientInstanceId,
+      stores: input.stores,
+      pages: input.pages,
+      workspaceObjects: input.workspaceObjects,
+      logger: input.logger,
+      slots: readPositiveInteger("PAGE_BUILD_CONCURRENCY", input.env.PAGE_BUILD_CONCURRENCY),
+      limits: {
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
+        ...(maxHeapMb === undefined ? {} : { maxHeapMb })
+      }
+    }).handlers
+  };
+}
+
+function readPositiveInteger(name: string, raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new AppError("VALIDATION_FAILED", `${name} must be a positive integer`);
+  }
+  return value;
 }

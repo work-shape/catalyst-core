@@ -13,7 +13,7 @@ contain breaking changes; a patch version does not.
   is configured and `CHAT_SESSION_TOKEN_SECRET` or `BETTER_AUTH_SECRET` is set with at least 32
   characters. `GET /api/v1/conversations/{conversationId}/pages`, `.../pages/{pageId}` and
   `.../pages/{pageId}/file-sets/{fileSetId}/source-file` read them, and `POST .../pages/{pageId}/preview`
-  answers the address a frame loads a revision from. No operation stores a Page yet. A file set
+  answers the address a frame loads a revision from. The tool `page.save`, below, stores them. A file set
   holds at most 500 files, 2 MiB per file and 25 MiB in all, a Page at most 1,000 revisions, a
   conversation at most 200 Pages. Deleting a conversation, a workspace or a user removes their
   Pages, rows and files, whether the module is on or off.
@@ -35,6 +35,26 @@ contain breaking changes; a patch version does not.
   part runs in the Page's own realm and is hardening, not a boundary. WebRTC from a scripted
   frame stays a known open exit. Tested in Chromium only.
 - **Database:** migration `0050_pages` adds the tables `pages` and `file_sets`.
+- **Pages, saving:** the tool `page.save({ name, directory })` stores a folder of the
+  conversation's Execution Workspace as the next revision of a Page. It answers
+  `{ pageId, number, fileSetId }`, or `{ errors: [{ file, line?, column?, message }] }` when the
+  files do not build; a failed build stores nothing and uses up no number. The tool exists with
+  the module `apps` on and Execution Workspaces enabled, and like every tool it must be listed in
+  `tools` and on an agent. The folder needs a manifest `app.yaml` (`id`, `name`, `kit`, optional
+  `description`, `icon`, `entry`, `connections`, `actions`, `externalHosts`; unknown keys are
+  refused). The build is the job kind `page.bundle`. **It runs in the Agent Run worker, in a
+  child process of its own, and never executes a file of the Page**: the files are transformed
+  from memory, kit imports are rewritten to `/app-runtime/kit/<kit version>/<file>`, and inline
+  scripts and styles of an HTML Page are moved to files. An inline event handler such as
+  `onclick` fails the save with the file, element and attribute. With the Agent Run worker
+  placement `separate` no Page file is parsed in the API process; with `in_process` the build
+  process is a child of the API process. A build is killed after 60 seconds
+  (`PAGE_BUILD_TIMEOUT_MS`), when its Node heap passes 1024 MB (`PAGE_BUILD_MAX_HEAP_MB`) or
+  when it writes more than 50 MiB; a worker process runs 2 builds at once
+  (`PAGE_BUILD_CONCURRENCY`). The kit files themselves are not served yet, so a saved React
+  Page does not render until they are.
+- **Database:** migration `0052_page_builds` adds the table `page_builds`, the row a save and
+  its build meet on. A row lives for the length of one save.
 
 - **Infrastructure:** the page **Instance > Infrastructure** in the settings and
   `GET /api/v1/instance/infrastructure` list what the instance runs on: every entry of the

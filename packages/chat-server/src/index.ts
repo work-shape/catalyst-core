@@ -101,6 +101,18 @@ export {
   deriveAppContentKey
 } from "./app-content";
 export { storePageFileSet } from "./page-file-sets";
+export {
+  createPageBuildClient,
+  createPageBundleJobs,
+  PAGE_BUILD_POLL_INTERVAL_MS,
+  PAGE_BUILD_WAIT_MS,
+  PAGE_BUNDLE_DEFAULT_SLOTS,
+  PAGE_BUNDLE_HEARTBEAT_MS,
+  PAGE_BUNDLE_LEASE_MS,
+  pageBundleJob,
+  type PageBuildClientOptions,
+  type PageBundleJobsOptions
+} from "./page-jobs";
 export type { PageFileInput, StorePageFileSetInput } from "./page-file-sets";
 export { createInProcessRateLimiter } from "./http/rate-limit";
 export { createHttpRuntime } from "./http/runtime";

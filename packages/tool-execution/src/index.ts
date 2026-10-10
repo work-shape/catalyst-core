@@ -1,5 +1,10 @@
 export * from "./tool-registry";
 export * from "./built-in-tools";
+export {
+  createPageSaveTool,
+  PAGE_SAVE_TOOL_NAME,
+  type PageSaveToolOptions
+} from "./page-save-tool";
 export * from "./read-skill-tool";
 export * from "./workspace-tools";
 export * from "./workspace-tool-schemas";
