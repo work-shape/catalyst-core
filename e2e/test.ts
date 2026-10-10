@@ -223,6 +223,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["a decision on a request that was decided meanwhile is refused in a sentence"]
   },
   {
+    name: "page-of-conversations-that-fails",
+    reason:
+      "Chromium's own log line: the test answers one request for an older page of the " +
+      "sidebar's conversations with 503 and asserts that the sidebar says so and tries again.",
+    matches: requestAnswered(503),
+    path: /^\/api\/v1\/conversations$/u,
+    tests: [
+      "the rail is the list of conversations: it loads a page at a time, the search finds what no loaded page holds, and an older open conversation is the first row"
+    ]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +

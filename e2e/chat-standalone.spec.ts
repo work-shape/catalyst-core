@@ -2650,10 +2650,10 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   await expect(targetConversation).toHaveCount(1);
 
   const conversationCountBefore = await conversations.count();
-  // Past its cap the rail lists the latest conversations only, so the next older one moves up
-  // into the place of the deleted one.
-  const railIsCapped =
-    (await page.getByRole("button", { name: "Show all", exact: true }).count()) > 0;
+  // While the workspace holds older conversations than the loaded page, the next older one
+  // moves up into the place of the deleted one.
+  const railHasOlder =
+    (await page.getByRole("button", { name: "Load more", exact: true }).count()) > 0;
   const optionsButton = targetConversation.getByRole("button", {
     name: `Conversation options for ${title}`,
     exact: true
@@ -2684,7 +2684,7 @@ test("conversation rail deletes a conversation", async ({ page }) => {
   expect(deleteConversationRequests).toBe(1);
   await expect(targetConversation).toHaveCount(0);
   await expect(conversations).toHaveCount(
-    railIsCapped ? conversationCountBefore : conversationCountBefore - 1
+    railHasOlder ? conversationCountBefore : conversationCountBefore - 1
   );
 });
 

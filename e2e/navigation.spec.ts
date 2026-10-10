@@ -9,10 +9,8 @@ const member = { email: "e2e-user@example.test", password: "e2e-user-password" }
 /** May decide skill changes, so the rail shows this person the Inbox row. */
 const reviewer = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 
-/** As many conversations as the rail lists under "Recent" (`RAIL_RECENT_LIMIT`). */
-const railRecentLimit = 30;
-/** As many conversations as the full list reads at once (`CONVERSATION_LIST_PAGE_SIZE`). */
-const listPageSize = 50;
+/** As many conversations as the rail asks for at once (`RAIL_PAGE_SIZE`). */
+const railPageSize = 30;
 /** How often the rail reads its conversations again while it must (`RAIL_REFRESH_INTERVAL_MS`). */
 const railRefreshIntervalMs = 2_000;
 /**
@@ -22,7 +20,6 @@ const railRefreshIntervalMs = 2_000;
 const longRunWords = 500;
 
 const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
-const listPage = (page: Page) => page.getByRole("region", { name: "Conversations", exact: true });
 
 // Fails with the Chat row: the rail then held a "Chat" button above the Inbox, and it was the
 // current item in a conversation instead of the conversation's own row.
@@ -63,193 +60,87 @@ test("the rail has no Chat entry, and New chat starts a conversation whose row i
   );
 });
 
-// Fails without the list of every conversation: the rail listed all of them, had no "Show all"
-// row, and `/w/<workspace>/conversations` opened the application root.
-test("Show all appears past the rail's cap and opens the full list, whose search finds an older conversation and whose row opens it", async ({
+// Fails with the list page and the one-page rail: the rail then ended in "Show all", which
+// opened a page of its own, and never held more than its first 30 conversations.
+test("the rail is the list of conversations: it loads a page at a time, the search finds what no loaded page holds, and an older open conversation is the first row", async ({
   page
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   await signIn(page, member);
   const stamp = Date.now();
-  const workspace = await createWorkspace(page, `All conversations ${stamp}`);
+  const workspace = await createWorkspace(page, `Rail pages ${stamp}`);
   const workspacePath = `/w/${encodeURIComponent(workspace.id)}`;
   const navigation = rail(page);
-  const list = listPage(page);
-  const rows = list.getByTestId("conversation-list-row");
   const railRows = navigation.getByTestId("conversation-row");
-  const showAll = navigation.getByRole("button", { name: "Show all", exact: true });
+  const loadMore = navigation.getByRole("button", { name: "Load more", exact: true });
+  const firstPage = { collaborationWorkspaceId: workspace.id, limit: String(railPageSize) };
 
-  // An empty workspace says so on the list and offers the one way to start.
-  await page.goto(`${workspacePath}/conversations`);
-  await expect(list.getByRole("heading", { name: "Conversations", level: 1 })).toBeFocused();
-  await expect(list.getByText("No conversations yet.")).toBeVisible();
-  await expect(list.getByRole("button", { name: "New chat" })).toBeVisible();
-
-  // The oldest conversation is the one the search has to find later.
+  // The two oldest conversations: one the search has to find, one opened by its address.
   const oldestTitle = `Mietvertrag Altbau ${stamp}`;
   const oldest = await createListedConversation(page, workspace.id, oldestTitle);
-  // Another old one, which is later opened by its address, renamed and deleted from the rail.
   const olderTitle = `Kaufvertrag Neubau ${stamp}`;
   const older = await createListedConversation(page, workspace.id, olderTitle);
-  await createListedConversations(page, workspace.id, railRecentLimit - 2, `Filler ${stamp} a`);
+  await createListedConversations(page, workspace.id, railPageSize - 2, `Filler ${stamp} a`);
 
-  // With exactly as many as the rail shows, the rail shows them all and needs no further row.
+  // With exactly one page of conversations the rail shows them all and offers nothing more.
   await page.goto(workspacePath);
-  await expect(railRows).toHaveCount(railRecentLimit);
+  await expect(railRows).toHaveCount(railPageSize);
   await expect(railRows.filter({ hasText: oldestTitle })).toHaveCount(1);
-  await expect(showAll).toHaveCount(0);
+  await expect(loadMore).toHaveCount(0);
+  await expect(navigation.getByRole("button", { name: "Show all", exact: true })).toHaveCount(0);
 
-  await createListedConversations(
-    page,
-    workspace.id,
-    listPageSize + 2 - railRecentLimit,
-    `Filler ${stamp} b`
-  );
+  // Two full pages and a few rows of a third.
+  const total = 2 * railPageSize + 5;
+  await createListedConversations(page, workspace.id, total - railPageSize, `Filler ${stamp} b`);
+  const railReads = railListRequests(page);
   await page.reload();
-  await expect(railRows).toHaveCount(railRecentLimit);
+  await expect(railRows).toHaveCount(railPageSize);
   await expect(railRows.filter({ hasText: oldestTitle })).toHaveCount(0);
-  await expect(showAll).toBeVisible();
-  // The quiet row ends the list.
+  // The quiet row ends the list, below what the window shows, and nothing is loaded for it.
   await expect(
     navigation.getByRole("group", { name: "Recent" }).getByRole("button").last()
-  ).toHaveText("Show all");
+  ).toHaveText("Load more");
+  await expect(loadMore).not.toBeInViewport();
+  expect(railReads()).toEqual([{ ...firstPage, cursor: null }]);
 
-  const searches: string[] = [];
-  const pageRequests: string[] = [];
-  page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (url.pathname !== "/api/v1/conversations" || url.searchParams.get("limit") !== "50") {
-      return;
-    }
-    pageRequests.push(url.searchParams.get("cursor") ?? "");
-    const query = url.searchParams.get("query");
-    if (query !== null) {
-      searches.push(query);
-    }
-  });
-
-  await showAll.click();
-  await expect(page).toHaveURL(new RegExp(`${workspacePath}/conversations$`, "u"));
-  await expect(list.getByRole("heading", { name: "Conversations", level: 1 })).toBeFocused();
-  await expect(showAll).toHaveAttribute("aria-current", "true");
-  // One page arrives, not the whole list: the oldest conversation is not on it.
-  await expect(rows).toHaveCount(listPageSize);
-  await expect(rows.filter({ hasText: oldestTitle })).toHaveCount(0);
-  await expect(rows.first().locator("time")).toHaveText(/ago|now/u);
-  expect(pageRequests).toEqual([""]);
-
-  // The older rows come on request.
-  await list.getByRole("button", { name: "Show more" }).click();
-  await expect(rows).toHaveCount(listPageSize + 2);
-  await expect(rows.last()).toContainText(oldestTitle);
-  await expect(list.getByRole("button", { name: "Show more" })).toHaveCount(0);
-  expect(pageRequests).toHaveLength(2);
-
-  // The search is answered by the server, without regard to case.
-  const search = list.getByRole("searchbox", { name: "Search conversations" });
-  await search.fill(`mietvertrag altbau ${stamp}`);
-  await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText(oldestTitle);
-  expect(searches).toEqual([`mietvertrag altbau ${stamp}`]);
-  await search.fill(`Nothing is called this ${stamp}`);
-  await expect(
-    list.getByText(`No results for "Nothing is called this ${stamp}" in ${workspace.name}.`)
-  ).toBeVisible();
-  await search.fill(`Altbau ${stamp}`);
-  await expect(rows).toHaveCount(1);
-
-  // The keyboard reaches the row and its menu.
-  await search.focus();
-  await page.keyboard.press("Tab");
-  await expect(rows.first().getByRole("button").first()).toBeFocused();
-  await expect(rows.first().getByRole("button").first()).toContainText(oldestTitle);
-  await page.keyboard.press("Tab");
-  const rowMenu = rows
-    .first()
-    .getByRole("button", { name: `Conversation options for ${oldestTitle}` });
-  await expect(rowMenu).toBeFocused();
-
-  // A row opens its conversation, and the rail then holds the older one as the current row,
-  // after the latest ones.
-  await rows.first().getByRole("button").first().click();
+  // The search in the rail's header asks the server, so it finds a conversation that no
+  // loaded page holds. Opened, it is the first row and the current one.
+  await navigation.getByRole("button", { name: "Search", exact: true }).click();
+  const palette = page.getByRole("dialog", { name: "Search" });
+  await palette.getByRole("combobox", { name: "Search" }).fill(`mietvertrag altbau ${stamp}`);
+  await palette.getByRole("option", { name: oldestTitle }).click();
   await expect(page).toHaveURL(
     new RegExp(`${workspacePath}/c/${encodeURIComponent(oldest.id)}$`, "u")
   );
   await expect(page.getByText(`Opening message for ${oldestTitle}`, { exact: true })).toBeVisible();
-  await expect(railRows).toHaveCount(railRecentLimit + 1);
-  await expect(railRows.last()).toContainText(oldestTitle);
-  await expect(railRows.last()).toHaveAttribute("data-selected", "true");
-
-  // The address without a workspace leads to the list of the active one. A row's menu renames
-  // like the rail's, and deletes after one question.
-  await page.goto("/conversations");
-  await expect(page).toHaveURL(new RegExp(`${workspacePath}/conversations$`, "u"));
-  await search.fill(`Altbau ${stamp}`);
-  await expect(rows).toHaveCount(1);
-  await rowMenu.focus();
-  await page.keyboard.press("Enter");
-  await page.getByRole("menuitem", { name: "Rename conversation" }).click();
-  const renameDialog = page.getByRole("dialog", { name: "Rename conversation" });
-  // Still matches the search, so the row stays.
-  const renamedTitle = `Mietvertrag umbenannt Altbau ${stamp}`;
-  await renameDialog.getByRole("textbox", { name: "Conversation title" }).fill(renamedTitle);
-  await page.keyboard.press("Enter");
-  await expect(renameDialog).toBeHidden();
-  await expect(rows.first()).toContainText(renamedTitle);
-  // A menu opened in the instant the rename dialog leaves the page closes again (measured:
-  // within about 130 ms of the dialog closing; from 150 ms on it stays). A person is slower
-  // than that, the test asks again.
-  const deleteItem = page.getByRole("menuitem", { name: "Delete conversation" });
-  await expect(async () => {
-    if (!(await deleteItem.isVisible())) {
-      await rows
-        .first()
-        .getByRole("button", { name: `Conversation options for ${renamedTitle}` })
-        .click({ timeout: 2_000 });
-    }
-    await deleteItem.click({ timeout: 1_000 });
-  }).toPass();
-  const deleteDialog = page.getByRole("dialog", { name: "Delete conversation?" });
-  await expect(deleteDialog).toContainText(renamedTitle);
-  await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(
-    list.getByText(`No results for "Altbau ${stamp}" in ${workspace.name}.`)
-  ).toBeVisible();
-
-  // Fails without the one page: the rail then asked for pages of 200 until the list ended, and
-  // found the open conversation among all of them. Now it asks for its rows and one more, and
-  // an older conversation opened by its address is the last row, from the thread on screen.
-  const railReads = railListRequests(page);
-  await page.goto(`${workspacePath}/c/${encodeURIComponent(older.id)}`);
-  await expect(railRows).toHaveCount(railRecentLimit + 1);
-  await expect(railRows.last()).toContainText(olderTitle);
-  await expect(railRows.last()).toHaveAttribute("data-selected", "true");
-  await expect(showAll).toBeVisible();
-  expect(railReads()).toEqual([
-    { collaborationWorkspaceId: workspace.id, limit: String(railRecentLimit + 1), cursor: null }
-  ]);
+  await expect(railRows).toHaveCount(railPageSize + 1);
+  await expect(railRows.first()).toContainText(oldestTitle);
+  await expect(railRows.first()).toHaveAttribute("data-selected", "true");
+  await expect(navigation.locator('[aria-current="true"]')).toHaveCount(1);
+  // Opening it read its thread and no list.
+  expect(railReads()).toHaveLength(1);
 
   // The row renames and deletes like every other row of the rail.
   await railRows
-    .last()
-    .getByRole("button", { name: `Conversation options for ${olderTitle}` })
+    .first()
+    .getByRole("button", { name: `Conversation options for ${oldestTitle}` })
     .click();
   await page.getByRole("menuitem", { name: "Rename conversation", exact: true }).click();
   const railTitle = page.getByRole("textbox", { name: "Conversation title", exact: true });
-  await expect(railTitle).toHaveValue(olderTitle);
-  const renamedOlderTitle = `Kaufvertrag umbenannt ${stamp}`;
-  await railTitle.fill(renamedOlderTitle);
+  await expect(railTitle).toHaveValue(oldestTitle);
+  const renamedTitle = `Mietvertrag umbenannt ${stamp}`;
+  await railTitle.fill(renamedTitle);
   await railTitle.press("Enter");
-  const renamedOlderRow = railRows.filter({ hasText: renamedOlderTitle });
-  await expect(renamedOlderRow).toHaveCount(1);
-  await expect(renamedOlderRow).toHaveAttribute("data-selected", "true");
-  await expect(railRows.filter({ hasText: olderTitle })).toHaveCount(0);
+  const renamedRow = railRows.filter({ hasText: renamedTitle });
+  await expect(renamedRow).toHaveCount(1);
+  await expect(renamedRow).toHaveAttribute("data-selected", "true");
+  await expect(railRows.filter({ hasText: oldestTitle })).toHaveCount(0);
 
   const deleteFromRail = page.getByRole("menuitem", { name: "Delete conversation", exact: true });
   await expect(async () => {
     if (!(await deleteFromRail.isVisible())) {
-      await renamedOlderRow
-        .getByRole("button", { name: `Conversation options for ${renamedOlderTitle}` })
+      await renamedRow
+        .getByRole("button", { name: `Conversation options for ${renamedTitle}` })
         .click({ timeout: 2_000 });
     }
     await deleteFromRail.click({ timeout: 1_000 });
@@ -258,12 +149,88 @@ test("Show all appears past the rail's cap and opens the full list, whose search
     .getByRole("dialog", { name: "Delete conversation?", exact: true })
     .getByRole("button", { name: "Delete", exact: true })
     .click();
-  // The latest conversation opens in its place, and older ones are still a row away.
-  await expect(renamedOlderRow).toHaveCount(0);
-  await expect(railRows).toHaveCount(railRecentLimit);
+  // The latest conversation opens in its place.
+  await expect(renamedRow).toHaveCount(0);
+  await expect(railRows).toHaveCount(railPageSize);
   await expect(railRows.first()).toHaveAttribute("data-selected", "true");
-  await expect(page).not.toHaveURL(new RegExp(encodeURIComponent(older.id), "u"));
-  await expect(showAll).toBeVisible();
+  await expect(page).not.toHaveURL(new RegExp(encodeURIComponent(oldest.id), "u"));
+
+  // An older conversation opened by its address is the first row, from the thread on screen,
+  // and the rail has asked for its one page.
+  const readsBeforeAddress = railReads().length;
+  await page.goto(`${workspacePath}/c/${encodeURIComponent(older.id)}`);
+  await expect(railRows).toHaveCount(railPageSize + 1);
+  await expect(railRows.first()).toContainText(olderTitle);
+  await expect(railRows.first()).toHaveAttribute("data-selected", "true");
+  expect(railReads().slice(readsBeforeAddress)).toEqual([{ ...firstPage, cursor: null }]);
+
+  // Scrolling to the end of the rows loads the next page: one request, from where the first
+  // page ended.
+  await loadMore.scrollIntoViewIfNeeded();
+  await expect(railRows).toHaveCount(2 * railPageSize + 1);
+  expect(railReads()).toHaveLength(readsBeforeAddress + 2);
+  expect(railReads().at(-1)?.limit).toBe(String(railPageSize));
+  expect(railReads().at(-1)?.cursor).not.toBeNull();
+  await expect(loadMore).not.toBeInViewport();
+
+  // A page that fails to load says so and keeps the rows. The keyboard reaches the row that
+  // loads it and the one that tries again.
+  let failing = true;
+  await page.route(
+    (url) => url.pathname === "/api/v1/conversations" && url.searchParams.has("cursor"),
+    async (route) => {
+      if (failing) {
+        await route.fulfill({
+          status: 503,
+          json: { error: { code: "INTERNAL", message: "down" } }
+        });
+      } else {
+        await route.continue();
+      }
+    }
+  );
+  await loadMore.focus();
+  await page.keyboard.press("Enter");
+  const failed = navigation.getByRole("alert").filter({
+    hasText: "More conversations could not be loaded."
+  });
+  await expect(failed).toBeVisible();
+  await expect(railRows).toHaveCount(2 * railPageSize + 1);
+  const afterFailure = railReads().length;
+  // Nothing tries again by itself.
+  await page.waitForTimeout(1_000);
+  expect(railReads()).toHaveLength(afterFailure);
+  failing = false;
+  const tryAgain = failed.getByRole("button", { name: "Try again" });
+  await tryAgain.focus();
+  await page.keyboard.press("Enter");
+  // The list is at its end. The open conversation stands in its own place, once.
+  await expect(railRows).toHaveCount(total - 1);
+  await expect(loadMore).toHaveCount(0);
+  await expect(failed).toHaveCount(0);
+  await expect(railRows.last()).toContainText(olderTitle);
+  await expect(railRows.last()).toHaveAttribute("data-selected", "true");
+  await expect(railRows.filter({ hasText: olderTitle })).toHaveCount(1);
+  expect(railReads()).toHaveLength(afterFailure + 1);
+
+  // Another workspace and back: the loaded pages are let go, and the first one is read again.
+  const selector = page.getByTestId("collaboration-workspace-selector-trigger");
+  await selector.click();
+  await page.getByRole("button", { name: "Personal workspace" }).click();
+  await expect(page).not.toHaveURL(new RegExp(workspacePath, "u"));
+  await selector.click();
+  await page.getByRole("button", { name: workspace.name, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${workspacePath}$`, "u"));
+  await expect(railRows).toHaveCount(railPageSize);
+  await expect(loadMore).toHaveCount(1);
+
+  // The addresses of the former list page lead to the start page of the workspace.
+  await page.goto(`${workspacePath}/conversations`);
+  await expect(page).toHaveURL(new RegExp(`${workspacePath}$`, "u"));
+  await expect(page.getByPlaceholder("Message")).toBeVisible();
+  await page.goto("/conversations");
+  await expect(page).toHaveURL(/\/w\/[^/]+$/u);
+  await expect(page.getByPlaceholder("Message")).toBeVisible();
 });
 
 // Fails without the change: while a run was active the rail read its whole list once a second,
@@ -288,7 +255,7 @@ test("a run in the open conversation is followed by its stream, and the rail rea
   const railReads = railListRequests(page);
   const onePage = (collaborationWorkspaceId: string) => ({
     collaborationWorkspaceId,
-    limit: String(railRecentLimit + 1),
+    limit: String(railPageSize),
     cursor: null
   });
 
@@ -355,9 +322,8 @@ test("a run in the open conversation is followed by its stream, and the rail rea
   }
 });
 
-// Fails without the change: the collapsed rail had no way to the conversations, since the
-// strip hides the list under "Recent".
-test("the collapsed rail keeps New chat and opens the list of every conversation", async ({
+// Fails with the list page: the strip then held a "Conversations" icon that opened it.
+test("the collapsed rail keeps the search and New chat, and no entry for a list page", async ({
   page
 }) => {
   await signIn(page, member);
@@ -366,21 +332,18 @@ test("the collapsed rail keeps New chat and opens the list of every conversation
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(navigation.getByTestId("conversation-row")).toHaveCount(0);
   await expect(navigation.getByRole("button", { name: "Chat", exact: true })).toHaveCount(0);
+  await expect(navigation.getByRole("button", { name: "Conversations", exact: true })).toHaveCount(
+    0
+  );
   const strip = navigation.getByRole("button");
   await expect(strip.nth(0)).toHaveAccessibleName("Expand sidebar");
   await expect(strip.nth(1)).toHaveAccessibleName("Search");
   await expect(strip.nth(2)).toHaveAccessibleName("New chat");
-  await expect(strip.nth(3)).toHaveAccessibleName("Conversations");
 
-  const conversations = navigation.getByRole("button", { name: "Conversations", exact: true });
-  await conversations.hover();
-  await expect(page.getByRole("tooltip", { name: "Conversations" })).toBeVisible();
-  await conversations.click();
-  await expect(page).toHaveURL(/\/w\/[^/]+\/conversations$/u);
-  await expect(conversations).toHaveAttribute("aria-current", "true");
-  await expect(
-    listPage(page).getByRole("heading", { name: "Conversations", level: 1 })
-  ).toBeVisible();
+  // The search is the strip's way to a conversation.
+  await strip.nth(1).click();
+  await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await navigation.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
@@ -403,10 +366,12 @@ test("the application's favicon is the Catalyst mark", async ({ page }) => {
 });
 
 /**
- * What the rail has asked the conversation list for so far. The full list page asks with its
- * own page size and the palette with a search text; everything else on that path is the rail.
+ * What the rail has asked the conversation list for so far. The palette asks with a search
+ * text; everything else on that path is the rail.
  */
-function railListRequests(page: Page): () => {
+function railListRequests(
+  page: Page
+): () => {
   collaborationWorkspaceId: string | null;
   limit: string | null;
   cursor: string | null;
@@ -417,7 +382,6 @@ function railListRequests(page: Page): () => {
     if (
       request.method() !== "GET" ||
       url.pathname !== "/api/v1/conversations" ||
-      url.searchParams.get("limit") === String(listPageSize) ||
       url.searchParams.has("query")
     ) {
       return;
