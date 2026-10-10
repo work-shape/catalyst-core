@@ -396,13 +396,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/agent-runtime/src/local-agent-runtime.ts",
-      "count": 1,
-      "owner": "CB-7c"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "packages/chat-server/src/collaboration-workspace-workflow.ts",
       "count": 1,
       "owner": "AP-3"
