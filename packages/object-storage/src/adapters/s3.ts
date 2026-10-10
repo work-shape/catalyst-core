@@ -12,7 +12,6 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from "node:stream";
 import { z } from "zod";
 import {
-  checkObjectStorage,
   defineProvider,
   guardObjectStorage,
   OBJECT_LIST_PAGE_SIZE,
@@ -22,8 +21,24 @@ import {
   type ObjectBody,
   type ObjectPutOptions,
   type ObjectStorage,
-  type ObjectStorageFailure
+  type ObjectStorageFailure,
+  type ProviderCheckContext,
+  type ProviderCheckResult
 } from "@vivd-catalyst/core";
+
+/**
+ * The transport bounds of a check's own request: how long the connection may take and how long
+ * the store may leave the request unanswered. Both end before `PROVIDER_CHECK_TIMEOUT_MS`, so a
+ * stalled store frees its socket by itself even where the abort of the check is not heard.
+ */
+const S3_CHECK_CONNECTION_TIMEOUT_MS = 2_000;
+const S3_CHECK_REQUEST_TIMEOUT_MS = 4_000;
+
+/** The check of each store this adapter created. A store of another adapter has none. */
+const checksOfStores = new WeakMap<
+  ObjectStorage,
+  (context: ProviderCheckContext) => Promise<ProviderCheckResult>
+>();
 
 const s3ConfigSchema = z.object({
   bucket: z.string().min(1).default("vivd-catalyst-documents"),
@@ -42,23 +57,36 @@ export const s3ObjectStorageProvider = defineProvider({
   configSchema: s3ConfigSchema,
   external: true,
   async create(config, { secrets, entryPath }): Promise<ObjectStorage> {
-    return guardObjectStorage(
-      new S3ObjectStorage(
-        config.bucket,
-        new S3Client({
-          region: config.bucketRegion,
-          endpoint: config.endpoint,
-          forcePathStyle: config.forcePathStyle,
-          credentials: {
-            accessKeyId: await secrets.resolve(config.accessKeySecret),
-            secretAccessKey: await secrets.resolve(config.secretKeySecret)
-          }
-        })
-      ),
+    const clientConfig = {
+      region: config.bucketRegion,
+      endpoint: config.endpoint,
+      forcePathStyle: config.forcePathStyle,
+      credentials: {
+        accessKeyId: await secrets.resolve(config.accessKeySecret),
+        secretAccessKey: await secrets.resolve(config.secretKeySecret)
+      }
+    };
+    const storage = guardObjectStorage(
+      new S3ObjectStorage(config.bucket, new S3Client(clientConfig)),
       { entryPath }
     );
+    // The check has a client of its own: one attempt inside tight transport bounds, which the
+    // product's reads and writes of large objects must not have. It opens no connection until
+    // a check runs.
+    const checkClient = new S3Client({
+      ...clientConfig,
+      maxAttempts: 1,
+      requestHandler: {
+        connectionTimeout: S3_CHECK_CONNECTION_TIMEOUT_MS,
+        requestTimeout: S3_CHECK_REQUEST_TIMEOUT_MS
+      }
+    });
+    checksOfStores.set(storage, ({ signal }) => checkBucket(checkClient, config.bucket, signal));
+    return storage;
   },
-  check: checkObjectStorage,
+  async check(storage, context) {
+    return (await checksOfStores.get(storage)?.(context)) ?? { ok: false, errorClass: "failed" };
+  },
   describe(config) {
     return {
       bucket: config.bucket,
@@ -67,6 +95,40 @@ export const s3ObjectStorageProvider = defineProvider({
     };
   }
 });
+
+/**
+ * Whether the bucket answers: one HEAD of the bucket, which reads and never writes. It does not
+ * go through the store's own requests, which create a missing bucket: a check that finds none
+ * says so and leaves the store as it is. The signal ends the request when the check's time is up.
+ */
+async function checkBucket(
+  client: S3Client,
+  bucket: string,
+  signal: AbortSignal
+): Promise<ProviderCheckResult> {
+  try {
+    await client.send(new HeadBucketCommand({ Bucket: bucket }), { abortSignal: signal });
+    return { ok: true };
+  } catch (error: unknown) {
+    if (signal.aborted) {
+      return { ok: false, errorClass: "timeout" };
+    }
+    const code = codeOf(error);
+    if (code === "TimeoutError" || code === "ETIMEDOUT" || code === "RequestTimeout") {
+      return { ok: false, errorClass: "timeout" };
+    }
+    switch (failureOf(code, statusOf(error))) {
+      case "store_missing":
+        return { ok: false, errorClass: "bucket_missing" };
+      case "access_denied":
+        return { ok: false, errorClass: "access_denied" };
+      case "unreachable":
+        return { ok: false, errorClass: "unreachable" };
+      default:
+        return { ok: false, errorClass: "failed" };
+    }
+  }
+}
 
 /** How many objects a prefix delete removes at the same time. */
 const PREFIX_DELETE_CONCURRENCY = 8;

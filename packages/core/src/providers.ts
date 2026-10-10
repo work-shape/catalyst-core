@@ -68,6 +68,8 @@ export const PROVIDER_CHECK_ERROR_CLASSES = [
   "timeout",
   "access_denied",
   "not_found",
+  // The bucket an object store is configured with does not exist. The check creates none.
+  "bucket_missing",
   "rejected",
   "failed"
 ] as const;

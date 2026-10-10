@@ -96,6 +96,7 @@ export const administration = defineTranslations({
     "infrastructure.errorTimeout": "The provider did not answer in time.",
     "infrastructure.errorAccessDenied": "The provider refused the credentials.",
     "infrastructure.errorNotFound": "The provider does not know what was asked for.",
+    "infrastructure.errorBucketMissing": "The bucket does not exist. The check does not create it.",
     "infrastructure.errorRejected": "The provider refused the request.",
     "infrastructure.errorFailed": "The check failed.",
     "infrastructure.checkNow": "Check now",
@@ -263,6 +264,8 @@ export const administration = defineTranslations({
     "infrastructure.errorTimeout": "Der Anbieter hat nicht rechtzeitig geantwortet.",
     "infrastructure.errorAccessDenied": "Der Anbieter hat die Zugangsdaten abgelehnt.",
     "infrastructure.errorNotFound": "Der Anbieter kennt das Angefragte nicht.",
+    "infrastructure.errorBucketMissing":
+      "Der Bucket existiert nicht. Die Prüfung legt ihn nicht an.",
     "infrastructure.errorRejected": "Der Anbieter hat die Anfrage abgelehnt.",
     "infrastructure.errorFailed": "Die Prüfung ist fehlgeschlagen.",
     "infrastructure.checkNow": "Jetzt prüfen",

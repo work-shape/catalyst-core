@@ -63,6 +63,7 @@ const errorKeys: Record<ErrorClass, TranslationKey> = {
   timeout: "infrastructure.errorTimeout",
   access_denied: "infrastructure.errorAccessDenied",
   not_found: "infrastructure.errorNotFound",
+  bucket_missing: "infrastructure.errorBucketMissing",
   rejected: "infrastructure.errorRejected",
   failed: "infrastructure.errorFailed"
 };

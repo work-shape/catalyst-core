@@ -658,3 +658,72 @@ describe("object keys", () => {
     ).toBe(PREVIOUS_RELEASE_KEYS[0]);
   });
 });
+
+describe("the check of an S3 store", () => {
+  const s3 = required(objectStorageProviderDefinitions.find((provider) => provider.type === "s3"));
+
+  it("answers for a bucket that exists and creates none that is missing", async () => {
+    const missing = `check-missing-${randomUUID()}`;
+
+    await expect(s3.check(required(stores.get("s3")))).resolves.toEqual({ ok: true });
+    await expect(s3.check(await s3Storage({ bucket: missing }))).resolves.toEqual({
+      ok: false,
+      errorClass: "bucket_missing"
+    });
+
+    // The store lists its buckets: the one of the suite is there, the checked one is not.
+    const listed = await (await fetch(s3Mock.endpoint)).text();
+    expect(listed).toContain(bucket);
+    expect(listed).not.toContain(missing);
+  });
+
+  it("sends one HEAD of the bucket and nothing that writes", async () => {
+    const requests: string[] = [];
+    const server = createServer((request, response) => {
+      request.resume();
+      requests.push(`${request.method} ${request.url}`);
+      response.writeHead(404).end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("No port was assigned");
+    try {
+      const storage = await s3Storage({
+        endpoint: `http://127.0.0.1:${address.port}`,
+        bucket: "absent"
+      });
+
+      await expect(s3.check(storage)).resolves.toEqual({ ok: false, errorClass: "bucket_missing" });
+
+      expect(requests).toEqual(["HEAD /absent/"]);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("ends the request to a store that never answers and leaves no connection open", async () => {
+    let open = 0;
+    // It accepts the connection and never writes an answer.
+    const server = createServer(() => {});
+    server.on("connection", (socket) => {
+      open += 1;
+      socket.on("close", () => {
+        open -= 1;
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("No port was assigned");
+    try {
+      const storage = await s3Storage({ endpoint: `http://127.0.0.1:${address.port}` });
+
+      await expect(s3.check(storage)).resolves.toEqual({ ok: false, errorClass: "timeout" });
+
+      await expect.poll(() => open, { timeout: 2_000 }).toBe(0);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 20_000);
+});
