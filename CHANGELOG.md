@@ -71,7 +71,7 @@ contain breaking changes; a patch version does not.
   called them use `/api/v1/assets/...`; the CLI is unaffected. The operations
   `config_assets.get`, `put`, `delete`, `revert` and `revisions.list` under
   `/api/v1/instance/config/assets/{kind}/{name}` answer `404`, and the instance-wide `baseVersion`
-  of these writes is replaced by the asset's `expectedRevision`. Three migrations (0046 to 0048)
+  of these writes is replaced by the asset's `expectedRevision`. Three migrations (0047 to 0049)
   tie an asset a workspace owns to that workspace: deleting the workspace deletes its assets and
   the grants on them.
 - **Modules:** a module that is off is off everywhere. Each of its operations answers
