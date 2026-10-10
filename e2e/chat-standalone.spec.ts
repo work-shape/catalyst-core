@@ -1367,6 +1367,83 @@ test("collaboration workspace settings delete a workspace and fall back to perso
   ).toHaveCount(0);
 });
 
+test("deleting my account signs me out when the removal is finished later", async ({ page }) => {
+  await signInViaUi(page, normalUser);
+  const apiOrigin = new URL(apiBaseUrl).origin;
+  let accepted = false;
+  // The server answers 202 when stored data could not be removed at once, and refuses the
+  // closed account from then on. Answered here, so the seeded user stays for the other tests.
+  await page.route(
+    (url) => url.origin === apiOrigin && url.pathname === apiOperations["me.get"].path,
+    async (route) => {
+      const method = route.request().method();
+      if (method === "DELETE") {
+        accepted = true;
+        await route.fulfill({
+          status: 202,
+          headers: {
+            "access-control-allow-origin": new URL(page.url()).origin,
+            "access-control-allow-credentials": "true"
+          }
+        });
+      } else if (method === "GET" && accepted) {
+        const response = await route.fetch();
+        await route.fulfill({
+          response,
+          status: 401,
+          json: {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "User account is being deleted",
+              correlationId: "e2e"
+            }
+          }
+        });
+      } else {
+        await route.continue();
+      }
+    }
+  );
+
+  await page.goto("/settings/you/profile");
+  await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "Delete account", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete account?", exact: true });
+  await dialog.getByRole("button", { name: "Delete account", exact: true }).click();
+
+  await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
+  expect(accepted).toBe(true);
+});
+
+test("the user list shows an account that is being deleted", async ({ page }) => {
+  await signInViaUi(page, superadminUser);
+  const apiOrigin = new URL(apiBaseUrl).origin;
+  await page.route(
+    (url) => url.origin === apiOrigin && url.pathname === apiOperations["users.list"].path,
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const body = apiOperations["users.list"].response.schema.parse(await response.json());
+      await route.fulfill({
+        response,
+        json: {
+          ...body,
+          items: body.items.map((user) =>
+            user.email === normalUser.email ? { ...user, status: "deleting" } : user
+          )
+        }
+      });
+    }
+  );
+  await settingsGear(page).click();
+  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
+
+  await expect(page.getByText("Being deleted", { exact: true }).first()).toBeVisible();
+});
+
 test("a superadmin manages a shared workspace without being a member", async ({
   page,
   browser
