@@ -33,14 +33,11 @@ Keep workflow examples concrete and customer-specific. Do not put them in platfo
 
 ## Feature Availability
 
-Expose controls only when the backend supports the workflow.
+The interface shows a control only when the instance supports the workflow behind it.
 
-Examples:
-
-- uploads should stay disabled until file acquisition, storage, retention, and audit behavior exist
-- message editing should stay disabled until the backend defines how regenerated model calls are persisted and audited
-- export should stay disabled until export permissions and retention semantics are clear
-- approval-required tools should stay disabled until runtime resume is implemented end to end
+- Uploads are shown when the instance has something that takes the file. That is the module `documents`, which needs the document processing capability (part of the paid capabilities and not in the open repository), or enabled execution workspaces, which keep an uploaded file as a source file of the conversation's workspace. An instance with neither shows no upload, and `features.attachments.enabled` of `GET /api/v1/instance/config` is `false`.
+- Editing a sent message and exporting a conversation are not part of this release.
+- A tool with the permission mode `approval_required` cannot be enabled in this release, see [Permission Policy](/extend/custom-tools/#permission-policy).
 
 ## Domain UI Output
 
