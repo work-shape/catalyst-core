@@ -1,4 +1,3 @@
-import { Lock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { InstanceModule } from "@vivd-catalyst/api-client";
 import {
@@ -15,6 +14,7 @@ import {
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../../i18n";
 import { moduleTexts } from "../../module-texts";
+import { OperatorManaged } from "../operator-managed";
 import { useSettingsPage } from "../settings-page-context";
 
 /**
@@ -34,7 +34,7 @@ export function ModulesPage() {
     <>
       <PageHeader title={t("modules.title")} description={t("modules.description")} />
       <div className="grid gap-4">
-        <OperatorManaged />
+        <OperatorManaged>{t("modules.operatorManaged")}</OperatorManaged>
         {modules ? (
           <ModuleTable modules={modules} />
         ) : modulesQuery.error ? (
@@ -44,20 +44,6 @@ export function ModulesPage() {
         )}
       </div>
     </>
-  );
-}
-
-/**
- * Says that the operator sets what the page shows and that nothing here can be changed. It is
- * the one place this page marks that, so a shared marking for operator-managed values can
- * take its place.
- */
-function OperatorManaged() {
-  const { t } = useTranslation();
-  return (
-    <Banner layout="line" icon={<Lock aria-hidden="true" />} data-operator-managed="">
-      {t("modules.operatorManaged")}
-    </Banner>
   );
 }
 

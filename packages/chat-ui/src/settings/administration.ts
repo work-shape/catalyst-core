@@ -9,6 +9,7 @@ import type { ChatShellAdministration } from "./page-definition";
 import { AccessPage } from "./pages/access";
 import { ApiAccessPage } from "./pages/api-access";
 import { AuditPage } from "./pages/audit";
+import { InfrastructurePage } from "./pages/infrastructure";
 import { BuildPage } from "./pages/build";
 import { JobsPage } from "./pages/jobs";
 import { ModulesPage } from "./pages/modules";
@@ -77,6 +78,15 @@ export const administration: ChatShellAdministration = {
       width: "wide",
       visible: (viewer) => canViewAudit(viewer.user),
       component: ModulesPage
+    },
+    {
+      id: "infrastructure",
+      group: "instance",
+      labelKey: "settings.infrastructure",
+      // A row holds a provider, its region, its destination, its secrets and its health.
+      width: "wide",
+      visible: (viewer) => canManageUsers(viewer.user),
+      component: InfrastructurePage
     }
   ],
   build: {
