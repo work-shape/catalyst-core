@@ -6,6 +6,7 @@ export {
 } from "./command-palette";
 export { ConfirmDialog, type ConfirmDialogProps, type ConfirmDialogTone } from "./confirm-dialog";
 export { Dialog, type DialogProps, type DialogSize } from "./dialog";
+export { Drawer, type DrawerProps, type DrawerSide } from "./drawer";
 export {
   DropdownMenu,
   DropdownMenuCheckboxItem,

@@ -7,7 +7,8 @@ import * as library from "@vivd-catalyst/ui";
 import { galleryGroups, UiGallery, type GallerySectionId } from "@vivd-catalyst/ui/gallery";
 import { createThemeTokens, DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 
-const { Dialog, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, UiRoot } = library;
+const { Dialog, Drawer, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, UiRoot } =
+  library;
 const { Tooltip, TooltipContent, TooltipTrigger, uiLabelsDe, uiLabelsEn } = library;
 const { Avatar, Banner, Checkbox, Chip, ConfirmDialog, Field, Input, RadioGroup } = library;
 const { DropdownMenu, DropdownMenuContent, Picker, PickerButton, Popover, PopoverContent } =
@@ -65,7 +66,56 @@ describe("UiRoot", () => {
     expect(markup.split('data-catalyst-overlays=""')).toHaveLength(3);
   });
 
+  it("stands a drawer on the same modal layer, against one edge of the window", () => {
+    const render = (side?: "left" | "right") =>
+      renderToStaticMarkup(
+        createElement(
+          UiRoot,
+          { mode: "light", labels: uiLabelsDe },
+          createElement(Drawer, {
+            open: true,
+            side,
+            title: "Title",
+            description: "What it is for",
+            footer: "FOOTER",
+            onClose: () => undefined,
+            children: "Body"
+          })
+        )
+      );
+    const drawer = /<dialog[\s\S]*<\/dialog>/u.exec(render())?.[0] ?? "";
+    const opening = /^<dialog[^>]*>/u.exec(drawer)?.[0] ?? "";
+
+    // Named by its title and described by its description.
+    const titleId = /<h2 id="([^"]+)"/u.exec(drawer)?.[1];
+    const descriptionId = /<p id="([^"]+)"/u.exec(drawer)?.[1];
+    expect(titleId).toBeDefined();
+    expect(opening).toContain(`aria-labelledby="${titleId}"`);
+    expect(opening).toContain(`aria-describedby="${descriptionId}"`);
+    // The window's full height at the right edge, and the whole window where that is narrower.
+    expect(opening).toMatch(/class="[^"]*\bh-dvh\b/u);
+    expect(opening).toContain("w-[min(28rem,100vw)]");
+    expect(opening).toMatch(/class="[^"]*\bml-auto\b/u);
+    expect(opening).not.toMatch(/\bm-auto\b|\brounded-xl\b|max-h-\[/u);
+    expect(/<dialog[^>]*>/u.exec(render("left"))?.[0]).toMatch(/class="[^"]*\bmr-auto\b/u);
+    // Overlays opened inside it render into it, and the close button is no tooltip trigger.
+    expect(drawer).toContain('data-catalyst-overlays=""');
+    expect(/<button[^>]*aria-label="Schließen"[^>]*>/u.exec(drawer)?.[0]).not.toContain(
+      "data-state"
+    );
+    expect(drawer).toContain("FOOTER");
+  });
+
   it.each([
+    [
+      "Drawer",
+      createElement(Drawer, {
+        open: true,
+        title: "Title",
+        onClose: () => undefined,
+        children: "Body"
+      })
+    ],
     [
       "Tooltip",
       createElement(Tooltip, {

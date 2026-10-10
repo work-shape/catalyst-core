@@ -291,6 +291,88 @@ test("the sidebar is 280 px wide, collapses to icons and is a drawer under 768 p
   await expect(drawer).toBeHidden();
 });
 
+test("a drawer holds the focus, closes on Escape and on the backdrop, and gives the focus back", async ({
+  page
+}) => {
+  const root = await openGallery(page, "Overlays");
+  const entry = root.locator('[data-gallery-entry="Drawer"]');
+  const opener = entry.getByRole("button", { name: "Open drawer", exact: true });
+  const drawer = root.getByRole("dialog", { name: "Edit agent" });
+
+  // It opens at the right edge at the window's full height, with the focus on its close button.
+  await opener.click();
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Close" })).toBeFocused();
+  const viewport = page.viewportSize();
+  const box = await drawer.boundingBox();
+  expect(box?.width).toBe(448);
+  expect(box?.height).toBe(viewport?.height);
+  expect((box?.x ?? 0) + (box?.width ?? 0)).toBe(viewport?.width);
+  // It is the raised surface a dialog is.
+  expect(await style(drawer, "--popover")).toBe(await style(root, "--popover"));
+  expect(await style(drawer, "border-radius")).toBe("0px");
+
+  // Tab goes through the drawer's own controls and never reaches the page behind it.
+  const reached = new Set<string>();
+  for (let press = 0; press < 12; press += 1) {
+    await page.keyboard.press("Tab");
+    const focused = await drawer.evaluate((element) => {
+      const active = document.activeElement;
+      return {
+        inside: active !== null && element.contains(active),
+        onPage: active !== null && active !== document.body && !element.contains(active),
+        name: active?.textContent?.trim() ?? ""
+      };
+    });
+    expect(focused.onPage).toBe(false);
+    if (focused.inside) {
+      reached.add(focused.name);
+    }
+  }
+  expect([...reached]).toEqual(expect.arrayContaining(["Cancel", "Save", "Delete agent"]));
+
+  // The body scrolls between the header and the footer, which stay in place.
+  const save = drawer.getByRole("button", { name: "Save", exact: true });
+  const heading = drawer.getByRole("heading", { name: "Edit agent" });
+  const remove = drawer.getByRole("button", { name: "Delete agent" });
+  const headingTop = (await heading.boundingBox())?.y;
+  const saveTop = (await save.boundingBox())?.y;
+  await remove.scrollIntoViewIfNeeded();
+  expect((await heading.boundingBox())?.y).toBe(headingTop);
+  expect((await save.boundingBox())?.y).toBe(saveTop);
+
+  // A confirmation opened inside it takes the first Escape, the drawer the second.
+  await remove.click();
+  const confirmation = drawer.getByRole("dialog", { name: "Delete Support assistant?" });
+  await expect(confirmation).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(confirmation).toBeHidden();
+  await expect(drawer).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(opener).toBeFocused();
+
+  // A press on the backdrop closes it too, and the left one stands at the left edge.
+  await opener.click();
+  await expect(drawer).toBeVisible();
+  await page.mouse.click(40, 300);
+  await expect(drawer).toBeHidden();
+  await expect(opener).toBeFocused();
+  await entry.getByRole("button", { name: "Open drawer on the left" }).click();
+  await expect(drawer).toBeVisible();
+  expect((await drawer.boundingBox())?.x).toBe(0);
+  await drawer.getByRole("button", { name: "Close" }).click();
+  await expect(drawer).toBeHidden();
+
+  // At 390 px it covers the window.
+  await page.setViewportSize({ width: 390, height: 800 });
+  await opener.click();
+  await expect(drawer).toBeVisible();
+  expect(await drawer.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 800 });
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+});
+
 test("the sub-rail navigates routes, scrolls to anchors and follows the scroll", async ({
   page
 }) => {

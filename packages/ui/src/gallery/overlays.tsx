@@ -17,10 +17,12 @@ import { flushSync } from "react-dom";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { Field } from "../forms/field";
+import { Input, Textarea } from "../forms/input";
 import { Select } from "../forms/select";
 import { CommandPalette, type CommandPaletteGroup } from "../overlays/command-palette";
 import { ConfirmDialog, type ConfirmDialogTone } from "../overlays/confirm-dialog";
 import { Dialog, type DialogSize } from "../overlays/dialog";
+import { Drawer, type DrawerSide } from "../overlays/drawer";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -80,6 +82,68 @@ function DialogSamples({ text }: { text: GalleryText }) {
           </IconButton>
         </div>
       </Dialog>
+    </Samples>
+  );
+}
+
+const drawerSides: readonly DrawerSide[] = ["right", "left"];
+
+/** A form in a drawer, long enough to scroll, with a confirmation that opens inside it. */
+function DrawerSamples({ text }: { text: GalleryText }) {
+  const [openSide, setOpenSide] = useState<DrawerSide | undefined>(undefined);
+  const [confirming, setConfirming] = useState(false);
+  const close = () => setOpenSide(undefined);
+  return (
+    <Samples>
+      {drawerSides.map((side) => (
+        <Button key={side} variant="outline" onClick={() => setOpenSide(side)}>
+          {side === "right" ? text.openDrawerRight : text.openDrawerLeft}
+        </Button>
+      ))}
+      <Drawer
+        open={openSide !== undefined}
+        side={openSide}
+        title={text.drawerTitle}
+        description={text.drawerDescription}
+        footer={
+          <>
+            <Button variant="outline" onClick={close}>
+              {text.cancel}
+            </Button>
+            <Button onClick={close}>{text.save}</Button>
+          </>
+        }
+        onClose={close}
+      >
+        <div className="grid gap-5">
+          <Field label={text.name} hint={text.nameHint}>
+            <Input defaultValue={text.namePlaceholder} />
+          </Field>
+          <Field label={text.description} optional>
+            <Textarea defaultValue={text.cardBody} />
+          </Field>
+          <Field label={text.instructions}>
+            <Textarea className="min-h-96" defaultValue={text.instructionsSample} />
+          </Field>
+          <div>
+            <Button variant="danger" onClick={() => setConfirming(true)}>
+              {text.drawerRemove}
+            </Button>
+          </div>
+        </div>
+        <ConfirmDialog
+          open={confirming}
+          title={text.confirmDeleteTitle}
+          confirmLabel={text.delete}
+          onConfirm={() => {
+            setConfirming(false);
+            close();
+          }}
+          onClose={() => setConfirming(false)}
+        >
+          {text.confirmDeleteBody}
+        </ConfirmDialog>
+      </Drawer>
     </Samples>
   );
 }
@@ -503,6 +567,11 @@ export const overlaysGallery: GalleryGroup = {
       name: "Dialog",
       components: ["Dialog"],
       render: (text) => <DialogSamples text={text} />
+    },
+    {
+      name: "Drawer",
+      components: ["Drawer"],
+      render: (text) => <DrawerSamples text={text} />
     },
     {
       name: "ConfirmDialog",

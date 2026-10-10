@@ -159,6 +159,11 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   dialogTitle: string;
   dialogDescription: string;
   dialogBody: string;
+  openDrawerRight: string;
+  openDrawerLeft: string;
+  drawerTitle: string;
+  drawerDescription: string;
+  drawerRemove: string;
   tooltipText: string;
   hoverCardTrigger: string;
   hoverCardBody: string;
@@ -367,6 +372,11 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     dialogTitle: "Delete agent",
     dialogDescription: "The agent and its history are removed for everyone in this workspace.",
     dialogBody: "Conversations that used this agent stay readable.",
+    openDrawerRight: "Open drawer",
+    openDrawerLeft: "Open drawer on the left",
+    drawerTitle: "Edit agent",
+    drawerDescription: "The page stays behind the panel, and the changes apply when you save.",
+    drawerRemove: "Delete agent",
     tooltipText: "Copy the link",
     hoverCardTrigger: "Context",
     hoverCardBody: "About a third of the context window is in use.",
@@ -576,6 +586,12 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     dialogTitle: "Agent löschen",
     dialogDescription: "Der Agent und sein Verlauf werden für alle in diesem Workspace entfernt.",
     dialogBody: "Unterhaltungen mit diesem Agenten bleiben lesbar.",
+    openDrawerRight: "Seitenleiste öffnen",
+    openDrawerLeft: "Seitenleiste links öffnen",
+    drawerTitle: "Agent bearbeiten",
+    drawerDescription:
+      "Die Seite bleibt hinter der Leiste, und die Änderungen gelten ab dem Speichern.",
+    drawerRemove: "Agent löschen",
     tooltipText: "Link kopieren",
     hoverCardTrigger: "Kontext",
     hoverCardBody: "Etwa ein Drittel des Kontextfensters ist belegt.",
