@@ -16,13 +16,12 @@ export function registerOperationRunRoutes(route: Route, options: ResolvedChatSe
 
   // A caller reads the run of its own call. Anybody else's run is governance evidence and
   // takes the right the list takes. A run of another instance does not exist.
-  route(apiOperations["operations.get_run"], async ({ identity, params }) => {
+  route(apiOperations["operations.get_run"], async ({ identity, access, params }) => {
     const run = await runs.get({ clientInstanceId, id: params.runId });
     if (!run) {
       throw new AppError("NOT_FOUND", "Operation run not found");
     }
     if (!isCallerOf(run, identity)) {
-      const access = await options.authorizer.forActor(identity);
       access.require("audit.view", { kind: "operation_run", workspaceId: run.workspaceId });
     }
     return toOperationRunResource(run);

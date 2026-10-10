@@ -354,6 +354,32 @@ describe("who may write a grant, and what a grant may say", () => {
     );
   });
 
+  it("hides the rows a superadmin holds from an administrator's list", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    const kaiGrant = await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    const rootGrant = await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.root.id,
+      action: "agent.read",
+      effect: "allow",
+      scopeKind: "namespace",
+      namespace: "kai-",
+      grantedBy: t.root.id
+    });
+    const page = z.object({ items: z.array(z.object({ id: z.string() })) });
+    const ids = async (userId: string, query: Record<string, string> = {}) =>
+      page
+        .parse((await t.expectOk(userId, "permissions.list", { query })).json())
+        .items.map((row) => row.id)
+        .sort();
+
+    expect(await ids(t.admin.id)).toEqual([kaiGrant]);
+    expect(await ids(t.admin.id, { holderKind: "user", holderId: t.root.id })).toEqual([]);
+    expect(await ids(t.root.id)).toEqual([kaiGrant, rootGrant.id].sort());
+  });
+
   it("lists rows by holder and shows the sources of a holder's rights", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
@@ -428,14 +454,16 @@ describe("tenant and holder boundaries of the access store", () => {
       holder: { kind: "user", id: t.kai.id }
     });
     expect(own.grants).toHaveLength(1);
-    expect(own.namespaces).toHaveLength(1);
+    expect(await t.stores.access.listNamespaces({ clientInstanceId })).toHaveLength(1);
 
     const foreign = await t.stores.access.loadPersistedAccess({
       clientInstanceId: otherClientInstanceId,
       holder: { kind: "user", id: t.kai.id }
     });
     expect(foreign.grants).toEqual([]);
-    expect(foreign.namespaces).toEqual([]);
+    expect(
+      await t.stores.access.listNamespaces({ clientInstanceId: otherClientInstanceId })
+    ).toEqual([]);
 
     const actor = (instanceId: typeof clientInstanceId): AuthenticatedUser => ({
       id: t.kai.id,

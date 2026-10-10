@@ -164,7 +164,14 @@ export class ConfigAssetWorkflow {
     context: ConfigAssetCallContext,
     command: AssetMutationCommand
   ) {
-    await this.requireAssetAccess(access, `${command.kind}.delete`, command);
+    const resource = await this.assetResource(command);
+    access.require(`${command.kind}.delete`, resource);
+    // Deleting an asset deletes the grant rows on it, a deny among them, and frees the name to
+    // be written again. So a holder whose write is denied for the asset does not delete it.
+    const write = access.authorize(`${command.kind}.write`, resource);
+    if (!write.allowed && write.reason === "denied") {
+      access.require(`${command.kind}.write`, resource);
+    }
     await this.authorizeInteractiveWrite(user, context);
     this.assertInteractiveDeleteAllowed(command.kind);
     const existing = await this.getActiveAssetOrThrow(command);
@@ -582,16 +589,20 @@ export class ConfigAssetWorkflow {
     action: Extract<PlatformAction, `${ConfigAssetKind}.${"read" | "write" | "delete"}`>,
     input: { kind: ConfigAssetKind; name: string }
   ): Promise<void> {
+    access.require(action, await this.assetResource(input));
+  }
+
+  private async assetResource(input: { kind: ConfigAssetKind; name: string }) {
     const asset = await this.options.configAssets.store.getConfigAsset({
       clientInstanceId: this.options.clientInstanceId,
       kind: input.kind,
       name: input.name
     });
-    access.require(action, {
+    return {
       kind: input.kind,
       name: input.name,
       ...(asset?.status === "active" ? { assetId: asset.id } : {})
-    });
+    };
   }
 
   // The first agent becomes the default and the last one takes the default with it. Either is

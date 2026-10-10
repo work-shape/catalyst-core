@@ -26,7 +26,7 @@ type NamespaceRow = typeof namespaces.$inferSelect;
 export function createPostgresAccessStore(db: PostgresConnection): AccessAdministrationStore {
   return {
     async loadPersistedAccess(input) {
-      const [holder, grantRows, namespaceRows] = await Promise.all([
+      const [holder, grantRows] = await Promise.all([
         input.holder.kind === "user"
           ? db
               .select({ status: productUsers.status })
@@ -57,15 +57,13 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
               eq(permissionGrants.holderKind, input.holder.kind),
               eq(permissionGrants.holderId, input.holder.id)
             )
-          ),
-        db.select().from(namespaces).where(eq(namespaces.clientInstanceId, input.clientInstanceId))
+          )
       ]);
       return {
         // A holder without a record here was vouched for by the sign-in alone and has no status
         // to read; only a record that says otherwise makes a holder inactive.
         holderActive: holder[0] === undefined || holder[0].status === "active",
-        grants: grantRows.map(mapGrant),
-        namespaces: namespaceRows.map(mapNamespace)
+        grants: grantRows.map(mapGrant)
       };
     },
 
@@ -157,6 +155,13 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
             input.holderId ? eq(permissionGrants.holderId, input.holderId) : undefined,
             input.action ? eq(permissionGrants.action, input.action) : undefined,
             input.scopeKind ? eq(permissionGrants.scopeKind, input.scopeKind) : undefined,
+            input.excludeSuperadminHolders
+              ? sql`NOT (${permissionGrants.holderKind} = 'user' AND EXISTS (
+                  SELECT 1 FROM ${productUsers}
+                  WHERE ${productUsers.clientInstanceId} = ${permissionGrants.clientInstanceId}
+                    AND ${productUsers.id} = ${permissionGrants.holderId}
+                    AND ${productUsers.roles} @> '["superadmin"]'::jsonb))`
+              : undefined,
             keysetFilter(input.page, order, false)
           )
         )

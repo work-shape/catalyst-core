@@ -19,9 +19,9 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
     )
   );
 
-  route(apiOperations["permissions.list"], async ({ query, paging }) =>
+  route(apiOperations["permissions.list"], async ({ user, query, paging }) =>
     (
-      await workflow.listGrants({
+      await workflow.listGrants(user, {
         holderKind: query.holderKind,
         holderId: query.holderId,
         action: query.action,

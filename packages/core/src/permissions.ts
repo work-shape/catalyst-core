@@ -130,7 +130,6 @@ export type AccessDecision =
 export interface PersistedAccess {
   holderActive: boolean;
   grants: PermissionGrant[];
-  namespaces: Namespace[];
 }
 
 export interface AccessStore {
@@ -399,7 +398,7 @@ export function createAuthorizer(accessStore?: AccessStore): Authorizer {
             clientInstanceId: holder.clientInstanceId,
             holder: { kind: holder.kind, id: holder.id }
           })
-        : { holderActive: true, grants: [], namespaces: [] };
+        : { holderActive: true, grants: [] };
       return createActorAccess(holder, persisted);
     }
   };
@@ -436,6 +435,8 @@ export interface AccessAdministrationStore extends AccessStore {
     holderId?: string;
     action?: string;
     scopeKind?: PermissionGrant["scopeKind"];
+    /** Leaves out the rows whose holder is a user with the superadmin role. */
+    excludeSuperadminHolders?: boolean;
     page?: StorePage;
   }): Promise<PermissionGrant[]>;
   /** Throws CONFLICT `namespace_overlap` naming the registered prefix it meets. */

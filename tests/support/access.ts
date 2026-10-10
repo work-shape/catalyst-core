@@ -17,7 +17,6 @@ export function accessOf(
   return createActorAccess(accessHolderFromIdentity(actor), {
     holderActive: true,
     grants: [],
-    namespaces: [],
     ...persisted
   });
 }

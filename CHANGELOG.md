@@ -12,7 +12,10 @@ contain breaking changes; a patch version does not.
   prefix such as `kai-`; it can carry a list of allowed tools and a list of allowed model
   bindings, which bind every writer of an agent in it, an administrator and the release sync
   included. Eight operations under `/api/v1/instance/access` write and read grants and
-  Namespaces; they need `users.manage`. A matching deny wins over every allow. Deleting a user
+  Namespaces; they need `users.manage`. A deny wins over every grant and role that would allow the same action on that asset. It does not
+  wall the asset off from holders of instance rights: export and setting the default agent are
+  decided at the instance and still reach it. A holder whose write is denied for an asset cannot
+  delete it either. Deleting a user
   deletes the user's grant rows. No interface
   for it ships yet. A migration adds the tables `permission_grants` and `namespaces` and
   changes no other table; no user, service principal or API key gains or loses a right.
@@ -20,7 +23,10 @@ contain breaking changes; a patch version does not.
   compares every holder's rights with what the legacy columns answered and exits non-zero on
   a difference. Before rolling back to an earlier release, list the deny rows
   (`select * from permission_grants where effect = 'deny'`): an earlier release reads neither
-  table, so every grant stops applying and every deny stops refusing.
+  table, so every grant stops applying and every deny stops refusing. An earlier release that
+  deletes an agent or skill leaves the grant rows on it, and they apply again if the same name
+  is created after rolling forward. Remove them first:
+  `delete from permission_grants where scope_kind = 'asset' and scope_id in (select id from config_assets where status = 'deleted')`.
 - **Operations:** an operation can be registered once in the operation registry and is then
   reached through one call path, `runOperation`, that checks the actor's right, resolves the
   policy, asks the guardrails, executes and records the call as an Operation Run. Over HTTP

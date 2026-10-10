@@ -48,7 +48,7 @@ function grant(input: Partial<PermissionGrant> = {}): PermissionGrant {
 }
 
 function persisted(grants: PermissionGrant[] = [], holderActive = true): PersistedAccess {
-  return { holderActive, grants, namespaces: [] };
+  return { holderActive, grants };
 }
 
 function decide(

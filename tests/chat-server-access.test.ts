@@ -296,6 +296,46 @@ describe("deny rows and asset grants", () => {
     ).toBe(200);
   });
 
+  it("refuses the delete of an asset whose write is denied, so the deny cannot be shed", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-");
+    await t.grant(t.kai.id, "agent.write", { namespace: "kai-" });
+    await t.grant(t.kai.id, "agent.delete", { namespace: "kai-" });
+    expect((await t.putAgent(t.kai.id, "kai-helper")).statusCode).toBe(200);
+    expect((await t.putAgent(t.kai.id, "kai-second")).statusCode).toBe(200);
+    const denyId = await t.grant(
+      t.kai.id,
+      "agent.write",
+      { assetId: await t.assetId("agent", "kai-helper") },
+      "deny"
+    );
+
+    await t.expectRefused(
+      t.kai.id,
+      "config_assets.delete",
+      { params: { kind: "agent", name: "kai-helper" }, payload: {} },
+      t.forbidden("agent.write", "denied")
+    );
+    // The asset and the deny row are both still there.
+    await t.assetId("agent", "kai-helper");
+    const rows = await t.stores.access.listGrants({ clientInstanceId });
+    expect(rows.filter((row) => row.id === denyId)).toHaveLength(1);
+    await t.expectRefused(
+      t.kai.id,
+      "config_assets.put",
+      {
+        params: { kind: "agent", name: "kai-helper" },
+        payload: { config: agent("kai-helper", { instructions: "Denied." }) }
+      },
+      t.forbidden("agent.write", "denied")
+    );
+    // The neighbour without a deny is deleted as before.
+    await t.expectOk(t.kai.id, "config_assets.delete", {
+      params: { kind: "agent", name: "kai-second" },
+      payload: {}
+    });
+  });
+
   it("lets a Namespace deny win over an asset allow, and over an administrator's role", async () => {
     const t = await setup();
     await t.createNamespace("kai-");

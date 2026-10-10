@@ -168,7 +168,7 @@ describe("legacy equivalence: users", () => {
         for (const key of LEGACY_KEYS) {
           const decision = evaluateAccess({
             holder,
-            persisted: { holderActive: true, grants: [], namespaces: [] },
+            persisted: { holderActive: true, grants: [] },
             action: key
           });
           expect(decision.allowed, `${roles.join("+")} [${permissions.join(",")}] ${key}`).toBe(
@@ -449,7 +449,7 @@ describe("legacy equivalence: a service actor has no role", () => {
       expect(
         evaluateAccess({
           holder,
-          persisted: { holderActive: true, grants: [], namespaces: [] },
+          persisted: { holderActive: true, grants: [] },
           action: key
         }).allowed
       ).toBe(false);

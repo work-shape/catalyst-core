@@ -117,16 +117,21 @@ export class AccessWorkflow {
     return revoked;
   }
 
-  listGrants(filter: {
-    holderKind?: PermissionGrant["holderKind"];
-    holderId?: string;
-    action?: string;
-    scopeKind?: PermissionGrant["scopeKind"];
-    page?: StorePage;
-  }): Promise<PermissionGrant[]> {
+  /** The user list hides superadmins from everyone else, and so do the rows they hold. */
+  listGrants(
+    actor: AuthenticatedUser,
+    filter: {
+      holderKind?: PermissionGrant["holderKind"];
+      holderId?: string;
+      action?: string;
+      scopeKind?: PermissionGrant["scopeKind"];
+      page?: StorePage;
+    }
+  ): Promise<PermissionGrant[]> {
     return this.options.stores.access.listGrants({
       clientInstanceId: this.options.clientInstanceId,
-      ...filter
+      ...filter,
+      excludeSuperadminHolders: !isSuperadmin(actor)
     });
   }
 
