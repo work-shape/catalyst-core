@@ -1,0 +1,5 @@
+# One file for the whole host. Each product's docs add their sitemap below.
+User-agent: *
+Allow: /
+
+Sitemap: https://docs.workshape.ai/catalyst/sitemap-index.xml

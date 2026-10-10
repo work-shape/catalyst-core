@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/generate-api-reference.mjs && astro build",
+    "build": "rm -rf dist && node scripts/generate-api-reference.mjs && astro build && cp -R host/. dist/",
     "dev": "node scripts/generate-api-reference.mjs && astro dev --host 127.0.0.1 --port 4321",
+    "check:site": "node scripts/check-site.mjs",
     "generate:api-reference": "node scripts/generate-api-reference.mjs",
     "preview": "astro preview --host 127.0.0.1 --port 4321",
     "typecheck": "node scripts/generate-api-reference.mjs && astro check"
