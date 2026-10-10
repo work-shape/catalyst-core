@@ -214,6 +214,17 @@ describe("old addresses", () => {
     });
   });
 
+  it.each(["/build", "/build/agents", "/build/skills/tax-review"])(
+    "answers %s with Build for a viewer who may open it, and leads everyone else away",
+    (path) => {
+      expect(resolve(path, superadminWithoutMembership)).toEqual({
+        kind: "build",
+        page: administration.build
+      });
+      expect(resolve(path, member)).toEqual({ kind: "chat" });
+    }
+  );
+
   it("leads /admin to the first permitted Settings page, else to Build, else to chat", () => {
     const users: WorkspaceRoute = { kind: "settings", group: "instance", page: "users" };
 

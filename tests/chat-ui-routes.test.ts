@@ -32,7 +32,13 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
   ["/inbox", { kind: "inbox" }, "inbox"],
   ["/inbox/apr_1", { kind: "inbox-item", itemId: "apr_1" }, "inbox"],
   ["/admin", { kind: "administration" }, "settings"],
-  ["/admin/config", { kind: "build" }, "build"],
+  ["/build", { kind: "build" }, "build"],
+  ["/build/agents", { kind: "build-kind", assetKind: "agents" }, "build"],
+  [
+    "/build/skills/tax-review",
+    { kind: "build-asset", assetKind: "skills", name: "tax-review" },
+    "build"
+  ],
   ["/ui-library", { kind: "ui-library" }, "ui-library"]
 ];
 
@@ -91,13 +97,36 @@ describe("area route table", () => {
     });
   });
 
-  it("keeps /admin and /admin/config as addresses the shell answers by the viewer's rights", () => {
+  it("keeps /admin as an address the shell answers by the viewer's rights", () => {
     expect(workspaceRouteFromPath("/admin")).toEqual({ kind: "administration" });
+  });
+
+  it("leads the old Config address to Build, which opens a list", () => {
+    const row = areaRoutePaths().find((candidate) => candidate.path === "/admin/config");
+
+    expect(row?.route).toBeUndefined();
+    expect(row?.redirectTo).toBe("/build");
     expect(workspaceRouteFromPath("/admin/config")).toEqual({ kind: "build" });
   });
 
+  it("reads the id of a Build asset as written, with its Namespace prefix and dots", () => {
+    expect(workspaceRouteFromPath("/build/agents/tax-steuer_agent.v2")).toEqual({
+      kind: "build-asset",
+      assetKind: "agents",
+      name: "tax-steuer_agent.v2"
+    });
+  });
+
   it("opens the application root for an address no row resolves", () => {
-    for (const path of ["/w/", "/w/cw_1/c", "/w/cw_1/x/conv_2", "/c/a/b", "/admin/nothing", "/x"]) {
+    for (const path of [
+      "/w/",
+      "/w/cw_1/c",
+      "/w/cw_1/x/conv_2",
+      "/c/a/b",
+      "/admin/nothing",
+      "/x",
+      "/build/a/b/c"
+    ]) {
       expect(workspaceRouteFromPath(path)).toEqual({ kind: "collaboration-workspace-root" });
     }
   });

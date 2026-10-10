@@ -18,7 +18,11 @@ export type WorkspaceRoute =
    * replaces it with the first administration page the viewer may open.
    */
   | { kind: "administration" }
-  /** Config as a full page, until the Build area replaces it. */
+  /** One list of the Build area: every asset of a kind. `assetKind` is the kind's path segment. */
+  | { kind: "build-kind"; assetKind: string }
+  /** One asset of the Build area on its own page. */
+  | { kind: "build-asset"; assetKind: string; name: string }
+  /** The Build area without a kind: it opens the list last visited. */
   | { kind: "build" }
   /** The Inbox with its lists. */
   | { kind: "inbox" }
@@ -77,7 +81,15 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/approvals", redirectTo: "/inbox" }
     ]
   },
-  { area: "build", paths: [{ path: "/admin/config", route: "build" }] },
+  {
+    area: "build",
+    paths: [
+      { path: "/build", route: "build" },
+      { path: "/build/$assetKind", route: "build-kind" },
+      { path: "/build/$assetKind/$name", route: "build-asset" },
+      { path: "/admin/config", redirectTo: "/build" }
+    ]
+  },
   { area: "ui-library", paths: [{ path: "/ui-library", route: "ui-library" }] }
 ];
 
@@ -142,6 +154,12 @@ function routeOf(
       return itemId ? { kind, itemId } : undefined;
     case "settings":
       return group && page ? { kind, group, page } : undefined;
+    case "build-kind":
+      return params.assetKind ? { kind, assetKind: params.assetKind } : undefined;
+    case "build-asset":
+      return params.assetKind && params.name
+        ? { kind, assetKind: params.assetKind, name: params.name }
+        : undefined;
     case "new-conversation":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
     case "conversation":

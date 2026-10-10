@@ -358,6 +358,8 @@ export function useCollaborationWorkspaceModel(
 
 function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {
   return (
+    route.kind === "build-kind" ||
+    route.kind === "build-asset" ||
     route.kind === "settings" ||
     route.kind === "administration" ||
     route.kind === "build" ||

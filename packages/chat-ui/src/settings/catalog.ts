@@ -175,7 +175,7 @@ export function resolveSettingsRoute(input: {
   if (route.kind === "administration") {
     return administration();
   }
-  if (route.kind === "build") {
+  if (route.kind === "build" || route.kind === "build-kind" || route.kind === "build-asset") {
     const page = visibleBuildPage(build, viewer);
     return page ? { kind: "build", page } : administration();
   }
