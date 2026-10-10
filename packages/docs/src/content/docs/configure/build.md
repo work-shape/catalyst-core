@@ -47,12 +47,14 @@ If you may read an asset but not change it, the page says so and has no save bar
 ### When a save is refused
 
 - **A tool, model or skill that is not allowed.** A Namespace can limit the tools and models of its agents. The refusal stands under the field it concerns, and the form keeps what you typed.
-- **Somebody else saved first.** The page saves against the revision it loaded. If the asset changed in between, nothing is overwritten. A notice offers **Load the newer version**. Your text stays in the form until you choose it, so you can copy what you need first.
+- **Somebody else saved first.** The page saves against the revision it loaded. If the asset changed in between, nothing is overwritten. A notice offers **Load the newer version** and asks before it replaces what you typed, so you can copy what you need first. Until then the page saves nothing. If the newer version cannot be loaded, the page says so and keeps your text.
+- **Somebody deleted it.** The notice says that the asset was deleted. Your text stays so that you can copy it, and the notice leads back to the list.
+- **A skill you may not read.** An agent can only be given skills you may read yourself. A skill it already has stays when you save other changes.
 - **Anything else** is shown in the words of the instance, above the save bar.
 
 ## History and restore
 
-**History** opens a panel beside the editor with every saved revision, the newest first. **Restore** makes the content of an older revision the newest one. The asset gets a new revision, so a restore can itself be restored.
+**History** opens a panel beside the editor with the saved revisions, the newest first, 50 at a time. **Restore** makes the content of an older revision the newest one. The asset gets a new revision, so a restore can itself be restored. After a restore the page says which revision it restored. While somebody else's newer version waits to be loaded, History restores nothing.
 
 ## Delete
 
@@ -67,4 +69,4 @@ If you may read an asset but not change it, the page says so and has no save bar
 | Skills offered per search in an agent's skill picker                 | 50        |
 | How long the list of your Namespaces is kept before it is read again | 5 minutes |
 
-The list never holds more than the pages you asked for. The Namespace filter and the create dialog list the Namespaces you hold rights in. History reads all revisions of the one asset when it opens.
+The list never holds more than the pages you asked for. The Namespace filter and the create dialog list the Namespaces you hold rights in. History reads 50 revisions of the one asset when it opens, and **Show more** reads the next 50.
