@@ -1,47 +1,46 @@
-/* The look of the application on Starlight's own custom properties.
-   Colours are the default theme of the shared UI library (`DEFAULT_THEME_INPUTS` and the
-   state tones in packages/ui/src/theme/tokens.ts): warm paper neutrals and one terracotta
-   accent. Radius, focus line and link style follow packages/ui/src/styles.css.
-   Nothing here loads a font or any other file. */
+/* Use only the shared UI's generated colour tokens, without its Tailwind reset or utilities.
+   The docs build adapts the token selectors to Starlight's light/dark mode and backdrops. */
+@import "../../../ui/src/theme/defaults.css";
 
 /* Dark is Starlight's base mode. */
 :root,
 ::backdrop {
-  --sl-color-white: #efebe4; /* text */
-  --sl-color-gray-1: #e6e1d9;
-  --sl-color-gray-2: #d6d0c6;
-  --sl-color-gray-3: #b3ada3; /* muted text */
-  --sl-color-gray-4: #7a7469;
-  --sl-color-gray-5: #33302b; /* border */
-  --sl-color-gray-6: #131210; /* background: rail, code */
-  --sl-color-black: #1c1a17; /* surface: the page */
+  --sl-color-white: var(--foreground); /* text */
+  --sl-color-gray-1: var(--foreground);
+  --sl-color-gray-2: var(--foreground);
+  --sl-color-gray-3: var(--muted-foreground); /* muted text */
+  --sl-color-gray-4: var(--input-strong);
+  --sl-color-gray-5: var(--border); /* border */
+  --sl-color-gray-6: var(--muted); /* background: rail, code */
+  --sl-color-black: var(--background); /* surface: the page */
 
-  --sl-color-accent-low: color-mix(in srgb, #d98c6c 14%, #1c1a17);
-  --sl-color-accent: #d98c6c;
-  --sl-color-accent-high: #e8ab90;
+  --sl-color-accent-low: color-mix(in srgb, var(--primary) 14%, var(--background));
+  --sl-color-accent: var(--primary);
+  --sl-color-accent-high: var(--primary-soft-foreground);
 
   --sl-color-text: var(--sl-color-white);
   --sl-color-bg-nav: var(--sl-color-black);
   --sl-color-bg-sidebar: var(--sl-color-gray-6);
-  --sl-color-bg-inline-code: color-mix(in srgb, #efebe4 9%, #1c1a17);
+  --sl-color-bg-inline-code: color-mix(in srgb, var(--foreground) 9%, var(--background));
   --sl-color-hairline-light: var(--sl-color-gray-5);
   --sl-color-hairline: var(--sl-color-gray-5);
   --sl-color-hairline-shade: var(--sl-color-gray-5);
-  --sl-color-backdrop-overlay: rgb(0 0 0 / 0.45);
+  --docs-scrim: var(--primary-foreground);
+  --sl-color-backdrop-overlay: color-mix(in srgb, var(--docs-scrim) 45%, transparent);
 
   /* The four state tones, for asides: info, success, warning, destructive. */
-  --sl-color-blue: #38bdf8;
-  --sl-color-blue-high: color-mix(in srgb, #38bdf8 80%, #efebe4);
-  --sl-color-blue-low: color-mix(in srgb, #38bdf8 12%, #1c1a17);
-  --sl-color-green: #34d399;
-  --sl-color-green-high: color-mix(in srgb, #34d399 80%, #efebe4);
-  --sl-color-green-low: color-mix(in srgb, #34d399 12%, #1c1a17);
-  --sl-color-orange: #fbbf24;
-  --sl-color-orange-high: color-mix(in srgb, #fbbf24 80%, #efebe4);
-  --sl-color-orange-low: color-mix(in srgb, #fbbf24 12%, #1c1a17);
-  --sl-color-red: #f87171;
-  --sl-color-red-high: color-mix(in srgb, #f87171 80%, #efebe4);
-  --sl-color-red-low: color-mix(in srgb, #f87171 12%, #1c1a17);
+  --sl-color-blue: var(--info);
+  --sl-color-blue-high: var(--info-soft-foreground);
+  --sl-color-blue-low: color-mix(in srgb, var(--info) 12%, var(--background));
+  --sl-color-green: var(--success);
+  --sl-color-green-high: var(--success-soft-foreground);
+  --sl-color-green-low: color-mix(in srgb, var(--success) 12%, var(--background));
+  --sl-color-orange: var(--warning);
+  --sl-color-orange-high: var(--warning-soft-foreground);
+  --sl-color-orange-low: color-mix(in srgb, var(--warning) 12%, var(--background));
+  --sl-color-red: var(--destructive);
+  --sl-color-red-high: var(--destructive-soft-foreground);
+  --sl-color-red-low: color-mix(in srgb, var(--destructive) 12%, var(--background));
   /* A tip carries the accent; the product has no fifth tone. */
   --sl-color-purple: var(--sl-color-accent);
   --sl-color-purple-high: var(--sl-color-accent-high);
@@ -49,8 +48,8 @@
 
   /* Nothing has a shadow at rest; what opens over the page keeps one. */
   --sl-shadow-sm: none;
-  --sl-shadow-md: 0 8px 24px rgb(0 0 0 / 0.5);
-  --sl-shadow-lg: 0 16px 48px rgb(0 0 0 / 0.6);
+  --sl-shadow-md: var(--shadow-overlay);
+  --sl-shadow-lg: var(--shadow-modal);
 
   /* The application's family. Inter shows where it is installed; no font file is requested. */
   --sl-font:
@@ -74,55 +73,29 @@
   --docs-radius-sm: 4px;
   --docs-radius-md: 8px;
   --docs-radius-lg: 12px;
-  --docs-ring: var(--sl-color-accent);
-  --docs-selected: color-mix(in srgb, #d98c6c 12%, transparent);
-  --docs-hover: color-mix(in srgb, #efebe4 6%, transparent);
+  --docs-ring: var(--ring);
+  --docs-selected: var(--state-selected);
+  --docs-hover: var(--state-hover);
 }
 
 :root[data-theme="light"],
 [data-theme="light"] ::backdrop {
-  --sl-color-white: #201c17; /* text */
-  --sl-color-gray-1: #2b2620;
-  --sl-color-gray-2: #3d372f;
-  --sl-color-gray-3: #655e54; /* muted text */
-  --sl-color-gray-4: #8a8275;
-  --sl-color-gray-5: #d8d0c1; /* strong border */
-  --sl-color-gray-6: #e7e1d5; /* border */
-  --sl-color-gray-7: #f6f3ec; /* background: rail, code */
-  --sl-color-black: #fdfbf7; /* surface: the page */
+  --sl-color-gray-5: var(--input); /* strong border */
+  --sl-color-gray-6: var(--border); /* border */
+  --sl-color-gray-7: var(--muted); /* background: rail, code */
 
-  --sl-color-accent-low: color-mix(in srgb, #b5573a 12%, #fdfbf7);
-  --sl-color-accent: #b5573a;
-  --sl-color-accent-high: #8c3f26;
+  --sl-color-accent-low: color-mix(in srgb, var(--primary) 12%, var(--background));
 
   --sl-color-text-accent: var(--sl-color-accent-high);
-  --sl-color-text-invert: #ffffff;
-  --sl-color-bg-nav: var(--sl-color-black);
+  --sl-color-text-invert: var(--primary-foreground);
   --sl-color-bg-sidebar: var(--sl-color-gray-7);
-  --sl-color-bg-inline-code: color-mix(in srgb, #201c17 7%, #fdfbf7);
+  --sl-color-bg-inline-code: color-mix(in srgb, var(--foreground) 7%, var(--background));
   --sl-color-bg-accent: var(--sl-color-accent);
   --sl-color-hairline-light: var(--sl-color-gray-6);
   --sl-color-hairline: var(--sl-color-gray-6);
   --sl-color-hairline-shade: var(--sl-color-gray-6);
 
-  --sl-color-blue: #0369a1;
-  --sl-color-blue-high: color-mix(in srgb, #0369a1 80%, #201c17);
-  --sl-color-blue-low: color-mix(in srgb, #0369a1 12%, #fdfbf7);
-  --sl-color-green: #047857;
-  --sl-color-green-high: color-mix(in srgb, #047857 80%, #201c17);
-  --sl-color-green-low: color-mix(in srgb, #047857 12%, #fdfbf7);
-  --sl-color-orange: #b45309;
-  --sl-color-orange-high: color-mix(in srgb, #b45309 80%, #201c17);
-  --sl-color-orange-low: color-mix(in srgb, #b45309 12%, #fdfbf7);
-  --sl-color-red: #b42318;
-  --sl-color-red-high: color-mix(in srgb, #b42318 80%, #201c17);
-  --sl-color-red-low: color-mix(in srgb, #b42318 12%, #fdfbf7);
-
-  --sl-shadow-md: 0 1px 3px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.1);
-  --sl-shadow-lg: 0 16px 48px rgb(0 0 0 / 0.18);
-
-  --docs-selected: color-mix(in srgb, #b5573a 12%, transparent);
-  --docs-hover: color-mix(in srgb, #201c17 6%, transparent);
+  --docs-scrim: var(--foreground);
 }
 
 /* Starlight enlarges the headings from 50em up; the scale here is the same at every width. */

@@ -27,6 +27,27 @@ export default defineConfig({
   // files of `host/` that have to sit at the root (robots.txt, the redirect from "/").
   outDir: `./dist${base}`,
   markdown: { rehypePlugins: [rehypeBaseLinks] },
+  vite: {
+    css: {
+      postcss: {
+        plugins: [
+          {
+            postcssPlugin: "docs-ui-theme-selectors",
+            Rule(rule) {
+              if (!rule.source?.input.file?.endsWith("/ui/src/theme/defaults.css")) return;
+              // Starlight defaults to dark and gives backdrops their own properties.
+              // Light's higher specificity wins over the shared dark base rule.
+              if (rule.selector === ":root") {
+                rule.selector = ':root[data-theme="light"], [data-theme="light"] ::backdrop';
+              } else if (rule.selector === ':root[data-vivd-theme="dark"]') {
+                rule.selector = ":root, ::backdrop";
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
   integrations: [
     starlight({
       title: "Workshape Catalyst",
