@@ -17,7 +17,7 @@ A separately deployed product instance for one customer, with its own infrastruc
 
 ## Instance Operator
 
-The party responsible for running a client instance. This may be us or the customer.
+The party responsible for running a client instance. This may be Workshape or the customer.
 
 ## Operated Dedicated Instance
 
