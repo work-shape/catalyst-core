@@ -457,7 +457,10 @@ describe("the content of a Page surface", () => {
     { file: "src/routes/index.tsx", line: 12, message: "Expected '}'" },
     { file: "app.yaml", message: "The kit version is not released." }
   ];
-  const view = (input: { view: "preview" | "files"; buildErrors?: typeof errors }, locale?: "de") =>
+  const view = (
+    input: { view: "preview" | "files"; buildErrors?: typeof errors; revision?: number },
+    locale?: "de"
+  ) =>
     render(
       createElement(PageSurfaceView, {
         ...input,
@@ -476,6 +479,30 @@ describe("the content of a Page surface", () => {
     );
     expect(view({ view: "preview", buildErrors: errors }, "de")).toContain("2 Build-Fehler");
     expect(view({ view: "preview", buildErrors: errors.slice(0, 1) })).toContain("1 build error");
+  });
+
+  it("says under the count which revision the preview still shows and what to do", () => {
+    const shown = (count: number, locale?: "de") =>
+      render(
+        createElement(PageBuildErrors, { errors: errors.slice(0, count), revision: 1 }),
+        locale
+      );
+
+    // Outside the folded findings: the sentence is in the document while they are not.
+    expect(shown(2)).toContain(
+      "The preview still shows revision 1. Ask the agent to fix the errors."
+    );
+    expect(shown(2)).not.toContain("Expected");
+    expect(shown(1)).toContain("Ask the agent to fix the error.");
+    expect(shown(1, "de")).toContain(
+      "Die Vorschau zeigt weiter Revision 1. Bitte den Agenten, den Fehler zu beheben."
+    );
+    expect(shown(2, "de")).toContain("Bitte den Agenten, die Fehler zu beheben.");
+    expect(view({ view: "preview", buildErrors: errors, revision: 3 }, "de")).toContain(
+      "Die Vorschau zeigt weiter Revision 3."
+    );
+    // Before the instance said which revision the frame holds, the line names none.
+    expect(view({ view: "preview", buildErrors: errors })).not.toContain("still shows");
   });
 
   it("shows no line without a finding", () => {
@@ -638,6 +665,11 @@ describe("the card of a page.save call", () => {
     expect(markup).toContain("The Page could not be built");
     expect(markup).toContain("1 build error");
     expect(markup).not.toMatch(/>Open</u);
+    // No revision was stored by this save, so the card says that and what to do.
+    expect(markup).toContain("Nothing was saved. Ask the agent to fix the error.");
+    expect(
+      card({ state: "errors", name: "Offers", errors: refused.output.errors }, {}, "de")
+    ).toContain("Es wurde nichts gespeichert. Bitte den Agenten, die Fehler zu beheben.");
   });
 
   it("says that the save failed, and names a Page without a name as a Page", () => {

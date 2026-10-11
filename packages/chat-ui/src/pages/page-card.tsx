@@ -132,6 +132,11 @@ export function PageSaveCardView({
       {save.state === "errors" && save.errors.length > 0 ? (
         <Disclosure className="pl-7">
           <DisclosureTrigger>{buildErrorCountLabel(save.errors.length, t)}</DisclosureTrigger>
+          <p className="pb-1 text-caption text-muted-foreground">
+            {t(
+              save.errors.length === 1 ? "pages.errorsNothingSavedOne" : "pages.errorsNothingSaved"
+            )}
+          </p>
           <DisclosureContent>
             <BuildErrorList errors={save.errors} />
           </DisclosureContent>

@@ -9,6 +9,12 @@ export const pages = defineTranslations({
     "pages.cardErrors": "The Page could not be built",
     "pages.cardFailed": "The Page could not be saved",
     "pages.errorPlace": "{file}, line {line}",
+    "pages.errorsKeepRevision":
+      "The preview still shows revision {number}. Ask the agent to fix the errors.",
+    "pages.errorsKeepRevisionOne":
+      "The preview still shows revision {number}. Ask the agent to fix the error.",
+    "pages.errorsNothingSaved": "Nothing was saved. Ask the agent to fix the errors.",
+    "pages.errorsNothingSavedOne": "Nothing was saved. Ask the agent to fix the error.",
     "pages.files": "Files",
     "pages.filesEmpty": "This revision has no source files.",
     "pages.filesFailed": "The files could not be loaded.",
@@ -35,6 +41,14 @@ export const pages = defineTranslations({
     "pages.cardErrors": "Die Page konnte nicht gebaut werden",
     "pages.cardFailed": "Die Page konnte nicht gespeichert werden",
     "pages.errorPlace": "{file}, Zeile {line}",
+    "pages.errorsKeepRevision":
+      "Die Vorschau zeigt weiter Revision {number}. Bitte den Agenten, die Fehler zu beheben.",
+    "pages.errorsKeepRevisionOne":
+      "Die Vorschau zeigt weiter Revision {number}. Bitte den Agenten, den Fehler zu beheben.",
+    "pages.errorsNothingSaved":
+      "Es wurde nichts gespeichert. Bitte den Agenten, die Fehler zu beheben.",
+    "pages.errorsNothingSavedOne":
+      "Es wurde nichts gespeichert. Bitte den Agenten, den Fehler zu beheben.",
     "pages.files": "Dateien",
     "pages.filesEmpty": "Diese Revision hat keine Quelldateien.",
     "pages.filesFailed": "Die Dateien konnten nicht geladen werden.",

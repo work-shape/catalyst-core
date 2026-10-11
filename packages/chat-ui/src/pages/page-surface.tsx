@@ -1,7 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
-import { ApiError, type AppBridgeContext } from "@vivd-catalyst/api-client";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode
+} from "react";
+import type { AppBridgeContext, PagePreviewResponse } from "@vivd-catalyst/api-client";
 import {
   Button,
   Disclosure,
@@ -14,6 +21,12 @@ import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation } from "../i18n";
 import type { PageBuildError, SurfaceOf } from "../surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
+import {
+  keepPageAddress,
+  pageIsGone,
+  retryUnlessGone,
+  type PageAddressState
+} from "./page-address";
 import { PageFiles } from "./page-files";
 import { usePageHost } from "./page-host";
 import { buildErrorCountLabel, buildErrorPlace } from "./page-save";
@@ -105,15 +118,6 @@ export function pageSurfaceRendering(surface: SurfaceOf<"page">): {
   };
 }
 
-function isGone(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 404 || error.status === 403);
-}
-
-/** An answer that says the Page is not there does not change by asking again. */
-function retryUnlessGone(failureCount: number, error: unknown): boolean {
-  return !isGone(error) && failureCount < 2;
-}
-
 /** An address of the instance as the frame needs it: absolute, on the API's origin. */
 export function pageFrameAddress(path: string, apiBaseUrl: string, pageAddress: string): string {
   return new URL(path, new URL(apiBaseUrl, pageAddress)).toString();
@@ -147,27 +151,19 @@ function PageSurface({
     refetchInterval: PAGE_ACCESS_CHECK_MS,
     retry: retryUnlessGone
   });
-  const preview = useQuery({
-    queryKey: ["pages", apiBaseUrl, conversationId, pageId, "preview", fileSetId],
-    queryFn: () => client.pages.preview({ params, body: { fileSetId } }),
-    // The address is a credential for this mount of the frame: asked once, kept nowhere else.
-    staleTime: Number.POSITIVE_INFINITY,
-    gcTime: 0,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: retryUnlessGone
-  });
+  const preview = usePageAddress(conversationId, pageId, fileSetId);
+  const address = preview.shown;
 
-  const gone = isGone(detail.error) || isGone(preview.error);
+  const gone = pageIsGone(detail.error) || preview.gone;
   const state: PreviewState = gone
     ? "stopped"
-    : preview.data
+    : address
       ? "ready"
-      : preview.isError
+      : preview.failed
         ? "failed"
         : "starting";
   const fileSets = detail.data?.fileSets ?? [];
-  const number = preview.data?.number;
+  const number = address?.number;
   const previousFileSetId =
     number === undefined ? undefined : fileSets.find((set) => set.number === number - 1)?.id;
 
@@ -175,14 +171,15 @@ function PageSurface({
     <PageSurfaceView
       view={view}
       buildErrors={gone ? undefined : buildErrors}
+      revision={number}
       preview={
-        state === "ready" && preview.data ? (
+        state === "ready" && address ? (
           <LivePagePreview
             name={name}
             pageId={pageId}
-            number={preview.data.number}
-            session={preview.data.pageSessionId}
-            url={pageFrameAddress(preview.data.url, apiBaseUrl, window.location.href)}
+            number={address.number}
+            session={address.pageSessionId}
+            url={pageFrameAddress(address.url, apiBaseUrl, window.location.href)}
           />
         ) : (
           <PreviewPane
@@ -199,14 +196,7 @@ function PageSurface({
             action={
               // A Page that is gone for the viewer stays gone: asking again changes nothing.
               state !== "failed" ? undefined : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    // The query keeps the failure; the pane shows it again.
-                    preview.refetch().catch(() => undefined);
-                  }}
-                >
+                <Button variant="outline" size="sm" onClick={preview.again}>
                   {t("pages.retry")}
                 </Button>
               )
@@ -238,6 +228,29 @@ function PageSurface({
 }
 
 /**
+ * The address of one revision for the frame, kept while the surface is mounted: renewed before
+ * its token expires, and gone when the instance says the viewer lost the Page.
+ */
+function usePageAddress(conversationId: string, pageId: string, fileSetId: string) {
+  const { client } = useWorkspaceApiClient();
+  const [state, setState] = useState<PageAddressState<PagePreviewResponse>>({
+    gone: false,
+    failed: false
+  });
+  const keeper = useRef<{ again: () => void }>(undefined);
+  useEffect(() => {
+    const kept = keepPageAddress(
+      () => client.pages.preview({ params: { conversationId, pageId }, body: { fileSetId } }),
+      setState
+    );
+    keeper.current = kept;
+    return kept.stop;
+  }, [client, conversationId, pageId, fileSetId]);
+  const again = useCallback(() => keeper.current?.again(), []);
+  return { ...state, again };
+}
+
+/**
  * The content of a Page surface: the preview with the build errors as one line under it, or
  * the files. The preview stays mounted under the files, so the Page keeps its state while the
  * reader looks at its source.
@@ -246,12 +259,15 @@ export function PageSurfaceView({
   view,
   preview,
   files,
-  buildErrors
+  buildErrors,
+  revision
 }: {
   view: PageView;
   preview: ReactNode;
   files: ReactNode;
   buildErrors?: readonly PageBuildError[];
+  /** The number of the revision the preview shows, once it is known. */
+  revision?: number;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col" data-page-view={view}>
@@ -260,14 +276,24 @@ export function PageSurfaceView({
       </div>
       {view === "files" ? <div className="min-h-0 flex-1">{files}</div> : null}
       {view === "preview" && buildErrors && buildErrors.length > 0 ? (
-        <PageBuildErrors errors={buildErrors} />
+        <PageBuildErrors errors={buildErrors} revision={revision} />
       ) : null}
     </div>
   );
 }
 
-/** The findings of the build that refused the newest save, folded into one line. */
-export function PageBuildErrors({ errors }: { errors: readonly PageBuildError[] }) {
+/**
+ * The findings of the build that refused the newest save, folded into one line, and under it
+ * what the preview above still shows and what to do about it.
+ */
+export function PageBuildErrors({
+  errors,
+  revision
+}: {
+  errors: readonly PageBuildError[];
+  /** The number of the revision the preview shows, once it is known. */
+  revision?: number;
+}) {
   const { t } = useTranslation();
   return (
     <Disclosure className="shrink-0 border-t bg-card px-4 py-1" data-testid="page-build-errors">
@@ -277,6 +303,13 @@ export function PageBuildErrors({ errors }: { errors: readonly PageBuildError[] 
           {buildErrorCountLabel(errors.length, t)}
         </span>
       </DisclosureTrigger>
+      {revision === undefined ? null : (
+        <p className="pb-1 pl-6 text-caption text-muted-foreground">
+          {t(errors.length === 1 ? "pages.errorsKeepRevisionOne" : "pages.errorsKeepRevision", {
+            number: revision
+          })}
+        </p>
+      )}
       <DisclosureContent>
         <BuildErrorList errors={errors} className="max-h-40 overflow-y-auto pb-2" />
       </DisclosureContent>

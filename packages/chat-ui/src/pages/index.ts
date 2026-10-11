@@ -7,6 +7,16 @@ export {
   themeMessage,
   type ArrivedMessage
 } from "./bridge-host";
+export {
+  PAGE_ADDRESS_RENEWAL_MARGIN_MS,
+  PAGE_ADDRESS_RENEWAL_MIN_WAIT_MS,
+  keepPageAddress,
+  pageAddressRemaining,
+  pageAddressRenewalDelay,
+  pageAddressToShow,
+  pageIsGone,
+  type PageAddressState
+} from "./page-address";
 export { PageSaveCardView } from "./page-card";
 export { changedSourcePaths, defaultOpenPath, PageFilesView } from "./page-files";
 export { PageHostProvider } from "./page-host";
