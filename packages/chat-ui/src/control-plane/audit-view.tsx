@@ -236,7 +236,7 @@ function OutcomeBadge({ outcome }: { outcome: AuditActivity["outcome"] }) {
   }
   if (outcome === "warning") {
     return (
-      <Badge appearance="outline" className="border-amber-500 text-amber-600">
+      <Badge tone="warning" appearance="outline">
         {label}
       </Badge>
     );

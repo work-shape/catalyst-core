@@ -109,7 +109,25 @@ export function toUiMessages(
     : messages;
   const projectedMessages = toPersistedUiMessages(visibleMessages, completedRunProjections);
   const activeRunMessage = activeRun ? toActiveRunUiMessage(activeRun) : undefined;
-  return activeRunMessage ? [...projectedMessages, activeRunMessage] : projectedMessages;
+  return activeRunMessage && !leftNothingToShow(activeRun, activeRunMessage)
+    ? [...projectedMessages, activeRunMessage]
+    : projectedMessages;
+}
+
+/**
+ * A run that failed or was stopped before anything of its answer arrived, such as one that was
+ * refused. It gets no row: an empty one would show only the copy and retry buttons, and the
+ * notice above the composer says what happened.
+ */
+function leftNothingToShow(
+  activeRun: AssistantUiActiveRun | undefined,
+  message: UIMessage
+): boolean {
+  const status = activeRun?.projection.status;
+  return (
+    (status === "failed" || status === "cancelled") &&
+    message.parts.every((part) => part.type === "text" && part.text.trim().length === 0)
+  );
 }
 
 export function createMessageSnapshotKey(

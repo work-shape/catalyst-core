@@ -1328,8 +1328,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   glared on the dark page. A run that is refused because its model has no price on the customer
   rate card now fails with the code `MODEL_NOT_PRICED` (it was `FORBIDDEN`; the message is
   unchanged), and the chat words it for its reader in English and German: someone with
-  `usage.view` reads that the operator adds the price under `usage.costs` in release config,
-  anyone else reads to choose another model or ask an administrator.
+  `usage.view` reads that the price is missing and to choose another model until the operator
+  has added it, anyone else reads to choose another model or ask an administrator. The notice
+  spans the composer, goes when another model is picked, and a reply that failed or was stopped
+  before anything of it arrived leaves no empty row with copy and retry buttons. The warning
+  outcome in the audit log and the budget bar from 80% use the library's warning tone.
 - **Connections:** a Connection whose host is on the egress list and does not resolve, as with
   a stopped service or a resolver that is down, no longer reads as refused by the list. A call
   answers `connection_unavailable` with "the host <host>:<port> did not resolve to an address"

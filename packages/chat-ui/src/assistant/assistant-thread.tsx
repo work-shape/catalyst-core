@@ -220,7 +220,7 @@ export function AssistantThread({
               <div ref={composerRef} className="relative z-10">
                 {notice ? (
                   // Something went wrong with what was sent, so it is announced at once.
-                  <Banner tone="warning" role="alert" className="mb-2 w-fit max-w-full">
+                  <Banner tone="warning" role="alert" className="mb-2">
                     {notice}
                   </Banner>
                 ) : null}

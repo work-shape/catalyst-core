@@ -758,6 +758,31 @@ describe("chat UI message history projection", () => {
       }
     });
   });
+  // Fails without the change: a refused run left an empty assistant row, of which only the
+  // copy and retry buttons showed.
+  it("gives a run that failed or was stopped before anything arrived no row", () => {
+    const ended = (
+      status: AgentRunProjection["status"],
+      text: string
+    ): Parameters<typeof toUiMessages>[1] => ({
+      run: { id: "run_ended", status },
+      projection: {
+        runId: "run_ended",
+        lastSequence: 2,
+        status,
+        parts: text ? [{ type: "text", text }] : [],
+        text,
+        reasoning: [],
+        activeToolCalls: []
+      }
+    });
+
+    expect(toUiMessages([], ended("failed", ""))).toEqual([]);
+    expect(toUiMessages([], ended("cancelled", ""))).toEqual([]);
+    // What did arrive stays, and a running run keeps its row while nothing has arrived yet.
+    expect(toUiMessages([], ended("failed", "Half an answer"))).toHaveLength(1);
+    expect(toUiMessages([], ended("running", ""))).toHaveLength(1);
+  });
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {

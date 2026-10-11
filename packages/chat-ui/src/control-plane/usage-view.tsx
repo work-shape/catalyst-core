@@ -397,7 +397,7 @@ function SpendBudgetProgress({
         <div
           className={cn(
             "h-full rounded-full transition-[width]",
-            reached ? "bg-destructive" : percentage >= 80 ? "bg-amber-500" : "bg-primary"
+            reached ? "bg-destructive" : percentage >= 80 ? "bg-warning" : "bg-primary"
           )}
           style={{ width: `${barPercentage}%` }}
         />

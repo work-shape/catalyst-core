@@ -15,7 +15,7 @@ export const workspace = defineTranslations({
     runModelNotPriced:
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
     runModelNotPricedOperator:
-      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. The operator adds the price in the release config under usage.costs. Until then, choose another model.",
+      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the operator has added the price.",
     runNotStarted:
       "The reply could not be started because the service is busy or unavailable. Please send your message again.",
     runStopped: "The reply was stopped.",
@@ -47,7 +47,7 @@ export const workspace = defineTranslations({
     runModelNotPriced:
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
     runModelNotPricedOperator:
-      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Der Betreiber trägt den Preis in der Release-Konfiguration unter usage.costs ein. Wähle bis dahin ein anderes Modell.",
+      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis der Betreiber den Preis eingetragen hat.",
     runNotStarted:
       "Die Antwort konnte nicht gestartet werden, weil der Dienst ausgelastet oder nicht erreichbar ist. Bitte sende deine Nachricht erneut.",
     runStopped: "Die Antwort wurde gestoppt.",

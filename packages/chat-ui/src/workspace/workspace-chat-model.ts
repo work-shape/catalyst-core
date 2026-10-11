@@ -340,6 +340,8 @@ export function useWorkspaceChatModel({
   collaborationWorkspacesAvailable
 }: WorkspaceChatModelInput): WorkspaceChatModel {
   const [notice, setNotice] = useState<string | undefined>();
+  // The run whose notice the person answered by picking another model.
+  const [answeredRunId, setAnsweredRunId] = useState<string | undefined>();
   const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
   // The user's default once they change it here; until then the stored one applies.
   const [changedUserModelPicks, setChangedUserModelPicks] = useState<ModelPicks | undefined>();
@@ -558,7 +560,14 @@ export function useWorkspaceChatModel({
     createTranslationContext(activeLocale).t,
     { seesRateCard: canViewUsageGovernance(meQuery.data) }
   );
-  const visibleNotice = notice ?? controllerTerminalNotice;
+  // A notice of an ended run goes when another model is picked. The next run is another run,
+  // so its notice shows again.
+  const endedRunId = controller.activeRun?.run.id;
+  const visibleNotice =
+    notice ??
+    (endedRunId !== undefined && endedRunId === answeredRunId
+      ? undefined
+      : controllerTerminalNotice);
 
   function showConversationInActiveCollaborationWorkspace(
     conversationId: string,
@@ -1019,13 +1028,18 @@ export function useWorkspaceChatModel({
       ),
       selectAgentName: setSelectedAgentName,
       // Picking the agent's own model is not a pick: the next agent then uses its own model too.
-      selectModelBindingId: (modelBindingId) =>
+      selectModelBindingId: (modelBindingId) => {
+        if (modelBindingId !== selectedModelBindingId) {
+          setNotice(undefined);
+          setAnsweredRunId(endedRunId);
+        }
         changeModelPicks({
           ...(modelBindingId && modelBindingId !== selectableModels[0]?.bindingId
             ? { modelBindingId }
             : {}),
           reasoningEfforts: modelPicks.reasoningEfforts
-        }),
+        });
+      },
       selectReasoningEffort: (modelBindingId, effort) =>
         changeModelPicks({
           ...modelPicks,
