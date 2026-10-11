@@ -21,6 +21,18 @@ type WorkspacePatchLine =
   | { kind: "delete"; text: string }
   | { kind: "add"; text: string };
 
+/** How much of a file's line a refusal quotes. A longer line is cut and marked. */
+const QUOTED_FILE_LINE_MAX_CHARS = 400;
+const REBUILD_PATCH =
+  "Read the file again with workspace.read_file and rebuild the patch from what it has.";
+
+/** The line as the file has it, quoted so that tabs and blanks at its end can be seen. */
+function quotedLine(line: string): string {
+  return line.length > QUOTED_FILE_LINE_MAX_CHARS
+    ? `${JSON.stringify(line.slice(0, QUOTED_FILE_LINE_MAX_CHARS))} (cut after ${QUOTED_FILE_LINE_MAX_CHARS} characters)`
+    : JSON.stringify(line);
+}
+
 export function parseWorkspaceApplyPatch(
   patch: string,
   limits: WorkspaceCommandServiceLimits
@@ -142,10 +154,14 @@ export function applyWorkspacePatchToText(
   for (const hunk of change.hunks) {
     const startIndex = hunk.oldStart === 0 ? 0 : hunk.oldStart - 1;
     if (startIndex < cursor || startIndex > existing.lines.length) {
-      return validationFailed("Workspace patch hunk does not apply at the expected line", {
-        path: change.path,
-        line: hunk.oldStart
-      });
+      return validationFailed(
+        `Workspace patch hunk does not apply at the expected line: the hunk starts at line ${hunk.oldStart} of '${change.path}', and the file has ${existing.lines.length} lines. Nothing was changed. ${REBUILD_PATCH}`,
+        {
+          path: change.path,
+          line: hunk.oldStart,
+          fileLineCount: existing.lines.length
+        }
+      );
     }
     output.push(...existing.lines.slice(cursor, startIndex));
     cursor = startIndex;
@@ -157,10 +173,18 @@ export function applyWorkspacePatchToText(
       }
       const current = existing.lines[cursor];
       if (current !== line.text) {
-        return validationFailed("Workspace patch context did not match file content", {
-          path: change.path,
-          line: cursor + 1
-        });
+        return validationFailed(
+          `Workspace patch context did not match file content at line ${cursor + 1} of '${change.path}'. ${
+            current === undefined
+              ? `The file ends at line ${existing.lines.length}.`
+              : `The file has ${quotedLine(current)} there.`
+          } Nothing was changed. ${REBUILD_PATCH}`,
+          {
+            path: change.path,
+            line: cursor + 1,
+            fileLineCount: existing.lines.length
+          }
+        );
       }
       if (line.kind === "context") {
         output.push(current);
