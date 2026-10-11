@@ -48,16 +48,16 @@ describe("OpenAI provider-native web search", () => {
         providerId: "openai",
         model: "gpt-5.5",
         messages: [{ role: "user", content: "search the web" }],
-        tools: [OPENAI_WEB_SEARCH_TOOL]
+        tools: [OPENAI_WEB_SEARCH_TOOL, { name: "workspace.exec", description: "Execute" }]
       },
       createRuntimeContext()
     );
 
     expect(requestBody).toMatchObject({
       include: ["reasoning.encrypted_content", "web_search_call.action.sources"],
-      tools: [{ type: "web_search" }]
+      tools: [{ type: "function", name: "workspace_exec" }, { type: "web_search" }]
     });
-    expect(requestBody?.tools?.[0]).not.toHaveProperty("name");
+    expect(requestBody?.tools?.[1]).not.toHaveProperty("name");
     expect(completion).toMatchObject({
       text: "Search completed.",
       toolCalls: [],

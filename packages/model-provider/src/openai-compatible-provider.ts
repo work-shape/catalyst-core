@@ -37,8 +37,7 @@ import {
   toOpenAiChatMessages,
   toOpenAiResponsesInput,
   toOpenAiResponsesTools,
-  toResponsesModelUsage,
-  type OpenAiCompatibleProviderTool
+  toResponsesModelUsage
 } from "./openai-compatible-mapping";
 import {
   isEncryptedContentAboveStringLimit,
@@ -127,12 +126,11 @@ export class OpenAiCompatibleChatProvider {
     request: ModelCompletionRequest,
     context: TransportCallContext
   ): Promise<ModelCompletion> {
-    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
-      request.tools
-    );
+    const metadata = createProviderToolMetadata(request.tools);
+    const { providerNativeTools, toolNameMap } = metadata;
     assertNoProviderNativeToolsForChatCompletions(providerNativeTools);
     const response = await this.postChatCompletion({
-      body: this.createChatCompletionsRequestBody(request, providerTools),
+      body: this.createChatCompletionsRequestBody(request, metadata),
       signal: context.signal
     });
 
@@ -164,13 +162,12 @@ export class OpenAiCompatibleChatProvider {
     request: ModelCompletionRequest,
     context: TransportCallContext
   ): AsyncIterable<ModelAdapterStreamEvent> {
-    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
-      request.tools
-    );
+    const metadata = createProviderToolMetadata(request.tools);
+    const { providerNativeTools, toolNameMap } = metadata;
     assertNoProviderNativeToolsForChatCompletions(providerNativeTools);
     const response = await this.postChatCompletion({
       body: {
-        ...this.createChatCompletionsRequestBody(request, providerTools),
+        ...this.createChatCompletionsRequestBody(request, metadata),
         stream: true,
         stream_options: {
           include_usage: true
@@ -195,11 +192,10 @@ export class OpenAiCompatibleChatProvider {
     request: ModelCompletionRequest,
     context: TransportCallContext
   ): Promise<ModelCompletion> {
-    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
-      request.tools
-    );
+    const metadata = createProviderToolMetadata(request.tools);
+    const { toolNameMap } = metadata;
     const response = await this.postResponse({
-      body: this.createResponsesRequestBody(request, providerTools, providerNativeTools),
+      body: this.createResponsesRequestBody(request, metadata),
       signal: context.signal
     });
 
@@ -229,12 +225,11 @@ export class OpenAiCompatibleChatProvider {
     request: ModelCompletionRequest,
     context: TransportCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
-    const { providerTools, providerNativeTools, toolNameMap } = createProviderToolMetadata(
-      request.tools
-    );
+    const metadata = createProviderToolMetadata(request.tools);
+    const { toolNameMap } = metadata;
     const response = await this.postResponse({
       body: {
-        ...this.createResponsesRequestBody(request, providerTools, providerNativeTools),
+        ...this.createResponsesRequestBody(request, metadata),
         stream: true
       },
       signal: context.signal
@@ -314,14 +309,14 @@ export class OpenAiCompatibleChatProvider {
 
   private createChatCompletionsRequestBody(
     request: ModelCompletionRequest,
-    providerTools: OpenAiCompatibleProviderTool[]
+    metadata: ReturnType<typeof createProviderToolMetadata>
   ): OpenAiCompatibleRequestBody {
     return {
       model: request.model || this.options.model,
-      messages: toOpenAiChatMessages(request.messages),
+      messages: toOpenAiChatMessages(request.messages, metadata),
       reasoning_effort: this.resolveReasoningEffort(request),
       ...(request.fastMode ? { service_tier: "priority" as const } : {}),
-      tools: providerTools.map(({ tool, providerName }) => ({
+      tools: metadata.providerTools.map(({ tool, providerName }) => ({
         type: "function",
         function: {
           name: providerName,
@@ -338,9 +333,9 @@ export class OpenAiCompatibleChatProvider {
 
   private createResponsesRequestBody(
     request: ModelCompletionRequest,
-    providerTools: OpenAiCompatibleProviderTool[],
-    providerNativeTools: ReturnType<typeof createProviderToolMetadata>["providerNativeTools"]
+    metadata: ReturnType<typeof createProviderToolMetadata>
   ): OpenAiResponsesRequestBody {
+    const { providerTools, providerNativeTools } = metadata;
     if (isOpenAiResponsesContinuationAboveStringLimit(this.id, request.continuation)) {
       // The provider would answer 400 to this request, every time. Refuse it before it is sent.
       throw new ModelProviderError({
@@ -355,6 +350,7 @@ export class OpenAiCompatibleChatProvider {
       model,
       input: toOpenAiResponsesInput(
         request.messages,
+        metadata,
         readOpenAiResponsesContinuationItems(this.id, request.continuation),
         readOpenAiResponsesCompactionItem(this.id, request.continuation)
       ),

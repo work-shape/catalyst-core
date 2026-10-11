@@ -15,7 +15,7 @@
             {
               "type": "function",
               "function": {
-                "name": "tool_Z2V0X3dlYXRoZXI",
+                "name": "get_weather",
                 "description": "Reads the weather of a city.",
                 "parameters": {
                   "type": "object",
@@ -33,7 +33,7 @@
             {
               "type": "function",
               "function": {
-                "name": "tool_Z2V0X3RpbWU",
+                "name": "get_time",
                 "description": "Reads the time of a zone.",
                 "parameters": {
                   "type": "object",
@@ -74,7 +74,7 @@
                       "id": "call_recorded_1",
                       "type": "function",
                       "function": {
-                        "name": "tool_Z2V0X3dlYXRoZXI",
+                        "name": "get_weather",
                         "arguments": ""
                       }
                     }
@@ -140,7 +140,7 @@
                       "id": "call_recorded_2",
                       "type": "function",
                       "function": {
-                        "name": "tool_Z2V0X3RpbWU",
+                        "name": "get_time",
                         "arguments": ""
                       }
                     }

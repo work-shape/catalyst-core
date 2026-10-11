@@ -1,10 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  AppError,
-  type MessageCitation,
-  type ModelTokenUsage,
-  type WebSource
-} from "@vivd-catalyst/core";
+import { type MessageCitation, type ModelTokenUsage, type WebSource } from "@vivd-catalyst/core";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
   isModelFunctionTool,
@@ -71,19 +66,87 @@ type OpenAiChatTextImageContent =
         }
     >;
 
-export function createProviderToolMetadata(tools: ModelTool[]): {
+const PROVIDER_TOOL_NAME_MAX_CHARS = 64;
+const PROVIDER_TOOL_NAME_PREFIX_CHARS = 55;
+const PROVIDER_TOOL_NAME_HASH_CHARS = 8;
+const PROVIDER_TOOL_NAME_LAST_LEVEL = 2;
+
+interface ProviderToolName {
+  productName: string;
+  base: string;
+  hash: string;
+  level: number;
+}
+
+function createToolName(productName: string): ProviderToolName {
+  return {
+    productName,
+    base: productName.replace(/[^a-zA-Z0-9_-]/gu, "_"),
+    hash: createHash("sha256").update(productName, "utf8").digest("hex"),
+    level: productName.length === 0 ? 1 : 0
+  };
+}
+
+function wireNameAtLevel({ base, hash, level }: ProviderToolName): string {
+  if (level >= PROVIDER_TOOL_NAME_LAST_LEVEL)
+    return `t_${hash.slice(0, PROVIDER_TOOL_NAME_MAX_CHARS - 2)}`;
+  if (level === 0 && base.length > 0 && base.length <= PROVIDER_TOOL_NAME_MAX_CHARS) {
+    return base;
+  }
+  const suffix = hash.slice(0, PROVIDER_TOOL_NAME_HASH_CHARS);
+  return base ? `${base.slice(0, PROVIDER_TOOL_NAME_PREFIX_CHARS)}_${suffix}` : suffix;
+}
+
+/** The wire names of one request: the offered tools, and a valid name for any other tool. */
+export interface ProviderToolNames {
+  wireNameFor: (productName: string) => string;
+}
+
+// A wire name depends only on its product name and the set of product names offered in the
+// request, because prompt caching depends on stable names. The order of the tools does not
+// matter: while two or more offered names share a wire name, every one of them moves up one
+// level together, so none of them keeps the plain name. The last level is the hash alone.
+// The way back is the table built here, never a decoding of the wire name.
+export function createProviderToolMetadata(tools: ModelTool[]): ProviderToolNames & {
   providerTools: OpenAiCompatibleProviderTool[];
   providerNativeTools: ModelProviderNativeTool[];
   toolNameMap: Map<string, string>;
 } {
-  const providerTools = tools.filter(isModelFunctionTool).map((tool) => ({
-    tool,
-    providerName: toProviderToolName(tool.name)
-  }));
+  const functionTools = tools.filter(isModelFunctionTool);
+  const names = [...new Set(functionTools.map((tool) => tool.name))].map(createToolName);
+  for (;;) {
+    const groups = new Map<string, ProviderToolName[]>();
+    for (const name of names) {
+      const wireName = wireNameAtLevel(name);
+      groups.set(wireName, [...(groups.get(wireName) ?? []), name]);
+    }
+    // A name at the last level stays there. Each name moves at most twice, so this ends.
+    const promoted = [...groups.values()]
+      .filter((group) => group.length > 1)
+      .flat()
+      .filter((name) => name.level < PROVIDER_TOOL_NAME_LAST_LEVEL);
+    if (promoted.length === 0) break;
+    for (const name of promoted) {
+      name.level += 1;
+    }
+  }
+
+  const forwardNames = new Map(names.map((name) => [name.productName, wireNameAtLevel(name)]));
+  const toolNameMap = new Map(
+    [...forwardNames].map(([productName, wireName]) => [wireName, productName])
+  );
+  function wireNameFor(productName: string): string {
+    const offeredName = forwardNames.get(productName);
+    if (offeredName !== undefined) return offeredName;
+    const name = createToolName(productName);
+    if (toolNameMap.has(wireNameAtLevel(name))) name.level = 1;
+    return wireNameAtLevel(name);
+  }
   return {
-    providerTools,
+    providerTools: functionTools.map((tool) => ({ tool, providerName: wireNameFor(tool.name) })),
     providerNativeTools: tools.filter(isModelProviderNativeTool),
-    toolNameMap: new Map(providerTools.map(({ tool, providerName }) => [providerName, tool.name]))
+    toolNameMap,
+    wireNameFor
   };
 }
 
@@ -164,14 +227,17 @@ function normalizeCachedInputTokens(
   return Math.min(Math.max(Math.trunc(value), 0), inputTokens);
 }
 
-export function toOpenAiChatMessages(messages: ModelMessage[]): OpenAiCompatibleMessage[] {
+export function toOpenAiChatMessages(
+  messages: ModelMessage[],
+  toolNames: ProviderToolNames
+): OpenAiCompatibleMessage[] {
   const output: OpenAiCompatibleMessage[] = [];
   const pendingVisualMessages: OpenAiCompatibleMessage[] = [];
   messages.forEach((message, index) => {
     if (message.role !== "tool") {
       flushPendingVisualMessages(output, pendingVisualMessages);
     }
-    output.push(...toOpenAiChatMessagesForOne(message, pendingVisualMessages));
+    output.push(...toOpenAiChatMessagesForOne(message, pendingVisualMessages, toolNames));
     if (message.role === "tool" && messages[index + 1]?.role !== "tool") {
       flushPendingVisualMessages(output, pendingVisualMessages);
     }
@@ -182,7 +248,8 @@ export function toOpenAiChatMessages(messages: ModelMessage[]): OpenAiCompatible
 
 function toOpenAiChatMessagesForOne(
   message: ModelMessage,
-  pendingVisualMessages: OpenAiCompatibleMessage[]
+  pendingVisualMessages: OpenAiCompatibleMessage[],
+  toolNames: ProviderToolNames
 ): OpenAiCompatibleMessage[] {
   if (message.role === "assistant") {
     return [
@@ -193,7 +260,7 @@ function toOpenAiChatMessagesForOne(
           id: toolCall.toolCallId,
           type: "function",
           function: {
-            name: toProviderToolName(toolCall.toolName),
+            name: toolNames.wireNameFor(toolCall.toolName),
             arguments: serializeToolInput(toolCall)
           }
         }))
@@ -244,6 +311,7 @@ function toOpenAiChatMessagesForOne(
 
 export function toOpenAiResponsesInput(
   messages: ModelMessage[],
+  toolNames: ProviderToolNames,
   encryptedReasoningItems: OpenAiResponsesContinuationState["encryptedReasoningItems"] = [],
   compactionItem?: OpenAiResponsesCompactionItem
 ): OpenAiResponseInput {
@@ -271,7 +339,7 @@ export function toOpenAiResponsesInput(
         input.push({
           type: "function_call",
           call_id: toolCall.toolCallId,
-          name: toProviderToolName(toolCall.toolName),
+          name: toolNames.wireNameFor(toolCall.toolName),
           arguments: serializeToolInput(toolCall)
         });
       }
@@ -570,17 +638,6 @@ export function readOpenAiResponsesWebMetadata(payload: OpenAiResponsesResponse)
 
 export function readOpenAiResponsesWebSearchCallCount(payload: OpenAiResponsesResponse): number {
   return payload.output?.filter((item) => item.type === "web_search_call").length ?? 0;
-}
-
-export function toProviderToolName(toolName: string): string {
-  const providerName = `tool_${Buffer.from(toolName, "utf8").toString("base64url")}`;
-  if (providerName.length > 64) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Tool name '${toolName}' is too long for the OpenAI-compatible provider name limit`
-    );
-  }
-  return providerName;
 }
 
 /** The product's native tools as the responses format names them. */

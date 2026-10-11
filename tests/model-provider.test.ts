@@ -107,6 +107,7 @@ describe("OpenAI-compatible model provider", () => {
     );
 
     const providerToolNames = requestBody?.tools.map((tool) => tool.function.name) ?? [];
+    expect(providerToolNames).toEqual(["a_b", "a__dot__b"]);
     expect(new Set(providerToolNames).size).toBe(2);
     expect(completion.toolCalls[0]?.toolName).toBe("a__dot__b");
     expect(completion.usage).toMatchObject({
