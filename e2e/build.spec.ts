@@ -448,25 +448,44 @@ test("a long history comes a page at a time", async ({ page }) => {
   const name = "e2e_history_probe";
   await signInViaApi(page, superadminUser);
   await deleteSkill(page, name);
-  // Two revisions more than one page holds.
-  for (let index = 1; index <= 52; index += 1) {
-    await putSkill(page, name, `Text ${index}.`);
-  }
+  await putSkill(page, name, "The text.");
   try {
     await page.setViewportSize(WIDE);
+    // Two revisions more than one page holds. The instance answers the first read with its
+    // one revision, and this test makes 52 of its shape: writing them would put some 150
+    // calls on the instance's record under the tests of other files that read its first page.
+    // The paging of the instance itself is held in tests/asset-operation-bounds.test.ts.
     const reads: URLSearchParams[] = [];
-    page.on("request", (request) => {
-      const url = new URL(request.url());
-      if (url.pathname === `/api/v1/assets/skill/${name}/revisions`) {
-        reads.push(url.searchParams);
+    await page.route(
+      (url) => url.pathname === `/api/v1/assets/skill/${name}/revisions`,
+      async (route) => {
+        const asked = new URL(route.request().url()).searchParams;
+        reads.push(asked);
+        const response = await route.fetch({
+          url: route.request().url().replace(/\?.*$/u, "?limit=1")
+        });
+        const real: unknown = await response.json();
+        const stored = items(real)[0];
+        const older = asked.has("cursor");
+        const numbers = older ? [2, 1] : Array.from({ length: 50 }, (_, index) => 52 - index);
+        await route.fulfill({
+          response,
+          json: {
+            items: numbers.map((revision) => ({
+              ...(typeof stored === "object" ? stored : {}),
+              revision,
+              operation: revision === 1 ? "create" : "update"
+            })),
+            ...(older ? {} : { nextCursor: "after-three" })
+          }
+        });
       }
-    });
+    );
     await page.goto(`/build/skills/${name}`);
     await page.getByRole("button", { name: "History", exact: true }).click();
     const history = page.getByRole("dialog", { name: "History", exact: true });
     const rows = history.locator("[data-revision]");
     await expect(rows).toHaveCount(50);
-    await expect(rows.first()).toContainText("Current");
     expect(reads).toHaveLength(1);
     expect(reads[0]?.get("limit")).toBe("50");
     expect(reads[0]?.has("cursor")).toBe(false);
@@ -476,9 +495,10 @@ test("a long history comes a page at a time", async ({ page }) => {
     await expect(history.getByRole("button", { name: "Show more", exact: true })).toHaveCount(0);
     expect(reads).toHaveLength(2);
     expect(reads[1]?.get("limit")).toBe("50");
-    expect(reads[1]?.get("cursor")).toBeTruthy();
-    // Still one current revision, the newest.
+    expect(reads[1]?.get("cursor")).toBe("after-three");
+    // One current revision, the newest.
     await expect(history.getByText("Current", { exact: true })).toHaveCount(1);
+    await expect(rows.first()).toContainText("Current");
   } finally {
     await deleteSkill(page, name);
   }

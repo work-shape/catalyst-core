@@ -385,19 +385,26 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
       .getByRole("button", { name: "Operations", exact: true })
   ).toBeVisible();
   const runRow = approverPage.locator(`tr[data-operation-run-id="${runId}"]`);
+  // The page lists every call on the instance, a read of an asset included, the newest
+  // first. The specs beside this one make many, so the call is found by its operation.
+  const filters = approverPage.locator("[data-operation-run-filters]");
+  const onlyTheTool = (label = "Operation, exact name") =>
+    filters.getByRole("searchbox", { name: label }).fill(TOOL);
+  await onlyTheTool();
   await expect(runRow).toHaveAttribute("data-status", "done");
   await expect(runRow).toContainText(TOOL);
   await expect(runRow).toContainText("E2E Inbox");
   await expect(runRow).toContainText("Done");
 
   // The filters narrow the list and say when nothing matches.
-  const filters = approverPage.locator("[data-operation-run-filters]");
-  await filters.getByRole("searchbox", { name: "Operation, exact name" }).fill(TOOL);
   await expect(runRow).toBeVisible();
   await expect(approverPage.locator("tr[data-operation-run-id]")).toHaveCount(1);
   await filters.getByRole("searchbox", { name: "Operation, exact name" }).fill("no.such_operation");
   await expect(approverPage.getByText("No call matches these filters.")).toBeVisible();
   await approverPage.getByRole("button", { name: "Clear filters" }).first().click();
+  await expect(filters.getByRole("searchbox", { name: "Operation, exact name" })).toHaveValue("");
+  await expect(approverPage.locator("tr[data-operation-run-id]").first()).toBeVisible();
+  await onlyTheTool();
   await expect(runRow).toBeVisible();
 
   // The detail names the decision and the correlation id, and carries no input or output.
@@ -421,7 +428,13 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
 
   await approverPage.keyboard.press("Escape");
   await shoot(approverPage, "operations-detail", async () => {
-    // The detail is not part of the address: every reload opens it again.
+    // Neither the filter nor the detail is part of the address: every reload sets them again.
+    await onlyTheTool(
+      (await approverPage.evaluate(() => window.localStorage.getItem("vivd-catalyst:locale"))) ===
+        "de"
+        ? "Operation, genauer Name"
+        : undefined
+    );
     await runRow.getByRole("button").first().click();
     await expect(approverPage.locator("[data-operation-run-detail]")).toBeVisible();
   });
@@ -434,6 +447,7 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   await approverPage.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
   await approverPage.reload();
   await expect(approverPage.getByRole("heading", { name: "Operationen", level: 1 })).toBeVisible();
+  await onlyTheTool("Operation, genauer Name");
   await expect(runRow).toContainText("Erledigt");
   await runRow.getByRole("button", { name: `Aufruf von ${TOOL} anzeigen` }).click();
   const germanDetail = approverPage.getByRole("dialog", { name: "Aufruf einer Operation" });

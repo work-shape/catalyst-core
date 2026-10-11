@@ -318,7 +318,10 @@ test("a message sent directly after switching lands in the conversation switched
 });
 
 test("start page centres the composer and settles it at the bottom after the first message", async ({
-  page
+  page,
+  // The picker shows every agent of the instance, an agent in a Namespace included: this test
+  // steps through its options, so it runs when no other test holds a Namespace.
+  accessState: _accessState
 }) => {
   await serveAgentSettings(page, { showAgentDescriptions: true });
   await signInViaUi(page, normalUser);
@@ -369,8 +372,7 @@ test("start page centres the composer and settles it at the bottom after the fir
   await expect(agentPicker).toHaveAttribute("aria-expanded", "false");
   await agentPicker.click();
   await expect(agentListbox).toHaveAccessibleName("Select agent");
-  // Not a count of the options: an agent another spec file holds at this moment shows here too.
-  await expect(agentOptions.filter({ hasText: "Research Assistant" })).toHaveCount(1);
+  await expect(agentOptions).toHaveCount(2);
   await expect(agentOptions.filter({ hasText: "Application Assistant" })).toContainText(
     "Help with application and document review."
   );
