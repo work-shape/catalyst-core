@@ -23,6 +23,12 @@ import {
 } from "@vivd-catalyst/core";
 import { createSeedApi, type SeedApi } from "./api";
 import {
+  assertLocalDevelopmentHost,
+  assertLoopbackAddress,
+  localOnlyFetch,
+  type ResolveHost
+} from "./adapters/local-network";
+import {
   PERSON_PERMISSION_REFS,
   cliPrincipal,
   firstDraft,
@@ -63,6 +69,8 @@ interface SeedOptions {
   envFile: string;
   /** Replaces the network. For tests. */
   fetchImpl?: ApiClientOptions["fetchImpl"];
+  /** Replaces the lookup of the instance's host name. For tests. */
+  resolveHost?: ResolveHost;
 }
 
 /** What one part of the seed did: how many things it made, and how many were there already. */
@@ -77,35 +85,22 @@ export interface SeedReport {
   steps: SeedStep[];
 }
 
-const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
-const LOCAL_HOST_SUFFIXES = [".localhost", ".test"];
-
-/** The seed signs in with development passwords, so it runs against this machine only. */
-export function assertLocalDevelopmentHost(baseUrl: string): void {
-  const { hostname } = new URL(baseUrl);
-  if (
-    !LOCAL_HOSTS.includes(hostname) &&
-    !LOCAL_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix))
-  ) {
-    throw new Error(
-      `Refusing to seed '${hostname}'. The seed signs in with development passwords and only runs against localhost, 127.0.0.1, ::1 or a name ending in .localhost or .test.`
-    );
-  }
-}
-
 /**
  * Fills a running local instance with the test company. Everything goes through the
  * instance's own operations and the config CLI. Each part reads what is there first and adds
  * only what is missing, so a second run changes nothing.
  */
 export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
-  const baseUrl = options.baseUrl.replace(/\/+$/u, "");
-  assertLocalDevelopmentHost(baseUrl);
+  const origin = assertLocalDevelopmentHost(options.baseUrl);
+  await assertLoopbackAddress(origin, options.resolveHost);
+  const baseUrl = origin.origin;
+  // Every request of the run goes through this: the sign-ins, the operations, the config CLI.
+  const fetchImpl = localOnlyFetch(origin, options.fetchImpl);
   const { env } = options;
   const config = await loadClientInstanceConfigFromFile(options.appConfigPath);
   const standalone = config.auth.standalone;
   const superadmin = standalone?.seedUsers.find((user) => user.roles.includes("superadmin"));
-  const origin = env.CHAT_UI_ORIGIN ?? standalone?.trustedOrigins[0];
+  const uiOrigin = env.CHAT_UI_ORIGIN ?? standalone?.trustedOrigins[0];
   const secrets = createEnvironmentSecretResolver({
     env,
     readSecretFile: (path) => readFile(path, "utf8")
@@ -116,7 +111,7 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   if (
     config.clientInstance.environment !== "development" ||
     !superadmin ||
-    !origin ||
+    !uiOrigin ||
     !superadminPassword
   ) {
     throw new Error(
@@ -130,10 +125,10 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
         baseUrl,
         fetchImpl: await signInForSessionFetch({
           apiBaseUrl: baseUrl,
-          origin,
+          origin: uiOrigin,
           email,
           password,
-          ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
+          fetchImpl
         })
       })
     );
@@ -156,7 +151,7 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   const moduleOn = (name: string) =>
     modules.some((module) => module.name === name && module.enabled);
 
-  const instance = { ...options, baseUrl };
+  const instance = { ...options, baseUrl, fetchImpl };
   const userIds = await seedPeople(root, password, moduleOn("userInvitations"), steps);
   const apiKey = await seedCliKey(root, instance, secrets, steps);
   await seedInstanceAssets(root, instance, apiKey, steps);
@@ -269,15 +264,15 @@ async function seedNamespaces(
 
 type InstanceOptions = Pick<
   SeedOptions,
-  "baseUrl" | "envFile" | "fetchImpl" | "assetsDir" | "instanceAssetsDir"
->;
+  "baseUrl" | "envFile" | "assetsDir" | "instanceAssetsDir"
+> & { fetchImpl: NonNullable<SeedOptions["fetchImpl"]> };
 
 async function keyIsAccepted(options: InstanceOptions, apiKey: string): Promise<boolean> {
   try {
     await createConfigApi({
       baseUrl: options.baseUrl,
       apiKey,
-      ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
+      fetchImpl: options.fetchImpl
     });
     return true;
   } catch (error) {
@@ -353,7 +348,7 @@ async function push(
     {
       cwd: workingDir,
       env: { [API_KEY_ENV_NAME]: apiKey },
-      ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
+      fetchImpl: options.fetchImpl,
       stdout: (text) => output.push(text),
       stderr: (text) => output.push(text)
     }

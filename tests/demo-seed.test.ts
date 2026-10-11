@@ -201,9 +201,87 @@ describe("the demo seed on the fixture instance", () => {
     for (const refused of [
       "http://10.0.0.5:4100",
       "https://test.example.com",
-      "http://localtest.me"
+      "http://localtest.me",
+      "http://localhost.example.com",
+      "http://127.0.0.1.nip.io",
+      "http://localhost@example.com"
     ]) {
       expect(() => assertLocalDevelopmentHost(refused)).toThrow("Refusing to seed");
     }
+  });
+
+  /** The seed against an address and a network of the test's choice. */
+  const seedAt = (
+    baseUrl: string,
+    network: { resolveHost?: (hostname: string) => Promise<string[]>; answer?: () => Response }
+  ) => {
+    const requested: string[] = [];
+    const run = seedDemo({
+      baseUrl,
+      appConfigPath: fixtureConfig,
+      assetsDir: seeded().assetsDir,
+      instanceAssetsDir: seeded().instanceAssetsDir,
+      env: {},
+      envFile: seeded().envFile,
+      ...(network.resolveHost ? { resolveHost: network.resolveHost } : {}),
+      fetchImpl: (resource, init) => {
+        requested.push(new Request(resource, init).url);
+        return Promise.resolve(network.answer?.() ?? new Response(null, { status: 500 }));
+      }
+    });
+    return { run, requested };
+  };
+
+  it("refuses an address with a user, a password or a query and repeats none of it", async () => {
+    for (const address of [
+      "http://someone:hunter2hunter2@127.0.0.1:4210",
+      "http://127.0.0.1:4210/?token=hunter2hunter2",
+      "http://127.0.0.1:4210/#hunter2hunter2"
+    ]) {
+      const { run, requested } = seedAt(address, {});
+      const error: unknown = await run.catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(Error);
+      const message = error instanceof Error ? error.message : "";
+      expect(message).toContain("must not carry a user, a password, a query or a fragment");
+      expect(message).not.toContain("hunter2");
+      expect(requested).toEqual([]);
+    }
+  });
+
+  it("refuses a local name that resolves to another machine before it sends anything", async () => {
+    const elsewhere = seedAt("http://catalyst.test:4210", {
+      resolveHost: () => Promise.resolve(["127.0.0.1", "203.0.113.7"])
+    });
+    await expect(elsewhere.run).rejects.toThrow(
+      "Refusing to seed 'catalyst.test': the name resolves to an address that is not this machine."
+    );
+    expect(elsewhere.requested).toEqual([]);
+
+    const unknown = seedAt("http://demo.localhost:4210", {
+      resolveHost: () => Promise.reject(new Error("ENOTFOUND"))
+    });
+    await expect(unknown.run).rejects.toThrow("the name does not resolve to an address");
+    expect(unknown.requested).toEqual([]);
+
+    // A name that is this machine gets its first request, the sign-in.
+    const here = seedAt("http://catalyst.test:4210", {
+      resolveHost: () => Promise.resolve(["127.0.0.1", "::1"])
+    });
+    await expect(here.run).rejects.toThrow("was refused with status 500");
+    expect(here.requested).toEqual(["http://catalyst.test:4210/api/auth/sign-in/email"]);
+  });
+
+  it("follows no redirect, so a sign-in is never sent on to another host", async () => {
+    const { run, requested } = seedAt("http://127.0.0.1:4210", {
+      answer: () =>
+        new Response(null, {
+          status: 307,
+          headers: { location: "https://catalyst.example.com/api/auth/sign-in/email" }
+        })
+    });
+    await expect(run).rejects.toThrow(
+      "http://127.0.0.1:4210 answered with a redirect (status 307). The seed follows none"
+    );
+    expect(requested).toEqual(["http://127.0.0.1:4210/api/auth/sign-in/email"]);
   });
 });
