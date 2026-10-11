@@ -44,6 +44,14 @@ export function resolveAppRights(context: Pick<PlatformContext, "actions"> | und
   };
 }
 
+/**
+ * Whether the instance showed this reader the draft of an App. Whoever may not read the draft
+ * is answered the published view, which names no draft: nothing of a draft is offered then.
+ */
+export function appDraftShown(app: Pick<AssetSummary, "draftRevision"> | undefined): boolean {
+  return app?.draftRevision !== undefined;
+}
+
 /** Where an App stands: what its users are served, and whether its draft is ahead of that. */
 export type AppState =
   { kind: "published"; revision: number; draftAhead: boolean } | { kind: "draft_only" };
@@ -57,7 +65,8 @@ export function appState(
   return {
     kind: "published",
     revision: app.publishedRevision,
-    draftAhead: (app.draftRevision ?? app.revision) !== app.publishedRevision
+    // A view without a draft is the published one: nothing is ahead of it for this reader.
+    draftAhead: app.draftRevision !== undefined && app.draftRevision !== app.publishedRevision
   };
 }
 
@@ -71,13 +80,18 @@ export type AppRowAction = "open" | "edit" | "details" | "copy_link" | "delete";
 
 /**
  * The actions of one App for this reader. An action the reader may not take is absent. An App
- * without a published revision has nothing to open and no address its users could follow.
+ * without a published revision has nothing to open and no address its users could follow, and
+ * a reader who was not shown the draft has none to edit.
  */
-export function appRowActions(rights: AppRights, state: AppState): AppRowAction[] {
+export function appRowActions(
+  rights: AppRights,
+  state: AppState,
+  draftShown: boolean
+): AppRowAction[] {
   const published = state.kind === "published";
   return [
     ...(published ? (["open"] as const) : []),
-    ...(rights.write ? (["edit"] as const) : []),
+    ...(rights.write && draftShown ? (["edit"] as const) : []),
     ...(rights.read ? (["details"] as const) : []),
     ...(published ? (["copy_link"] as const) : []),
     ...(rights.delete ? (["delete"] as const) : [])
@@ -191,17 +205,6 @@ export function appRefusalText(error: unknown): TranslationKey | undefined {
     default:
       return undefined;
   }
-}
-
-/** Which revision the record of an App is read at. */
-export type AppReadRevision = "draft" | "published";
-
-/**
- * The revision a reader is answered: the draft for whoever may write or publish the App, the
- * published one for everybody else, who the instance refuses the draft.
- */
-export function appReadRevision(rights: Pick<AppRights, "write" | "publish">): AppReadRevision {
-  return rights.write || rights.publish ? "draft" : "published";
 }
 
 /** Why the instance gave no address for a revision of an App. */

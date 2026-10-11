@@ -28,6 +28,7 @@ import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
 import {
   APP_RIGHT_NAMES,
   appDraftRevision,
+  appDraftShown,
   appManifestSummary,
   appRefusalText,
   appTitle,
@@ -56,7 +57,7 @@ export function AppEdit({ app }: { app: string }) {
   const workspace = host?.workspace;
   const rights = host?.rights;
   const mayWrite = Boolean(workspace && rights?.write);
-  const record = useApp(workspace?.id ?? "", app, mayWrite, "draft");
+  const record = useApp(workspace?.id ?? "", app, mayWrite);
   const writes = useAppWrites(workspace?.id);
   const [turn, setTurn] = useState(0);
   const [view, setView] = useState<"preview" | "files">("preview");
@@ -74,7 +75,8 @@ export function AppEdit({ app }: { app: string }) {
   const asset = record.app;
   const name = appTitle(asset, app);
 
-  if (!rights.write || record.missing) {
+  // An answer that names no draft is the published view: the draft is not this reader's.
+  if (!rights.write || record.missing || (asset !== undefined && !appDraftShown(asset))) {
     return (
       <AppEditFrame name={name} workspace={workspace} rights={rights} onBack={backToList}>
         <AppPreviewNotice

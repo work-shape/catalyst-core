@@ -17,7 +17,7 @@ import {
   appManifestSummary,
   appPreviewProblem,
   appPreviewProblemText,
-  appReadRevision,
+  appDraftShown,
   appRefusalText,
   AppPreviewNotice,
   appPreviewState,
@@ -203,23 +203,35 @@ describe("what a reader may do with Apps", () => {
       draftAhead: false
     });
     expect(appState(summary({ publishedRevision: undefined }))).toEqual({ kind: "draft_only" });
+    // The published view names no draft: nothing is ahead for a reader who is shown it.
+    const publishedView = summary({ revision: 2, draftRevision: undefined, publishedRevision: 2 });
+    expect(appDraftShown(publishedView)).toBe(false);
+    expect(appDraftShown(summary())).toBe(true);
+    expect(appState(publishedView)).toEqual({ kind: "published", revision: 2, draftAhead: false });
   });
 
   it("offers the row actions in their order, and leaves out what the reader may not do", () => {
     const published = appState(summary());
     const draftOnly = appState(summary({ publishedRevision: undefined }));
 
-    expect(appRowActions(ALL, published)).toEqual([
+    expect(appRowActions(ALL, published, true)).toEqual([
       "open",
       "edit",
       "details",
       "copy_link",
       "delete"
     ]);
-    expect(appRowActions(WRITER, published)).toEqual(["open", "edit", "details", "copy_link"]);
-    expect(appRowActions(NO_APP_RIGHTS, published)).toEqual(["open", "copy_link"]);
+    expect(appRowActions(WRITER, published, true)).toEqual([
+      "open",
+      "edit",
+      "details",
+      "copy_link"
+    ]);
+    // A writer who was shown the published view alone has no draft to edit.
+    expect(appRowActions(WRITER, published, false)).toEqual(["open", "details", "copy_link"]);
+    expect(appRowActions(NO_APP_RIGHTS, published, false)).toEqual(["open", "copy_link"]);
     // Nothing is served yet: there is nothing to open and no address to hand on.
-    expect(appRowActions(ALL, draftOnly)).toEqual(["edit", "details", "delete"]);
+    expect(appRowActions(ALL, draftOnly, true)).toEqual(["edit", "details", "delete"]);
   });
 
   it("leads a row to the App, or to the draft for a writer while nothing is published", () => {
@@ -318,9 +330,14 @@ describe("the Apps list", () => {
 });
 
 describe("an open App (layout 2)", () => {
-  const frame = (rights: AppRights, served: { revision?: number } = { revision: 2 }) =>
+  const frame = (
+    rights: AppRights,
+    served: { revision?: number } = { revision: 2 },
+    draftShown = true
+  ) =>
     render(
       createElement(AppViewFrame, {
+        draftShown,
         name: "Angebotsrechner",
         workspace,
         rights,
@@ -352,6 +369,8 @@ describe("an open App (layout 2)", () => {
   it("offers Edit to a writer and to nobody else", () => {
     expect(frame(WRITER)).toContain("Edit</button>");
     expect(frame(NO_APP_RIGHTS)).not.toContain("Edit</button>");
+    // The published view names no draft: there is none to edit, whatever the reader holds.
+    expect(frame(WRITER, { revision: 2 }, false)).not.toContain("Edit</button>");
   });
 
   it("shows no number before the instance said which revision is served", () => {
@@ -451,14 +470,6 @@ describe("the draft of an App (layout 3)", () => {
 
     expect(markup).toContain("Preview");
     expect(markup).toContain("Files");
-  });
-
-  it("reads the draft for a writer or publisher and the published revision for everybody else", () => {
-    expect(appReadRevision({ write: true, publish: false })).toBe("draft");
-    expect(appReadRevision({ write: false, publish: true })).toBe("draft");
-    expect(appReadRevision(NO_APP_RIGHTS)).toBe("published");
-    const reader: AppRights = { ...NO_APP_RIGHTS, read: true };
-    expect(appReadRevision(reader)).toBe("published");
   });
 
   it("says in its own words that a revision lost its files or is too large to be held", () => {

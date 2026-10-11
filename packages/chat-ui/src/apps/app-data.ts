@@ -13,7 +13,7 @@ import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import { keepPageAddress, retryUnlessGone, type PageAddressState } from "../pages/page-address";
-import { appPreviewProblem, type AppPreviewProblem, type AppReadRevision } from "./app-model";
+import { appPreviewProblem, type AppPreviewProblem } from "./app-model";
 
 /** The session the Apps are read with: the one the workspace shell holds. */
 const APP_AUTH_SCOPE = "standalone";
@@ -88,24 +88,19 @@ export interface AppRead {
 }
 
 /**
- * The record of one App: its name, its two pointers and the manifest of one revision. The
- * draft is read by whoever may write or publish the App; everybody else is answered the
- * published revision, and nothing where none is published.
+ * The record of one App: its name, its pointers and the manifest of one revision. The read
+ * names no revision, so the instance chooses the view: the draft for whoever may read it, and
+ * the published revision without a `draftRevision` for everybody else who may open the App.
  */
-export function useApp(
-  workspaceId: string,
-  app: string,
-  enabled: boolean,
-  revision: AppReadRevision
-): AppRead {
+export function useApp(workspaceId: string, app: string, enabled: boolean): AppRead {
   const { client } = useWorkspaceApiClient();
   const keys = useAppKeys();
   const query = useQuery({
-    queryKey: [...keys, "app", workspaceId, app, revision],
+    queryKey: [...keys, "app", workspaceId, app],
     queryFn: ({ signal }) =>
       client.assets.get({
         params: { kind: APP_ASSET_KIND, name: app },
-        query: { workspaceId, revision },
+        query: { workspaceId },
         signal
       }),
     enabled,

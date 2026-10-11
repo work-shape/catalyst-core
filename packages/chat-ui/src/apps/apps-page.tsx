@@ -36,11 +36,10 @@ import {
   opensHere
 } from "./app-header";
 import {
-  appReadRevision,
+  appDraftShown,
   appRefusalText,
   appRowActions,
   appState,
-  NO_APP_RIGHTS,
   type AppRights,
   type AppRowAction,
   type AppState
@@ -86,12 +85,7 @@ export function AppsPage() {
   const [deleting, setDeleting] = useState<AssetSummary>();
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
-  const details = useApp(
-    workspace?.id ?? "",
-    detailsOf?.name ?? "",
-    detailsOf !== undefined,
-    appReadRevision(rights ?? NO_APP_RIGHTS)
-  );
+  const details = useApp(workspace?.id ?? "", detailsOf?.name ?? "", detailsOf !== undefined);
   // The ages are counted from when the list last arrived.
   const rows = list.rows;
   const now = useMemo(() => new Date(), [rows]);
@@ -316,7 +310,7 @@ function AppRow({
   const name = appDisplayName(app);
   const state = appState(app);
   const route = appRowRoute(workspace.id, app, state, rights);
-  const actions = appRowActions(rights, state);
+  const actions = appRowActions(rights, state, appDraftShown(app));
   const stateChips = (
     <>
       <AppStateBadge state={state} />

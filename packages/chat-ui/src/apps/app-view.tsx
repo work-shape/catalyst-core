@@ -19,35 +19,22 @@ import {
   AppStateBadge,
   CopyAppLinkItem
 } from "./app-header";
-import {
-  APP_START_ROUTE,
-  appReadRevision,
-  appTitle,
-  NO_APP_RIGHTS,
-  type AppRights
-} from "./app-model";
+import { APP_START_ROUTE, appDraftShown, appTitle, type AppRights } from "./app-model";
 import { AppPreview } from "./app-preview";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 
 /**
- * One App as its users are served it, across the full width (layout 2). The frame shows the
- * published revision; the address carries the App's own route, so a link into the App opens
- * where it points and a reload stays there. The record of the App is read at the draft for
- * whoever may write or publish it and at the published revision for a holder of the read
- * right alone. A member who only uses the App is given no record and sees it under its id.
+ * One App open across the main area (layout 2): the published revision in the frame, and the
+ * head with what this reader may do. The record is read without naming a revision: the
+ * instance answers the draft to whoever may read it and the published view to everybody else
+ * who may open the App. The way to the draft is offered only where the answer names one.
  */
 export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const { t } = useTranslation();
   const host = useAppsHost();
   const workspace = host?.workspace;
   const rights = host?.rights;
-  const record = useApp(
-    workspace?.id ?? "",
-    app,
-    // A member who only uses the App is refused its record, so none is asked for.
-    Boolean(workspace && (rights?.read || rights?.write || rights?.publish)),
-    appReadRevision(rights ?? NO_APP_RIGHTS)
-  );
+  const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
   const [shown, setShown] = useState<AppPreviewResponse>();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const showRoute = host?.showRoute;
@@ -91,6 +78,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
     return null;
   }
   const name = appTitle(record.app, app);
+  const draftShown = appDraftShown(record.app);
   const published = shown?.revision ?? record.app?.publishedRevision;
   const address = { collaborationWorkspaceId: workspace.id, app };
   return (
@@ -104,6 +92,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         onEdit={() => host.showRoute({ kind: "app-edit", ...address })}
         onDetails={() => setDetailsOpen(true)}
         app={app}
+        draftShown={draftShown}
       >
         <AppPreview
           app={app}
@@ -111,7 +100,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
           name={name}
           appPath={appPath}
           stoppedAction={
-            rights.write ? (
+            rights.write && draftShown ? (
               <Button onClick={() => host.showRoute({ kind: "app-edit", ...address })}>
                 {t("apps.openDraft")}
               </Button>
@@ -137,6 +126,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
 export function AppViewFrame({
   name,
   app,
+  draftShown,
   workspace,
   rights,
   publishedRevision,
@@ -148,6 +138,8 @@ export function AppViewFrame({
   name: string;
   /** The id of the App, which its link carries. */
   app: string;
+  /** The instance showed this reader the draft: only then is there one to edit. */
+  draftShown: boolean;
   workspace: AppsWorkspace;
   rights: AppRights;
   /** The number of the revision shown, once it is known. */
@@ -177,7 +169,7 @@ export function AppViewFrame({
           backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
           onBack={onBack}
           secondaryActions={
-            rights.write ? (
+            rights.write && draftShown ? (
               <Button variant="outline" onClick={onEdit}>
                 <Pencil aria-hidden="true" />
                 {t("apps.edit")}

@@ -219,9 +219,18 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(publish).toBeDisabled();
 
   // A second member of the workspace opens the App across the full width.
-  await memberPage.goto(appPath);
+  // The member holds the use right alone, through membership: the list shows the published App
+  // under its title, and the App opens from there.
+  await memberPage.goto(appsPath);
+  const memberArea = memberPage.getByTestId("apps-area");
+  await expect(memberArea).toContainText(APP_NAME);
+  await expect(memberArea).toContainText("Published · revision 1");
+  await memberArea.getByText(APP_NAME, { exact: true }).click();
+  await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
+  const memberView = memberPage.getByTestId("app-view");
   const memberApp = appIn(memberPage, "app-view");
   await expect(memberApp.getByRole("heading", { name: PUBLISHED_HEADING })).toBeVisible();
+  await expect(memberView.getByRole("heading", { name: APP_NAME })).toBeVisible();
   await expect(
     memberPage
       .getByRole("navigation", { name: "Main navigation" })
@@ -243,7 +252,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(memberPage.getByTestId("app-edit")).toContainText(
     "The draft of this app is not available to you."
   );
-  await memberContext.close();
 
   // A write moves the draft ahead of what is published.
   const written = await requestWithOrigin(page, "put", `${apiOrigin}/api/v1/assets/app/${APP_ID}`, {
@@ -259,6 +267,34 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     timeout: 90_000
   });
   expect(written.ok(), await written.text()).toBe(true);
+
+  // The member is shown nothing of the draft: the list names what is published and no change
+  // waiting, and the open App has no way to a draft.
+  await memberPage.goto(appsPath);
+  const memberListReady = async () => {
+    await expect(memberArea).toContainText(/(?:Published · revision|Veröffentlicht · Revision) 1/u);
+  };
+  await memberListReady();
+  await expect(memberArea).toContainText(APP_NAME);
+  await expect(memberArea).not.toContainText("Unpublished changes");
+  await memberArea.getByRole("button", { name: `Actions for ${APP_NAME}` }).click();
+  await expect(memberPage.getByRole("menuitem", { name: "Open" })).toBeVisible();
+  await expect(memberPage.getByRole("menuitem", { name: "Edit" })).toHaveCount(0);
+  await memberPage.keyboard.press("Escape");
+  await shoot(memberPage, "apps-list-member", [["light", "en", 1440]], memberListReady);
+  await memberArea.getByText(APP_NAME, { exact: true }).click();
+  await expect(
+    appIn(memberPage, "app-view").getByRole("heading", { name: PUBLISHED_HEADING })
+  ).toBeVisible();
+  await expect(memberView.getByRole("heading", { name: APP_NAME })).toBeVisible();
+  await expect(memberView.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  await shoot(memberPage, "app-view-member", [["light", "en", 1440]], async () => {
+    await expect(
+      appIn(memberPage, "app-view").getByRole("heading", { name: PUBLISHED_HEADING })
+    ).toBeVisible();
+    await expect(memberView.getByRole("heading", { name: APP_NAME })).toBeVisible();
+  });
+  await memberContext.close();
   await page.reload();
   const draftReady = async () => {
     await expect(edit).toContainText(/(?:Draft · revision|Entwurf · Revision) 2/u);

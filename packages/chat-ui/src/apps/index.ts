@@ -8,7 +8,7 @@ export {
   appManifestSummary,
   appPreviewProblem,
   appPreviewProblemText,
-  appReadRevision,
+  appDraftShown,
   appRefusalText,
   appRowActions,
   appState,
