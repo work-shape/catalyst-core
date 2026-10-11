@@ -3,11 +3,10 @@ import { z } from "zod";
 import {
   LocalAgentRuntime,
   describeAgentDataTools,
-  materializeModelTools,
-  type DataToolSource
+  materializeModelTools
 } from "@vivd-catalyst/agent-runtime";
 import { findAgentReferenceIssues } from "@vivd-catalyst/config-schema";
-import type { AgentConfig, Logger, ModelProviderConfig } from "@vivd-catalyst/core";
+import type { AgentConfig, DataToolSource, Logger, ModelProviderConfig } from "@vivd-catalyst/core";
 import {
   DETERMINISTIC_CAPABILITIES,
   DeterministicModelProvider,

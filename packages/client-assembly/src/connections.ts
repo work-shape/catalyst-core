@@ -48,15 +48,26 @@ export interface InstanceConnections {
 }
 
 /**
- * Adds the Connections' operations to the call path of this process and answers the tool
- * options with their tools, so an agent's run offers and calls them. Without Connections it
- * answers the options as they are: every agent has the tools it had.
+ * Adds the Connections' operations to the call path of this process and answers what the
+ * agent tools of the instance are built with: the Connections' tool source among it, as it
+ * is. Whoever builds the agent tools bounds its reads. Without Connections an agent has the
+ * tools of the release only.
  */
-export function withConnections<Options extends object>(
+export function withConnections(
   connections: InstanceConnections | undefined,
   operationCalls: { registry: Pick<OperationRegistry, "addSource"> },
-  options: Options
-): Options & { dataTools?: DataToolSource } {
+  parts: Pick<InstanceConnectionParts, "clientInstanceId" | "logger" | "config">
+): {
+  clientInstanceId: ClientInstanceId;
+  logger: Logger;
+  runtime: ClientInstanceConfig["runtime"];
+  dataTools?: DataToolSource;
+} {
+  const options = {
+    clientInstanceId: parts.clientInstanceId,
+    logger: parts.logger,
+    runtime: parts.config.runtime
+  };
   if (!connections) return options;
   operationCalls.registry.addSource(connections.operationSource);
   return { ...options, dataTools: connections.toolSource };

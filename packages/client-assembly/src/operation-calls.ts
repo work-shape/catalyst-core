@@ -13,6 +13,7 @@ import {
   type Authorizer,
   type ClientInstanceId,
   type ConfigAssetSource,
+  type DataToolSource,
   type Logger,
   type ModuleSnapshot,
   type PlatformStores,
@@ -23,7 +24,6 @@ import {
   createBoundedDataToolSource,
   createToolOperationRunner,
   registerToolOperations,
-  type DataToolSource,
   type ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 

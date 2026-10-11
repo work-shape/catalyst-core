@@ -3,6 +3,7 @@ import {
   AppError,
   INTERRUPTED_RUN_ERROR,
   assertOperationChecksRights,
+  isDataToolName,
   type AuthenticatedIdentity,
   type OperationCall,
   type OperationDefinition,
@@ -26,7 +27,6 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
-import { isDataToolName } from "./tool-registry";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
 export interface WaitingOperationCall {

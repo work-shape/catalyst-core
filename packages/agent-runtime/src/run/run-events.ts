@@ -7,6 +7,7 @@ import {
   type AgentRunStatus,
   type Clock,
   type ConversationHistoryStore,
+  type DataToolSource,
   type ModelBindingConfig,
   type ModelProviderContinuationStore,
   type ModelProviderConfig,
@@ -26,7 +27,7 @@ import type {
   ModelContextFileReader,
   ModelContextProjectionOptions
 } from "../model-context-projection";
-import type { DataToolSource, ModelToolRegistryView } from "../model-tool-materialization";
+import type { ModelToolRegistryView } from "../model-tool-materialization";
 
 export interface LocalAgentRuntimeOptions {
   logger?: import("@vivd-catalyst/core").Logger;

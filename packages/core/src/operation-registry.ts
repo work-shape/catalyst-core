@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { OperationDenial } from "./operation-denial";
 import type { AuditRecorder } from "./audit";
+import { DATA_TOOL_PREFIXES } from "./data-tool-names";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
@@ -254,20 +255,16 @@ export interface OperationRegistry {
  * The name prefixes of operations that exist as data and come from an `OperationSource`: the
  * operations of a Connection, `connection.<name>.<operation>`. An operation of the release may
  * not take such a name. `resolve` asks the release first, so one that did would stand in for
- * the data operation of that name, with rights and a policy of its own.
- *
- * Local until `core/src/data-tools.ts` exists (C1 slice K). Then this is `DATA_TOOL_PREFIXES`.
+ * the data operation of that name, with rights and a policy of its own. They are the prefixes
+ * of the data tools, `DATA_TOOL_PREFIXES`.
  */
-const DATA_OPERATION_PREFIXES = ["connection."] as const;
 
 export function createOperationRegistry(): OperationRegistry {
   const registered = new Map<string, OperationDefinition>();
   const sources: OperationSource[] = [];
   return {
     register(definition) {
-      const dataPrefix = DATA_OPERATION_PREFIXES.find((prefix) =>
-        definition.name.startsWith(prefix)
-      );
+      const dataPrefix = DATA_TOOL_PREFIXES.find((prefix) => definition.name.startsWith(prefix));
       if (dataPrefix !== undefined) {
         throw new AppError(
           "INTERNAL",

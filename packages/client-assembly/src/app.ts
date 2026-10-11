@@ -451,11 +451,7 @@ export async function createClientInstanceExecutionAssembly(
     enabledToolNames: getEnabledToolNames(config),
     modules
   });
-  const toolOptions = withConnections(connections, operationCalls, {
-    clientInstanceId,
-    logger,
-    runtime: config.runtime
-  });
+  const toolOptions = withConnections(connections, operationCalls, connectionParts);
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");

@@ -6,21 +6,22 @@ import {
   answerAsTool,
   isAppError,
   isAuthenticatedServicePrincipal,
+  isDataToolName,
   operationCallFromToolRequest,
   operationDenialError,
   toErrorEnvelope,
   toolRequestFromOperationCall,
   type ClientInstanceId,
+  type DataToolDescriptor,
+  type DataToolSource,
   type JsonObject,
   type Logger,
   type OperationDefinition,
   type OperationDenial,
   type OperationEffect,
   type OperationExecutionContext,
-  type OperationListScope,
   type OperationRegistry,
   type PolicyValue,
-  type ToolDescriptor,
   type ToolExecutionContext,
   type ToolExecutionRequest,
   type ToolExecutionResult,
@@ -32,7 +33,7 @@ import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 import type { OperationOutcome, RunOperationDeps } from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
-import { isDataToolName, type ToolRegistry } from "./tool-registry";
+import type { ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
 
 /**
@@ -331,21 +332,6 @@ const issuesSchema = z.object({
     })
   )
 });
-
-/**
- * A tool an agent carries that exists as data: the projection of an operation an
- * `OperationSource` contributes.
- *
- * Local until `core/src/data-tools.ts` exists (C1 slice K). Then both types come from core.
- */
-export interface DataToolDescriptor extends ToolDescriptor {
-  effect: OperationEffect;
-}
-
-export interface DataToolSource {
-  /** Of the named tools, those that exist now and that an agent may carry. One read, never one per name. */
-  describe(toolNames: readonly string[], scope: OperationListScope): Promise<DataToolDescriptor[]>;
-}
 
 /**
  * How long a call waits for the source to say whether a data tool exists. A source answers

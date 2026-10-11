@@ -17,7 +17,8 @@ import {
 } from "@vivd-catalyst/core";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";
-import { createTestConfig } from "./support/fixtures";
+import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
+import { createTestConfig, setTestAgent } from "./support/fixtures";
 import {
   captureProcessOutput,
   createTestConnector,
@@ -169,6 +170,53 @@ describe("the Connector types of a defined client instance", () => {
     } finally {
       await rm(root, { force: true, recursive: true });
     }
+  });
+});
+
+describe("an agent of an assembled instance", () => {
+  // Fails without the Connections' tool source in what the agent tools are built with: the
+  // model is then not offered the tool and a call of it finds nothing.
+  it("calls the Connection operation it lists through the call path, as one Operation Run", async () => {
+    const w = world();
+    const tool = "connection.outside.echo";
+    const { config, ...input } = w.input();
+    setTestAgent(config, {
+      name: "test_agent",
+      displayName: "Test Agent",
+      instructions: "Use configured tools only.",
+      modelProviderId: "local",
+      toolNames: [tool],
+      initialPrompts: []
+    });
+    const instance = await createTestInstance({ ...input, config });
+
+    const created = await instance.call("conversations.create", { payload: { title: "Call" } });
+    const conversationId = created.json<{ id: string }>().id;
+    const started = await injectStartConversationRun(
+      instance,
+      conversationId,
+      `/tool ${tool} {"text":"hello"}`
+    );
+    const events = await drainRunEvents(instance, conversationId, started.run.id);
+
+    // The test Connector type ran once, with the input and the credential of the Connection.
+    expect(w.connector.calls).toHaveLength(1);
+    expect(w.connector.calls[0]).toMatchObject({ operation: "echo", input: { text: "hello" } });
+    expect(w.connector.calls[0]?.credential?.secret).toBe(w.token);
+    expect(events).toContain("hello");
+    const runs = (await instance.stores.operationRuns.list({ clientInstanceId })).filter(
+      (run) => run.operation === tool
+    );
+    expect(runs).toMatchObject([
+      {
+        status: "done",
+        actor: { id: expect.stringMatching(/^usr_/u) },
+        origin: { kind: "agent", toolName: tool }
+      }
+    ]);
+    // The credential is in no row and in nothing the run sent to the person.
+    expect(findLeak(await dumpDatabaseText(), w.token)).toBeUndefined();
+    expect(findLeak(events, w.token)).toBeUndefined();
   });
 });
 

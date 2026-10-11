@@ -1,4 +1,3 @@
-import { CONNECTION_OPERATION_PREFIX } from "./connection-operations";
 import type { OperationListScope } from "./operation-registry";
 import type { OperationEffect } from "./operations";
 import type { ToolDescriptor } from "./tool-execution";
@@ -19,14 +18,4 @@ export interface DataToolSource {
    * per name. A name that is gone, disabled or not exposed to agents is left out.
    */
   describe(toolNames: readonly string[], scope: OperationListScope): Promise<DataToolDescriptor[]>;
-}
-
-/**
- * The name prefixes that belong to data tools. A tool of the release may not take a name that
- * starts with one, and an agent may list such a name without the release knowing it.
- */
-export const DATA_TOOL_PREFIXES = [CONNECTION_OPERATION_PREFIX] as const;
-
-export function isDataToolName(name: string): boolean {
-  return DATA_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix));
 }

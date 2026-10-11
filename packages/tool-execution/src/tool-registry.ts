@@ -1,4 +1,9 @@
-import { AppError, type ModuleSnapshot, type ToolDescriptor } from "@vivd-catalyst/core";
+import {
+  AppError,
+  DATA_TOOL_PREFIXES,
+  type ModuleSnapshot,
+  type ToolDescriptor
+} from "@vivd-catalyst/core";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 export interface ToolRegistryOptions {
@@ -9,19 +14,6 @@ export interface ToolRegistryOptions {
    * not offered it and a call that names it finds nothing, whatever an agent still lists.
    */
   modules?: ModuleSnapshot;
-}
-
-/**
- * The prefixes of tools that exist as data, not as release code. A tool of the release may not
- * take such a name: it would stand in for an operation that rights and a policy of its own
- * guard.
- *
- * Local until `core/src/data-tools.ts` exists (C1 slice K). Then both come from core.
- */
-export const DATA_TOOL_PREFIXES = ["connection."] as const;
-
-export function isDataToolName(name: string): boolean {
-  return DATA_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
 export class ToolRegistry {
@@ -74,6 +66,10 @@ export class ToolRegistry {
   }
 }
 
+/**
+ * A tool of the release may not take the name of a tool that exists as data: it would stand in
+ * for an operation that rights and a policy of its own guard.
+ */
 function assertReleaseToolName(name: string): void {
   const prefix = DATA_TOOL_PREFIXES.find((candidate) => name.startsWith(candidate));
   if (prefix !== undefined) {

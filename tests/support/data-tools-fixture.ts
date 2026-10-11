@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { DataToolDescriptor, DataToolSource } from "@vivd-catalyst/agent-runtime";
 import { createAuditingEventEmitter } from "@vivd-catalyst/chat-server";
 import {
   asAgentRunId,
@@ -10,6 +9,8 @@ import {
   createOperationRegistry,
   type AgentConfig,
   type AuditRecorder,
+  type DataToolDescriptor,
+  type DataToolSource,
   type OperationDefinition,
   type OperationSource,
   type RuntimeCallContext,
@@ -29,8 +30,6 @@ import { recordedAuditEvent } from "./tool-runner";
 
 // The fakes stand for what the Connections of an instance bring (C1 slice B): an
 // `OperationSource` with the operations and a `DataToolSource` that describes them as tools.
-// `DataToolSource` and `DataToolDescriptor` are imported from the agent runtime until
-// `core/src/data-tools.ts` exists (C1 slice K); then they come from core.
 
 export const ECHO = "connection.fake.echo";
 export const WRITE = "connection.fake.write";

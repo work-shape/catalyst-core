@@ -1,9 +1,10 @@
-import type {
-  AgentConfig,
-  OperationEffect,
-  OperationListScope,
-  ToolDescriptor,
-  WebAccessConfig
+import {
+  isDataToolName,
+  type AgentConfig,
+  type DataToolDescriptor,
+  type DataToolSource,
+  type ToolDescriptor,
+  type WebAccessConfig
 } from "@vivd-catalyst/core";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
@@ -13,28 +14,6 @@ import {
 
 export interface ModelToolRegistryView {
   listDescriptorsForAgent(toolNames: readonly string[]): ToolDescriptor[];
-}
-
-/**
- * A tool an agent carries that exists as data, and where such tools are described.
- *
- * The three declarations below are local until `core/src/data-tools.ts` exists (C1 slice K).
- * Then `DATA_TOOL_PREFIXES`, `isDataToolName`, `DataToolDescriptor` and `DataToolSource` come
- * from core.
- */
-const DATA_TOOL_PREFIXES = ["connection."] as const;
-
-function isDataToolName(name: string): boolean {
-  return DATA_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix));
-}
-
-export interface DataToolDescriptor extends ToolDescriptor {
-  effect: OperationEffect;
-}
-
-export interface DataToolSource {
-  /** Of the named tools, those that exist now and that an agent may carry. One read, never one per name. */
-  describe(toolNames: readonly string[], scope: OperationListScope): Promise<DataToolDescriptor[]>;
 }
 
 /**
