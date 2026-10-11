@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AdministeredUser,
-  AgentAvailability,
   AdministeredUserIdentity,
   ApiClient,
   OperationInput,
@@ -577,63 +576,6 @@ export function useDeleteCurrentUserMutation(
       void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.me(input.apiBaseUrl) });
     }
   });
-}
-
-/**
- * The two changes of an agent that belong to the instance and are not part of its definition:
- * which agent is the default, and where an agent can be chosen. The definition itself is
- * written by the asset operations (`createAssetWrites`).
- */
-export function useAgentPlacementMutations(input: WorkspaceMutationInput) {
-  const queryClient = useQueryClient();
-
-  const invalidateAssets = () =>
-    Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.assets(input.apiBaseUrl, input.authScope)
-      }),
-      queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.configAssetsOverview(input.apiBaseUrl, input.authScope)
-      }),
-      queryClient.invalidateQueries({
-        queryKey: workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
-      })
-    ]);
-
-  const setDefaultAgent = useMutation({
-    mutationFn: (mutationInput: { agentName: string }) =>
-      input.client.config_agents.set_default({ body: mutationInput }),
-    onSuccess: invalidateAssets
-  });
-  const setAgentAvailability = useMutation({
-    mutationFn: (mutationInput: {
-      name: string;
-      mode: AgentAvailability["mode"];
-      personalWorkspaces: boolean;
-      collaborationWorkspaceIds: string[];
-    }) => {
-      const { name, ...availability } = mutationInput;
-      return input.client.config_agents.set_availability({ params: { name }, body: availability });
-    },
-    // The admin's own picker reads the same lists, so it follows the change at once.
-    onSuccess: () =>
-      Promise.all([
-        invalidateAssets(),
-        queryClient.invalidateQueries({
-          queryKey: workspaceQueryKeys.collaborationWorkspaceAgentsScope(
-            input.apiBaseUrl,
-            input.authScope
-          )
-        }),
-        queryClient.invalidateQueries({ queryKey: ["config", input.apiBaseUrl, input.authScope] })
-      ])
-  });
-
-  return {
-    setDefaultAgent,
-    setAgentAvailability,
-    isPending: setDefaultAgent.isPending || setAgentAvailability.isPending
-  };
 }
 
 export function useSuperadminUserMutations(

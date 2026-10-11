@@ -169,8 +169,9 @@ describe("config asset admin routes", () => {
       config: { instructions: "Original instructions" }
     });
 
-    const defaultAgent = await request(fixture.server, token, "config_agents.set_default", {
-      payload: { agentName: "assistant", baseVersion: 3 }
+    const defaultAgent = await request(fixture.server, token, "assets.set_default", {
+      params: { kind: "agent" },
+      payload: { name: "assistant" }
     });
     expect(defaultAgent.json()).toEqual({ version: 4 });
     const read = await request(fixture.server, token, "assets.get", {
@@ -839,8 +840,8 @@ describe("config asset admin routes", () => {
     ]);
 
     const setKai = (payload: unknown, name = "kai") =>
-      request(fixture.server, token, "config_agents.set_availability", {
-        params: { name: name },
+      request(fixture.server, token, "assets.set_availability", {
+        params: { kind: "agent", name },
         payload
       });
     const selected = await setKai({
@@ -890,8 +891,9 @@ describe("config asset admin routes", () => {
         message: "Default agent 'assistant' must be available in all workspaces"
       }
     });
-    const defaultToRestricted = await request(fixture.server, token, "config_agents.set_default", {
-      payload: { agentName: "kai" }
+    const defaultToRestricted = await request(fixture.server, token, "assets.set_default", {
+      params: { kind: "agent" },
+      payload: { name: "kai" }
     });
     expect(defaultToRestricted.statusCode).toBe(422);
     expect(defaultToRestricted.json()).toMatchObject({
@@ -931,16 +933,16 @@ describe("config asset admin routes", () => {
       })
     ];
     for (const deniedToken of denied) {
-      const set = await request(fixture.server, deniedToken, "config_agents.set_availability", {
-        params: { name: "kai" },
+      const set = await request(fixture.server, deniedToken, "assets.set_availability", {
+        params: { kind: "agent", name: "kai" },
         payload: { mode: "selected" }
       });
       expect(set.statusCode).toBe(403);
       const list = await request(fixture.server, deniedToken, "instance.workspaces.list", {});
       expect(list.statusCode).toBe(403);
     }
-    const unauthenticated = await fixture.server.call("config_agents.set_availability", {
-      params: { name: "kai" },
+    const unauthenticated = await fixture.server.call("assets.set_availability", {
+      params: { kind: "agent", name: "kai" },
       payload: { mode: "selected" }
     });
     expect(unauthenticated.statusCode).toBe(401);
@@ -954,20 +956,18 @@ describe("config asset admin routes", () => {
 
     const disabled = await createFixture({ agentConfiguration: { enabled: false } });
     const disabledToken = await mintToken(disabled.server);
-    const whileDisabled = await request(
-      disabled.server,
-      disabledToken,
-      "config_agents.set_availability",
-      { params: { name: "kai" }, payload: { mode: "all" } }
-    );
+    const whileDisabled = await request(disabled.server, disabledToken, "assets.set_availability", {
+      params: { kind: "agent", name: "kai" },
+      payload: { mode: "all" }
+    });
     // The asset management module is off: the operation does not exist on this instance.
     expect(whileDisabled.statusCode).toBe(404);
     expect(whileDisabled.json()).toMatchObject({
       error: { details: { reason: "module_off", module: "assetManagement" } }
     });
     // A caller without a credential is refused as on any route and learns nothing of modules.
-    const anonymous = await disabled.server.call("config_agents.set_availability", {
-      params: { name: "kai" },
+    const anonymous = await disabled.server.call("assets.set_availability", {
+      params: { kind: "agent", name: "kai" },
       payload: { mode: "all" }
     });
     expect(anonymous.statusCode).toBe(401);

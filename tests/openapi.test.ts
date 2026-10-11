@@ -35,7 +35,7 @@ const schemeNames = (id: keyof typeof apiOperations) =>
   documentedOperation(id).security.flatMap((requirement) => Object.keys(requirement));
 
 describe("the released OpenAPI document", () => {
-  it("lists the ten asset operations at their addresses and none of the five they replace", () => {
+  it("lists the twelve asset operations at their addresses and none of the five they replace", () => {
     const listed = Object.entries(released.paths).flatMap(([path, methods]) =>
       Object.entries(methods).map(
         ([method, operation]) => `${operation.operationId}  ${method.toUpperCase()} ${path}`
@@ -50,6 +50,8 @@ describe("the released OpenAPI document", () => {
       "assets.put  PUT /api/v1/assets/{kind}/{name}",
       "assets.revert  POST /api/v1/assets/{kind}/{name}/revert",
       "assets.revisions.list  GET /api/v1/assets/{kind}/{name}/revisions",
+      "assets.set_availability  PUT /api/v1/assets/{kind}/{name}/availability",
+      "assets.set_default  POST /api/v1/assets/{kind}/default",
       "assets.sync  POST /api/v1/assets/sync",
       "assets.sync_check  POST /api/v1/assets/sync/check",
       "assets.validate  POST /api/v1/assets/{kind}/validate",
@@ -64,11 +66,7 @@ describe("the released OpenAPI document", () => {
     );
     // What stays of the old group.
     expect(ids).toEqual(
-      expect.arrayContaining([
-        "config_assets.get_overview",
-        "config_agents.set_default",
-        "config_agents.set_availability"
-      ])
+      expect.arrayContaining(["config_assets.get_overview", "instance.workspaces.list"])
     );
   });
 

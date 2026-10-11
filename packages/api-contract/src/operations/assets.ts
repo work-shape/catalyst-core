@@ -8,12 +8,15 @@ import {
   listAssetsQuerySchema,
   putAssetRequestSchema,
   revertAssetRequestSchema,
+  setAssetAvailabilityRequestSchema,
+  setAssetDefaultRequestSchema,
+  setAssetDefaultResponseSchema,
   syncAssetsRequestSchema,
   syncAssetsResponseSchema,
   validateAssetRequestSchema,
   validateAssetResponseSchema
 } from "../assets";
-import { configAssetRevisionSchema } from "../configuration";
+import { agentAvailabilitySchema, configAssetRevisionSchema } from "../configuration";
 import { listQuerySchema } from "../shared";
 import { defineRegisteredOperation, json, page } from "./define-operation";
 
@@ -66,6 +69,23 @@ export const assetOperations = {
     response: json(checkAssetSyncResponseSchema),
     errors: ["CONFLICT"],
     rateClass: "read"
+  }),
+  // Valid for a kind that keeps an instance default. The right is the kind's write right on
+  // the whole instance: a grant in a Namespace or on one asset does not answer it.
+  "assets.set_default": defineRegisteredOperation({
+    id: "assets.set_default",
+    method: "POST",
+    path: "/api/v1/assets/:kind/default",
+    summary: "Set or clear the instance's default asset of one kind",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: setAssetDefaultRequestSchema,
+    response: json(setAssetDefaultResponseSchema),
+    errors: ["CONFLICT"],
+    rateClass: "write"
   }),
   "assets.validate": defineRegisteredOperation({
     id: "assets.validate",
@@ -125,6 +145,22 @@ export const assetOperations = {
     body: deleteAssetRequestSchema,
     response: json(assetWriteResponseSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  // Valid for a kind that is offered per workspace. The right is decided as for the default.
+  "assets.set_availability": defineRegisteredOperation({
+    id: "assets.set_availability",
+    method: "PUT",
+    path: "/api/v1/assets/:kind/:name/availability",
+    summary: "Set the workspaces one asset is offered in",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: setAssetAvailabilityRequestSchema,
+    response: json(agentAvailabilitySchema),
+    errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
   "assets.revisions.list": defineRegisteredOperation({

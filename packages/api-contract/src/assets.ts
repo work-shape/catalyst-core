@@ -129,6 +129,23 @@ export const revertAssetRequestSchema = z.object({
   workspaceId: workspaceIdSchema
 });
 
+export const setAssetDefaultRequestSchema = z.object({
+  /** The asset that becomes the instance's default of its kind, or `null` for none. */
+  name: nameText(z.string().min(1)).nullable()
+});
+
+export const setAssetDefaultResponseSchema = z.object({
+  /** The version of the instance's whole asset set after the change. */
+  version: z.number().int().positive()
+});
+
+export const setAssetAvailabilityRequestSchema = z.object({
+  mode: agentAvailabilitySchema.shape.mode,
+  // Both apply to `selected` only and are ignored for `all`.
+  personalWorkspaces: z.boolean().optional(),
+  collaborationWorkspaceIds: z.array(z.string().min(1)).optional()
+});
+
 export const validateAssetRequestSchema = z.object({
   config: assetDefinitionSchema,
   workspaceId: workspaceIdSchema

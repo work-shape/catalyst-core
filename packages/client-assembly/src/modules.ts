@@ -28,8 +28,8 @@ const assetManagementModule = defineModule({
     "assets.put",
     "assets.delete",
     "assets.revert",
-    "config_agents.set_default",
-    "config_agents.set_availability"
+    "assets.set_default",
+    "assets.set_availability"
   ],
   selfCheckedOperations: ["assets.sync"],
   ui: ["settings.build"]

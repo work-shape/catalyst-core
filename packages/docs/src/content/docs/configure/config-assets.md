@@ -231,6 +231,8 @@ The writing operations and `assets.sync` belong to the module `assetManagement` 
 
 `assets.list` and `assets.get` mark the instance's default agent with `isDefault: true` and leave the field out on every other asset. `assets.get` of an agent also carries its `availability`, the workspaces it is offered in, when one is stored.
 
+`assets.set_default` (`POST /api/v1/assets/{kind}/default` with `{ "name": "…" }`) makes one asset the instance's default of its kind, and `assets.set_availability` (`PUT /api/v1/assets/{kind}/{name}/availability`) sets the workspaces one asset is offered in. Only the agent kind takes either today. Both are Operation Runs of the module `assetManagement`, and both need the right to write the kind on the whole instance: a grant in a Namespace or on one asset does not answer it, and a deny on the named asset refuses. The default also needs `allowDefaultAgentChange`. A changed availability moves the version of the asset set, and the next run that starts reads it.
+
 `platform.references.get` answers what a definition may refer to on this instance: the model providers and bindings, the reasoning efforts, the enabled tools, and the tools whose module is off. It answers a caller who holds at least one right on an asset kind, on the instance or in one Namespace, with a credential that carries `config_assets:read` and the scope of that right. It writes no Operation Run, so an editor may read it each time it opens a definition.
 
 ## Permissions

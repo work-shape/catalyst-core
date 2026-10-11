@@ -1,7 +1,9 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { asCollaborationWorkspaceId, type OperationResource } from "@vivd-catalyst/core";
 import { readDefinitionName } from "../asset-kinds/shared";
+import { authorizeAssetPlacement, setAssetAvailability, setAssetDefault } from "../asset-placement";
 import { AssetWorkflow } from "../asset-workflow";
+import { ConfigAssetWorkflow } from "../config-asset-workflow";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
@@ -9,7 +11,8 @@ import type { ChatServerOptions } from "../types";
 const ASSET_WRITE_MODULE = "assetManagement";
 
 /**
- * One asset of any registered kind. Each call is an Operation Run. The right is the kind's
+ * One asset of any registered kind, and the two reads of the instance's agents and skills as
+ * a whole, which are plain reads. Each call on an asset is an Operation Run. The right is the kind's
  * own and is decided on the asset the call names, so every operation brings its check: the
  * registry asks it before the policy, and the workflow asks it again on the asset it loaded.
  * The policy is asked about the kind, the owner and the Namespace of every asset a call names.
@@ -38,6 +41,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     authorize: (input, { actor, access }) => workflow.authorizeSync(actor, access, input),
     policyTargets: (input) => workflow.syncPolicyTargets(input),
     execute: (input, context) => workflow.checkSync(context, input)
+  });
+
+  route.operation(apiOperations["assets.set_default"], {
+    authorize: (input, { access }) => authorizeAssetPlacement(options, access, input),
+    resource: ({ kind, name }) => assetResource({ kind, name: name ?? undefined }),
+    policyTargets: (input) => workflow.policyTargets({ ...input, name: input.name ?? undefined }),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => setAssetDefault(options, context, input)
   });
 
   route.operation(apiOperations["assets.validate"], {
@@ -73,6 +85,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.delete(context, input)
   });
 
+  route.operation(apiOperations["assets.set_availability"], {
+    authorize: (input, { access }) => authorizeAssetPlacement(options, access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => setAssetAvailability(options, context, input)
+  });
+
   route.operation(apiOperations["assets.revisions.list"], {
     authorize: (input, { access }) => workflow.authorizeRead(access, input),
     resource: assetResource,
@@ -88,6 +109,14 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => workflow.revert(context, input)
   });
+
+  const overview = new ConfigAssetWorkflow({ options });
+
+  route(apiOperations["config_assets.get_overview"], ({ identity, context }) =>
+    overview.getOverview(identity, context)
+  );
+
+  route(apiOperations["instance.workspaces.list"], () => overview.listAdministeredWorkspaces());
 }
 
 /** What the call touches, as its run and its events name it. */

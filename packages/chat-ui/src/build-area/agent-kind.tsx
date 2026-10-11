@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Bot } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@vivd-catalyst/ui";
-import { useAgentPlacementMutations } from "../api/workspace-mutations";
+import { useAgentPlacementMutations } from "../api/agent-placement-mutations";
 import { useAdministeredCollaborationWorkspacesQuery } from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { canManageAgentModels } from "../control-plane/governance";
@@ -41,7 +41,10 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const { asset, start, instanceWrite } = frame;
   const management = config.features.configAssets;
   const api = { apiBaseUrl, authScope, client };
-  const placement = useAgentPlacementMutations(api);
+  const placement = useAgentPlacementMutations({
+    ...api,
+    heldMessage: t("configChangeWaitsForApproval")
+  });
   // What an agent may refer to. A reader the instance does not tell sees the agent's own
   // tools and models and nothing to add.
   const referencesQuery = useQuery({

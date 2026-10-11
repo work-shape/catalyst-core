@@ -41,8 +41,6 @@ const authenticated = names.flatMap((name) => {
  * holder's rights are checked after the input, so a refusal for a missing right needs one.
  */
 const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
-  "config_agents.set_default": { agentName: "agent" },
-  "config_agents.set_availability": { mode: "all" },
   "service_principals.create": { displayLabel: "Service" },
   "service_principals.update": { displayLabel: "Service" },
   "api_credentials.create": { name: "Credential" },

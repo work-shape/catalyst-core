@@ -16,14 +16,6 @@
       "class": "decision",
       "reason": "A decision on a held call cannot itself be held."
     },
-    "config_agents.set_availability": {
-      "class": "pending",
-      "ticket": "CONV-5"
-    },
-    "config_agents.set_default": {
-      "class": "pending",
-      "ticket": "CONV-5"
-    },
     "conversations.artifacts.retry_preview": {
       "class": "conversation",
       "reason": "The Agent Run is the record for this operation."

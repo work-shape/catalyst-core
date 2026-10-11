@@ -31,7 +31,6 @@ import {
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
 import { registerAssetRoutes } from "./routes/asset-routes";
 import { registerConnectionRoutes } from "./routes/connection-routes";
-import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
 import { registerConversationResourceRoutes } from "./routes/conversation-resource-routes";
 import { registerConversationRoutes } from "./routes/conversation-routes";
@@ -198,7 +197,6 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerViewShellRoutes(route, options);
   registerPageRoutes(route, options);
   registerCollaborationWorkspaceRoutes(route, options);
-  registerConfigAssetRoutes(route, options);
   registerAssetRoutes(route, options);
   registerConnectionRoutes(route, options);
   registerApprovalRequestRoutes(route, options);

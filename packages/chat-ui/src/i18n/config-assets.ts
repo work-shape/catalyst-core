@@ -32,6 +32,7 @@ export const configAssets = defineTranslations({
     configCapabilities: "Capabilities",
     configCapabilitiesDescription: "Only tools enabled for this deployment can be assigned here.",
     configChangeSaveFailed: "The change could not be saved.",
+    configChangeWaitsForApproval: "This change waits for an approval. Nothing has changed yet.",
     configChangedDescription:
       "Someone else — or a CLI push — modified the configuration since you loaded it. Reload to continue from the latest version. Unsaved edits in this editor will be lost.",
     configChangedTitle: "Configuration changed on the server",
@@ -150,6 +151,8 @@ export const configAssets = defineTranslations({
     configCapabilitiesDescription:
       "Hier können nur Werkzeuge zugewiesen werden, die für diese Bereitstellung aktiviert sind.",
     configChangeSaveFailed: "Die Änderung konnte nicht gespeichert werden.",
+    configChangeWaitsForApproval:
+      "Diese Änderung wartet auf eine Freigabe. Bisher wurde nichts geändert.",
     configChangedDescription:
       "Eine andere Person oder ein CLI-Push hat die Konfiguration geändert, seit sie geladen wurde. Lade die neueste Version, um fortzufahren. Nicht gespeicherte Änderungen in diesem Editor gehen dabei verloren.",
     configChangedTitle: "Konfiguration auf dem Server geändert",

@@ -429,6 +429,19 @@ id from config_assets where status = 'deleted')`.
   default is `#181614` (it was `#1c1a17`). Cards and the chosen row of the sidebar follow, and
   the raised surface of menus becomes `#252320`. The sidebar, borders and text are unchanged.
   An instance that sets its own `darkTheme.surfaceColor` keeps it.
+- **Default agent and availability (breaking):** `PUT /api/v1/instance/config/default-agent`
+  (`config_agents.set_default`) and `PUT /api/v1/instance/config/agents/{name}/availability`
+  (`config_agents.set_availability`) are gone. `POST /api/v1/assets/{kind}/default`
+  (`assets.set_default`, body `{ "name": "…" | null }`) and
+  `PUT /api/v1/assets/{kind}/{name}/availability` (`assets.set_availability`, the same body as
+  before) replace them, for a kind that keeps a default or is offered per workspace. Both are
+  Operation Runs: they answer the header `Operation-Run-Id`, take an `Idempotency-Key`, pass the
+  policy of the instance, and the typed client answers them as an operation outcome. The right
+  is unchanged, the right to write the kind on the whole instance, and a deny on the named asset
+  now refuses too. `baseVersion` of the default-agent call is gone with the old address. A
+  changed availability now moves the version of the asset set, so the overview's `version` rises
+  by one with it. `routes/config-asset-routes.ts` is deleted; the two reads that stay,
+  `config_assets.get_overview` and `instance.workspaces.list`, keep their addresses.
 - **User administration (breaking for callers of the typed client):** `users.create`,
   `users.update`, `users.delete`, `users.identities.upsert`, `users.identities.delete`,
   `users.password.reset` and `users.invitation.send` are Operation Runs. They answer the

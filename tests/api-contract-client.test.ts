@@ -85,14 +85,10 @@ describe("api operation catalog", () => {
   });
 
   it("describes agent availability and the answer of a release", () => {
-    expect(
-      apiOperations["config_agents.set_availability"].body.parse({ mode: "selected" })
-    ).toEqual({
+    expect(apiOperations["assets.set_availability"].body.parse({ mode: "selected" })).toEqual({
       mode: "selected"
     });
-    expect(() =>
-      apiOperations["config_agents.set_availability"].body.parse({ mode: "some" })
-    ).toThrow();
+    expect(() => apiOperations["assets.set_availability"].body.parse({ mode: "some" })).toThrow();
     const synced = { version: 2, items: [], warnings: [] };
     expect(
       apiOperations["assets.sync"].response.schema.parse({ ...synced, hiddenAgentNames: ["a"] })

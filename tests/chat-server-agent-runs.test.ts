@@ -1193,6 +1193,39 @@ describe("agent availability per Collaboration Workspace", () => {
     }
   });
 
+  it("offers an agent to the next run once the operation changed its availability", async () => {
+    const fixture = await createAvailabilityFixture({ assetManagement: true });
+    const { app, clientInstanceId, sharedWorkspaceId } = fixture;
+    try {
+      const version = async () =>
+        (await app.stores.configAssets.getConfigAssetState({ clientInstanceId })).version;
+      const setThroughOperation = (collaborationWorkspaceIds: string[]) =>
+        app.call("assets.set_availability", {
+          params: { kind: "agent", name: "hidden" },
+          payload: { mode: "selected", collaborationWorkspaceIds }
+        });
+      const startInShared = async () =>
+        fixture.startRun(await fixture.createConversation(sharedWorkspaceId), "hidden");
+      expect((await startInShared()).statusCode).toBe(404);
+      const before = await version();
+
+      const offered = await setThroughOperation([sharedWorkspaceId]);
+      expect(offered.statusCode, offered.body).toBe(200);
+      // The run that starts next reads the change, and so does whatever keeps the asset set
+      // by its version: the change moved it. Fails without the change, when the version stood.
+      expect(await version()).toBe(before + 1);
+      const started = await startInShared();
+      expect(started.statusCode).toBe(200);
+      expect(started.json()).toMatchObject({ run: { agentName: "hidden" } });
+
+      expect((await setThroughOperation([])).statusCode).toBe(200);
+      expect(await version()).toBe(before + 2);
+      expect((await startInShared()).statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("lists the agents of a workspace for its members only", async () => {
     const fixture = await createAvailabilityFixture();
     const { app, sharedWorkspaceId, personalWorkspaceId } = fixture;
@@ -1254,7 +1287,8 @@ const SELECTED_NOWHERE: AgentAvailability = {
  * `test_agent` is the instance default (`all`); the other agents are restricted to the shared
  * workspace, to Personal Workspaces, and to nothing. Runs stay queued (worker runtime).
  */
-async function createAvailabilityFixture() {
+/** `assetManagement` turns changing assets through the operations on, as an instance may. */
+async function createAvailabilityFixture(options: { assetManagement?: true } = {}) {
   const identity = (id: string, roles: string[]) => ({
     id,
     externalUserId: id,
@@ -1264,14 +1298,23 @@ async function createAvailabilityFixture() {
     roles,
     permissionRefs: []
   });
+  const config = createTestConfig({
+    developmentAuth: {
+      enabled: true,
+      defaultUserId: "owner",
+      users: [identity("owner", ["user", "admin"]), identity("outsider", ["user"])]
+    }
+  });
   const app = await createTestInstance({
-    config: createTestConfig({
-      developmentAuth: {
-        enabled: true,
-        defaultUserId: "owner",
-        users: [identity("owner", ["user", "admin"]), identity("outsider", ["user"])]
-      }
-    }),
+    config: options.assetManagement
+      ? {
+          ...config,
+          administration: {
+            ...config.administration,
+            agentConfiguration: { ...config.administration.agentConfiguration, enabled: true }
+          }
+        }
+      : config,
     env: {},
     agentRunWorker: "separate",
     tools: []

@@ -144,7 +144,12 @@ export function createSeedApi(client: ApiClient): SeedApi {
     createAsset: async (kind, config) =>
       (await client.assets.put({ params: { kind, name: config.name }, body: { config } })).status,
     async showAgentEverywhere(name) {
-      await client.config_agents.set_availability({ params: { name }, body: { mode: "all" } });
+      completedOutput(
+        await client.assets.set_availability({
+          params: { kind: "agent", name },
+          body: { mode: "all" }
+        })
+      );
     },
     listOwnApprovalRequests: () =>
       listAll((paging) => client.approval_requests.list_mine({ query: paging }))

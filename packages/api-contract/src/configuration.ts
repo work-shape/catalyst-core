@@ -191,13 +191,6 @@ export const agentAvailabilitySchema = z.object({
   collaborationWorkspaceIds: z.array(z.string())
 });
 
-export const setConfigAgentAvailabilityRequestSchema = z.object({
-  mode: agentAvailabilitySchema.shape.mode,
-  // Both apply to `selected` only and are ignored for `all`.
-  personalWorkspaces: z.boolean().optional(),
-  collaborationWorkspaceIds: z.array(z.string().min(1)).optional()
-});
-
 export const administeredCollaborationWorkspaceSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -256,15 +249,6 @@ export const configAssetsOverviewSchema = z.object({
   defaultAgentName: z.string().optional(),
   assets: z.array(configAssetSummarySchema),
   references: configAssetReferencesSchema
-});
-
-export const configAssetMutationVersionResponseSchema = z.object({
-  version: z.number().int().positive()
-});
-
-export const setDefaultConfigAgentRequestSchema = z.object({
-  agentName: z.string().min(1).optional(),
-  baseVersion: z.number().int().nonnegative().optional()
 });
 
 export type ClientBranding = z.infer<typeof clientBrandingSchema>;

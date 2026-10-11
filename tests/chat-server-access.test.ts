@@ -152,7 +152,7 @@ describe("Namespace grants on agents and skills", () => {
     );
   });
 
-  it("opens no overview, default-agent or availability call, and no naming of the default", async () => {
+  it("opens no overview and no naming of the default with a batch", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
@@ -166,19 +166,8 @@ describe("Namespace grants on agents and skills", () => {
       {},
       t.forbidden("agent.read", "no_grant")
     );
-    await t.expectRefused(
-      t.kai.id,
-      "config_agents.set_default",
-      { payload: { agentName: "kai-helper" } },
-      t.forbidden("agent.write", "no_grant")
-    );
-    await t.expectRefused(
-      t.kai.id,
-      "config_agents.set_availability",
-      { params: { name: "kai-helper" }, payload: { mode: "all" } },
-      t.forbidden("agent.write", "no_grant")
-    );
-    // Naming the default agent with a batch is the release holder's.
+    // Naming the default agent with a batch is the release holder's. The default-agent and
+    // the availability call are held in tests/asset-placement.test.ts.
     await t.expectRefused(
       t.kai.id,
       "assets.sync",
@@ -186,9 +175,6 @@ describe("Namespace grants on agents and skills", () => {
       t.forbidden("assets.release", "no_grant")
     );
     await t.expectOk(t.admin.id, "config_assets.get_overview");
-    await t.expectOk(t.admin.id, "config_agents.set_default", {
-      payload: { agentName: "kai-helper" }
-    });
   });
 
   it("keeps the legacy keys of me.get unchanged by a Namespace grant", async () => {
@@ -246,8 +232,9 @@ describe("Namespace grants on agents and skills", () => {
       t.forbidden("agent.write", "no_grant")
     );
     expect((await t.putAgent(t.admin.id, "assistant")).statusCode).toBe(200);
-    await t.expectOk(t.admin.id, "config_agents.set_default", {
-      payload: { agentName: "assistant" }
+    await t.expectOk(t.admin.id, "assets.set_default", {
+      params: { kind: "agent" },
+      payload: { name: "assistant" }
     });
     await t.expectOk(t.kai.id, "assets.delete", {
       params: { kind: "agent", name: "kai-helper" },
