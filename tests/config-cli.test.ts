@@ -1675,6 +1675,180 @@ describe("config CLI against an instance", () => {
     ).toBe(0);
   });
 
+  it("refuses a forced push whose default agent changed after the CLI read it", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl, fixture } = await instanceHolding(
+      { defaultAgentName: "assistant", agents: releasedAgents, skills: releasedSkills },
+      syncs
+    );
+    const directory = await createTemporaryDirectory();
+    await writeRelease(directory);
+    const storedDefault = async () =>
+      (
+        await fixture.store.configAssets.getConfigAssetState({
+          clientInstanceId: fixture.clientInstanceId
+        })
+      ).defaultAgentName;
+    // Someone makes another agent the default after the CLI listed the assets.
+    const changing: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      if (
+        new URL(request.url).pathname === testOperations["assets.sync_check"].path &&
+        (await storedDefault()) === "assistant"
+      ) {
+        await fixture.store.configAssets.applyConfigAssetMutations({
+          clientInstanceId: fixture.clientInstanceId,
+          mutations: [{ type: "setDefaultAgent", agentName: "helper" }]
+        });
+      }
+      return fetchImpl(request);
+    };
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      force: true,
+      env: { CATALYST_API_KEY: "cat_force" },
+      stdout: () => {},
+      stderr: (text: string) => errors.push(text)
+    };
+
+    expect(await runConfigCommand("push", { ...options, fetchImpl: changing })).toBe(1);
+    expect(errors.join("")).toContain("default agent changed on the instance");
+    expect(syncs).toEqual([]);
+    expect(await storedDefault()).toBe("helper");
+
+    // Pushed again, the CLI reads the default as it is now and the local one wins.
+    expect(await runConfigCommand("push", { ...options, fetchImpl })).toBe(0);
+    expect(syncs).toHaveLength(1);
+    expect(syncs[0]).toMatchObject({
+      defaultAgentName: "assistant",
+      expectedDefaultAgentName: "helper"
+    });
+    expect(await storedDefault()).toBe("assistant");
+  });
+
+  it("names the upgrade where the instance has the sync and not its check, and sends nothing", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] }, syncs);
+    // An instance of the release before this one: it lists and syncs, and has no check.
+    const earlier: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      return new URL(request.url).pathname === testOperations["assets.sync_check"].path
+        ? jsonResponse(404, {
+            error: {
+              code: "NOT_FOUND",
+              message: "Not found",
+              details: { reason: UNKNOWN_OPERATION_REASON }
+            }
+          })
+        : fetchImpl(request);
+    };
+    const directory = await createTemporaryDirectory();
+    await writeRelease(directory);
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_skew" },
+      fetchImpl: earlier,
+      stdout: () => {},
+      stderr: (text: string) => errors.push(text)
+    };
+    const upgrade =
+      "This instance is on an earlier release than this CLI: 'config push' and 'config validate' need the instance on the release of this CLI or later. Upgrade the instance, or use the CLI of its release.\n";
+
+    expect(await runConfigCommand("push", { ...options, force: true })).toBe(1);
+    expect(errors.join("")).toBe(upgrade);
+    errors.length = 0;
+    expect(await runConfigCommand("validate", options)).toBe(1);
+    expect(errors.join("")).toBe(upgrade);
+    expect(syncs).toEqual([]);
+    expect(
+      await fixture.store.configAssets.getConfigAssetState({
+        clientInstanceId: fixture.clientInstanceId
+      })
+    ).toMatchObject({ version: 0 });
+  });
+
+  it("keeps an asset created since the pull out of a prune, and names it", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl, fixture } = await instanceHolding(
+      { defaultAgentName: "assistant", agents: [agentConfig("Remote")], skills: [] },
+      syncs
+    );
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      prune: true,
+      env: { CATALYST_API_KEY: "cat_prune" },
+      fetchImpl,
+      stdout: () => {},
+      stderr: (text: string) => errors.push(text)
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    // Someone creates a skill on the instance, and the working copy changes an agent.
+    await fixture.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "skill", name: "fresh", config: skillConfig("fresh", "New.") }
+      ]
+    });
+    await writeFile(
+      resolve(directory, "agents", "assistant.agent.yaml"),
+      serializeAgentYaml(canonicalizeAgentConfig(agentConfig("Local"))),
+      "utf8"
+    );
+
+    expect(await runConfigCommand("push", options)).toBe(1);
+    expect(errors.join("")).toContain("skill:fresh");
+    expect(syncs).toEqual([]);
+    const held = (kind: string, name: string) =>
+      fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind,
+        name
+      });
+    expect(await held("skill", "fresh")).toMatchObject({ status: "active", revision: 1 });
+    expect(await held("agent", "assistant")).toMatchObject({ revision: 1 });
+  });
+
+  it("pushes a first release to an empty instance after a pull, without --force", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] }, syncs);
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const output: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_first" },
+      fetchImpl,
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => output.push(text)
+    };
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    await writeRelease(directory);
+
+    expect(await runConfigCommand("push", options), output.join("")).toBe(0);
+    expect(output.join("")).toContain("Pushed 3 agents, 2 skills, version 1.");
+    expect(syncs).toHaveLength(1);
+    // Made against what the pull saw: no asset and no default agent.
+    expect(syncs[0]).toMatchObject({
+      defaultAgentName: "assistant",
+      expectedDefaultAgentName: null
+    });
+    expect(syncs[0]).toHaveProperty("items.length", 5);
+    expect(JSON.stringify(syncs[0])).not.toContain("expectedRevision");
+    expect(
+      await fixture.store.configAssets.getConfigAssetState({
+        clientInstanceId: fixture.clientInstanceId
+      })
+    ).toMatchObject({ version: 1, defaultAgentName: "assistant" });
+    output.length = 0;
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(output.join("")).toContain("No local changes to push.");
+  });
+
   it.each(retiredReleasePaths)(
     "tells a CLI of an earlier release to upgrade at %s %s",
     async (method, path) => {

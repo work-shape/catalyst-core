@@ -333,18 +333,25 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       `This push changes ${items.length} assets, and one push holds at most ${ASSET_RELEASE_SYNC_MAX_ITEMS}. Push in parts with --only.`
     );
   }
+  // The default agent the push is made against, as the revisions are: the one of the last
+  // pull, or with --force the one the listing above shows.
+  const listedDefault = [...listing.values()].find((asset) => asset.isDefault)?.name ?? null;
+  const batch: SyncBatch = {
+    items,
+    ...(changesDefault
+      ? {
+          defaultAgentName: bundle.defaultAgentName ?? null,
+          expectedDefaultAgentName: options.force
+            ? listedDefault
+            : (baseline?.defaultAgentName ?? null)
+        }
+      : {})
+  };
   try {
-    const outcome = await api.syncAssets({
-      items,
-      ...(changesDefault
-        ? {
-            defaultAgentName: bundle.defaultAgentName ?? null,
-            ...(options.force
-              ? {}
-              : { expectedDefaultAgentName: baseline?.defaultAgentName ?? null })
-          }
-        : {})
-    });
+    // Asked first: an instance of an earlier release has no check, and says so here before
+    // anything is written under rules this CLI does not expect.
+    await checkSyncOnThisRelease(api, batch);
+    const outcome = await api.syncAssets(batch);
     if (outcome.status === "pending_approval") {
       writeError(
         options,
@@ -487,7 +494,7 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
   try {
     // The whole working copy, each asset against the revision the instance holds now: the
     // check says whether a push of everything would be accepted, whatever was pulled last.
-    await api.checkSync({
+    await checkSyncOnThisRelease(api, {
       items: assetEntries(bundle).map((asset) => {
         const revision = listing.get(asset.key)?.revision;
         return {
@@ -617,6 +624,8 @@ interface RemoteAsset {
   kind: AssetKindName;
   name: string;
   revision: number;
+  /** The listing marks the instance's default agent. */
+  isDefault?: true;
 }
 
 type FetchedAsset = RemoteAsset & AssetDefinition;
@@ -627,7 +636,13 @@ async function listRemoteAssets(api: ConfigApi): Promise<Map<string, RemoteAsset
   for (const kind of ASSET_KINDS) {
     for (const asset of await api.listAssets(kind)) {
       const key = `${kind}:${asset.name}`;
-      assets.set(key, { key, kind, name: asset.name, revision: asset.revision });
+      assets.set(key, {
+        key,
+        kind,
+        name: asset.name,
+        revision: asset.revision,
+        ...(asset.isDefault ? { isDefault: true as const } : {})
+      });
     }
   }
   return assets;
@@ -1055,6 +1070,31 @@ function readRefusedBatch(error: ConfigApiError): RefusedBatch | undefined {
       })
     ]
   };
+}
+
+/**
+ * Asks the instance whether it would apply the batch. An instance that does not know the
+ * check is of an earlier release, whose sync does not write a release as this CLI sends it.
+ */
+async function checkSyncOnThisRelease(api: ConfigApi, batch: SyncBatch): Promise<void> {
+  try {
+    await api.checkSync(batch);
+  } catch (error) {
+    if (error instanceof ConfigApiError && isMissingCheck(error)) {
+      throw new Error(
+        "This instance is on an earlier release than this CLI: 'config push' and 'config validate' need the instance on the release of this CLI or later. Upgrade the instance, or use the CLI of its release.",
+        { cause: error }
+      );
+    }
+    throw error;
+  }
+}
+
+/** A 404 that is no refusal of the batch: the instance has no such operation. */
+function isMissingCheck(error: ConfigApiError): boolean {
+  return (
+    error.status === 404 && !(isRecord(error.details) && error.details.reason === "sync_refused")
+  );
 }
 
 function formatRefusal(title: string, refusal: RefusedBatch): string {

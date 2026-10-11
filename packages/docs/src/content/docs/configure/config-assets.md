@@ -29,7 +29,7 @@ A `catalyst.yaml` manifest in the working-copy root names instances and the asse
 
 `push` sends only assets changed locally since their last pull, in one `assets.sync` call that is applied completely or not at all. Each asset names the revision of its last pull. Unchanged files leave instance edits alone. Assets missing locally stay on the instance unless you use `--prune`, which deletes them at the revision of the last pull; an asset that appeared on the instance since is reported as a conflict instead of being deleted.
 
-`--force` sends every selected local asset against the revision the instance holds at that moment, whatever changed there since the last pull, and needs no earlier pull. It does not imply deletion, and it is no bypass on the instance: a write that arrives between the CLI's read and its push still refuses the push.
+`--force` sends every selected local asset against the revision the instance holds at that moment, whatever changed there since the last pull, and needs no earlier pull. A full forced push sends the default agent the same way, against the one the instance holds at that moment. It does not imply deletion, and it is no bypass on the instance: a write that arrives between the CLI's read and its push still refuses the push.
 
 The CLI reads with `assets.list` and `assets.get` and writes with `assets.sync`, the operations under [The asset API](#the-asset-api). Each push is one Operation Run of the key's service principal. A push whose answer is lost on the way is sent again under the same idempotency key, so it is applied once. One push holds at most 2,000 assets and one megabyte; a larger release is pushed in parts with `--only`. `validate` asks `assets.sync_check` whether a push of the whole working copy would be accepted and writes nothing. On an instance whose policy holds a release for approval, `push` reports the waiting Operation Run and exits with 1; pull after the approval.
 
@@ -45,7 +45,7 @@ Commit or stash local edits in git before running that command: pull overwrites 
 
 State files from an older CLI remain readable, but their global version is not a per-asset baseline. Pull before a guarded push.
 
-CLI and server ship together. The addresses the CLI used before, `/api/v1/instance/config/export`, `/import` and `/validate`, are gone: an older CLI is answered `404` with the sentence to upgrade it. This CLI against an older server reports that the instance does not serve the asset operations it uses.
+CLI and server ship together. The addresses the CLI used before, `/api/v1/instance/config/export`, `/import` and `/validate`, are gone: an older CLI is answered `404` with the sentence to upgrade it. This CLI against an older server reports that the instance does not serve the asset operations it uses. `push` and `validate` need the instance on the release of this CLI or later: they ask `assets.sync_check` first, and against an instance that has `assets.sync` without it they say so and send nothing.
 
 The canonical skill package layout is:
 
@@ -69,7 +69,7 @@ catalyst config diff --instance production
 Create the credential once as a superadmin under **Administration → API Access**:
 
 1. Create a service principal such as `Catalyst CLI` with `config_assets.read` and `config_assets.release`.
-2. Create a key restricted to `config_assets:read` and `config_assets:release`.
+2. Create a key restricted to `config_assets:read` and `config_assets:release`. A push is a release only with both: the right on the principal and the release scope on the key. Under a key with `config_assets:write` instead, the same principal syncs as any writer does, inside one Namespace and within the editing limits.
 3. Copy the secret when it is shown once and expose it as `CATALYST_API_KEY` in the operator environment or CI secret store.
 
 For a local development instance, one command does these steps:
@@ -217,7 +217,7 @@ A write names the revision it was made against. `assets.put` with `expectedRevis
 
 `assets.sync` applies up to 200 puts and deletes for one registered Namespace, named by its prefix in `namespace`. Each item is checked like the single call: the right on that asset, its revision, its content. The batch is applied completely or not at all. When any item is refused the answer carries `details.items` with one entry per item, `refused` with its error or `not_applied`, and nothing is written. An item whose name does not start with the prefix is refused for every caller, an administrator included. The right on every item is decided before the instance's policy is asked, and a policy setting narrowed to a kind or to a Namespace applies to a batch that names an asset of that kind or in that Namespace.
 
-A holder of `config_assets.release` may leave `namespace` out. That batch is a release, which is what `catalyst config push` sends: it may name any agent or skill of the instance, holds up to 2,000 items, may carry `defaultAgentName` and `expectedDefaultAgentName`, is not bound by `editableAgentFields` or the right for model settings, and is checked against the whole stored set instead of what its key may read. A delete of an asset that is not there is answered `absent` and refuses nothing, unless the asset was created meanwhile. A release answers `hiddenAgentNames` for agents it wrote that no workspace offers.
+A holder of `config_assets.release` whose key carries the scope `config_assets:release` may leave `namespace` out. That batch is a release, which is what `catalyst config push` sends: it may name any agent or skill of the instance, holds up to 2,000 items, may carry `defaultAgentName` and `expectedDefaultAgentName`, is not bound by `editableAgentFields` or the right for model settings, and is checked against the whole stored set instead of what its key may read. A delete of an asset that is not there is answered `absent` and refuses nothing, unless the asset was created meanwhile. A release answers `hiddenAgentNames` for agents it wrote that no workspace offers.
 
 `assets.sync_check` takes the body of a sync, runs every check of it and writes nothing. It answers `{ "valid": true }` or the refusal the sync would answer.
 
