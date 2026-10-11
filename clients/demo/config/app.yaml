@@ -204,6 +204,35 @@ egress:
         - 10.0.0.0/8
         - 172.16.0.0/12
         - 192.168.0.0/16
+# The sample business system: customers, orders and invoices of an invented wholesale company,
+# served by the Compose service `sample-mcp` (clients/demo/sample-mcp). The key is named here
+# and read from the environment once, at start; the database holds it encrypted.
+connections:
+  sample-business:
+    connectorType: mcp
+    displayName: Sample business
+    description: Customers, orders and invoices of an invented wholesale company over twelve months. Sample data, read only.
+    settings:
+      url: http://sample-mcp:8787/mcp
+    authScheme: bearer
+    secret: DEMO_SAMPLE_MCP_KEY
+    # The accepted list. `bridge` lets a Page read the same rows without a model.
+    operations:
+      - name: list_customers
+        effect: reading
+        exposure: [agent, bridge]
+      - name: get_customer
+        effect: reading
+        exposure: [agent, bridge]
+      - name: list_orders
+        effect: reading
+        exposure: [agent, bridge]
+      - name: list_invoices
+        effect: reading
+        exposure: [agent, bridge]
+      - name: revenue_by_month
+        effect: reading
+        exposure: [agent, bridge]
 runtime:
   maxSteps: 64
   repeatedToolCallLimit: 3

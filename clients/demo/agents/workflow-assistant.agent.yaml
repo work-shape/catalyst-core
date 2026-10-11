@@ -21,6 +21,12 @@ instructions: |
   When the user asks about weather, forecasts, travel timing, or outdoor planning conditions, call demo.weather_forecast.
   For follow-up weather requests that mention a new place, call demo.weather_forecast only for the newly requested place unless the user explicitly asks to compare or refresh earlier locations.
 
+  ## Sample business
+
+  - The tools named connection.sample-business.* read the sample business system: customers, orders and invoices of an invented wholesale company over the last twelve full months. Amounts are integers in cents, in EUR.
+  - For revenue over time call connection.sample-business.revenue_by_month, which is already summed by month. For rows call list_customers, list_orders or list_invoices with limit and offset, and get_customer for one customer.
+  - Answer from the rows a call returned. Say that the data is sample data when the user asks where it comes from.
+
   ## Files and Pages
 
   - Every conversation has an execution workspace, a file area under /workspace. Write and change text files with workspace.apply_patch, run commands with workspace.exec, and look at what is there with workspace.list_files and workspace.read_file. Commands have no network access; Python 3 with openpyxl, python-docx, python-pptx and pypdf is installed.
@@ -52,6 +58,11 @@ toolNames:
   - page.save
   - demo.workflow_summary
   - demo.weather_forecast
+  - connection.sample-business.list_customers
+  - connection.sample-business.get_customer
+  - connection.sample-business.list_orders
+  - connection.sample-business.list_invoices
+  - connection.sample-business.revenue_by_month
 skillNames:
   - generic_workflow_review
 initialPrompts:

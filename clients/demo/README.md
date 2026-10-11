@@ -110,6 +110,26 @@ The demo runs with Execution Workspaces and the `apps` module on. Its agent read
 - The worker keeps the directory of a running command under `/tmp/vivd-catalyst-demo-execution-workspaces` on the host. `WORKSPACE_COMMAND_HOST_ROOT` names another directory; Docker must be allowed to mount it.
 - The runner image is the platform's own. It has Python with `openpyxl`, `python-docx`, `python-pptx` and `pypdf`, LibreOffice and the Page build command, and none of the artifact helper commands of the capabilities repository, so the demo ships no spreadsheet, document, presentation or PDF skills.
 
+## The sample business system and its Connection
+
+Beside the instance runs a small outside system: the Compose service `sample-mcp` (`sample-mcp/`), a remote MCP server with customers, orders and invoices of an invented wholesale company over the last twelve full months. The data is generated at start from a fixed seed, so it is the same for a whole month. The server has five reading tools, publishes no host port and answers only with its key.
+
+The instance reaches it through the Connection `sample-business` ("Sample business" under Build > Connections), which release config defines in `config/app.yaml`:
+
+- `connections.sample-business` names the Connector type `mcp`, the address `http://sample-mcp:8787/mcp`, the secret `DEMO_SAMPLE_MCP_KEY` and the five accepted operations, each reading and open to agents and to Pages.
+- `egress.allow` lists the one target a Connection may reach: `sample-mcp`, port 8787, as a private target whose address lies in a private range. Docker gives a Compose network such a range. Remove the entry and the Connection's test answers `network_denied`.
+- `secretStore.keys` names `DEMO_SECRET_STORE_KEY`, the key that encrypts the secrets of Connections in the database.
+
+`pnpm dev` generates both keys into the gitignored `.env` when they are missing and prints only their names. They are local test values and nothing else reads them: Compose hands `DEMO_SAMPLE_MCP_KEY` to `sample-mcp` and to the API, and `DEMO_SECRET_STORE_KEY` to the API. The API reads the sample key once, at start, and stores it encrypted. Without `DEMO_SECRET_STORE_KEY` the API stops at start and names the variable; `node scripts/ensure-local-secrets.mjs` writes it for a stack that is not started with `pnpm dev`.
+
+To replace the sample key, delete the line `DEMO_SAMPLE_MCP_KEY` from `.env` and start again with `pnpm dev`: the server takes the new key and the API stores it as the next secret version. Keep `DEMO_SECRET_STORE_KEY` as long as the database lives, because the stored secret is read with it. After a database reset both lines may go.
+
+The demo agent carries the five tools as `connection.sample-business.<tool>`. Like every change to the working copy they reach a running demo with `pnpm config:push`. Then ask, for example:
+
+```text
+Which five customers ordered most in the last twelve months?
+```
+
 ## Agent and skill configuration
 
 Agents and skills are loaded live from the database. The YAML and Markdown files under `agents/` and `skills/` are the CLI working copy, not runtime file config: a change to them, such as a new entry under `toolNames`, reaches a running demo only with `pnpm config:push`, and a database that was never pushed to has no agent. On the first boot, and after every change to the working copy, start the API and then push that working copy from another terminal:
