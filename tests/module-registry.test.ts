@@ -314,7 +314,8 @@ describe("the snapshot in a running instance", () => {
       resources: { enabled: true },
       assetManagement: { enabled: true },
       userInvitations: { enabled: true },
-      apps: { enabled: false }
+      // The reference client's agent saves Pages, so the module is on there.
+      apps: { enabled: true }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },

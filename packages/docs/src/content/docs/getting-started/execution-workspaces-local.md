@@ -5,7 +5,7 @@ description: Test execution workspaces from the repository and see what an insta
 
 Execution workspaces give an agent a file area per conversation and a bounded command tool. The code is in the open repository: the tools `workspace.exec`, `workspace.apply_patch`, `workspace.import_files`, `workspace.list_files`, `workspace.read_file`, `workspace.preview_images` and `workspace.promote_artifact`, the command queue, the worker and the runner image.
 
-The demo client does not enable execution workspaces. From the repository alone you can run the tests of the feature. To use it in a chat, a client assembly has to enable it and start a worker, as described under [What An Instance Needs](#what-an-instance-needs).
+The demo client enables execution workspaces with the Docker sandbox: its Compose files build the runner image and start a workspace command worker, and its agent names the workspace tools. Another client assembly has to do the same, as described under [What An Instance Needs](#what-an-instance-needs).
 
 ## Requirements
 

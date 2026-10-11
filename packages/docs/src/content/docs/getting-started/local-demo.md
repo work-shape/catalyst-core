@@ -9,7 +9,7 @@ The repository includes a demo client instance at `clients/demo`. It is useful f
 
 - Node.js compatible with the workspace toolchain
 - pnpm 10
-- Docker for the local Postgres service
+- Docker for the local Postgres service, the workers and the command sandbox
 - an OpenAI API key for the default model-backed demo path
 
 ## Start The Demo
@@ -31,6 +31,7 @@ The demo starts:
 - chat API on `http://127.0.0.1:4100`
 - demo chat UI on `http://127.0.0.1:5173`
 - Postgres through `clients/demo/docker-compose.yml`
+- the artifact preview worker and the workspace command worker, which runs the agent's commands and Page builds in containers of the runner image it builds
 
 ## Default Standalone Users
 

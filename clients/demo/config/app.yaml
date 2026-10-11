@@ -47,6 +47,14 @@ modules:
     enabled: true
   userInvitations:
     enabled: true
+  # Pages: an agent saves a folder of the conversation's Execution Workspace with `page.save`.
+  # Needs the `files` store, Execution Workspaces and the workspace command worker below.
+  apps:
+    enabled: true
+# The file area per conversation and the commands an agent runs in it. The commands run in the
+# Docker sandbox, so the Compose files start a workspace command worker and build its runner image.
+executionWorkspaces:
+  enabled: true
 administration:
   agentConfiguration:
     editableAgentFields:
@@ -92,10 +100,19 @@ infrastructure:
     sender:
       fromAddress: noreply@example.test
   objectStorage:
-    # Shared by the API and the artifact preview worker; the Compose files mount this directory.
+    # The built files of Pages. Shared by the API and the workspace command worker.
+    files:
+      provider: filesystem
+      root: /var/lib/vivd-catalyst/demo/files
+    # Shared by the API and both workers; the Compose files mount this directory.
     workspaces:
       provider: filesystem
       root: /var/lib/vivd-catalyst/demo/execution-workspaces/objects
+  sandbox:
+    provider: docker
+    # The target `workspace-command-runner` of docker/vivd-client.Dockerfile, built by the
+    # Compose files under this name. EXECUTION_WORKSPACE_RUNNER_IMAGE replaces it at runtime.
+    image: vivd-catalyst-demo-workspace-command-runner:local
 modelBindings:
   - id: primary
     providerId: openai
@@ -183,6 +200,22 @@ tools:
   - name: structured_data.read
     enabled: true
   - name: structured_result.read
+    enabled: true
+  - name: workspace.import_files
+    enabled: true
+  - name: workspace.list_files
+    enabled: true
+  - name: workspace.read_file
+    enabled: true
+  - name: workspace.apply_patch
+    enabled: true
+  - name: workspace.exec
+    enabled: true
+  - name: workspace.preview_images
+    enabled: true
+  - name: workspace.promote_artifact
+    enabled: true
+  - name: page.save
     enabled: true
   - name: demo.workflow_summary
     enabled: true

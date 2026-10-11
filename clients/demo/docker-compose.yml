@@ -53,6 +53,15 @@ x-app-environment: &app-environment
   CHAT_SERVER_CREDENTIAL: ${CHAT_SERVER_CREDENTIAL:-replace-with-a-server-to-server-secret}
   SERVICE_ACCESS_TOKEN_SECRET: ${SERVICE_ACCESS_TOKEN_SECRET:-replace-with-at-least-32-random-characters}
 
+x-workspace-command-worker-environment: &workspace-command-worker-environment
+  CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
+  DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
+  WORKSPACE_COMMAND_WORKER_ID: demo-workspace-command-worker
+  EXECUTION_WORKSPACE_RUNNER_IMAGE: ${WORKSPACE_COMMAND_RUNNER_IMAGE:-vivd-catalyst-demo-workspace-command-runner:local}
+  # The Docker engine mounts a command's directory by its path on the host, so the worker
+  # sees this directory under the same path as the host does.
+  WORKSPACE_COMMAND_TEMP_ROOT: ${WORKSPACE_COMMAND_HOST_ROOT:-/tmp/vivd-catalyst-demo-execution-workspaces}/runner-tmp
+
 x-artifact-preview-worker-environment: &artifact-preview-worker-environment
   CLIENT_CONFIG_PATH: /app/clients/demo/config/app.yaml
   DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
@@ -116,6 +125,7 @@ services:
       - "${API_HOST_PORT:-4100}:4100"
     volumes:
       - execution-workspace-objects:/var/lib/vivd-catalyst/demo/execution-workspaces
+      - page-files:/var/lib/vivd-catalyst/demo/files
     develop:
       watch:
         - action: rebuild
@@ -148,6 +158,56 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  # Builds the image the Docker sandbox starts a container from for each command and each Page
+  # build. The service itself runs nothing.
+  workspace-command-runner:
+    image: ${WORKSPACE_COMMAND_RUNNER_IMAGE:-vivd-catalyst-demo-workspace-command-runner:local}
+    build:
+      <<: *client-build
+      target: workspace-command-runner
+    command: ["true"]
+
+  workspace-command-worker:
+    build:
+      <<: *client-build
+      target: workspace-command-worker
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      workspace-command-runner:
+        condition: service_completed_successfully
+    environment:
+      <<: *workspace-command-worker-environment
+    command: ["node", "clients/demo/dist/workspace-command-worker.js"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${WORKSPACE_COMMAND_HOST_ROOT:-/tmp/vivd-catalyst-demo-execution-workspaces}:${WORKSPACE_COMMAND_HOST_ROOT:-/tmp/vivd-catalyst-demo-execution-workspaces}
+      - execution-workspace-objects:/var/lib/vivd-catalyst/demo/execution-workspaces
+      - page-files:/var/lib/vivd-catalyst/demo/files
+    develop:
+      watch:
+        - action: rebuild
+          path: ../../clients/demo
+          ignore: *demo-api-watch-ignore
+        - action: rebuild
+          path: ../../packages
+          ignore: *backend-package-watch-ignore
+        - action: rebuild
+          path: ../../packages
+          include: "**/package.json"
+          ignore: *watch-ignore
+        - action: rebuild
+          path: ../../docker
+        - action: rebuild
+          path: ../../package.json
+        - action: rebuild
+          path: ../../pnpm-lock.yaml
+        - action: rebuild
+          path: ../../pnpm-workspace.yaml
 
   artifact-preview-worker:
     build:
@@ -263,4 +323,5 @@ services:
 volumes:
   postgres-data:
   execution-workspace-objects:
+  page-files:
   artifact-preview-tmp:
