@@ -55,7 +55,9 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
 
 test("an administrator registers a Namespace, grants in it, checks, denies, revokes and deletes", async ({
   page,
-  accessState: _accessState
+  // The test stores an agent in its Namespace; the turn on the agents holds the one on the
+  // Namespaces and grants.
+  instanceAgentsChange: _instanceAgentsChange
 }) => {
   test.setTimeout(90_000);
   // A seeded user is listed once the user has signed in.

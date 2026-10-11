@@ -1,4 +1,5 @@
-import { mkdir, rmdir, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test as base, type BrowserContext } from "@playwright/test";
@@ -344,11 +345,82 @@ export interface PageErrorWatch {
   watch(context: BrowserContext): Promise<void>;
 }
 
+/** How old a lock or a mark of a reader is, or nothing when it is not there. */
+async function ageOf(path: string): Promise<number | undefined> {
+  return stat(path).then(
+    (entry) => Date.now() - entry.mtimeMs,
+    () => undefined
+  );
+}
+
+const pause = () => new Promise((resolve) => setTimeout(resolve, 250));
+
+/**
+ * Waits for a turn on something of the instance that only one test may hold at a time, and
+ * answers with what ends the turn. The specs run side by side in several processes, so the
+ * turn is a directory: making one succeeds for one process alone.
+ */
+export async function takeTurn(
+  name: "access" | "release-connections",
+  baseURL: string | undefined
+): Promise<() => Promise<void>> {
+  const lock = join(tmpdir(), `catalyst-e2e-${name}-${(baseURL ?? "").replace(/\W+/gu, "-")}`);
+  const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS;
+  for (;;) {
+    try {
+      await mkdir(lock);
+      return () => rmdir(lock).catch(() => undefined);
+    } catch {
+      // A run that was killed leaves its lock behind: one older than any test is taken over.
+      const age = (await ageOf(lock)) ?? 0;
+      if (age > ACCESS_STATE_WAIT_MS) {
+        await rmdir(lock).catch(() => undefined);
+      } else if (Date.now() > waitUntil) {
+        throw new Error(`The turn "${name}" on the instance stayed taken: ${lock}`);
+      } else {
+        await pause();
+      }
+    }
+  }
+}
+
+/** The places of the turn-taking on the instance's agents, by the instance's address. */
+function agentTurns(baseURL: string | undefined) {
+  const instance = (baseURL ?? "").replace(/\W+/gu, "-");
+  return {
+    /** A directory that is there while a test adds or removes agents. */
+    changing: join(tmpdir(), `catalyst-e2e-agents-changing-${instance}`),
+    /** One file for each test that reads the whole list at this moment. */
+    reading: join(tmpdir(), `catalyst-e2e-agents-reading-${instance}`)
+  };
+}
+
+/** The marks of the tests that read the agent list now. One a killed run left is removed. */
+async function agentReaders(reading: string): Promise<string[]> {
+  const marks = await readdir(reading).catch(() => []);
+  const live: string[] = [];
+  for (const mark of marks) {
+    const age = await ageOf(join(reading, mark));
+    if (age !== undefined && age > ACCESS_STATE_WAIT_MS) {
+      await rm(join(reading, mark), { force: true });
+    } else if (age !== undefined) {
+      live.push(mark);
+    }
+  }
+  return live;
+}
+
 /**
  * The `test` of every browser spec. It fails a test whose pages threw an uncaught JavaScript
  * error or logged one with `console.error`, after the test's own steps have run.
  */
-export const test = base.extend<{ pageErrors: PageErrorWatch; accessState: void }>({
+export const test = base.extend<{
+  pageErrors: PageErrorWatch;
+  accessState: void;
+  instanceAgents: void;
+  instanceAgentsChange: void;
+  releaseConnections: void;
+}>({
   /**
    * Asked for by a test that registers a Namespace or writes a grant, or that asserts there is
    * none. The specs run side by side against one instance, and such a test would see the
@@ -356,36 +428,95 @@ export const test = base.extend<{ pageErrors: PageErrorWatch; accessState: void 
    */
   accessState: [
     async ({ baseURL }, use) => {
-      const lock = join(tmpdir(), `catalyst-e2e-access-${(baseURL ?? "").replace(/\W+/gu, "-")}`);
+      const release = await takeTurn("access", baseURL);
+      try {
+        await use();
+      } finally {
+        await release();
+      }
+    },
+    // The wait for another spec is not the test's own time.
+    { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
+  ],
+  /**
+   * Asked for by a test that asserts the whole list of agents a member is offered, by count or
+   * by every name. A new agent is offered in every workspace from the moment it is stored, so
+   * an agent another spec file holds at that moment would stand in the list. Such tests run
+   * side by side with each other, and not while a test with `instanceAgentsChange` runs.
+   */
+  instanceAgents: [
+    async ({ baseURL }, use) => {
+      const { changing, reading } = agentTurns(baseURL);
+      const mark = join(reading, randomUUID());
       const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS;
+      await mkdir(reading, { recursive: true });
       for (;;) {
-        try {
-          await mkdir(lock);
+        // The mark is set before the look at the other side, as the changing test sets its
+        // directory before it looks here: one of the two always sees the other.
+        await writeFile(mark, "");
+        const age = await ageOf(changing);
+        if (age === undefined) {
           break;
-        } catch {
-          // A run that was killed leaves its lock behind: one older than any test is taken over.
-          const age =
-            Date.now() -
-            (await stat(lock).then(
-              (entry) => entry.mtimeMs,
-              () => 0
-            ));
-          if (age > ACCESS_STATE_WAIT_MS) {
-            await rmdir(lock).catch(() => undefined);
-          } else if (Date.now() > waitUntil) {
-            throw new Error(`The Namespaces and grants of the instance stayed in use: ${lock}`);
-          } else {
-            await new Promise((resolve) => setTimeout(resolve, 250));
-          }
+        }
+        await rm(mark, { force: true });
+        if (age > ACCESS_STATE_WAIT_MS) {
+          await rmdir(changing).catch(() => undefined);
+        } else if (Date.now() > waitUntil) {
+          throw new Error(`The agents of the instance stayed in change: ${changing}`);
+        } else {
+          await pause();
         }
       }
       try {
         await use();
       } finally {
-        await rmdir(lock).catch(() => undefined);
+        await rm(mark, { force: true });
       }
     },
-    // The wait for another spec is not the test's own time.
+    { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
+  ],
+  /**
+   * Asked for by a test that stores or deletes an agent of the instance. It runs when no test
+   * with `instanceAgents` runs and no other test changes agents. It takes its turn on the
+   * Namespaces and grants first, so two such tests never wait for each other.
+   */
+  instanceAgentsChange: [
+    async ({ baseURL, accessState: _accessState }, use) => {
+      const { changing, reading } = agentTurns(baseURL);
+      const waitUntil = Date.now() + ACCESS_STATE_WAIT_MS;
+      // `accessState` lets one such test through at a time, so the directory is free or left
+      // behind by a run that was killed.
+      await rmdir(changing).catch(() => undefined);
+      await mkdir(changing);
+      try {
+        while ((await agentReaders(reading)).length > 0) {
+          if (Date.now() > waitUntil) {
+            throw new Error(`The agent list of the instance stayed in use: ${reading}`);
+          }
+          await pause();
+        }
+        await use();
+      } finally {
+        await rmdir(changing).catch(() => undefined);
+      }
+    },
+    { timeout: 2 * ACCESS_STATE_WAIT_MS + 10_000 }
+  ],
+  /**
+   * Asked for by a test that puts a Connection of origin `release` into the store by hand. An
+   * API process that starts makes the stored release Connections equal to its release config
+   * and deletes such a row, so a spec that starts an API takes the same turn while it starts
+   * (`takeTurn("release-connections", …)`).
+   */
+  releaseConnections: [
+    async ({ baseURL }, use) => {
+      const release = await takeTurn("release-connections", baseURL);
+      try {
+        await use();
+      } finally {
+        await release();
+      }
+    },
     { timeout: ACCESS_STATE_WAIT_MS + 10_000 }
   ],
   pageErrors: [

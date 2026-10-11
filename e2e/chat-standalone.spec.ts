@@ -319,9 +319,8 @@ test("a message sent directly after switching lands in the conversation switched
 
 test("start page centres the composer and settles it at the bottom after the first message", async ({
   page,
-  // The picker shows every agent of the instance, an agent in a Namespace included: this test
-  // steps through its options, so it runs when no other test holds a Namespace.
-  accessState: _accessState
+  // The picker shows every agent of the instance and this test counts its options.
+  instanceAgents: _instanceAgents
 }) => {
   await serveAgentSettings(page, { showAgentDescriptions: true });
   await signInViaUi(page, normalUser);
@@ -598,7 +597,9 @@ test("an opened conversation without messages has the agent in the header only",
 });
 
 test("without its name the agent chip is an icon that opens the agent list under the pointer", async ({
-  page
+  page,
+  // The test names every option of the picker.
+  instanceAgents: _instanceAgents
 }) => {
   await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
@@ -702,7 +703,9 @@ test("without its name the agent chip is an icon that opens the agent list under
 });
 
 test("an agent is chosen with the keyboard alone: arrows, a typed name, Enter and Escape", async ({
-  page
+  page,
+  // The arrow keys move to the next option, whichever agent that is.
+  instanceAgents: _instanceAgents
 }) => {
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
@@ -766,7 +769,9 @@ test("an agent is chosen with the keyboard alone: arrows, a typed name, Enter an
 });
 
 test("the agent icon's list takes the keyboard on an arrow key and stays while the keyboard is in it", async ({
-  page
+  page,
+  // The arrow keys move to the next option, whichever agent that is.
+  instanceAgents: _instanceAgents
 }) => {
   await serveAgentSettings(page, { showAgentName: false });
   await signInViaUi(page, normalUser);
@@ -835,7 +840,9 @@ test("the agent icon's list takes the keyboard on an arrow key and stays while t
 test("a tap opens the agent icon's list and chooses from it", async ({
   browser,
   baseURL,
-  pageErrors
+  pageErrors,
+  // The test names every option of the picker.
+  instanceAgents: _instanceAgents
 }) => {
   const context = await browser.newContext({ baseURL, hasTouch: true });
   await pageErrors.watch(context);
@@ -868,7 +875,9 @@ test("a tap opens the agent icon's list and chooses from it", async ({
 
 for (const showAgentName of [false, true]) {
   test(`the header's agent list fits a narrow window on an instance that ${showAgentName ? "shows" : "hides"} the agent's name`, async ({
-    page
+    page,
+    // The test counts the options of the picker.
+    instanceAgents: _instanceAgents
   }) => {
     await serveAgentSettings(page, { showAgentName, showAgentDescriptions: true });
     await signInViaApi(page, normalUser);

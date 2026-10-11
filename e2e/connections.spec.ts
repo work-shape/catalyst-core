@@ -128,7 +128,9 @@ async function shoot(page: Page, name: string, ready: () => Promise<void>): Prom
 test("an administrator sees Connections in Build and grants its rights; a read grant on one Connection opens Build, a grant to use does not", async ({
   page,
   browser,
-  accessState: _accessState
+  accessState: _accessState,
+  // The test plants a release Connection, which an API that starts meanwhile would delete.
+  releaseConnections: _releaseConnections
 }) => {
   test.setTimeout(shotsDir ? 180_000 : 90_000);
   const connection = {

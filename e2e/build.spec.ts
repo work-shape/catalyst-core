@@ -74,7 +74,8 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
   page,
   browser,
   pageErrors,
-  accessState: _accessState
+  // The test stores two agents; the turn on the agents holds the one on the Namespaces.
+  instanceAgentsChange: _instanceAgentsChange
 }) => {
   test.setTimeout(120_000);
   const adminContext = await browser.newContext();

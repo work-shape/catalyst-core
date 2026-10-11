@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import { requestWithOrigin } from "./request-with-origin";
-import { expect, test } from "./test";
+import { expect, takeTurn, test } from "./test";
 
 // Instance > Infrastructure: an operator reads what the instance runs on and whether each
 // provider answers. A second API runs the same instance with one more model provider whose
@@ -109,7 +109,18 @@ test.describe("with a provider that does not answer", () => {
   test.describe.configure({ timeout: 90_000 });
   let brokenApi: ChildProcess | undefined;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({}, testInfo) => {
+    // An API that starts makes the release Connections of the shared database equal to its
+    // config. It starts when no test holds a Connection it planted there.
+    const started = await takeTurn("release-connections", testInfo.project.use.baseURL);
+    try {
+      await startBrokenApi();
+    } finally {
+      await started();
+    }
+  });
+
+  async function startBrokenApi(): Promise<void> {
     // The suite's own config with one more model provider, served by a second API process.
     const brokenConfigPath = resolve(dirname(resolve(configPath)), "e2e-app-broken-provider.yaml");
     const config = (await readFile(configPath, "utf8")).replaceAll(apiBaseUrl, brokenApiUrl);
@@ -123,6 +134,9 @@ test.describe("with a provider that does not answer", () => {
         PORT: String(brokenApiPort),
         CLIENT_CONFIG_PATH: brokenConfigPath,
         DATABASE_URL: databaseUrl,
+        // One database, so one queue of jobs and Agent Runs: this API takes none of them. It is
+        // stopped when this file ends, and what it held of another file would end with it.
+        E2E_TAKES_NO_JOBS: "1",
         CHAT_UI_ORIGIN: process.env.E2E_UI_URL ?? `http://${host}:5273`,
         BETTER_AUTH_URL: `${brokenApiUrl}/api/auth`,
         // The secret of the suite's own API: both sign the sessions of one database.
@@ -153,7 +167,7 @@ test.describe("with a provider that does not answer", () => {
         { timeout: 60_000 }
       )
       .toBe(200);
-  });
+  }
 
   test.afterAll(async () => {
     if (!brokenApi || brokenApi.exitCode !== null) return;

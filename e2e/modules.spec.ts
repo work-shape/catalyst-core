@@ -7,7 +7,7 @@ import type { Page } from "@playwright/test";
 import postgres from "postgres";
 import { z } from "zod";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
-import { expect, test } from "./test";
+import { expect, takeTurn, test } from "./test";
 
 // Instance > Modules: an operator reads which modules this instance runs. And a module that is
 // off is off everywhere: a second API runs the same instance with `resources` off, on the same
@@ -110,7 +110,9 @@ const exportSchema = z.object({ agents: z.array(z.record(z.string(), z.unknown()
 const storedAgentSchema = z.object({ config: z.object({ toolNames: z.array(z.string()) }) });
 
 test("an admin removes a tool of a module that is off from an agent and saves", async ({
-  page
+  page,
+  // The test stores an agent of its own, which every picker would offer meanwhile.
+  instanceAgentsChange: _instanceAgentsChange
 }) => {
   test.setTimeout(60_000);
   const staleTool = "demo.weather_forecast";
@@ -262,7 +264,18 @@ test.describe("with the resources module off", () => {
   test.describe.configure({ timeout: 90_000 });
   let offApi: ChildProcess | undefined;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({}, testInfo) => {
+    // An API that starts makes the release Connections of the shared database equal to its
+    // config. It starts when no test holds a Connection it planted there.
+    const started = await takeTurn("release-connections", testInfo.project.use.baseURL);
+    try {
+      await startOffApi();
+    } finally {
+      await started();
+    }
+  });
+
+  async function startOffApi(): Promise<void> {
     // The suite's own config with the one switch turned, served by a second API process.
     const offConfigPath = resolve(dirname(resolve(configPath)), "e2e-app-resources-off.yaml");
     const config = (await readFile(configPath, "utf8")).replaceAll(apiBaseUrl, offApiUrl);
@@ -311,7 +324,7 @@ test.describe("with the resources module off", () => {
         { timeout: 60_000 }
       )
       .toBe(200);
-  });
+  }
 
   test.afterAll(async () => {
     if (!offApi || offApi.exitCode !== null) return;
