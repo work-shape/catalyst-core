@@ -1,4 +1,4 @@
-import { describeWithoutMessage } from "../error-without-message";
+import { describeWithoutMessage, reasonCodeOf } from "../error-without-message";
 import {
   AppError,
   JobLeaseLostError,
@@ -260,8 +260,15 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
           // The worker asked the handler to stop; that is no failure of the job.
           outcome = { type: "ended", ending: { status: "released" } };
         } else {
-          if (!(error instanceof JobLeaseLostError))
-            jobLogger.error(describeWithoutMessage(error), "Job attempt failed");
+          if (!(error instanceof JobLeaseLostError)) {
+            // The reason says why where the code alone does not: a discovery refused by the
+            // egress check and one whose host did not resolve are both a CONFLICT or FORBIDDEN.
+            const reason = reasonCodeOf(error);
+            jobLogger.error(
+              { ...describeWithoutMessage(error), ...(reason === undefined ? {} : { reason }) },
+              "Job attempt failed"
+            );
+          }
           outcome = outcomeOfFailure(row, handler, error);
         }
       }

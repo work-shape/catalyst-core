@@ -11,3 +11,17 @@ export function describeWithoutMessage(error: unknown): { errorClass: string; co
       : undefined;
   return code === undefined ? { errorClass } : { errorClass, code };
 }
+
+/**
+ * The fixed reason code an error carries in its details, for a log beside its class and code:
+ * `egress_denied`, `egress_unresolved`, `connection_unavailable`. Only a short word of lower
+ * case letters, digits and underscores is a code. Anything else is left out, so no sentence
+ * and no value of a call is written.
+ */
+export function reasonCodeOf(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("details" in error)) return undefined;
+  const { details } = error;
+  if (typeof details !== "object" || details === null || !("reason" in details)) return undefined;
+  const { reason } = details;
+  return typeof reason === "string" && /^[a-z][a-z0-9_]{0,63}$/u.test(reason) ? reason : undefined;
+}

@@ -1,4 +1,5 @@
 import {
+  AppError,
   JobLeaseLostError,
   NonRetryableJobError,
   defineJobHandler,
@@ -9,6 +10,7 @@ import {
   type JobControl,
   type JobHandler,
   type JobWorker,
+  type Logger,
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
 import { describe, expect, it, vi } from "vitest";
@@ -550,6 +552,67 @@ describe("job executor", () => {
     `;
     expect(dead?.error_code).toBe("INTERNAL");
     expect(dead?.error_message).not.toContain("try again");
+  });
+
+  it("logs a failed attempt with the fixed reason its error carries, and never its message", async () => {
+    // Fails without the change: the line held the class and the code only, so a discovery
+    // the egress check refused read as a bare CONFLICT or FORBIDDEN.
+    const clientInstanceId = db.clientInstance("reason");
+    const kind = kindOf("test.reasoned", { maxAttempts: 1 });
+    const lines: unknown[] = [];
+    const logger: Logger = {
+      debug() {},
+      info() {},
+      warn() {},
+      error: (input, message) => lines.push([input, message]),
+      child: () => logger
+    };
+    const errors = [
+      new AppError("CONFLICT", "egress_unresolved: sample-mcp:8787 did not resolve", {
+        reason: "egress_unresolved",
+        host: "sample-mcp"
+      }),
+      new AppError("FORBIDDEN", "egress_denied: sample-mcp:8787 is not allowed", {
+        reason: "egress_denied"
+      }),
+      new AppError("CONFLICT", "a sentence", { reason: "Not a code: sample-mcp" }),
+      new Error("plain")
+    ];
+    const only = worker(
+      db.store,
+      clientInstanceId,
+      [
+        defineJobHandler({
+          kind,
+          slots: 1,
+          run(job) {
+            return Promise.reject(required(errors[job.payload.n]));
+          }
+        })
+      ],
+      [],
+      logger
+    );
+    for (let n = 0; n < errors.length; n += 1) {
+      await db.store.jobs.enqueue(kind, { n }, { clientInstanceId });
+      await waitUntil(async () => {
+        await only.runDue();
+        return lines.length === n + 1;
+      }, `attempt ${n} is logged`);
+    }
+    expect(lines).toEqual([
+      [
+        { errorClass: "AppError", code: "CONFLICT", reason: "egress_unresolved" },
+        "Job attempt failed"
+      ],
+      [
+        { errorClass: "AppError", code: "FORBIDDEN", reason: "egress_denied" },
+        "Job attempt failed"
+      ],
+      [{ errorClass: "AppError", code: "CONFLICT" }, "Job attempt failed"],
+      [{ errorClass: "Error" }, "Job attempt failed"]
+    ]);
+    expect(JSON.stringify(lines)).not.toContain("sample-mcp");
   });
 
   it("leaves a kind that no worker serves queued", async () => {

@@ -73,14 +73,15 @@ export function useJobExecutorHarness(db: PostgresSuite) {
     stores: PlatformStores,
     clientInstanceId: ClientInstanceId,
     handlers: RegisteredJobHandler[],
-    schedules: JobSchedule[] = []
+    schedules: JobSchedule[] = [],
+    logger: Logger = silent
   ): JobWorker {
     const created = createPostgresJobWorker({
       stores,
       clientInstanceId,
       handlers,
       schedules,
-      logger: silent
+      logger
     });
     workers.push(created);
     return created;
