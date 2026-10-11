@@ -220,9 +220,13 @@ async function setView(
 }
 
 // The test plants Connections: it takes its turn with the spec that asserts the empty list.
+// They are of origin `release` and no release config names them, so an API process that starts
+// meanwhile deletes them, and the page then answers that there is no such Connection. The
+// specs that start an API wait for the turn this test holds while its Connections are there.
 test("a Connection's page shows its definition, its state in every case and the test, and writes nothing", async ({
   page,
-  accessState: _accessState
+  accessState: _accessState,
+  releaseConnections: _releaseConnections
 }) => {
   test.setTimeout(shotsDir ? 480_000 : 180_000);
   const planted = (
