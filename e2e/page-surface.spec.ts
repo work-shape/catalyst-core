@@ -308,8 +308,10 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(page.getByTestId("page-card")).toHaveCount(0);
   await expect(surface).toBeHidden();
-  // The conversation that was used last stands first in the list.
-  await page.getByRole("button", { name: "Tool result review", exact: true }).first().click();
+  // Back through the browser's history. The list cannot say which row is this conversation:
+  // the tests of this file share their member and run side by side, every conversation of
+  // theirs has the same title, and which one was used last changes while they run.
+  await page.goBack();
   await expect.poll(() => new URL(page.url()).pathname).toBe(conversation);
   await expect(page.getByTestId("page-card")).toHaveCount(2);
   await expect(surface).toBeHidden();
