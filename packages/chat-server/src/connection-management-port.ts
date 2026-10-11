@@ -29,7 +29,7 @@ export interface ConnectionDiscoveryOutcome {
 }
 
 /** What a discovery runs under: the job attempt that asked for it. */
-export interface ConnectionDiscoveryAttempt {
+interface ConnectionDiscoveryAttempt {
   /** Aborted when the attempt is stopped or lost its lease. The discovery then writes nothing. */
   signal: AbortSignal;
   /**
