@@ -98,7 +98,7 @@ export const OPERATION_HEADERS = {
   },
   response: {
     "Operation-Run-Id":
-      "The id of the Operation Run that records this call. Set on every answer of a call that got as far as a run, a refusal and a failure included.",
+      "The id of the Operation Run that records this call. Set on every answer of a recorded call, a refusal and a failure included. Every changing call is recorded. A reading call is recorded when it is refused, when it fails, or when its operation records every call; an allowed read that is not recorded answers without this header.",
     Location: "Where the Operation Run of a call that waits for an approval is read.",
     "Idempotent-Replayed":
       "`true` when the answer is the recorded one of an earlier call with the same `Idempotency-Key`."
@@ -228,8 +228,11 @@ const REGISTERED_CHANGING_ERRORS = [
 ] as const;
 
 /**
- * An operation of the registry: every call of it is an Operation Run, named by the header
- * `Operation-Run-Id`. A reading one answers its output or an error. A changing one takes an
+ * An operation of the registry: every recorded call of it is an Operation Run, named by the
+ * header `Operation-Run-Id`. A changing call is always recorded. A reading call is recorded
+ * when it is refused, when it fails, or when its operation records every call, so the header
+ * is declared on a reading operation and present when the call was recorded.
+ * A reading one answers its output or an error. A changing one takes an
  * `Idempotency-Key` and can also answer `202` with the run while it waits for an approval.
  */
 export function defineRegisteredOperation<
@@ -250,7 +253,7 @@ export function defineRegisteredOperation(config: RegisteredOperationConfig): Op
   });
 }
 
-/** Whether every call of the operation is an Operation Run. */
+/** Whether the operation is one of the registry, reached through `runOperation`. */
 export function isRegisteredOperation(operation: Operation): boolean {
   return operation.headers?.response?.includes("Operation-Run-Id") ?? false;
 }

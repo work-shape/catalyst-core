@@ -137,8 +137,17 @@ export type OperationRunEnd = { finishedAt: ISODateString } & (
     }
 );
 
+/**
+ * A call that left no run while it went on and ended refused or failed: a read whose
+ * operation does not record every call.
+ */
+export type EndedOperationRun = Omit<NewOperationRun, "idempotencyKey"> & {
+  end: Extract<OperationRunEnd, { status: "failed" | "denied" }>;
+};
+
 export interface OperationRunFilters {
   operation?: string;
+  effect?: OperationEffect;
   status?: OperationRunStatus;
   actorId?: string;
   originKind?: OperationOrigin["kind"];
@@ -156,6 +165,12 @@ export interface OperationRunStore {
    * implementation started may have changed something, and is never run again under its key.
    */
   create(run: NewOperationRun): Promise<OperationRun | undefined>;
+  /**
+   * Writes the run of a call that has ended, in one statement. The run is never `running` in
+   * the store. It is for a read that is recorded only because it was refused or failed, so it
+   * takes no idempotency key.
+   */
+  recordEnded(run: EndedOperationRun): Promise<OperationRun>;
   /** Ends a run that is still `running`. `undefined` when it is not running any more. */
   finish(input: {
     clientInstanceId: ClientInstanceId;

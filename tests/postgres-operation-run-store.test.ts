@@ -170,6 +170,46 @@ describe("Postgres operation run store", () => {
     expect(await runs.create(newRun({ idempotencyKey: "key-1" }))).toBeUndefined();
   });
 
+  // Fails without the change: the store had no way to write a run that was never `running`,
+  // and its list took no filter for the effect.
+  it("writes an ended run in one go and lists by effect", async () => {
+    const runs = await createStore();
+    const finishedAt = new Date().toISOString();
+    const denial = { kind: "policy", operation: "items.get" } as const;
+    const denied = await runs.recordEnded({
+      ...newRun({ operation: "items.get", effect: "reading" }),
+      end: {
+        status: "denied",
+        finishedAt,
+        error: { code: "POLICY_DENIED", message: "Refused" },
+        denial
+      }
+    });
+    const failed = await runs.recordEnded({
+      ...newRun({ operation: "items.get", effect: "reading" }),
+      end: { status: "failed", finishedAt, error: { code: "INTERNAL", message: "Failed" } }
+    });
+    expect(denied).toMatchObject({ status: "denied", attempt: 1, denial, finishedAt });
+    expect(denied.error).toEqual({ code: "POLICY_DENIED", message: "Refused" });
+    expect(failed).toMatchObject({ status: "failed", error: { code: "INTERNAL" }, finishedAt });
+    expect(await runs.get({ clientInstanceId, id: denied.id })).toEqual(denied);
+    // Neither was ever running: the sweep for interrupted runs finds nothing.
+    expect(
+      await runs.listRunningSince({
+        clientInstanceId,
+        startedBefore: "2999-01-01T00:00:00.000Z",
+        limit: 10
+      })
+    ).toEqual([]);
+
+    const changing = await runs.create(newRun());
+    const ids = async (effect?: "reading" | "changing") =>
+      (await runs.list({ clientInstanceId, filters: { effect } })).map((run) => run.id).sort();
+    expect(await ids("changing")).toEqual([changing?.id]);
+    expect(await ids("reading")).toEqual([denied.id, failed.id].sort());
+    expect(await ids()).toHaveLength(3);
+  });
+
   it("ends a run once and only inside its own instance", async () => {
     const runs = await createStore();
     const run = await runs.create(newRun());

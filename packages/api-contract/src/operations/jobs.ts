@@ -3,8 +3,9 @@ import { jobKindSummarySchema, jobSchema, jobStatusListSchema } from "../jobs";
 import { listQuerySchema } from "../shared";
 import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
-// The two reads are plain operations: the Jobs page asks them every ten seconds, and a
-// registered read would write an Operation Run and three audit rows each time.
+// The two reads are plain operations. They were kept plain when every registered read wrote an
+// Operation Run and three audit rows; an allowed read writes neither any more, so nothing but
+// the work of moving them keeps them plain.
 export const jobOperations = {
   "instance.jobs.summary": defineOperation({
     id: "instance.jobs.summary",

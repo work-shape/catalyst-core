@@ -173,9 +173,10 @@ export interface Route {
   <const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
   /**
    * Registers an operation of the registry, defined with `defineRegisteredOperation`. Every
-   * call of it runs through `runOperation` and is an Operation Run: the right in `requires`,
-   * the policy and the guardrails are checked there, and the answer's status says how the run
-   * went.
+   * call of it runs through `runOperation`: the right in `requires`, the policy and the
+   * guardrails are checked there, and the answer's status says how the call went. A changing
+   * call is an Operation Run. A read is one when it is refused, when it fails, or when the
+   * binding sets `recordsEveryCall`.
    */
   operation<const Op extends Operation>(operation: Op, binding: OperationBinding<Op>): void;
   /** Every operation registered on this server so far, through whichever helper. */

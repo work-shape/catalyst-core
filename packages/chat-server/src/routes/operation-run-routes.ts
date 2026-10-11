@@ -32,6 +32,7 @@ export function registerOperationRunRoutes(route: Route, options: ResolvedChatSe
       clientInstanceId,
       filters: {
         operation: query.operation,
+        effect: query.effect,
         status: query.status,
         actorId: query.actor,
         originKind: query.origin,

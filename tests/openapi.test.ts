@@ -213,7 +213,11 @@ describe("the released OpenAPI document", () => {
       expect.objectContaining({ name: "Idempotency-Key", in: "header", required: false })
     );
 
-    // A reading operation of the registry names its run and never waits.
+    // A reading operation of the registry declares the header of its run, which is set when
+    // the call was recorded, and never waits.
+    expect(required(registered.components.headers).OperationRunId).toMatchObject({
+      description: expect.stringContaining("an allowed read that is not recorded answers without")
+    });
     expect(Object.keys(read.responses)).not.toContain("202");
     expect(read.responses["200"]).toMatchObject({
       headers: { "Operation-Run-Id": header("OperationRunId") }

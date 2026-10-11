@@ -32,6 +32,8 @@ export const operationRunOperations = {
     effect: "reading",
     query: listQuerySchema.extend({
       operation: z.string().min(1).optional(),
+      /** Only reading calls or only changing ones. Without it the list holds both. */
+      effect: z.enum(["reading", "changing"]).optional(),
       status: operationRunStatusSchema.optional(),
       /** The id of the user or service principal that called. */
       actor: z.string().min(1).optional(),

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   AGENT_TOOL_ACTION_PREFIX,
+  AppError,
   callerCanConfirm,
   isToolOperationAnswer,
   moduleOffError,
@@ -19,6 +20,7 @@ import {
   type JsonValue,
   type Logger,
   type ModuleSnapshot,
+  type NewOperationRun,
   type OperationAuthorization,
   type OperationCall,
   type OperationCallRuntime,
@@ -118,6 +120,11 @@ export interface OperationOutcome {
   replayed: boolean;
   /** The whole result of an agent tool, where the operation is one and it was executed. */
   toolResult?: ToolExecutionResult;
+  /**
+   * The call left no Operation Run: an allowed read of an operation that does not record
+   * every call. `run` then says how the call went and is in no store.
+   */
+  unrecorded?: true;
 }
 
 export type OperationEnding = Pick<OperationOutcome, "result" | "run" | "toolResult">;
@@ -130,6 +137,14 @@ export interface RunContext {
   resource: OperationResource | undefined;
   deps: RunOperationDeps;
   runtime: OperationCallRuntime;
+  /**
+   * Set while the call has left no run: a read of an operation that does not record every
+   * call. It holds what the run is written from if the call is refused or fails, and the
+   * after-events the call had until then. They are emitted once the run is written, so a
+   * refused or failed read has the audit rows it always had, and dropped when the read
+   * completes. Before-events are never held: a guardrail is asked for every call.
+   */
+  unrecorded?: { start: NewOperationRun; heldAfterEvents: (() => Promise<unknown>)[] };
   now(): Date;
   emit(
     name: PlatformEventName,
@@ -138,8 +153,27 @@ export interface RunContext {
   ): Promise<PlatformEventOutcome>;
 }
 
+/**
+ * The run of a call that is recorded only if it is refused or fails, as the call path reads
+ * it meanwhile. Its id is made here, so the events and the log lines of the call name it.
+ */
+export function unrecordedRun(start: NewOperationRun): OperationRun {
+  const { startedAt, ...run } = start;
+  return {
+    ...run,
+    status: "running",
+    attempt: 1,
+    createdAt: startedAt,
+    startedAt,
+    updatedAt: startedAt
+  };
+}
+
 export function createRunContext(
-  input: Pick<RunContext, "run" | "definition" | "call" | "resource" | "deps" | "runtime">
+  input: Pick<RunContext, "run" | "definition" | "call" | "resource" | "deps" | "runtime"> & {
+    /** What the run is written from later, for a call that has left none yet. */
+    unrecordedStart?: NewOperationRun;
+  }
 ): RunContext {
   const { run, definition, call, resource, deps } = input;
   const subject = resource
@@ -154,30 +188,40 @@ export function createRunContext(
           toolCallId: call.origin.toolCallId
         }
       : {};
-  return {
-    ...input,
+  const { unrecordedStart, ...rest } = input;
+  const context: RunContext = {
+    ...rest,
+    ...(unrecordedStart ? { unrecorded: { start: unrecordedStart, heldAfterEvents: [] } } : {}),
     now: deps.now ?? (() => new Date()),
-    emit: (name, phase, payload = {}) =>
-      deps.events.emit(
-        name,
-        {
-          operationRunId: run.id,
-          operation: definition.name,
-          effect: definition.effect,
-          attempt: run.attempt,
-          ...origin,
-          ...payload
-        },
-        {
-          actor: call.actor,
-          origin: call.origin,
-          workspaceId: call.workspaceId,
-          correlationId: call.correlationId,
-          subject,
-          phase
-        }
-      )
+    emit: (name, phase, payload = {}) => {
+      const send = () =>
+        deps.events.emit(
+          name,
+          {
+            operationRunId: run.id,
+            operation: definition.name,
+            effect: definition.effect,
+            attempt: run.attempt,
+            ...origin,
+            ...payload
+          },
+          {
+            actor: call.actor,
+            origin: call.origin,
+            workspaceId: call.workspaceId,
+            correlationId: call.correlationId,
+            subject,
+            phase
+          }
+        );
+      if (phase === "after" && context.unrecorded) {
+        context.unrecorded.heldAfterEvents.push(send);
+        return Promise.resolve("allow");
+      }
+      return send();
+    }
   };
+  return context;
 }
 
 /** Refuses a call of an operation, or of an agent tool, whose module is off. */
@@ -301,6 +345,9 @@ function strictestOutcome(outcomes: readonly PlatformEventOutcome[]): PlatformEv
 /** Ends a run that is still `running`. The run as it was when something else ended it first. */
 export async function endRun(context: RunContext, ended: OperationRunEnd): Promise<OperationRun> {
   const { run, definition, deps } = context;
+  if (context.unrecorded) {
+    return endUnrecorded(context, context.unrecorded, ended);
+  }
   const finished = await deps.runs.finish({
     clientInstanceId: deps.clientInstanceId,
     id: run.id,
@@ -314,6 +361,30 @@ export async function endRun(context: RunContext, ended: OperationRunEnd): Promi
     );
   }
   return finished ?? run;
+}
+
+/**
+ * Ends a call that has left no run. Completed, it leaves none: nothing is sent to the store.
+ * Refused or failed, its run is written now, ended, in one statement, and the after-events it
+ * had are emitted behind it.
+ */
+async function endUnrecorded(
+  context: RunContext,
+  unrecorded: NonNullable<RunContext["unrecorded"]>,
+  ended: OperationRunEnd
+): Promise<OperationRun> {
+  if (ended.status === "done") {
+    return { ...context.run, status: "done", finishedAt: ended.finishedAt };
+  }
+  if (ended.status === "pending_approval") {
+    throw new AppError("INTERNAL", "A reading call cannot wait for an approval");
+  }
+  const recorded = await context.deps.runs.recordEnded({ ...unrecorded.start, end: ended });
+  context.unrecorded = undefined;
+  for (const send of unrecorded.heldAfterEvents) {
+    await send();
+  }
+  return recorded;
 }
 
 export function deniedEnd(

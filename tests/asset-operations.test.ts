@@ -518,7 +518,7 @@ describe("assets.sync", () => {
 });
 
 describe("the Operation Run of an asset call", () => {
-  it("leaves one run per call with its actor, effect and outcome", async () => {
+  it("leaves one run per changing call and per failed read, and none for an allowed read", async () => {
     const t = await setupNamespace();
     const runs = () => t.stores.operationRuns.list({ clientInstanceId });
     const runOf = async (...call: Call) => {
@@ -549,24 +549,37 @@ describe("the Operation Run of an asset call", () => {
     expect(await runOf(t.kai.id, "assets.put", put)).toEqual(
       done("assets.put", t.kai.id, "changing")
     );
-    expect(await runOf(t.kai.id, "assets.get", address)).toEqual(
-      done("assets.get", t.kai.id, "reading")
-    );
-    expect(await runOf(t.admin.id, "assets.list", { params: { kind: "agent" } })).toEqual(
-      done("assets.list", t.admin.id, "reading")
-    );
-    expect(await runOf(t.kai.id, "assets.revisions.list", address)).toEqual(
-      done("assets.revisions.list", t.kai.id, "reading")
-    );
+    // The five reads over HTTP are allowed here: no run, no audit row and no header. Fails
+    // without the change, when each left one `done` run and three audit rows.
+    const audited = async () => (await t.stores.audit.listAuditEvents({ clientInstanceId })).length;
+    const reads: Call[] = [
+      [t.kai.id, "assets.get", address],
+      [t.admin.id, "assets.list", { params: { kind: "agent" } }],
+      [t.kai.id, "assets.revisions.list", address],
+      [
+        t.kai.id,
+        "assets.validate",
+        { params: { kind: "agent" }, payload: { config: agent("kai-intake") } }
+      ],
+      [t.lena.id, "platform.context.get"]
+    ];
+    for (const read of reads) {
+      const before = { runs: (await runs()).length, audited: await audited() };
+      const response = await t.call(...read);
+      expect(response.statusCode, read[1]).toBe(200);
+      expect(response.headers["operation-run-id"], read[1]).toBeUndefined();
+      expect({ runs: (await runs()).length, audited: await audited() }, read[1]).toEqual(before);
+    }
+    // A read that fails is a run.
     expect(
-      await runOf(t.kai.id, "assets.validate", {
-        params: { kind: "agent" },
-        payload: { config: agent("kai-intake") }
-      })
-    ).toEqual(done("assets.validate", t.kai.id, "reading"));
-    expect(await runOf(t.lena.id, "platform.context.get")).toEqual(
-      done("platform.context.get", t.lena.id, "reading")
-    );
+      await runOf(t.kai.id, "assets.get", { params: { kind: "agent", name: "kai-missing" } })
+    ).toEqual({
+      operation: "assets.get",
+      actor: t.kai.id,
+      effect: "reading",
+      status: "failed",
+      error: "NOT_FOUND"
+    });
     // A refusal of the right, a conflict and a refused batch are runs too.
     expect(await runOf(t.lena.id, "assets.put", put)).toMatchObject({
       operation: "assets.put",

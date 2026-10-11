@@ -41,14 +41,7 @@ export async function createOperationRun(
       actorId: run.actor.id,
       actor: run.actor,
       ownerUserId: run.ownerUserId,
-      // A call a conversation caused happens in that conversation's workspace.
-      collaborationWorkspaceId:
-        run.workspaceId ??
-        (run.conversationId === undefined
-          ? undefined
-          : sql`(select ${conversations.collaborationWorkspaceId} from ${conversations}
-              where ${conversations.clientInstanceId} = ${run.clientInstanceId}
-                and ${conversations.id} = ${run.conversationId})`),
+      collaborationWorkspaceId: run.workspaceId ?? conversationWorkspace(run),
       originKind: run.origin.kind,
       origin: run.origin,
       conversationId: run.conversationId,
@@ -90,6 +83,53 @@ export async function createOperationRun(
     })
     .returning();
   return row ? mapOperationRun(row) : undefined;
+}
+
+export async function recordEndedOperationRun(
+  db: PostgresConnection,
+  run: Input<"recordEnded">
+): Promise<OperationRun> {
+  const { end } = run;
+  const startedAt = new Date(run.startedAt);
+  const finishedAt = new Date(end.finishedAt);
+  const [row] = await db
+    .insert(operationRuns)
+    .values({
+      id: run.id,
+      clientInstanceId: run.clientInstanceId,
+      operation: run.operation,
+      effect: run.effect,
+      actorKind: run.actor.kind,
+      actorId: run.actor.id,
+      actor: run.actor,
+      ownerUserId: run.ownerUserId,
+      collaborationWorkspaceId: run.workspaceId ?? conversationWorkspace(run),
+      originKind: run.origin.kind,
+      origin: run.origin,
+      conversationId: run.conversationId,
+      inputHash: run.inputHash,
+      status: end.status,
+      error: end.status === "denied" ? { ...end.error, denial: end.denial } : end.error,
+      correlationId: run.correlationId,
+      createdAt: startedAt,
+      startedAt,
+      finishedAt,
+      updatedAt: finishedAt
+    })
+    .returning();
+  if (!row) {
+    throw new Error(`Operation run '${run.id}' was not written`);
+  }
+  return mapOperationRun(row);
+}
+
+/** A call a conversation caused happens in that conversation's workspace. */
+function conversationWorkspace(run: Pick<Input<"create">, "clientInstanceId" | "conversationId">) {
+  return run.conversationId === undefined
+    ? undefined
+    : sql`(select ${conversations.collaborationWorkspaceId} from ${conversations}
+        where ${conversations.clientInstanceId} = ${run.clientInstanceId}
+          and ${conversations.id} = ${run.conversationId})`;
 }
 
 export async function finishOperationRun(
@@ -168,6 +208,7 @@ export async function listOperationRuns(
         filters.operation === undefined
           ? undefined
           : eq(operationRuns.operation, filters.operation),
+        filters.effect === undefined ? undefined : eq(operationRuns.effect, filters.effect),
         filters.status === undefined ? undefined : eq(operationRuns.status, filters.status),
         filters.actorId === undefined ? undefined : eq(operationRuns.actorId, filters.actorId),
         filters.originKind === undefined

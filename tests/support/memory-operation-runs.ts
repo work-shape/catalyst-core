@@ -46,6 +46,20 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
       runs.push(created);
       return Promise.resolve(created);
     },
+    recordEnded({ end, startedAt, ...rest }) {
+      const { finishedAt, ...outcome } = end;
+      const recorded: OperationRun = {
+        ...rest,
+        ...outcome,
+        attempt: 1,
+        createdAt: startedAt,
+        startedAt,
+        finishedAt,
+        updatedAt: finishedAt
+      };
+      runs.push(recorded);
+      return Promise.resolve(recorded);
+    },
     finish({ clientInstanceId, id, end }) {
       const run = find(clientInstanceId, id);
       if (run?.status !== "running") return Promise.resolve(undefined);
@@ -75,9 +89,15 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
     get({ clientInstanceId, id }) {
       return Promise.resolve(find(clientInstanceId, id));
     },
-    list({ clientInstanceId }) {
+    list({ clientInstanceId, filters }) {
       return Promise.resolve(
-        runs.filter((run) => run.clientInstanceId === clientInstanceId).reverse()
+        runs
+          .filter(
+            (run) =>
+              run.clientInstanceId === clientInstanceId &&
+              (filters?.effect === undefined || run.effect === filters.effect)
+          )
+          .reverse()
       );
     },
     resume({ clientInstanceId, id, decision, startedAt }) {

@@ -6,7 +6,9 @@ import {
   createPlatformId,
   isAuthenticatedServicePrincipal,
   operationDenialError,
+  recordsAllowedCalls,
   type ActorAccess,
+  type NewOperationRun,
   type OperationAuthorization,
   type OperationCall,
   type OperationCallRuntime,
@@ -26,6 +28,7 @@ import {
   hashInput,
   requireModuleOn,
   resolveGuardedPolicy,
+  unrecordedRun,
   type OperationEnding,
   type OperationOutcome,
   type RunContext,
@@ -77,7 +80,7 @@ export async function runOperation(
   const inputHash = hashInput(input);
 
   for (let attempt = 0; attempt < IDEMPOTENCY_CLAIM_ATTEMPTS; attempt++) {
-    const run = await deps.runs.create({
+    const start: NewOperationRun = {
       id: createPlatformId<"OperationRunId">("oprun"),
       clientInstanceId: deps.clientInstanceId,
       operation: definition.name,
@@ -90,10 +93,15 @@ export async function runOperation(
       inputHash,
       correlationId: call.correlationId,
       startedAt: now().toISOString()
-    });
+    };
+    // The definition says whether an allowed call leaves a run. A read that leaves none is
+    // checked like every call and written only if it is refused or fails.
+    const recorded = recordsAllowedCalls(definition);
+    const run = recorded ? await deps.runs.create(start) : unrecordedRun(start);
     if (run) {
       const context = createRunContext({
         run,
+        ...(recorded ? {} : { unrecordedStart: start }),
         definition,
         // A call a conversation caused is in that conversation's workspace, as its run says.
         call: { ...frozen, workspaceId: frozen.workspaceId ?? run.workspaceId },
@@ -101,7 +109,8 @@ export async function runOperation(
         deps,
         runtime
       });
-      return { ...(await admitAndExecute(context, surface)), replayed: false };
+      const ending = await admitAndExecute(context, surface);
+      return { ...ending, replayed: false, ...(context.unrecorded ? { unrecorded: true } : {}) };
     }
     if (idempotencyKey === undefined) break;
     const held = await deps.runs.findByIdempotencyKey({

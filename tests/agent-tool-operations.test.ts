@@ -150,6 +150,21 @@ describe("an agent's tool calls in a chat run", () => {
         agentRunId: second.agentRunId
       }
     });
+    // Every tool records every call, a reading one too. Fails without the mark the tool's
+    // operation carries: the reading tool would leave no run and no audit row.
+    const audited = await f.app.stores.audit.listAuditEvents({
+      clientInstanceId: f.clientInstanceId
+    });
+    expect(
+      audited
+        .filter((event) => event.metadata?.operationRunId === reading?.id)
+        .map((event) => `${event.type}:${event.status}`)
+        .sort()
+    ).toEqual([
+      "operation.authorization_checked:success",
+      "operation.completed:success",
+      "operation.started:success"
+    ]);
     // The run is in the workspace of its conversation.
     expect(first.workspaceId).toEqual(expect.any(String));
     expect(changing?.workspaceId).toBe(first.workspaceId);

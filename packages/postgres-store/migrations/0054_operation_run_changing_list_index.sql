@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "operation_runs_changing_list_idx" ON "operation_runs" USING btree ("client_instance_id","created_at","id") WHERE "operation_runs"."effect" = 'changing';

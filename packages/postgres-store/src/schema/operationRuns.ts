@@ -93,6 +93,12 @@ export const operationRuns = pgTable(
     // backwards: an index declared descending puts nulls last, which `ORDER BY ... DESC` does
     // not ask for, so PostgreSQL would sort every matching run instead.
     index("operation_runs_list_idx").on(table.clientInstanceId, table.createdAt, table.id),
+    // The list as the Operations page opens it: changing calls only. A read enters the table
+    // when it is refused, when it fails, or when its operation records every call, and none of
+    // them enters this index.
+    index("operation_runs_changing_list_idx")
+      .on(table.clientInstanceId, table.createdAt, table.id)
+      .where(sql`${table.effect} = 'changing'`),
     index("operation_runs_status_created_idx").on(
       table.clientInstanceId,
       table.status,

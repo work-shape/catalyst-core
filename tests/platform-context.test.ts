@@ -208,8 +208,8 @@ describe("platform.references.get", () => {
     const before = (await runs()).length;
     await t.expectOk(t.admin.id, "platform.references.get");
     expect((await runs()).length).toBe(before);
-    // The context is a registered read, which shows the count would have moved.
+    // The context is a registered read, and an allowed one leaves no run either.
     await t.expectOk(t.admin.id, "platform.context.get");
-    expect((await runs()).length).toBe(before + 1);
+    expect((await runs()).length).toBe(before);
   });
 });

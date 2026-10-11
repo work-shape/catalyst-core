@@ -19,8 +19,8 @@ export const platformOperations = {
     errors: [],
     rateClass: "read"
   }),
-  // A plain operation: an editor reads it every time it opens a definition, and a registered
-  // read would write an Operation Run and its audit rows each time. Its caller holds at least
+  // A plain operation. It was kept plain when every registered read wrote an Operation Run and
+  // its audit rows; an allowed read writes neither any more. Its caller holds at least
   // one action of a registered asset kind, on the instance or in a Namespace, that the
   // credential's scopes let it use. The handler decides that, so `requires` names nothing.
   "platform.references.get": defineOperation({

@@ -7852,6 +7852,18 @@
             }
           },
           {
+            "name": "effect",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "reading",
+                "changing"
+              ]
+            }
+          },
+          {
             "name": "status",
             "in": "query",
             "required": false,
@@ -9844,7 +9856,7 @@
     },
     "headers": {
       "OperationRunId": {
-        "description": "`Operation-Run-Id`: The id of the Operation Run that records this call. Set on every answer of a call that got as far as a run, a refusal and a failure included.",
+        "description": "`Operation-Run-Id`: The id of the Operation Run that records this call. Set on every answer of a recorded call, a refusal and a failure included. Every changing call is recorded. A reading call is recorded when it is refused, when it fails, or when its operation records every call; an allowed read that is not recorded answers without this header.",
         "schema": {
           "type": "string"
         }

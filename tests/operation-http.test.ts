@@ -65,28 +65,6 @@ describe("operation over HTTP: a call that runs", () => {
     ]);
   });
 
-  it("runs a reading operation without a decision and keeps none of its answer", async () => {
-    const { server, runs } = await createServer();
-    const response = await server.call(
-      "testRunRead",
-      {
-        params: { itemId: "item-1" },
-        query: { view: "short" },
-        headers: { "idempotency-key": "k" }
-      },
-      person()
-    );
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ itemId: "item-1", view: "short" });
-    const [run] = await runs();
-    expect(response.headers["operation-run-id"]).toBe(run?.id);
-    expect(run).toMatchObject({ operation: "testRunRead", effect: "reading", status: "done" });
-    expect(run?.decision).toBeUndefined();
-    expect(run?.output).toBeUndefined();
-    // A reading call takes no key: the same one twice is two runs.
-    expect(run?.idempotencyKey).toBeUndefined();
-  });
-
   it("cuts the page of a list operation as every list is cut", async () => {
     const { server, executed } = await createServer();
     const first = await server.call("testRunList", { query: { limit: 2 } }, person());
@@ -780,6 +758,24 @@ describe("operation runs: who may read them", () => {
     expect((await list({ status: "denied" })).items.map((run) => run.operation)).toEqual([
       "testRunRead"
     ]);
+    // Fails without the change: the query took no `effect` and answered 422.
+    expect((await list({ effect: "changing" })).items.map((run) => run.operation)).toEqual([
+      "testRunChange",
+      "testRunChange"
+    ]);
+    expect((await list({ effect: "reading" })).items.map((run) => run.operation)).toEqual([
+      "testRunRead"
+    ]);
+    expect((await list({ effect: "reading", status: "done" })).items).toEqual([]);
+    const changingPage = await list({ effect: "changing", limit: 1 });
+    const changingRest = await list({
+      effect: "changing",
+      limit: 1,
+      cursor: changingPage.nextCursor ?? ""
+    });
+    expect(changingRest.items).toHaveLength(1);
+    expect(changingRest.items[0]?.id).not.toBe(changingPage.items[0]?.id);
+    expect(changingRest.nextCursor).toBeUndefined();
     expect((await list({ actor: "usr_one" })).items).toHaveLength(2);
     expect((await list({ origin: "cli" })).items).toHaveLength(1);
     expect((await list({ workspaceId: "cws_none" })).items).toEqual([]);

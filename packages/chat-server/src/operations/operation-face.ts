@@ -50,6 +50,8 @@ export interface AssembledOperationBinding {
   events?: OperationDefinition["events"];
   module?: string;
   timeoutMs?: number;
+  /** Records every call of a reading operation. See `recordsEveryCall` of the definition. */
+  recordsEveryCall?: true;
   /**
    * Decides who may call an operation whose descriptor requires no right, from the parsed
    * input and the caller's rights. It is asked where a named right is: before the policy, the
@@ -88,8 +90,9 @@ const runReferenceSchema = z.object({ operationRunId: z.string() });
 
 /**
  * The HTTP face of the operation registry. An operation registered here is reached through
- * `runOperation`, so every call of it is an Operation Run, and the status of the answer says
- * how the run went: `200` with the output, `202` with the run while it waits for an approval,
+ * `runOperation`. Every recorded call is an Operation Run and names it in `Operation-Run-Id`;
+ * an allowed read of an operation that does not record every call leaves none and names none.
+ * The status of the answer says how the call went: `200` with the output, `202` with the run while it waits for an approval,
  * `403` for a refusal, the operation's own error for a failure.
  */
 export function createOperationFace(options: OperationFaceOptions): OperationFace {
@@ -140,6 +143,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         effect: operation.effect,
         changeClass: binding.changeClass,
         defaultPolicy: binding.defaultPolicy,
+        ...(binding.recordsEveryCall ? { recordsEveryCall: true } : {}),
         ...rights,
         scope: operation.scope ?? null,
         auth: operation.auth,
@@ -191,7 +195,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         throw error;
       });
       const { result, run } = outcome;
-      void reply.header("operation-run-id", run.id);
+      if (!outcome.unrecorded) void reply.header("operation-run-id", run.id);
       if (outcome.replayed) void reply.header("idempotent-replayed", "true");
       switch (result.status) {
         case "done":

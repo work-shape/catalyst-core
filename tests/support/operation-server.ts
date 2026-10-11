@@ -35,6 +35,8 @@ export interface ServerInput {
   /** Sign-in that takes a key or token from the request, as the API's does. */
   explicitCredentials?: boolean;
   authorizer?: Authorizer;
+  /** How the fixture read is registered: marked to record every call, or with a failing handler. */
+  read?: { recordsEveryCall?: true; fails?: true };
   register?: (route: TestRoute) => void;
 }
 
@@ -43,6 +45,8 @@ export async function createServer(input: ServerInput = {}) {
   const authorized: string[] = [];
   const logged: unknown[] = [];
   const approvalRequests: string[] = [];
+  /** Every event the call path emitted, with its phase, where the test supplies the emitter. */
+  const emitted: string[] = [];
   let release: () => void = () => undefined;
   let entered: () => void = () => undefined;
   const gate = {
@@ -61,10 +65,12 @@ export async function createServer(input: ServerInput = {}) {
   const events: PlatformEventEmitter | undefined =
     guardrail || failingEvent
       ? {
-          emit: (name) =>
-            name === failingEvent
+          emit: (name, _payload, context) => {
+            emitted.push(`${name}:${context.phase}`);
+            return name === failingEvent
               ? Promise.reject(new Error(secret))
-              : Promise.resolve(name === guardrail?.event ? guardrail.outcome : "allow")
+              : Promise.resolve(name === guardrail?.event ? guardrail.outcome : "allow");
+          }
         }
       : undefined;
   const server = await createTestInstanceWith(
@@ -103,9 +109,11 @@ export async function createServer(input: ServerInput = {}) {
 
   function registerFixtures(route: TestRoute): void {
     route.operation(operations.testRunRead, {
+      ...(input.read?.recordsEveryCall ? { recordsEveryCall: true } : {}),
       resource: (item) => ({ kind: "test_item", id: item.itemId }),
       execute: (item) => {
         executed.push("testRunRead");
+        if (input.read?.fails) throw new Error(secret);
         return Promise.resolve({ itemId: item.itemId, view: item.view });
       }
     });
@@ -159,8 +167,13 @@ export async function createServer(input: ServerInput = {}) {
       .filter((event) => event.metadata?.operationRunId === run)
       .map((event) => `${event.type}:${event.status}`)
       .sort();
+  /** Every audit row of the instance, whichever run it names. */
+  const auditRows = async () =>
+    (await server.stores.audit.listAuditEvents({ clientInstanceId })).length;
   return {
     server,
+    emitted,
+    auditRows,
     executed,
     authorized,
     logged,

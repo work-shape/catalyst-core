@@ -99,10 +99,42 @@ export function assertOperationChecksRights(definition: OperationDefinition): vo
   }
 }
 
+/**
+ * Refuses a changing operation that carries the mark of a read. A changing call is always
+ * recorded, so the mark on one says nothing and would read as if it could be left off.
+ */
+export function assertOperationRecordingMark(definition: OperationDefinition): void {
+  if (definition.recordsEveryCall !== undefined && definition.effect !== "reading") {
+    throw new AppError(
+      "INTERNAL",
+      `Operation '${definition.name}' is changing and is always recorded: remove 'recordsEveryCall'`
+    );
+  }
+}
+
+/**
+ * Whether an allowed call that completes leaves an Operation Run and audit rows. Decided from
+ * the definition alone, never from the caller.
+ */
+export function recordsAllowedCalls(
+  definition: Pick<OperationDefinition, "effect" | "recordsEveryCall">
+): boolean {
+  return definition.effect === "changing" || definition.recordsEveryCall === true;
+}
+
 interface OperationDefinitionBase<Input, Output> {
   /** `<resource>.<verb>`. Over HTTP it is the operation id of the API contract. */
   name: string;
   effect: OperationEffect;
+  /**
+   * Set on a reading operation whose every call is recorded. Without it an allowed read that
+   * completes leaves no Operation Run and no audit row, and a read is recorded only when it is
+   * refused or fails. Rights, policy and guardrails are asked for every read either way.
+   * An operation that reads a customer's data through a Connection, a Knowledge Base or a Data
+   * Store sets it, and so does every agent tool. A changing operation is always recorded and
+   * may not carry it.
+   */
+  recordsEveryCall?: true;
   changeClass?: OperationChangeClass;
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
@@ -195,6 +227,7 @@ export function createOperationRegistry(): OperationRegistry {
         throw new AppError("INTERNAL", `Operation '${definition.name}' is registered twice`);
       }
       assertOperationChecksRights(definition);
+      assertOperationRecordingMark(definition);
       registered.set(definition.name, definition);
     },
     addSource(source) {

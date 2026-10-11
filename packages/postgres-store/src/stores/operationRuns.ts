@@ -5,6 +5,7 @@ import type { PostgresConnection } from "../postgres-database";
 export function createPostgresOperationRunsStore(db: PostgresConnection): OperationRunStore {
   return {
     create: (run) => operations.createOperationRun(db, run),
+    recordEnded: (run) => operations.recordEndedOperationRun(db, run),
     finish: (input) => operations.finishOperationRun(db, input),
     findByIdempotencyKey: (input) => operations.findOperationRunByIdempotencyKey(db, input),
     get: (input) => operations.getOperationRun(db, input),
