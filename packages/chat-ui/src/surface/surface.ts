@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
 
+/** One finding of a Page build, as `page.save` reports it. */
+export interface PageBuildError {
+  file: string;
+  line?: number;
+  message: string;
+}
+
 /** What an already rendered surface carries: its content and the actions of its header. */
 interface RenderedSurfaceSource {
   node: ReactNode;
@@ -14,7 +21,17 @@ interface RenderedSurfaceSource {
 interface SurfaceSources {
   tool_display: RenderedSurfaceSource;
   file_preview: RenderedSurfaceSource;
-  page: unknown;
+  /**
+   * One revision of a Page of a conversation. The renderer loads the revision's files itself.
+   * `buildErrors` are what the newest save of the Page was refused for, shown under the
+   * revision that still stands.
+   */
+  page: {
+    conversationId: string;
+    pageId: string;
+    fileSetId: string;
+    buildErrors?: readonly PageBuildError[];
+  };
   app_view: unknown;
   app_edit: unknown;
   workflow_canvas: unknown;

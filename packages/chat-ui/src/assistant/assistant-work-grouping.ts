@@ -1,6 +1,7 @@
 import { groupPartByType, type GroupByContext, type PartState } from "@assistant-ui/react";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import { readToolDisplayPayloadFromToolResult } from "../domain-ui-widgets";
+import { PAGE_SAVE_TOOL_NAME, readPageSave } from "../pages/page-save";
 import {
   isWorkspacePromotedArtifactsData,
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE
@@ -116,6 +117,8 @@ interface AssistantPartOutline {
   data?: unknown;
   name?: string;
   result?: unknown;
+  toolName?: string;
+  args?: unknown;
 }
 
 export function createCompletedAssistantWorkIndices(
@@ -158,6 +161,7 @@ function staysVisibleAfterRun(
   return (
     index === finalTextIndex ||
     isApprovalRequestToolCall(part) ||
+    isSavedPageToolCall(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }
@@ -170,6 +174,19 @@ function isApprovalRequestToolCall(part: AssistantPartOutline): boolean {
   return (
     part.type === "tool-call" &&
     readApprovalRequestDisplay(readToolDisplayPayloadFromToolResult(part.result)) !== undefined
+  );
+}
+
+/**
+ * A saved Page revision is a result of the run, not a step of it: its card is how the reader
+ * opens the revision again, so it stays in the thread. A save the build refused folds away
+ * with the other steps.
+ */
+function isSavedPageToolCall(part: AssistantPartOutline): boolean {
+  return (
+    part.type === "tool-call" &&
+    part.toolName === PAGE_SAVE_TOOL_NAME &&
+    readPageSave({ args: part.args, result: part.result }).state === "built"
   );
 }
 

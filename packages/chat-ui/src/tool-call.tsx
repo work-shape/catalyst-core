@@ -19,6 +19,8 @@ import {
 } from "./tool-display-rendering";
 import { ToolArtifactList } from "./artifact-download-card";
 import { useTranslation } from "./i18n";
+import { PageSaveCard } from "./pages/page-card";
+import { PAGE_SAVE_TOOL_NAME } from "./pages/page-save";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import {
   readWorkspacePromotedArtifactsData,
@@ -105,6 +107,10 @@ export function ToolCallPart({
   const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
   const statusLabel = toolStatusLabel(state, t);
   const actionLabel = workspaceProjection?.actionLabel ?? toolDisplay.actionLabel;
+
+  if (toolName === PAGE_SAVE_TOOL_NAME) {
+    return <PageSaveCard args={args} result={result} failed={state === "failed"} />;
+  }
 
   if (approvalRequest) {
     return (

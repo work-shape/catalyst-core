@@ -9,7 +9,9 @@ export const surfaceDefaultWidths: Partial<Record<SurfaceKind, number>> = {
   tool_display: DEFAULT_SURFACE_WIDTH,
   file_preview: DEFAULT_SURFACE_WIDTH,
   // An item is read like a document: wide enough for a proposal's lines beside the list.
-  inbox_item: 520
+  inbox_item: 520,
+  // A Page is laid out like a small application: it gets more room than a document.
+  page: 640
 };
 
 /**

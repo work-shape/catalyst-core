@@ -18,6 +18,7 @@ import { AssistantThread } from "./assistant-thread";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation } from "../i18n";
+import { useAutoOpenPageSurface } from "../pages/page-card";
 import { useOpenConversationFile } from "../conversation-file-presentation";
 import {
   createRunIdempotencyKey,
@@ -144,6 +145,7 @@ function AssistantRuntimePane({
   const settleQueuedSend = useCallback(() => setQueuedSend(undefined), []);
   const visibleNotice = rootSubmitError ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
+  useAutoOpenPageSurface(activeRun, selectedConversationId);
 
   useEffect(() => {
     activeRef.current = true;

@@ -1,11 +1,14 @@
 import { createElement, type ReactNode } from "react";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
+import { pageSurfaceRendering } from "../pages/page-surface";
 import type { Surface, SurfaceKind, SurfaceOf } from "./surface";
 
 /** What a renderer gives the frame: the content and the actions of its kind. */
 interface SurfaceRendering {
   actions?: ReactNode;
   content: ReactNode;
+  /** The content reaches the edges of the frame and lays out its own height. */
+  flush?: boolean;
 }
 
 /** One renderer per kind. A kind without one shows the frame with a sentence in place of content. */
@@ -21,7 +24,8 @@ function renderPrepared(surface: SurfaceOf<"tool_display" | "file_preview">): Su
 export const surfaceRenderers: SurfaceRenderers = {
   tool_display: renderPrepared,
   file_preview: renderPrepared,
-  inbox_item: (surface) => ({ content: createElement(InboxItemPanel, { itemId: surface.itemId }) })
+  inbox_item: (surface) => ({ content: createElement(InboxItemPanel, { itemId: surface.itemId }) }),
+  page: pageSurfaceRendering
 };
 
 /** The rendering of a surface, or nothing when its kind has no renderer. */

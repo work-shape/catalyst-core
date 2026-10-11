@@ -16,6 +16,17 @@
       ],
       "vite": false
     },
+    "packages/chat-ui": {
+      "entry": [
+        "src/index.tsx",
+        "src/{shell,admin}.tsx",
+        "src/vite.js",
+        "src/pages/index.ts",
+        "*.config.{ts,js,mjs}"
+      ],
+      "project": ["src/**/*.{ts,tsx,mts,cts,js}", "*.{ts,mts,cts,js,mjs}"],
+      "vite": false
+    },
     "packages/app-build": {
       "entry": ["src/index.ts", "src/build.ts", "src/cli.ts"],
       "project": ["src/**/*.ts"],

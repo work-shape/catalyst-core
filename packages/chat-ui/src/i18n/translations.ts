@@ -12,6 +12,7 @@ import { files } from "./files";
 import { inbox } from "./inbox";
 import { navigation } from "./navigation";
 import { operations } from "./operations";
+import { pages } from "./pages";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
@@ -36,6 +37,7 @@ export const translations = combineTranslations(common)
   .and(inbox)
   .and(navigation)
   .and(operations)
+  .and(pages)
   .and(settings)
   .and(signIn)
   .and(tools)

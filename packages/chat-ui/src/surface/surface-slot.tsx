@@ -364,6 +364,7 @@ export function SurfaceSlotFrame({
       title={surface.title}
       subtitle={surface.subtitle}
       actions={rendering?.actions}
+      flush={rendering?.flush}
       fullscreen={
         mode === "covering" ? undefined : (
           <IconButton

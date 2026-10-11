@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
+import { pageSurfaceRendering } from "@vivd-catalyst/chat-ui/pages";
 import { SurfaceSlotFrame } from "../packages/chat-ui/src/surface/surface-slot";
 import { renderToStaticMarkup } from "./chat-ui-render-harness";
 
@@ -11,7 +12,7 @@ type Surface = FrameProps["surface"];
 const rendered: Record<Surface["kind"], boolean> = {
   tool_display: true,
   file_preview: true,
-  page: false,
+  page: true,
   app_view: false,
   app_edit: false,
   workflow_canvas: false,
@@ -43,7 +44,6 @@ const toolDisplay: Surface = {
 function bareSurface(kind: string): Surface | undefined {
   const base = { key: `${kind}:1`, title: "Brutto-Netto-Rechner" };
   switch (kind) {
-    case "page":
     case "app_view":
     case "app_edit":
     case "workflow_canvas":
@@ -54,13 +54,13 @@ function bareSurface(kind: string): Surface | undefined {
 }
 
 describe("surface slot frame", () => {
-  it("declares seven kinds and renders three of them", () => {
+  it("declares seven kinds and renders four of them", () => {
     expect(Object.keys(rendered)).toHaveLength(7);
     expect(
       Object.entries(rendered)
         .filter(([, hasRenderer]) => hasRenderer)
         .map(([kind]) => kind)
-    ).toEqual(["tool_display", "file_preview", "inbox_item"]);
+    ).toEqual(["tool_display", "file_preview", "page", "inbox_item"]);
   });
 
   it("renders a tool display and a file preview with their own actions", () => {
@@ -76,7 +76,62 @@ describe("surface slot frame", () => {
     }
   });
 
-  it.each(["page", "app_view", "app_edit", "workflow_canvas"])(
+  it("renders a Page under its name and revision, with the switch between its views", () => {
+    // Fails without the Page renderer: the frame showed the sentence of a kind it cannot show.
+    const page: Surface = {
+      kind: "page",
+      key: "page:page-1:set-2",
+      title: "Angebotsvergleich",
+      subtitle: "Revision 2",
+      conversationId: "conv-1",
+      pageId: "page-1",
+      fileSetId: "set-2"
+    };
+    // The revision itself asks the instance for its address; here a line stands in its place.
+    const rendering = pageSurfaceRendering(page);
+    const markup = renderToStaticMarkup(
+      createElement(SurfaceSlotFrame, {
+        surface: page,
+        renderers: {
+          page: (surface) => ({
+            ...pageSurfaceRendering(surface),
+            content: createElement("p", null, "the revision")
+          })
+        },
+        mode: "beside",
+        onClose() {},
+        onShowChat() {},
+        onToggleFullscreen() {}
+      })
+    );
+    const order = [
+      ">Angebotsvergleich<",
+      ">Revision 2<",
+      'aria-label="View of the Page"',
+      ">Preview<",
+      ">Files<",
+      'aria-label="View fullscreen"',
+      'aria-label="Close display panel"',
+      "the revision"
+    ].map((text) => markup.indexOf(text));
+
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
+    expect(markup).not.toContain("This content cannot be shown yet.");
+    // The preview reaches the edges of the frame: its content has no inset of the frame's.
+    expect(markup).toContain('data-flush=""');
+    expect(rendering.content).toMatchObject({
+      key: "page:page-1:set-2",
+      props: {
+        name: "Angebotsvergleich",
+        conversationId: "conv-1",
+        pageId: "page-1",
+        fileSetId: "set-2"
+      }
+    });
+  });
+
+  it.each(["app_view", "app_edit", "workflow_canvas"])(
     "shows the frame with a sentence for %s, which has no renderer",
     (kind) => {
       const surface = bareSurface(kind);

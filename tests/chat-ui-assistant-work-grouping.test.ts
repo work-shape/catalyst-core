@@ -70,6 +70,27 @@ describe("assistant work grouping", () => {
     expect(createVisibleFinalAssistantPartIndices(parts, 0)).toEqual([0]);
   });
 
+  it("keeps the card of a saved Page revision under the answer and folds a refused save away", () => {
+    // Fails without the Page surface: every page.save call folded into the work summary, and
+    // with it the only way to open the revision again.
+    const saved = {
+      type: "tool-call" as const,
+      toolCallId: "call_saved",
+      toolName: "page.save",
+      args: { name: "Offers", directory: "offers" },
+      result: { output: { pageId: "page-1", number: 1, fileSetId: "set-1" } }
+    };
+    const refused = {
+      ...saved,
+      toolCallId: "call_refused",
+      result: { output: { errors: [{ file: "app.yaml", message: "No kit version." }] } }
+    };
+    const parts = [refused, saved, textPart("The Page is ready.")];
+
+    expect(createCompletedAssistantWorkIndices(parts, 2)).toEqual([0]);
+    expect(createVisibleFinalAssistantPartIndices(parts, 2)).toEqual([2, 1]);
+  });
+
   it("keeps web search tool work and source parts collapsible as one step", () => {
     const parts = [
       textPart("Final answer."),

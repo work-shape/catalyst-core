@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { cn, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
+import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
@@ -11,6 +12,7 @@ import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider, useTranslation } from "./i18n";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
+import { PageHostProvider } from "./pages/page-host";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
 import { SurfaceSlot } from "./surface/surface-slot";
@@ -257,6 +259,7 @@ function ChatWorkspaceContent({
     />
   ) : undefined;
 
+  const activeWorkspace = collaborationWorkspace.activeCollaborationWorkspace;
   const rail = model.conversationRail;
   const closeDrawer = model.chrome.closeSidebarDrawer;
   const startNewChat = () => {
@@ -387,51 +390,63 @@ function ChatWorkspaceContent({
                     client={chat.client}
                     selectedConversationId={chat.selectedConversationId}
                   >
-                    <div className="flex h-full min-h-0 min-w-0">
-                      <div
-                        className={cn(
-                          "relative h-full min-h-0 min-w-0 flex-1",
-                          // 23.5rem = panel width (22rem) + its right-6 offset, so the
-                          // thread centers with equal gaps to sidebar and panel edge
-                          resourcesVisible && "lg:[--resources-inset:23.5rem]"
-                        )}
-                        // Under a surface that covers it the chat leaves the tab order.
-                        inert={chatCovered}
-                        onDragEnter={chat.fileDropzone.onChatDragEnter}
-                        onDragOver={chat.fileDropzone.onChatDragOver}
-                        onDragLeave={chat.fileDropzone.onChatDragLeave}
-                        onDrop={chat.fileDropzone.onChatDrop}
-                      >
-                        <AssistantRuntimePanel chat={chat} />
-                        {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                        {resourcesAvailable &&
-                        resourcesConversationId &&
-                        resourcesPanel.hasResources ? (
-                          resourcesVisible ? (
-                            <ResourcesPanel
-                              client={resourcesPanel.client}
-                              conversationId={resourcesConversationId}
-                              error={resourcesPanel.error}
-                              loading={resourcesPanel.loading}
-                              onClose={resourcesPanel.close}
-                              open
-                              resources={resourcesPanel.resources}
-                            />
-                          ) : (
-                            <ResourcesPanelToggle
-                              onOpen={() => {
-                                displayPanel.close();
-                                resourcesPanel.openExplicitly();
-                              }}
-                            />
-                          )
-                        ) : null}
+                    <PageHostProvider
+                      conversationId={chat.selectedConversationId}
+                      viewer={{ kind: "member", id: model.auth.user.id, displayName: userLabel }}
+                      workspace={
+                        activeWorkspace
+                          ? { id: activeWorkspace.id, name: activeWorkspace.name }
+                          : null
+                      }
+                      theme={model.config.theme ?? DEFAULT_THEME_INPUTS[themeMode]}
+                      mode={themeMode}
+                    >
+                      <div className="flex h-full min-h-0 min-w-0">
+                        <div
+                          className={cn(
+                            "relative h-full min-h-0 min-w-0 flex-1",
+                            // 23.5rem = panel width (22rem) + its right-6 offset, so the
+                            // thread centers with equal gaps to sidebar and panel edge
+                            resourcesVisible && "lg:[--resources-inset:23.5rem]"
+                          )}
+                          // Under a surface that covers it the chat leaves the tab order.
+                          inert={chatCovered}
+                          onDragEnter={chat.fileDropzone.onChatDragEnter}
+                          onDragOver={chat.fileDropzone.onChatDragOver}
+                          onDragLeave={chat.fileDropzone.onChatDragLeave}
+                          onDrop={chat.fileDropzone.onChatDrop}
+                        >
+                          <AssistantRuntimePanel chat={chat} />
+                          {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+                          {resourcesAvailable &&
+                          resourcesConversationId &&
+                          resourcesPanel.hasResources ? (
+                            resourcesVisible ? (
+                              <ResourcesPanel
+                                client={resourcesPanel.client}
+                                conversationId={resourcesConversationId}
+                                error={resourcesPanel.error}
+                                loading={resourcesPanel.loading}
+                                onClose={resourcesPanel.close}
+                                open
+                                resources={resourcesPanel.resources}
+                              />
+                            ) : (
+                              <ResourcesPanelToggle
+                                onOpen={() => {
+                                  displayPanel.close();
+                                  resourcesPanel.openExplicitly();
+                                }}
+                              />
+                            )
+                          ) : null}
+                        </div>
+                        <SurfaceSlot
+                          onBesideWidthChange={setSurfaceBesideWidth}
+                          onCoveringChange={setSurfaceCovering}
+                        />
                       </div>
-                      <SurfaceSlot
-                        onBesideWidthChange={setSurfaceBesideWidth}
-                        onCoveringChange={setSurfaceCovering}
-                      />
-                    </div>
+                    </PageHostProvider>
                   </AttachmentContentProvider>
                 </section>
               </ControlPlaneRoutes>
