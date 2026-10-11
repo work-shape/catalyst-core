@@ -38,15 +38,18 @@ function createFixture() {
   const ensure = vi
     .fn<ExecutionWorkspaceMetadataStore["ensureExecutionWorkspace"]>()
     .mockResolvedValue(workspace);
+  const find = vi
+    .fn<ExecutionWorkspaceMetadataStore["getExecutionWorkspaceForConversation"]>()
+    .mockResolvedValue(undefined);
   const resolver = createExecutionWorkspaceHandleResolver({
     store: {
       ensureExecutionWorkspace: ensure,
       getExecutionWorkspace: async () => undefined,
-      getExecutionWorkspaceForConversation: async () => undefined
+      getExecutionWorkspaceForConversation: find
     },
     now: () => now
   });
-  return { resolver, ensure, workspace, context, now };
+  return { resolver, ensure, find, workspace, context, now };
 }
 
 describe("the Execution Workspace handle resolver", () => {
@@ -82,6 +85,33 @@ describe("the Execution Workspace handle resolver", () => {
     const { resolver, ensure, context } = createFixture();
 
     await expect(resolver.resolveWorkspaceHandle(context)).resolves.toBeUndefined();
+    expect(ensure).not.toHaveBeenCalled();
+  });
+
+  // Fails without the lookup: a reading tool had only the resolving call, which creates.
+  it("finds the workspace of a reading call without ensuring one", async () => {
+    const { resolver, ensure, find, workspace, context } = createFixture();
+    const conversationId = asConversationId("request_conversation");
+    const reading: ToolExecutionContext = {
+      ...context,
+      toolRequest: {
+        toolName: "workspace.read_file",
+        toolCallId: asToolCallId("workspace_resolver_call"),
+        agentRunId: asAgentRunId("workspace_resolver_run"),
+        conversationId,
+        agentName: "workspace_agent",
+        input: {}
+      }
+    };
+
+    await expect(resolver.findWorkspaceHandle(reading)).resolves.toEqual({ conversationId });
+    find.mockResolvedValue(workspace);
+    await expect(resolver.findWorkspaceHandle(reading)).resolves.toEqual({
+      conversationId,
+      handle: { kind: "execution_workspace", id: workspace.id }
+    });
+    await expect(resolver.findWorkspaceHandle(context)).resolves.toBeUndefined();
+    expect(find).toHaveBeenCalledTimes(2);
     expect(ensure).not.toHaveBeenCalled();
   });
 });

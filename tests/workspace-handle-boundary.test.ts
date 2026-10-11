@@ -38,7 +38,9 @@ function workspaceAddressingFiles(): string[] {
 // The only lines of these files that may name the tool request. A read through an alias or a
 // destructured name passes the patterns above, so any other mention fails here.
 const TOOL_REQUEST_MENTIONS: Record<string, string[]> = {
+  // Twice: once to resolve a workspace for a changing tool, once to find one for a reading tool.
   "workspace-tools/workspace-handle-resolver.ts": [
+    "const conversationId = context.toolRequest?.conversationId;",
     "const conversationId = context.toolRequest?.conversationId;"
   ],
   "workspace-tools/exec.ts": [

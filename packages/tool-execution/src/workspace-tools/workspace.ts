@@ -45,19 +45,18 @@ export async function findExistingWorkspace(
 ): Promise<
   ValidationResult<{ conversationId: ConversationId; workspaceId?: ExecutionWorkspaceId }>
 > {
-  const conversationId = context.toolRequest?.conversationId;
-  if (!conversationId) {
+  const found = await deps.workspaces.findWorkspaceHandle(context);
+  if (!found) {
     return failedValidationResult(
       "Workspace tools work only inside a conversation. Call this tool from an agent run of a conversation."
     );
   }
-  const workspace = await deps.store.executionWorkspaces.getExecutionWorkspaceForConversation({
-    clientInstanceId: context.clientInstanceId,
-    conversationId
-  });
   return {
     status: "success",
-    value: { conversationId, ...(workspace ? { workspaceId: workspace.id } : {}) }
+    value: {
+      conversationId: found.conversationId,
+      ...(found.handle ? { workspaceId: found.handle.id } : {})
+    }
   };
 }
 
