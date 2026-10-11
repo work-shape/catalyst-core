@@ -26,7 +26,7 @@ import type {
   ModelContextFileReader,
   ModelContextProjectionOptions
 } from "../model-context-projection";
-import type { ModelToolRegistryView } from "../model-tool-materialization";
+import type { DataToolSource, ModelToolRegistryView } from "../model-tool-materialization";
 
 export interface LocalAgentRuntimeOptions {
   logger?: import("@vivd-catalyst/core").Logger;
@@ -41,6 +41,12 @@ export interface LocalAgentRuntimeOptions {
   /** The only way a run reaches a model. It admits, retries and records usage. */
   modelGateway: ModelGateway;
   toolRegistry: ModelToolRegistryView;
+  /**
+   * Where the tools that exist as data are described: a Connection's operations. Asked once
+   * when a run starts, for the data tools its agent lists. Without it an agent has the tools of
+   * the release only.
+   */
+  dataTools?: DataToolSource;
   runTool: ToolOperationRunner;
   webAccess?: WebAccessConfig;
   agentSkillChangesEnabled?: boolean;

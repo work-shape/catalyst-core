@@ -19,7 +19,7 @@ import {
   createAssistantToolCallsMetadata,
   createSubmittedUserMessageContent
 } from "../model-context-projection";
-import { materializeModelTools } from "../model-tool-materialization";
+import { describeAgentDataTools, materializeModelTools } from "../model-tool-materialization";
 import {
   ModelInput,
   getProviderCompactionThreshold,
@@ -54,10 +54,25 @@ export class TurnLoop {
       input.reasoningEffort
     );
     const { capabilities } = modelSelection;
+    // Read once for the run, not for each model call of it: what the agent is offered stays
+    // the same while it works. Whether a tool may still be called is asked again by each call.
+    const dataTools = await describeAgentDataTools(agent, this.options.dataTools);
+    if (dataTools.missing.length > 0) {
+      this.options.logger?.info(
+        {
+          type: "agent_run.data_tools_missing",
+          runId,
+          agentName: agent.name,
+          toolNames: dataTools.missing
+        },
+        "Agent lists data tools that do not exist now; the run goes on without them"
+      );
+    }
     const tools = materializeModelTools({
       agent,
       capabilities,
       toolRegistry: this.options.toolRegistry,
+      dataTools: dataTools.described,
       webAccess: this.options.webAccess
     });
     const compactThresholdTokens = getProviderCompactionThreshold(
