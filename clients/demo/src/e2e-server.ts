@@ -26,6 +26,14 @@ const client = defineClientInstance({
   tools: [...demoTools, recordNote]
 });
 
-await client.listen({
+const app = await client.listen({
   operations: { centralPolicySettings: () => [{ operation: HELD_TOOL, value: "approval" }] }
 });
+
+// A second API of one spec shares the suite's database and is stopped when that spec ends. It
+// says so here and takes nothing from the queues: a job or an Agent Run of another spec that it
+// held would end with it. What it took before this line it finishes; it takes no more.
+if (client.loadEnvironment().E2E_TAKES_NO_JOBS === "1") {
+  const drainMs = 60_000;
+  await Promise.all([app.jobs.stop({ drainMs }), app.agentRunJobs?.stop({ drainMs })]);
+}

@@ -274,6 +274,9 @@ test.describe("with the resources module off", () => {
         PORT: String(offApiPort),
         CLIENT_CONFIG_PATH: offConfigPath,
         DATABASE_URL: databaseUrl,
+        // One database, so one queue of jobs and Agent Runs: this API takes none of them. It is
+        // stopped when this file ends, and what it held of another file ended with it.
+        E2E_TAKES_NO_JOBS: "1",
         CHAT_UI_ORIGIN: process.env.E2E_UI_URL ?? `http://${host}:5273`,
         BETTER_AUTH_URL: `${offApiUrl}/api/auth`,
         // The secret of the suite's own API: both sign the sessions of one database.
