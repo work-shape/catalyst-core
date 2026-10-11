@@ -109,6 +109,62 @@ describe("what a discovery takes from an outside system", () => {
     expect((await storedState(instance)).catalog).toEqual(before.catalog);
   });
 
+  // Fails without the change: an operation was compiled before the ones after it were
+  // measured, so an answer over the bound cost the time of its schemas before it was refused.
+  it("measures the whole answer before it compiles its first schema", async () => {
+    const w = world();
+    const instance = await w.start();
+    let reads = 0;
+    const first = listedOperation("first", {
+      inputSchema: {
+        type: "object",
+        get properties() {
+          reads += 1;
+          return { field: { type: "string" } };
+        }
+      }
+    });
+    const heavy = { type: "object", description: "s".repeat(240 * 1024) };
+    w.connector.discover = () =>
+      Promise.resolve([
+        first,
+        ...Array.from({ length: 20 }, (_unused, index) =>
+          listedOperation(`heavy_${index}`, { inputSchema: heavy })
+        )
+      ]);
+
+    expect(await discoverDirectly(w)).toEqual({ status: "failed", reason: "output_invalid" });
+    // Read to be measured, and never again to be compiled.
+    expect(reads).toBe(1);
+    expect((await storedState(instance)).catalog).toBeUndefined();
+  });
+
+  // Fails without the change: a text was counted by its characters, so an answer whose JSON
+  // is twice that, each quote written as two bytes, was stored at well over the bound.
+  it("counts an answer by the bytes it is stored as, escapes included", async () => {
+    const w = world();
+    const instance = await w.start();
+    // 100 KiB of quotes are 200 KiB of JSON: under the validator's bound for one schema.
+    const escaped = { type: "object", description: '"'.repeat(100 * 1024) };
+    const answer = (count: number) => () =>
+      Promise.resolve(
+        Array.from({ length: count }, (_unused, index) =>
+          listedOperation(`quoted_${index}`, { inputSchema: escaped })
+        )
+      );
+
+    // 2.2 MiB of characters, 4.3 MiB as stored.
+    w.connector.discover = answer(22);
+    expect(await discoverDirectly(w)).toEqual({ status: "failed", reason: "output_invalid" });
+    expect((await storedState(instance)).catalog).toBeUndefined();
+
+    // Under the bound as stored, the same operations are taken.
+    w.connector.discover = answer(20);
+    expect(await discoverDirectly(w)).toMatchObject({ status: "discovered", operationCount: 20 });
+    const stored = JSON.stringify(required((await storedState(instance)).catalog).entries);
+    expect(Buffer.byteLength(stored, "utf8")).toBeLessThanOrEqual(4 * 1024 * 1024 + 64 * 1024);
+  });
+
   // Fails without the change: the deadline ended with the type's answer, so an answer that
   // arrived in time was worked on for as long as it took.
   it("ends under its deadline while it works on an answer that arrived in time", async () => {
@@ -180,16 +236,19 @@ describe("what a discovery takes from an outside system", () => {
     const readInTurn: number[] = [];
     w.connector.discover = () =>
       Promise.resolve(
-        Array.from({ length: count }, (_unused, index) => ({
-          ...listedOperation(`tool_${index}`, {
-            // Each schema is its own, so each one is compiled.
-            inputSchema: { type: "object", properties: { [`field_${index}`]: { type: "string" } } }
-          }),
-          get name() {
-            readInTurn.push(turns);
-            return `tool_${index}`;
-          }
-        }))
+        Array.from({ length: count }, (_unused, index) =>
+          listedOperation(`tool_${index}`, {
+            inputSchema: {
+              type: "object",
+              // Each schema is its own, so each one is compiled. It is read once when the
+              // answer is measured, all in one turn, and again when it is compiled.
+              get properties() {
+                readInTurn.push(turns);
+                return { [`field_${index}`]: { type: "string" } };
+              }
+            }
+          })
+        )
       );
     setImmediate(turn);
     try {
@@ -200,9 +259,8 @@ describe("what a discovery takes from an outside system", () => {
     } finally {
       counting = false;
     }
-    expect(readInTurn).toHaveLength(count);
-    // No two operations were worked on in the same turn.
-    expect(new Set(readInTurn).size).toBe(count);
+    // No two operations were compiled in the same turn.
+    expect(new Set(readInTurn).size).toBeGreaterThanOrEqual(count);
     expect(required((await storedState(instance)).catalog).entries).toHaveLength(count);
   });
 

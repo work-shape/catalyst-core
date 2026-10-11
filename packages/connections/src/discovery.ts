@@ -43,8 +43,8 @@ export const CONNECTION_DISCOVERY_TIMEOUT_MS = 60_000;
 export const CONNECTION_DISCOVERY_MAX_OPERATIONS = 500;
 
 /**
- * The largest answer one discovery takes, in bytes of the JSON of its operations, counted
- * over every listed operation before any schema is compiled. It bounds the `catalog` value
+ * The largest answer one discovery takes, in the bytes of the JSON its operations are stored
+ * as, counted over every listed operation before any schema is compiled. It bounds the `catalog` value
  * of one `connection_state` row, which every read of an agent's Connection tools loads: the
  * row adds a fingerprint of 64 characters per operation and one per pin, at most 64 KiB more.
  * An answer over it fails the discovery with `output_invalid`.
@@ -191,49 +191,74 @@ function openDeadline(outer: AbortSignal, timeoutMs: number): DiscoveryDeadline 
   };
 }
 
+/** The bytes of a text or key as JSON writes it, or more than `room` where it is longer. */
+function jsonTextBytes(text: string, room: number): number {
+  // Every character is at least a byte, so a text longer than the room is never serialized.
+  return text.length > room ? room + 1 : Buffer.byteLength(JSON.stringify(text), "utf8");
+}
+
 /**
- * The size of a value as JSON, counted until it passes `budget`: the bytes of its keys and
- * texts and at least one byte for everything else. It walks without recursion and stops at
- * the budget, so it costs no more than the budget allows whatever it is handed, and a value
- * nested too deeply to serialize is measured like any other.
+ * The bytes of a value as `JSON.stringify` writes it, counted until they pass `budget`:
+ * escapes, numbers, commas and colons included, so it is the size of what is stored. It walks
+ * without recursion and stops at the budget, so it costs no more than the budget allows
+ * whatever it is handed, and a value nested too deeply to serialize is measured like any
+ * other. Past the budget the count only says so.
  */
 function jsonBytesWithin(value: JsonValue, budget: number): number {
   let bytes = 0;
   const pending: JsonValue[] = [value];
   while (pending.length > 0 && bytes <= budget) {
     const next = pending.pop();
-    if (next === undefined) break;
-    if (typeof next === "string") {
-      bytes += Buffer.byteLength(next, "utf8") + 2;
-    } else if (typeof next !== "object" || next === null) {
+    if (next === undefined) {
+      // A hole in a list, which JSON writes as `null`.
       bytes += 4;
+    } else if (typeof next === "string") {
+      bytes += jsonTextBytes(next, budget - bytes);
+    } else if (typeof next !== "object" || next === null) {
+      bytes += JSON.stringify(next).length;
     } else if (Array.isArray(next)) {
-      bytes += 2;
-      for (const child of next) {
-        bytes += 1;
-        if (bytes > budget) break;
-        pending.push(child);
-      }
+      // The brackets and the commas. A list longer than the room is over without a walk.
+      bytes += next.length > budget - bytes ? budget + 1 : 2 + Math.max(0, next.length - 1);
+      if (bytes > budget) break;
+      for (const child of next) pending.push(child);
     } else {
       bytes += 2;
+      let members = 0;
       for (const key in next) {
         if (!Object.hasOwn(next, key)) continue;
-        bytes += Buffer.byteLength(key, "utf8") + 4;
-        if (bytes > budget) break;
         const child = next[key];
-        if (child !== undefined) pending.push(child);
+        if (child === undefined) continue;
+        members += 1;
+        // The key, its colon, and the comma before every member but the first.
+        bytes += jsonTextBytes(key, budget - bytes) + (members > 1 ? 2 : 1);
+        if (bytes > budget) break;
+        pending.push(child);
       }
     }
   }
   return bytes;
 }
 
+/** A listed operation as the catalog would hold it: its fields, and the description cut. */
+function asStored(descriptor: ConnectorOperationDescriptor): ConnectorOperationDescriptor {
+  const { name, inputSchema, outputSchema, proposedEffect } = descriptor;
+  return {
+    name,
+    description: boundedDescription(descriptor.description),
+    inputSchema,
+    ...(outputSchema === undefined ? {} : { outputSchema }),
+    proposedEffect
+  };
+}
+
 /**
- * The operations of an answer that the catalog takes. The order is fixed: first the count,
- * then the size of each operation against what is left of the bound of bytes, and only then
- * is a schema handed to the validator, which bounds and compiles it. So nothing is compiled
- * or fingerprinted of an answer that is over a bound, and an answer over the bound of count
- * or of bytes throws `output_invalid` whatever its schemas are. An operation whose name
+ * The operations of an answer that the catalog takes. The order is fixed. First the count.
+ * Then the size of the whole answer: every listed operation as it would be stored, in the
+ * bytes of its JSON. Only after that is the first schema handed to the validator, which bounds
+ * and compiles it. So nothing is compiled or fingerprinted of an answer that is over a bound,
+ * an answer over the bound of count or of bytes throws `output_invalid` whatever its schemas
+ * are and however long they would take, and what is stored of an answer is never more than
+ * the bound. An operation whose name
  * cannot end an operation name, whose text cannot be stored or whose schema the validator
  * refuses is left out and the others stay. So is one that holds the Connection's credential,
  * by the search a call makes of its result: it would be stored in the clear and sent to a
@@ -259,22 +284,25 @@ async function boundedOperations(
   if (discovered.length > CONNECTION_DISCOVERY_MAX_OPERATIONS) {
     throw connectionCallError("output_invalid");
   }
+  const listed: ConnectorOperationDescriptor[] = [];
+  // The brackets of the list and the commas between its operations.
+  let bytes = 2 + Math.max(0, discovered.length - 1);
+  for (const descriptor of discovered) {
+    deadline.check();
+    const stored = asStored(descriptor);
+    bytes += jsonBytesWithin({ ...stored }, CONNECTION_DISCOVERY_MAX_BYTES - bytes);
+    if (bytes > CONNECTION_DISCOVERY_MAX_BYTES) throw connectionCallError("output_invalid");
+    listed.push(stored);
+  }
   const operations: ConnectorOperationDescriptor[] = [];
   const names = new Set<string>();
-  let bytes = 0;
   let rejected = 0;
-  for (const descriptor of discovered) {
+  for (const operation of listed) {
     await new Promise<void>((resolve) => {
       setImmediate(resolve);
     });
     deadline.check();
-    const { name, inputSchema, outputSchema, proposedEffect } = descriptor;
-    const description = boundedDescription(descriptor.description);
-    for (const part of [name, description, inputSchema, outputSchema]) {
-      if (part === undefined) continue;
-      bytes += jsonBytesWithin(part, CONNECTION_DISCOVERY_MAX_BYTES - bytes);
-      if (bytes > CONNECTION_DISCOVERY_MAX_BYTES) throw connectionCallError("output_invalid");
-    }
+    const { name, description, inputSchema, outputSchema } = operation;
     if (
       name.length > CONNECTION_OPERATION_NAME_MAX_LENGTH ||
       !CONNECTION_OPERATION_NAME_PATTERN.test(name) ||
@@ -285,13 +313,6 @@ async function boundedOperations(
     ) {
       continue;
     }
-    const operation: ConnectorOperationDescriptor = {
-      name,
-      description,
-      inputSchema,
-      ...(outputSchema === undefined ? {} : { outputSchema }),
-      proposedEffect
-    };
     // Both schemas are within the validator's bounds, so this serializes without surprise.
     if (secret !== undefined && holdsSecret(JSON.stringify(operation), secret)) {
       rejected += 1;
