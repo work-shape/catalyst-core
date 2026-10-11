@@ -560,6 +560,9 @@ importers:
       '@vivd-catalyst/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
+      '@vivd-catalyst/app-build':
+        specifier: workspace:*
+        version: link:../app-build
       '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../auth
