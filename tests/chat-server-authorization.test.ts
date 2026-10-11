@@ -622,9 +622,10 @@ describe("client instance app vertical slice", () => {
 
     const auditAfterDelete = await server.call("audit_events.list", {});
     expect(auditAfterDelete.statusCode).toBe(200);
+    // The run records the authorization check in place of the old governance row.
     expect(
       auditAfterDelete.json<{ items: Array<{ type: string }> }>().items.map((event) => event.type)
-    ).toEqual(expect.arrayContaining(["governance.user_delete_authorized", "user.deleted"]));
+    ).toEqual(expect.arrayContaining(["operation.authorization_checked", "user.deleted"]));
 
     await server.close();
   });

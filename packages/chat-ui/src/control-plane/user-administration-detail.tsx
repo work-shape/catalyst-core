@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeft, KeyRound, Link2, Mail, Plus, Save, Trash2 } from "lucide-react";
 import type {
   AdministeredUser,
+  UserDeletionState,
   AdministeredUserIdentity,
   UpdateAdministeredUserRequest,
   UpsertAdministeredUserIdentityRequest
@@ -56,7 +57,7 @@ export function UserDetail({
   mutating: boolean;
   onBack(): void;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
-  onDeleteUser(userId: string): Promise<AdministeredUser | undefined>;
+  onDeleteUser(userId: string): Promise<UserDeletionState>;
   onDeleted(): void;
   onUpsertIdentity(
     userId: string,
@@ -548,7 +549,7 @@ function DeleteUserCard({
   user: AdministeredUser;
   canDeleteUser: boolean;
   mutating: boolean;
-  onDeleteUser(userId: string): Promise<AdministeredUser | undefined>;
+  onDeleteUser(userId: string): Promise<UserDeletionState>;
   onDeleted(): void;
 }) {
   const { t } = useTranslation();

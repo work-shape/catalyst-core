@@ -114,6 +114,9 @@ export const administeredUserPasswordSignInRequestSchema = z.object({
   password: z.string().min(8)
 });
 
+/** `deleted` means the rows are gone; `deleting` means the account is closed and a job removes the rest. */
+export const userDeletionStateSchema = z.object({ state: z.enum(["deleting", "deleted"]) });
+
 export const createAdministeredUserRequestSchema = z.object({
   displayLabel: z.string().min(1),
   email: z.string().email().optional(),
@@ -275,6 +278,7 @@ export type AuthScope = z.infer<typeof authScopeSchema>;
 export type ChatSessionAuthScope = z.infer<typeof chatSessionAuthScopeSchema>;
 export type AuthPrincipal = z.infer<typeof authPrincipalSchema>;
 export type DelegatedActor = z.infer<typeof delegatedActorSchema>;
+export type UserDeletionState = z.infer<typeof userDeletionStateSchema>;
 export type AdministeredUser = z.infer<typeof administeredUserSchema>;
 export type AdministeredUserIdentity = z.infer<typeof administeredUserIdentitySchema>;
 export type CreateAdministeredUserRequest = z.infer<typeof createAdministeredUserRequestSchema>;

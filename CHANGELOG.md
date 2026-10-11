@@ -375,6 +375,22 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **User administration (breaking for callers of the typed client):** `users.create`,
+  `users.update`, `users.delete`, `users.identities.upsert`, `users.identities.delete`,
+  `users.password.reset` and `users.invitation.send` are Operation Runs. They answer the
+  header `Operation-Run-Id` and take an `Idempotency-Key`. The typed client answers the six
+  calls other than password reset as an operation outcome; `completedOutput(outcome)` hands
+  a caller the output. `DELETE /api/v1/instance/users/{userId}` answers `200` with
+  `{ "state": "deleted" | "deleting" }` in place of the user or an empty `202`. A refusal by
+  a superadmin rule answers `403 FORBIDDEN` with `details.action` naming the operation.
+  The rows `governance.user_*_authorized` are no longer written; the run's
+  `operation.authorization_checked` row records the same check. The change's own audit rows
+  stay and name the run. `users.password.reset`, and `users.create` with `passwordSignIn`,
+  keep no answer: a repeat with the same key answers `409 OUTPUT_NOT_RETAINED` and sets
+  nothing. These calls never wait for an approval, and the hash their run keeps of the input
+  is taken with the password left out, so no password and no fast hash of one rests in a run.
+  An operation whose input can hold a secret says so with `inputWithoutSecrets` on its
+  registration.
 - **API access (breaking for callers of the typed client):** creating and changing a service
   principal and issuing and revoking an API key are Operation Runs. `service_principals.create`,
   `service_principals.update`, `api_credentials.create` and `api_credentials.revoke` keep their

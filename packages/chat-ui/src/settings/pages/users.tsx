@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n";
 import { useSuperadminUserMutations } from "../../api/workspace-mutations";
 import { useWorkspaceUsersQuery } from "../../api/workspace-queries";
 import { UserAdministrationPanel } from "../../control-plane/user-administration-panel";
@@ -6,9 +7,15 @@ import { useSettingsPage } from "../settings-page-context";
 
 /** Instance > Users: the accounts of this instance, with its own data. */
 export function UsersPage() {
+  const { t } = useTranslation();
   const { apiBaseUrl, authScope, client, user, config } = useSettingsPage();
   const usersQuery = useWorkspaceUsersQuery({ apiBaseUrl, authScope, client, enabled: true });
-  const userMutations = useSuperadminUserMutations({ apiBaseUrl, authScope, client });
+  const userMutations = useSuperadminUserMutations({
+    apiBaseUrl,
+    authScope,
+    client,
+    heldMessage: t("settings.userChangeWaitsForApproval")
+  });
 
   return (
     <UserAdministrationPanel

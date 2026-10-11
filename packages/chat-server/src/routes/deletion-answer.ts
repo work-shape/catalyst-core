@@ -5,3 +5,9 @@ import type { DeletionOutcome } from "../subject-deletion";
 export function deletionAnswer<Result>(outcome: DeletionOutcome<Result>): Result | typeof DEFERRED {
   return outcome.status === "deleted" ? outcome.result : DEFERRED;
 }
+
+export function deletionState(outcome: DeletionOutcome<unknown>): {
+  state: "deleting" | "deleted";
+} {
+  return { state: outcome.status === "deleted" ? "deleted" : "deleting" };
+}

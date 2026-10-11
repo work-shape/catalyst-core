@@ -96,7 +96,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unnecessary-type-assertion",
       "scope": "tests",
-      "count": 102,
+      "count": 99,
       "owner": "CB-2"
     },
     {
@@ -614,7 +614,7 @@
       "target": "operations",
       "rule": "plain-changing",
       "scope": "pending",
-      "count": 20,
+      "count": 13,
       "owner": "CONV-1"
     },
     {

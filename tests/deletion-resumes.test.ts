@@ -228,8 +228,10 @@ describe("a deletion that finishes by itself", () => {
     t.byteStore.failDeletes = true;
     for (const request of [deleteUser, deleteWorkspace, deleteUser, deleteWorkspace]) {
       const answer = await request();
-      expect(answer.statusCode).toBe(202);
-      expect(answer.body).toBe("");
+      // User deletion now answers its state; workspace deletion still defers with no body.
+      expect(answer.statusCode).toBe(request === deleteUser ? 200 : 202);
+      if (request === deleteUser) expect(answer.json()).toEqual({ state: "deleting" });
+      else expect(answer.body).toBe("");
     }
     await expect(t.jobs()).resolves.toEqual([
       { kind: "account.delete", status: "queued", attempts: 0 },
@@ -252,7 +254,8 @@ describe("a deletion that finishes by itself", () => {
       t.api.call("users.delete", { params: { userId: removed.id } }, superadmin.id);
 
     t.byteStore.failDeletes = true;
-    expect((await deleteUser()).statusCode).toBe(202);
+    // User deletion answers 200 while its job removes the data.
+    expect((await deleteUser()).statusCode).toBe(200);
     for (let attempt = 1; attempt < DELETION_MAX_ATTEMPTS; attempt += 1) {
       await t.runDeletionJobs();
     }
@@ -279,7 +282,8 @@ describe("a deletion that finishes by itself", () => {
 
     // What an operator does once the object store is back: ask again.
     t.byteStore.failDeletes = false;
-    expect((await deleteUser()).statusCode).toBe(202);
+    // User deletion answers 200 while its job removes the data.
+    expect((await deleteUser()).statusCode).toBe(200);
     await expect(t.jobs()).resolves.toEqual([
       { kind: "account.delete", status: "dead", attempts: DELETION_MAX_ATTEMPTS },
       { kind: "account.delete", status: "queued", attempts: 0 }
@@ -335,7 +339,8 @@ describe("a deletion that finishes by itself", () => {
     const prune = () => db.store.jobs.pruneEndedJobs(t.scope);
 
     t.byteStore.failDeletes = true;
-    expect((await deleteUser()).statusCode).toBe(202);
+    // User deletion answers 200 while its job removes the data.
+    expect((await deleteUser()).statusCode).toBe(200);
     // As after the last attempt, long ago, with a dead job of another subject of the same age.
     await db.sql`
       update platform_jobs set status = 'dead', finished_at = now() - interval '400 days'
@@ -355,7 +360,8 @@ describe("a deletion that finishes by itself", () => {
     ]);
 
     t.byteStore.failDeletes = false;
-    expect((await deleteUser()).statusCode).toBe(202);
+    // User deletion answers 200 while its job removes the data.
+    expect((await deleteUser()).statusCode).toBe(200);
     await t.runDeletionJobs();
     await expect(t.userRow(removed)).resolves.toEqual([]);
     await expect(prune()).resolves.toMatchObject({ failedCount: 1 });

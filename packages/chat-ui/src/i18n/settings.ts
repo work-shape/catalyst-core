@@ -16,6 +16,8 @@ export const settings = defineTranslations({
     "settings.general": "General",
     "settings.members": "Members",
     "settings.users": "Users",
+    "settings.userChangeWaitsForApproval":
+      "This change waits for an approval. Nothing has changed yet.",
     "settings.access": "Access",
     "settings.apiAccess": "API access",
     "settings.usage": "Usage",
@@ -250,6 +252,8 @@ export const settings = defineTranslations({
     "settings.general": "Allgemein",
     "settings.members": "Mitglieder",
     "settings.users": "Benutzer",
+    "settings.userChangeWaitsForApproval":
+      "Diese Änderung wartet auf eine Freigabe. Bisher wurde nichts geändert.",
     "settings.access": "Zugriff",
     "settings.apiAccess": "API-Zugang",
     "settings.usage": "Nutzung",

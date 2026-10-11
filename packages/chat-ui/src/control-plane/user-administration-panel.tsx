@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ChevronRight, Copy, Search, UserPlus, Users } from "lucide-react";
 import type {
   AdministeredUser,
+  UserDeletionState,
   AdministeredUserIdentity,
   CreateAdministeredUserRequest,
   UpdateAdministeredUserRequest,
@@ -59,7 +60,7 @@ interface UserAdministrationPanelProps {
   mutating: boolean;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
-  onDeleteUser(userId: string): Promise<AdministeredUser | undefined>;
+  onDeleteUser(userId: string): Promise<UserDeletionState>;
   onUpsertIdentity(
     userId: string,
     input: UpsertAdministeredUserIdentityRequest

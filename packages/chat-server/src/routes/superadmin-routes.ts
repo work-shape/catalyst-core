@@ -2,13 +2,29 @@ import { apiOperations } from "@vivd-catalyst/api-contract";
 import { asUserId } from "@vivd-catalyst/core";
 import { recordGovernanceAccess } from "../governance-actions";
 import type { Route } from "../http/route";
-import { deletionAnswer } from "./deletion-answer";
+import { deletionState } from "./deletion-answer";
 import { requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
 import { UserAdministrationWorkflow } from "../user-administration-workflow";
+import { authorizeUserAdministration } from "../user-administration-rights";
 
+/** What stands in the hashed input of a call where a password was. */
+const PASSWORD_MARK = "[password]";
+
+/**
+ * Instance > Users and Usage. The two reads are plain routes. The seven user changes are
+ * registered operations: each call is an Operation Run and checks `users.manage` and the
+ * superadmin rules before it runs.
+ */
 export function registerSuperadminRoutes(route: Route, options: ChatServerOptions): void {
   const userAdministration = new UserAdministrationWorkflow(options);
+  const create = apiOperations["users.create"];
+  const update = apiOperations["users.update"];
+  const remove = apiOperations["users.delete"];
+  const upsertIdentity = apiOperations["users.identities.upsert"];
+  const resetPassword = apiOperations["users.password.reset"];
+  const sendInvitation = apiOperations["users.invitation.send"];
+  const deleteIdentity = apiOperations["users.identities.delete"];
 
   route(apiOperations["usage.get_summary"], async ({ user, context }) => {
     await recordGovernanceAccess({
@@ -28,64 +44,122 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     return userAdministration.listUsers(user, context, paging);
   });
 
-  route(apiOperations["users.create"], async ({ user, context, body }) => {
-    return userAdministration.createUser(user, context, {
-      displayLabel: body.displayLabel,
-      email: body.email,
-      roles: body.roles,
-      permissionRefs: body.permissionRefs,
-      permissions: body.permissions,
-      status: body.status,
-      passwordSignIn: body.passwordSignIn
-    });
+  route.operation(create, {
+    changeClass: "reversible",
+    authorize: (input, context) =>
+      authorizeUserAdministration(options, create.id, context, {
+        roles: input.roles,
+        permissions: input.permissions
+      }),
+    inputWithoutSecrets: (input) =>
+      input.passwordSignIn
+        ? { ...input, passwordSignIn: { ...input.passwordSignIn, password: PASSWORD_MARK } }
+        : undefined,
+    execute: (input, context) =>
+      userAdministration.createUser(create.id, context, {
+        displayLabel: input.displayLabel,
+        email: input.email,
+        roles: input.roles,
+        permissionRefs: input.permissionRefs,
+        permissions: input.permissions,
+        status: input.status,
+        passwordSignIn: input.passwordSignIn
+      })
   });
 
-  route(apiOperations["users.update"], async ({ user, context, params, body }) => {
-    const userId = userIdParam(params);
-    return userAdministration.updateUser(user, context, {
-      userId,
-      displayLabel: body.displayLabel,
-      email: body.email,
-      roles: body.roles,
-      permissionRefs: body.permissionRefs,
-      permissions: body.permissions,
-      status: body.status
-    });
+  route.operation(update, {
+    changeClass: "reversible",
+    authorize: (input, context) =>
+      authorizeUserAdministration(options, update.id, context, {
+        userId: input.userId,
+        roles: input.roles,
+        permissions: input.permissions
+      }),
+    resource: ({ userId }) => ({ kind: "user", id: userId }),
+    execute: (input, context) =>
+      userAdministration.updateUser(update.id, context, {
+        userId: userIdParam(input),
+        displayLabel: input.displayLabel,
+        email: input.email,
+        roles: input.roles,
+        permissionRefs: input.permissionRefs,
+        permissions: input.permissions,
+        status: input.status
+      })
   });
 
-  route(apiOperations["users.delete"], async ({ user, context, params }) => {
-    const userId = userIdParam(params);
-    return deletionAnswer(await userAdministration.deleteUser(user, context, { userId }));
+  route.operation(remove, {
+    // Deleting an account and its data is irreversible.
+    authorize: (input, context) =>
+      authorizeUserAdministration(options, remove.id, context, {
+        userId: input.userId,
+        superadminOnly: true
+      }),
+    resource: ({ userId }) => ({ kind: "user", id: userId }),
+    execute: async (input, context) =>
+      deletionState(
+        await userAdministration.deleteUser(remove.id, context, {
+          userId: userIdParam(input)
+        })
+      )
   });
 
-  route(apiOperations["users.identities.upsert"], async ({ user, context, params, body }) => {
-    const userId = userIdParam(params);
-    return userAdministration.upsertIdentity(user, context, {
-      userId,
-      authSource: body.authSource,
-      externalUserId: body.externalUserId,
-      displayLabel: body.displayLabel,
-      email: body.email,
-      emailVerified: body.emailVerified
-    });
+  route.operation(upsertIdentity, {
+    changeClass: "reversible",
+    authorize: (input, context) =>
+      authorizeUserAdministration(options, upsertIdentity.id, context, {
+        userId: input.userId
+      }),
+    resource: ({ userId }) => ({ kind: "user", id: userId }),
+    execute: (input, context) =>
+      userAdministration.upsertIdentity(upsertIdentity.id, context, {
+        userId: userIdParam(input),
+        authSource: input.authSource,
+        externalUserId: input.externalUserId,
+        displayLabel: input.displayLabel,
+        email: input.email,
+        emailVerified: input.emailVerified
+      })
   });
 
-  route(apiOperations["users.password.reset"], async ({ user, context, params, body }) => {
-    const userId = userIdParam(params);
-    return userAdministration.resetPassword(user, context, {
-      userId,
-      password: body.password
-    });
+  route.operation(resetPassword, {
+    // The previous password cannot be restored, so this change is irreversible.
+    authorize: (input, context) =>
+      authorizeUserAdministration(options, resetPassword.id, context, {
+        userId: input.userId
+      }),
+    resource: ({ userId }) => ({ kind: "user", id: userId }),
+    inputWithoutSecrets: (input) => ({ ...input, password: PASSWORD_MARK }),
+    execute: (input, context) =>
+      userAdministration.resetPassword(resetPassword.id, context, {
+        userId: userIdParam(input),
+        password: input.password
+      })
   });
 
-  route(apiOperations["users.invitation.send"], async ({ user, context, params }) => {
-    return userAdministration.sendInvitation(user, context, {
-      userId: userIdParam(params)
-    });
+  route.operation(sendInvitation, {
+    // Sending an invitation sends mail outside the instance.
+    changeClass: "outward",
+    authorize: (input, context) =>
+      authorizeUserAdministration(options, sendInvitation.id, context, {
+        userId: input.userId
+      }),
+    resource: ({ userId }) => ({ kind: "user", id: userId }),
+    execute: (input, context) =>
+      userAdministration.sendInvitation(sendInvitation.id, context, {
+        userId: userIdParam(input)
+      })
   });
 
-  route(apiOperations["users.identities.delete"], async ({ user, context, params }) => {
-    return userAdministration.deleteIdentity(user, context, identityParams(params));
+  route.operation(deleteIdentity, {
+    changeClass: "reversible",
+    authorize: (input, context) =>
+      authorizeUserAdministration(options, deleteIdentity.id, context, {
+        userId: input.userId
+      }),
+    resource: ({ userId }) => ({ kind: "user", id: userId }),
+    execute: (input, context) =>
+      userAdministration.deleteIdentity(deleteIdentity.id, context, identityParams(input))
   });
 }
 

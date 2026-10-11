@@ -5,7 +5,11 @@ import {
   AppError,
   isSuperadmin,
   asUserId,
+  auditActorFromIdentity,
   auditActorFromUser,
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
+  type OperationExecutionContext,
   type AuthenticatedUser,
   type RuntimeCallContext,
   type UserId,
@@ -19,6 +23,10 @@ import type { ChatServerOptions } from "./types";
 import { recordGovernanceAccess } from "./governance-actions";
 import { createPasswordSetupLink, PLATFORM_INVITATION_VALID_DAYS } from "./password-setup-workflow";
 import type { DeletionOutcome } from "./subject-deletion";
+import { changedPermissionEntries, requireMayAdministerUser } from "./user-administration-rights";
+
+/** What a changing user administration operation takes from its Operation Run. */
+type ChangeContext = Pick<OperationExecutionContext, "actor" | "audit" | "correlationId">;
 
 interface CreateUserCommand {
   displayLabel: string;
@@ -91,13 +99,16 @@ export class UserAdministrationWorkflow {
   }
 
   async createUser(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    operationId: string,
+    context: ChangeContext,
     command: CreateUserCommand
   ): Promise<UserRecord> {
-    await this.recordAccess(actor, context, "governance.user_create_authorized");
-    this.requireAssignableRoles(actor, command.roles);
-    this.requireAssignablePermissions(actor, command.permissions);
+    const actor = personOf(context.actor);
+    requireMayAdministerUser(operationId, actor, undefined, {
+      roles: command.roles,
+      permissions: command.permissions
+    });
+    this.requireAssignablePermissions(command.permissions);
     if (command.passwordSignIn && !command.email) {
       throw new AppError("VALIDATION_FAILED", "Email is required to create a password sign-in");
     }
@@ -111,9 +122,9 @@ export class UserAdministrationWorkflow {
       permissions: command.permissions,
       status: command.status
     });
-    await this.recordUserMutation(actor, context, "user.created", created);
+    await this.recordUserMutation(context, "user.created", created);
     if (command.passwordSignIn) {
-      created = await this.setOrCreatePasswordSignIn(actor, context, created, {
+      created = await this.setOrCreatePasswordSignIn(context, created, {
         password: command.passwordSignIn.password,
         auditType: "user.password_sign_in_created"
       });
@@ -122,16 +133,18 @@ export class UserAdministrationWorkflow {
   }
 
   async updateUser(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    operationId: string,
+    context: ChangeContext,
     command: UpdateUserCommand
   ): Promise<UserRecord> {
-    await this.recordAccess(actor, context, "governance.user_update_authorized");
+    const actor = personOf(context.actor);
     const existing = await this.getUserOrThrow(command.userId);
-    this.requireManageableUser(actor, existing);
+    requireMayAdministerUser(operationId, actor, existing, {
+      roles: command.roles,
+      permissions: command.permissions
+    });
     requireNotInDeletion(existing);
-    this.requireAssignableRoles(actor, command.roles);
-    this.requireAssignablePermissions(actor, command.permissions, existing.permissions);
+    this.requireAssignablePermissions(command.permissions, existing.permissions);
     const updated = await this.options.stores.users.updateUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: command.userId,
@@ -142,19 +155,23 @@ export class UserAdministrationWorkflow {
       permissions: command.permissions,
       status: command.status
     });
-    await this.recordUserMutation(actor, context, "user.updated", updated);
+    await this.recordUserMutation(context, "user.updated", updated);
     return updated;
   }
 
   async deleteUser(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    operationId: string,
+    context: ChangeContext,
     command: DeleteUserCommand
   ): Promise<DeletionOutcome<UserRecord>> {
+    const actor = personOf(context.actor);
+    // The operation's `authorize` refused everybody else before. Asked again where it deletes.
     if (!isSuperadmin(actor)) {
-      throw new AppError("FORBIDDEN", "User deletion requires a superadmin role");
+      throw new AppError("FORBIDDEN", `Missing the right '${operationId}'`, {
+        action: operationId,
+        reason: "no_grant"
+      });
     }
-    await this.recordAccess(actor, context, "governance.user_delete_authorized");
     if (command.userId === actor.id) {
       throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
     }
@@ -172,13 +189,13 @@ export class UserAdministrationWorkflow {
   }
 
   async upsertIdentity(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    operationId: string,
+    context: ChangeContext,
     command: UpsertUserIdentityCommand
   ): Promise<UserRecord> {
-    await this.recordAccess(actor, context, "governance.user_identity_upsert_authorized");
+    const actor = personOf(context.actor);
     const existing = await this.getUserOrThrow(command.userId);
-    this.requireManageableUser(actor, existing);
+    requireMayAdministerUser(operationId, actor, existing);
     requireNotInDeletion(existing);
     const updated = await this.options.stores.users.upsertUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
@@ -189,10 +206,11 @@ export class UserAdministrationWorkflow {
       email: command.email,
       emailVerified: command.emailVerified
     });
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = context;
+    await auditRecorder.record({
       type: "user.identity_upserted",
       status: "success",
-      actor: auditActorFromUser(actor),
+      actor: auditActorFromIdentity(context.actor),
       subject: updated.id,
       correlationId: context.correlationId,
       metadata: {
@@ -205,13 +223,13 @@ export class UserAdministrationWorkflow {
   }
 
   async deleteIdentity(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    operationId: string,
+    context: ChangeContext,
     command: DeleteUserIdentityCommand
   ): Promise<UserRecord> {
-    await this.recordAccess(actor, context, "governance.user_identity_delete_authorized");
+    const actor = personOf(context.actor);
     const existing = await this.getUserOrThrow(command.userId);
-    this.requireManageableUser(actor, existing);
+    requireMayAdministerUser(operationId, actor, existing);
     requireNotInDeletion(existing);
     const updated = await this.options.stores.users.deleteUserIdentity({
       clientInstanceId: this.options.clientInstanceId,
@@ -219,10 +237,11 @@ export class UserAdministrationWorkflow {
       authSource: command.authSource,
       externalUserId: command.externalUserId
     });
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = context;
+    await auditRecorder.record({
       type: "user.identity_deleted",
       status: "success",
-      actor: auditActorFromUser(actor),
+      actor: auditActorFromIdentity(context.actor),
       subject: updated.id,
       correlationId: context.correlationId,
       metadata: {
@@ -233,12 +252,18 @@ export class UserAdministrationWorkflow {
     return updated;
   }
 
+  /**
+   * Sets a user's password. The password goes to the auth store, which keeps its own slow
+   * hash, and nowhere else: no audit row, log line or answer names it. The operation is
+   * registered as `secret` and marks the password in its hashed input, so the run keeps
+   * neither an answer nor a hash of the password, and a repeated call sets nothing.
+   */
   async resetPassword(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    operationId: string,
+    context: ChangeContext,
     command: ResetUserPasswordCommand
   ): Promise<{ ok: true }> {
-    await this.recordAccess(actor, context, "governance.user_password_reset_authorized");
+    const actor = personOf(context.actor);
     const setPassword = this.options.standaloneAuth?.setPassword;
     if (!setPassword) {
       throw new AppError(
@@ -247,13 +272,13 @@ export class UserAdministrationWorkflow {
       );
     }
     const user = await this.getUserOrThrow(command.userId);
-    this.requireManageableUser(actor, user);
+    requireMayAdministerUser(operationId, actor, user);
     requireNotInDeletion(user);
     const identity = user.identities.find(
       (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
     );
     if (!identity) {
-      await this.setOrCreatePasswordSignIn(actor, context, user, {
+      await this.setOrCreatePasswordSignIn(context, user, {
         password: command.password,
         auditType: "user.password_sign_in_created"
       });
@@ -263,10 +288,11 @@ export class UserAdministrationWorkflow {
       externalUserId: identity.externalUserId,
       password: command.password
     });
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = context;
+    await auditRecorder.record({
       type: "user.password_reset",
       status: "success",
-      actor: auditActorFromUser(actor),
+      actor: auditActorFromIdentity(context.actor),
       subject: user.id,
       correlationId: context.correlationId,
       metadata: {
@@ -282,11 +308,11 @@ export class UserAdministrationWorkflow {
    * password keeps working until the link is used.
    */
   async sendInvitation(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    operationId: string,
+    context: ChangeContext,
     command: SendUserInvitationCommand
   ): Promise<{ ok: true }> {
-    await this.recordAccess(actor, context, "governance.user_invitation_authorized");
+    const actor = personOf(context.actor);
     const { mail, standaloneAuth } = this.options;
     if (!mail || !standaloneAuth) {
       throw new AppError(
@@ -295,12 +321,12 @@ export class UserAdministrationWorkflow {
       );
     }
     let user = await this.getUserOrThrow(command.userId);
-    this.requireManageableUser(actor, user);
+    requireMayAdministerUser(operationId, actor, user);
     if (user.status !== "active") {
       throw new AppError("VALIDATION_FAILED", "Only active users can be invited");
     }
     if (!user.identities.some((identity) => identity.authSource === STANDALONE_AUTH_SOURCE)) {
-      user = await this.setOrCreatePasswordSignIn(actor, context, user, {
+      user = await this.setOrCreatePasswordSignIn(context, user, {
         password: randomBytes(32).toString("base64url"),
         auditType: "user.password_sign_in_created"
       });
@@ -335,10 +361,11 @@ export class UserAdministrationWorkflow {
         inviterLabel: actor.displayLabel
       }
     });
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = context;
+    await auditRecorder.record({
       type: "user.invitation_sent",
       status: result.ok ? "success" : "failed",
-      actor: auditActorFromUser(actor),
+      actor: auditActorFromIdentity(context.actor),
       subject: user.id,
       correlationId: context.correlationId,
       metadata: {
@@ -355,8 +382,7 @@ export class UserAdministrationWorkflow {
   }
 
   private async setOrCreatePasswordSignIn(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    context: ChangeContext,
     user: UserRecord,
     input: {
       password: string;
@@ -393,10 +419,11 @@ export class UserAdministrationWorkflow {
       email: signIn.email,
       emailVerified: signIn.emailVerified
     });
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = context;
+    await auditRecorder.record({
       type: input.auditType,
       status: "success",
-      actor: auditActorFromUser(actor),
+      actor: auditActorFromIdentity(context.actor),
       subject: user.id,
       correlationId: context.correlationId,
       metadata: {
@@ -467,57 +494,17 @@ export class UserAdministrationWorkflow {
     return user;
   }
 
-  private requireAssignableRoles(actor: AuthenticatedUser, roles: UserRole[] | undefined): void {
-    if (roles && isSuperadmin({ roles }) && !isSuperadmin(actor)) {
-      throw new AppError("FORBIDDEN", "Only superadmins can assign superadmin access");
-    }
-  }
-
   private requireAssignablePermissions(
-    actor: AuthenticatedUser,
-    permissions: string[] | undefined,
+    permissions: readonly string[] | undefined,
     existingPermissions: readonly string[] = []
   ): void {
-    if (permissions === undefined) {
-      return;
-    }
-    const previous = new Set(existingPermissions);
-    const submitted = new Set(permissions);
-    const changedEntries = [
-      ...permissions.filter((permission) => !previous.has(permission)),
-      ...existingPermissions.filter((permission) => !submitted.has(permission))
-    ];
-    if (changedEntries.includes("config_assets.release")) {
+    if (
+      changedPermissionEntries(permissions, existingPermissions).includes("config_assets.release")
+    ) {
       throw new AppError(
         "VALIDATION_FAILED",
         "Release permission can only be carried by service tokens"
       );
-    }
-    if (
-      changedEntries.some((permission) => permission.replace(/^!/u, "") === "api_access.manage") &&
-      !isSuperadmin(actor)
-    ) {
-      throw new AppError(
-        "FORBIDDEN",
-        "Only superadmins can assign API Access administration permission"
-      );
-    }
-    if (
-      changedEntries.some(
-        (permission) => permission.replace(/^!/u, "") === "agent_models.manage"
-      ) &&
-      !isSuperadmin(actor)
-    ) {
-      throw new AppError(
-        "FORBIDDEN",
-        "Only superadmins can assign agent model settings permission"
-      );
-    }
-  }
-
-  private requireManageableUser(actor: AuthenticatedUser, user: UserRecord): void {
-    if (isSuperadmin(user) && !isSuperadmin(actor)) {
-      throw new AppError("FORBIDDEN", "Only superadmins can manage superadmin users");
     }
   }
 
@@ -536,7 +523,7 @@ export class UserAdministrationWorkflow {
     }
   }
 
-  // The right itself, `users.manage`, is every user administration operation's `requires`.
+  // The list is a plain read and records its access itself.
   private async recordAccess(
     user: AuthenticatedUser,
     context: RuntimeCallContext,
@@ -546,15 +533,15 @@ export class UserAdministrationWorkflow {
   }
 
   private async recordUserMutation(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    context: ChangeContext,
     type: string,
     user: UserRecord
   ): Promise<void> {
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = context;
+    await auditRecorder.record({
       type,
       status: "success",
-      actor: auditActorFromUser(actor),
+      actor: auditActorFromIdentity(context.actor),
       subject: user.id,
       correlationId: context.correlationId,
       metadata: {
@@ -574,4 +561,11 @@ export class UserAdministrationWorkflow {
  */
 function requireNotInDeletion(user: UserRecord): void {
   if (user.status === "deleting") throw userInDeletionError();
+}
+
+function personOf(actor: AuthenticatedIdentity): AuthenticatedUser {
+  if (isAuthenticatedServicePrincipal(actor)) {
+    throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
+  }
+  return actor;
 }

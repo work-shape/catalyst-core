@@ -252,41 +252,6 @@ export const EVENTS = {
     name: "governance.usage_viewed",
     subject: "instance"
   },
-  "governance.user_create_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.user_create_authorized",
-    subject: "instance"
-  },
-  "governance.user_delete_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.user_delete_authorized",
-    subject: "instance"
-  },
-  "governance.user_identity_delete_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.user_identity_delete_authorized",
-    subject: "instance"
-  },
-  "governance.user_identity_upsert_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.user_identity_upsert_authorized",
-    subject: "instance"
-  },
-  "governance.user_invitation_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.user_invitation_authorized",
-    subject: "instance"
-  },
-  "governance.user_password_reset_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.user_password_reset_authorized",
-    subject: "instance"
-  },
-  "governance.user_update_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.user_update_authorized",
-    subject: "instance"
-  },
   "governance.users_viewed": {
     ...LEGACY_AUDIT,
     name: "governance.users_viewed",

@@ -830,9 +830,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(escalatedCreate.statusCode).toBe(403);
-    expect((escalatedCreate.json() as { error: { message: string } }).error.message).toContain(
-      "Only superadmins can assign superadmin access"
-    );
+    // The operation records a superadmin refusal with its id instead of the old role message.
+    expect(escalatedCreate.json()).toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+        message: "Missing the right 'users.create'",
+        details: { action: "users.create", reason: "no_grant" }
+      }
+    });
 
     const escalatedUpdate = await app.call("users.update", {
       params: { userId: createdUser.id },
@@ -855,9 +860,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(superadminUpdate.statusCode).toBe(403);
-    expect((superadminUpdate.json() as { error: { message: string } }).error.message).toContain(
-      "Only superadmins can manage superadmin users"
-    );
+    // The operation records a superadmin refusal with its id instead of the old role message.
+    expect(superadminUpdate.json()).toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+        message: "Missing the right 'users.update'",
+        details: { action: "users.update", reason: "no_grant" }
+      }
+    });
 
     const adminDelete = await app.call("users.delete", {
       params: { userId: createdUser.id },
@@ -866,9 +876,14 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(adminDelete.statusCode).toBe(403);
-    expect((adminDelete.json() as { error: { message: string } }).error.message).toContain(
-      "superadmin role"
-    );
+    // The operation records a superadmin refusal with its id instead of the old role message.
+    expect(adminDelete.json()).toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+        message: "Missing the right 'users.delete'",
+        details: { action: "users.delete", reason: "no_grant" }
+      }
+    });
 
     const selfDelete = await app.call("users.delete", {
       params: { userId: required(superadminManagedUser?.id) },

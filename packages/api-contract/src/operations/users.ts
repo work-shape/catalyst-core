@@ -6,10 +6,13 @@ import {
   resetAdministeredUserPasswordResponseSchema,
   sendAdministeredUserInvitationResponseSchema,
   updateAdministeredUserRequestSchema,
+  userDeletionStateSchema,
   upsertAdministeredUserIdentityRequestSchema
 } from "../identity";
-import { defineOperation, json, page } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
+// The seven changing operations ask for `users.manage` and for the superadmin rules.
+// The rule is more than one right, so each operation checks it itself and requires none.
 export const userOperations = {
   "users.list": defineOperation({
     id: "users.list",
@@ -26,7 +29,7 @@ export const userOperations = {
     errors: [],
     rateClass: "read"
   }),
-  "users.create": defineOperation({
+  "users.create": defineRegisteredOperation({
     id: "users.create",
     method: "POST",
     path: "/api/v1/instance/users",
@@ -34,14 +37,14 @@ export const userOperations = {
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    requires: [],
     effect: "changing",
     body: createAdministeredUserRequestSchema,
     response: json(administeredUserSchema),
     errors: ["CONFLICT"],
     rateClass: "write"
   }),
-  "users.update": defineOperation({
+  "users.update": defineRegisteredOperation({
     id: "users.update",
     method: "PATCH",
     path: "/api/v1/instance/users/:userId",
@@ -49,30 +52,29 @@ export const userOperations = {
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    requires: [],
     effect: "changing",
     body: updateAdministeredUserRequestSchema,
     response: json(administeredUserSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "users.delete": defineOperation({
+  "users.delete": defineRegisteredOperation({
     id: "users.delete",
     method: "DELETE",
     path: "/api/v1/instance/users/:userId",
     summary:
-      "Delete a user and their data. Answers 202 when the user is closed and their data is still being removed.",
+      "Delete a user and their data. Answers `deleted`, or `deleting` while the data is still being removed.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    requires: [],
     effect: "changing",
-    response: json(administeredUserSchema),
-    deferred: true,
+    response: json(userDeletionStateSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "users.identities.upsert": defineOperation({
+  "users.identities.upsert": defineRegisteredOperation({
     id: "users.identities.upsert",
     method: "PUT",
     path: "/api/v1/instance/users/:userId/identities",
@@ -80,14 +82,14 @@ export const userOperations = {
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    requires: [],
     effect: "changing",
     body: upsertAdministeredUserIdentityRequestSchema,
     response: json(administeredUserSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "users.password.reset": defineOperation({
+  "users.password.reset": defineRegisteredOperation({
     id: "users.password.reset",
     method: "POST",
     path: "/api/v1/instance/users/:userId/password",
@@ -95,14 +97,16 @@ export const userOperations = {
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    requires: [],
     effect: "changing",
+    // The call sets a password. The run keeps no answer and the call never waits.
+    secret: true,
     body: resetAdministeredUserPasswordRequestSchema,
     response: json(resetAdministeredUserPasswordResponseSchema),
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  "users.invitation.send": defineOperation({
+  "users.invitation.send": defineRegisteredOperation({
     id: "users.invitation.send",
     method: "POST",
     path: "/api/v1/instance/users/:userId/invitation",
@@ -110,13 +114,13 @@ export const userOperations = {
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    requires: [],
     effect: "changing",
     response: json(sendAdministeredUserInvitationResponseSchema),
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  "users.identities.delete": defineOperation({
+  "users.identities.delete": defineRegisteredOperation({
     id: "users.identities.delete",
     method: "DELETE",
     path: "/api/v1/instance/users/:userId/identities/:authSource/:externalUserId",
@@ -124,7 +128,7 @@ export const userOperations = {
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    requires: [],
     effect: "changing",
     response: json(administeredUserSchema),
     errors: ["NOT_FOUND"],

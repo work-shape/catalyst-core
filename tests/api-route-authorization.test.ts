@@ -10,7 +10,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import { HmacSessionTokenIssuer } from "@vivd-catalyst/auth";
 import { platformModules } from "@vivd-catalyst/client-assembly";
-import { createModuleRegistry } from "@vivd-catalyst/core";
+import { createModuleRegistry, type PlatformAction } from "@vivd-catalyst/core";
 import {
   FIRST_PARTY_AUTH_SCOPES,
   PERMISSIONS,
@@ -164,14 +164,19 @@ describe("every operation of the catalog", () => {
     }
   );
 
-  const requiring = authenticated.flatMap(({ name, operation }) =>
-    operation.requires.map((action) => {
+  const requiring = authenticated.flatMap(({ name, operation }) => {
+    // User administration checks its right in authorize, so these descriptors require none.
+    const actions: readonly PlatformAction[] =
+      name.startsWith("users.") && isRegisteredOperation(operation)
+        ? ["users.manage"]
+        : operation.requires;
+    return actions.map((action) => {
       const missing = legacyPermissionFor(action);
       // Two actions can stand behind one legacy permission; the first of them refuses.
       const refused = operation.requires.find((other) => legacyPermissionFor(other) === missing);
       return [name, action, missing, refused ?? action] as const;
-    })
-  );
+    });
+  });
   it.each(requiring)("%s refuses a holder without %s", async (name, _action, missing, refused) => {
     const response = await call(
       name,

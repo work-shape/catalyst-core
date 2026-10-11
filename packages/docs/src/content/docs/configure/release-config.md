@@ -571,15 +571,20 @@ policy:
   refused with 403 and the code `POLICY_DENIED`, like `deny`. The answers the API reference
   lists for a held call (`202` with the run, `DECLINED`, `OPERATION_EXPIRED`) do not occur yet.
 
-One operation does not follow an inherited `approval`: issuing an API key
-(`api_credentials.create`). Its answer is the key, shown once to the person who asks, so the
-call cannot wait for somebody else. Under `changing: approval` it is not refused: it runs on its
-caller's own word, as under `confirm`, and its run records the decision with the reason
-`inherited_approval_not_applied`. To require an approval for key creation on purpose, name the
-operation or its prefix in a policy setting (`api_credentials.create` or `api_credentials.*`
-with the value `approval`). Such a setting refuses the call with 403 and the code
-`POLICY_DENIED`, since a secret answer cannot wait: nobody issues a key while the setting
-stands. See also [Governance](/operate/governance/#inbox).
+Calls that carry a secret do not follow an inherited `approval`: issuing an API key
+(`api_credentials.create`), whose answer is the key, shown once to the person who asks; setting
+a user's password (`users.password.reset`); and creating a user with a first password
+(`users.create` with `passwordSignIn`). A held call keeps its input and shows it to whoever
+decides, and a key shown later reaches nobody, so such a call cannot wait for somebody else.
+Under `changing: approval` it is not refused: it runs on its caller's own word, as under
+`confirm`, and its run records the decision with the reason `inherited_approval_not_applied`.
+To require an approval for one of them on purpose, name the operation or its prefix in a policy
+setting (`api_credentials.create` or `api_credentials.*` with the value `approval`). Such a
+setting refuses the call with 403 and the code `POLICY_DENIED`, since a secret cannot wait:
+nobody issues a key or sets a password while the setting stands. A `users.create` without a
+password carries no secret and waits like any other change. A run never keeps the answer of
+such a call, and the hash it keeps of the input is taken with the password left out.
+See also [Governance](/operate/governance/#inbox).
 
 ## Infrastructure
 

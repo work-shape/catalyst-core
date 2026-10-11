@@ -112,34 +112,6 @@
       "class": "identity",
       "reason": "This operation establishes the actor."
     },
-    "users.create": {
-      "class": "pending",
-      "ticket": "CONV-6"
-    },
-    "users.delete": {
-      "class": "pending",
-      "ticket": "CONV-6"
-    },
-    "users.identities.delete": {
-      "class": "pending",
-      "ticket": "CONV-6"
-    },
-    "users.identities.upsert": {
-      "class": "pending",
-      "ticket": "CONV-6"
-    },
-    "users.invitation.send": {
-      "class": "pending",
-      "ticket": "CONV-6"
-    },
-    "users.password.reset": {
-      "class": "pending",
-      "ticket": "CONV-6"
-    },
-    "users.update": {
-      "class": "pending",
-      "ticket": "CONV-6"
-    },
     "workspaces.access_requests.approve": {
       "class": "pending",
       "ticket": "CONV-7"

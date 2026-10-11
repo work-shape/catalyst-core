@@ -137,8 +137,9 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
     const everyone = [superadmin.id, removedUser.id, leavingUser.id].sort();
 
     fixture.byteStore.failDeletes = true;
-    for (const accepted of await deleteAccounts()) {
-      expect(accepted.statusCode).toBe(202);
+    for (const [index, accepted] of (await deleteAccounts()).entries()) {
+      // User administration answers a state with 200; self deletion still defers.
+      expect(accepted.statusCode).toBe(index === 0 ? 200 : 202);
     }
     // The claim came before the first object was touched.
     expect(statusAtDeletion.size).toBeGreaterThanOrEqual(2);

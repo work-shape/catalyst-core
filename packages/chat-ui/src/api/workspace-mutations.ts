@@ -636,7 +636,9 @@ export function useAgentPlacementMutations(input: WorkspaceMutationInput) {
   };
 }
 
-export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
+export function useSuperadminUserMutations(
+  input: WorkspaceMutationInput & { heldMessage: string }
+) {
   const queryClient = useQueryClient();
 
   const invalidateSuperadminUsers = () => {
@@ -651,32 +653,36 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
   };
 
   const createUser = useMutation({
-    mutationFn: (mutationInput: CreateAdministeredUserRequest) =>
-      input.client.users.create({ body: mutationInput }),
+    mutationFn: async (mutationInput: CreateAdministeredUserRequest) =>
+      completedOutput(await input.client.users.create({ body: mutationInput }), input.heldMessage),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }
   });
   const updateUser = useMutation({
-    mutationFn: (mutationInput: { userId: string; update: UpdateAdministeredUserRequest }) =>
-      input.client.users.update({
-        params: { userId: mutationInput.userId },
-        body: mutationInput.update
-      }),
+    mutationFn: async (mutationInput: { userId: string; update: UpdateAdministeredUserRequest }) =>
+      completedOutput(
+        await input.client.users.update({
+          params: { userId: mutationInput.userId },
+          body: mutationInput.update
+        }),
+        input.heldMessage
+      ),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }
   });
   const deleteUser = useMutation({
-    mutationFn: (userId: string) => input.client.users.delete({ params: { userId } }),
-    onSuccess: (deletedUser) => {
-      // Without a user the account is closed and still being removed: the list reads it so.
-      if (deletedUser) {
+    mutationFn: async (userId: string) =>
+      completedOutput(await input.client.users.delete({ params: { userId } }), input.heldMessage),
+    onSuccess: (answer, userId) => {
+      // A deleted account leaves the cache; a deleting account stays until the list refreshes.
+      if (answer.state === "deleted") {
         queryClient.setQueryData<AdministeredUser[]>(
           workspaceQueryKeys.superadminUsers(input.apiBaseUrl, input.authScope),
-          (currentUsers = []) => currentUsers.filter((user) => user.id !== deletedUser.id)
+          (currentUsers = []) => currentUsers.filter((user) => user.id !== userId)
         );
       }
       invalidateSuperadminUsers();
@@ -684,34 +690,41 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
     }
   });
   const upsertUserIdentity = useMutation({
-    mutationFn: (mutationInput: {
+    mutationFn: async (mutationInput: {
       userId: string;
       identity: UpsertAdministeredUserIdentityRequest;
     }) =>
-      input.client.users.identities.upsert({
-        params: { userId: mutationInput.userId },
-        body: mutationInput.identity
-      }),
+      completedOutput(
+        await input.client.users.identities.upsert({
+          params: { userId: mutationInput.userId },
+          body: mutationInput.identity
+        }),
+        input.heldMessage
+      ),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }
   });
   const deleteUserIdentity = useMutation({
-    mutationFn: (mutationInput: { userId: string; identity: AdministeredUserIdentity }) =>
-      input.client.users.identities.delete({
-        params: {
-          userId: mutationInput.userId,
-          authSource: mutationInput.identity.authSource,
-          externalUserId: mutationInput.identity.externalUserId
-        }
-      }),
+    mutationFn: async (mutationInput: { userId: string; identity: AdministeredUserIdentity }) =>
+      completedOutput(
+        await input.client.users.identities.delete({
+          params: {
+            userId: mutationInput.userId,
+            authSource: mutationInput.identity.authSource,
+            externalUserId: mutationInput.identity.externalUserId
+          }
+        }),
+        input.heldMessage
+      ),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
     }
   });
   const resetUserPassword = useMutation({
+    // This call is never held for an approval: it sets a password and keeps no answer.
     mutationFn: (mutationInput: { userId: string; password: string }) =>
       input.client.users.password.reset({
         params: { userId: mutationInput.userId },
@@ -722,7 +735,11 @@ export function useSuperadminUserMutations(input: WorkspaceMutationInput) {
     }
   });
   const sendUserInvitation = useMutation({
-    mutationFn: (userId: string) => input.client.users.invitation.send({ params: { userId } }),
+    mutationFn: async (userId: string) =>
+      completedOutput(
+        await input.client.users.invitation.send({ params: { userId } }),
+        input.heldMessage
+      ),
     onSuccess: () => {
       invalidateSuperadminUsers();
       invalidateAuditEvents();
