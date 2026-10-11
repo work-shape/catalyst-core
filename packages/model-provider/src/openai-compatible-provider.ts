@@ -127,7 +127,7 @@ export class OpenAiCompatibleChatProvider {
     context: TransportCallContext
   ): Promise<ModelCompletion> {
     const metadata = createProviderToolMetadata(request.tools);
-    const { providerNativeTools, toolNameMap } = metadata;
+    const { providerNativeTools } = metadata;
     assertNoProviderNativeToolsForChatCompletions(providerNativeTools);
     const response = await this.postChatCompletion({
       body: this.createChatCompletionsRequestBody(request, metadata),
@@ -149,7 +149,7 @@ export class OpenAiCompatibleChatProvider {
       toolCalls:
         message.tool_calls?.map((toolCall) => ({
           toolCallId: toolCall.id,
-          toolName: toolNameMap.get(toolCall.function.name) ?? toolCall.function.name,
+          toolName: metadata.productNameFor(toolCall.function.name),
           ...parseToolInput(toolCall.function.arguments)
         })) ?? [],
       sources: [],
@@ -163,7 +163,7 @@ export class OpenAiCompatibleChatProvider {
     context: TransportCallContext
   ): AsyncIterable<ModelAdapterStreamEvent> {
     const metadata = createProviderToolMetadata(request.tools);
-    const { providerNativeTools, toolNameMap } = metadata;
+    const { providerNativeTools } = metadata;
     assertNoProviderNativeToolsForChatCompletions(providerNativeTools);
     const response = await this.postChatCompletion({
       body: {
@@ -185,7 +185,7 @@ export class OpenAiCompatibleChatProvider {
       });
     }
 
-    yield* streamOpenAiCompatibleCompletion(response.body, toolNameMap);
+    yield* streamOpenAiCompatibleCompletion(response.body, metadata);
   }
 
   private async completeResponses(
@@ -193,7 +193,6 @@ export class OpenAiCompatibleChatProvider {
     context: TransportCallContext
   ): Promise<ModelCompletion> {
     const metadata = createProviderToolMetadata(request.tools);
-    const { toolNameMap } = metadata;
     const response = await this.postResponse({
       body: this.createResponsesRequestBody(request, metadata),
       signal: context.signal
@@ -207,7 +206,7 @@ export class OpenAiCompatibleChatProvider {
     const webMetadata = readOpenAiResponsesWebMetadata(payload);
     return {
       text: readOpenAiResponsesText(payload),
-      toolCalls: readOpenAiResponsesToolCalls(payload, toolNameMap),
+      toolCalls: readOpenAiResponsesToolCalls(payload, metadata.productNameFor),
       continuation: createOpenAiResponsesContinuation(this.id, payload, request.continuation),
       contextManagement: {
         compacted: didOpenAiResponsesCompact(payload)
@@ -226,7 +225,6 @@ export class OpenAiCompatibleChatProvider {
     context: TransportCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
     const metadata = createProviderToolMetadata(request.tools);
-    const { toolNameMap } = metadata;
     const response = await this.postResponse({
       body: {
         ...this.createResponsesRequestBody(request, metadata),
@@ -246,7 +244,7 @@ export class OpenAiCompatibleChatProvider {
 
     yield* streamOpenAiResponsesCompletion(
       response.body,
-      toolNameMap,
+      metadata.productNameFor,
       this.id,
       request.continuation,
       response.headers
@@ -469,12 +467,12 @@ function shouldRequestReasoningSummary(model: string): boolean {
 
 function readOpenAiResponsesToolCalls(
   payload: OpenAiResponsesResponse,
-  toolNameMap: Map<string, string>
+  productNameFor: (wireName: string) => string
 ): ModelCompletion["toolCalls"] {
   return (
     payload.output?.filter(isOpenAiResponsesFunctionCall).map((toolCall) => ({
       toolCallId: toolCall.call_id,
-      toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
+      toolName: productNameFor(toolCall.name),
       ...parseToolInput(toolCall.arguments)
     })) ?? []
   );

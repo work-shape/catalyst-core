@@ -14,7 +14,8 @@ import {
   readOpenAiResponsesWebMetadata,
   readOpenAiResponsesWebSearchCallCount,
   toModelUsage,
-  toResponsesModelUsage
+  toResponsesModelUsage,
+  type ProviderToolNames
 } from "./openai-compatible-mapping";
 import {
   ModelProviderError,
@@ -29,6 +30,7 @@ interface OpenAiCompatibleStreamChunk {
   usage?: OpenAiCompatibleResponse["usage"];
   service_tier?: string | null;
   choices?: Array<{
+    finish_reason?: string | null;
     delta?: {
       content?: string | null;
       tool_calls?: Array<{
@@ -93,7 +95,7 @@ interface OpenAiResponsesStreamEvent {
 
 export async function* streamOpenAiCompatibleCompletion(
   body: ReadableStream<Uint8Array>,
-  toolNameMap: Map<string, string>
+  toolNames: ProviderToolNames
 ): AsyncIterable<ModelAdapterStreamEvent> {
   let text = "";
   let usage = noReportedUsage();
@@ -101,9 +103,28 @@ export async function* streamOpenAiCompatibleCompletion(
   let completed = false;
   const toolCalls = new Map<number, Partial<OpenAiCompatibleStreamingToolCall>>();
   const announcedToolCalls = new Set<number>();
+  const completeToolNames = new Set<number>();
+
+  function* announceReadyToolCalls(): Iterable<ModelAdapterStreamEvent> {
+    for (const [index, toolCall] of [...toolCalls].sort(([a], [b]) => a - b)) {
+      const productName =
+        toolCall.name === undefined ? undefined : toolNames.toolNameMap.get(toolCall.name);
+      if (
+        completeToolNames.has(index) &&
+        toolCall.id &&
+        productName !== undefined &&
+        !announcedToolCalls.has(index)
+      ) {
+        announcedToolCalls.add(index);
+        yield { type: "tool_call_preparing", toolCallId: toolCall.id, toolName: productName };
+      }
+    }
+  }
 
   for await (const data of readServerSentEventData(body)) {
     if (data === "[DONE]") {
+      for (const index of toolCalls.keys()) completeToolNames.add(index);
+      yield* announceReadyToolCalls();
       completed = true;
       break;
     }
@@ -117,13 +138,10 @@ export async function* streamOpenAiCompatibleCompletion(
       yield { type: "usage_reported", usage: { ...usage, ...serviceTier } };
     }
 
+    const inputDeltas: string[] = [];
     for (const choice of payload.choices ?? []) {
       const delta = choice.delta;
-      if (!delta) {
-        continue;
-      }
-
-      if (delta.content) {
+      if (delta?.content) {
         text += delta.content;
         yield {
           type: "text_delta",
@@ -131,28 +149,31 @@ export async function* streamOpenAiCompatibleCompletion(
         };
       }
 
-      for (const toolCall of delta.tool_calls ?? []) {
+      for (const toolCall of delta?.tool_calls ?? []) {
         const existing = toolCalls.get(toolCall.index) ?? { arguments: "" };
         const updated = {
           ...existing,
           id: toolCall.id ?? existing.id,
-          name: toolCall.function?.name ?? existing.name,
+          name: `${existing.name ?? ""}${toolCall.function?.name ?? ""}`,
           arguments: `${existing.arguments ?? ""}${toolCall.function?.arguments ?? ""}`
         };
         toolCalls.set(toolCall.index, updated);
-        const mappedToolName = updated.name ? toolNameMap.get(updated.name) : undefined;
-        if (updated.id && mappedToolName && !announcedToolCalls.has(toolCall.index)) {
-          announcedToolCalls.add(toolCall.index);
-          yield {
-            type: "tool_call_preparing",
-            toolCallId: updated.id,
-            toolName: mappedToolName
-          };
+        for (const index of toolCalls.keys()) {
+          if (index < toolCall.index) completeToolNames.add(index);
         }
         if (toolCall.function?.arguments) {
-          yield { type: "tool_call_input_delta", delta: toolCall.function.arguments };
+          completeToolNames.add(toolCall.index);
+          inputDeltas.push(toolCall.function.arguments);
         }
       }
+    }
+    if (payload.choices?.some((choice) => choice.finish_reason != null)) {
+      for (const index of toolCalls.keys()) completeToolNames.add(index);
+    }
+    // Announce all ready names in index order before forwarding this chunk's input.
+    yield* announceReadyToolCalls();
+    for (const delta of inputDeltas) {
+      yield { type: "tool_call_input_delta", delta };
     }
   }
 
@@ -170,7 +191,7 @@ export async function* streamOpenAiCompatibleCompletion(
         )
         .map((toolCall) => ({
           toolCallId: toolCall.id,
-          toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
+          toolName: toolNames.productNameFor(toolCall.name),
           ...parseToolInput(toolCall.arguments)
         })),
       sources: [],
@@ -182,7 +203,7 @@ export async function* streamOpenAiCompatibleCompletion(
 
 export async function* streamOpenAiResponsesCompletion(
   body: ReadableStream<Uint8Array>,
-  toolNameMap: Map<string, string>,
+  productNameFor: (wireName: string) => string,
   providerId: string,
   previousContinuation: ModelProviderContinuation | undefined,
   headers?: Headers
@@ -209,7 +230,7 @@ export async function* streamOpenAiResponsesCompletion(
       yield {
         type: "tool_call_preparing",
         toolCallId: payload.item.call_id,
-        toolName: toolNameMap.get(payload.item.name) ?? payload.item.name
+        toolName: productNameFor(payload.item.name)
       };
       continue;
     }
@@ -337,7 +358,7 @@ export async function* streamOpenAiResponsesCompletion(
       text: text || finalText,
       toolCalls: toolCalls.map((toolCall) => ({
         toolCallId: toolCall.id,
-        toolName: toolNameMap.get(toolCall.name) ?? toolCall.name,
+        toolName: productNameFor(toolCall.name),
         ...parseToolInput(toolCall.arguments)
       })),
       sources: webMetadata.sources,

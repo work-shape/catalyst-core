@@ -16,6 +16,8 @@ import {
   type ModelTool
 } from "./types";
 import { serializeToolInput } from "./tool-input";
+import { createProviderToolNames, type ProviderToolNames } from "./openai-compatible-tool-names";
+export type { ProviderToolNames } from "./openai-compatible-tool-names";
 import type {
   OpenAiCompatibleMessage,
   OpenAiCompatibleResponse,
@@ -66,87 +68,19 @@ type OpenAiChatTextImageContent =
         }
     >;
 
-const PROVIDER_TOOL_NAME_MAX_CHARS = 64;
-const PROVIDER_TOOL_NAME_PREFIX_CHARS = 55;
-const PROVIDER_TOOL_NAME_HASH_CHARS = 8;
-const PROVIDER_TOOL_NAME_LAST_LEVEL = 2;
-
-interface ProviderToolName {
-  productName: string;
-  base: string;
-  hash: string;
-  level: number;
-}
-
-function createToolName(productName: string): ProviderToolName {
-  return {
-    productName,
-    base: productName.replace(/[^a-zA-Z0-9_-]/gu, "_"),
-    hash: createHash("sha256").update(productName, "utf8").digest("hex"),
-    level: productName.length === 0 ? 1 : 0
-  };
-}
-
-function wireNameAtLevel({ base, hash, level }: ProviderToolName): string {
-  if (level >= PROVIDER_TOOL_NAME_LAST_LEVEL)
-    return `t_${hash.slice(0, PROVIDER_TOOL_NAME_MAX_CHARS - 2)}`;
-  if (level === 0 && base.length > 0 && base.length <= PROVIDER_TOOL_NAME_MAX_CHARS) {
-    return base;
-  }
-  const suffix = hash.slice(0, PROVIDER_TOOL_NAME_HASH_CHARS);
-  return base ? `${base.slice(0, PROVIDER_TOOL_NAME_PREFIX_CHARS)}_${suffix}` : suffix;
-}
-
-/** The wire names of one request: the offered tools, and a valid name for any other tool. */
-export interface ProviderToolNames {
-  wireNameFor: (productName: string) => string;
-}
-
-// A wire name depends only on its product name and the set of product names offered in the
-// request, because prompt caching depends on stable names. The order of the tools does not
-// matter: while two or more offered names share a wire name, every one of them moves up one
-// level together, so none of them keeps the plain name. The last level is the hash alone.
-// The way back is the table built here, never a decoding of the wire name.
 export function createProviderToolMetadata(tools: ModelTool[]): ProviderToolNames & {
   providerTools: OpenAiCompatibleProviderTool[];
   providerNativeTools: ModelProviderNativeTool[];
-  toolNameMap: Map<string, string>;
 } {
   const functionTools = tools.filter(isModelFunctionTool);
-  const names = [...new Set(functionTools.map((tool) => tool.name))].map(createToolName);
-  for (;;) {
-    const groups = new Map<string, ProviderToolName[]>();
-    for (const name of names) {
-      const wireName = wireNameAtLevel(name);
-      groups.set(wireName, [...(groups.get(wireName) ?? []), name]);
-    }
-    // A name at the last level stays there. Each name moves at most twice, so this ends.
-    const promoted = [...groups.values()]
-      .filter((group) => group.length > 1)
-      .flat()
-      .filter((name) => name.level < PROVIDER_TOOL_NAME_LAST_LEVEL);
-    if (promoted.length === 0) break;
-    for (const name of promoted) {
-      name.level += 1;
-    }
-  }
-
-  const forwardNames = new Map(names.map((name) => [name.productName, wireNameAtLevel(name)]));
-  const toolNameMap = new Map(
-    [...forwardNames].map(([productName, wireName]) => [wireName, productName])
-  );
-  function wireNameFor(productName: string): string {
-    const offeredName = forwardNames.get(productName);
-    if (offeredName !== undefined) return offeredName;
-    const name = createToolName(productName);
-    if (toolNameMap.has(wireNameAtLevel(name))) name.level = 1;
-    return wireNameAtLevel(name);
-  }
+  const toolNames = createProviderToolNames(functionTools.map((tool) => tool.name));
   return {
-    providerTools: functionTools.map((tool) => ({ tool, providerName: wireNameFor(tool.name) })),
-    providerNativeTools: tools.filter(isModelProviderNativeTool),
-    toolNameMap,
-    wireNameFor
+    ...toolNames,
+    providerTools: functionTools.map((tool) => ({
+      tool,
+      providerName: toolNames.wireNameFor(tool.name)
+    })),
+    providerNativeTools: tools.filter(isModelProviderNativeTool)
   };
 }
 

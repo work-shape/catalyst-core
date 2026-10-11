@@ -1,11 +1,22 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import {
+  asAgentRunId,
+  asClientInstanceId,
+  asConversationId,
+  asToolCallId,
+  type ToolExecutionContext
+} from "@vivd-catalyst/core";
+import { ToolRegistry } from "@vivd-catalyst/tool-execution";
+import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import {
   OpenAiCompatibleChatProvider,
   type ModelAdapterStreamEvent,
   type ModelCompletion,
   type ModelMessage
 } from "@vivd-catalyst/model-provider";
+import { createTestToolRunner } from "./support/tool-runner";
 
 type Api = "chat_completions" | "responses";
 
@@ -188,6 +199,36 @@ function history(names: string[]): ModelMessage[] {
   ];
 }
 
+function setupChatStream(chunks: unknown[]): OpenAiCompatibleChatProvider {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n",
+          { headers: { "content-type": "text/event-stream" } }
+        )
+    )
+  );
+  return new OpenAiCompatibleChatProvider({
+    id: "openai",
+    api: "chat_completions",
+    model: "test-model",
+    baseUrl: "https://example.test/v1",
+    apiKey: "test"
+  });
+}
+
+interface ChatToolFragment {
+  index: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+function chatChunk(toolCalls: ChatToolFragment[], finishReason?: string): unknown {
+  return { choices: [{ delta: { tool_calls: toolCalls }, finish_reason: finishReason }] };
+}
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s", (api) => {
@@ -214,7 +255,7 @@ describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s",
   it("does not promote duplicate offers of the same product name", async () => {
     const { provider, bodies } = setup(api);
     await request(provider, ["workspace.exec", "workspace.exec"]);
-    expect(new Set(offeredNames(captured(bodies)))).toEqual(new Set(["workspace_exec"]));
+    expect(offeredNames(captured(bodies))).toEqual(["workspace_exec", "workspace_exec"]);
   });
 
   it("shortens 200 character names and distinguishes a shared long prefix", async () => {
@@ -257,22 +298,77 @@ describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s",
     }
   });
 
-  it.each([false, true])("passes unknown wire names through with stream=%s", async (stream) => {
-    const unknown = "tool_d29ya3NwYWNlLmV4ZWM";
-    const { provider, bodies } = setup(api, () => [unknown, "workspace.exec"]);
-    const { completion, events } = await request(provider, ["workspace.exec"], undefined, stream);
-    expect(offeredNames(captured(bodies))).toEqual(["workspace_exec"]);
-    expect(completion.toolCalls.map((call) => call.toolName)).toEqual([unknown, "workspace.exec"]);
+  it.each([false, true])("marks unknown wire names with stream=%s", async (stream) => {
+    const names = ["a.b", "a_b"];
+    const { provider, bodies } = setup(api, () => ["a_b"]);
+    const { completion, events } = await request(provider, names, undefined, stream);
+    expect(offeredNames(captured(bodies))).toEqual(
+      names.map((name) => `a_b_${hash(name).slice(0, 8)}`)
+    );
+    expect(completion.toolCalls.map((call) => call.toolName)).toEqual(["unknown:a_b"]);
     if (stream) {
       expect(events.filter((event) => event.type === "tool_call_preparing")).toEqual(
         api === "chat_completions"
           ? []
-          : [
-              { type: "tool_call_preparing", toolCallId: "call_0", toolName: unknown },
-              { type: "tool_call_preparing", toolCallId: "call_1", toolName: "workspace.exec" }
-            ]
+          : [{ type: "tool_call_preparing", toolCallId: "call_0", toolName: "unknown:a_b" }]
       );
     }
+  });
+
+  it("dispatches an unknown wire name as not registered while the plain name runs", async () => {
+    const ran: string[] = [];
+    const tool = defineTool({
+      name: "a_b",
+      description: "Records that it ran.",
+      effect: "reading",
+      inputSchema: z.object({ ok: z.boolean() }),
+      execute() {
+        ran.push("a_b");
+        return toolSuccess({ ran: true });
+      }
+    });
+    const registry = new ToolRegistry({ tools: [tool] });
+    const runTool = createTestToolRunner({ registry, getAgentToolNames: () => ["a_b"] });
+    const clientInstanceId = asClientInstanceId("tool-names-test");
+    const context: ToolExecutionContext = {
+      clientInstanceId,
+      correlationId: "corr_tool_names",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const { provider } = setup(api, () => ["a_b"]);
+    const { completion } = await request(provider, ["a.b", "a_b"]);
+    const call = completion.toolCalls[0];
+    if (!call) throw new Error("Provider returned no tool call");
+    const dispatch = (toolName: string) =>
+      runTool(
+        {
+          toolName,
+          input: call.input,
+          toolCallId: asToolCallId(call.toolCallId),
+          agentRunId: asAgentRunId("run_tool_names"),
+          conversationId: asConversationId("conv_tool_names"),
+          agentName: "test_agent"
+        },
+        context
+      );
+    expect(await dispatch(call.toolName)).toMatchObject({
+      status: "failed",
+      error: { code: "not_allowed", message: "Tool 'unknown:a_b' is not registered" }
+    });
+    expect(ran).toEqual([]);
+    expect(await dispatch("a_b")).toMatchObject({ status: "success", output: { ran: true } });
+    expect(ran).toEqual(["a_b"]);
+    expect(() => new ToolRegistry({ tools: [{ ...tool, name: "unknown:a_b" }] })).toThrow(
+      "must start with a letter and contain only letters, numbers, dots, underscores, or hyphens"
+    );
   });
 
   it("keeps names stable across repeated requests, unrelated additions and order changes", async () => {
@@ -315,7 +411,61 @@ describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s",
       `${longName.replaceAll(".", "_").slice(0, 55)}_${hash(longName).slice(0, 8)}`
     ]);
     for (const wire of wires) expect(wire).toMatch(validWireName);
-    expect(completion.toolCalls.map((call) => call.toolName)).toEqual(wires);
+    expect(completion.toolCalls.map((call) => call.toolName)).toEqual(
+      wires.map((wire) => `unknown:${wire}`)
+    );
+  });
+
+  it.each([2, 3, 5])(
+    "avoids %s occupied history name candidates deterministically",
+    async (count) => {
+      const removed = "a.b";
+      const candidates = [
+        "a_b",
+        `a_b_${hash(removed).slice(0, 8)}`,
+        `t_${hash(removed).slice(0, 62)}`,
+        `t_${hash(`${removed}#1`).slice(0, 62)}`,
+        `t_${hash(`${removed}#2`).slice(0, 62)}`
+      ];
+      const offered = candidates.slice(0, count);
+      const { provider, bodies } = setup(api);
+      await request(provider, offered, history([removed]));
+      await request(provider, offered, history([removed]));
+      const body = captured(bodies);
+      const wires = historyNames(body);
+      expect(offeredNames(body)).toEqual(offered);
+      expect(wires).toEqual([
+        count === 2
+          ? `t_${hash(removed).slice(0, 62)}`
+          : `t_${hash(`${removed}#${count - 2}`).slice(0, 62)}`
+      ]);
+      for (const wire of wires) {
+        expect(wire).toMatch(validWireName);
+        expect(offeredNames(body)).not.toContain(wire);
+      }
+      expect(historyNames(captured(bodies, 1))).toEqual(wires);
+    }
+  );
+
+  it("serializes a marked unknown name in history as a free valid wire name", async () => {
+    const marked = "unknown:a_b";
+    const { provider, bodies } = setup(api);
+    await request(provider, ["a.b", "a_b"], history([marked]));
+    expect(historyNames(captured(bodies))).toEqual(["unknown_a_b"]);
+    await request(provider, ["unknown_a_b"], history([marked]));
+    expect(historyNames(captured(bodies, 1))).toEqual([`unknown_a_b_${hash(marked).slice(0, 8)}`]);
+    const offered = [
+      "unknown_a_b",
+      `unknown_a_b_${hash(marked).slice(0, 8)}`,
+      `t_${hash(marked).slice(0, 62)}`
+    ];
+    await request(provider, offered, history([marked]));
+    const wires = historyNames(captured(bodies, 2));
+    expect(wires).toEqual([`t_${hash(`${marked}#1`).slice(0, 62)}`]);
+    for (const wire of wires) {
+      expect(wire).toMatch(validWireName);
+      expect(offered).not.toContain(wire);
+    }
   });
 
   it("replaces non ASCII and odd characters and hashes an empty name", async () => {
@@ -356,5 +506,143 @@ describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s",
     expect(offeredNames(captured(bodies, 1))).toEqual([...expected].reverse());
     for (const wire of expected) expect(wire).toMatch(validWireName);
     expect(completion.toolCalls.map((call) => call.toolName)).toEqual(names);
+  });
+});
+
+describe("Fragmented chat completion tool names", () => {
+  it.each([["workspace.exec"], ["workspace", "workspace.exec"]])(
+    "waits for the complete name with offers %j",
+    async (...names) => {
+      const first = names.length === 1 ? "workspace_" : "workspace";
+      const second = names.length === 1 ? "exec" : "_exec";
+      const provider = setupChatStream([
+        chatChunk([{ index: 0, id: "call_0", function: { name: first, arguments: "" } }]),
+        chatChunk([{ index: 0, function: { name: second } }]),
+        { choices: [{ delta: { content: "waiting for arguments" } }] },
+        chatChunk([{ index: 0, function: { arguments: '{"command":' } }]),
+        chatChunk([{ index: 0, function: { arguments: '"pwd"}' } }])
+      ]);
+      const { completion, events } = await request(provider, names, undefined, true);
+      expect(events.slice(0, -1)).toEqual([
+        { type: "text_delta", delta: "waiting for arguments" },
+        { type: "tool_call_preparing", toolCallId: "call_0", toolName: "workspace.exec" },
+        { type: "tool_call_input_delta", delta: '{"command":' },
+        { type: "tool_call_input_delta", delta: '"pwd"}' }
+      ]);
+      expect(events.at(-1)?.type).toBe("completed");
+      expect(completion.toolCalls).toEqual([
+        { toolCallId: "call_0", toolName: "workspace.exec", input: { command: "pwd" } }
+      ]);
+    }
+  );
+
+  it("announces parallel fragmented names once in index order before their input deltas", async () => {
+    const provider = setupChatStream([
+      chatChunk([{ index: 0, function: { name: "workspace_" } }]),
+      chatChunk([{ index: 0, function: { name: "exec" } }]),
+      chatChunk([{ index: 1, function: { name: "storage_" } }]),
+      chatChunk([{ index: 1, function: { name: "read" } }]),
+      chatChunk([
+        { index: 1, id: "call_1", function: { arguments: '{"path":' } },
+        { index: 0, id: "call_0", function: { arguments: '{"command":' } }
+      ]),
+      chatChunk([
+        { index: 0, function: { arguments: '"pwd"}' } },
+        { index: 1, function: { arguments: '"file"}' } }
+      ])
+    ]);
+    const { completion, events } = await request(
+      provider,
+      ["workspace.exec", "storage.read"],
+      undefined,
+      true
+    );
+    expect(events.slice(0, -1)).toEqual([
+      { type: "tool_call_preparing", toolCallId: "call_0", toolName: "workspace.exec" },
+      { type: "tool_call_preparing", toolCallId: "call_1", toolName: "storage.read" },
+      { type: "tool_call_input_delta", delta: '{"path":' },
+      { type: "tool_call_input_delta", delta: '{"command":' },
+      { type: "tool_call_input_delta", delta: '"pwd"}' },
+      { type: "tool_call_input_delta", delta: '"file"}' }
+    ]);
+    expect(completion.toolCalls).toEqual([
+      { toolCallId: "call_0", toolName: "workspace.exec", input: { command: "pwd" } },
+      { toolCallId: "call_1", toolName: "storage.read", input: { path: "file" } }
+    ]);
+  });
+
+  it("marks a fragmented unknown name without announcing it", async () => {
+    const provider = setupChatStream([
+      chatChunk([{ index: 0, id: "call_0", function: { name: "a_" } }]),
+      chatChunk([{ index: 0, function: { name: "b" } }]),
+      chatChunk([{ index: 0, function: { arguments: '{"ok":true}' } }])
+    ]);
+    const { completion, events } = await request(provider, ["a.b", "a_b"], undefined, true);
+    expect(events.slice(0, -1)).toEqual([{ type: "tool_call_input_delta", delta: '{"ok":true}' }]);
+    expect(completion.toolCalls).toEqual([
+      { toolCallId: "call_0", toolName: "unknown:a_b", input: { ok: true } }
+    ]);
+  });
+
+  it.each(["later index", "finish reason", "completion marker"])(
+    "announces names without arguments at the %s",
+    async (boundary) => {
+      const chunks = [
+        chatChunk([{ index: 0, id: "call_0", function: { name: "workspace" } }]),
+        chatChunk([{ index: 0, function: { name: "_exec" } }])
+      ];
+      if (boundary === "later index") {
+        chunks.push(
+          chatChunk([
+            { index: 1, id: "call_1", function: { name: "storage_read", arguments: "{}" } }
+          ])
+        );
+      } else if (boundary === "finish reason") {
+        chunks.push({ choices: [{ finish_reason: "tool_calls" }] });
+        chunks.push({ choices: [{ delta: { content: "after finish" } }] });
+      }
+      const provider = setupChatStream(chunks);
+      const { completion, events } = await request(
+        provider,
+        ["workspace", "workspace.exec", "storage.read"],
+        undefined,
+        true
+      );
+      expect(events[0]).toEqual({
+        type: "tool_call_preparing",
+        toolCallId: "call_0",
+        toolName: "workspace.exec"
+      });
+      expect(events.filter((event) => event.type === "tool_call_preparing")).toHaveLength(
+        boundary === "later index" ? 2 : 1
+      );
+      expect(events.at(-1)?.type).toBe("completed");
+      expect(completion.toolCalls[0]).toEqual({
+        toolCallId: "call_0",
+        toolName: "workspace.exec",
+        input: {}
+      });
+    }
+  );
+
+  it("concatenates a late name fragment without announcing the index twice", async () => {
+    const provider = setupChatStream([
+      chatChunk([{ index: 0, id: "call_0", function: { name: "workspace", arguments: "{" } }]),
+      chatChunk([{ index: 0, function: { name: "_exec", arguments: '"ok":true}' } }])
+    ]);
+    const { completion, events } = await request(
+      provider,
+      ["workspace", "workspace.exec"],
+      undefined,
+      true
+    );
+    expect(events.slice(0, -1)).toEqual([
+      { type: "tool_call_preparing", toolCallId: "call_0", toolName: "workspace" },
+      { type: "tool_call_input_delta", delta: "{" },
+      { type: "tool_call_input_delta", delta: '"ok":true}' }
+    ]);
+    expect(completion.toolCalls).toEqual([
+      { toolCallId: "call_0", toolName: "workspace.exec", input: { ok: true } }
+    ]);
   });
 });
