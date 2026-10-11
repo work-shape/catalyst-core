@@ -1,4 +1,4 @@
-import { Inbox, type LucideIcon } from "lucide-react";
+import { Inbox, LayoutGrid, type LucideIcon } from "lucide-react";
 import type { TranslationKey } from "../i18n";
 import type { WorkspaceRouteView } from "./workspace-route";
 
@@ -7,6 +7,8 @@ import type { WorkspaceRouteView } from "./workspace-route";
  * absent here does not show.
  */
 export interface RailSectionsGiven {
+  /** The Apps module is on and the person is in a workspace that can hold Apps. */
+  apps?: boolean;
   /** Present for a person who may decide requests or has made one. */
   inbox?: { toDecide: number };
 }
@@ -32,6 +34,13 @@ export interface RailSection {
  * chat starts a conversation and the list under "Recent" holds the ones there are.
  */
 export const railSections: readonly RailSection[] = [
+  {
+    id: "apps",
+    label: "nav.apps",
+    icon: LayoutGrid,
+    view: "apps",
+    shown: (given) => given.apps === true
+  },
   {
     id: "inbox",
     label: "nav.inbox",

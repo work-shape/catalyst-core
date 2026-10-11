@@ -51,6 +51,8 @@ interface WorkspaceRailProps {
   canViewBuild?: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox?: RailSectionsGiven["inbox"];
+  /** The Apps module is on: the Apps row shows. */
+  apps?: boolean;
   view: WorkspaceView;
   deletingConversation: boolean;
   canMoveConversation: boolean;
@@ -78,7 +80,10 @@ interface WorkspaceRailProps {
  */
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
-  const sections = shownRailSections(props.sections ?? railSections, { inbox: props.inbox });
+  const sections = shownRailSections(props.sections ?? railSections, {
+    inbox: props.inbox,
+    apps: props.apps
+  });
 
   return (
     <Sidebar

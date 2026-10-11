@@ -34,6 +34,7 @@ import {
 import { useRailConversations } from "../api/rail-conversations";
 import {
   useCollaborationWorkspaceAgentsQuery,
+  usePlatformContextQuery,
   useWorkspaceCacheActions,
   useWorkspaceConfigQuery,
   useWorkspaceMeQuery,
@@ -60,6 +61,7 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
+import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
 import { inboxRailEntry } from "../inbox/inbox-model";
 import type { WorkspaceRoute } from "./workspace-route";
 import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
@@ -180,6 +182,16 @@ export interface WorkspaceChatModel {
   controlPlane: ControlPlaneModel;
   toolDisplay: ToolDisplayModel;
   approvalRevision: ApprovalRevisionHost;
+  apps: AppsModel;
+}
+
+/** What the workspace knows about Apps: the module's state and the reader's rights. */
+interface AppsModel {
+  /** The Apps module is on and the session has workspaces to hold Apps. */
+  enabled: boolean;
+  rights: AppRights;
+  /** Opens a new conversation of the open workspace with this text in its composer. */
+  startChat(prompt: string): void;
 }
 
 export interface WorkspaceAuthModel {
@@ -259,6 +271,8 @@ export interface ConversationRailModel {
   canViewAdministration: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox: { toDecide: number } | undefined;
+  /** The Apps module is on: the Apps row shows. */
+  apps: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -701,6 +715,28 @@ export function useWorkspaceChatModel({
     enabled: isAuthenticated
   });
   const inbox = inboxRailEntry(approvalPendingCountQuery.data);
+  // The modules are the instance's, so they are read from its own configuration: the
+  // workspace's view of it is not there yet while the workspace's agents load.
+  const instanceModules = configQuery.data?.modules;
+  const appsEnabled = collaborationWorkspacesAvailable && instanceModules?.apps?.enabled === true;
+  const platformContextQuery = usePlatformContextQuery({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    enabled: isAuthenticated && appsEnabled
+  });
+  const appRights = useMemo(
+    () => (appsEnabled ? resolveAppRights(platformContextQuery.data) : NO_APP_RIGHTS),
+    [appsEnabled, platformContextQuery.data]
+  );
+  // With the module off, an address of the Apps area leads to the chat.
+  const appsClosed = view === "apps" && instanceModules !== undefined && !appsEnabled;
+  const { goToDefaultChat } = routeState;
+  useEffect(() => {
+    if (appsClosed) {
+      goToDefaultChat(activeCollaborationWorkspaceId, { replace: true });
+    }
+  }, [activeCollaborationWorkspaceId, appsClosed, goToDefaultChat]);
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
@@ -974,6 +1010,7 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       canViewAdministration,
       inbox,
+      apps: appsEnabled,
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
@@ -992,7 +1029,28 @@ export function useWorkspaceChatModel({
         }
       },
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
-      selectWorkspaceView: routeState.selectWorkspaceView
+      selectWorkspaceView: (nextView) => {
+        // The Apps of the open workspace: the row has no address without one.
+        if (nextView === "apps" && activeCollaborationWorkspaceId) {
+          routeState.showRoute({
+            kind: "apps",
+            collaborationWorkspaceId: activeCollaborationWorkspaceId
+          });
+          return;
+        }
+        routeState.selectWorkspaceView(nextView);
+      }
+    },
+    apps: {
+      enabled: appsEnabled,
+      rights: appRights,
+      startChat: (prompt) => {
+        draftController.setDraft(
+          { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
+          prompt
+        );
+        startNewConversation();
+      }
     },
     selectedChat: {
       client,

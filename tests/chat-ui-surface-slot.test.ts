@@ -13,8 +13,8 @@ const rendered: Record<Surface["kind"], boolean> = {
   tool_display: true,
   file_preview: true,
   page: true,
-  app_view: false,
-  app_edit: false,
+  app_view: true,
+  app_edit: true,
   workflow_canvas: false,
   inbox_item: true
 };
@@ -44,8 +44,6 @@ const toolDisplay: Surface = {
 function bareSurface(kind: string): Surface | undefined {
   const base = { key: `${kind}:1`, title: "Brutto-Netto-Rechner" };
   switch (kind) {
-    case "app_view":
-    case "app_edit":
     case "workflow_canvas":
       return { kind, ...base };
     default:
@@ -54,13 +52,13 @@ function bareSurface(kind: string): Surface | undefined {
 }
 
 describe("surface slot frame", () => {
-  it("declares seven kinds and renders four of them", () => {
+  it("declares seven kinds and renders six of them", () => {
     expect(Object.keys(rendered)).toHaveLength(7);
     expect(
       Object.entries(rendered)
         .filter(([, hasRenderer]) => hasRenderer)
         .map(([kind]) => kind)
-    ).toEqual(["tool_display", "file_preview", "page", "inbox_item"]);
+    ).toEqual(["tool_display", "file_preview", "page", "app_view", "app_edit", "inbox_item"]);
   });
 
   it("renders a tool display and a file preview with their own actions", () => {
@@ -131,7 +129,7 @@ describe("surface slot frame", () => {
     });
   });
 
-  it.each(["app_view", "app_edit", "workflow_canvas"])(
+  it.each(["workflow_canvas"])(
     "shows the frame with a sentence for %s, which has no renderer",
     (kind) => {
       const surface = bareSurface(kind);

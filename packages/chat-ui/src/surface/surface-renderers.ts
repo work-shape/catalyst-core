@@ -1,4 +1,5 @@
 import { createElement, type ReactNode } from "react";
+import { AppPreview } from "../apps/app-preview";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
 import { pageSurfaceRendering } from "../pages/page-surface";
 import type { Surface, SurfaceKind, SurfaceOf } from "./surface";
@@ -25,7 +26,28 @@ export const surfaceRenderers: SurfaceRenderers = {
   tool_display: renderPrepared,
   file_preview: renderPrepared,
   inbox_item: (surface) => ({ content: createElement(InboxItemPanel, { itemId: surface.itemId }) }),
-  page: pageSurfaceRendering
+  page: pageSurfaceRendering,
+  // An App fills the frame like a Page. The address stays the area's that shows the slot, so
+  // the App's own moves are not written into it.
+  app_view: (surface) => ({
+    content: createElement(AppPreview, {
+      key: surface.key,
+      app: surface.app,
+      mode: "published",
+      name: surface.title,
+      appPath: surface.appPath
+    }),
+    flush: true
+  }),
+  app_edit: (surface) => ({
+    content: createElement(AppPreview, {
+      key: surface.key,
+      app: surface.app,
+      mode: "draft",
+      name: surface.title
+    }),
+    flush: true
+  })
 };
 
 /** The rendering of a surface, or nothing when its kind has no renderer. */

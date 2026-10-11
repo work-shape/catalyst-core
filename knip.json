@@ -21,6 +21,7 @@
         "src/index.tsx",
         "src/{shell,admin}.tsx",
         "src/vite.js",
+        "src/apps/index.ts",
         "src/pages/index.ts",
         "*.config.{ts,js,mjs}"
       ],

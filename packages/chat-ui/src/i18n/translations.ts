@@ -2,6 +2,7 @@ import { access } from "./access";
 import { administration } from "./administration";
 import { apiAccess } from "./api-access";
 import { approvals } from "./approvals";
+import { apps } from "./apps";
 import { assistant } from "./assistant";
 import { build } from "./build";
 import { collaborationWorkspace } from "./collaboration-workspace";
@@ -29,6 +30,7 @@ export const translations = combineTranslations(common)
   .and(administration)
   .and(apiAccess)
   .and(approvals)
+  .and(apps)
   .and(assistant)
   .and(build)
   .and(collaborationWorkspace)

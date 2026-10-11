@@ -10,6 +10,8 @@ import { CollaborationWorkspacePanel } from "./collaboration-workspace/collabora
 import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider, useTranslation } from "./i18n";
+import { AppsArea, isAppsRoute } from "./apps/apps-area";
+import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
 import { PageHostProvider } from "./pages/page-host";
@@ -135,6 +137,9 @@ function ChatWorkspaceContent({
   const displayPanel = useToolDisplayPanel();
   // The slot reports its placement a render late; a surface that has closed covers nothing at once.
   const inboxRoute = model.route.view === "inbox" ? model.route.route : undefined;
+  // With the module off the model leads an Apps address to the chat; nothing shows meanwhile.
+  const appsRoute =
+    model.apps.enabled && isAppsRoute(model.route.route) ? model.route.route : undefined;
   const chatCovered =
     surfaceCovering && (inboxRoute ? inboxRoute.kind === "inbox-item" : displayPanel.open);
   const resourcesVisible = resourcesPanel.open && !displayPanel.open;
@@ -274,6 +279,22 @@ function ChatWorkspaceContent({
     model.chrome.requestComposerFocus();
   };
 
+  const pageHost = {
+    viewer: { kind: "member" as const, id: model.auth.user.id, displayName: userLabel },
+    workspace: activeWorkspace ? { id: activeWorkspace.id, name: activeWorkspace.name } : null,
+    theme: model.config.theme ?? DEFAULT_THEME_INPUTS[themeMode],
+    mode: themeMode
+  };
+  const appsHost: AppsHost = {
+    enabled: model.apps.enabled,
+    rights: model.apps.rights,
+    workspace: activeWorkspace
+      ? { id: activeWorkspace.id, name: activeWorkspace.name, emoji: activeWorkspace.emoji }
+      : undefined,
+    showRoute: model.route.showRoute,
+    startChat: model.apps.startChat
+  };
+
   const workspace = (
     <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
       <UiRoot
@@ -315,6 +336,7 @@ function ChatWorkspaceContent({
             canViewAdministration={rail.canViewAdministration}
             canViewBuild={model.controlPlane.canViewBuild}
             inbox={rail.inbox}
+            apps={rail.apps}
             view={rail.view}
             deletingConversation={rail.deletingConversation}
             canMoveConversation={rail.canMoveConversation}
@@ -346,10 +368,11 @@ function ChatWorkspaceContent({
               surfaceBesideWidth={surfaceBesideWidth}
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
-              // Only a conversation has an agent to choose: not the Inbox, Build or Settings.
+              // Only a conversation has an agent to choose: not the Inbox, Apps, Build or Settings.
               showAgentSelector={
                 !onStartPage &&
                 !inboxRoute &&
+                !appsRoute &&
                 !model.controlPlane.build &&
                 !model.controlPlane.settings
               }
@@ -377,85 +400,87 @@ function ChatWorkspaceContent({
             ) : null}
 
             <ApprovalRevisionHostProvider value={model.approvalRevision}>
-              <ControlPlaneRoutes
-                controlPlane={model.controlPlane}
-                inboxArea={
-                  inboxRoute ? (
-                    <InboxArea
-                      itemId={inboxRoute.kind === "inbox-item" ? inboxRoute.itemId : undefined}
-                      onOpenItem={(itemId) => model.route.showRoute({ kind: "inbox-item", itemId })}
-                      onCloseItem={() => model.route.showRoute({ kind: "inbox" })}
-                      onBesideWidthChange={setSurfaceBesideWidth}
-                      onCoveringChange={setSurfaceCovering}
-                    />
-                  ) : undefined
-                }
-              >
-                <section className="relative h-full min-h-0 min-w-0">
-                  <AttachmentContentProvider
-                    client={chat.client}
-                    selectedConversationId={chat.selectedConversationId}
-                  >
-                    <PageHostProvider
-                      conversationId={chat.selectedConversationId}
-                      viewer={{ kind: "member", id: model.auth.user.id, displayName: userLabel }}
-                      workspace={
-                        activeWorkspace
-                          ? { id: activeWorkspace.id, name: activeWorkspace.name }
-                          : null
-                      }
-                      theme={model.config.theme ?? DEFAULT_THEME_INPUTS[themeMode]}
-                      mode={themeMode}
+              <AppsHostProvider value={appsHost}>
+                <ControlPlaneRoutes
+                  controlPlane={model.controlPlane}
+                  appsArea={
+                    appsRoute ? (
+                      // An App is told who looks at it and how the interface looks, as a Page is.
+                      <PageHostProvider conversationId={undefined} {...pageHost}>
+                        <AppsArea route={appsRoute} />
+                      </PageHostProvider>
+                    ) : undefined
+                  }
+                  inboxArea={
+                    inboxRoute ? (
+                      <InboxArea
+                        itemId={inboxRoute.kind === "inbox-item" ? inboxRoute.itemId : undefined}
+                        onOpenItem={(itemId) =>
+                          model.route.showRoute({ kind: "inbox-item", itemId })
+                        }
+                        onCloseItem={() => model.route.showRoute({ kind: "inbox" })}
+                        onBesideWidthChange={setSurfaceBesideWidth}
+                        onCoveringChange={setSurfaceCovering}
+                      />
+                    ) : undefined
+                  }
+                >
+                  <section className="relative h-full min-h-0 min-w-0">
+                    <AttachmentContentProvider
+                      client={chat.client}
+                      selectedConversationId={chat.selectedConversationId}
                     >
-                      <div className="flex h-full min-h-0 min-w-0">
-                        <div
-                          className={cn(
-                            "relative h-full min-h-0 min-w-0 flex-1",
-                            // 23.5rem = panel width (22rem) + its right-6 offset, so the
-                            // thread centers with equal gaps to sidebar and panel edge
-                            resourcesVisible && "lg:[--resources-inset:23.5rem]"
-                          )}
-                          // Under a surface that covers it the chat leaves the tab order.
-                          inert={chatCovered}
-                          onDragEnter={chat.fileDropzone.onChatDragEnter}
-                          onDragOver={chat.fileDropzone.onChatDragOver}
-                          onDragLeave={chat.fileDropzone.onChatDragLeave}
-                          onDrop={chat.fileDropzone.onChatDrop}
-                        >
-                          <AssistantRuntimePanel chat={chat} />
-                          {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                          {resourcesAvailable &&
-                          resourcesConversationId &&
-                          resourcesPanel.hasResources ? (
-                            resourcesVisible ? (
-                              <ResourcesPanel
-                                client={resourcesPanel.client}
-                                conversationId={resourcesConversationId}
-                                error={resourcesPanel.error}
-                                loading={resourcesPanel.loading}
-                                onClose={resourcesPanel.close}
-                                open
-                                resources={resourcesPanel.resources}
-                              />
-                            ) : (
-                              <ResourcesPanelToggle
-                                onOpen={() => {
-                                  displayPanel.close();
-                                  resourcesPanel.openExplicitly();
-                                }}
-                              />
-                            )
-                          ) : null}
+                      <PageHostProvider conversationId={chat.selectedConversationId} {...pageHost}>
+                        <div className="flex h-full min-h-0 min-w-0">
+                          <div
+                            className={cn(
+                              "relative h-full min-h-0 min-w-0 flex-1",
+                              // 23.5rem = panel width (22rem) + its right-6 offset, so the
+                              // thread centers with equal gaps to sidebar and panel edge
+                              resourcesVisible && "lg:[--resources-inset:23.5rem]"
+                            )}
+                            // Under a surface that covers it the chat leaves the tab order.
+                            inert={chatCovered}
+                            onDragEnter={chat.fileDropzone.onChatDragEnter}
+                            onDragOver={chat.fileDropzone.onChatDragOver}
+                            onDragLeave={chat.fileDropzone.onChatDragLeave}
+                            onDrop={chat.fileDropzone.onChatDrop}
+                          >
+                            <AssistantRuntimePanel chat={chat} />
+                            {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+                            {resourcesAvailable &&
+                            resourcesConversationId &&
+                            resourcesPanel.hasResources ? (
+                              resourcesVisible ? (
+                                <ResourcesPanel
+                                  client={resourcesPanel.client}
+                                  conversationId={resourcesConversationId}
+                                  error={resourcesPanel.error}
+                                  loading={resourcesPanel.loading}
+                                  onClose={resourcesPanel.close}
+                                  open
+                                  resources={resourcesPanel.resources}
+                                />
+                              ) : (
+                                <ResourcesPanelToggle
+                                  onOpen={() => {
+                                    displayPanel.close();
+                                    resourcesPanel.openExplicitly();
+                                  }}
+                                />
+                              )
+                            ) : null}
+                          </div>
+                          <SurfaceSlot
+                            onBesideWidthChange={setSurfaceBesideWidth}
+                            onCoveringChange={setSurfaceCovering}
+                          />
                         </div>
-                        <SurfaceSlot
-                          onBesideWidthChange={setSurfaceBesideWidth}
-                          onCoveringChange={setSurfaceCovering}
-                        />
-                      </div>
-                    </PageHostProvider>
-                  </AttachmentContentProvider>
-                </section>
-              </ControlPlaneRoutes>
+                      </PageHostProvider>
+                    </AttachmentContentProvider>
+                  </section>
+                </ControlPlaneRoutes>
+              </AppsHostProvider>
             </ApprovalRevisionHostProvider>
           </div>
         </div>

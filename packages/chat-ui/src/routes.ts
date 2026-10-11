@@ -1,5 +1,7 @@
+import { appInterfacePath, type AppMode } from "@vivd-catalyst/api-client";
+
 /** The areas of the interface: what a route shows. */
-export type WorkspaceRouteView = "chat" | "settings" | "inbox" | "build" | "ui-library";
+export type WorkspaceRouteView = "chat" | "apps" | "settings" | "inbox" | "build" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -11,6 +13,15 @@ export type WorkspaceRoute =
   | { kind: "legacy-conversation"; conversationId: string }
   | { kind: "new-conversation"; collaborationWorkspaceId: string }
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
+  /** The Apps of one workspace. */
+  | { kind: "apps"; collaborationWorkspaceId: string }
+  /**
+   * One App as its users are served it. `appPath` is the App's own route after the App's
+   * address, starting with a slash; without it the App opens where it starts.
+   */
+  | { kind: "app"; collaborationWorkspaceId: string; app: string; appPath?: string }
+  /** The draft of one App, for whoever may write it. */
+  | { kind: "app-edit"; collaborationWorkspaceId: string; app: string }
   /** One page of the Settings area. The Settings catalog knows the groups and the pages. */
   | { kind: "settings"; group: string; page: string }
   /**
@@ -31,7 +42,8 @@ export type WorkspaceRoute =
   /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
   | { kind: "ui-library" };
 
-/** One address of an area: a path pattern, with `$name` for a segment that is read. */
+/** One address of an area: a path pattern, with `$name` for a segment that is read. A last
+ * segment `$` alone reads everything after it, as the router's `_splat`. */
 interface AreaRoutePath {
   path: string;
   /** The route the address resolves to. Its fields are the path's parameters, by name. */
@@ -44,6 +56,19 @@ interface AreaRoutePath {
 interface AreaRoute {
   area: WorkspaceRouteView;
   paths: readonly AreaRoutePath[];
+}
+
+/** The name the router gives what a last `$` segment read. */
+const SPLAT = "_splat";
+
+/**
+ * The address of one App as a pattern. It is built by the function the server answers
+ * `interfacePath` with, so a link of the server and a route of the interface never disagree.
+ */
+function appPattern(mode: AppMode): string {
+  return decodeURIComponent(
+    appInterfacePath({ workspaceId: "$collaborationWorkspaceId", app: "$app", mode })
+  );
 }
 
 /**
@@ -66,6 +91,16 @@ export const areaRoutes: readonly AreaRoute[] = [
         redirectTo: "/w/$collaborationWorkspaceId"
       },
       { path: "/conversations", redirectTo: "/" }
+    ]
+  },
+  {
+    area: "apps",
+    paths: [
+      { path: "/w/$collaborationWorkspaceId/apps", route: "apps" },
+      // The draft's address stands before the App's own routes: `edit` is never one of those.
+      { path: appPattern("draft"), route: "app-edit" },
+      { path: appPattern("published"), route: "app" },
+      { path: `${appPattern("published")}/$`, route: "app" }
     ]
   },
   {
@@ -140,8 +175,22 @@ export function workspaceRouteNavigation(route: WorkspaceRoute): {
   to: string;
   params?: Record<string, string>;
 } {
-  const to = areaRoutePaths().find((candidate) => candidate.route === route.kind)?.path ?? "/";
-  const { kind: _kind, ...params } = route;
+  const splat = route.kind === "app" ? appSplat(route.appPath) : undefined;
+  const to =
+    areaRoutePaths().find(
+      (candidate) =>
+        candidate.route === route.kind && candidate.path.endsWith("/$") === (splat !== undefined)
+    )?.path ?? "/";
+  const { kind: _kind, ...fields } = route;
+  const params: Record<string, string> = {};
+  for (const [name, value] of Object.entries(fields)) {
+    if (name !== "appPath" && typeof value === "string") {
+      params[name] = value;
+    }
+  }
+  if (splat !== undefined) {
+    params[SPLAT] = splat;
+  }
   return Object.keys(params).length > 0 ? { to, params } : { to };
 }
 
@@ -155,8 +204,23 @@ export function workspaceRoutePath(route: WorkspaceRoute): string {
 function pathWith(pattern: string, params: Record<string, string>): string {
   return pattern
     .split("/")
-    .map((part) => (part.startsWith("$") ? encodeURIComponent(params[part.slice(1)] ?? "") : part))
+    .map((part) =>
+      part === "$"
+        ? (params[SPLAT] ?? "").split("/").map(encodeURIComponent).join("/")
+        : part.startsWith("$")
+          ? encodeURIComponent(params[part.slice(1)] ?? "")
+          : part
+    )
     .join("/");
+}
+
+/**
+ * The App's own route as the address carries it: without its first slash. Nothing for the
+ * route an App starts on, and nothing for `/edit`, which the address of the draft has taken.
+ */
+function appSplat(appPath: string | undefined): string | undefined {
+  const splat = appPath?.replace(/^\/+/u, "") ?? "";
+  return splat === "" || splat === "edit" ? undefined : splat;
 }
 
 function routeOf(
@@ -182,7 +246,21 @@ function routeOf(
         ? { kind, assetKind: params.assetKind, name: params.name }
         : undefined;
     case "new-conversation":
+    case "apps":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
+    case "app-edit":
+      return collaborationWorkspaceId && params.app
+        ? { kind, collaborationWorkspaceId, app: params.app }
+        : undefined;
+    case "app":
+      return collaborationWorkspaceId && params.app
+        ? {
+            kind,
+            collaborationWorkspaceId,
+            app: params.app,
+            ...(params[SPLAT] ? { appPath: `/${params[SPLAT]}` } : {})
+          }
+        : undefined;
     case "conversation":
       return collaborationWorkspaceId && conversationId
         ? { kind, collaborationWorkspaceId, conversationId }
@@ -197,7 +275,8 @@ function matchPath(
   pattern: readonly string[],
   segments: readonly string[]
 ): Record<string, string> | undefined {
-  if (pattern.length !== segments.length) {
+  const splat = pattern.at(-1) === "$";
+  if (splat ? segments.length < pattern.length : pattern.length !== segments.length) {
     return undefined;
   }
   const params: Record<string, string> = {};
@@ -206,7 +285,9 @@ function matchPath(
     if (!segment) {
       return undefined;
     }
-    if (part.startsWith("$")) {
+    if (part === "$") {
+      params[SPLAT] = segments.slice(index).map(decodePathSegment).join("/");
+    } else if (part.startsWith("$")) {
       params[part.slice(1)] = decodePathSegment(segment);
     } else if (part !== segment) {
       return undefined;

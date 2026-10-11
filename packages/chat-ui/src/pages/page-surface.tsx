@@ -18,6 +18,7 @@ import {
   SegmentedControlItem
 } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
+import { SaveAsAppAction } from "../apps/save-as-app-dialog";
 import { useTranslation } from "../i18n";
 import type { PageBuildError, SurfaceOf } from "../surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
@@ -102,7 +103,16 @@ export function pageSurfaceRendering(surface: SurfaceOf<"page">): {
   flush: true;
 } {
   return {
-    actions: <PageSurfaceActions pageId={surface.pageId} />,
+    actions: (
+      <>
+        <SaveAsAppAction
+          conversationId={surface.conversationId}
+          pageId={surface.pageId}
+          pageName={surface.title}
+        />
+        <PageSurfaceActions pageId={surface.pageId} />
+      </>
+    ),
     content: (
       <PageSurface
         // Another revision is another frame and another list of files.
@@ -175,7 +185,7 @@ function PageSurface({
       preview={
         state === "ready" && address ? (
           <LivePagePreview
-            name={name}
+            title={t("pages.previewOf", { name })}
             pageId={pageId}
             number={address.number}
             session={address.pageSessionId}
@@ -340,36 +350,55 @@ export function BuildErrorList({
   );
 }
 
-function LivePagePreview({
-  name,
+/** Where a mounted frame starts and where it tells its moves, when that is not the Page's own memory. */
+export interface PreviewRoute {
+  /** The route the frame opens on, asked each time its document loads. */
+  current(): string;
+  /** The document moved to this route. */
+  changed(path: string): void;
+}
+
+/**
+ * One built revision in its frame, with the interface's end of the bridge: the frame is told
+ * who looks at it and how the interface looks, and it tells where it moved. A Page keeps its
+ * route while the window lives; an App hands `route` and keeps it in the address.
+ */
+export function LivePagePreview({
+  title,
   pageId,
   number,
   session,
-  url
+  url,
+  route
 }: {
-  name: string;
+  /** Names the frame for someone who does not see it. */
+  title: string;
+  /** What the document is told it is: the id of the Page or of the App. */
   pageId: string;
   number: number;
   session: string;
   url: string;
+  route?: PreviewRoute;
 }) {
-  const { locale, t } = useTranslation();
+  const { locale } = useTranslation();
   const host = usePageHost();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const bridgeRef = useRef<PageBridge | undefined>(undefined);
+  const routeRef = useRef(route);
   const context: AppBridgeContext | undefined = host
     ? {
         ...host,
         locale,
         pageId,
         fileSetNumber: number,
-        initialRoute: pageRoutes.get(pageId) ?? "/"
+        initialRoute: route?.current() ?? pageRoutes.get(pageId) ?? "/"
       }
     : undefined;
   // The Page asks when it has loaded, which is later than this render: it gets what holds then.
   const contextRef = useRef(context);
   useEffect(() => {
     contextRef.current = context;
+    routeRef.current = route;
   });
   const hosted = host !== undefined;
 
@@ -385,10 +414,17 @@ function LivePagePreview({
         if (!current) {
           throw new Error("A Page is shown inside a workspace");
         }
-        return { ...current, initialRoute: pageRoutes.get(pageId) ?? "/" };
+        return {
+          ...current,
+          initialRoute: routeRef.current?.current() ?? pageRoutes.get(pageId) ?? "/"
+        };
       },
       onNavigate: (path) => {
-        pageRoutes.set(pageId, path);
+        if (routeRef.current) {
+          routeRef.current.changed(path);
+        } else {
+          pageRoutes.set(pageId, path);
+        }
       },
       // The frame fills the surface, whatever height the Page's content has.
       onResize: () => undefined
@@ -411,11 +447,6 @@ function LivePagePreview({
   }, [mode, theme]);
 
   return (
-    <PreviewPane
-      frameRef={frameRef}
-      source={{ kind: "bundle", url }}
-      state="ready"
-      title={t("pages.previewOf", { name })}
-    />
+    <PreviewPane frameRef={frameRef} source={{ kind: "bundle", url }} state="ready" title={title} />
   );
 }

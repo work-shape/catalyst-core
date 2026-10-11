@@ -100,7 +100,7 @@ describe("workspace rail without a Chat row", () => {
   const inbox = { toDecide: 0 };
 
   it("has no Chat row: New chat is the one entry for a chat", () => {
-    expect(railSections.map((section) => section.id)).toEqual(["inbox"]);
+    expect(railSections.map((section) => section.id)).toEqual(["apps", "inbox"]);
 
     for (const markup of [renderRail(), renderRail([], { inbox })]) {
       expect(markup).not.toContain(">Chat<");
@@ -110,7 +110,7 @@ describe("workspace rail without a Chat row", () => {
   });
 
   it("shows a section that stands alone, and every registered one in its order", () => {
-    const [inboxSection] = railSections;
+    const inboxSection = railSections.find((section) => section.id === "inbox");
     if (!inboxSection) {
       throw new Error("The rail has no Inbox section.");
     }
@@ -130,7 +130,7 @@ describe("workspace rail without a Chat row", () => {
   // Fails with the sections in a group of their own: a group's space then stood between New
   // chat and the Inbox, in the open rail and not in the strip.
   it("keeps New chat and the sections in one group, with or without a section and in the strip", () => {
-    const [inboxSection] = railSections;
+    const inboxSection = railSections.find((section) => section.id === "inbox");
     if (!inboxSection) {
       throw new Error("The rail has no Inbox section.");
     }

@@ -32,8 +32,13 @@ interface SurfaceSources {
     fileSetId: string;
     buildErrors?: readonly PageBuildError[];
   };
-  app_view: unknown;
-  app_edit: unknown;
+  /**
+   * The published revision of an App. `title` is the name people read. `appPath` is the App's
+   * own route to open on; without it the App opens where it starts.
+   */
+  app_view: { app: string; appPath?: string };
+  /** The draft revision of an App, for whoever may write it. */
+  app_edit: { app: string };
   workflow_canvas: unknown;
   /** One item of the Inbox, by its id. The renderer reads the item's live state itself. */
   inbox_item: { itemId: string };
