@@ -5,6 +5,18 @@ import type { TranslationKey } from "../i18n";
 export type OperationRunStatus = OperationRunResource["status"];
 export type OperationRunOrigin = OperationRunResource["origin"];
 export type OperationRunOriginKind = OperationRunOrigin["kind"];
+export type OperationRunEffect = OperationRunResource["effect"];
+
+/** The effects in the order the filter offers them: what somebody did before what was read. */
+export const operationRunEffects = [
+  "changing",
+  "reading"
+] as const satisfies readonly OperationRunEffect[];
+
+export const operationEffectFilterLabelKeys: Record<OperationRunEffect, TranslationKey> = {
+  changing: "operations.effectChangingCalls",
+  reading: "operations.effectReadingCalls"
+};
 
 /** The statuses in the order a run passes through them, for the filter. */
 export const operationRunStatuses = [
@@ -73,31 +85,43 @@ export const operationDecisionLabelKeys: Record<
 export interface OperationRunFilter {
   /** The exact name of an operation, as typed. */
   operation: string;
+  /** Nothing means calls of both effects. */
+  effect: OperationRunEffect | undefined;
   status: OperationRunStatus | undefined;
   origin: OperationRunOriginKind | undefined;
   workspaceId: string | undefined;
 }
 
-export const emptyOperationRunFilter: OperationRunFilter = {
+/**
+ * The filter the page opens with: the changing calls. A read is recorded only when it was
+ * refused, when it failed, or when its operation records every call, so the list of what
+ * somebody did is the changing one.
+ */
+export const defaultOperationRunFilter: OperationRunFilter = {
   operation: "",
+  effect: "changing",
   status: undefined,
   origin: undefined,
   workspaceId: undefined
 };
 
-export function isOperationRunFilterEmpty(filter: OperationRunFilter): boolean {
+export function isOperationRunFilterDefault(filter: OperationRunFilter): boolean {
   return operationRunQuery(filter).operation === undefined && !hasChoice(filter);
 }
 
 function hasChoice(filter: OperationRunFilter): boolean {
   return (
-    filter.status !== undefined || filter.origin !== undefined || filter.workspaceId !== undefined
+    filter.effect !== defaultOperationRunFilter.effect ||
+    filter.status !== undefined ||
+    filter.origin !== undefined ||
+    filter.workspaceId !== undefined
   );
 }
 
 /** What the list asks the server: a filter that is not set is left out. */
 export function operationRunQuery(filter: OperationRunFilter): {
   operation?: string;
+  effect?: OperationRunEffect;
   status?: OperationRunStatus;
   origin?: OperationRunOriginKind;
   workspaceId?: string;
@@ -105,10 +129,16 @@ export function operationRunQuery(filter: OperationRunFilter): {
   const operation = filter.operation.trim();
   return {
     ...(operation ? { operation } : {}),
+    ...(filter.effect ? { effect: filter.effect } : {}),
     ...(filter.status ? { status: filter.status } : {}),
     ...(filter.origin ? { origin: filter.origin } : {}),
     ...(filter.workspaceId ? { workspaceId: filter.workspaceId } : {})
   };
+}
+
+/** The value of a select as an effect, or nothing for the entry that means both. */
+export function operationRunEffectOf(value: string): OperationRunEffect | undefined {
+  return operationRunEffects.find((effect) => effect === value);
 }
 
 /** The value of a select as a status, or nothing for the entry that means every status. */

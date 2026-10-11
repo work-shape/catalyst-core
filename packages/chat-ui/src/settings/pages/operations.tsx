@@ -13,8 +13,8 @@ import {
 import { useCollaborationWorkspacesQuery } from "../../api/workspace-queries";
 import { useTranslation } from "../../i18n";
 import {
-  emptyOperationRunFilter,
-  isOperationRunFilterEmpty,
+  defaultOperationRunFilter,
+  isOperationRunFilterDefault,
   operationRunQuery,
   type OperationRunFilter
 } from "../../operations/operations-model";
@@ -45,7 +45,7 @@ function useOperationRunsApi() {
 export function OperationsPage() {
   const { t } = useTranslation();
   const { apiBaseUrl, authScope, client, scope } = useOperationRunsApi();
-  const [filter, setFilter] = useState<OperationRunFilter>(emptyOperationRunFilter);
+  const [filter, setFilter] = useState<OperationRunFilter>(defaultOperationRunFilter);
   // The name is asked for once typing rests; the selects apply at once.
   const appliedOperation = useRested(filter.operation, OPERATION_NAME_FILTER_DELAY_MS);
   const applied: OperationRunFilter = { ...filter, operation: appliedOperation };
@@ -86,15 +86,17 @@ export function OperationsPage() {
               layout="inline"
               data-operation-runs-empty
               action={
-                isOperationRunFilterEmpty(applied) ? undefined : (
-                  <Button variant="outline" onClick={() => setFilter(emptyOperationRunFilter)}>
+                isOperationRunFilterDefault(applied) ? undefined : (
+                  <Button variant="outline" onClick={() => setFilter(defaultOperationRunFilter)}>
                     {t("operations.clearFilters")}
                   </Button>
                 )
               }
             >
               {t(
-                isOperationRunFilterEmpty(applied) ? "operations.empty" : "operations.emptyFiltered"
+                isOperationRunFilterDefault(applied)
+                  ? "operations.empty"
+                  : "operations.emptyFiltered"
               )}
             </EmptyState>
           ) : (

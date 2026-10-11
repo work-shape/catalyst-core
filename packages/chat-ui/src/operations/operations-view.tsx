@@ -21,11 +21,15 @@ import {
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import {
+  defaultOperationRunFilter,
   formatOperationRunDuration,
-  isOperationRunFilterEmpty,
+  isOperationRunFilterDefault,
   operationDecisionLabelKeys,
+  operationEffectFilterLabelKeys,
   operationOriginLabelKeys,
   operationRunAgentName,
+  operationRunEffectOf,
+  operationRunEffects,
   operationRunOriginFields,
   operationRunOriginKindOf,
   operationRunOriginKinds,
@@ -73,6 +77,22 @@ export function OperationRunFilters({
       }
       filters={
         <>
+          <Select
+            className="w-full font-medium sm:w-44"
+            aria-label={t("operations.filterEffect")}
+            data-operation-run-effect-filter
+            value={filter.effect ?? ""}
+            onChange={(event) =>
+              onChange({ ...filter, effect: operationRunEffectOf(event.target.value) })
+            }
+          >
+            {operationRunEffects.map((effect) => (
+              <option key={effect} value={effect}>
+                {t(operationEffectFilterLabelKeys[effect])}
+              </option>
+            ))}
+            <option value="">{t("operations.allEffects")}</option>
+          </Select>
           <Select
             className="w-full font-medium sm:w-52"
             aria-label={t("operations.filterStatus")}
@@ -123,19 +143,8 @@ export function OperationRunFilters({
         </>
       }
       actions={
-        isOperationRunFilterEmpty(filter) ? undefined : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              onChange({
-                operation: "",
-                status: undefined,
-                origin: undefined,
-                workspaceId: undefined
-              })
-            }
-          >
+        isOperationRunFilterDefault(filter) ? undefined : (
+          <Button variant="ghost" size="sm" onClick={() => onChange(defaultOperationRunFilter)}>
             {t("operations.clearFilters")}
           </Button>
         )

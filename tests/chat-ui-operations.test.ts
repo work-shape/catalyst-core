@@ -2,9 +2,9 @@ import { createElement, type ReactNode } from "react";
 import type { OperationRunResource } from "@vivd-catalyst/api-client";
 import { administration } from "@vivd-catalyst/chat-ui/admin";
 import {
-  emptyOperationRunFilter,
+  defaultOperationRunFilter,
   formatOperationRunDuration,
-  isOperationRunFilterEmpty,
+  isOperationRunFilterDefault,
   OperationRunDetail,
   OperationRunFilters,
   operationRunOriginFields,
@@ -63,22 +63,33 @@ const detail = (
 
 describe("operation runs model", () => {
   it("asks the server only for the filters that are set, with the name trimmed", () => {
-    expect(operationRunQuery(emptyOperationRunFilter)).toEqual({});
-    expect(isOperationRunFilterEmpty({ ...emptyOperationRunFilter, operation: "  " })).toBe(true);
+    // The page opens on the changing calls. Fails without the change: it asked for every call.
+    expect(operationRunQuery(defaultOperationRunFilter)).toEqual({ effect: "changing" });
+    expect(operationRunQuery({ ...defaultOperationRunFilter, effect: undefined })).toEqual({});
+    expect(isOperationRunFilterDefault({ ...defaultOperationRunFilter, operation: "  " })).toBe(
+      true
+    );
+    for (const effect of ["reading", undefined] as const) {
+      expect(isOperationRunFilterDefault({ ...defaultOperationRunFilter, effect })).toBe(false);
+    }
     const filter = {
       operation: " assets.put ",
+      effect: "reading",
       status: "failed",
       origin: "cli",
       workspaceId: "cw_team"
     } as const;
     expect(operationRunQuery(filter)).toEqual({
       operation: "assets.put",
+      effect: "reading",
       status: "failed",
       origin: "cli",
       workspaceId: "cw_team"
     });
-    expect(isOperationRunFilterEmpty(filter)).toBe(false);
-    expect(isOperationRunFilterEmpty({ ...emptyOperationRunFilter, origin: "mcp" })).toBe(false);
+    expect(isOperationRunFilterDefault(filter)).toBe(false);
+    expect(isOperationRunFilterDefault({ ...defaultOperationRunFilter, origin: "mcp" })).toBe(
+      false
+    );
   });
 
   it("says how long a run took and nothing for one that has not ended", () => {
@@ -194,7 +205,7 @@ describe("operation runs list", () => {
   });
 
   it("offers the workspace filter only to a viewer who has workspaces", () => {
-    const filters = (of: typeof workspaces, filter = emptyOperationRunFilter, locale?: "de") =>
+    const filters = (of: typeof workspaces, filter = defaultOperationRunFilter, locale?: "de") =>
       render(
         createElement(OperationRunFilters, { filter, workspaces: of, onChange: () => undefined }),
         locale
@@ -203,16 +214,27 @@ describe("operation runs list", () => {
     const markup = filters(workspaces);
     expect(markup).toContain('aria-label="Operation, exact name"');
     expect(markup).toContain('aria-label="Filter by status"');
+    // The effect filter opens on the changing calls and offers the reads and every call.
+    expect(markup).toMatch(
+      /aria-label="Filter by effect"[^>]*>.*<option value="changing" selected="">Changing calls<\/option><option value="reading">Reading calls<\/option><option value="">All calls<\/option>/u
+    );
+    expect(filters(workspaces, { ...defaultOperationRunFilter, effect: undefined })).toContain(
+      ">Clear filters</button>"
+    );
     expect(markup).toContain('aria-label="Filter by origin"');
     expect(markup).toContain('aria-label="Filter by workspace"');
     expect(markup).toContain(">Produktteam</option>");
     expect(markup).not.toContain("Clear filters");
     expect(filters([])).not.toContain("Filter by workspace");
-    expect(filters(workspaces, { ...emptyOperationRunFilter, status: "failed" })).toContain(
+    expect(filters(workspaces, { ...defaultOperationRunFilter, status: "failed" })).toContain(
       ">Clear filters</button>"
     );
-    const german = filters(workspaces, { ...emptyOperationRunFilter, origin: "cli" }, "de");
+    const german = filters(workspaces, { ...defaultOperationRunFilter, origin: "cli" }, "de");
     expect(german).toContain('aria-label="Nach Herkunft filtern"');
+    expect(german).toContain('aria-label="Nach Wirkung filtern"');
+    expect(german).toContain(">Ändernde Aufrufe</option>");
+    expect(german).toContain(">Lesende Aufrufe</option>");
+    expect(german).toContain(">Alle Aufrufe</option>");
     expect(german).toContain(">Filter zurücksetzen</button>");
   });
 });

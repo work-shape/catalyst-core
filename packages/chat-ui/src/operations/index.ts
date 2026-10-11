@@ -1,7 +1,7 @@
 export {
-  emptyOperationRunFilter,
+  defaultOperationRunFilter,
   formatOperationRunDuration,
-  isOperationRunFilterEmpty,
+  isOperationRunFilterDefault,
   operationRunOriginFields,
   operationRunQuery,
   operationRunWorkspaceLabel
