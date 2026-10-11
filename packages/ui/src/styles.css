@@ -162,6 +162,17 @@
   --duration-color: 150ms;
   --duration-open: 200ms;
   --duration-close: 180ms;
+
+  /* A loading layout stays unseen this long, then fades in. An answer that comes sooner shows
+     no loading state at all: a stand-in that is replaced at once reads as a flicker. */
+  --duration-loading-delay: 180ms;
+  --animate-loading-appear: loading-appear var(--duration-color) var(--duration-loading-delay) both;
+
+  @keyframes loading-appear {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 @media (width < 48rem) {

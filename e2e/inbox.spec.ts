@@ -486,6 +486,95 @@ async function shoot(page: Page, name: string, ready: () => Promise<void>): Prom
   await ready();
 }
 
+/** A list answer the reader does not wait for: sooner than the library's loading layout appears. */
+const INBOX_FAST_ANSWER_MS = 60;
+/** A list answer long enough to notice. */
+const INBOX_SLOW_ANSWER_MS = 700;
+/** How long a tab is watched after the click: longer than the slow answer. */
+const INBOX_WATCH_MS = 1_100;
+
+test("a tab opened for the first time flashes no loading layout for a fast answer and shows it for a slow one", async ({
+  page
+}) => {
+  await signIn(page, reviewer);
+  let answerAfterMs = INBOX_FAST_ANSWER_MS;
+  await page.route(
+    (url) =>
+      url.origin === new URL(apiBaseUrl).origin &&
+      /^\/api\/v1\/approval-requests(?:\/mine)?$/u.test(url.pathname),
+    async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, answerAfterMs));
+      await route.continue();
+    }
+  );
+  const inbox = page.getByRole("region", { name: "Inbox", exact: true });
+  const openInbox = async () => {
+    await page.goto("/inbox");
+    await expect(inbox.getByRole("tab")).toHaveCount(3);
+    await expect(inbox.getByRole("tabpanel").getByRole("status")).toHaveCount(0);
+  };
+  // What each frame after the click shows: a loading layout the reader can see, and the
+  // sentence of an empty list.
+  const watch = () =>
+    page.evaluate(
+      (watchMs) =>
+        new Promise<{ frames: number; loadingFrames: number; emptyTexts: string[] }>((resolve) => {
+          const seen = { frames: 0, loadingFrames: 0, emptyTexts: new Set<string>() };
+          const started = performance.now();
+          const frame = () => {
+            const area = document.querySelector('[data-testid="inbox-area"]');
+            const loading = area?.querySelector('[role="tabpanel"] [role="status"]');
+            seen.frames += 1;
+            if (loading && Number.parseFloat(getComputedStyle(loading).opacity) > 0) {
+              seen.loadingFrames += 1;
+            }
+            const empty = area?.querySelector('[data-testid="inbox-empty"]')?.textContent;
+            if (empty) {
+              seen.emptyTexts.add(empty);
+            }
+            if (performance.now() - started < watchMs) {
+              requestAnimationFrame(frame);
+            } else {
+              resolve({ ...seen, emptyTexts: [...seen.emptyTexts] });
+            }
+          };
+          requestAnimationFrame(frame);
+        }),
+      INBOX_WATCH_MS
+    );
+  const emptyTextNow = async () =>
+    (await inbox.getByTestId("inbox-empty").count()) > 0
+      ? [await inbox.getByTestId("inbox-empty").innerText()]
+      : [];
+
+  // A fast answer: the list is there before a loading layout would show, so none does, and
+  // the sentence of another tab's empty list never stands in.
+  await openInbox();
+  for (const name of ["My requests", "Decided"]) {
+    const before = await emptyTextNow();
+    const frames = watch();
+    await inbox.getByRole("tab", { name, exact: true }).click();
+    const seen = await frames;
+    await expect(inbox.getByRole("tab", { name, exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(seen.frames).toBeGreaterThan(10);
+    expect(seen.loadingFrames).toBe(0);
+    // Only the sentence that stood before the click and the one this tab ends with.
+    const allowed = [...before, ...(await emptyTextNow())];
+    expect(seen.emptyTexts.filter((text) => !allowed.includes(text))).toEqual([]);
+  }
+
+  // A slow answer: the library's loading layout shows while the reader waits.
+  answerAfterMs = INBOX_SLOW_ANSWER_MS;
+  await openInbox();
+  const frames = watch();
+  await inbox.getByRole("tab", { name: "My requests", exact: true }).click();
+  expect((await frames).loadingFrames).toBeGreaterThan(0);
+  await expect(inbox.getByRole("tabpanel").getByRole("status")).toHaveCount(0);
+});
+
 async function signIn(page: Page, user: { email: string; password: string }): Promise<void> {
   const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: { email: user.email, password: user.password, rememberMe: true }

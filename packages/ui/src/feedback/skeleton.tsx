@@ -81,14 +81,25 @@ export function SkeletonPage({ sections = 2, ...props }: SkeletonPageProps) {
   );
 }
 
-/** Tells assistive technology once that content is loading; the shapes inside stay silent. */
+/**
+ * Tells assistive technology once that content is loading; the shapes inside stay silent.
+ *
+ * The layout holds its room from the start and shows itself after `--duration-loading-delay`,
+ * so content that arrives sooner replaces nothing the reader saw.
+ */
 function LoadingLayout({
   children,
+  className,
   ...props
 }: HTMLAttributes<HTMLDivElement> & { children: ReactNode }) {
   const labels = useUiLabels("Skeleton");
   return (
-    <div role="status" aria-busy="true" {...props}>
+    <div
+      role="status"
+      aria-busy="true"
+      className={cn("animate-loading-appear", className)}
+      {...props}
+    >
       <span className="sr-only">{labels.loading}</span>
       {children}
     </div>
