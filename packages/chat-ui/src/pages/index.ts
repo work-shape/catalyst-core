@@ -8,11 +8,13 @@ export {
   type ArrivedMessage
 } from "./bridge-host";
 export {
+  PAGE_ADDRESS_LIFETIME_MS,
   PAGE_ADDRESS_RENEWAL_MARGIN_MS,
-  PAGE_ADDRESS_RENEWAL_MIN_WAIT_MS,
+  PAGE_ADDRESS_RETRY_MAX_MS,
+  PAGE_ADDRESS_RETRY_MS,
+  heldPageAddress,
   keepPageAddress,
-  pageAddressRemaining,
-  pageAddressRenewalDelay,
+  pageAddressRetryDelay,
   pageAddressToShow,
   pageIsGone,
   type PageAddressState
