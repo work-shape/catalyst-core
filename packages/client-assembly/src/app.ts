@@ -391,6 +391,7 @@ export async function createClientInstanceExecutionAssembly(
     auditRecorder,
     modelGateway,
     assetSource,
+    configAssets,
     approvalRequestHandlers,
     operations: input.operations
   });

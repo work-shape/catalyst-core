@@ -4,6 +4,7 @@ import {
   auditActorFromUser,
   hasAuthScope,
   type ActorAccess,
+  type ApprovalPreviewViewer,
   type ApprovalRequest,
   type ApprovalRequestContext,
   type ApprovalRequestCreator,
@@ -102,7 +103,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     requestId: string
   ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, requestId);
-    return this.view(user, access, context, request);
+    return this.view(user, { access, inList: false }, context, request);
   }
 
   async listRequests(
@@ -123,7 +124,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       excludeStatus: scope === "decided" ? "pending" : undefined,
       updatedSince: scope === "decided" ? new Date(Date.now() - DECIDED_LIST_WINDOW_MS) : undefined
     });
-    return Promise.all(requests.map((request) => this.view(user, access, context, request)));
+    // One viewer for the page: what a kind reads for one row it does not read for the next.
+    const viewer: ApprovalPreviewViewer = { access, inList: true };
+    return Promise.all(requests.map((request) => this.view(user, viewer, context, request)));
   }
 
   /**
@@ -143,7 +146,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       requestedById: user.id,
       ...filter
     });
-    return Promise.all(requests.map((request) => this.view(user, access, context, request)));
+    // One viewer for the page: what a kind reads for one row it does not read for the next.
+    const viewer: ApprovalPreviewViewer = { access, inList: true };
+    return Promise.all(requests.map((request) => this.view(user, viewer, context, request)));
   }
 
   async pendingCount(
@@ -344,18 +349,19 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 
   private async view(
     user: AuthenticatedUser,
-    access: ActorAccess,
+    viewer: ApprovalPreviewViewer,
     context: CallContext,
     request: ApprovalRequest
   ): Promise<ApprovalRequestView> {
+    const { access } = viewer;
     const handler = this.handler(request.kind);
     const canDecideWithToken = hasAuthScope(user, APPROVAL_DECIDE_AUTH_SCOPE);
     return {
       ...request,
-      preview: await handler.preview(
-        handler.validate(request.payload),
-        this.handlerContext(request, context)
-      ),
+      preview: await handler.preview(handler.validate(request.payload), {
+        ...this.handlerContext(request, context),
+        viewer
+      }),
       // A flag is true only if the route would also accept the caller's token scopes.
       canRevert:
         request.status === "approved" &&

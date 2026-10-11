@@ -37,6 +37,8 @@ export interface InstanceOperationCallsInput {
   modelGateway: ModelGateway;
   /** Where an agent's definition is read, for the tools it lists. */
   assetSource: ConfigAssetSource;
+  /** The asset kinds of the instance: a held save of an asset is shown as that asset. */
+  configAssets: Pick<ChatServerOptions["configAssets"], "kinds">;
   /** The approval kinds the assembly brings. The kind of a held call is added to them. */
   approvalRequestHandlers: ApprovalRequestHandlerRegistry;
   operations?: ChatServerOptions["operations"];
@@ -71,6 +73,7 @@ export function createInstanceOperationCalls(
     config,
     logger: input.logger,
     modules: input.modules,
+    configAssets: input.configAssets,
     operations: input.operations,
     approvalRequests: {
       store: store.approvals,

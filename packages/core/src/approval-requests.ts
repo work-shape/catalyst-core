@@ -8,7 +8,7 @@ import type { StorePage } from "./paging";
 import type { ClientInstanceId, ConversationId } from "./ids";
 import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";
 import type { JsonObject } from "./json";
-import type { Permission, PlatformAction } from "./permissions";
+import type { ActorAccess, Permission, PlatformAction } from "./permissions";
 import type { JobsStore } from "./jobs";
 import type { OperationRunStore } from "./operation-runs";
 
@@ -22,6 +22,17 @@ export * from "./approval-request";
 export interface ApprovalTransactionStores {
   jobs: JobsStore;
   operationRuns: OperationRunStore;
+}
+
+/**
+ * Who a preview is rendered for. The workflow makes one for each of its calls, so every row of
+ * a list is given the same one and a kind can keep for the next row what it read for the first.
+ */
+export interface ApprovalPreviewViewer {
+  /** What the person who reads the request may do. A kind asks it before it shows more. */
+  access: ActorAccess;
+  /** The request is one row of a list. A kind then reads nothing that a row does not show. */
+  inList: boolean;
 }
 
 export interface ApprovalRequestContext {
@@ -38,6 +49,8 @@ export interface ApprovalRequestContext {
    * connection while the request is locked.
    */
   transaction?: ApprovalTransactionStores;
+  /** Given to `preview` alone. */
+  viewer?: ApprovalPreviewViewer;
 }
 
 /** What a kind says about a request that can no longer apply. */

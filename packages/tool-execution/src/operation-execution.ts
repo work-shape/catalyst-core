@@ -40,6 +40,7 @@ import {
   type PlatformEventName,
   type PlatformEventOutcome,
   type PolicyDefaults,
+  type PolicySource,
   type PolicyInput,
   type PolicyResolution,
   type ToolExecutionResult
@@ -67,6 +68,8 @@ export interface OperationApprovalRequests {
     /** What the live call has. An agent's call carries the hold of its run here. */
     runtime: OperationCallRuntime;
     expiresAt: string;
+    /** Where the value came from that makes the call wait. */
+    policySource: PolicySource;
   }): Promise<{ approvalRequestId: string } | undefined>;
 }
 

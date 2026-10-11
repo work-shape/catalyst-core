@@ -414,7 +414,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       call,
       resource: context.resource,
       runtime: context.runtime,
-      expiresAt
+      expiresAt,
+      policySource: policy.source
     });
     if (!filed) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };

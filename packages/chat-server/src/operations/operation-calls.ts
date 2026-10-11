@@ -8,6 +8,7 @@ import {
   ApprovalRequestWorkflow,
   type ApprovalRequestWorkflowOptions
 } from "../approval-request-workflow";
+import { createHeldAssetPreviewer } from "../held-asset-preview";
 import {
   createOperationApprovalFiler,
   createOperationCallApprovalHandler
@@ -29,6 +30,11 @@ export type OperationCallsOptions = Pick<
   /** Without it this process holds no call for an approval and refuses one that needs it. */
   approvalRequests?: ChatServerOptions["approvalRequests"] &
     Pick<ApprovalRequestWorkflowOptions, "checkRunner">;
+  /**
+   * The asset kinds of the instance. With them a held `assets.put` is shown as the asset it
+   * saves; without them it is shown as any other call.
+   */
+  configAssets?: Pick<ResolvedChatServerOptions["configAssets"], "kinds">;
   /** The tools an agent's definition lists. Without it this process serves no agent. */
   agentToolNames?: RunOperationDeps["agentToolNames"];
 };
@@ -40,7 +46,18 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
   const handler = createOperationCallApprovalHandler({
     clientInstanceId,
     deps: () => deps,
-    users: options.stores.users
+    users: options.stores.users,
+    ...(options.configAssets
+      ? {
+          assetPreview: createHeldAssetPreviewer({
+            clientInstanceId,
+            store: options.stores.configAssets,
+            kinds: options.configAssets.kinds,
+            namespaces: options.stores.access,
+            modules: options.modules
+          })
+        }
+      : {})
   });
   const approvalRequestHandlers = new Map([
     ...(options.approvalRequests?.handlers ?? []),

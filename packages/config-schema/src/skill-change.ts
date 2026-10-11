@@ -244,6 +244,91 @@ function evaluate(
   return { skill: validated.data, preview };
 }
 
+/**
+ * What saving `next` over `current` changes, in the shape of a skill change preview: for a new
+ * skill its whole text, otherwise the paragraphs that differ, before and after. Each text has
+ * one entry at most, from its first paragraph that differs to its last, so paragraphs that
+ * stayed the same between two changes are shown with them. A removal carries the paragraph
+ * before it, or the one after it, so no entry has an empty new text.
+ *
+ * The preview carries no change of the title or the description and no removed resource: a
+ * caller that shows it says those itself.
+ */
+export function createSkillRevisionPreview(
+  current: SkillConfig | undefined,
+  next: SkillConfig
+): SkillChangePreview {
+  const preview: SkillChangePreview = {
+    skillName: next.name,
+    skillTitle: next.title,
+    isNewSkill: current === undefined,
+    changes: []
+  };
+  if (!current) {
+    preview.newSkill = {
+      name: next.name,
+      title: next.title,
+      description: next.description,
+      content: next.content
+    };
+  } else {
+    const root = changedParagraphs(current.content, next.content);
+    if (root) preview.changes.push({ target: "root", ...root });
+  }
+  for (const resource of next.resources ?? []) {
+    const before = current?.resources?.find((candidate) => candidate.path === resource.path);
+    if (!before) {
+      preview.changes.push({
+        type: "new_resource",
+        target: resource.path,
+        after: resource.content
+      });
+      continue;
+    }
+    const changed = changedParagraphs(before.content, resource.content);
+    if (changed) preview.changes.push({ target: resource.path, ...changed });
+  }
+  return preview;
+}
+
+/** The paragraphs of two texts between the first and the last that differ. */
+function changedParagraphs(
+  before: string,
+  after: string
+): { type: "replace"; before: string; after: string } | { type: "add"; after: string } | undefined {
+  if (before === after) return undefined;
+  const paragraphs = (text: string) =>
+    text
+      .split(/\r?\n[\t ]*\r?\n/u)
+      .map((paragraph) => paragraph.replace(/\s+$/u, ""))
+      .filter((paragraph) => paragraph.trim() !== "");
+  const old = paragraphs(before);
+  const now = paragraphs(after);
+  let head = 0;
+  while (head < old.length && head < now.length && old[head] === now[head]) head += 1;
+  let tail = 0;
+  while (
+    tail < old.length - head &&
+    tail < now.length - head &&
+    old[old.length - 1 - tail] === now[now.length - 1 - tail]
+  ) {
+    tail += 1;
+  }
+  // Only blank lines or trailing spaces differ: both texts are shown whole.
+  if (head === old.length && head === now.length) {
+    return { type: "replace", before, after };
+  }
+  if (now.length - tail - head === 0) {
+    // A removal has no new text of its own, so it is shown with a paragraph that stays.
+    if (head > 0) head -= 1;
+    else if (tail > 0) tail -= 1;
+  }
+  const join = (list: string[]) => list.slice(head, list.length - tail).join("\n\n");
+  return old.length - tail - head === 0
+    ? { type: "add", after: join(now) }
+    : { type: "replace", before: join(old), after: join(now) };
+}
+
 function fail(message: string): never {
   throw new AppError("VALIDATION_FAILED", message);
 }

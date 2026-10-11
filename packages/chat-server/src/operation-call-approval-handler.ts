@@ -34,6 +34,7 @@ import {
   type RunOperationDeps,
   type WaitingOperationCall
 } from "@vivd-catalyst/tool-execution";
+import { HELD_ASSET_OPERATION, type HeldAssetPreviewer } from "./held-asset-preview";
 import { executeApprovedOperationCallJob } from "./job-kinds";
 
 /**
@@ -96,6 +97,13 @@ const payloadSchema = z.object({
     toolName: z.string().optional()
   }),
   workspaceId: z.string().optional(),
+  /**
+   * Where the value came from that made the call wait: a setting or a default of the instance,
+   * or a guardrail. A request that was filed before this was kept names nothing.
+   */
+  heldBy: z
+    .enum(["instance_default", "declared_default", "central_setting", "guardrail"])
+    .optional(),
   expiresAt: z.string()
 });
 
@@ -106,6 +114,8 @@ export interface OperationCallApprovalOptions {
   /** The call path the frozen call is executed on. Read when a request is decided. */
   deps(): RunOperationDeps;
   users: Pick<UserStore, "getUser">;
+  /** Describes the asset a held `assets.put` saves. Without it such a call is shown as any other. */
+  assetPreview?: HeldAssetPreviewer;
 }
 
 /**
@@ -132,8 +142,17 @@ export function createOperationCallApprovalHandler(
     validate(payload) {
       return toJsonObject(parsePayload(payload));
     },
-    preview(payload) {
-      return Promise.resolve(toJsonObject(previewOf(parsePayload(payload))));
+    async preview(payload, context) {
+      const call = parsePayload(payload);
+      // Only while the call waits: afterwards its input is gone, and the stored asset may
+      // already be what the call saved.
+      const asset =
+        context.status === "pending" &&
+        !call.inputRemoved &&
+        call.operation === HELD_ASSET_OPERATION
+          ? await options.assetPreview?.(unknownToJsonValue(call.input), context.viewer)
+          : undefined;
+      return toJsonObject({ ...previewOf(call), ...(asset ? { asset } : {}) });
     },
     async isStale(payload, context) {
       const { runId } = parsePayload(payload);
@@ -533,8 +552,10 @@ function toJsonObject(value: unknown): JsonObject {
 
 /**
  * What a person who decides is shown: the call, who made it and its input, field by field.
- * Nothing is left out without a count: `inputFieldCount` is how many fields the call has, and
- * a row that was cut says how long its value is. The request itself carries the whole input.
+ * A text is a row as it is written, and every other value is a row of indented JSON, so no
+ * row is one escaped line. Nothing is left out without a count: `inputFieldCount` is how many
+ * rows the call has, and a row that was cut says how long its value is. The request itself
+ * carries the whole input.
  */
 function previewOf(payload: OperationCallPayload) {
   const fields = payload.inputRemoved ? [] : inputFields(unknownToJsonValue(payload.input));
@@ -545,8 +566,9 @@ function previewOf(payload: OperationCallPayload) {
     actor: { kind: "user", id: payload.actor.id, label: payload.actor.label },
     origin: payload.origin,
     ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),
+    ...(payload.heldBy ? { heldBy: payload.heldBy } : {}),
     inputs: fields.slice(0, HELD_OPERATION_PREVIEW_MAX_FIELDS).map(([key, value]) => {
-      const text = typeof value === "string" ? value : JSON.stringify(value);
+      const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
       return text.length > HELD_OPERATION_PREVIEW_VALUE_MAX_CHARS
         ? {
             key,
@@ -562,12 +584,20 @@ function previewOf(payload: OperationCallPayload) {
   };
 }
 
+/**
+ * The rows of an input. A field that holds an object is one row for each of its own fields,
+ * named `field.inner`: a long text inside it, such as the instructions of a definition, is
+ * then a row of its own and is cut on its own.
+ */
 function inputFields(input: JsonValue): [string, JsonValue][] {
-  return isJsonObject(input)
-    ? Object.entries(input).flatMap(([key, value]): [string, JsonValue][] =>
-        value === undefined ? [] : [[key, value]]
-      )
-    : [["input", input]];
+  if (!isJsonObject(input)) return [["input", input]];
+  const rows = (fields: JsonObject, prefix: string): [string, JsonValue][] =>
+    Object.entries(fields).flatMap(([key, value]): [string, JsonValue][] =>
+      value === undefined ? [] : [[`${prefix}${key}`, value]]
+    );
+  return rows(input, "").flatMap(([key, value]) =>
+    isJsonObject(value) && Object.keys(value).length > 0 ? rows(value, `${key}.`) : [[key, value]]
+  );
 }
 
 export interface OperationApprovalFilerOptions {
@@ -584,7 +614,7 @@ export function createOperationApprovalFiler(
   options: OperationApprovalFilerOptions
 ): OperationApprovalRequests {
   return {
-    async request({ run, call, runtime, expiresAt }) {
+    async request({ run, call, runtime, expiresAt, policySource }) {
       const { actor, origin } = call;
       if (isAuthenticatedServicePrincipal(actor)) {
         return undefined;
@@ -630,6 +660,7 @@ export function createOperationApprovalFiler(
             : {})
         },
         ...(call.workspaceId ? { workspaceId: call.workspaceId } : {}),
+        ...(policySource === "surface_cannot_pause" ? {} : { heldBy: policySource }),
         expiresAt
       };
       const request = await createWithinLimits(() =>
