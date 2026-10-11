@@ -139,6 +139,7 @@ export const recordedStates = {
     lastTestedAt: TESTED_AT,
     lastErrorCode: "connection_unavailable"
   },
+  failedUnnamed: { health: "failed", lastTestedAt: TESTED_AT, lastErrorCode: "upstream_error" },
   notConfigured: { health: "needs_configuration", secret: { state: "not_set" } },
   secretUnreadable: { health: "secret_unreadable", secret: { state: "unreadable" } }
 } satisfies Record<string, Partial<ConnectionDetail>>;

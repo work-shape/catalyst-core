@@ -136,7 +136,11 @@ describe("Connection page", () => {
     expect(markup).toContain(">Connection<");
     expect(markup).toContain('title="sample-business"');
     expect(markup).toContain(">Instance<");
-    expect(markup).toContain(">Defined in release config<");
+    expect(markup).toContain(
+      "Connections come from the release config and cannot be changed here."
+    );
+    // Where it comes from is a sentence at the top of the page and no chip.
+    expect(markup).not.toContain("Defined in release config");
     expect(markup).toContain("Enabled");
     expect(markup).toContain('aria-label="Back to Connections"');
     // Nothing on the page writes: no field, no History, no menu, no save. The one select is the
@@ -144,7 +148,12 @@ describe("Connection page", () => {
     for (const control of ["<input", "<textarea", ">History<", "More actions", "Save"]) {
       expect(markup, control).not.toContain(control);
     }
-    expect(renderPage({ locale: "de" })).toContain(">In Release-Konfiguration definiert<");
+    expect(renderPage({ locale: "de" })).toContain(
+      "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern."
+    );
+    expect(renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) })).not.toContain(
+      "data-build-read-only"
+    );
     // A Connection of a workspace says so, and one that is off says that nothing can call it.
     const other = renderPage({
       asset: {
@@ -235,6 +244,52 @@ describe("Connection page", () => {
       expect(en, state).toContain(english);
       expect(renderPage({ detail: recordedStates[state], locale: "de" }), state).toContain(german);
     }
+    // Each failure names the next step, and none promises a screen: the operator acts.
+    const steps: [keyof typeof recordedStates, string, string][] = [
+      [
+        "unauthorized",
+        "The operator sets a new credential in the instance's environment and restarts the instance. Then test again.",
+        "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Testen Sie danach erneut."
+      ],
+      [
+        "networkDenied",
+        "The operator adds the host to egress.allow in the release config and restarts the instance. Then test again.",
+        "Der Betreiber trägt den Host in der Release-Konfiguration unter egress.allow ein und startet die Instanz neu. Testen Sie danach erneut."
+      ],
+      [
+        "unavailable",
+        "Check the address under Settings. It is changed in the release config.",
+        "Prüfen Sie die Adresse unter Einstellungen. Sie wird in der Release-Konfiguration geändert."
+      ],
+      [
+        "notConfigured",
+        "The operator supplies the credential in the instance's environment and restarts the instance.",
+        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu."
+      ],
+      [
+        "secretUnreadable",
+        "The operator supplies the credential again in the instance's environment, or the Secret Store key it was stored with, and restarts the instance.",
+        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit oder den Secret-Store-Schlüssel, mit dem sie gespeichert wurden, und startet die Instanz neu."
+      ]
+    ];
+    for (const [state, english, german] of steps) {
+      // The markup writes an apostrophe as its entity.
+      expect(renderPage({ detail: recordedStates[state] }), state).toContain(
+        english.replaceAll("'", "&#x27;")
+      );
+      expect(renderPage({ detail: recordedStates[state], locale: "de" }), state).toContain(german);
+    }
+    // A reason the page does not know has its own sentence and borrows no other state's.
+    const unnamed = renderPage({ detail: recordedStates.failedUnnamed });
+    expect(healthOf(unnamed)).toBe("failed");
+    expect(unnamed).toContain("The test failed for a reason the instance does not name.");
+    expect(unnamed).not.toContain("The outside system did not answer the test.");
+    expect(renderPage({ detail: recordedStates.failedUnnamed, locale: "de" })).toContain(
+      "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt."
+    );
+    expect(healthOf(renderPage({ detail: { health: "failed", lastTestedAt: undefined } }))).toBe(
+      "failed"
+    );
     // A tested Connection says when; one never tested names no time.
     expect(renderPage({ detail: recordedStates.ready })).toContain("Last tested ");
     expect(renderPage()).not.toContain("Last tested ");
@@ -306,6 +361,11 @@ describe("Connection page", () => {
   it("names the shared account where the Connection has one", () => {
     const shared = renderPage();
     expect(shared).toContain("One shared account");
+    // The notice is always there for such a Connection: it is no warning.
+    const notice = shared.slice(
+      shared.lastIndexOf("<div", shared.indexOf("data-connection-shared"))
+    );
+    expect(notice).toContain('data-tone="info"');
     expect(shared).toContain(
       "Everyone who may use the connection sees what that account sees, whatever their own rights there are."
     );

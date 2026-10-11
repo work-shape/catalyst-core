@@ -6,6 +6,19 @@ export const connections = defineTranslations({
       "Connections come from the release config and cannot be changed here.",
     "connections.disabled": "Disabled",
     "connections.empty": "No connections yet. A connection holds the access to an outside system.",
+    "connections.healthFailed": "Failed",
+    "connections.healthFailedText": "The test failed for a reason the instance does not name.",
+    "connections.healthNetworkDeniedNext":
+      "The operator adds the host to egress.allow in the release config and restarts the instance. Then test again.",
+    "connections.healthNotConfiguredNext":
+      "The operator supplies the credential in the instance's environment and restarts the instance.",
+    "connections.healthSecretUnreadableNext":
+      "The operator supplies the credential again in the instance's environment, or the Secret Store key it was stored with, and restarts the instance.",
+    "connections.healthUnauthorizedNext":
+      "The operator sets a new credential in the instance's environment and restarts the instance. Then test again.",
+    "connections.healthUnavailableNext":
+      "Check the address under Settings. It is changed in the release config.",
+    "connections.statusDescription": "Whether the instance reaches the outside system.",
     "connections.agentsTitle": "Used by",
     "connections.agentsDescription": "The agents that carry a tool of this connection.",
     "connections.agentsEmpty": "No agent carries a tool of this connection.",
@@ -20,9 +33,6 @@ export const connections = defineTranslations({
     "connections.credentialSet": "Set",
     "connections.credentialSetVersion": "Set, version {version}",
     "connections.credentialUnreadable": "Unreadable",
-    "connections.definedInRelease": "Defined in release config",
-    "connections.definedInReleaseDescription":
-      "This connection is defined in release config. It is changed there, not on this page.",
     "connections.descriptionLabel": "Description",
     "connections.detailFailed": "The status of this connection could not be read.",
     "connections.disabledNotice": "This connection is disabled. Nothing can call it.",
@@ -96,6 +106,20 @@ export const connections = defineTranslations({
   de: {
     "connections.description":
       "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.",
+    "connections.healthFailed": "Fehlgeschlagen",
+    "connections.healthFailedText":
+      "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt.",
+    "connections.healthNetworkDeniedNext":
+      "Der Betreiber trägt den Host in der Release-Konfiguration unter egress.allow ein und startet die Instanz neu. Testen Sie danach erneut.",
+    "connections.healthNotConfiguredNext":
+      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu.",
+    "connections.healthSecretUnreadableNext":
+      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit oder den Secret-Store-Schlüssel, mit dem sie gespeichert wurden, und startet die Instanz neu.",
+    "connections.healthUnauthorizedNext":
+      "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Testen Sie danach erneut.",
+    "connections.healthUnavailableNext":
+      "Prüfen Sie die Adresse unter Einstellungen. Sie wird in der Release-Konfiguration geändert.",
+    "connections.statusDescription": "Ob die Instanz das externe System erreicht.",
     "connections.agentsTitle": "Verwendet von",
     "connections.agentsDescription": "Die Agenten, die ein Tool dieser Verbindung führen.",
     "connections.agentsEmpty": "Kein Agent führt ein Tool dieser Verbindung.",
@@ -110,9 +134,6 @@ export const connections = defineTranslations({
     "connections.credentialSet": "Gesetzt",
     "connections.credentialSetVersion": "Gesetzt, Version {version}",
     "connections.credentialUnreadable": "Nicht lesbar",
-    "connections.definedInRelease": "In Release-Konfiguration definiert",
-    "connections.definedInReleaseDescription":
-      "Diese Verbindung ist in der Release-Konfiguration definiert. Sie wird dort geändert, nicht auf dieser Seite.",
     "connections.descriptionLabel": "Beschreibung",
     "connections.detailFailed": "Der Status dieser Verbindung konnte nicht gelesen werden.",
     "connections.disabled": "Deaktiviert",

@@ -205,7 +205,11 @@ test("a Connection's page shows its definition, its state in every case and the 
         .click();
       await expect(page).toHaveURL(new RegExp(`${address}$`, "u"));
       await expect(heading).toBeVisible();
-      await expect(main.getByText("Defined in release config", { exact: true })).toBeVisible();
+      await expect(
+        main.getByText("Connections come from the release config and cannot be changed here.", {
+          exact: true
+        })
+      ).toBeVisible();
       await expect(main.getByText("Instance", { exact: true })).toBeVisible();
       await expect(main.getByText(connection.name, { exact: true })).toBeVisible();
       await expect(main.getByText("https://sample-business.example.test/mcp")).toBeVisible();
@@ -265,6 +269,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       await open(plantedTest(connection.name, "unauthorized", recordedStates.unauthorized));
       await testButton.click();
       await expect(health).toContainText("The outside system refused the credential.");
+      await expect(health).toContainText("The operator sets a new credential");
       await open(plantedTest(connection.name, "unavailable", recordedStates.unavailable));
       await testButton.click();
       await expect(health).toContainText("The outside system did not answer the test.");
@@ -287,7 +292,10 @@ test("a Connection's page shows its definition, its state in every case and the 
         { locale: "de" }
       );
       await expect(
-        main.getByText("In Release-Konfiguration definiert", { exact: true })
+        main.getByText(
+          "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.",
+          { exact: true }
+        )
       ).toBeVisible();
       await expect(health).toContainText("Diese Verbindung wurde noch nicht getestet.");
       await testButton.click();
@@ -359,6 +367,7 @@ test("a Connection's page shows its definition, its state in every case and the 
         ["unauthorized", recordedStates.unauthorized],
         ["network-denied", recordedStates.networkDenied],
         ["unavailable", recordedStates.unavailable],
+        ["failed-unnamed", recordedStates.failedUnnamed],
         ["not-configured", recordedStates.notConfigured],
         ["secret-unreadable", recordedStates.secretUnreadable]
       ] as const) {

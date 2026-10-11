@@ -41,13 +41,14 @@ type HealthView =
   | "unauthorized"
   | "network_denied"
   | "unavailable"
+  | "failed"
   | "not_configured"
   | "secret_unreadable"
   | "never_tested";
 
 const HEALTH_VIEWS: Record<
   HealthView,
-  { tone: BadgeTone; label: TranslationKey; text: TranslationKey }
+  { tone: BadgeTone; label: TranslationKey; text: TranslationKey; next?: TranslationKey }
 > = {
   testing: {
     tone: "info",
@@ -58,27 +59,37 @@ const HEALTH_VIEWS: Record<
   unauthorized: {
     tone: "danger",
     label: "connections.healthUnauthorized",
-    text: "connections.healthUnauthorizedText"
+    text: "connections.healthUnauthorizedText",
+    next: "connections.healthUnauthorizedNext"
   },
   network_denied: {
     tone: "danger",
     label: "connections.healthNetworkDenied",
-    text: "connections.healthNetworkDeniedText"
+    text: "connections.healthNetworkDeniedText",
+    next: "connections.healthNetworkDeniedNext"
   },
   unavailable: {
     tone: "danger",
     label: "connections.healthUnavailable",
-    text: "connections.healthUnavailableText"
+    text: "connections.healthUnavailableText",
+    next: "connections.healthUnavailableNext"
+  },
+  failed: {
+    tone: "danger",
+    label: "connections.healthFailed",
+    text: "connections.healthFailedText"
   },
   not_configured: {
     tone: "warning",
     label: "connections.healthNotConfigured",
-    text: "connections.healthNotConfiguredText"
+    text: "connections.healthNotConfiguredText",
+    next: "connections.healthNotConfiguredNext"
   },
   secret_unreadable: {
     tone: "danger",
     label: "connections.healthSecretUnreadable",
-    text: "connections.healthSecretUnreadableText"
+    text: "connections.healthSecretUnreadableText",
+    next: "connections.healthSecretUnreadableNext"
   },
   never_tested: {
     tone: "neutral",
@@ -90,7 +101,9 @@ const HEALTH_VIEWS: Record<
 /** The reasons a failed test or call records, as far as the page tells them apart. */
 const RECORDED_FAILURES: Record<string, HealthView> = {
   upstream_unauthorized: "unauthorized",
-  egress_denied: "network_denied"
+  egress_denied: "network_denied",
+  connection_unavailable: "unavailable",
+  upstream_timeout: "unavailable"
 };
 
 const TEST_RESULTS: Record<ConnectionTestStatus, HealthView> = {
@@ -110,7 +123,7 @@ function recordedHealth(detail: ConnectionDetail): HealthView {
     case "ok":
       return "ready";
     case "failed":
-      return RECORDED_FAILURES[detail.lastErrorCode ?? ""] ?? "unavailable";
+      return RECORDED_FAILURES[detail.lastErrorCode ?? ""] ?? "failed";
     case "unknown":
       return "never_tested";
   }
@@ -185,7 +198,7 @@ function settingsOf(config: Record<string, unknown>): [string, unknown][] {
 
 /**
  * The page of one Connection. It shows and changes nothing: the header with whom the
- * Connection belongs to and that release config defines it, its status with the test, its
+ * Connection belongs to, that it comes from the release config, its status with the test, its
  * settings, its operations and the agents that carry them. Of the credential it shows whether
  * it is there. It reads the named members of the definition only, so a reference to the
  * credential in the revision is never on the page.
@@ -214,7 +227,7 @@ export function ConnectionPage({
     {
       id: "status",
       label: t("connections.statusTitle"),
-      description: t("connections.definedInReleaseDescription"),
+      description: t("connections.statusDescription"),
       body: (
         <>
           {enabled ? null : (
@@ -311,14 +324,9 @@ export function ConnectionPage({
             </Chip>
           }
           state={
-            <>
-              {config.origin === "release" ? (
-                <Chip lockLabel={t("build.readOnly")}>{t("connections.definedInRelease")}</Chip>
-              ) : null}
-              <Badge tone={enabled ? "success" : "neutral"} dot>
-                {t(enabled ? "connections.enabled" : "connections.disabled")}
-              </Badge>
-            </>
+            <Badge tone={enabled ? "success" : "neutral"} dot>
+              {t(enabled ? "connections.enabled" : "connections.disabled")}
+            </Badge>
           }
           description={
             <span className="flex min-w-0 items-center gap-2">
@@ -347,6 +355,11 @@ export function ConnectionPage({
       {page.above}
       {/* The first line of the content starts where the first item of the index does. */}
       <div className="grid min-w-0 content-start pt-5">
+        {config.origin === "release" ? (
+          <Banner layout="line" className="mb-4" data-build-read-only="">
+            {t("connections.description")}
+          </Banner>
+        ) : null}
         {sections.map((section) => (
           <Section
             key={section.id}
@@ -398,6 +411,7 @@ function ConnectionStatus({
             {t(health.label)}
           </Badge>
           <p className="text-body">{t(health.text)}</p>
+          {health.next ? <p className="text-body">{t(health.next)}</p> : null}
           {testedAt ? (
             <p className="text-caption text-muted-foreground">
               {t("connections.lastTested", { time: formatDateTime(testedAt, locale) })}
@@ -449,11 +463,7 @@ function ConnectionStatus({
         </KeyValue>
       </KeyValueList>
       {detail.sharedCredential ? (
-        <Banner
-          tone="warning"
-          title={t("connections.sharedAccountTitle")}
-          data-connection-shared=""
-        >
+        <Banner layout="line" title={t("connections.sharedAccountTitle")} data-connection-shared="">
           {t("connections.sharedAccountText")}
         </Banner>
       ) : null}
