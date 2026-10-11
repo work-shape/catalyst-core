@@ -42,6 +42,9 @@
 @layer components {
   .chat-markdown {
     @apply min-w-0 text-sm leading-6 text-inherit;
+    /* A long string without a break, such as a hash or an address, wraps instead of running
+       under what stands beside the conversation. */
+    overflow-wrap: anywhere;
   }
 
   .artifact-markdown {

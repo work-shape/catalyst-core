@@ -39,12 +39,14 @@ function renderHeader({
   agents = oneAgent,
   locale = "en",
   showAgentName = true,
-  showAgentSelector = true
+  showAgentSelector = true,
+  surfaceBesideWidth = 0
 }: {
   agents?: typeof severalAgents;
   locale?: "de" | "en";
   showAgentName?: boolean;
   showAgentSelector?: boolean;
+  surfaceBesideWidth?: number;
 } = {}) {
   return renderToStaticMarkup(
     createElement(
@@ -53,7 +55,7 @@ function renderHeader({
       createElement(WorkspaceChrome, {
         agentDisplay: display({ showAgentName }),
         agents,
-        surfaceBesideWidth: 0,
+        surfaceBesideWidth,
         covered: false,
         selectedAgentName: "catalyst_assistant",
         showAgentSelector,
@@ -130,6 +132,24 @@ describe("agent chip in the header", () => {
     expect(renderHeader({ agents: severalAgents, locale: "de" })).toContain(
       'aria-label="Agent auswählen: Catalyst Assistant"'
     );
+  });
+
+  // Fails without the band: the header beside a surface kept its fading gradient and no line,
+  // so thread text showed under the chip and the surface's header line ended at the seam.
+  it("stands on an opaque band with a line under it while a surface is beside the chat", () => {
+    const header = (markup: string) => /<header[^>]*>/u.exec(markup)?.[0] ?? "";
+    const beside = renderHeader({ surfaceBesideWidth: 520 });
+
+    expect(header(beside)).toContain("data-beside-surface");
+    expect(header(beside)).toContain("h-(--layout-header)");
+    expect(header(beside)).toContain("border-b");
+    expect(header(beside)).toContain("bg-background");
+    expect(beside).not.toContain("bg-gradient-to-b");
+
+    const alone = renderHeader();
+    expect(header(alone)).not.toContain("data-beside-surface");
+    expect(header(alone)).not.toContain("border-b");
+    expect(alone).toContain("bg-gradient-to-b");
   });
 
   it("stays empty while the start page shows the agent", () => {

@@ -205,19 +205,28 @@ export function WorkspaceChrome({
   onOpenSidebar: () => void;
 }) {
   const { t } = useTranslation();
+  const besideSurface = surfaceBesideWidth > 0;
 
   return (
     <header
-      className="pointer-events-none absolute top-0 left-0 z-40 flex h-(--layout-header) min-w-0 items-center gap-2 px-4"
+      data-beside-surface={besideSurface ? "" : undefined}
+      className={cn(
+        "pointer-events-none absolute top-0 left-0 z-40 flex h-(--layout-header) min-w-0 items-center gap-2 px-4",
+        // Beside a surface the header is a band like the surface's own: one line runs across
+        // the window, and the thread scrolls under the band, not under the controls.
+        besideSurface && "border-b bg-background"
+      )}
       style={{ right: surfaceBesideWidth }}
       inert={covered}
     >
-      {/* The chat scrolls all the way to the top, so the controls float over
-          it; this fade keeps them legible once messages pass underneath. */}
-      <div
-        className="pointer-events-none absolute inset-x-0 -top-px bottom-0 -z-10 bg-gradient-to-b from-background/25 via-background/3 to-transparent"
-        aria-hidden="true"
-      />
+      {/* Alone, the chat scrolls all the way to the top, so the controls float over it;
+          this fade keeps them legible once messages pass underneath. */}
+      {besideSurface ? null : (
+        <div
+          className="pointer-events-none absolute inset-x-0 -top-px bottom-0 -z-10 bg-gradient-to-b from-background/25 via-background/3 to-transparent"
+          aria-hidden="true"
+        />
+      )}
       <div className="pointer-events-auto flex min-w-0 items-center gap-2">
         <IconButton className="md:hidden" label={t("openSidebar")} onClick={onOpenSidebar}>
           <PanelLeft aria-hidden="true" />
