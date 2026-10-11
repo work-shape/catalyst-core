@@ -51,6 +51,9 @@ modules:
   # Needs the `files` store, Execution Workspaces and the workspace command worker below.
   apps:
     enabled: true
+  # Connections: outside systems an agent may call. The demo has one, `sample-business` below.
+  connections:
+    enabled: true
 # The file area per conversation and the commands an agent runs in it. The commands run in the
 # Docker sandbox, so the Compose files start a workspace command worker and build its runner image.
 executionWorkspaces:
@@ -182,6 +185,25 @@ usage:
       webSearch:
         - providerId: openai
           pricePerCall: 0.01
+# The key that encrypts the secrets of Connections in the database. `pnpm dev` generates it
+# into the gitignored `.env`; this file names the variable and never holds the key.
+secretStore:
+  keys:
+    - id: local
+      ref: DEMO_SECRET_STORE_KEY
+# Where Connections may connect. Everything that is not listed is refused. The sample server is
+# reached by its Compose service name over plain http, which is allowed for a private target
+# only. Its address must lie in one of the private ranges Docker gives a Compose network.
+egress:
+  allow:
+    - protocol: http
+      host: sample-mcp
+      port: 8787
+      network: private
+      cidrs:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
 runtime:
   maxSteps: 64
   repeatedToolCallLimit: 3

@@ -2,7 +2,11 @@ import { randomBytes } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const secrets = [{ name: "DEMO_SAMPLE_MCP_KEY", generate: () => randomBytes(32).toString("hex") }];
+const secrets = [
+  { name: "DEMO_SAMPLE_MCP_KEY", generate: () => randomBytes(32).toString("hex") },
+  // The Secret Store reads its key as 32 random bytes in base64.
+  { name: "DEMO_SECRET_STORE_KEY", generate: () => randomBytes(32).toString("base64") }
+];
 const path = process.argv[2] ?? fileURLToPath(new URL("../.env", import.meta.url));
 
 try {

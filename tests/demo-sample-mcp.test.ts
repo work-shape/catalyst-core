@@ -450,13 +450,20 @@ describe("demo sample MCP", () => {
     const first = run();
     expect(first.status).toBe(0);
     const initial = readFileSync(path, "utf8");
-    const generated = z
-      .string()
-      .regex(/^[0-9a-f]{64}$/u)
-      .parse(/^DEMO_SAMPLE_MCP_KEY=([^\n]+)\n$/u.exec(initial)?.[1]);
-    expect(first.stdout).toBe("Generated DEMO_SAMPLE_MCP_KEY in .env.\n");
+    const lines =
+      /^DEMO_SAMPLE_MCP_KEY=([0-9a-f]{64})\nDEMO_SECRET_STORE_KEY=([A-Za-z0-9+/]{43}=)\n$/u.exec(
+        initial
+      );
+    const mcpKey = z.string().parse(lines?.[1]);
+    const storeKey = z.string().parse(lines?.[2]);
+    // The Secret Store reads its key as 32 random bytes in base64.
+    expect(Buffer.from(storeKey, "base64")).toHaveLength(32);
+    expect(first.stdout).toBe(
+      "Generated DEMO_SAMPLE_MCP_KEY in .env.\nGenerated DEMO_SECRET_STORE_KEY in .env.\n"
+    );
     expect(first.stderr).toBe("");
-    expect(first.stdout + first.stderr).not.toContain(generated);
+    expect(first.stdout + first.stderr).not.toContain(mcpKey);
+    expect(first.stdout + first.stderr).not.toContain(storeKey);
     expect(statSync(path).mode & 0o777).toBe(0o600);
     const second = run();
     expect(second.status).toBe(0);
@@ -464,23 +471,32 @@ describe("demo sample MCP", () => {
     expect(readFileSync(path, "utf8")).toBe(initial);
     writeFileSync(
       path,
-      "# Other lines\r\nOTHER=leave-this\r\nDEMO_SAMPLE_MCP_KEY=\r\nTAIL=keep-this",
+      `# Other lines\r\nOTHER=leave-this\r\nDEMO_SAMPLE_MCP_KEY=\r\nDEMO_SECRET_STORE_KEY=${storeKey}\r\nTAIL=keep-this`,
       { mode: 0o600 }
     );
     const third = run();
     expect(third.status).toBe(0);
-    const replaced = readFileSync(path, "utf8");
-    expect(replaced).toMatch(
-      /^# Other lines\r\nOTHER=leave-this\r\nDEMO_SAMPLE_MCP_KEY=[0-9a-f]{64}\r\nTAIL=keep-this$/u
-    );
+    expect(third.stdout).toBe("Generated DEMO_SAMPLE_MCP_KEY in .env.\n");
+    const replaced = readFileSync(path, "utf8").split("\r\n");
+    expect(replaced).toHaveLength(5);
+    expect(replaced[2]).toMatch(/^DEMO_SAMPLE_MCP_KEY=[0-9a-f]{64}$/u);
+    expect([replaced[0], replaced[1], replaced[3], replaced[4]]).toEqual([
+      "# Other lines",
+      "OTHER=leave-this",
+      `DEMO_SECRET_STORE_KEY=${storeKey}`,
+      "TAIL=keep-this"
+    ]);
     expect(statSync(path).mode & 0o777).toBe(0o600);
-    expect(third.stdout + third.stderr).not.toContain(
-      /DEMO_SAMPLE_MCP_KEY=([0-9a-f]{64})/u.exec(replaced)?.[1]
-    );
+    expect(third.stdout + third.stderr).not.toContain(replaced[2]?.split("=")[1]);
     writeFileSync(path, "OTHER=keep");
     expect(run().status).toBe(0);
-    expect(readFileSync(path, "utf8")).toMatch(/^OTHER=keep\nDEMO_SAMPLE_MCP_KEY=[0-9a-f]{64}\n$/u);
-    writeFileSync(path, "DEMO_SAMPLE_MCP_KEY=existing-value\nDEMO_SAMPLE_MCP_KEY=\n");
+    expect(readFileSync(path, "utf8")).toMatch(
+      /^OTHER=keep\nDEMO_SAMPLE_MCP_KEY=[0-9a-f]{64}\nDEMO_SECRET_STORE_KEY=[A-Za-z0-9+/]{43}=\n$/u
+    );
+    writeFileSync(
+      path,
+      "DEMO_SAMPLE_MCP_KEY=existing-value\nDEMO_SAMPLE_MCP_KEY=\nDEMO_SECRET_STORE_KEY=existing\n"
+    );
     const before = readFileSync(path, "utf8");
     expect(run().stdout).toBe("");
     expect(readFileSync(path, "utf8")).toBe(before);

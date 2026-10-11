@@ -316,7 +316,8 @@ describe("the snapshot in a running instance", () => {
       userInvitations: { enabled: true },
       // The reference client's agent saves Pages, so the module is on there.
       apps: { enabled: true },
-      connections: { enabled: false }
+      // And it carries one Connection, to the sample business system.
+      connections: { enabled: true }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
