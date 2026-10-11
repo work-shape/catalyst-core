@@ -593,7 +593,8 @@ export function createOperationApprovalFiler(
       if (Buffer.byteLength(JSON.stringify(input)) > HELD_OPERATION_INPUT_MAX_BYTES) {
         throw new AppError(
           "VALIDATION_FAILED",
-          `This call needs an approval and its input is too large to be held for one. The limit is ${HELD_OPERATION_INPUT_MAX_BYTES / 1024} KiB.`
+          `This call needs an approval and its input is too large to be held for one. The limit is ${HELD_OPERATION_INPUT_MAX_BYTES / 1024} KiB.`,
+          { reason: "input_too_large_to_hold", limit: "HELD_OPERATION_INPUT_MAX_BYTES" }
         );
       }
       const payload: OperationCallPayload = {

@@ -120,6 +120,9 @@ export const assetOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
+  // A call with files that a policy holds for an approval is refused where its input is above
+  // the limit of a held call, with the reason `input_too_large_to_hold`, before a file is
+  // stored or built: a held call is kept whole or not at all.
   "assets.put": defineRegisteredOperation({
     id: "assets.put",
     method: "PUT",
@@ -149,7 +152,7 @@ export const assetOperations = {
     effect: "changing",
     body: publishAssetRequestSchema,
     response: json(assetPointersResponseSchema),
-    errors: ["NOT_FOUND"],
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   "assets.discard_draft": defineRegisteredOperation({

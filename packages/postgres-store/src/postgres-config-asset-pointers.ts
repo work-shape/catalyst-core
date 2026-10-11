@@ -1,5 +1,11 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { AppError, asClientInstanceId, type ConfigAssetStore } from "@vivd-catalyst/core";
+import {
+  AppError,
+  asClientInstanceId,
+  type ClientInstanceId,
+  type ConfigAssetStore,
+  type FileSetId
+} from "@vivd-catalyst/core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import type { ConfigAssetRow } from "./rows";
 import {
@@ -81,6 +87,20 @@ export async function publishConfigAssetRevision(
         "NOT_FOUND",
         `Config ${input.kind} '${input.name}' has no revision ${input.revision} to publish`,
         { reason: "revision_unknown" }
+      );
+    }
+    if (
+      input.requireFiles &&
+      !(await hasBuiltFiles(
+        tx,
+        { clientInstanceId: input.clientInstanceId, assetId: asset.id },
+        target.fileSetId
+      ))
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Revision ${input.revision} of ${input.kind} '${input.name}' has no built files to serve, so it is not published. Write the files again and publish the new revision.`,
+        { reason: "revision_files_removed", revision: input.revision }
       );
     }
     const [replaced] = asset.publishedRevisionId
@@ -194,4 +214,28 @@ export async function removeConfigAsset(
     await tx.delete(configAssets).where(eq(configAssets.id, asset.id));
     return { assetId: asset.id, fileSetCount: removedFileSets.length };
   });
+}
+
+/** Whether the file set a revision names is there, is this asset's and holds built files. */
+async function hasBuiltFiles(
+  db: PostgresTransaction,
+  owner: { clientInstanceId: ClientInstanceId; assetId: string },
+  fileSetId: FileSetId | null
+): Promise<boolean> {
+  if (fileSetId === null) {
+    return false;
+  }
+  const [fileSet] = await db
+    .select({ builtFileCount: fileSets.builtFileCount })
+    .from(fileSets)
+    .where(
+      and(
+        eq(fileSets.id, fileSetId),
+        eq(fileSets.clientInstanceId, owner.clientInstanceId),
+        eq(fileSets.ownerKind, "asset"),
+        eq(fileSets.ownerId, owner.assetId)
+      )
+    )
+    .limit(1);
+  return fileSet !== undefined && fileSet.builtFileCount > 0;
 }

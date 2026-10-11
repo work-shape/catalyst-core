@@ -33,7 +33,7 @@ import {
 import { MemoryObjectStorage } from "./memory-object-storage";
 import type { TestCallInput } from "./operations";
 import { pageBuildCommandFromSource } from "./page-build";
-import { callTestPath } from "./test-instance";
+import { callTestPath, type TestServerOptions } from "./test-instance";
 
 // An instance with the kind `app`: the `files` store in memory, the worker that builds an
 // App's files on Postgres, and a Shared Workspace with one member. `admin` holds the rights of
@@ -109,6 +109,8 @@ export interface AppInstanceOptions {
   explicitCredentials?: boolean;
   /** Kinds registered beside agent, skill and app. */
   furtherKinds?: WorkflowAssetKind[];
+  /** Further server options, such as a policy or an audit recorder of the test's own. */
+  server?: (stores: AccessInstance["stores"]) => Partial<TestServerOptions>;
 }
 
 export interface AppInstance extends AccessInstance {
@@ -165,7 +167,8 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
       allowedOrigins: ["https://ui.example.test"],
       ...(options.explicitCredentials
         ? { authAdapter: { ...recordAuthAdapter(stores), credentialMode: "explicit" as const } }
-        : {})
+        : {}),
+      ...options.server?.(stores)
     })
   });
   const { stores, instance, admin, kai } = access;

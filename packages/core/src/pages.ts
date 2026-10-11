@@ -350,12 +350,16 @@ export interface PagesStore {
     assetId: string;
     fileSetId: FileSetId;
   }): Promise<FileSet | undefined>;
-  /** Removes the row of one file set of an asset, for a write that stored it and then failed. */
+  /**
+   * Removes the row of one file set of an asset, for a write that stored it and then failed.
+   * A file set that a revision of the asset names stays, and the answer is `false`: the write
+   * was committed, whatever failed after it.
+   */
   deleteAssetFileSet(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;
     fileSetId: FileSetId;
-  }): Promise<void>;
+  }): Promise<boolean>;
   /** The Pages of a conversation whose rows are still there, for its cleanup. */
   listConversationPageIds(input: {
     clientInstanceId: ClientInstanceId;

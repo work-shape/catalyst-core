@@ -12,7 +12,7 @@ import {
   buildAssetFileSet,
   copyFileSetToAsset,
   decodeAssetFiles,
-  removeAssetFileSet,
+  removeUnnamedAssetFileSet,
   removeAssetObjects,
   sourceFileEntries,
   type AssetFileInput
@@ -117,7 +117,8 @@ export class AssetDraftWorkflow {
 
   /**
    * Makes the revision that names a stored file set the draft of its asset. The file set was
-   * stored for this write alone: a refused revision takes it along.
+   * stored for this write alone: a refused revision takes it along. A failure after the
+   * revision was committed leaves the files, which are that revision's from then on.
    */
   private async writeFilesRevision(
     call: AssetCall,
@@ -142,7 +143,7 @@ export class AssetDraftWorkflow {
         files: sourceFileEntries(write.fileSet)
       };
     } catch (error) {
-      await removeAssetFileSet(this.options, write.assetId, write.fileSet.id).catch(
+      await removeUnnamedAssetFileSet(this.options, write.assetId, write.fileSet.id).catch(
         () => undefined
       );
       throw error;
@@ -226,7 +227,8 @@ export class AssetDraftWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       kind: kind.kind,
       name,
-      revision: input.revision
+      revision: input.revision,
+      ...(kind.representation === "files" ? { requireFiles: true as const } : {})
     });
     const metadata = {
       kind: kind.kind,

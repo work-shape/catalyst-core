@@ -97,19 +97,25 @@ function assetOwner(assetId: string): FileSetOwner {
   return { kind: "asset", id: assetId };
 }
 
-/** Removes one file set of an asset a write stored and then did not name: row and objects. */
-export async function removeAssetFileSet(
+/**
+ * Removes one file set of an asset a write stored and then did not name: row and objects.
+ * Where a revision names the file set the write was committed and something after it failed:
+ * the files are that revision's and stay.
+ */
+export async function removeUnnamedAssetFileSet(
   options: FilesContext,
   assetId: string,
   fileSetId: FileSetId
 ): Promise<void> {
   const { objects } = requireObjects(options);
-  await options.stores.pages.deleteAssetFileSet({
+  const removed = await options.stores.pages.deleteAssetFileSet({
     clientInstanceId: options.clientInstanceId,
     assetId,
     fileSetId
   });
-  await objects.deletePrefix(fileSetObjectPrefix(assetOwner(assetId), fileSetId));
+  if (removed) {
+    await objects.deletePrefix(fileSetObjectPrefix(assetOwner(assetId), fileSetId));
+  }
 }
 
 /** Removes everything stored for an asset whose rows are gone. */

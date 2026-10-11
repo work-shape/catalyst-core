@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, isNull, lt, max, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, lt, max, or, sql, type SQL } from "drizzle-orm";
 import {
   CONVERSATION_MAX_PAGES,
   PAGE_BUILD_KEEP_MS,
@@ -210,16 +210,27 @@ export async function getAssetFileSet(
 export async function deleteAssetFileSet(
   db: PostgresConnection,
   input: Input<"deleteAssetFileSet">
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const removed = await db
     .delete(fileSets)
     .where(
       and(
         eq(fileSets.clientInstanceId, input.clientInstanceId),
         ownedByAsset(input.assetId),
-        eq(fileSets.id, input.fileSetId)
+        eq(fileSets.id, input.fileSetId),
+        sql`not ${namedByRevision(input.assetId, input.fileSetId)}`
       )
-    );
+    )
+    .returning({ id: fileSets.id });
+  return removed.length > 0;
+}
+
+/**
+ * Whether a revision of the asset names the file set. Read by the asset's key: the revisions
+ * of one asset are the rows it looks at.
+ */
+function namedByRevision(assetId: string | SQL, fileSetId: string | SQL): SQL<boolean> {
+  return sql<boolean>`exists (select 1 from ${configAssetRevisions} where ${configAssetRevisions.assetId} = ${assetId} and ${configAssetRevisions.fileSetId} = ${fileSetId})`;
 }
 
 export async function listPages(
@@ -308,7 +319,11 @@ export async function getServedFileSet(
     : getServedPageFileSet(db, input);
 }
 
-/** The file set with the asset that owns it, while that asset is active. */
+/**
+ * The file set with the asset that owns it, while that asset is active and one of its
+ * revisions names the file set. A file set no revision names is nobody's to open: a write
+ * stored it and did not come to its revision.
+ */
 async function getServedAssetFileSet(
   db: PostgresConnection,
   fileSet: FileSetRow
@@ -340,7 +355,8 @@ async function getServedAssetFileSet(
       and(
         eq(configAssets.id, fileSet.ownerId),
         eq(configAssets.clientInstanceId, fileSet.clientInstanceId),
-        eq(configAssets.status, "active")
+        eq(configAssets.status, "active"),
+        namedByRevision(sql`${configAssets.id}`, fileSet.id)
       )
     );
   const [asset] = rows;

@@ -230,6 +230,11 @@ export interface ConfigAssetStore {
     kind: ConfigAssetKind;
     name: string;
     revision: number;
+    /**
+     * For a kind whose revisions hold files: refuses, with the reason `revision_files_removed`
+     * and in the same transaction, a revision without a built file set this asset owns.
+     */
+    requireFiles?: true;
   }): Promise<{
     assetId: string;
     revision: number;
