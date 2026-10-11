@@ -66,6 +66,8 @@ type PageSaveOutput = z.infer<typeof pageSaveOutputSchema>;
 export function createPageSaveTool(options: PageSaveToolOptions): AnyToolDefinition {
   return defineTool({
     name: PAGE_SAVE_TOOL_NAME,
+    // A saved revision outlives the call and shows beside the conversation.
+    effect: "changing",
     description: [
       "Save a folder of the execution workspace as a revision of a Page and build it. The Page then shows beside the conversation.",
       "The folder holds app.yaml (id, name, kit: an exact kit version, optional entry) and the Page's files.",
@@ -75,6 +77,8 @@ export function createPageSaveTool(options: PageSaveToolOptions): AnyToolDefinit
     ].join(" "),
     inputSchema: pageSaveInputSchema,
     outputSchema: pageSaveOutputSchema,
+    // Runs on the agent's own call, like the workspace tools that wrote the folder. Without a
+    // mode the instance default for changes would apply.
     permission: { mode: "allow" },
     execute(input, context) {
       return savePage(options, input, context);

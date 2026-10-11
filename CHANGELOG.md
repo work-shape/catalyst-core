@@ -66,7 +66,7 @@ contain breaking changes; a patch version does not.
   so a job delivered twice or a save that gave up leaves no second or unwanted revision. A
   worker removes the directories and containers a killed worker left of its builds. The kit
   files themselves are not served yet, so a saved React Page does not render until they are.
-- **Database:** migration `0052_page_builds` adds the table `page_builds`, the row a save and
+- **Database:** migration `0053_page_builds` adds the table `page_builds`, the row a save and
   its build meet on. A row lives for the length of one save.
 
 - **Infrastructure:** the page **Instance > Infrastructure** in the settings and

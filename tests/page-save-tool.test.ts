@@ -32,7 +32,6 @@ import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
 import {
   createPageSaveTool,
-  InProcessToolExecution,
   LocalWorkspaceCommandProcessExecutor,
   ToolRegistry,
   WorkspaceCommandService
@@ -47,6 +46,7 @@ import {
   rootRoute
 } from "./support/page-build";
 import { fileTestDatabaseUrl } from "./support/test-database";
+import { createTestToolRunner } from "./support/tool-runner";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
 // Saving a Page through the tool an agent calls: the folder in the conversation's Execution
@@ -128,7 +128,7 @@ async function createSaveHarness(
     workspace: service.dependencies,
     builds: options.builds?.(client) ?? client
   });
-  const execution = new InProcessToolExecution({
+  const execution = createTestToolRunner({
     registry: new ToolRegistry({ tools: [tool] }),
     getAgentToolNames: () => [tool.name]
   });
@@ -191,14 +191,7 @@ async function createSaveHarness(
     },
     async save(name: string, directory: string) {
       const request = harness.createRequest("page.save", { name, directory });
-      const decision = await execution.authorize(request, harness.context);
-      if (decision.status !== "allowed") {
-        throw new Error(`page.save was not allowed: ${decision.status}`);
-      }
-      const result = await execution.execute(
-        { ...request, authorization: decision },
-        harness.context
-      );
+      const result = await execution(request, harness.context);
       return {
         status: result.status,
         output: result.status === "success" ? saveOutputSchema.parse(result.output) : undefined,
