@@ -68,6 +68,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "auth.session_token_issued": "Signed in",
   "conversation.cleanup_completed": "Finished removing conversation data",
   "conversation.cleanup_failed": "Removing conversation data failed",
+  "connection.discovered": "Read the operations of a Connection",
+  "connection.discovery_failed": "Connection discovery failed",
   "conversation.created": "Started a conversation",
   "conversation.deleted": "Deleted a conversation",
   "conversation.renamed": "Renamed a conversation",

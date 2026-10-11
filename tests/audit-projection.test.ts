@@ -155,6 +155,25 @@ describe("projectAuditActivities", () => {
     });
   });
 
+  // Fails without the labels: the timeline showed the raw event names.
+  it("labels the outcome of a Connection discovery and shows a failed one by default", () => {
+    const discovered = evt({ type: "connection.discovered", correlationId: "d_ok" });
+    const failed = evt({
+      type: "connection.discovery_failed",
+      correlationId: "d_bad",
+      status: "failed",
+      reason: "upstream_unauthorized"
+    });
+    expect(projectAuditActivities([discovered, failed])).toMatchObject([
+      { label: "Connection discovery failed", reason: "upstream_unauthorized" }
+    ]);
+    expect(
+      projectAuditActivities([discovered, failed], { view: "all" }).map(
+        (activity) => activity.label
+      )
+    ).toEqual(["Connection discovery failed", "Read the operations of a Connection"]);
+  });
+
   it("treats actorless events as system", () => {
     const [activity] = projectAuditActivities([
       evt({ type: "workspace_command.failed", correlationId: "c", status: "failed" })
