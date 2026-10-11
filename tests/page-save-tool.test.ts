@@ -667,6 +667,27 @@ describe("a save on an instance where no worker takes builds", () => {
     expect(await harness.fileSets()).toEqual([]);
   });
 
+  it("builds a save that waited behind builds that ended back to back for longer than the unclaimed time", async () => {
+    // One conversation builds one Page at a time, so these builds run one after the other
+    // and between two of them none is running.
+    const harness = await createSaveHarness({
+      command: `sleep 1 && ${buildCommand}`,
+      unclaimedMs: 1_500
+    });
+    const names = ["first", "second", "third", "fourth"];
+    for (const name of names) {
+      await harness.write(name, { "app.yaml": htmlManifest, "index.html": `<p>${name}</p>` });
+    }
+    const started = Date.now();
+
+    const results = await Promise.all(names.map((name) => harness.save(name, name)));
+
+    expect(results.map((result) => result.error?.message)).toEqual(names.map(() => undefined));
+    expect(results.map((result) => result.status)).toEqual(names.map(() => "success"));
+    expect(Date.now() - started).toBeGreaterThan(1_500 + 1_000);
+    expect(await harness.fileSets()).toHaveLength(names.length);
+  }, 60_000);
+
   it("waits for a build that a worker is running, however long it has been queued", async () => {
     const harness = await createSaveHarness({ command: "sleep 2 #", unclaimedMs: 200 });
     await harness.write("slow", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });

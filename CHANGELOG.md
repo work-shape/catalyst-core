@@ -62,7 +62,7 @@ contain breaking changes; a patch version does not.
   with a message that says so. Both runner images carry the command, the platform's
   `workspace-command-runner` target and the capabilities runner image, and each builds a small
   Page with it when the image is built. A save fails after 30 seconds, with the reason, when no
-  worker takes builds. A revision is published in one transaction with the result of its build,
+  worker takes builds: none is running and none was claimed or ended in that time. A revision is published in one transaction with the result of its build,
   so a job delivered twice or a save that gave up leaves no second or unwanted revision. A
   worker removes the directories and containers a killed worker left of its builds. The kit
   files themselves are not served yet, so a saved React Page does not render until they are.

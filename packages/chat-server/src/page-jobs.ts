@@ -60,16 +60,29 @@ export const PAGE_BUILD_POLL_INTERVAL_MS = 250;
  */
 export const PAGE_BUILD_WAIT_MS = 5 * 60 * 1000;
 /**
- * How long a build may be due without any build of the instance running before the save
- * concludes that no worker takes builds. A worker that is alive claims a due job within a
- * second when none of its slots is taken, so this only has to cover a worker that restarts.
+ * How long a build may be due before the save asks whether any worker takes builds, and the
+ * window in which a worker must have shown itself: by running a build now, or by having
+ * claimed or ended one within this time. A worker that is alive claims a due job within a
+ * second when one of its slots is free, so this only has to cover a worker that restarts.
  */
 export const PAGE_BUILD_UNCLAIMED_MS = 30 * 1000;
+/**
+ * How many of the newest builds that a worker took are read for the time a worker last claimed
+ * or ended one. Builds are taken in the order they were queued, so the last ones taken are
+ * among the newest.
+ */
+export const PAGE_BUILD_WORKER_SIGNS_READ = 20;
 /** How often a save that still waits asks the queue whether a worker takes builds. */
 export const PAGE_BUILD_WORKER_CHECK_INTERVAL_MS = 5 * 1000;
+/** What a save is told when its build did not end within the wait although workers take builds. */
+export const PAGE_BUILD_BUSY_MESSAGE =
+  "The Page was not built in time: the workers that build Pages are busy with other builds, or its build did not end. Nothing was saved. Save the Page again.";
 /** What a save is told when no worker takes builds. */
 export const PAGE_BUILD_NO_WORKER_MESSAGE =
   "No workspace command worker takes Page builds on this instance: the build was not started. An operator has to start that worker. Nothing was saved.";
+
+/** The states a job has only after a worker claimed it. */
+const JOB_STATUSES_A_WORKER_SET = ["running", "succeeded", "failed", "dead"] as const;
 
 /** Ends the transaction that would publish a revision for a save that has its answer already. */
 class BuildAlreadyAnswered extends Error {}
@@ -369,18 +382,30 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
   const workerCheckIntervalMs =
     options.workerCheckIntervalMs ?? PAGE_BUILD_WORKER_CHECK_INTERVAL_MS;
   /**
-   * Whether no worker takes builds: a build has been due for `unclaimedMs` and none of the
-   * instance is running. A worker with a build running has none of its slots free for certain
-   * only then, so one running build is taken as a worker that is alive.
+   * Whether no worker takes builds: a build has been due for `unclaimedMs`, none is running,
+   * and no build was claimed or ended within `unclaimedMs` either. One look at the queue
+   * between two builds of a busy worker finds none running, so the builds that ended count
+   * too: a save queued behind a busy worker keeps waiting.
    */
   const noWorkerTakesBuilds = async (clientInstanceId: ClientInstanceId): Promise<boolean> => {
     const kinds = await options.stores.jobs.summarizeByKind({ clientInstanceId });
     const builds = kinds.find((kind) => kind.kind === pageBundleJob.kind);
-    return (
-      builds !== undefined &&
-      builds.running === 0 &&
-      builds.waitingSince !== undefined &&
-      Date.now() - Date.parse(builds.waitingSince) >= unclaimedMs
+    if (
+      builds === undefined ||
+      builds.running > 0 ||
+      builds.waitingSince === undefined ||
+      Date.now() - Date.parse(builds.waitingSince) < unclaimedMs
+    ) {
+      return false;
+    }
+    const taken = await options.stores.jobs.listOverview({
+      clientInstanceId,
+      filters: { kind: pageBundleJob.kind, statuses: JOB_STATUSES_A_WORKER_SET },
+      page: { limit: PAGE_BUILD_WORKER_SIGNS_READ }
+    });
+    const since = Date.now() - unclaimedMs;
+    return !taken.some((job) =>
+      [job.startedAt, job.finishedAt].some((at) => at !== undefined && Date.parse(at) >= since)
     );
   };
   return {
@@ -432,7 +457,7 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
                 ? "The save was stopped before the Page was built."
                 : noWorker
                   ? PAGE_BUILD_NO_WORKER_MESSAGE
-                  : "The Page was not built in time. It is still queued behind others, or its build did not end. Save the Page again."
+                  : PAGE_BUILD_BUSY_MESSAGE
             };
             // The build finds a result on its row and stores nothing. When it was faster, its
             // result is the answer.

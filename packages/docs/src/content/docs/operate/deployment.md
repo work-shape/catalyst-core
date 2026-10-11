@@ -102,7 +102,7 @@ An instance with `modules.apps.enabled: true` needs:
 - A running workspace command worker. It needs `infrastructure.objectStorage.files` and its credentials in addition to the workspace store. A worker that does not serve `page.bundle` does not start.
 - A runner image of the same release. Both runner images carry the command: the platform's `workspace-command-runner` target and the runner image of the capabilities repository. Each runs `catalyst-page-build --check` when it is built, which builds a small Page, so an image without a working command does not come out of its build. An older image has no `catalyst-page-build`; every save then fails with a message that says the runner image must be rolled out. The Infrastructure page does not show this.
 
-A save does not wait for a worker that is not there. When a build has been due for 30 seconds and no build of the instance is running, the save fails and says that no workspace command worker takes Page builds. A worker that is busy has a build running, so its queue is waited for.
+A save does not wait for a worker that is not there. When a build has been due for 30 seconds, no build of the instance is running and none was claimed or ended in the last 30 seconds, the save fails and says that no workspace command worker takes Page builds. A worker that is busy runs a build or has just ended one, so its queue is waited for; a save whose wait runs out behind it says that the workers are busy.
 
 A build that is published is published once. The revision and the result of the build are written in one transaction while the worker holds the job; a job that is delivered again after a worker stopped finds the result and stores nothing, and a save that gave up gets no revision.
 
