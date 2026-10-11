@@ -763,7 +763,7 @@ egress:
       port: 443
 ```
 
-Each key under `connections` is the name of a Connection. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called.
+Each key under `connections` is the name of a Connection. A name that starts with the prefix of a [Namespace](/operate/rights-and-namespaces/) belongs to that Namespace: whoever holds `connection.read` or `connection.use` there holds it on this Connection too, so choose the name with that in mind. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called.
 
 `secret` is the name of a secret, resolved like every other secret of the instance: from the environment variable of that name or from the file `<NAME>_FILE` points at. It is the only place of a Connection where a secret may stand, and it never holds the value. An `authScheme` other than `none` needs it, and `none` refuses it.
 
@@ -772,7 +772,8 @@ Each key under `connections` is the name of a Connection. An entry takes `connec
 The API process reconciles the stored Connections with this section each time it starts, in one transaction under one lock, so several API processes starting together write once. Workers do not seed.
 
 - A new entry becomes a Connection with `origin: release` at revision 1. A changed entry becomes a new revision. An unchanged entry writes nothing.
-- An entry that is gone removes its Connection, its stored secret and its state.
+- An entry that is gone removes its Connection, its stored secret, its state and the grants that allow something on that one Connection. A deny on it stays with the name, as for every asset. A later release also removes what was read from the outside system about it.
+- A renamed entry is a removed entry and a new one: the new Connection starts at revision 1 with no grants of its own, and grants have to be written again.
 - The value of `secret` is read once and stored encrypted. A changed value becomes the next version of the secret and no new revision of the Connection. A variable that is not set leaves the Connection in the state `needs_configuration`, and a call of it is refused with `connection_not_configured`.
 - A Connection created on the instance is never touched. An entry with the name of such a Connection stops startup.
 
@@ -809,8 +810,10 @@ Every connection a Connection opens is checked against this list before a creden
 - The connection goes to the address that was checked, with the host name unchanged for TLS, so a second DNS answer changes nothing.
 - A redirect and a returned download address are checked as new targets, and the credential is sent to the origin it was configured for and to no other.
 - An address with a user name or a password is refused.
-- The instance's own database host and port are refused whatever the list says.
+- The instance's own database host and port are refused whatever the list says, by name and by address. While the database host does not resolve, every target on its port is refused. When the database address cannot be read as host and port, for example a Unix socket, startup logs a warning and every `postgres` target is refused.
 - Plain `http` is accepted for a `private` entry only.
+- Link-local addresses (`169.254.0.0/16`, `fe80::/10`) are reached by no entry. A `private` entry whose `cidrs` cover them stops startup with the range named. Loopback and the private ranges are reachable where a `private` entry names them.
+- An IPv4 address carried inside an IPv6 one (IPv4-mapped, IPv4-compatible, NAT64, 6to4, Teredo) is judged as that IPv4 address.
 
 ```yaml
 egress:
@@ -822,7 +825,7 @@ egress:
       cidrs: ["172.28.0.0/16"]
 ```
 
-A refusal answers `egress_denied` with the host and the port, and nothing else of the address. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. The list is read at start: a change needs a restart.
+A refusal answers `egress_denied` with the host and the port, and nothing else of the address. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list is read at start: a change needs a restart.
 
 ## Config Is Not A Secret Store
 

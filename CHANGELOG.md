@@ -23,6 +23,9 @@ contain breaking changes; a patch version does not.
   and names the range, pins the checked address and refuses the instance's own database.
   Migration `0055_connection_secrets` adds `secrets` and `connection_state`. No connector type
   ships yet, so no Connection can be configured before the next release adds one.
+- **Web access:** the public web fetcher refuses an IPv6 address that carries a blocked IPv4
+  address in any form: IPv4-compatible, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` and Teredo
+  `2001:0::/32`, as it did IPv4-mapped ones.
 - **Access:** `connection.read` and `connection.use` can be granted in a Namespace, which covers
   the Connections whose names start with its prefix.
 - **Pages:** a conversation can hold Pages, each with numbered revisions. A revision is a file

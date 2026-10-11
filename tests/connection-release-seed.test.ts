@@ -258,8 +258,31 @@ describe("the release seed of Connections", () => {
 
   it("removes the asset, its secret and its state when the entry is gone", async () => {
     const w = world();
-    await (await w.start({ connections: { outside: outside(), kept: outside() } })).close();
+    const first = await w.start({ connections: { outside: outside(), kept: outside() } });
     expect(await readSecrets()).toHaveLength(2);
+    // A grant written on the Connection goes with it, as with every deleted asset.
+    const removedId = required((await readAssets()).find((asset) => asset.name === "outside")).id;
+    await first.call("assets.list", { params: { kind: "connection" } });
+    const [holder] = await withTestSql(
+      (sql) => sql<{ id: string }[]>`select id from product_users limit 1`
+    );
+    const granted = await first.call("permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: required(holder).id,
+        action: "connection.use",
+        scopeKind: "asset",
+        scopeId: removedId
+      }
+    });
+    expect(granted.statusCode).toBe(200);
+    const grantsOn = () =>
+      withTestSql(
+        (sql) => sql<{ action: string }[]>`
+          select action from permission_grants where scope_id = ${removedId}`
+      );
+    expect(await grantsOn()).toHaveLength(1);
+    await first.close();
     const instance = await w.start({ connections: { kept: outside() } });
     expect(await readAssets()).toMatchObject([
       { name: "kept", deleted: false },
@@ -268,6 +291,7 @@ describe("the release seed of Connections", () => {
     const kept = required((await readAssets())[0]);
     expect((await readSecrets()).map((row) => row.connection_asset_id)).toEqual([kept.id]);
     expect((await readStates()).map((row) => row.connection_asset_id)).toEqual([kept.id]);
+    expect(await grantsOn()).toEqual([]);
     const listed = await instance.call("assets.list", { params: { kind: "connection" } });
     expect(
       z
