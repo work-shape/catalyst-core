@@ -182,13 +182,13 @@ describe("Namespaces tab", () => {
 describe("Grants tab", () => {
   it("says that nothing is granted and offers to grant", () => {
     const markup = render(grantsTab({ grants: [] }));
-    expect(markup).toContain("No grant yet.");
+    expect(markup).toContain("No right given yet.");
     expect(markup).not.toContain('data-testid="grant-row"');
   });
 
   it("says that the grants could not be loaded and offers another try", () => {
     const markup = render(grantsTab({ loadFailed: true }));
-    expect(markup).toContain("The grants could not be loaded.");
+    expect(markup).toContain("The rights could not be loaded.");
     expect(markup).toContain("Try again");
   });
 

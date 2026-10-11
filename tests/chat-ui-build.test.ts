@@ -538,7 +538,7 @@ describe("Build asset page", () => {
 
     // The notice names whose asset it is and what editing needs.
     expect(markup).toMatch(
-      /data-build-read-only=""[^>]*>.*Asset of Namespace Tax\. Editing needs/u
+      /data-build-read-only=""[^>]*>.*Belongs to the Namespace Tax\. Only a person/u
     );
     expect(markup).toContain('value="Tax review"');
     // A field that is only read stays readable: read-only, not disabled, and not required.
@@ -577,7 +577,9 @@ describe("Build asset page", () => {
       })
     );
 
-    expect(markup).toContain("Asset of Namespace Legal. Editing needs Builder in this Namespace.");
+    expect(markup).toContain(
+      "Belongs to the Namespace Legal. Only a person who may edit in this Namespace can change it."
+    );
   });
 
   it("says of an instance asset that editing needs the right on the instance", () => {
@@ -613,13 +615,13 @@ describe("Build asset page", () => {
 
     expect(linked.match(/data-docs-link/gu)).toHaveLength(1);
     expect(notice(linked)).toMatch(
-      /Editing needs[^<]*<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#do-you-hold-the-right-here" target="_blank" rel="noopener noreferrer" aria-label="Learn more about who may change this, opens in a new tab"[^>]*>Learn more</u
+      /can change it\.[^<]*<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#do-you-hold-the-right-here" target="_blank" rel="noopener noreferrer" aria-label="Learn more about who may change this, opens in a new tab"[^>]*>Learn more</u
     );
     expect(german).toMatch(
       /aria-label="Mehr erfahren darüber, wer das ändern darf, öffnet in neuem Tab"[^>]*>Mehr erfahren</u
     );
     // Without an address the notice is the same sentence and no link.
-    expect(page(from)).toContain("Asset of Namespace Tax. Editing needs");
+    expect(page(from)).toContain("Belongs to the Namespace Tax. Only a person");
     expect(page(from)).not.toContain("data-docs-link");
     expect(page(from)).not.toContain("Learn more");
   });

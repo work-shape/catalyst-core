@@ -126,7 +126,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
 
     // Grant E2E User reading and writing agents in kai-: one row, two actions.
     await tab(page, "Rights").click();
-    await expect(page.getByText("No grant yet.")).toBeVisible();
+    await expect(page.getByText("No right given yet.")).toBeVisible();
     await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
     await grantDialog.getByLabel("Read").check();
@@ -158,13 +158,13 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     // answers for the right alone, and that a read through a grant opens no overview.
     await check(page, "kai-helper");
     await expect(checkRow(page, "write")).toContainText("Allowed");
-    await expect(checkRow(page, "write")).toContainText("Grant in Namespace kai-");
+    await expect(checkRow(page, "write")).toContainText("Right in Namespace kai-");
     await expect(page.getByTestId("check-right-only")).toContainText("This is the right alone.");
     await expect(page.getByText("Read is allowed through a grant")).toBeVisible();
     await expect(page.getByTestId("check-namespace-limits")).toHaveCount(0);
     await check(page, "other-helper");
     await expect(checkRow(page, "write")).toContainText("Refused");
-    await expect(checkRow(page, "write")).toContainText("No grant");
+    await expect(checkRow(page, "write")).toContainText("No right");
     await expect(page.getByTestId("check-right-only")).toHaveCount(0);
     // A name no agent can have gets no result.
     await check(page, "kai helper");
@@ -177,7 +177,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     await namespaceRow.getByRole("button", { name: "Actions for kai-" }).click();
     const deleteItem = page.getByRole("menuitem", { name: "Delete" });
     await expect(deleteItem).toBeDisabled();
-    await expect(deleteItem).toContainText("3 grants name this Namespace. Revoke them first.");
+    await expect(deleteItem).toContainText("3 rights name this Namespace. Revoke them first.");
 
     // An empty tool list over an agent that exists is saved only after a confirmation that
     // names the Namespace and the agent count.
@@ -249,7 +249,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
       expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true
       );
-      await expect(row.getByRole("button", { name: /^Actions for the grant of/u })).toBeInViewport({
+      await expect(row.getByRole("button", { name: /^Actions for the right of/u })).toBeInViewport({
         ratio: 1
       });
     }
@@ -268,7 +268,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
   const orphanedDeny = grantRows.filter({ hasText: "Asset no longer exists" });
   await expect(orphanedDeny).toContainText("kai-helper");
   await expect(orphanedDeny).toContainText("This deny stays until you remove it.");
-  await orphanedDeny.getByRole("button", { name: /^Actions for the grant of/u }).click();
+  await orphanedDeny.getByRole("button", { name: /^Actions for the right of/u }).click();
   await page.getByRole("menuitem", { name: "Remove deny: Write agents" }).click();
   await page
     .getByRole("dialog", { name: "Remove this deny?" })
@@ -279,15 +279,15 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     // The menu of the last round has left the page before the row's menu is opened again: a
     // click that lands while it is still leaving only finishes its closing.
     await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
-    await namespaceGrants.getByRole("button", { name: /^Actions for the grant of/u }).click();
+    await namespaceGrants.getByRole("button", { name: /^Actions for the right of/u }).click();
     await page.getByRole("menuitem", { name: `Revoke: ${action}` }).click();
-    const revokeDialog = page.getByRole("dialog", { name: "Revoke this grant?" });
+    const revokeDialog = page.getByRole("dialog", { name: "Revoke this right?" });
     await revokeDialog.getByRole("button", { name: "Revoke" }).click();
     // The dialog is gone, not only faded: it hands the focus back when it leaves.
     await expect(revokeDialog).toHaveCount(0);
     await expect(namespaceGrants.getByText(action, { exact: true })).toHaveCount(0);
   }
-  await expect(page.getByText("No grant yet.")).toBeVisible();
+  await expect(page.getByText("No right given yet.")).toBeVisible();
 
   // Nothing names the Namespace any more, so it can go.
   await tab(page, "Namespaces").click();

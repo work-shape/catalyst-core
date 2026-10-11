@@ -45,7 +45,7 @@ export const build = defineTranslations({
     "build.readOnlyInstance":
       "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyNamespace":
-      "Asset of Namespace {namespace}. Editing needs Builder in this Namespace.",
+      "Belongs to the Namespace {namespace}. Only a person who may edit in this Namespace can change it.",
     "build.restored": "Revision {number} restored.",
     "build.refusedModel": "The model {model} is not allowed in Namespace {namespace}.",
     "build.refusedModelRequired":
@@ -140,7 +140,7 @@ export const build = defineTranslations({
     "build.readOnlyInstance":
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":
-      "Asset des Namespace {namespace}. Zum Bearbeiten braucht es Builder in diesem Namespace.",
+      "Gehört zum Namespace {namespace}. Ändern kann es nur, wer in diesem Namespace bearbeiten darf.",
     "build.restored": "Version {number} wiederhergestellt.",
     "build.refusedModel": "Das Modell {model} ist im Namespace {namespace} nicht erlaubt.",
     "build.refusedModelRequired":

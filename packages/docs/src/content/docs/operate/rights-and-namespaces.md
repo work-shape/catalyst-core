@@ -51,9 +51,9 @@ Choose a person and enter the name of an agent or a skill. The name does not hav
 | --- | --- |
 | Role | The person's instance role allows it everywhere. |
 | Individual right | A right set or revoked on the Users page decides. |
-| Grant | A row in a Namespace or on the asset allows it. |
+| Given right | A row in a Namespace or on the asset allows it. |
 | Deny | A deny row refuses it. |
-| No grant | Nothing covers it. |
+| No right | Nothing covers it. |
 
 An account that is not active has no rights, whatever its rows say.
 
