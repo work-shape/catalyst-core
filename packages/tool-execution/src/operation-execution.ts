@@ -96,8 +96,10 @@ export interface RunOperationDeps {
   agentToolNames?(agentName: string): readonly string[] | Promise<readonly string[]>;
   /**
    * Whether a person is a member of a workspace now. Asked before a call that waited for an
-   * approval is executed in a workspace: whoever left it meanwhile no longer acts there.
-   * Without it this process does not ask.
+   * approval is executed in a workspace, for an agent's call and for an operation whose right
+   * is a named action: whoever left the workspace meanwhile no longer acts there. An operation
+   * that decides its right itself is asked by its own rule instead. Without it this process
+   * does not ask.
    */
   workspaceMember?(input: {
     userId: string;

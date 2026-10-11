@@ -475,6 +475,10 @@ id from config_assets where status = 'deleted')`.
   asked before the policy: a refusal answers `403 FORBIDDEN` with `details.action` naming the
   operation, and a workspace the caller cannot reach answers `404` as before.
   `workspaces.ensure_personal` stays a plain call, since the interface makes it on every load.
+  A call that waited for an approval is asked again by the same rule before it runs: an
+  approved request to join runs for a person outside the workspace, and a change of somebody
+  who left meanwhile ends unexecuted. The membership of the run's workspace is still asked
+  first for an agent's call and for an operation whose right is a named action.
 - **User administration (breaking for callers of the typed client):** `users.create`,
   `users.update`, `users.delete`, `users.identities.upsert`, `users.identities.delete`,
   `users.password.reset` and `users.invitation.send` are Operation Runs. They answer the

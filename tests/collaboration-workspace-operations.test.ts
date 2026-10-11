@@ -4,6 +4,7 @@ import { operationRunSchema } from "@vivd-catalyst/api-contract";
 import type { CentralPolicySetting, CollaborationWorkspaceId, UserId } from "@vivd-catalyst/core";
 import { clientInstanceId, errorSchema, setupAccessInstance } from "./support/access-instance";
 import type { TestCallInput, TestOperationName } from "./support/operations";
+import { getTestJobs } from "./support/test-instance";
 
 // The ten changes of workspaces, members and access requests are registered operations. These
 // tests fail without that: the plain routes wrote no Operation Run, answered no run id, knew
@@ -363,6 +364,83 @@ describe("workspaces and members: the role is asked before the policy", () => {
     expect((await f.runs("workspaces.members.add"))[0]?.workspaceId).toBe(f.workspaceId);
     expect(await f.memberIds()).toEqual(f.members);
   });
+
+  // Fails without the fix: before an approved call ran, membership of the run's workspace was
+  // asked for every operation, so a request to join could never be approved.
+  it("applies an approved request to join of a person who is not a member", async () => {
+    const f = await setup([{ operation: "workspaces.access_requests.create", value: "approval" }]);
+    const held = await f.t.call(f.outsider.id, "workspaces.access_requests.create", {
+      params: { collaborationWorkspaceId: f.workspaceId }
+    });
+    expect(held.statusCode).toBe(202);
+    const requested = () =>
+      f.t.stores.workspaces.getAccessRequest({ ...f.scope, userId: f.outsider.id });
+    expect(await requested()).toBeUndefined();
+
+    await f.approve(held);
+
+    expect(await requested()).toMatchObject({ userId: f.outsider.id });
+    const [run] = await f.runs("workspaces.access_requests.create");
+    expect(run).toMatchObject({ status: "done", decision: { mode: "approved" } });
+    // Asking to join makes nobody a member.
+    expect(await f.memberIds()).toEqual(f.members);
+  });
+
+  it("does not apply an approved change of a person who left the workspace meanwhile", async () => {
+    const f = await setup([{ operation: "workspaces.members.add", value: "approval" }]);
+    const held = await f.t.call(f.admin.id, "workspaces.members.add", {
+      params: { collaborationWorkspaceId: f.workspaceId },
+      payload: { email: "joiner@example.test" }
+    });
+    expect(held.statusCode).toBe(202);
+    await f.t.stores.workspaces.removeMembership({ ...f.scope, userId: f.admin.id });
+
+    await f.approve(held);
+
+    const [run] = await f.runs("workspaces.members.add");
+    // The workspace is not found for somebody outside it, as on a call made now.
+    expect(run).toMatchObject({
+      status: "failed",
+      error: { code: "NOT_FOUND", message: NOT_AVAILABLE, unexecuted: true }
+    });
+    expect(await f.memberIds()).toEqual([f.owner.id, f.member.id].sort());
+  });
+
+  it("keeps neither the email nor the workspace name on a refused and on a failed run", async () => {
+    const f = await setup();
+    const params = { collaborationWorkspaceId: f.workspaceId };
+    // Refused: a Member may not add anybody. Failed: the workspace is not found for an outsider.
+    const refused = await f.t.call(f.member.id, "workspaces.members.add", {
+      params,
+      payload: { email: "joiner@example.test" }
+    });
+    const failedAdd = await f.t.call(f.outsider.id, "workspaces.members.add", {
+      params,
+      payload: { email: "joiner@example.test" }
+    });
+    const failedDelete = await f.t.call(f.outsider.id, "workspaces.delete", {
+      params,
+      payload: { confirmName: "Lab" }
+    });
+    expect([refused.statusCode, failedAdd.statusCode, failedDelete.statusCode]).toEqual([
+      403, 404, 404
+    ]);
+    const runs = [
+      ...(await f.runs("workspaces.members.add")),
+      ...(await f.runs("workspaces.delete"))
+    ];
+    expect(runs.map((run) => run.status).sort()).toEqual(["denied", "failed", "failed"]);
+    const rows = (await f.audit()).filter((event) =>
+      runs.some((run) => run.id === event.metadata?.operationRunId)
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const kept of [...runs, ...rows, refused.json(), failedAdd.json(), failedDelete.json()]) {
+      const text = JSON.stringify(kept);
+      expect(text).not.toContain("joiner@example.test");
+      // As a value: `displayLabel` is a key of every row.
+      expect(text).not.toContain('"Lab"');
+    }
+  });
 });
 
 type Answer = Awaited<ReturnType<Awaited<ReturnType<typeof setupAccessInstance>>["call"]>>;
@@ -418,6 +496,16 @@ async function setup(settings: CentralPolicySetting[] = []) {
     joiner,
     outsider,
     stranger,
+    /** The instance administrator approves a held call and the job that executes it runs. */
+    approve: async (held: Answer) => {
+      const { approvalRequestId: requestId = "" } = operationRunSchema.parse(held.json());
+      const decided = await t.call(t.admin.id, "approval_requests.decide", {
+        params: { requestId },
+        payload: { decision: "approve" }
+      });
+      expect(decided.statusCode).toBe(200);
+      await getTestJobs(t.instance).runDue();
+    },
     /** The members the workspace starts with. */
     members: [owner.id, admin.id, member.id].sort(),
     audit,

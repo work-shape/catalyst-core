@@ -60,8 +60,8 @@ export type ApprovedOperationEnd = { run?: OperationRun } & (
  *
  * While the run still waits, the call is asked again as the person who made it, as that person
  * is at this moment: the operation exists and its module is on, the input is the one that was
- * asked for, the person is a member of the call's workspace, the surface and the right still
- * allow it, and the policy with its guardrails does not refuse it. A call that may not run
+ * asked for, the surface and the right still allow it (where the workspace of the call is only
+ * where it was made, the person is still a member of it), and the policy with its guardrails does not refuse it. A call that may not run
  * ends its run with the reason and is `refused`.
  *
  * The run is then taken for execution in one statement, so of two takers one executes, and
@@ -263,7 +263,13 @@ async function admitAgain(
       message ? { code: denied.error?.code ?? "FORBIDDEN", message } : (denied.error ?? UNKNOWN_END)
     );
   };
+  // An operation that decides its right itself decides it below, by the rule of the call: a
+  // person may ask to join a workspace without being its member. Membership is asked here
+  // where the workspace is only where the call was made: for an agent's call, and for an
+  // operation whose right is a named action.
+  const membershipIsTheRule = definition.action !== null || call.origin.kind === "agent";
   if (
+    membershipIsTheRule &&
     call.workspaceId !== undefined &&
     deps.workspaceMember &&
     !(await deps.workspaceMember({ userId: call.actor.id, workspaceId: call.workspaceId }))
@@ -297,7 +303,30 @@ async function admitAgain(
   }
   const access = await deps.authorizer.forActor(call.actor);
   const surface = await authorizeOrigin(call, definition, deps);
-  const right = surface.allowed ? await authorizeActor(context, access) : surface;
+  // An operation's own rule may answer with an error where it does not say that the resource
+  // exists: a workspace the person has left is not found. The run ends with that error and
+  // nothing is executed.
+  const asked = surface.allowed
+    ? await authorizeActor(context, access).catch((error: unknown) => {
+        if (error instanceof AppError) {
+          return { thrown: { code: error.code, message: error.message } };
+        }
+        throw error;
+      })
+    : surface;
+  if ("thrown" in asked) {
+    const { thrown } = asked;
+    const ended = await endWaiting({
+      status: "failed",
+      finishedAt: now().toISOString(),
+      error: { ...thrown, unexecuted: true }
+    });
+    if (ended) {
+      await context.emit("operation.failed", "after", { status: "failed", reason: thrown.code });
+    }
+    return refused(ended, () => thrown);
+  }
+  const right = asked;
   await context.emit("operation.authorization_checked", "after", {
     ...(definition.action === null ? {} : { action: definition.action }),
     status: right.allowed ? "success" : "denied",
