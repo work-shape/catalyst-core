@@ -107,8 +107,10 @@ export function BuildArea({ build }: { build: BuildAreaModel }) {
 }
 
 /**
- * The frame of a full-page area: it keeps the floating header's height free and scrolls
- * below it, so a sticky sub-rail never slides under the header's buttons.
+ * The frame of a full-page area. The page scrolls up to the top edge, under the floating
+ * header's buttons: no band is kept free for them. The page starts below them and its pinned
+ * parts stay clear of them, which is what `--layout-page-inset` tells the `Page`. The scroll
+ * area is the container a sub-rail takes its greatest height from.
  */
 function AreaFrame({
   ref,
@@ -123,9 +125,12 @@ function AreaFrame({
   return (
     <section
       aria-label={label}
-      className="grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] bg-background pt-(--layout-header)"
+      className="grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)] bg-background"
     >
-      <div ref={ref} className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto">
+      <div
+        ref={ref}
+        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [--layout-page-inset:var(--layout-header)] [container-type:size]"
+      >
         {children}
       </div>
     </section>

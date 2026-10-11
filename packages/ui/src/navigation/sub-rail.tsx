@@ -70,6 +70,9 @@ export type SubRailProps = SubRailRoutesProps | SubRailAnchorsProps;
  * Grouped navigation inside a page, 14rem wide and built from `NavItem`. It stands beside the
  * content only while the content keeps 40rem; with less room in its `Page` it is the library's
  * `Select` above the content. It measures the page, not the window, so an open sidebar counts.
+ *
+ * Beside the content it is pinned where it starts, so it stands still while the content scrolls.
+ * A rail longer than the scroll area scrolls on its own.
  */
 export function SubRail(props: SubRailProps) {
   const { label, groups, scope, belowHeader = false, className } = props;
@@ -94,16 +97,26 @@ export function SubRail(props: SubRailProps) {
       ref={rootRef}
       data-mode={props.mode}
       className={cn(
-        "grid w-full shrink-0 gap-3 self-start bg-background py-2 @subrail/page:w-(--layout-subrail) @subrail/page:pb-0",
+        "grid w-full shrink-0 gap-3 self-start bg-background py-2",
+        // Beside the content the rail scrolls on its own when it is longer than the scroll area.
+        // That clips what leaves its box, so the box is a step larger on each side than the
+        // rail it shows and a focus ring keeps its room.
+        "@subrail/page:-mx-1 @subrail/page:w-[calc(var(--layout-subrail)+var(--spacing)*2)] @subrail/page:overflow-y-auto @subrail/page:px-1 @subrail/page:pb-1",
         // A select that names sections scrolls away with the page: pinned, it would stand in
         // the way of the page's own sticky head. A select that names routes stays.
         props.mode === "anchors" ? "@subrail/page:sticky" : "sticky",
         // Under a head the rail keeps a step of room, at rest and while it is pinned: its first
         // item would otherwise touch the head's line.
         // A head with a second line is taller than the offset: the rail then goes under it.
+        // The pinned position is the one the `Page` starts the rail at, so the rail never travels.
         belowHeader
-          ? "top-(--layout-header) z-[calc(var(--layer-sticky-header)-1)] @subrail/page:pt-4"
-          : "top-0 z-(--layer-sticky-header) @subrail/page:pt-0",
+          ? "top-[calc(var(--layout-page-inset)+var(--layout-header))] z-[calc(var(--layer-sticky-header)-1)] @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--layout-header))] @subrail/page:pt-4"
+          : "top-(--layout-page-inset) z-(--layer-sticky-header) @subrail/page:top-[calc(var(--layout-page-inset)+var(--spacing)*5)] @subrail/page:-mt-1 @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--spacing)*5)] @subrail/page:pt-1",
+        // The pinned select keeps what floats over the page's top clear: the content leaves
+        // under the select, not between the floating controls.
+        props.mode === "routes" &&
+          !belowHeader &&
+          "before:absolute before:inset-x-0 before:bottom-full before:h-(--layout-page-inset) before:bg-background @subrail/page:before:hidden",
         className
       )}
     >

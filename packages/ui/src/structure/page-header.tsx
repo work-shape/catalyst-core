@@ -55,7 +55,8 @@ export function PageHeader({
       className={cn(
         "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2",
         detail
-          ? "sticky top-0 z-(--layer-sticky-header) min-h-(--layout-header) border-b bg-background px-(--layout-gutter) py-2"
+          ? // Pinned, it keeps what floats over the page's top clear: its own line starts below that.
+            "sticky top-0 z-(--layer-sticky-header) min-h-[calc(var(--layout-page-inset)+var(--layout-header))] border-b bg-background px-(--layout-gutter) pt-[calc(var(--layout-page-inset)+var(--spacing)*2)] pb-2"
           : "pb-6",
         className
       )}

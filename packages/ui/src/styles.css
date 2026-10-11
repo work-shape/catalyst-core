@@ -124,6 +124,10 @@
      beside it. */
   --layout-header: 4rem;
   --layout-gutter: 1.5rem;
+  /* The height of what floats over the top of a page's scroll area, such as the workspace
+     header's buttons. The page starts below it and scrolls up under it; a pinned SubRail or
+     detail PageHeader stays clear of it. An area with such a header sets it on its scroll area. */
+  --layout-page-inset: 0rem;
   --layout-sidebar: 17.5rem;
   --layout-sidebar-collapsed: 3rem;
   --layout-subrail: 14rem;

@@ -2881,6 +2881,59 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
   await expect(panel.getByRole("heading", { name: "API-Zugang", exact: true })).toBeVisible();
 });
 
+test("the Settings sub-rail stands still while the page scrolls up to the top edge", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1280, height: SHORT_WINDOW_HEIGHT });
+  await signInViaApi(page, superadminUser);
+  await page.goto("/settings/instance/infrastructure");
+  const area = page.getByRole("region", { name: "Settings" });
+  const scroller = area.locator("> div");
+  const firstEntry = settingsPages(page).getByRole("button", { name: "Profile" });
+  const lastEntry = settingsPages(page).getByRole("button").last();
+  await expect(firstEntry).toBeVisible();
+  await expect(area.getByRole("heading", { level: 1 })).toBeVisible();
+  const topOf = async (locator: Locator) => (await locator.boundingBox())?.y;
+  const scrollPageTo = (top: number) =>
+    scroller.evaluate((element, to) => {
+      element.scrollTop = to;
+      return element.scrollTop;
+    }, top);
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollHeight - element.clientHeight))
+    .toBeGreaterThan(SUB_RAIL_SCROLL_STEPS.at(-1) ?? 0);
+
+  // No band is kept free above the page: what scrolls reaches the top edge of the area.
+  expect(await topOf(scroller)).toBe(await topOf(area));
+
+  const restingTop = await topOf(firstEntry);
+  for (const top of SUB_RAIL_SCROLL_STEPS) {
+    expect(await scrollPageTo(top)).toBe(top);
+    expect(await topOf(firstEntry)).toBe(restingTop);
+  }
+
+  // The rail is longer than this window: it scrolls on its own, down to its last entry.
+  await expect(lastEntry).not.toBeInViewport();
+  await lastEntry.scrollIntoViewIfNeeded();
+  await expect(lastEntry).toBeInViewport({ ratio: 1 });
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
+    SUB_RAIL_SCROLL_STEPS.at(-1)
+  );
+
+  // Without the room for a rail the select is pinned below the floating header's buttons.
+  await page.setViewportSize({ width: 390, height: SHORT_WINDOW_HEIGHT });
+  const select = area.getByRole("combobox", { name: "Settings pages" });
+  await expect(select).toBeVisible();
+  await scrollPageTo(0);
+  const selectTop = await topOf(select);
+  const openSidebar = await page.getByRole("button", { name: "Open sidebar" }).boundingBox();
+  expect(selectTop).toBeGreaterThanOrEqual((openSidebar?.y ?? 0) + (openSidebar?.height ?? 0));
+  for (const top of SUB_RAIL_SCROLL_STEPS) {
+    await scrollPageTo(top);
+    expect(await topOf(select)).toBe(selectTop);
+  }
+});
+
 test("Build opens on a list, and a list and an asset each have an address", async ({ page }) => {
   await signInViaApi(page, superadminUser);
   await page.goto("/");
@@ -4339,6 +4392,10 @@ const AGENT_LIST_WINDOW_MARGIN = 8;
 const AGENT_CHIP_TAB_STOPS_MOST = 12;
 /** The lines the composer grows to in the test that watches its resize observers. */
 const COMPOSER_GROWTH_LINES = 6;
+/** A window too short for the Settings page and for its sub-rail: both scroll. */
+const SHORT_WINDOW_HEIGHT = 420;
+/** How far the Settings page is scrolled: inside the room above its first element, then past it. */
+const SUB_RAIL_SCROLL_STEPS = [8, 24, 60, 200];
 
 /**
  * Words in a message whose run must still be going on the server while the test acts on the
