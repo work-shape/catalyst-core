@@ -150,6 +150,8 @@ const TOOL_ACTION_LABELS: Record<string, string> = {
   "workspace.exec": "Ran a command",
   "workspace.list_files": "Listed workspace files",
   "workspace.read_file": "Read a workspace file",
+  "workspace.write_file": "Wrote a workspace file",
+  "workspace.edit_file": "Edited a workspace file",
   "workspace.import_files": "Imported files",
   "workspace.promote_artifact": "Saved an artifact",
   "workspace.preview_images": "Loaded artifact preview images",

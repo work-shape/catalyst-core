@@ -320,7 +320,7 @@ function workspacePathValidationToToolValidation(
   };
 }
 
-function isTextMimeType(mimeType: string): boolean {
+export function isTextMimeType(mimeType: string): boolean {
   const type = mimeType.toLowerCase().split(";", 1)[0] ?? "";
   return (
     type === "application/csv" ||

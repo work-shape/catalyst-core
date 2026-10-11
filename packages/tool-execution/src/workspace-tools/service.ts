@@ -1,6 +1,12 @@
 import type { z } from "zod";
 import type { ToolExecutionContext, ToolHandlerResult } from "@vivd-catalyst/core";
 import type {
+  workspaceEditFileInputSchema,
+  workspaceEditFileOutputSchema,
+  workspaceWriteFileInputSchema,
+  workspaceWriteFileOutputSchema
+} from "../workspace-file-write-schemas";
+import type {
   workspaceApplyPatchInputSchema,
   workspaceApplyPatchOutputSchema,
   workspaceExecInputSchema,
@@ -22,12 +28,14 @@ import {
   type WorkspaceCommandServiceOptions,
   type WorkspaceToolDependencies
 } from "./dependencies";
+import { editWorkspaceFile } from "./edit-file";
 import { execWorkspaceCommand } from "./exec";
 import { importWorkspaceFiles } from "./import-files";
 import { listWorkspaceFiles } from "./list-files";
 import { previewWorkspaceImages } from "./preview-images";
 import { promoteWorkspaceArtifact } from "./promote-artifact";
 import { readWorkspaceFile } from "./read-file";
+import { writeWorkspaceFile } from "./write-file";
 
 /** The workspace tools as one object, for callers that run a tool without the registry. */
 export class WorkspaceCommandService {
@@ -63,6 +71,20 @@ export class WorkspaceCommandService {
     context: ToolExecutionContext
   ): Promise<ToolHandlerResult<z.infer<typeof workspaceReadFileOutputSchema>>> {
     return readWorkspaceFile(this.dependencies, input, context);
+  }
+
+  writeFile(
+    input: z.infer<typeof workspaceWriteFileInputSchema>,
+    context: ToolExecutionContext
+  ): Promise<ToolHandlerResult<z.infer<typeof workspaceWriteFileOutputSchema>>> {
+    return writeWorkspaceFile(this.dependencies, input, context);
+  }
+
+  editFile(
+    input: z.infer<typeof workspaceEditFileInputSchema>,
+    context: ToolExecutionContext
+  ): Promise<ToolHandlerResult<z.infer<typeof workspaceEditFileOutputSchema>>> {
+    return editWorkspaceFile(this.dependencies, input, context);
   }
 
   applyPatch(

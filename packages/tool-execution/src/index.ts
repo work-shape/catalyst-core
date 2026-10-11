@@ -8,6 +8,7 @@ export {
 export * from "./read-skill-tool";
 export * from "./workspace-tools";
 export * from "./workspace-tool-schemas";
+export * from "./workspace-file-write-schemas";
 export {
   shapeWorkspaceCommandOutput,
   type WorkspaceRawCommandOutput

@@ -1,6 +1,7 @@
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 import { workspaceApplyPatchTool } from "./apply-patch";
 import type { WorkspaceCommandServiceOptions } from "./dependencies";
+import { workspaceEditFileTool } from "./edit-file";
 import { workspaceExecTool } from "./exec";
 import { workspaceImportFilesTool } from "./import-files";
 import { workspaceListFilesTool } from "./list-files";
@@ -8,6 +9,7 @@ import { workspacePreviewImagesTool } from "./preview-images";
 import { workspacePromoteArtifactTool } from "./promote-artifact";
 import { workspaceReadFileTool } from "./read-file";
 import { WorkspaceCommandService } from "./service";
+import { workspaceWriteFileTool } from "./write-file";
 
 export {
   shapeWorkspaceCommandOutput,
@@ -34,6 +36,8 @@ export function createWorkspaceToolDefinitions(
     workspaceListFilesTool(deps),
     workspaceImportFilesTool(deps),
     workspaceReadFileTool(deps),
+    workspaceWriteFileTool(deps),
+    workspaceEditFileTool(deps),
     workspaceApplyPatchTool(deps),
     workspacePromoteArtifactTool(deps),
     workspacePreviewImagesTool(deps)
