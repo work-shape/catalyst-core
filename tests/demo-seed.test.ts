@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { listAll } from "@vivd-catalyst/api-client";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
-import { assertLocalDevelopmentHost, people, seedDemo } from "@vivd-catalyst/demo/seed";
+import {
+  assertLocalDevelopmentHost,
+  heldSkillChange,
+  people,
+  seedDemo
+} from "@vivd-catalyst/demo/seed";
 import {
   createdBy,
   expectCheckAnswers,
@@ -27,6 +32,9 @@ const recordNote = defineTool({
   execute: (input) => toolSuccess({ recorded: input.text })
 });
 
+/** What the preview of a held save says about the asset, as far as the tests read it. */
+const shownAssetSchema = z.looseObject({ kind: z.string(), isNew: z.boolean() });
+
 const seeded = useSeededInstance({
   configPath: fixtureConfig,
   baseUrl: "http://127.0.0.1:4210",
@@ -49,7 +57,7 @@ describe("the demo seed on the fixture instance", () => {
       agents: 8,
       skills: 7,
       "grant rows": 16,
-      "approval requests": 1,
+      "approval requests": 2,
       "connection grant rows": 0,
       workspaces: 1,
       "workspace members": 4,
@@ -169,7 +177,7 @@ describe("the demo seed on the fixture instance", () => {
     expect(count("deny", "asset")).toBe(1);
   });
 
-  it("creates the config CLI's service principal with one key and leaves one call waiting in the Inbox", () => {
+  it("creates the config CLI's service principal with one key and leaves two calls waiting in the Inbox", async () => {
     const { principals, approvals, assets } = seeded().before;
     expect(principals).toEqual([
       {
@@ -178,16 +186,46 @@ describe("the demo seed on the fixture instance", () => {
         credentials: [expect.any(String)]
       }
     ]);
-    expect(approvals).toEqual([
-      {
-        id: expect.any(String),
-        kind: "operation_call",
-        requestedBy: "Elif Aydin",
-        status: "pending"
-      }
-    ]);
+    const held = {
+      id: expect.any(String),
+      kind: "operation_call",
+      requestedBy: "Elif Aydin",
+      status: "pending"
+    };
+    expect(approvals).toEqual([held, held]);
     // Nothing was written yet: the skill exists once somebody approves.
     expect(assets.some((asset) => asset.name === "hr-parental-leave-faq")).toBe(false);
+
+    // The Inbox reads one as a new skill and the other as one changed paragraph. Fails without
+    // the second request, and without the asset block of the preview.
+    const { client } = seeded().before;
+    const shown = await Promise.all(
+      approvals.map(async ({ id }) => {
+        const { preview } = await client.approval_requests.get({ params: { requestId: id } });
+        return z.object({ asset: shownAssetSchema }).parse(preview).asset;
+      })
+    );
+    expect(shown.find((asset) => asset.isNew)).toMatchObject({
+      kind: "skill",
+      title: "Elternzeit: häufige Fragen",
+      namespace: "hr-",
+      content: { newSkill: { name: "hr-parental-leave-faq" } }
+    });
+    expect(shown.find((asset) => !asset.isNew)).toMatchObject({
+      kind: "skill",
+      title: "Urlaubsrichtlinie",
+      namespace: "hr-",
+      content: {
+        changes: [
+          {
+            type: "replace",
+            target: "root",
+            before: heldSkillChange.before,
+            after: heldSkillChange.after
+          }
+        ]
+      }
+    });
   });
 
   it("grants no right on a Connection the instance does not have, and says so", () => {

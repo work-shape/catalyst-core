@@ -38,6 +38,7 @@ import {
   firstDraft,
   grants,
   heldSkill,
+  heldSkillChange,
   namespaces,
   people,
   workspace,
@@ -163,7 +164,7 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   await seedNamespaces(root, as, steps);
   await seedAssets(root, as, instance, apiKey, steps);
   await seedGrants(root, as, userIds, steps);
-  await seedHeldCall(root, as, steps);
+  await seedHeldCalls(root, as, steps);
   await seedConnections(root, as, userIds, modules, steps);
   await seedApps(modules, as, instance, steps);
   return { steps };
@@ -420,7 +421,7 @@ async function seedAssets(
   if (!(await root.getAsset("agent", drafted.name))) {
     await (
       await as(firstDraft.savedBy)
-    ).createAsset("agent", {
+    ).saveAsset("agent", {
       ...canonicalizeAgentConfig(drafted),
       instructions: firstDraft.instructions,
       toolNames: firstDraft.toolNames,
@@ -511,43 +512,82 @@ async function seedGrants(
   steps.push({ name: "grant rows", created, existing: total - created });
 }
 
-/** Leaves one call waiting for an approval, where the instance sends such a call to one. */
-async function seedHeldCall(
+/**
+ * Leaves two calls waiting for an approval, where the instance sends such calls to one: a new
+ * skill, and a change of one paragraph of a skill the seed pushed. The change is asked for
+ * only while the request for the new skill waits. That request is how the seed knows that the
+ * instance holds such a call: on an instance that holds none, the change would be written at
+ * once and pushed away again by the next run.
+ */
+async function seedHeldCalls(
   root: SeedApi,
   as: (key: PersonKey) => Promise<SeedApi>,
   steps: SeedStep[]
 ): Promise<void> {
-  const name = "approval requests";
-  const skillName = heldSkill.config.name;
-  if (await root.getAsset("skill", skillName)) {
-    steps.push({
-      name,
-      created: 0,
-      existing: 0,
-      note: `The skill '${skillName}' exists: its request was decided, or the instance asks for no approval.`
-    });
-    return;
+  let created = 0;
+  let existing = 0;
+  const notes: string[] = [];
+  const waits = async (person: PersonKey, skillName: string) =>
+    (await (await as(person)).listOwnApprovalRequests()).some(
+      (request) =>
+        request.status === "pending" && JSON.stringify(request.payload).includes(`"${skillName}"`)
+    );
+
+  const newName = heldSkill.config.name;
+  let holds = false;
+  if (await root.getAsset("skill", newName)) {
+    notes.push(
+      `The skill '${newName}' exists: its request was decided, or the instance asks for no approval.`
+    );
+  } else if (await waits(heldSkill.requestedBy, newName)) {
+    existing += 1;
+    holds = true;
+  } else if (
+    (await (await as(heldSkill.requestedBy)).saveAsset("skill", heldSkill.config)) ===
+    "pending_approval"
+  ) {
+    created += 1;
+    holds = true;
+  } else {
+    notes.push(
+      `The instance asks for no approval of a new skill in 'hr-', so '${newName}' was created at once and nothing waits in the Inbox.`
+    );
   }
-  const requester = await as(heldSkill.requestedBy);
-  const waiting = (await requester.listOwnApprovalRequests()).some(
-    (request) =>
-      request.status === "pending" && JSON.stringify(request.payload).includes(`"${skillName}"`)
-  );
-  if (waiting) {
-    steps.push({ name, created: 0, existing: 1 });
-    return;
+
+  const { skillName, before, after } = heldSkillChange;
+  if (await waits(heldSkillChange.requestedBy, skillName)) {
+    existing += 1;
+  } else if (!holds) {
+    notes.push(
+      `No change of '${skillName}' was requested: the seed asks for it only while the request for '${newName}' waits.`
+    );
+  } else {
+    const stored = await root.getAsset("skill", skillName);
+    const content = stored?.config.content;
+    if (!stored || typeof content !== "string" || !content.includes(before)) {
+      throw new Error(`The skill '${skillName}' has no paragraph '${before}' to change`);
+    }
+    const outcome = await (
+      await as(heldSkillChange.requestedBy)
+    ).saveAsset(
+      "skill",
+      { ...stored.config, name: skillName, content: content.replace(before, after) },
+      stored.revision
+    );
+    if (outcome === "pending_approval") {
+      created += 1;
+    } else {
+      notes.push(
+        `The instance asks for no approval of a changed skill in 'hr-', so '${skillName}' was changed at once.`
+      );
+    }
   }
-  const outcome = await requester.createAsset("skill", heldSkill.config);
-  steps.push(
-    outcome === "pending_approval"
-      ? { name, created: 1, existing: 0 }
-      : {
-          name,
-          created: 0,
-          existing: 0,
-          note: `The instance asks for no approval of a new skill in 'hr-', so '${skillName}' was created at once and nothing waits in the Inbox.`
-        }
-  );
+  steps.push({
+    name: "approval requests",
+    created,
+    existing,
+    ...(notes.length > 0 ? { note: notes.join(" ") } : {})
+  });
 }
 
 /** The module and the asset kind Connections come with. */

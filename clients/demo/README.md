@@ -48,7 +48,7 @@ The superadmin is the one of the demo's config, so the instance has eight people
 - Sixteen grant rows: allows in a Namespace, allows on one agent and one skill, a deny on one agent inside an allowed Namespace, and a deny in a Namespace against an admin.
 - Three grant rows on the Connection `sample-business`, which the release config brings and not the seed: Sven Olsen may see and use it, Tobias Keller may use it. The two admins hold every right on it by their role and the other users hold none, so an agent of Elif Aydin is refused when it calls one of the Connection's tools. See [docs/try-connections.md](docs/try-connections.md).
 - One service principal, `Local config CLI`, with one key.
-- One approval waiting in the Inbox: Elif Aydin saved the skill `hr-parental-leave-faq`, and the demo holds it, see below.
+- Two approvals waiting in the Inbox, both asked for by Elif Aydin and held by the demo, see below. One is the new skill `hr-parental-leave-faq` ("Elternzeit: häufige Fragen"), which the Inbox shows whole. The other replaces one paragraph of the pushed skill `hr-leave-policy` ("Urlaubsrichtlinie"), which the Inbox shows as before and after.
 - One Shared Workspace, `Nordlicht Beratung`: Mara Lindqvist owns it, and Jonas Brandt, Tobias Keller, Elif Aydin and Sven Olsen are its members.
 - Two Apps in that workspace, written from the source files under `seed/apps/`: `client-onboarding` is published, and `fee-estimate` is published with a draft one revision ahead, which adds a second route. A write of an App is built by the workspace command worker, so the seed needs that worker running. The Apps list shows them to Mara Lindqvist and Jonas Brandt, who hold the rights of the kind as admins.
 
@@ -56,7 +56,14 @@ The superadmin is the one of the demo's config, so the instance has eight people
 
 The demo's server runs with one policy setting, in `src/policy.ts`, whether or not the seed has run. It holds a new or changed skill that is saved through `assets.put` into the Namespace `hr-`, for every caller, admins and the superadmin included. So editing an HR skill in the interface asks for an approval first. It holds nothing else: not a delete, not a revert, and not a push of the config CLI, which is a different operation. While no Namespace `hr-` is registered it matches nothing, so a demo that was never seeded behaves as before.
 
-A held call is decided by anyone who holds `operations.approve`. Admins and the superadmin hold it, so Mara Lindqvist, Jonas Brandt or the superadmin can decide the seeded request. A requester who holds the right can decide their own request. Elif Aydin does not hold it, so hers waits for somebody else.
+A held call is decided by anyone who holds `operations.approve`. Admins and the superadmin hold it, so Mara Lindqvist, Jonas Brandt or the superadmin can decide the seeded requests. A requester who holds the right can decide their own request. Elif Aydin does not hold it, so hers wait for somebody else.
+
+| Request in the Inbox                     | Asked by   | What approving does                                        | A rerun of the seed                                                                                         |
+| ---------------------------------------- | ---------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| New skill: Elternzeit: häufige Fragen    | Elif Aydin | Creates the skill `hr-parental-leave-faq`                  | Asks again after a decline. Leaves it once the skill exists.                                                |
+| Skill change: Urlaubsrichtlinie          | Elif Aydin | Replaces the last paragraph of `hr-leave-policy`           | Asks again while the request for the new skill waits. An approved change is replaced by the file of `seed/`. |
+
+The seed asks for the change only while the request for the new skill waits: that request tells it that the instance holds such a call. On an instance that holds none it would be written at once.
 
 ### Running it again
 

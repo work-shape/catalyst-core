@@ -68,10 +68,14 @@ export interface SeedApi {
   assetsOverview(): Promise<ConfigAssetsOverview>;
   /** Nothing when the caller cannot read the asset or it does not exist. */
   getAsset(kind: string, name: string): Promise<Asset | undefined>;
-  /** `pending_approval`: nothing was written, a holder of `operations.approve` decides. */
-  createAsset(
+  /**
+   * Creates the asset, or replaces it at the revision the caller read where one is given.
+   * `pending_approval`: nothing was written, a holder of `operations.approve` decides.
+   */
+  saveAsset(
     kind: string,
-    config: Record<string, unknown> & { name: string }
+    config: Record<string, unknown> & { name: string },
+    expectedRevision?: number
   ): Promise<"done" | "pending_approval">;
   showAgentEverywhere(name: string): Promise<void>;
   listOwnApprovalRequests(): Promise<ApprovalRequestView[]>;
@@ -181,8 +185,13 @@ export function createSeedApi(client: ApiClient): SeedApi {
         throw error;
       }
     },
-    createAsset: async (kind, config) =>
-      (await client.assets.put({ params: { kind, name: config.name }, body: { config } })).status,
+    saveAsset: async (kind, config, expectedRevision) =>
+      (
+        await client.assets.put({
+          params: { kind, name: config.name },
+          body: { config, ...(expectedRevision === undefined ? {} : { expectedRevision }) }
+        })
+      ).status,
     async showAgentEverywhere(name) {
       completedOutput(
         await client.assets.set_availability({

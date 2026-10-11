@@ -8,6 +8,7 @@ export {
   apps,
   checkQuestions,
   connectionCheckQuestions,
+  heldSkillChange,
   people,
   workspace,
   type CheckReason

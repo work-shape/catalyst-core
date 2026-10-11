@@ -251,6 +251,10 @@ export const firstDraft: {
  * A call that waits for an approval. The demo holds every skill saved into the HR Namespace
  * (`demoOperations`), and the person who saves this one does not hold `operations.approve`,
  * so it lands in the Inbox of those who do.
+ *
+ * Why Elif Aydin wants it: the HR team answers the same three questions about parental leave
+ * every month, and the absence desk agent has nothing to answer them from. A request carries
+ * no comment of the person who made it, so this stands here and not in the Inbox.
  */
 export const heldSkill: {
   requestedBy: PersonKey;
@@ -265,6 +269,25 @@ export const heldSkill: {
     content:
       "# Elternzeit: häufige Fragen\n\n- Die Elternzeit wird spätestens sieben Wochen vor Beginn schriftlich angemeldet.\n- Teilzeit bis 32 Wochenstunden ist möglich und wird mit der Teamleitung abgestimmt.\n- Für alles, was hier nicht steht, an das HR-Team verweisen und keine Auskunft erfinden.\n"
   }
+};
+
+/**
+ * A second call that waits: one paragraph of a skill the seed pushed is replaced, so the Inbox
+ * shows a change as before and after. The seed asks for it only while the request above
+ * waits, which is how it knows that the instance holds such a call and does not write it.
+ */
+export const heldSkillChange: {
+  requestedBy: PersonKey;
+  skillName: string;
+  /** A whole paragraph of the skill under `seed/`, and what replaces it. */
+  before: string;
+  after: string;
+} = {
+  requestedBy: "elif",
+  skillName: "hr-leave-policy",
+  before: "Niemand muss eine Diagnose nennen.",
+  after:
+    "Eine Diagnose muss niemand nennen. Die Krankmeldung geht an die Teamleitung und an das HR-Team, nicht an das ganze Team."
 };
 
 /** The service principal of the config CLI, the one `catalyst config local-key` creates too. */
