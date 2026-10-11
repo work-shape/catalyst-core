@@ -111,6 +111,9 @@ export function BuildArea({ build }: { build: BuildAreaModel }) {
  * header's buttons: no band is kept free for them. The page starts below them and its pinned
  * parts stay clear of them, which is what `--layout-page-inset` tells the `Page`. The scroll
  * area is the container a sub-rail takes its greatest height from.
+ *
+ * Below `md` the header's first button is the one that opens the sidebar. A detail head starts
+ * at the top edge there, with its first row beside that button.
  */
 function AreaFrame({
   ref,
@@ -129,7 +132,7 @@ function AreaFrame({
     >
       <div
         ref={ref}
-        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [--layout-page-inset:var(--layout-header)] [container-type:size]"
+        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [--layout-page-inset:var(--layout-header)] [container-type:size] max-md:[--layout-page-head-inset:0rem] max-md:[--layout-page-head-start:var(--layout-header-control)]"
       >
         {children}
       </div>

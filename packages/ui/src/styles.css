@@ -128,6 +128,13 @@
      header's buttons. The page starts below it and scrolls up under it; a pinned SubRail or
      detail PageHeader stays clear of it. An area with such a header sets it on its scroll area. */
   --layout-page-inset: 0rem;
+  /* A detail PageHeader beside a floating control instead of below it: the area sets
+     `--layout-page-head-inset` to nothing, so the head starts at the top edge, and
+     `--layout-page-head-start` to the room the control takes, so the head's first row starts
+     after it. `--layout-header-control` is that room for one header button: its width and the
+     gap to what follows. */
+  --layout-page-head-start: 0rem;
+  --layout-header-control: 2.5rem;
   --layout-sidebar: 17.5rem;
   --layout-sidebar-collapsed: 3rem;
   --layout-subrail: 14rem;

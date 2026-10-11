@@ -31,7 +31,8 @@ export interface PageProps extends ComponentProps<"div"> {
  * The page starts `--layout-page-inset` lower where something floats over the top of its scroll
  * area. Its content scrolls up to the top edge; the sub-rail rests where it is pinned, so it
  * does not move with the content. Above a detail header that room scrolls away: the header
- * pins at the top edge and the sub-rail directly below it.
+ * pins at the top edge and the sub-rail directly below it. Where the area says the floating
+ * control stands beside the head, the head has no room above it and starts at the top edge.
  *
  * The space under the page belongs to the content column. On the row it would end the rail's
  * room early and push a rail as tall as the scroll area up at the end of the page.
@@ -48,7 +49,11 @@ export function Page({
     // The page is the container its sub-rail measures: the room the page has, not the window.
     return (
       <div className={cn("@container/page w-full min-w-0", className)} {...props}>
-        <div aria-hidden="true" className="h-(--layout-page-inset)" />
+        {/* An area whose floating control stands beside the head sets the head's own inset. */}
+        <div
+          aria-hidden="true"
+          className="h-[var(--layout-page-head-inset,var(--layout-page-inset))]"
+        />
         {header}
         {subRail === undefined ? (
           <div

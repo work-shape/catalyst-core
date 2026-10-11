@@ -61,7 +61,13 @@ export function PageHeader({
       )}
       {...props}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div
+        className={cn(
+          "flex min-w-0 items-center gap-3",
+          // Beside a floating control the first row starts after it, at rest and pinned alike.
+          detail && "ps-(--layout-page-head-start)"
+        )}
+      >
         {back}
         <div className="grid min-w-0 gap-0.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
