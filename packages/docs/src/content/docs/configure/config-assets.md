@@ -189,7 +189,7 @@ removed first. Reverting retains the original approval and proposal history.
 
 ## The asset API
 
-Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. The admin panel uses these operations, and so can a script or an outside editor. Each call is one Operation Run with its actor, effect and outcome. The [API reference](/reference/api/) lists the fields.
+Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. The admin panel uses these operations, and so can a script or an outside editor. Each changing call is one Operation Run with its actor and outcome. A read is checked the same way and leaves a run only when it is refused or fails. The [API reference](/reference/api/) lists the fields.
 
 | Operation                 | Address                                      | Right                |
 | ------------------------- | -------------------------------------------- | -------------------- |
