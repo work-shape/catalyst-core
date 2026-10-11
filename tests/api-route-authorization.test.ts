@@ -311,7 +311,9 @@ describe("a changing operation is registered or named as plain", () => {
       ),
       rightDecidedBy: z.record(
         z.string(),
-        z.enum(["workspace_role", "conversation_access", "own", "public"])
+        // `asset_right`: the handler asks for an action of an asset kind, on the instance or in a
+        // Namespace (`registerPlatformRoutes` in chat-server/src/routes/platform-routes.ts).
+        z.enum(["workspace_role", "conversation_access", "own", "public", "asset_right"])
       )
     })
     .parse(readJson("../packages/quality-config/plain-changing-operations.json"));

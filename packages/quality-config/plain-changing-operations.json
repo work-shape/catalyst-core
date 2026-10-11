@@ -275,6 +275,7 @@
     "pages.preview": "conversation_access",
     "password_reset.request": "public",
     "password_setup.complete": "public",
+    "platform.references.get": "asset_right",
     "ready.get": "public",
     "session_tokens.issue": "public",
     "view_runtime.files.get": "public",
