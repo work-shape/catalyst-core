@@ -55,9 +55,25 @@ export class TurnLoop {
     );
     const { capabilities } = modelSelection;
     // Read once for the run, not for each model call of it: what the agent is offered stays
-    // the same while it works. Whether a tool may still be called is asked again by each call.
-    const dataTools = await describeAgentDataTools(agent, this.options.dataTools);
-    if (dataTools.missing.length > 0) {
+    // the same while it works. Whether a tool may still be called is asked again by each call,
+    // and a data tool that was not offered here is refused for the whole run.
+    const dataTools = await describeAgentDataTools(
+      agent,
+      this.options.dataTools,
+      this.options.dataToolDescribeTimeoutMs
+    );
+    if (dataTools.sourceFailure) {
+      this.options.logger?.warn(
+        {
+          type: "agent_run.data_tools_unavailable",
+          runId,
+          agentName: agent.name,
+          reason: dataTools.sourceFailure,
+          toolNames: dataTools.missing
+        },
+        "The data tools of an agent could not be read; the run goes on without them"
+      );
+    } else if (dataTools.missing.length > 0) {
       this.options.logger?.info(
         {
           type: "agent_run.data_tools_missing",

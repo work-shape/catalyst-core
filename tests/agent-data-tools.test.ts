@@ -39,7 +39,11 @@ import {
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { setupAccessInstance } from "./support/access-instance";
 import { createMemoryOperationRunStore } from "./support/memory-operation-runs";
-import { silentTestLogger, withTestModelGateway } from "./support/model-gateway";
+import {
+  silentTestLogger,
+  withTestModelGateway,
+  type FakeModelProvider
+} from "./support/model-gateway";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestInstance } from "./support/test-instance";
 import { recordedAuditEvent } from "./support/tool-runner";
@@ -80,6 +84,8 @@ function createFakeConnection() {
   const executed: string[] = [];
   const describeCalls: string[][] = [];
   const gone = new Set<string>();
+  /** How the tool source answers: as asked, with an error, or never. */
+  const source: { answers: "yes" | "throws" | "never" } = { answers: "yes" };
   const operation = (name: string, effect: "reading" | "changing"): OperationDefinition => ({
     name,
     effect,
@@ -109,6 +115,8 @@ function createFakeConnection() {
   const toolSource: DataToolSource = {
     describe(toolNames) {
       describeCalls.push([...toolNames]);
+      if (source.answers === "throws") return Promise.reject(new Error("store unreachable"));
+      if (source.answers === "never") return new Promise(() => {});
       return Promise.resolve(
         existing()
           .filter((entry) => toolNames.includes(entry.name))
@@ -121,7 +129,7 @@ function createFakeConnection() {
       );
     }
   };
-  return { executed, describeCalls, gone, operationSource, toolSource };
+  return { executed, describeCalls, gone, source, operationSource, toolSource };
 }
 
 const releaseTool = defineTool({
@@ -136,6 +144,7 @@ const releaseTool = defineTool({
 function createCallPath(input: {
   agentToolNames: Record<string, readonly string[]>;
   connection?: ReturnType<typeof createFakeConnection>;
+  describeTimeoutMs?: number;
 }) {
   const runs = createMemoryOperationRunStore();
   const toolRegistry = new ToolRegistry({ tools: [releaseTool] });
@@ -162,7 +171,14 @@ function createCallPath(input: {
   return {
     runs,
     toolRegistry,
-    runTool: createToolOperationRunner(deps, toolRegistry, input.connection?.toolSource)
+    runTool: createToolOperationRunner(
+      deps,
+      toolRegistry,
+      input.connection && {
+        source: input.connection.toolSource,
+        describeTimeoutMs: input.describeTimeoutMs
+      }
+    )
   };
 }
 
@@ -200,6 +216,9 @@ async function startChat(input: {
   agent: AgentConfig;
   connection: ReturnType<typeof createFakeConnection>;
   logger?: Logger;
+  describeTimeoutMs?: number;
+  /** Left out, the provider of local development. */
+  modelProvider?: FakeModelProvider;
 }) {
   const store = (await createTestInstance()).stores;
   const conversation = await store.createConversationForTesting({
@@ -211,7 +230,8 @@ async function startChat(input: {
   });
   const path = createCallPath({
     agentToolNames: { [input.agent.name]: input.agent.toolNames },
-    connection: input.connection
+    connection: input.connection,
+    describeTimeoutMs: input.describeTimeoutMs
   });
   const failures: unknown[] = [];
   const runtime = new LocalAgentRuntime(
@@ -223,10 +243,11 @@ async function startChat(input: {
       conversationHistory: store.conversations,
       // The provider of local development: `/tool <name> <json>` calls a tool it was offered
       // and is refused for one it was not.
-      modelProvider: new DeterministicModelProvider("test-provider"),
+      modelProvider: input.modelProvider ?? new DeterministicModelProvider("test-provider"),
       modelCapabilities: DETERMINISTIC_CAPABILITIES,
       toolRegistry: path.toolRegistry,
       dataTools: input.connection.toolSource,
+      ...(input.describeTimeoutMs ? { dataToolDescribeTimeoutMs: input.describeTimeoutMs } : {}),
       runTool: path.runTool,
       runFailureReporter: (report) => void failures.push(report.error),
       usageGovernance: new ModelUsageGovernance({ store: store.usage, budget: {}, safeguards: {} })
@@ -276,26 +297,80 @@ describe("an agent carries data tools", () => {
     expect(connection.describeCalls).toEqual([[ECHO], [ECHO]]);
   });
 
-  it("refuses an agent that does not list the tool, naming the tool", async () => {
+  it("refuses an agent that does not list the tool, naming the tool, without a read of the source", async () => {
     const connection = createFakeConnection();
     const path = createCallPath({ agentToolNames: { other_agent: ["test.inspect"] }, connection });
 
     const result = await path.runTool(toolRequest(ECHO, "other_agent"), context);
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       status: "failed",
       error: {
         code: "not_allowed",
-        message: `Agent 'other_agent' is not allowed to use '${ECHO}'`
+        message: `Agent 'other_agent' is not allowed to use '${ECHO}'`,
+        details: { action: `agent_tool:${ECHO}` }
       }
     });
     expect(connection.executed).toEqual([]);
-    expect(path.runs.runs).toHaveLength(1);
-    expect(path.runs.runs[0]).toMatchObject({
-      operation: ECHO,
-      status: "denied",
-      denial: { kind: "forbidden", action: `agent_tool:${ECHO}`, reason: "no_grant" }
-    });
+    // The agent's list is asked first: an agent that lists no data tool reaches no source,
+    // so a source that is down cannot fail its run.
+    expect(connection.describeCalls).toEqual([]);
+    expect(path.runs.runs).toEqual([]);
+  });
+
+  it("fails one call, not the run, when the source fails or does not answer at call time", async () => {
+    for (const answers of ["throws", "never"] as const) {
+      const connection = createFakeConnection();
+      connection.source.answers = answers;
+      const path = createCallPath({
+        agentToolNames: { data_agent: [ECHO] },
+        connection,
+        describeTimeoutMs: 50
+      });
+
+      const result = await path.runTool(toolRequest(ECHO, "data_agent"), context);
+
+      expect(result, answers).toMatchObject({
+        status: "failed",
+        error: {
+          code: "handler_failed",
+          message: `Tool '${ECHO}' could not be reached right now. Try again later. Reference: corr-data-tools`
+        }
+      });
+      expect(connection.executed).toEqual([]);
+      expect(path.runs.runs).toEqual([]);
+    }
+  });
+
+  it("goes on without data tools when the source fails or does not answer at run start", async () => {
+    for (const answers of ["throws", "never"] as const) {
+      const connection = createFakeConnection();
+      connection.source.answers = answers;
+      const logged: unknown[] = [];
+      const logger: Logger = {
+        ...silentTestLogger,
+        warn: (record: unknown) => void logged.push(record),
+        child: () => logger
+      };
+      const chat = await startChat({
+        agent: agent("data_agent", ["test.inspect", ECHO]),
+        connection,
+        logger,
+        describeTimeoutMs: 50
+      });
+
+      const answer = await chat.say("Hello");
+
+      expect(answer.failed, answers).toEqual([]);
+      expect(answer.completed).toHaveLength(1);
+      expect(logged).toContainEqual(
+        expect.objectContaining({
+          type: "agent_run.data_tools_unavailable",
+          reason: answers === "throws" ? "failed" : "timed_out",
+          toolNames: [ECHO]
+        })
+      );
+    }
   });
 
   it("refuses an agent's changing call as policy and does not run it", async () => {

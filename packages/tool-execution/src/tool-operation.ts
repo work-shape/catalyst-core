@@ -347,6 +347,19 @@ export interface DataToolSource {
   describe(toolNames: readonly string[], scope: OperationListScope): Promise<DataToolDescriptor[]>;
 }
 
+/**
+ * How long a call waits for the source to say whether a data tool exists. A source answers
+ * from the instance's own store, so this is far above an ordinary answer. When it is reached
+ * the call fails as a tool failure the agent reads, and the run goes on.
+ */
+export const DATA_TOOL_DESCRIBE_TIMEOUT_MS = 10_000;
+
+export interface DataToolRunnerOptions {
+  source: DataToolSource;
+  /** Without it `DATA_TOOL_DESCRIBE_TIMEOUT_MS`. */
+  describeTimeoutMs?: number;
+}
+
 /** What the runner needs of the tool a call names: the operation it is and its effect. */
 interface CalledTool {
   name: string;
@@ -361,24 +374,27 @@ interface CalledTool {
  * has; a tool it does not have, or one of a module that is off, is not registered for the
  * agent. A tool that exists as data is one its source describes now. Both are called through
  * `runOperation` and nothing else, so the agent's own list, the actor's right and the policy
- * decide for a data tool as for any other.
+ * decide for a data tool as for any other. That includes an administrator's central setting:
+ * a changing data tool the instance sets to `allow` runs for an agent without a confirmation,
+ * as a changing release tool does.
  */
 export function createToolOperationRunner(
   deps: RunOperationDeps,
   tools: ToolRegistry,
-  dataTools?: DataToolSource
+  dataTools?: DataToolRunnerOptions
 ): ToolOperationRunner {
   return async (request, context, options = {}) => {
-    const tool = await calledTool(request.toolName, tools, dataTools);
+    const called = await calledTool(request, context.correlationId, tools, dataTools, deps);
+    if ("refusal" in called) {
+      return called.refusal;
+    }
+    const { tool } = called;
     const names: ToolCallNames = {
       toolName: request.toolName,
       agentName: request.agentName,
       correlationId: context.correlationId,
-      policyReason: tool?.policyReason
+      policyReason: tool.policyReason
     };
-    if (!tool) {
-      return failed("not_allowed", `Tool '${request.toolName}' is not registered`);
-    }
     try {
       const outcome = await runOperation(
         operationCallFromToolRequest({
@@ -414,29 +430,98 @@ export function createToolOperationRunner(
 }
 
 /**
- * The tool a call names. A tool of the release comes first and a data name is never one, as
- * the registry refuses a release tool with a data prefix. A data tool costs one read of its
- * source per call: the source alone knows whether the tool still exists.
+ * The tool a call names, or what the call answers where there is none to run. A tool of the
+ * release comes first and a data name is never one, as the registry refuses a release tool
+ * with a data prefix.
+ *
+ * A data tool costs one read of its source per call: the source alone knows whether the tool
+ * still exists. The agent's own list is asked before that read, so an agent that lists no
+ * data tool never reaches a source, whatever its model calls. A source that fails or does not
+ * answer in time fails this one call and nothing else.
  */
 async function calledTool(
-  toolName: string,
+  request: ToolExecutionRequest,
+  correlationId: string,
   tools: ToolRegistry,
-  dataTools: DataToolSource | undefined
-): Promise<CalledTool | undefined> {
+  dataTools: DataToolRunnerOptions | undefined,
+  deps: RunOperationDeps
+): Promise<{ tool: CalledTool } | { refusal: ToolHandlerFailureResult }> {
+  const { toolName, agentName } = request;
   const tool = tools.get(toolName);
   if (tool) {
     return {
-      name: tool.name,
-      effect: tool.effect,
-      policyReason: tool.permission?.mode === "deny" ? tool.permission.reason : undefined
+      tool: {
+        name: tool.name,
+        effect: tool.effect,
+        policyReason: tool.permission?.mode === "deny" ? tool.permission.reason : undefined
+      }
     };
   }
   if (!dataTools || !isDataToolName(toolName)) {
-    return undefined;
+    return { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };
   }
-  const described = await dataTools.describe([toolName], {});
+  const listed = (await deps.agentToolNames?.(agentName)) ?? [];
+  if (!listed.includes(toolName)) {
+    const action = `${AGENT_TOOL_ACTION_PREFIX}${toolName}`;
+    return {
+      refusal: failed(
+        "not_allowed",
+        denialText(
+          { kind: "forbidden", action, reason: "no_grant" },
+          { toolName, agentName, correlationId }
+        ),
+        { action }
+      )
+    };
+  }
+  let described: DataToolDescriptor[];
+  try {
+    described = await withinTimeout(
+      dataTools.source.describe([toolName], {}),
+      dataTools.describeTimeoutMs ?? DATA_TOOL_DESCRIBE_TIMEOUT_MS
+    );
+  } catch (error) {
+    deps.logger.warn(
+      {
+        type: "data_tool.describe_failed",
+        toolName,
+        agentName,
+        correlationId,
+        errorName: error instanceof Error ? error.name : "unknown"
+      },
+      "A data tool could not be read from its source; the call fails and the run goes on"
+    );
+    return {
+      refusal: failed(
+        "handler_failed",
+        `Tool '${toolName}' could not be reached right now. Try again later. Reference: ${correlationId}`,
+        { correlationId }
+      )
+    };
+  }
   const descriptor = described.find((candidate) => candidate.name === toolName);
-  return descriptor && { name: descriptor.name, effect: descriptor.effect };
+  return descriptor
+    ? { tool: { name: descriptor.name, effect: descriptor.effect } }
+    : { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };
+}
+
+class DataToolDescribeTimeout extends Error {
+  override readonly name = "DataToolDescribeTimeout";
+}
+
+/** The answer, or a failure once the time is over. The read itself cannot be stopped. */
+async function withinTimeout<T>(answer: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      answer,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new DataToolDescribeTimeout()), timeoutMs);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** What a call that was refused before it had a run answers, or nothing for any other error. */

@@ -311,6 +311,8 @@ export interface ModelContextToolOutputBoundsConfig {
 export interface AgentRuntimeConfig {
   maxSteps: number;
   repeatedToolCallLimit: number;
+  /** How long a run, and a call, waits for the source of an agent's data tools. */
+  dataToolDescribeTimeoutMs: number;
 }
 
 export interface ModelContextConfig {

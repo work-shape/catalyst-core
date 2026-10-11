@@ -97,6 +97,7 @@ export interface InstanceAgentTools {
   toolRegistry: ToolRegistry;
   /** Where the tools that exist as data are described. Without it an agent has release tools only. */
   dataTools?: DataToolSource;
+  dataToolDescribeTimeoutMs: number;
   runTool: ToolOperationRunner;
 }
 
@@ -109,13 +110,24 @@ export interface InstanceAgentTools {
 export function createInstanceAgentTools(
   operationCalls: OperationCalls,
   tools: ToolRegistry,
-  options: { clientInstanceId: ClientInstanceId; logger: Logger; dataTools?: DataToolSource }
+  options: {
+    clientInstanceId: ClientInstanceId;
+    logger: Logger;
+    runtime: Pick<ClientInstanceConfig["runtime"], "dataToolDescribeTimeoutMs">;
+    dataTools?: DataToolSource;
+  }
 ): InstanceAgentTools {
-  const { dataTools, ...toolOptions } = options;
+  const { dataTools, runtime, ...toolOptions } = options;
+  const describeTimeoutMs = runtime.dataToolDescribeTimeoutMs;
   registerToolOperations(operationCalls.registry, tools.list(), toolOptions);
   return {
     toolRegistry: tools,
     ...(dataTools ? { dataTools } : {}),
-    runTool: createToolOperationRunner(operationCalls.deps, tools, dataTools)
+    dataToolDescribeTimeoutMs: describeTimeoutMs,
+    runTool: createToolOperationRunner(
+      operationCalls.deps,
+      tools,
+      dataTools && { source: dataTools, describeTimeoutMs }
+    )
   };
 }

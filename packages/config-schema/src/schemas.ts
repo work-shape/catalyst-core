@@ -451,11 +451,14 @@ export const conversationTitleConfigSchema = z
 export const agentRuntimeConfigSchema = z
   .object({
     maxSteps: z.number().int().positive().default(64),
-    repeatedToolCallLimit: z.number().int().positive().default(3)
+    repeatedToolCallLimit: z.number().int().positive().default(3),
+    /** How long a run waits for its agent's data tools to be read. See the agent runtime. */
+    dataToolDescribeTimeoutMs: z.number().int().positive().default(10_000)
   })
   .default({
     maxSteps: 64,
-    repeatedToolCallLimit: 3
+    repeatedToolCallLimit: 3,
+    dataToolDescribeTimeoutMs: 10_000
   });
 
 export const modelContextConfigSchema = z

@@ -47,6 +47,8 @@ export interface LocalAgentRuntimeOptions {
    * the release only.
    */
   dataTools?: DataToolSource;
+  /** How long a run's start waits for `dataTools`. Without it `DATA_TOOL_DESCRIBE_TIMEOUT_MS`. */
+  dataToolDescribeTimeoutMs?: number;
   runTool: ToolOperationRunner;
   webAccess?: WebAccessConfig;
   agentSkillChangesEnabled?: boolean;
