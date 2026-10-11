@@ -39,6 +39,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@vivd-catalyst/config-schema": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/web-access": "workspace:*",

@@ -689,6 +689,9 @@ importers:
 
   packages/connections:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.32.1
+        version: 1.32.1(zod@4.4.3)
       '@vivd-catalyst/config-schema':
         specifier: workspace:*
         version: link:../config-schema

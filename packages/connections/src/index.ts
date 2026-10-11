@@ -5,6 +5,7 @@ export * from "./connector-context";
 export * from "./egress";
 export * from "./json-schema";
 export * from "./management";
+export * from "./mcp/connector";
 export * from "./operation-source";
 export * from "./release-seed";
 export * from "./secret-store";
