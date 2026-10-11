@@ -15,6 +15,8 @@ import { useTranslation } from "../../i18n";
 import {
   defaultOperationRunFilter,
   isOperationRunFilterDefault,
+  isOperationRunFilterReadsOnly,
+  operationRunFilterShowsReads,
   operationRunQuery,
   type OperationRunFilter
 } from "../../operations/operations-model";
@@ -64,6 +66,8 @@ export function OperationsPage() {
   });
   const [open, setOpen] = useState<OperationRunResource>();
   const runs = runsQuery.data?.pages.flatMap((page) => page.items);
+  // An empty list of reads says the same sentence as its empty text, so it is said once.
+  const readsEmpty = runs?.length === 0 && isOperationRunFilterReadsOnly(applied);
 
   return (
     <>
@@ -71,6 +75,11 @@ export function OperationsPage() {
       <Section layout="stacked" title={t("operations.list")}>
         <div className="grid gap-4">
           <OperationRunFilters filter={filter} workspaces={workspaces} onChange={setFilter} />
+          {operationRunFilterShowsReads(filter) && !readsEmpty ? (
+            <p className="text-sm text-muted-foreground" data-operation-runs-reads-note>
+              {t("operations.readsNote")}
+            </p>
+          ) : null}
           {/* A refresh that failed leaves the rows that were loaded and says so above them. */}
           {runsQuery.error ? (
             <Banner tone="danger">
@@ -94,9 +103,11 @@ export function OperationsPage() {
               }
             >
               {t(
-                isOperationRunFilterDefault(applied)
-                  ? "operations.empty"
-                  : "operations.emptyFiltered"
+                readsEmpty
+                  ? "operations.readsNote"
+                  : isOperationRunFilterDefault(applied)
+                    ? "operations.empty"
+                    : "operations.emptyFiltered"
               )}
             </EmptyState>
           ) : (

@@ -5,7 +5,7 @@ export const operations = defineTranslations({
   en: {
     "operations.title": "Operations",
     "operations.description":
-      "The calls of operations on this instance: who called, from where and how it ended. A reading call is listed when it was refused or failed.",
+      "The calls of operations on this instance: who called, from where and how it ended. A reading call is listed when it was refused, failed or was marked.",
     "operations.list": "Calls",
     "operations.operation": "Operation",
     "operations.actor": "Called by",
@@ -21,6 +21,8 @@ export const operations = defineTranslations({
     "operations.refreshFailed": "The calls could not be refreshed. This is the last loaded state.",
     "operations.empty": "No changing call has been recorded yet.",
     "operations.emptyFiltered": "No call matches these filters.",
+    "operations.readsNote":
+      "Successful reading calls are not recorded. A reading call appears here only when it was refused, failed or was marked.",
     "operations.clearFilters": "Clear filters",
     "operations.filterOperation": "Operation, exact name",
     "operations.filterEffect": "Filter by effect",
@@ -121,7 +123,7 @@ export const operations = defineTranslations({
   de: {
     "operations.title": "Operationen",
     "operations.description":
-      "Die Aufrufe von Operationen auf dieser Instanz: wer aufgerufen hat, von wo und wie der Aufruf endete. Ein lesender Aufruf steht hier, wenn er abgelehnt wurde oder fehlgeschlagen ist.",
+      "Die Aufrufe von Operationen auf dieser Instanz: wer aufgerufen hat, von wo und wie der Aufruf endete. Ein lesender Aufruf steht hier, wenn er abgelehnt wurde, fehlgeschlagen ist oder markiert war.",
     "operations.list": "Aufrufe",
     "operations.operation": "Operation",
     "operations.actor": "Aufgerufen von",
@@ -138,6 +140,8 @@ export const operations = defineTranslations({
       "Die Aufrufe konnten nicht aktualisiert werden. Dies ist der zuletzt geladene Stand.",
     "operations.empty": "Bisher wurde kein ändernder Aufruf aufgezeichnet.",
     "operations.emptyFiltered": "Kein Aufruf passt zu diesen Filtern.",
+    "operations.readsNote":
+      "Erfolgreiche lesende Aufrufe werden nicht aufgezeichnet. Ein lesender Aufruf erscheint hier nur, wenn er abgelehnt wurde, fehlgeschlagen ist oder markiert war.",
     "operations.clearFilters": "Filter zurücksetzen",
     "operations.filterOperation": "Operation, genauer Name",
     "operations.filterEffect": "Nach Wirkung filtern",

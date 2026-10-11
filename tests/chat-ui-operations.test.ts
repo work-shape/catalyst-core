@@ -5,6 +5,8 @@ import {
   defaultOperationRunFilter,
   formatOperationRunDuration,
   isOperationRunFilterDefault,
+  isOperationRunFilterReadsOnly,
+  operationRunFilterShowsReads,
   OperationRunDetail,
   OperationRunFilters,
   operationRunOriginFields,
@@ -72,6 +74,15 @@ describe("operation runs model", () => {
     for (const effect of ["reading", undefined] as const) {
       expect(isOperationRunFilterDefault({ ...defaultOperationRunFilter, effect })).toBe(false);
     }
+    // The page says which reads are recorded whenever the list holds reads, and an empty list
+    // of nothing but reads says it as its empty text.
+    const reads = { ...defaultOperationRunFilter, effect: "reading" } as const;
+    expect(operationRunFilterShowsReads(defaultOperationRunFilter)).toBe(false);
+    expect(operationRunFilterShowsReads(reads)).toBe(true);
+    expect(operationRunFilterShowsReads({ ...reads, effect: undefined })).toBe(true);
+    expect(isOperationRunFilterReadsOnly(reads)).toBe(true);
+    expect(isOperationRunFilterReadsOnly({ ...reads, status: "failed" })).toBe(false);
+    expect(isOperationRunFilterReadsOnly({ ...reads, effect: undefined })).toBe(false);
     const filter = {
       operation: " assets.put ",
       effect: "reading",

@@ -57,6 +57,9 @@ test("the Operations page opens on changing calls and lists a read only when it 
   const failedRow = page.locator(`tr[data-operation-run-id="${failedRunId}"]`);
   const listed = () => page.locator("tr[data-operation-run-id], [data-operation-runs-empty]");
   const allowedReads = rows.filter({ hasText: /platform\.context\.get|assets\.list/u });
+  const readsNote = page.locator("[data-operation-runs-reads-note]");
+  const READS_NOTE =
+    /^(?:Successful reading calls are not recorded\. A reading call appears here only when it was refused, failed or was marked\.|Erfolgreiche lesende Aufrufe werden nicht aufgezeichnet\. Ein lesender Aufruf erscheint hier nur, wenn er abgelehnt wurde, fehlgeschlagen ist oder markiert war\.)$/u;
 
   // It opens on the changing calls and asks the server for nothing else.
   await expect(effect).toHaveValue("changing");
@@ -65,6 +68,7 @@ test("the Operations page opens on changing calls and lists a read only when it 
   expect(asked.every((search) => search.includes("effect=changing"))).toBe(true);
   await expect(failedRow).toHaveCount(0);
   await expect(allowedReads).toHaveCount(0);
+  await expect(readsNote).toHaveCount(0);
   await shoot(page, "operations-default", async () => {
     await expect(listed().first()).toBeVisible();
   });
@@ -74,15 +78,34 @@ test("the Operations page opens on changing calls and lists a read only when it 
   await expect(failedRow).toHaveAttribute("data-status", "failed");
   await expect(failedRow).toContainText("assets.get");
   await expect(allowedReads).toHaveCount(0);
+  await expect(readsNote).toHaveText(READS_NOTE);
   await shoot(page, "operations-reads", async () => {
     await effect.selectOption("reading");
     await expect(failedRow).toBeVisible();
+    await expect(readsNote).toHaveText(READS_NOTE);
   });
+
+  // An instance without a refused or failed read: the same sentence is the empty text, once.
+  const noReads = /\/api\/v1\/operations\/runs\?.*effect=reading/u;
+  await page.route(noReads, (route) => route.fulfill({ json: { items: [] } }));
+  const empty = page.locator("[data-operation-runs-empty]");
+  await shoot(page, "operations-reads-empty", async () => {
+    await effect.selectOption("reading");
+    await expect(empty).toContainText(
+      /Successful reading calls are not recorded\.|Erfolgreiche lesende Aufrufe werden nicht aufgezeichnet\./u
+    );
+    await expect(readsNote).toHaveCount(0);
+  });
+  await effect.selectOption("reading");
+  await expect(empty).toContainText("Successful reading calls are not recorded.");
+  await expect(readsNote).toHaveCount(0);
+  await page.unroute(noReads);
 
   await effect.selectOption({ index: 2 });
   await expect(effect).toHaveValue("");
   await expect(failedRow).toBeVisible();
   await expect(allowedReads).toHaveCount(0);
+  await expect(readsNote).toHaveText(READS_NOTE);
   await shoot(page, "operations-all", async () => {
     await effect.selectOption({ index: 2 });
     await expect(failedRow).toBeVisible();

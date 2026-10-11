@@ -109,6 +109,19 @@ export function isOperationRunFilterDefault(filter: OperationRunFilter): boolean
   return operationRunQuery(filter).operation === undefined && !hasChoice(filter);
 }
 
+/** Whether the list holds reads, so the page says which reads are recorded at all. */
+export function operationRunFilterShowsReads(filter: OperationRunFilter): boolean {
+  return filter.effect !== "changing";
+}
+
+/** Whether the filter is the reads and nothing else: an empty list then needs no other words. */
+export function isOperationRunFilterReadsOnly(filter: OperationRunFilter): boolean {
+  return (
+    filter.effect === "reading" &&
+    isOperationRunFilterDefault({ ...filter, effect: defaultOperationRunFilter.effect })
+  );
+}
+
 function hasChoice(filter: OperationRunFilter): boolean {
   return (
     filter.effect !== defaultOperationRunFilter.effect ||

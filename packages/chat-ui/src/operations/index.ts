@@ -2,6 +2,8 @@ export {
   defaultOperationRunFilter,
   formatOperationRunDuration,
   isOperationRunFilterDefault,
+  isOperationRunFilterReadsOnly,
+  operationRunFilterShowsReads,
   operationRunOriginFields,
   operationRunQuery,
   operationRunWorkspaceLabel
