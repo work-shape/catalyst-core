@@ -5,6 +5,8 @@ import type { SampleData } from "./data.js";
 export const DEFAULT_LIMIT = 50;
 export const MINIMUM_LIMIT = 1;
 export const MAXIMUM_LIMIT = 200;
+export const DEFAULT_TOP_LIMIT = 5;
+export const MAXIMUM_TOP_LIMIT = 40;
 
 const segmentSchema = z.enum(["retail", "hospitality", "office"]);
 const orderStatusSchema = z.enum(["open", "shipped", "cancelled"]);
@@ -57,6 +59,17 @@ export const outputSchemas = {
         })
       )
       .length(12)
+  }),
+  top_customers: z.strictObject({
+    rows: z.array(
+      z.strictObject({
+        rank: z.number().int().positive(),
+        customer: customerSchema,
+        revenueCents: z.number().int().nonnegative(),
+        orders: totalSchema
+      })
+    ),
+    total: totalSchema
   })
 };
 
@@ -226,6 +239,47 @@ export function registerSampleTools(server: McpServer, data: SampleData): void {
             orders: monthlyOrders.length
           };
         })
+      });
+    }
+  );
+
+  server.registerTool(
+    "top_customers",
+    {
+      title: "Top customers",
+      description:
+        "Rank customers by summed net order revenue excluding cancellations, highest first, within inclusive order dates. The total counts every customer with an order in the period.",
+      annotations: { readOnlyHint: true },
+      inputSchema: z.strictObject({
+        ...dateRange,
+        segment: segmentSchema.optional(),
+        limit: z.number().int().min(MINIMUM_LIMIT).max(MAXIMUM_TOP_LIMIT).default(DEFAULT_TOP_LIMIT)
+      }),
+      outputSchema: outputSchemas.top_customers
+    },
+    (input) => {
+      const sums = new Map<string, { revenueCents: number; orders: number }>();
+      for (const order of data.orders) {
+        if (order.status === "cancelled" || !inRange(order.date, input)) continue;
+        const sum = sums.get(order.customerId) ?? { revenueCents: 0, orders: 0 };
+        sum.revenueCents += order.netTotalCents;
+        sum.orders += 1;
+        sums.set(order.customerId, sum);
+      }
+      const ranked = data.customers
+        .filter((customer) => input.segment === undefined || customer.segment === input.segment)
+        .flatMap((customer) => {
+          const sum = sums.get(customer.id);
+          return sum ? [{ customer, ...sum }] : [];
+        })
+        .sort(
+          (left, right) =>
+            right.revenueCents - left.revenueCents ||
+            left.customer.id.localeCompare(right.customer.id)
+        );
+      return result({
+        rows: ranked.slice(0, input.limit).map((row, index) => ({ rank: index + 1, ...row })),
+        total: ranked.length
       });
     }
   );

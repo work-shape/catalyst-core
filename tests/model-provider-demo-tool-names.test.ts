@@ -29,8 +29,8 @@ afterEach(() => vi.unstubAllGlobals());
 describe("the tools of the demo's agent on the way to the model", () => {
   it("sends every tool of the agent to the model under a name the provider accepts", async () => {
     const names = agentToolNames();
-    // The five tools of the Connection are among them, with the longest names the agent has.
-    expect(names.filter(isDataToolName)).toHaveLength(5);
+    // The six tools of the Connection are among them, with the longest names the agent has.
+    expect(names.filter(isDataToolName)).toHaveLength(6);
     const bodies: z.infer<typeof requestSchema>[] = [];
     vi.stubGlobal(
       "fetch",

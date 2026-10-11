@@ -20,7 +20,7 @@ function agentToolNames(): string[] {
 }
 
 describe("the demo's Connection and the names its agent carries", () => {
-  it("accepts the five tools of the sample server, reading, for agents and Pages", async () => {
+  it("accepts the six tools of the sample server, reading, for agents and Pages", async () => {
     const config = await loadClientInstanceConfigFromFile(
       resolve(root, "clients/demo/config/app.yaml")
     );

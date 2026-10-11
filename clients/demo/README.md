@@ -112,11 +112,11 @@ The demo runs with Execution Workspaces and the `apps` module on. Its agent read
 
 ## The sample business system and its Connection
 
-Beside the instance runs a small outside system: the Compose service `sample-mcp` (`sample-mcp/`), a remote MCP server with customers, orders and invoices of an invented wholesale company over the last twelve full months. The data is generated at start from a fixed seed, so it is the same for a whole month. The server has five reading tools, publishes no host port and answers only with its key.
+Beside the instance runs a small outside system: the Compose service `sample-mcp` (`sample-mcp/`), a remote MCP server with customers, orders and invoices of an invented wholesale company over the last twelve full months. The data is generated at start from a fixed seed, so it is the same for a whole month. The server has six reading tools, publishes no host port and answers only with its key.
 
 The instance reaches it through the Connection `sample-business` ("Sample business" under Build > Connections), which release config defines in `config/app.yaml`:
 
-- `connections.sample-business` names the Connector type `mcp`, the address `http://sample-mcp:8787/mcp`, the secret `DEMO_SAMPLE_MCP_KEY` and the five accepted operations, each reading and open to agents and to Pages.
+- `connections.sample-business` names the Connector type `mcp`, the address `http://sample-mcp:8787/mcp`, the secret `DEMO_SAMPLE_MCP_KEY` and the six accepted operations, each reading and open to agents and to Pages.
 - `egress.allow` lists the one target a Connection may reach: `sample-mcp`, port 8787, as a private target whose address lies in a private range. Docker gives a Compose network such a range. Remove the entry and the Connection's test answers `network_denied`.
 - `secretStore.keys` names `DEMO_SECRET_STORE_KEY`, the key that encrypts the secrets of Connections in the database.
 
@@ -124,11 +124,13 @@ The instance reaches it through the Connection `sample-business` ("Sample busine
 
 To replace the sample key, delete the line `DEMO_SAMPLE_MCP_KEY` from `.env` and start again with `pnpm dev`: the server takes the new key and the API stores it as the next secret version. Keep `DEMO_SECRET_STORE_KEY` as long as the database lives, because the stored secret is read with it. After a database reset both lines may go.
 
-The demo agent carries the five tools as `connection.sample-business.<tool>`. Like every change to the working copy they reach a running demo with `pnpm config:push`. Then ask, for example:
+The demo agent carries the six tools as `connection.sample-business.<tool>`. Like every change to the working copy they reach a running demo with `pnpm config:push`. Then ask, for example:
 
 ```text
 Which five customers ordered most in the last twelve months?
 ```
+
+[docs/try-connections.md](docs/try-connections.md) walks through the Connection page, three questions with what a right answer looks like, a refusal and a stopped sample server.
 
 ## Agent and skill configuration
 

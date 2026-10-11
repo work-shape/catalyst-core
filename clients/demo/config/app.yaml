@@ -233,6 +233,9 @@ connections:
       - name: revenue_by_month
         effect: reading
         exposure: [agent, bridge]
+      - name: top_customers
+        effect: reading
+        exposure: [agent, bridge]
 runtime:
   maxSteps: 64
   repeatedToolCallLimit: 3

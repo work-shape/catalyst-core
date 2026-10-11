@@ -10,8 +10,10 @@ import {
   createSampleData,
   createSampleMcpServer,
   DEFAULT_LIMIT,
+  DEFAULT_TOP_LIMIT,
   MAXIMUM_BODY_BYTES,
   MAXIMUM_LIMIT,
+  MAXIMUM_TOP_LIMIT,
   MINIMUM_KEY_LENGTH,
   MINIMUM_LIMIT,
   outputSchemas,
@@ -105,7 +107,7 @@ afterEach(async () => {
 });
 
 describe("demo sample MCP", () => {
-  it("advertises exactly five read-only tools with the registered output schemas", async () => {
+  it("advertises exactly six read-only tools with the registered output schemas", async () => {
     const { tools } = await client.listTools();
     expect(tools.map(({ name }) => name).sort()).toEqual(Object.keys(outputSchemas).sort());
     for (const tool of tools) {
@@ -120,7 +122,8 @@ describe("demo sample MCP", () => {
           "get_customer",
           "list_orders",
           "list_invoices",
-          "revenue_by_month"
+          "revenue_by_month",
+          "top_customers"
         ])
         .parse(tool.name);
       expect(tool.outputSchema).toEqual(z.toJSONSchema(outputSchemas[name], { target: "draft-7" }));
@@ -186,6 +189,66 @@ describe("demo sample MCP", () => {
         .filter(({ month }) => month !== "2026-02")
         .every((row) => row.revenueCents === 0 && row.orders === 0)
     ).toBe(true);
+  });
+
+  it("ranks customers by the summed revenue of their non-cancelled orders in a period", async () => {
+    const orders = (await allOrders(client)).filter(({ status }) => status !== "cancelled");
+    const sumOf = (rows: typeof orders) => {
+      const sums = new Map<string, { revenueCents: number; orders: number }>();
+      for (const row of rows) {
+        const sum = sums.get(row.customerId) ?? { revenueCents: 0, orders: 0 };
+        sums.set(row.customerId, {
+          revenueCents: sum.revenueCents + row.netTotalCents,
+          orders: sum.orders + 1
+        });
+      }
+      return sums;
+    };
+    const year = sumOf(orders);
+    const top = await call(client, "top_customers", outputSchemas.top_customers);
+    expect(top.rows).toHaveLength(DEFAULT_TOP_LIMIT);
+    expect(top.total).toBe(year.size);
+    expect(top.rows.map(({ rank }) => rank)).toEqual([1, 2, 3, 4, 5]);
+    for (const row of top.rows)
+      expect({ revenueCents: row.revenueCents, orders: row.orders }).toEqual(
+        year.get(row.customer.id)
+      );
+    // No customer outside the answer has more revenue than the last one in it.
+    const inside = new Set(top.rows.map(({ customer }) => customer.id));
+    const least = Math.min(...top.rows.map(({ revenueCents }) => revenueCents));
+    for (const [id, sum] of year) if (!inside.has(id)) expect(sum.revenueCents <= least).toBe(true);
+    expect(top.rows.map(({ revenueCents }) => revenueCents)).toEqual(
+      top.rows.map(({ revenueCents }) => revenueCents).sort((left, right) => right - left)
+    );
+
+    const all = await call(client, "top_customers", outputSchemas.top_customers, {
+      limit: MAXIMUM_TOP_LIMIT
+    });
+    expect(all.rows).toHaveLength(year.size);
+    expect(all.rows.reduce((sum, row) => sum + row.revenueCents, 0)).toBe(
+      orders.reduce((sum, row) => sum + row.netTotalCents, 0)
+    );
+
+    const range = { from: "2026-02-01", to: "2026-02-28" };
+    const month = sumOf(orders.filter(({ date }) => date >= range.from && date <= range.to));
+    const retail = await call(client, "top_customers", outputSchemas.top_customers, {
+      ...range,
+      segment: "retail",
+      limit: MAXIMUM_TOP_LIMIT
+    });
+    expect(retail.rows.length).toBeGreaterThan(0);
+    expect(retail.total).toBe(retail.rows.length);
+    for (const row of retail.rows) {
+      expect(row.customer.segment).toBe("retail");
+      expect({ revenueCents: row.revenueCents, orders: row.orders }).toEqual(
+        month.get(row.customer.id)
+      );
+    }
+    const refused = await client.callTool({
+      name: "top_customers",
+      arguments: { limit: MAXIMUM_TOP_LIMIT + 1 }
+    });
+    expect(refused.isError).toBe(true);
   });
 
   it("repeats every tool result and all rows for an anchor and shifts dates for another", async () => {

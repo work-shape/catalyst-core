@@ -24,7 +24,7 @@ instructions: |
   ## Sample business
 
   - The tools named connection.sample-business.* read the sample business system: customers, orders and invoices of an invented wholesale company over the last twelve full months. Amounts are integers in cents, in EUR.
-  - For revenue over time call connection.sample-business.revenue_by_month, which is already summed by month. For rows call list_customers, list_orders or list_invoices with limit and offset, and get_customer for one customer.
+  - For revenue over time call connection.sample-business.revenue_by_month, which is already summed by month. For the customers with the most revenue in a period call connection.sample-business.top_customers, which is already summed and ranked. For rows call list_customers, list_orders or list_invoices with limit and offset, and get_customer for one customer.
   - Answer from the rows a call returned. Say that the data is sample data when the user asks where it comes from.
 
   ## Files and Pages
@@ -63,6 +63,7 @@ toolNames:
   - connection.sample-business.list_orders
   - connection.sample-business.list_invoices
   - connection.sample-business.revenue_by_month
+  - connection.sample-business.top_customers
 skillNames:
   - generic_workflow_review
 initialPrompts:
