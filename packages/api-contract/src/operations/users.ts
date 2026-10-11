@@ -33,7 +33,8 @@ export const userOperations = {
     id: "users.create",
     method: "POST",
     path: "/api/v1/instance/users",
-    summary: "Create a user",
+    summary:
+      "Create a user. Needs the right `users.manage`. Only a superadmin gives the superadmin role or a right only a superadmin assigns.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
@@ -48,7 +49,8 @@ export const userOperations = {
     id: "users.update",
     method: "PATCH",
     path: "/api/v1/instance/users/:userId",
-    summary: "Change a user's profile, roles or status",
+    summary:
+      "Change a user's profile, roles or status. Needs the right `users.manage`. Only a superadmin changes a superadmin, gives the superadmin role or gives or takes a right only a superadmin assigns.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
@@ -64,7 +66,7 @@ export const userOperations = {
     method: "DELETE",
     path: "/api/v1/instance/users/:userId",
     summary:
-      "Delete a user and their data. Answers `deleted`, or `deleting` while the data is still being removed.",
+      "Delete a user and their data. Answers `deleted`, or `deleting` while the data is still being removed. Needs the right `users.manage`. Only a superadmin deletes a user.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
@@ -78,7 +80,8 @@ export const userOperations = {
     id: "users.identities.upsert",
     method: "PUT",
     path: "/api/v1/instance/users/:userId/identities",
-    summary: "Link a sign-in identity to a user",
+    summary:
+      "Link a sign-in identity to a user. Needs the right `users.manage`. Only a superadmin changes a superadmin.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
@@ -93,7 +96,8 @@ export const userOperations = {
     id: "users.password.reset",
     method: "POST",
     path: "/api/v1/instance/users/:userId/password",
-    summary: "Set a user's password",
+    summary:
+      "Set a user's password. Needs the right `users.manage`. Only a superadmin changes a superadmin.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
@@ -110,7 +114,8 @@ export const userOperations = {
     id: "users.invitation.send",
     method: "POST",
     path: "/api/v1/instance/users/:userId/invitation",
-    summary: "Mail a user a link to set their password",
+    summary:
+      "Mail a user a link to set their password. Needs the right `users.manage`. Only a superadmin invites a superadmin.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",
@@ -124,7 +129,8 @@ export const userOperations = {
     id: "users.identities.delete",
     method: "DELETE",
     path: "/api/v1/instance/users/:userId/identities/:authSource/:externalUserId",
-    summary: "Unlink a sign-in identity from a user",
+    summary:
+      "Unlink a sign-in identity from a user. Needs the right `users.manage`. Only a superadmin changes a superadmin.",
     tag: "Users",
     auth: "user",
     scope: "user_admin:write",

@@ -830,11 +830,11 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(escalatedCreate.statusCode).toBe(403);
-    // The operation records a superadmin refusal with its id instead of the old role message.
+    // The refusal says the superadmin rule and names the operation it refused.
     expect(escalatedCreate.json()).toMatchObject({
       error: {
         code: "FORBIDDEN",
-        message: "Missing the right 'users.create'",
+        message: "Only a superadmin may assign the superadmin role",
         details: { action: "users.create", reason: "no_grant" }
       }
     });
@@ -860,11 +860,11 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(superadminUpdate.statusCode).toBe(403);
-    // The operation records a superadmin refusal with its id instead of the old role message.
+    // The refusal says the superadmin rule and names the operation it refused.
     expect(superadminUpdate.json()).toMatchObject({
       error: {
         code: "FORBIDDEN",
-        message: "Missing the right 'users.update'",
+        message: "Only a superadmin may change a superadmin",
         details: { action: "users.update", reason: "no_grant" }
       }
     });
@@ -876,11 +876,11 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(adminDelete.statusCode).toBe(403);
-    // The operation records a superadmin refusal with its id instead of the old role message.
+    // The refusal says the superadmin rule and names the operation it refused.
     expect(adminDelete.json()).toMatchObject({
       error: {
         code: "FORBIDDEN",
-        message: "Missing the right 'users.delete'",
+        message: "Only a superadmin may delete a user",
         details: { action: "users.delete", reason: "no_grant" }
       }
     });

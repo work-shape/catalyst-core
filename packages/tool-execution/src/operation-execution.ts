@@ -562,7 +562,13 @@ export async function executeAdmitted(
     }
     // An implementation that asks for a further right refuses through `context.access.require`.
     const refused = forbiddenSchema.safeParse(error);
-    if (refused.success) return denyRun(context, { kind: "forbidden", ...refused.data.details });
+    if (refused.success) {
+      return denyRun(context, {
+        kind: "forbidden",
+        ...refused.data.details,
+        message: refused.data.message
+      });
+    }
     return failRun(context, error, !started);
   }
 }
@@ -666,6 +672,7 @@ export async function failRun(
 
 const forbiddenSchema = z.object({
   code: z.literal("FORBIDDEN"),
+  message: z.string(),
   details: z.object({
     action: z.string(),
     reason: z.enum(["no_grant", "denied", "unknown_action", "holder_inactive"])

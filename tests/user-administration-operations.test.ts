@@ -91,11 +91,53 @@ describe("user administration: a password rests nowhere", () => {
         code: "OUTPUT_NOT_RETAINED",
         details: { operationRunId: run?.id }
       });
+      // The secret was in what the call sent: nothing was shown once and nothing is to revoke.
+      expect(errorOf(again).message).toBe(
+        "The call was already carried out and its answer is not kept. To carry it out again, call with a new Idempotency-Key."
+      );
       expect(again.payload).not.toContain(sent);
     }
     expect(fixture.passwordWrites).toBe(1);
     expect([...fixture.passwords.values()]).toEqual([password]);
     expect(await fixture.runs("users.password.reset")).toHaveLength(1);
+  });
+
+  // The other branch of the reset: the user has a password sign-in, so `setPassword` runs and
+  // the row `user.password_reset` is written.
+  it("keeps the new password of a user with a password sign-in in no row", async () => {
+    const fixture = await createFixture();
+    const target = await fixture.addUser("Grace", { email: "grace@example.test" });
+    const reset = (key: string, sent: string) =>
+      fixture.server.call("users.password.reset", {
+        params: { userId: target.id },
+        headers: { ...as.superadmin, "idempotency-key": key },
+        payload: { password: sent }
+      });
+    // The first reset gives the user the sign-in, the second sets its password.
+    expect((await reset("reset-first", "First-Password-7781-for-grace")).statusCode).toBe(200);
+    const password = "Second-Password-5503-for-grace";
+    expect((await reset("reset-second", password)).statusCode).toBe(200);
+    expect([...fixture.passwords.values()]).toEqual([password]);
+
+    const [first, second] = await fixture.runs("users.password.reset");
+    const events = await fixture.audit();
+    const rowsOf = (runId: string | undefined) =>
+      events.filter((event) => event.metadata?.operationRunId === runId).map((event) => event.type);
+    expect([first, second].map((run) => rowsOf(run?.id).includes("user.password_reset"))).toEqual([
+      false,
+      true
+    ]);
+
+    const rows = await storedRows();
+    const traces = secretTraces(password);
+    expect(traces).toHaveLength(13);
+    expect(
+      rows.filter((row) => traces.some((trace) => row.text.includes(trace))).map((row) => row.table)
+    ).toEqual([]);
+    expect(traces.filter((trace) => fixture.logged.join("\n").includes(trace))).toEqual([]);
+    // The rows were read: the row of this branch is among them.
+    expect(rows.some((row) => row.text.includes("user.password_reset"))).toBe(true);
+    expect(second?.output).toBeUndefined();
   });
 
   it("keeps the first password of a new user in no row, and creates the user once", async () => {
@@ -321,9 +363,14 @@ describe("user administration: who may change a user", () => {
       // No right a caller can be granted opens the rule, so the refusal names the operation.
       expect(errorOf(refused)).toMatchObject({
         code: "FORBIDDEN",
+        message:
+          operation === "users.delete"
+            ? "Only a superadmin may delete a user"
+            : "Only a superadmin may change a superadmin",
         details: { action: operation, reason: "no_grant" }
       });
       const [run] = await fixture.runs(operation);
+      expect(run?.error?.message).toBe(errorOf(refused).message);
       expect(await fixture.rowsOfRun(run?.id)).toEqual([
         "operation.authorization_checked:denied",
         "operation.denied:denied"
@@ -345,13 +392,25 @@ describe("user administration: who may change a user", () => {
   });
 
   it.each([
-    ["the superadmin role", { roles: ["user", "superadmin"] }],
-    ["the right to manage API access", { permissions: ["api_access.manage"] }],
-    ["the right to manage agent models", { permissions: ["agent_models.manage"] }],
-    ["a revocation of the right to manage API access", { permissions: ["!api_access.manage"] }]
+    ["the superadmin role", { roles: ["user", "superadmin"] }, "assign the superadmin role"],
+    [
+      "the right to manage API access",
+      { permissions: ["api_access.manage"] },
+      "give or take the right 'api_access.manage'"
+    ],
+    [
+      "the right to manage agent models",
+      { permissions: ["agent_models.manage"] },
+      "give or take the right 'agent_models.manage'"
+    ],
+    [
+      "a revocation of the right to manage API access",
+      { permissions: ["!api_access.manage"] },
+      "give or take the right 'api_access.manage'"
+    ]
   ])(
     "refuses an admin who gives %s, on a new user and on an existing one",
-    async (_label, change) => {
+    async (_label, change, rule) => {
       const fixture = await createFixture();
       const member = await fixture.addUser("Grace", {});
       const created = await fixture.server.call("users.create", {
@@ -369,6 +428,7 @@ describe("user administration: who may change a user", () => {
       ] as const) {
         expect({ operation, status: refused.statusCode }).toEqual({ operation, status: 403 });
         expect(errorOf(refused).details).toMatchObject({ action: operation, reason: "no_grant" });
+        expect(errorOf(refused).message).toBe(`Only a superadmin may ${rule}`);
       }
       expect(await fixture.usersNamed("New")).toEqual([]);
       expect(await fixture.user(member.id)).toMatchObject({ roles: ["user"], permissions: [] });

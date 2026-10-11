@@ -58,6 +58,10 @@ describe("operation over HTTP: an input that holds a secret", () => {
       code: "OUTPUT_NOT_RETAINED",
       details: { operationRunId: one?.id }
     });
+    // Not the text of a secret answer: nothing was shown once, and nothing is to revoke.
+    expect(errorOf(again).message).toBe(
+      "The call was already carried out and its answer is not kept. To carry it out again, call with a new Idempotency-Key."
+    );
     expect(executed).toEqual(["pw-hunter22", "pw-other-one"]);
     expect(await runs()).toHaveLength(2);
   });

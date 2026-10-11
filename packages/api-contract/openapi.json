@@ -6981,7 +6981,7 @@
       },
       "post": {
         "operationId": "users.create",
-        "summary": "Create a user",
+        "summary": "Create a user. Needs the right `users.manage`. Only a superadmin gives the superadmin role or a right only a superadmin assigns.",
         "tags": [
           "Users"
         ],
@@ -7089,7 +7089,7 @@
     "/api/v1/instance/users/{userId}": {
       "patch": {
         "operationId": "users.update",
-        "summary": "Change a user's profile, roles or status",
+        "summary": "Change a user's profile, roles or status. Needs the right `users.manage`. Only a superadmin changes a superadmin, gives the superadmin role or gives or takes a right only a superadmin assigns.",
         "tags": [
           "Users"
         ],
@@ -7206,7 +7206,7 @@
       },
       "delete": {
         "operationId": "users.delete",
-        "summary": "Delete a user and their data. Answers `deleted`, or `deleting` while the data is still being removed.",
+        "summary": "Delete a user and their data. Answers `deleted`, or `deleting` while the data is still being removed. Needs the right `users.manage`. Only a superadmin deletes a user.",
         "tags": [
           "Users"
         ],
@@ -7315,7 +7315,7 @@
     "/api/v1/instance/users/{userId}/identities": {
       "put": {
         "operationId": "users.identities.upsert",
-        "summary": "Link a sign-in identity to a user",
+        "summary": "Link a sign-in identity to a user. Needs the right `users.manage`. Only a superadmin changes a superadmin.",
         "tags": [
           "Users"
         ],
@@ -7434,7 +7434,7 @@
     "/api/v1/instance/users/{userId}/identities/{authSource}/{externalUserId}": {
       "delete": {
         "operationId": "users.identities.delete",
-        "summary": "Unlink a sign-in identity from a user",
+        "summary": "Unlink a sign-in identity from a user. Needs the right `users.manage`. Only a superadmin changes a superadmin.",
         "tags": [
           "Users"
         ],
@@ -7559,7 +7559,7 @@
     "/api/v1/instance/users/{userId}/invitation": {
       "post": {
         "operationId": "users.invitation.send",
-        "summary": "Mail a user a link to set their password",
+        "summary": "Mail a user a link to set their password. Needs the right `users.manage`. Only a superadmin invites a superadmin.",
         "tags": [
           "Users"
         ],
@@ -7668,7 +7668,7 @@
     "/api/v1/instance/users/{userId}/password": {
       "post": {
         "operationId": "users.password.reset",
-        "summary": "Set a user's password",
+        "summary": "Set a user's password. Needs the right `users.manage`. Only a superadmin changes a superadmin.",
         "tags": [
           "Users"
         ],

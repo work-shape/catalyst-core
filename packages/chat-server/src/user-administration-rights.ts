@@ -52,30 +52,38 @@ export function changedPermissionEntries(
 }
 
 /**
- * The rules of user administration that depend on the superadmin role. A superadmin may make
- * every change. Anybody else may not change a superadmin, may not give the superadmin role,
- * and may not give or take a right only a superadmin assigns. `target` is the user as they are
- * now, or nobody for a call that creates one.
+ * The rules of user administration that depend on the superadmin role, as the sentence a
+ * refused caller reads, or nothing where the actor may. A superadmin may make every change.
+ * Anybody else may not change a superadmin, may not give the superadmin role, and may not give
+ * or take a right only a superadmin assigns. `target` is the user as they are now, or nobody
+ * for a call that creates one.
  */
-function mayAdministerUser(
+function superadminRuleAgainst(
   actor: AuthenticatedIdentity,
   target: Pick<UserRecord, "roles" | "permissions"> | undefined,
-  change: UserRightsChange = {}
-): boolean {
-  if (!isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor)) return true;
-  if (target && isSuperadmin(target)) return false;
-  if (change.roles && isSuperadmin({ roles: [...change.roles] })) return false;
-  return !changedPermissionEntries(change.permissions, target?.permissions).some((permission) =>
-    SUPERADMIN_ASSIGNED_PERMISSIONS.has(permission.replace(/^!/u, ""))
-  );
+  call: Pick<UserAdministrationCall, "roles" | "permissions" | "superadminOnly"> = {}
+): string | undefined {
+  if (isSuperadminActor(actor)) return undefined;
+  if (call.superadminOnly) return "Only a superadmin may delete a user";
+  if (target && isSuperadmin(target)) return "Only a superadmin may change a superadmin";
+  if (call.roles && isSuperadmin({ roles: [...call.roles] })) {
+    return "Only a superadmin may assign the superadmin role";
+  }
+  const assigned = changedPermissionEntries(call.permissions, target?.permissions)
+    .map((permission) => permission.replace(/^!/u, ""))
+    .find((permission) => SUPERADMIN_ASSIGNED_PERMISSIONS.has(permission));
+  return assigned === undefined
+    ? undefined
+    : `Only a superadmin may give or take the right '${assigned}'`;
 }
 
 /**
  * Who may call a user administration operation. It is the `authorize` of the seven changing
  * operations, so the run records the check and a refusal, and nothing of the operation runs
  * for anybody else. `users.manage` is asked first, so a caller without it causes no read. A
- * refusal by a superadmin rule names the operation, since no right a caller can be granted
- * opens it. A user that does not exist passes: the operation answers that itself.
+ * refusal by a superadmin rule names the operation and says the rule, since no right a caller
+ * can be granted opens it. A user that does not exist passes: the operation answers that
+ * itself.
  */
 export async function authorizeUserAdministration(
   options: Pick<ChatServerOptions, "stores" | "clientInstanceId">,
@@ -87,22 +95,32 @@ export async function authorizeUserAdministration(
   if (!right.allowed) {
     return { allowed: false, action: USERS_MANAGE_ACTION, reason: right.reason };
   }
-  const refused: OperationAuthorization = {
-    allowed: false,
-    action: operationId,
-    reason: "no_grant"
-  };
-  if (isAuthenticatedServicePrincipal(actor)) return refused;
+  // A service principal administers no user, whatever it was granted.
+  if (isAuthenticatedServicePrincipal(actor)) {
+    return {
+      allowed: false,
+      action: operationId,
+      reason: "no_grant",
+      message: "Only a signed-in user may administer users"
+    };
+  }
   if (isSuperadmin(actor)) return { allowed: true };
-  if (call.superadminOnly) return refused;
+  // Deleting is refused whoever the user is, so that refusal causes no read either.
   const target =
-    call.userId === undefined
+    call.superadminOnly || call.userId === undefined
       ? undefined
       : await options.stores.users.getUser({
           clientInstanceId: options.clientInstanceId,
           userId: asUserId(call.userId)
         });
-  return mayAdministerUser(actor, target, call) ? { allowed: true } : refused;
+  const message = superadminRuleAgainst(actor, target, call);
+  return message === undefined
+    ? { allowed: true }
+    : { allowed: false, action: operationId, reason: "no_grant", message };
+}
+
+function isSuperadminActor(actor: AuthenticatedIdentity): boolean {
+  return !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor);
 }
 
 /**
@@ -114,12 +132,10 @@ export function requireMayAdministerUser(
   operationId: string,
   actor: AuthenticatedIdentity,
   target: Pick<UserRecord, "roles" | "permissions"> | undefined,
-  change: UserRightsChange = {}
+  call: Pick<UserAdministrationCall, "roles" | "permissions" | "superadminOnly"> = {}
 ): void {
-  if (!mayAdministerUser(actor, target, change)) {
-    throw new AppError("FORBIDDEN", `Missing the right '${operationId}'`, {
-      action: operationId,
-      reason: "no_grant"
-    });
+  const message = superadminRuleAgainst(actor, target, call);
+  if (message !== undefined) {
+    throw new AppError("FORBIDDEN", message, { action: operationId, reason: "no_grant" });
   }
 }

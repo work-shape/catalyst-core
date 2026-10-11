@@ -87,6 +87,7 @@ export async function runOperation(
     // never waits and keeps no answer, like an operation whose answer is the secret.
     definition = { ...definition, secret: true };
   }
+  const secretInput = withoutSecrets !== undefined;
 
   for (let attempt = 0; attempt < IDEMPOTENCY_CLAIM_ATTEMPTS; attempt++) {
     const start: NewOperationRun = {
@@ -132,7 +133,11 @@ export async function runOperation(
     // without asking for the right again: the actor had it when the call ran, and a refusal
     // now would hide an outcome that happened and invite the same change under a new key.
     if (held && !runsAgain(held)) {
-      return { result: replay(held, definition, actor, inputHash), run: held, replayed: true };
+      return {
+        result: replay(held, definition, actor, inputHash, secretInput),
+        run: held,
+        replayed: true
+      };
     }
     if (held && !sameCall(held, definition, actor, inputHash)) {
       throw keyReused();
@@ -233,17 +238,31 @@ function replay(
   held: OperationRun,
   definition: OperationDefinition,
   actor: OperationRunActor,
-  inputHash: string
+  inputHash: string,
+  /** The call's input held a secret, so no answer was kept whatever the answer was. */
+  secretInput: boolean
 ): OperationResult {
   if (!sameCall(held, definition, actor, inputHash)) throw keyReused();
-  return recordedResult(held, definition);
+  return recordedResult(held, definition, secretInput);
 }
 
 /** The result a run that has an outcome answers with, whoever asks again. */
-function recordedResult(held: OperationRun, definition: OperationDefinition): OperationResult {
+function recordedResult(
+  held: OperationRun,
+  definition: OperationDefinition,
+  secretInput: boolean
+): OperationResult {
   const runId = held.id;
   switch (held.status) {
     case "done":
+      if (secretInput) {
+        // The secret was in what the call sent, not in what it answered. Nothing is lost.
+        throw new AppError(
+          "OUTPUT_NOT_RETAINED",
+          "The call was already carried out and its answer is not kept. To carry it out again, call with a new Idempotency-Key.",
+          { operationRunId: runId }
+        );
+      }
       if (definition.secret) {
         // The secret went to the first call alone. Nothing here could answer it again.
         throw new AppError(
@@ -334,7 +353,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       ending: await denyRun(context, {
         kind: "forbidden",
         action: right.action,
-        reason: right.reason
+        reason: right.reason,
+        ...(right.message === undefined ? {} : { message: right.message })
       })
     };
   }

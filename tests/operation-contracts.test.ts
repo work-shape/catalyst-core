@@ -309,6 +309,7 @@ describe("operation contracts", () => {
           kind: "forbidden";
           action: string;
           reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive";
+          message?: string;
         }
       | { kind: "policy"; operation: string }
       | { kind: "guardrail"; guardrailId: string; message?: string }

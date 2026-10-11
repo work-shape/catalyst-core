@@ -382,7 +382,11 @@ id from config_assets where status = 'deleted')`.
   calls other than password reset as an operation outcome; `completedOutput(outcome)` hands
   a caller the output. `DELETE /api/v1/instance/users/{userId}` answers `200` with
   `{ "state": "deleted" | "deleting" }` in place of the user or an empty `202`. A refusal by
-  a superadmin rule answers `403 FORBIDDEN` with `details.action` naming the operation.
+  a superadmin rule answers `403 FORBIDDEN` with the rule as its message, such as
+  `Only a superadmin may change a superadmin`, and `details.action` naming the operation. Each
+  operation's summary names the right `users.manage`. A repeated call that sent a password
+  answers `409 OUTPUT_NOT_RETAINED` saying that the call was carried out and that a repeat
+  needs a new `Idempotency-Key`.
   The rows `governance.user_*_authorized` are no longer written; the run's
   `operation.authorization_checked` row records the same check. The change's own audit rows
   stay and name the run. `users.password.reset`, and `users.create` with `passwordSignIn`,

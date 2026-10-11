@@ -166,12 +166,7 @@ export class UserAdministrationWorkflow {
   ): Promise<DeletionOutcome<UserRecord>> {
     const actor = personOf(context.actor);
     // The operation's `authorize` refused everybody else before. Asked again where it deletes.
-    if (!isSuperadmin(actor)) {
-      throw new AppError("FORBIDDEN", `Missing the right '${operationId}'`, {
-        action: operationId,
-        reason: "no_grant"
-      });
-    }
+    requireMayAdministerUser(operationId, actor, undefined, { superadminOnly: true });
     if (command.userId === actor.id) {
       throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
     }

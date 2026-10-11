@@ -5,6 +5,11 @@ export type OperationDenial =
       kind: "forbidden";
       action: string;
       reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive";
+      /**
+       * What the refusal says, where a rule refused that no right a caller can be granted
+       * opens. Without it the refusal names the missing right.
+       */
+      message?: string;
     }
   | { kind: "policy"; operation: string }
   | { kind: "guardrail"; guardrailId: string; message?: string }
@@ -14,7 +19,7 @@ export type OperationDenial =
 export function operationDenialError(denial: OperationDenial): AppError {
   switch (denial.kind) {
     case "forbidden":
-      return new AppError("FORBIDDEN", `Missing the right '${denial.action}'`, {
+      return new AppError("FORBIDDEN", denial.message ?? `Missing the right '${denial.action}'`, {
         action: denial.action,
         reason: denial.reason
       });
