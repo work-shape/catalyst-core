@@ -317,6 +317,75 @@ test("a message sent directly after switching lands in the conversation switched
   expect(await messagesOf(left.id)).toEqual([`Opening message for Switch from ${stamp}`]);
 });
 
+test("switching between conversations keeps the composer at the bottom from the first frame", async ({
+  page
+}) => {
+  await signInViaApi(page, normalUser);
+  const stamp = Date.now();
+  const first = await createListedConversation(page, `Docked one ${stamp}`);
+  const second = await createListedConversation(page, `Docked two ${stamp}`);
+
+  await page.goto("/");
+  const chat = page.getByRole("region", { name: "Chat" });
+  const rowOf = (title: string) =>
+    page.getByTestId("conversation-row").filter({ hasText: title }).getByRole("button").first();
+  await expect(page.getByPlaceholder("Message")).toBeVisible();
+  const startGap = await settledComposerBottomGap(page);
+
+  await rowOf(`Docked one ${stamp}`).click();
+  await expect(page).toHaveURL(conversationUrlPattern(first.id));
+  await expect(chat.getByText(`Opening message for Docked one ${stamp}`).first()).toBeVisible();
+  const dockedGap = await settledComposerBottomGap(page);
+  // The start page has the composer in the middle, far from where a conversation has it.
+  expect(startGap - dockedGap).toBeGreaterThan(COMPOSER_START_PAGE_LIFT_PX);
+
+  // Between two conversations the composer is at the bottom in every frame.
+  for (const [title, id] of [
+    [`Docked two ${stamp}`, second.id],
+    [`Docked one ${stamp}`, first.id]
+  ] as const) {
+    const frames = recordComposerBottomGaps(page);
+    await rowOf(title).click();
+    const gaps = await frames;
+    await expect(page).toHaveURL(conversationUrlPattern(id));
+    await expect(chat.getByText(`Opening message for ${title}`).first()).toBeVisible();
+    expect(gaps.length).toBeGreaterThan(COMPOSER_FRAMES_LEAST);
+    expect(gaps.filter((gap) => Math.abs(gap - dockedGap) > 1)).toEqual([]);
+  }
+
+  // From the start page to a conversation it is in the middle, then at the bottom, and in no
+  // frame between the two.
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect.poll(() => composerBottomGap(page)).toBeCloseTo(startGap, 0);
+  const frames = recordComposerBottomGaps(page);
+  await rowOf(`Docked two ${stamp}`).click();
+  const gaps = await frames;
+  await expect(page).toHaveURL(conversationUrlPattern(second.id));
+  expect(gaps.at(-1)).toBeCloseTo(dockedGap, 0);
+  expect(
+    gaps.filter((gap) => Math.abs(gap - dockedGap) > 1 && Math.abs(gap - startGap) > 1)
+  ).toEqual([]);
+});
+
+test("the first message moves the composer from the middle to the bottom", async ({ page }) => {
+  await signInViaApi(page, normalUser);
+  await page.goto("/");
+  const input = page.getByPlaceholder("Message");
+  await expect(input).toBeVisible();
+  const startGap = await settledComposerBottomGap(page);
+
+  await input.fill(`Settles ${Date.now()}`);
+  const frames = recordComposerBottomGaps(page);
+  await input.press("Enter");
+  const gaps = await frames;
+  await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+
+  const dockedGap = await settledComposerBottomGap(page);
+  expect(startGap - dockedGap).toBeGreaterThan(COMPOSER_START_PAGE_LIFT_PX);
+  // It travels: some frames show it between the two places.
+  expect(gaps.filter((gap) => gap > dockedGap + 2 && gap < startGap - 2).length).toBeGreaterThan(0);
+});
+
 test("start page centres the composer and settles it at the bottom after the first message", async ({
   page,
   // The picker shows every agent of the instance and this test counts its options.
@@ -4476,6 +4545,14 @@ const SHORT_WINDOW_HEIGHT = 420;
 const TALL_WINDOW_HEIGHT = 1_600;
 /** How far the Settings page is scrolled: inside the room above its first element, then past it. */
 const SUB_RAIL_SCROLL_STEPS = [8, 24, 60, 200];
+/** How far above its place in a conversation the start page holds the composer, at the least. */
+const COMPOSER_START_PAGE_LIFT_PX = 100;
+/** How long the composer is watched after a click: well past its 220 ms move. */
+const COMPOSER_WATCH_MS = 1_000;
+/** The composer rests when it has not moved for this long. */
+const COMPOSER_REST_MS = 400;
+/** A watch that saw fewer frames than this did not see the switch. */
+const COMPOSER_FRAMES_LEAST = 10;
 
 /**
  * Words in a message whose run must still be going on the server while the test acts on the
@@ -4508,6 +4585,58 @@ function longRunMessage(token: string): string {
 
 function isRunEventsPath(pathname: string): boolean {
   return /^\/api\/v1\/conversations\/[^/]+\/runs\/[^/]+\/events$/u.test(pathname);
+}
+
+/** The gap between the composer and the lower edge of the window, as painted now. */
+function composerBottomGap(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const composer = document.querySelector("textarea")?.closest("form");
+    if (!composer) throw new Error("composer not found");
+    return window.innerHeight - composer.getBoundingClientRect().bottom;
+  });
+}
+
+/** The gap once the composer rests: the same over a time longer than its move takes. */
+async function settledComposerBottomGap(page: Page): Promise<number> {
+  let gap = Number.NaN;
+  await expect
+    .poll(async () => {
+      const before = await composerBottomGap(page);
+      await page.waitForTimeout(COMPOSER_REST_MS);
+      gap = await composerBottomGap(page);
+      return Math.abs(gap - before);
+    })
+    .toBeLessThan(1);
+  return gap;
+}
+
+/**
+ * The composer's gap to the lower edge of the window in every frame of the next second, a move
+ * under way included. Start it before the click it watches and await it after.
+ */
+function recordComposerBottomGaps(page: Page): Promise<number[]> {
+  return page.evaluate(
+    (watchMs) =>
+      new Promise<number[]>((resolve, reject) => {
+        const gaps: number[] = [];
+        const started = performance.now();
+        const frame = () => {
+          const composer = document.querySelector("textarea")?.closest("form");
+          if (!composer) {
+            reject(new Error("composer not found"));
+            return;
+          }
+          gaps.push(window.innerHeight - composer.getBoundingClientRect().bottom);
+          if (performance.now() - started < watchMs) {
+            requestAnimationFrame(frame);
+          } else {
+            resolve(gaps);
+          }
+        };
+        requestAnimationFrame(frame);
+      }),
+    COMPOSER_WATCH_MS
+  );
 }
 
 function currentConversationId(page: Page): string {

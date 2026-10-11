@@ -14,7 +14,7 @@ import {
 import { createToolSurfacePanelEntry } from "../tool-surface-card";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tool-surfaces";
-import { AssistantThread } from "./assistant-thread";
+import { AssistantThread, type StartComposerPosition } from "./assistant-thread";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
 import { useTranslation } from "../i18n";
@@ -45,7 +45,7 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
   );
   const runtimeKey = selectedConversationId ?? "new";
   // Outlives the keyed pane so the composer can settle from its start page position.
-  const startComposerTopRef = useRef<number | undefined>(undefined);
+  const startComposerRef = useRef<StartComposerPosition | undefined>(undefined);
 
   return (
     <AssistantRuntimePane
@@ -53,7 +53,7 @@ export function AssistantRuntimePanel({ chat }: { chat: SelectedChatModel }) {
       chat={chat}
       initialMessages={initialMessages}
       messagesSyncKey={messageSnapshotKey}
-      startComposerTopRef={startComposerTopRef}
+      startComposerRef={startComposerRef}
     />
   );
 }
@@ -62,12 +62,12 @@ function AssistantRuntimePane({
   chat,
   initialMessages,
   messagesSyncKey,
-  startComposerTopRef
+  startComposerRef
 }: {
   chat: SelectedChatModel;
   initialMessages: UIMessage[];
   messagesSyncKey: string;
-  startComposerTopRef: RefObject<number | undefined>;
+  startComposerRef: RefObject<StartComposerPosition | undefined>;
 }) {
   const {
     client,
@@ -195,6 +195,13 @@ function AssistantRuntimePane({
           if (!activeRef.current) {
             return;
           }
+          // The conversation this start page began is the one whose composer settles from it.
+          if (startComposerRef.current) {
+            startComposerRef.current = {
+              ...startComposerRef.current,
+              conversationId: response.conversation.id
+            };
+          }
           onMessageSubmitted(response.conversation.id);
           onRunStarted(response);
         })
@@ -221,7 +228,8 @@ function AssistantRuntimePane({
       selectedModelBindingId,
       selectedConversationId,
       sendDisabledReason,
-      setRootSubmitPendingIfActive
+      setRootSubmitPendingIfActive,
+      startComposerRef
     ]
   );
 
@@ -370,8 +378,10 @@ function AssistantRuntimePane({
           optimisticPending={optimisticPending}
           messagesEnabled={Boolean(selectedConversationId)}
           messagesLoaded={messagesLoaded}
+          loadedMessageCount={initialMessages.length}
+          conversationId={selectedConversationId}
           composerFocusRequestId={composerFocusRequestId}
-          startComposerTopRef={startComposerTopRef}
+          startComposerRef={startComposerRef}
           onCancelRun={onCancelRun}
           onSelectAgent={onSelectAgent}
           onSelectModelBinding={selectModelBindingId}

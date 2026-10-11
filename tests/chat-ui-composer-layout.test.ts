@@ -428,6 +428,7 @@ describe("the retention line above the composer", () => {
             attachmentAccept: "",
             messagesEnabled: true,
             messagesLoaded: true,
+            loadedMessageCount: 0,
             composerFocusRequestId: 0,
             onCancelRun: noop,
             onSelectAgent: noop,

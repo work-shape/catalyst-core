@@ -26,6 +26,17 @@ import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
 
+/** Where the centred start page composer last sat, and which conversation may settle from there. */
+export interface StartComposerPosition {
+  /** Viewport position of the composer's upper edge. */
+  top: number;
+  /**
+   * The conversation the start page belongs to: the open one, or the one its first message
+   * began. Any other conversation shows its composer at the bottom without a move.
+   */
+  conversationId: string | undefined;
+}
+
 export function AssistantThread({
   config,
   agents,
@@ -51,8 +62,10 @@ export function AssistantThread({
   optimisticPending,
   messagesEnabled,
   messagesLoaded,
+  loadedMessageCount,
+  conversationId,
   composerFocusRequestId,
-  startComposerTopRef,
+  startComposerRef,
   onCancelRun,
   onSelectAgent,
   onSelectModelBinding,
@@ -96,13 +109,19 @@ export function AssistantThread({
   messagesEnabled: boolean;
   /** False while a selected conversation is still loading, so it is not mistaken for an empty one. */
   messagesLoaded: boolean;
+  /**
+   * How many messages the loaded conversation holds. The thread runtime takes them up one
+   * effect later, so its own empty state alone would show the start page for a frame.
+   */
+  loadedMessageCount: number;
+  /** The open conversation; undefined on the screen for a new one. */
+  conversationId?: string;
   composerFocusRequestId: number;
   /**
-   * Last viewport position of the centred start page composer. Owned by a
-   * parent that outlives this component, because starting a conversation
-   * remounts the thread.
+   * Last position of the centred start page composer. Owned by a parent that
+   * outlives this component, because starting a conversation remounts the thread.
    */
-  startComposerTopRef?: RefObject<number | undefined>;
+  startComposerRef?: RefObject<StartComposerPosition | undefined>;
   onCancelRun: () => void;
   onSelectAgent: (agentName: string) => void;
   onSelectModelBinding: (modelBindingId: string) => void;
@@ -117,8 +136,11 @@ export function AssistantThread({
   const agent = getSelectedAgent(config, selectedAgentName);
   const initialPrompts = agent?.initialPrompts ?? [];
   const startPage =
-    useAuiState((state) => state.thread.isEmpty) && messagesLoaded && !conversationRunning;
-  const composerRef = useComposerSettleTransition(startPage, startComposerTopRef);
+    useAuiState((state) => state.thread.isEmpty) &&
+    messagesLoaded &&
+    loadedMessageCount === 0 &&
+    !conversationRunning;
+  const composerRef = useComposerSettleTransition(startPage, conversationId, startComposerRef);
 
   // An existing conversation stays readable; only the composer is blocked.
   if (noAgentsMessage && !messagesEnabled) {
@@ -314,25 +336,28 @@ function ConversationRunTopAnchor({ activeRunId }: { activeRunId?: string }) {
 
 /**
  * Moves the composer from its centred start page position to the bottom
- * instead of letting it jump there when the first message is sent.
+ * instead of letting it jump there when the first message is sent. Opening
+ * another conversation is no such move: its composer is at the bottom at once.
  */
 function useComposerSettleTransition(
   startPage: boolean,
-  startComposerTopRef: RefObject<number | undefined> | undefined
+  conversationId: string | undefined,
+  startComposerRef: RefObject<StartComposerPosition | undefined> | undefined
 ) {
   const composerRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const composer = composerRef.current;
-    if (!composer || !startComposerTopRef) return;
+    if (!composer || !startComposerRef) return;
     if (startPage) {
-      startComposerTopRef.current = composer.getBoundingClientRect().top;
+      startComposerRef.current = { top: composer.getBoundingClientRect().top, conversationId };
       return;
     }
-    const startTop = startComposerTopRef.current;
-    if (startTop === undefined) return;
-    startComposerTopRef.current = undefined;
-    const offset = startTop - composer.getBoundingClientRect().top;
+    const start = startComposerRef.current;
+    if (!start) return;
+    startComposerRef.current = undefined;
+    if (start.conversationId !== conversationId) return;
+    const offset = start.top - composer.getBoundingClientRect().top;
     if (
       Math.abs(offset) < 1 ||
       typeof composer.animate !== "function" ||
