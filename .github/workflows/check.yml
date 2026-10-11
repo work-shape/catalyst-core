@@ -119,7 +119,9 @@ jobs:
   # needs a browser and ports of its own; locally it is `pnpm test:e2e`.
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The job takes 15 minutes on an ordinary runner (2 to build, 12 for 296 tests) and 22 on a
+    # runner that is 1.6 times slower, which the hosted pool hands out now and then.
+    timeout-minutes: 35
     services:
       # The suite's own database, with the names its runner expects on its default port. The
       # runner would otherwise start `postgres:17` from Docker Hub, which rate-limits the runners.
