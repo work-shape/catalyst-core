@@ -166,6 +166,7 @@ const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
 /**
  * Shows a Page beside the conversation when a run saves it. Only a run seen while it was going
  * counts, so opening a conversation whose Page was built earlier opens nothing: its card does.
+ * Each revision opens by itself once, however often the calls of its run are seen again.
  * A save the build refused puts its findings under the revision of that Page that is shown.
  */
 export function useAutoOpenPageSurface(
@@ -195,8 +196,16 @@ export function useAutoOpenPageSurface(
       current: panel.open && panel.entry?.kind === "page" ? panel.entry : undefined,
       t
     });
-    if (next) {
+    if (!next) {
+      return;
+    }
+    if (panel.open && panel.entry?.key === next.key) {
+      // The revision that is shown gets what the run found for it.
       panel.show(next);
+    } else {
+      // A revision opens by itself once. Coming back to the conversation while its run is
+      // still ending replays the run's calls, and they open nothing a second time.
+      panel.showOnce(next);
     }
   }, [activeRun, conversationId, panel, t]);
 }
