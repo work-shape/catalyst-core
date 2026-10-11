@@ -178,6 +178,32 @@ function refusalReason(error: unknown): string | undefined {
   return typeof reason === "string" ? reason : undefined;
 }
 
+/**
+ * The sentence for a refusal the Apps area knows by its reason. Everything else is shown as
+ * the instance said it.
+ */
+export function appRefusalText(error: unknown): TranslationKey | undefined {
+  switch (refusalReason(error)) {
+    case "revision_files_removed":
+      return "apps.revisionFilesRemoved";
+    case "input_too_large_to_hold":
+      return "apps.tooLargeToHold";
+    default:
+      return undefined;
+  }
+}
+
+/** Which revision the record of an App is read at. */
+export type AppReadRevision = "draft" | "published";
+
+/**
+ * The revision a reader is answered: the draft for whoever may write or publish the App, the
+ * published one for everybody else, who the instance refuses the draft.
+ */
+export function appReadRevision(rights: Pick<AppRights, "write" | "publish">): AppReadRevision {
+  return rights.write || rights.publish ? "draft" : "published";
+}
+
 /** Why the instance gave no address for a revision of an App. */
 export function appPreviewProblem(error: unknown): AppPreviewProblem {
   const reason = refusalReason(error);

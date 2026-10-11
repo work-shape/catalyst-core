@@ -23,12 +23,13 @@ import { useTranslation } from "../i18n";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../routes";
 import { useApp, useAppWrites } from "./app-data";
-import { appDraftFiles } from "./app-draft-files";
+import { AppDraftFiles } from "./app-draft-files";
 import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
 import {
   APP_RIGHT_NAMES,
   appDraftRevision,
   appManifestSummary,
+  appRefusalText,
   appTitle,
   type AppManifestSummary,
   type AppRights
@@ -55,7 +56,7 @@ export function AppEdit({ app }: { app: string }) {
   const workspace = host?.workspace;
   const rights = host?.rights;
   const mayWrite = Boolean(workspace && rights?.write);
-  const record = useApp(workspace?.id ?? "", app, mayWrite);
+  const record = useApp(workspace?.id ?? "", app, mayWrite, "draft");
   const writes = useAppWrites(workspace?.id);
   const [turn, setTurn] = useState(0);
   const [view, setView] = useState<"preview" | "files">("preview");
@@ -96,10 +97,13 @@ export function AppEdit({ app }: { app: string }) {
       await change();
       return true;
     } catch (caught) {
+      const refusal = appRefusalText(caught);
       setError(
         caught instanceof PendingApprovalError
           ? t("apps.publishPending")
-          : (instanceSentence(caught) ??
+          : refusal
+            ? t(refusal)
+            : (instanceSentence(caught) ??
               t(
                 failure === "publish"
                   ? "apps.publishFailed"
@@ -119,7 +123,6 @@ export function AppEdit({ app }: { app: string }) {
     setDeleteOpen(false);
     setError(undefined);
   };
-  const Files = appDraftFiles;
 
   return (
     <>
@@ -129,7 +132,7 @@ export function AppEdit({ app }: { app: string }) {
         rights={rights}
         draftRevision={draft}
         publishedRevision={published}
-        view={Files ? view : undefined}
+        view={view}
         onViewChange={setView}
         onBack={backToList}
         onPublish={
@@ -151,7 +154,7 @@ export function AppEdit({ app }: { app: string }) {
         }}
       >
         {/* The preview stays mounted under the files, so the App keeps its state. */}
-        <div className="size-full" hidden={Files !== undefined && view === "files"}>
+        <div className="size-full" hidden={view === "files"}>
           {record.failed ? (
             <PreviewPane
               source={undefined}
@@ -174,8 +177,13 @@ export function AppEdit({ app }: { app: string }) {
             <AppPreview app={app} mode="draft" name={name} turn={turn} />
           )}
         </div>
-        {Files && view === "files" && draft !== undefined ? (
-          <Files workspaceId={workspace.id} app={app} revision={draft} />
+        {view === "files" && draft !== undefined ? (
+          <AppDraftFiles
+            workspaceId={workspace.id}
+            app={app}
+            revision={draft}
+            publishedRevision={published}
+          />
         ) : null}
       </AppEditFrame>
       {publishAsk ? (
@@ -298,7 +306,7 @@ export function AppEditFrame({
   /** The number of the draft, once the record arrived. */
   draftRevision?: number;
   publishedRevision?: number;
-  /** The side that is shown. Absent while the draft has no files side. */
+  /** The side that is shown. Left out, the head has no switch. */
   view?: "preview" | "files";
   children: ReactNode;
   onViewChange?(view: "preview" | "files"): void;

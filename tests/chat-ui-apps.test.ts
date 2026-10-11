@@ -9,7 +9,6 @@ import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   AppDeleteDialog,
-  appDraftFiles,
   appDraftIsAhead,
   AppEditFrame,
   appIdFromName,
@@ -18,6 +17,8 @@ import {
   appManifestSummary,
   appPreviewProblem,
   appPreviewProblemText,
+  appReadRevision,
+  appRefusalText,
   AppPreviewNotice,
   appPreviewState,
   appRowActions,
@@ -433,10 +434,44 @@ describe("the draft of an App (layout 3)", () => {
     expect(markup).not.toContain("revision 3");
   });
 
-  it("shows the preview alone while the files of a draft cannot be read", () => {
-    // The Files side waits behind one seam; see `app-draft-files.ts`.
-    expect(appDraftFiles).toBeUndefined();
-    expect(frame(ALL)).not.toContain(">Files<");
+  it("offers the files of the draft beside its preview", () => {
+    const markup = render(
+      createElement(AppEditFrame, {
+        name: "Angebotsrechner",
+        workspace,
+        rights: ALL,
+        draftRevision: 3,
+        publishedRevision: 2,
+        view: "preview",
+        children: createElement("p", null, "the draft"),
+        onViewChange() {},
+        onBack() {}
+      })
+    );
+
+    expect(markup).toContain("Preview");
+    expect(markup).toContain("Files");
+  });
+
+  it("reads the draft for a writer or publisher and the published revision for everybody else", () => {
+    expect(appReadRevision({ write: true, publish: false })).toBe("draft");
+    expect(appReadRevision({ write: false, publish: true })).toBe("draft");
+    expect(appReadRevision(NO_APP_RIGHTS)).toBe("published");
+    const reader: AppRights = { ...NO_APP_RIGHTS, read: true };
+    expect(appReadRevision(reader)).toBe("published");
+  });
+
+  it("says in its own words that a revision lost its files or is too large to be held", () => {
+    const refused = (reason: string) =>
+      new ApiError(422, "As the instance says it", {
+        error: { code: "VALIDATION_FAILED", details: { reason } }
+      });
+
+    expect(appRefusalText(refused("revision_files_removed"))).toBe("apps.revisionFilesRemoved");
+    expect(appRefusalText(refused("input_too_large_to_hold"))).toBe("apps.tooLargeToHold");
+    // Every other refusal is shown as the instance said it.
+    expect(appRefusalText(refused("something_else"))).toBeUndefined();
+    expect(appRefusalText(new Error("offline"))).toBeUndefined();
   });
 
   it("asks once before publishing, with the Connections and hosts the revision reaches", () => {

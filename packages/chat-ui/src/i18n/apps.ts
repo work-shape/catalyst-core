@@ -57,6 +57,10 @@ export const apps = defineTranslations({
     "apps.publishBody": "Revision {number} becomes what everyone in {workspace} is served.",
     "apps.publishConnections": "Connections it uses",
     "apps.publishFailed": "The app could not be published.",
+    "apps.revisionFilesRemoved":
+      "The files of this revision are not stored any more, so it cannot be published or shown.",
+    "apps.tooLargeToHold": "This change needs an approval, and it is too large to be held for one.",
+    "apps.filesTooLarge": "The files of this revision are too large to show here.",
     "apps.publishHosts": "External hosts it calls",
     "apps.publishMissingRight": "You need the right “{right}” to publish.",
     "apps.publishPending": "The change waits for an approval.",
@@ -145,6 +149,11 @@ export const apps = defineTranslations({
     "apps.publishBody": "Revision {number} wird zu dem, was alle in {workspace} bekommen.",
     "apps.publishConnections": "Verbindungen, die sie nutzt",
     "apps.publishFailed": "Die App konnte nicht veröffentlicht werden.",
+    "apps.revisionFilesRemoved":
+      "Die Dateien dieser Revision sind nicht mehr gespeichert. Sie lässt sich weder veröffentlichen noch anzeigen.",
+    "apps.tooLargeToHold":
+      "Diese Änderung braucht eine Freigabe und ist zu groß, um dafür zurückgehalten zu werden.",
+    "apps.filesTooLarge": "Die Dateien dieser Revision sind zu groß, um sie hier anzuzeigen.",
     "apps.publishHosts": "Externe Hosts, die sie aufruft",
     "apps.publishMissingRight": "Zum Veröffentlichen brauchst du das Recht „{right}“.",
     "apps.publishPending": "Die Änderung wartet auf eine Freigabe.",

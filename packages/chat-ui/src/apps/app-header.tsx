@@ -179,7 +179,9 @@ export function AppDetailsDialog({
       open
       size="sm"
       title={t("apps.detailsOf", { name })}
-      description={app ? t("apps.detailsRevision", { number: app.revision }) : undefined}
+      description={
+        app ? t("apps.detailsRevision", { number: app.contentRevision ?? app.revision }) : undefined
+      }
       onClose={onClose}
       footer={
         <Button variant="outline" onClick={onClose}>

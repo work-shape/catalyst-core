@@ -4,7 +4,7 @@ import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import { apiErrorCode } from "../workspace-utils";
 import { useAppWrites } from "./app-data";
-import { APP_ID_PATTERN, APP_NAME_MAX, appIdFromName } from "./app-model";
+import { APP_ID_PATTERN, APP_NAME_MAX, appIdFromName, appRefusalText } from "./app-model";
 import { useAppsHost } from "./apps-host";
 
 const FORM_ID = "save-as-app-form";
@@ -89,11 +89,16 @@ function SaveAsAppDialog({
         writes.saveFromPage({ conversationId, pageId, id, name }).then(
           (saved) => onSaved(saved.name),
           (error: unknown) => {
+            const refusal = appRefusalText(error);
             setSaving(false);
             setFailure(
               apiErrorCode(error) === "CONFLICT"
                 ? { field: "id", message: t("apps.saveIdTaken") }
-                : { message: instanceSentence(error) ?? t("apps.saveFailed") }
+                : {
+                    message: refusal
+                      ? t(refusal)
+                      : (instanceSentence(error) ?? t("apps.saveFailed"))
+                  }
             );
           }
         );

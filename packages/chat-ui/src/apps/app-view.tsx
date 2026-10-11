@@ -13,7 +13,13 @@ import { useTranslation } from "../i18n";
 import { workspaceRouteFromPath, workspaceRoutePath } from "../routes";
 import { useApp } from "./app-data";
 import { AppDetailsDialog, AppFrame, AppHeader, appLink, AppStateBadge } from "./app-header";
-import { APP_START_ROUTE, appTitle, type AppRights } from "./app-model";
+import {
+  APP_START_ROUTE,
+  appReadRevision,
+  appTitle,
+  NO_APP_RIGHTS,
+  type AppRights
+} from "./app-model";
 import { AppPreview } from "./app-preview";
 import { CopiedNotice } from "./apps-page";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
@@ -21,15 +27,21 @@ import { useAppsHost, type AppsWorkspace } from "./apps-host";
 /**
  * One App as its users are served it, across the full width (layout 2). The frame shows the
  * published revision; the address carries the App's own route, so a link into the App opens
- * where it points and a reload stays there. The record of the App is read for whoever may
- * read it; everybody else sees the App under its id.
+ * where it points and a reload stays there. The record of the App is read at the draft for
+ * whoever may write or publish it and at the published revision for everybody else; a reader
+ * the instance gives no record sees the App under its id.
  */
 export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const { t } = useTranslation();
   const host = useAppsHost();
   const workspace = host?.workspace;
   const rights = host?.rights;
-  const record = useApp(workspace?.id ?? "", app, Boolean(workspace && rights?.read));
+  const record = useApp(
+    workspace?.id ?? "",
+    app,
+    Boolean(workspace && rights),
+    appReadRevision(rights ?? NO_APP_RIGHTS)
+  );
   const [shown, setShown] = useState<AppPreviewResponse>();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [copied, setCopied] = useState(0);

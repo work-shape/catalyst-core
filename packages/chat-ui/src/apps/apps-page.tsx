@@ -36,8 +36,11 @@ import {
   opensHere
 } from "./app-header";
 import {
+  appReadRevision,
+  appRefusalText,
   appRowActions,
   appState,
+  NO_APP_RIGHTS,
   type AppRights,
   type AppRowAction,
   type AppState
@@ -84,7 +87,12 @@ export function AppsPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
   const [copied, setCopied] = useState(0);
-  const details = useApp(workspace?.id ?? "", detailsOf?.name ?? "", detailsOf !== undefined);
+  const details = useApp(
+    workspace?.id ?? "",
+    detailsOf?.name ?? "",
+    detailsOf !== undefined,
+    appReadRevision(rights ?? NO_APP_RIGHTS)
+  );
   // The ages are counted from when the list last arrived.
   const rows = list.rows;
   const now = useMemo(() => new Date(), [rows]);
@@ -124,7 +132,8 @@ export function AppsPage() {
       await writes.remove(app.name, app.revision);
       setDeleting(undefined);
     } catch (error) {
-      setDeleteError(instanceSentence(error) ?? t("apps.deleteFailed"));
+      const refusal = appRefusalText(error);
+      setDeleteError(refusal ? t(refusal) : (instanceSentence(error) ?? t("apps.deleteFailed")));
     } finally {
       setDeleteBusy(false);
     }

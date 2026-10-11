@@ -1,7 +1,6 @@
 // What the tests of the Apps area read. The interface itself reaches these through the area
 // route table, the surface renderers and the header of a Page.
 export { AppEditFrame, appDraftIsAhead, PublishDialog } from "./app-edit";
-export { appDraftFiles } from "./app-draft-files";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
 export {
   APP_ID_PATTERN,
@@ -9,6 +8,8 @@ export {
   appManifestSummary,
   appPreviewProblem,
   appPreviewProblemText,
+  appReadRevision,
+  appRefusalText,
   appRowActions,
   appState,
   NO_APP_RIGHTS,

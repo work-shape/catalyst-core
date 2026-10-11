@@ -13,7 +13,7 @@ import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import { keepPageAddress, retryUnlessGone, type PageAddressState } from "../pages/page-address";
-import { appPreviewProblem, type AppPreviewProblem } from "./app-model";
+import { appPreviewProblem, type AppPreviewProblem, type AppReadRevision } from "./app-model";
 
 /** The session the Apps are read with: the one the workspace shell holds. */
 const APP_AUTH_SCOPE = "standalone";
@@ -88,18 +88,24 @@ export interface AppRead {
 }
 
 /**
- * The record of one App: its name, its two pointers and the manifest of its draft. Only a
- * holder of `app.read` gets one; for everybody else the request is not made.
+ * The record of one App: its name, its two pointers and the manifest of one revision. The
+ * draft is read by whoever may write or publish the App; everybody else is answered the
+ * published revision, and nothing where none is published.
  */
-export function useApp(workspaceId: string, app: string, enabled: boolean): AppRead {
+export function useApp(
+  workspaceId: string,
+  app: string,
+  enabled: boolean,
+  revision: AppReadRevision
+): AppRead {
   const { client } = useWorkspaceApiClient();
   const keys = useAppKeys();
   const query = useQuery({
-    queryKey: [...keys, "app", workspaceId, app],
+    queryKey: [...keys, "app", workspaceId, app, revision],
     queryFn: ({ signal }) =>
       client.assets.get({
         params: { kind: APP_ASSET_KIND, name: app },
-        query: { workspaceId },
+        query: { workspaceId, revision },
         signal
       }),
     enabled,
@@ -111,6 +117,46 @@ export function useApp(workspaceId: string, app: string, enabled: boolean): AppR
     failed: enabled && query.isError && retryUnlessGone(0, query.error),
     loading: enabled && query.isPending,
     reload: async () => (await query.refetch()).data
+  };
+}
+
+/** The source files of one revision as its Files side asked for them. */
+interface AppFilesRead {
+  record: Asset | undefined;
+  /** What the instance refused the read with, or what went wrong on the way. */
+  error: unknown;
+  loading: boolean;
+}
+
+/**
+ * The source files of one revision of an App, contents included: one request per revision,
+ * made when the Files side is opened. A revision never changes, so it is asked for once. Above
+ * `ASSET_GET_FILES_MAX_BYTES` the instance answers the index alone.
+ */
+export function useAppFiles(
+  workspaceId: string,
+  app: string,
+  revision: number | undefined
+): AppFilesRead {
+  const { client } = useWorkspaceApiClient();
+  const keys = useAppKeys();
+  const query = useQuery({
+    queryKey: [...keys, "files", workspaceId, app, revision ?? 0],
+    queryFn: ({ signal }) =>
+      client.assets.get({
+        params: { kind: APP_ASSET_KIND, name: app },
+        query: { workspaceId, revision: String(revision), files: "true" },
+        signal
+      }),
+    enabled: revision !== undefined,
+    retry: retryUnlessGone,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false
+  });
+  return {
+    record: query.data,
+    error: query.isError ? query.error : undefined,
+    loading: revision !== undefined && query.isPending
   };
 }
 
