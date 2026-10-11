@@ -2912,13 +2912,17 @@ test("the Settings sub-rail stands still while the page scrolls up to the top ed
     expect(await topOf(firstEntry)).toBe(restingTop);
   }
 
+  // At the end of the page too, where the rail's room ends.
+  const end = await scroller.evaluate((element) => element.scrollHeight - element.clientHeight);
+  expect(await scrollPageTo(end)).toBe(end);
+  // The end of a page is not always a whole pixel, so the rail may sit a fraction off it.
+  expect(Math.abs(((await topOf(firstEntry)) ?? 0) - (restingTop ?? 0))).toBeLessThan(1);
+
   // The rail is longer than this window: it scrolls on its own, down to its last entry.
   await expect(lastEntry).not.toBeInViewport();
   await lastEntry.scrollIntoViewIfNeeded();
   await expect(lastEntry).toBeInViewport({ ratio: 1 });
-  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
-    SUB_RAIL_SCROLL_STEPS.at(-1)
-  );
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(end);
 
   // Without the room for a rail the select is pinned below the floating header's buttons.
   await page.setViewportSize({ width: 390, height: SHORT_WINDOW_HEIGHT });

@@ -30,7 +30,11 @@ export interface PageProps extends ComponentProps<"div"> {
  *
  * The page starts `--layout-page-inset` lower where something floats over the top of its scroll
  * area. Its content scrolls up to the top edge; the sub-rail rests where it is pinned, so it
- * does not move with the content.
+ * does not move with the content. Above a detail header that room scrolls away: the header
+ * pins at the top edge and the sub-rail directly below it.
+ *
+ * The space under the page belongs to the content column. On the row it would end the rail's
+ * room early and push a rail as tall as the scroll area up at the end of the page.
  */
 export function Page({
   className,
@@ -44,6 +48,7 @@ export function Page({
     // The page is the container its sub-rail measures: the room the page has, not the window.
     return (
       <div className={cn("@container/page w-full min-w-0", className)} {...props}>
+        <div aria-hidden="true" className="h-(--layout-page-inset)" />
         {header}
         {subRail === undefined ? (
           <div
@@ -52,9 +57,9 @@ export function Page({
             {children}
           </div>
         ) : (
-          <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) px-(--layout-gutter) pb-6 @subrail/page:flex-row">
+          <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) px-(--layout-gutter) @subrail/page:flex-row">
             {subRail}
-            <div className={cn("min-w-0 flex-1", contentWidths[width])}>{children}</div>
+            <div className={cn("min-w-0 flex-1 pb-6", contentWidths[width])}>{children}</div>
           </div>
         )}
       </div>
@@ -81,9 +86,9 @@ export function Page({
       {...props}
     >
       {/* The top padding is the sub-rail's pinned position: the rail rests there from the start. */}
-      <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) gap-y-2 pt-(--layout-page-inset) pb-6 @subrail/page:flex-row @subrail/page:pt-[calc(var(--layout-page-inset)+var(--spacing)*6)]">
+      <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) gap-y-2 pt-(--layout-page-inset) @subrail/page:flex-row @subrail/page:pt-[calc(var(--layout-page-inset)+var(--spacing)*6)]">
         {subRail}
-        <div className={cn("min-w-0 flex-1", contentWidths[width])}>{children}</div>
+        <div className={cn("min-w-0 flex-1 pb-6", contentWidths[width])}>{children}</div>
       </div>
     </div>
   );

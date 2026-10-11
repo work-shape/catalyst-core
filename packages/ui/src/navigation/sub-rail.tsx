@@ -108,9 +108,10 @@ export function SubRail(props: SubRailProps) {
         // Under a head the rail keeps a step of room, at rest and while it is pinned: its first
         // item would otherwise touch the head's line.
         // A head with a second line is taller than the offset: the rail then goes under it.
-        // The pinned position is the one the `Page` starts the rail at, so the rail never travels.
+        // Without a head the pinned position is the one the `Page` starts the rail at, so the
+        // rail never travels. Under a head it is pinned directly below the pinned head.
         belowHeader
-          ? "top-[calc(var(--layout-page-inset)+var(--layout-header))] z-[calc(var(--layer-sticky-header)-1)] @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--layout-header))] @subrail/page:pt-4"
+          ? "top-(--layout-header) z-[calc(var(--layer-sticky-header)-1)] @subrail/page:max-h-[calc(100cqh-var(--layout-header))] @subrail/page:pt-4"
           : "top-(--layout-page-inset) z-(--layer-sticky-header) @subrail/page:top-[calc(var(--layout-page-inset)+var(--spacing)*5)] @subrail/page:-mt-1 @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--spacing)*5)] @subrail/page:pt-1",
         // The pinned select keeps what floats over the page's top clear: the content leaves
         // under the select, not between the floating controls.
