@@ -228,7 +228,9 @@ export function Chart({
     >
       {drawable ? (
         <>
-          <div aria-hidden="true" className="w-full text-caption" style={{ height }}>
+          {/* The drawing keeps the width it was drawn at until it is drawn again, so the box
+              must be free to get narrower than its content. */}
+          <div aria-hidden="true" className="w-full min-w-0 text-caption" style={{ height }}>
             <Suspense fallback={<Skeleton shape="block" className="h-full" />}>
               <ChartCanvas
                 spec={spec}
