@@ -68,7 +68,15 @@ export function PageHeader({
           detail && "ps-(--layout-page-head-start)"
         )}
       >
-        {back}
+        {detail && back !== undefined ? (
+          // In a head of several lines the way back stays on the first: at the middle of the
+          // head's least height, level with a control that floats beside the head.
+          <div className="flex h-[calc(var(--layout-header)-var(--spacing)*4)] shrink-0 items-center self-start">
+            {back}
+          </div>
+        ) : (
+          back
+        )}
         <div className="grid min-w-0 gap-0.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Heading
