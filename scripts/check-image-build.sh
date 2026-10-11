@@ -52,6 +52,10 @@ packages:
   - "platform/packages/*"
   - "platform/clients/*"
 YAML
+# The lockfile below names the overrides of this repository's own workspace manifest, and a
+# frozen install refuses a root that does not name the same ones.
+awk '/^overrides:/ { block = 1; print; next } block && /^[^ ]/ { block = 0 } block && /^ /' \
+  "$platform_root/pnpm-workspace.yaml" >> "$workspace/pnpm-workspace.yaml"
 cp "$platform_root/.npmrc" "$workspace/.npmrc"
 cp "$platform_root/docker/vivd-client.Dockerfile.dockerignore" "$workspace/.dockerignore"
 
